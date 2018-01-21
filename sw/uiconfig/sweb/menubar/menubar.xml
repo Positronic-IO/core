@@ -35,15 +35,15 @@
       </menu:menu>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:CloseDoc"/>
-      <menu:menuitem menu:id=".uno:Save"/>
+      <!-- <menu:menuitem menu:id=".uno:Save"/>
       <menu:menuitem menu:id=".uno:SaveAs"/>
       <menu:menuitem menu:id=".uno:SaveAll"/>
       <menu:menuitem menu:id=".uno:CheckOut"/>
       <menu:menuitem menu:id=".uno:CancelCheckOut"/>
-      <menu:menuitem menu:id=".uno:CheckIn"/>
+      <menu:menuitem menu:id=".uno:CheckIn"/> -->
       <menu:menuitem menu:id=".uno:Reload"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:ExportTo"/>
+      <!-- <menu:menuitem menu:id=".uno:ExportTo"/>
       <menu:menu menu:id=".uno:SendToMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:SendMail"/>
@@ -59,7 +59,7 @@
       <menu:menuitem menu:id=".uno:PrintPreview"/>
       <menu:menuitem menu:id=".uno:Print"/>
       <menu:menuitem menu:id=".uno:PrinterSetup"/>
-      <menu:menuseparator/>
+      <menu:menuseparator/> -->
       <menu:menuitem menu:id=".uno:Quit"/>
     </menu:menupopup>
   </menu:menu>

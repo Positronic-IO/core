@@ -38,7 +38,7 @@
       <menu:menuitem menu:id=".uno:Reload"/>
       <menu:menuitem menu:id=".uno:VersionDialog"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Save"/>
+      <!-- <menu:menuitem menu:id=".uno:Save"/>
       <menu:menuitem menu:id=".uno:SaveAsRemote"/>
       <menu:menuitem menu:id=".uno:SaveAs"/>
       <menu:menuitem menu:id=".uno:SaveACopy"/>
@@ -78,7 +78,7 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:PrintPreview"/>
       <menu:menuitem menu:id=".uno:Print"/>
-      <menu:menuitem menu:id=".uno:PrinterSetup"/>
+      <menu:menuitem menu:id=".uno:PrinterSetup"/> -->
       <menu:menuseparator/>
       <menu:menu menu:id=".uno:SignaturesMenu">
         <menu:menupopup>
