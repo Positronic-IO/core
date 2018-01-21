@@ -121,6 +121,7 @@ void SAL_CALL GenericToolbarController::dispose()
 
 void SAL_CALL GenericToolbarController::execute( sal_Int16 KeyModifier )
 {
+#ifndef VIEWONLY
     Reference< XDispatch >       xDispatch;
     OUString                     aCommandURL;
 
@@ -161,6 +162,7 @@ void SAL_CALL GenericToolbarController::execute( sal_Int16 KeyModifier )
         pExecuteInfo->aArgs         = aArgs;
         Application::PostUserEvent( LINK(nullptr, GenericToolbarController , ExecuteHdl_Impl), pExecuteInfo );
     }
+#endif
 }
 
 void GenericToolbarController::statusChanged( const FeatureStateEvent& Event )
@@ -286,6 +288,7 @@ void MenuToolbarController::dispose()
 
 void MenuToolbarController::initialize( const css::uno::Sequence< css::uno::Any >& rArgs )
 {
+#ifndef VIEWONLY
     ToolboxController::initialize( rArgs );
 
     css::uno::Reference< css::container::XIndexAccess > xMenuContainer;
@@ -332,11 +335,13 @@ void MenuToolbarController::initialize( const css::uno::Sequence< css::uno::Any 
         if ( getToolboxId( nId, &pToolBox ) )
             pToolBox->SetItemBits( nId, pToolBox->GetItemBits( nId ) | ToolBoxItemBits::DROPDOWNONLY );
     }
+#endif
 }
 
 Reference< XWindow > SAL_CALL
 MenuToolbarController::createPopupWindow()
 {
+#ifndef VIEWONLY
     if ( !pMenu )
     {
         pMenu = VclPtr<PopupMenu>::Create();
@@ -354,7 +359,7 @@ MenuToolbarController::createPopupWindow()
     pToolBox->SetItemDown( m_nToolBoxId, true );
     pMenu->Execute( pToolBox, pToolBox->GetItemRect( nId ), PopupMenuFlags::ExecuteDown );
     pToolBox->SetItemDown( m_nToolBoxId, false );
-
+#endif
     return nullptr;
 }
 } // namespace

@@ -1404,6 +1404,7 @@ bool ToolBarManager::MenuItemAllowed( sal_uInt16 ) const
 
 void ToolBarManager::AddCustomizeMenuItems(ToolBox const * pToolBar)
 {
+#ifndef VIEWONLY
     // No config menu entries if command ".uno:ConfigureDialog" is not enabled
     Reference< XDispatch > xDisp;
     css::util::URL aURL;
@@ -1545,6 +1546,7 @@ void ToolBarManager::AddCustomizeMenuItems(ToolBox const * pToolBar)
 
     if ( bHideDisabledEntries )
         pMenu->RemoveDisabledEntries();
+#endif
 }
 
 IMPL_LINK( ToolBarManager, MenuButton, ToolBox*, pToolBar, void )
@@ -1609,7 +1611,7 @@ IMPL_LINK( ToolBarManager, MenuSelect, Menu*, pMenu, bool )
 
         if ( m_bDisposed )
             return true;
-
+#ifndef VIEWONLY
         switch ( pMenu->GetCurItemId() )
         {
             case MENUITEM_TOOLBAR_CUSTOMIZETOOLBAR:
@@ -1759,6 +1761,7 @@ IMPL_LINK( ToolBarManager, MenuSelect, Menu*, pMenu, bool )
                 break;
             }
         }
+#endif
     }
 
     return true;
