@@ -76,10 +76,10 @@
       <menu:menuitem menu:id=".uno:Undo"/>
       <menu:menuitem menu:id=".uno:Redo"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Cut"/>
+      <!-- <menu:menuitem menu:id=".uno:Cut"/>
       <menu:menuitem menu:id=".uno:Copy"/>
       <menu:menuitem menu:id=".uno:Paste"/>
-      <menu:menuitem menu:id=".uno:PasteSpecial"/>
+      <menu:menuitem menu:id=".uno:PasteSpecial"/> -->
       <menu:menuitem menu:id=".uno:SelectAll"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id="vnd.sun.star.findbar:FocusToFindbar"/>

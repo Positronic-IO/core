@@ -8,7 +8,7 @@
  *
 -->
 <menu:menupopup xmlns:menu="http://openoffice.org/2001/menu">
-  <menu:menuitem menu:id=".uno:Cut"/>
+  <!-- <menu:menuitem menu:id=".uno:Cut"/>
   <menu:menuitem menu:id=".uno:Copy"/>
   <menu:menuitem menu:id=".uno:Paste"/>
   <menu:menu menu:id=".uno:PasteSpecialMenu">
@@ -17,7 +17,7 @@
       <menu:menuitem menu:id=".uno:PasteSpecial"/>
     </menu:menupopup>
   </menu:menu>
-  <menu:menuseparator/>
+  <menu:menuseparator/> -->
   <menu:menuitem menu:id=".uno:TextAttributes"/>
   <menu:menuseparator/>
   <menu:menuitem menu:id=".uno:FontDialog"/>
