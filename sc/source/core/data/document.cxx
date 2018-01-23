@@ -2183,73 +2183,76 @@ void ScDocument::CopyToClip(const ScClipParam& rClipParam,
                             ScDocument* pClipDoc, const ScMarkData* pMarks,
                             bool bKeepScenarioFlags, bool bIncludeObjects )
 {
-    OSL_ENSURE( pMarks, "CopyToClip: ScMarkData fails" );
+    //viewonly
+    return;
 
-    if (bIsClip)
-        return;
+    // OSL_ENSURE( pMarks, "CopyToClip: ScMarkData fails" );
 
-    if (!pClipDoc)
-    {
-        SAL_WARN("sc", "CopyToClip: no ClipDoc");
-        pClipDoc = ScModule::GetClipDoc();
-    }
+    // if (bIsClip)
+    //     return;
 
-    if (mpShell->GetMedium())
-    {
-        pClipDoc->maFileURL = mpShell->GetMedium()->GetURLObject().GetMainURL(INetURLObject::DecodeMechanism::ToIUri);
-        // for unsaved files use the title name and adjust during save of file
-        if (pClipDoc->maFileURL.isEmpty())
-            pClipDoc->maFileURL = mpShell->GetName();
-    }
-    else
-    {
-        pClipDoc->maFileURL = mpShell->GetName();
-    }
+    // if (!pClipDoc)
+    // {
+    //     SAL_WARN("sc", "CopyToClip: no ClipDoc");
+    //     pClipDoc = ScModule::GetClipDoc();
+    // }
 
-    //init maTabNames
-    for (TableContainer::iterator itr = maTabs.begin(); itr != maTabs.end(); ++itr)
-    {
-        if( *itr )
-        {
-            OUString aTabName;
-            (*itr)->GetName(aTabName);
-            pClipDoc->maTabNames.push_back(aTabName);
-        }
-        else
-            pClipDoc->maTabNames.emplace_back();
-    }
+    // if (mpShell->GetMedium())
+    // {
+    //     pClipDoc->maFileURL = mpShell->GetMedium()->GetURLObject().GetMainURL(INetURLObject::DecodeMechanism::ToIUri);
+    //     // for unsaved files use the title name and adjust during save of file
+    //     if (pClipDoc->maFileURL.isEmpty())
+    //         pClipDoc->maFileURL = mpShell->GetName();
+    // }
+    // else
+    // {
+    //     pClipDoc->maFileURL = mpShell->GetName();
+    // }
 
-    pClipDoc->aDocName = aDocName;
-    pClipDoc->SetClipParam(rClipParam);
-    ScRange aClipRange = rClipParam.getWholeRange();
-    SCTAB nEndTab =  static_cast<SCTAB>(maTabs.size());
+    // //init maTabNames
+    // for (TableContainer::iterator itr = maTabs.begin(); itr != maTabs.end(); ++itr)
+    // {
+    //     if( *itr )
+    //     {
+    //         OUString aTabName;
+    //         (*itr)->GetName(aTabName);
+    //         pClipDoc->maTabNames.push_back(aTabName);
+    //     }
+    //     else
+    //         pClipDoc->maTabNames.emplace_back();
+    // }
 
-    pClipDoc->ResetClip(this, pMarks);
+    // pClipDoc->aDocName = aDocName;
+    // pClipDoc->SetClipParam(rClipParam);
+    // ScRange aClipRange = rClipParam.getWholeRange();
+    // SCTAB nEndTab =  static_cast<SCTAB>(maTabs.size());
 
-    sc::CopyToClipContext aCxt(*pClipDoc, bKeepScenarioFlags);
-    CopyRangeNamesToClip(pClipDoc, aClipRange, pMarks);
+    // pClipDoc->ResetClip(this, pMarks);
 
-    for (SCTAB i = 0; i < nEndTab; ++i)
-    {
-        if (!maTabs[i] || i >= static_cast<SCTAB>(pClipDoc->maTabs.size()) || !pClipDoc->maTabs[i])
-            continue;
+    // sc::CopyToClipContext aCxt(*pClipDoc, bKeepScenarioFlags);
+    // CopyRangeNamesToClip(pClipDoc, aClipRange, pMarks);
 
-        if ( pMarks && !pMarks->GetTableSelect(i) )
-            continue;
+    // for (SCTAB i = 0; i < nEndTab; ++i)
+    // {
+    //     if (!maTabs[i] || i >= static_cast<SCTAB>(pClipDoc->maTabs.size()) || !pClipDoc->maTabs[i])
+    //         continue;
 
-        maTabs[i]->CopyToClip(aCxt, rClipParam.maRanges, pClipDoc->maTabs[i]);
+    //     if ( pMarks && !pMarks->GetTableSelect(i) )
+    //         continue;
 
-        if (mpDrawLayer && bIncludeObjects)
-        {
-            //  also copy drawing objects
-            tools::Rectangle aObjRect = GetMMRect(
-                aClipRange.aStart.Col(), aClipRange.aStart.Row(), aClipRange.aEnd.Col(), aClipRange.aEnd.Row(), i);
-            mpDrawLayer->CopyToClip(pClipDoc, i, aObjRect);
-        }
-    }
+    //     maTabs[i]->CopyToClip(aCxt, rClipParam.maRanges, pClipDoc->maTabs[i]);
 
-    // Make sure to mark overlapped cells.
-    pClipDoc->ExtendMerge(aClipRange, true);
+    //     if (mpDrawLayer && bIncludeObjects)
+    //     {
+    //         //  also copy drawing objects
+    //         tools::Rectangle aObjRect = GetMMRect(
+    //             aClipRange.aStart.Col(), aClipRange.aStart.Row(), aClipRange.aEnd.Col(), aClipRange.aEnd.Row(), i);
+    //         mpDrawLayer->CopyToClip(pClipDoc, i, aObjRect);
+    //     }
+    // }
+
+    // // Make sure to mark overlapped cells.
+    // pClipDoc->ExtendMerge(aClipRange, true);
 }
 
 void ScDocument::CopyStaticToDocument(const ScRange& rSrcRange, SCTAB nDestTab, ScDocument* pDestDoc)
