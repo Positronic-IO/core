@@ -50,11 +50,11 @@
         <menu:menupopup>
             <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuseparator/>
-            <!-- <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/>
             <menu:menuitem menu:id=".uno:Copy"/>
             <menu:menuitem menu:id=".uno:Paste"/>
             <menu:menuitem menu:id=".uno:PasteSpecial"/>
-            <menu:menuseparator/> -->
+            <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:DBDelete"/>
             <menu:menuitem menu:id=".uno:DBRename"/>
             <menu:menuitem menu:id=".uno:DBEdit"/>

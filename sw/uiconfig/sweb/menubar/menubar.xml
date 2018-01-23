@@ -68,7 +68,7 @@
       <menu:menuitem menu:id=".uno:Undo"/>
       <menu:menuitem menu:id=".uno:Redo"/>
       <menu:menuitem menu:id=".uno:Repeat"/>
-      <!-- <menu:menuseparator/>
+      <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Cut"/>
       <menu:menuitem menu:id=".uno:Copy"/>
       <menu:menuitem menu:id=".uno:Paste"/>
@@ -79,7 +79,7 @@
           <menu:menuitem menu:id=".uno:SelectionModeDefault" menu:style="radio"/>
           <menu:menuitem menu:id=".uno:SelectionModeBlock" menu:style="radio"/>
         </menu:menupopup>
-      </menu:menu> -->
+      </menu:menu>
       <menu:menuitem menu:id=".uno:SelectAll"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id="vnd.sun.star.findbar:FocusToFindbar"/>
