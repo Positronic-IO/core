@@ -85,158 +85,155 @@ using namespace ::com::sun::star;
 // Copy for the internal clipboard. Copies all selections to the clipboard.
 bool SwFEShell::Copy( SwDoc* pClpDoc, const OUString* pNewClpText )
 {
-    //ifdef VIEWONLY not working
-    //need to figure it out.
-    return false;
-//     OSL_ENSURE( pClpDoc, "No Clipboard document"  );
+    OSL_ENSURE( pClpDoc, "No Clipboard document"  );
 
-//     pClpDoc->GetIDocumentUndoRedo().DoUndo(false); // always false!
+    pClpDoc->GetIDocumentUndoRedo().DoUndo(false); // always false!
 
-//     // delete content if ClpDocument contains content
-//     SwNodeIndex aSttIdx( pClpDoc->GetNodes().GetEndOfExtras(), 2 );
-//     SwNodeIndex aEndNdIdx( *aSttIdx.GetNode().EndOfSectionNode() );
-//     SwTextNode* pTextNd = aSttIdx.GetNode().GetTextNode();
-//     if (!pTextNd || !pTextNd->GetText().isEmpty() ||
-//         aSttIdx.GetIndex()+1 != pClpDoc->GetNodes().GetEndOfContent().GetIndex() )
-//     {
-//         pClpDoc->GetNodes().Delete( aSttIdx,
-//             pClpDoc->GetNodes().GetEndOfContent().GetIndex() - aSttIdx.GetIndex() );
-//         pTextNd = pClpDoc->GetNodes().MakeTextNode( aSttIdx,
-//                             pClpDoc->GetDfltTextFormatColl() );
-//         --aSttIdx;
-//     }
+    // delete content if ClpDocument contains content
+    SwNodeIndex aSttIdx( pClpDoc->GetNodes().GetEndOfExtras(), 2 );
+    SwNodeIndex aEndNdIdx( *aSttIdx.GetNode().EndOfSectionNode() );
+    SwTextNode* pTextNd = aSttIdx.GetNode().GetTextNode();
+    if (!pTextNd || !pTextNd->GetText().isEmpty() ||
+        aSttIdx.GetIndex()+1 != pClpDoc->GetNodes().GetEndOfContent().GetIndex() )
+    {
+        pClpDoc->GetNodes().Delete( aSttIdx,
+            pClpDoc->GetNodes().GetEndOfContent().GetIndex() - aSttIdx.GetIndex() );
+        pTextNd = pClpDoc->GetNodes().MakeTextNode( aSttIdx,
+                            pClpDoc->GetDfltTextFormatColl() );
+        --aSttIdx;
+    }
 
-//     // also delete surrounding FlyFrames if any
-//     for( const auto pFly : *pClpDoc->GetSpzFrameFormats() )
-//     {
-//         SwFormatAnchor const*const pAnchor = &pFly->GetAnchor();
-//         SwPosition const*const pAPos = pAnchor->GetContentAnchor();
-//         if (pAPos &&
-//             ((RndStdIds::FLY_AT_PARA == pAnchor->GetAnchorId()) ||
-//              (RndStdIds::FLY_AT_CHAR == pAnchor->GetAnchorId())) &&
-//             aSttIdx <= pAPos->nNode && pAPos->nNode <= aEndNdIdx )
-//         {
-//             pClpDoc->getIDocumentLayoutAccess().DelLayoutFormat( pFly );
-//         }
-//     }
+    // also delete surrounding FlyFrames if any
+    for( const auto pFly : *pClpDoc->GetSpzFrameFormats() )
+    {
+        SwFormatAnchor const*const pAnchor = &pFly->GetAnchor();
+        SwPosition const*const pAPos = pAnchor->GetContentAnchor();
+        if (pAPos &&
+            ((RndStdIds::FLY_AT_PARA == pAnchor->GetAnchorId()) ||
+             (RndStdIds::FLY_AT_CHAR == pAnchor->GetAnchorId())) &&
+            aSttIdx <= pAPos->nNode && pAPos->nNode <= aEndNdIdx )
+        {
+            pClpDoc->getIDocumentLayoutAccess().DelLayoutFormat( pFly );
+        }
+    }
 
-//     pClpDoc->GetDocumentFieldsManager().GCFieldTypes();        // delete the FieldTypes
+    pClpDoc->GetDocumentFieldsManager().GCFieldTypes();        // delete the FieldTypes
 
-//     // if a string was passed, copy it to the clipboard-
-//     // document. Then also the Calculator can use the internal
-//     // clipboard
-//     if( pNewClpText )
-//     {
-//         pTextNd->InsertText( *pNewClpText, SwIndex( pTextNd ) );
-//         return true;                // that's it
-//     }
+    // if a string was passed, copy it to the clipboard-
+    // document. Then also the Calculator can use the internal
+    // clipboard
+    if( pNewClpText )
+    {
+        pTextNd->InsertText( *pNewClpText, SwIndex( pTextNd ) );
+        return true;                // that's it
+    }
 
-//     pClpDoc->getIDocumentFieldsAccess().LockExpFields();
-//     pClpDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::DeleteRedlines );
-//     bool bRet;
+    pClpDoc->getIDocumentFieldsAccess().LockExpFields();
+    pClpDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::DeleteRedlines );
+    bool bRet;
 
-//     // do we want to copy a FlyFrame?
-//     if( IsFrameSelected() )
-//     {
-//         // get the FlyFormat
-//         SwFlyFrame* pFly = GetSelectedFlyFrame();
-//         SwFrameFormat* pFlyFormat = pFly->GetFormat();
-//         SwFormatAnchor aAnchor( pFlyFormat->GetAnchor() );
+    // do we want to copy a FlyFrame?
+    if( IsFrameSelected() )
+    {
+        // get the FlyFormat
+        SwFlyFrame* pFly = GetSelectedFlyFrame();
+        SwFrameFormat* pFlyFormat = pFly->GetFormat();
+        SwFormatAnchor aAnchor( pFlyFormat->GetAnchor() );
 
-//         if ((RndStdIds::FLY_AT_PARA == aAnchor.GetAnchorId()) ||
-//             (RndStdIds::FLY_AT_CHAR == aAnchor.GetAnchorId()) ||
-//             (RndStdIds::FLY_AT_FLY  == aAnchor.GetAnchorId()) ||
-//             (RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId()))
-//         {
-//             SwPosition aPos( aSttIdx );
-//             if ( RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId() )
-//             {
-//                 aPos.nContent.Assign( pTextNd, 0 );
-//             }
-//             aAnchor.SetAnchor( &aPos );
-//         }
-//         pFlyFormat = pClpDoc->getIDocumentLayoutAccess().CopyLayoutFormat( *pFlyFormat, aAnchor, true, true );
+        if ((RndStdIds::FLY_AT_PARA == aAnchor.GetAnchorId()) ||
+            (RndStdIds::FLY_AT_CHAR == aAnchor.GetAnchorId()) ||
+            (RndStdIds::FLY_AT_FLY  == aAnchor.GetAnchorId()) ||
+            (RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId()))
+        {
+            SwPosition aPos( aSttIdx );
+            if ( RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId() )
+            {
+                aPos.nContent.Assign( pTextNd, 0 );
+            }
+            aAnchor.SetAnchor( &aPos );
+        }
+        pFlyFormat = pClpDoc->getIDocumentLayoutAccess().CopyLayoutFormat( *pFlyFormat, aAnchor, true, true );
 
-//         // assure the "RootFormat" is the first element in Spz-Array
-//         // (if necessary Flys were copied in Flys)
-//         SwFrameFormats& rSpzFrameFormats = *pClpDoc->GetSpzFrameFormats();
-//         if( rSpzFrameFormats[ 0 ] != pFlyFormat )
-//         {
-// #ifndef NDEBUG
-//             bool inserted =
-// #endif
-//                 rSpzFrameFormats.newDefault( pFlyFormat );
-//             assert( !inserted && "Fly not contained in Spz-Array" );
-//         }
+        // assure the "RootFormat" is the first element in Spz-Array
+        // (if necessary Flys were copied in Flys)
+        SwFrameFormats& rSpzFrameFormats = *pClpDoc->GetSpzFrameFormats();
+        if( rSpzFrameFormats[ 0 ] != pFlyFormat )
+        {
+#ifndef NDEBUG
+            bool inserted =
+#endif
+                rSpzFrameFormats.newDefault( pFlyFormat );
+            assert( !inserted && "Fly not contained in Spz-Array" );
+        }
 
-//         if ( RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId() )
-//         {
-//             // JP 13.02.99  Bug 61863: if a frameselection is passed to the
-//             //              clipboard, it should be found at pasting. Therefore
-//             //              the copied TextAttribut should be removed in the node
-//             //              otherwise it will be recognised as TextSelektion
-//             const SwIndex& rIdx = pFlyFormat->GetAnchor().GetContentAnchor()->nContent;
-//             SwTextFlyCnt *const pTextFly = static_cast<SwTextFlyCnt *>(
-//                 pTextNd->GetTextAttrForCharAt(
-//                     rIdx.GetIndex(), RES_TXTATR_FLYCNT));
-//             if( pTextFly )
-//             {
-//                 const_cast<SwFormatFlyCnt&>(pTextFly->GetFlyCnt()).SetFlyFormat();
-//                 pTextNd->EraseText( rIdx, 1 );
-//             }
-//         }
-//         bRet = true;
-//     }
-//     else if ( IsObjSelected() )
-//     {
-//         SwPosition aPos( aSttIdx, SwIndex( pTextNd, 0 ));
-//         const SdrMarkList &rMrkList = Imp()->GetDrawView()->GetMarkedObjectList();
-//         for ( size_t i = 0; i < rMrkList.GetMarkCount(); ++i )
-//         {
-//             SdrObject *pObj = rMrkList.GetMark( i )->GetMarkedSdrObj();
+        if ( RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId() )
+        {
+            // JP 13.02.99  Bug 61863: if a frameselection is passed to the
+            //              clipboard, it should be found at pasting. Therefore
+            //              the copied TextAttribut should be removed in the node
+            //              otherwise it will be recognised as TextSelektion
+            const SwIndex& rIdx = pFlyFormat->GetAnchor().GetContentAnchor()->nContent;
+            SwTextFlyCnt *const pTextFly = static_cast<SwTextFlyCnt *>(
+                pTextNd->GetTextAttrForCharAt(
+                    rIdx.GetIndex(), RES_TXTATR_FLYCNT));
+            if( pTextFly )
+            {
+                const_cast<SwFormatFlyCnt&>(pTextFly->GetFlyCnt()).SetFlyFormat();
+                pTextNd->EraseText( rIdx, 1 );
+            }
+        }
+        bRet = true;
+    }
+    else if ( IsObjSelected() )
+    {
+        SwPosition aPos( aSttIdx, SwIndex( pTextNd, 0 ));
+        const SdrMarkList &rMrkList = Imp()->GetDrawView()->GetMarkedObjectList();
+        for ( size_t i = 0; i < rMrkList.GetMarkCount(); ++i )
+        {
+            SdrObject *pObj = rMrkList.GetMark( i )->GetMarkedSdrObj();
 
-//             if( Imp()->GetDrawView()->IsGroupEntered() ||
-//                 ( !pObj->GetUserCall() && pObj->GetUpGroup()) )
-//             {
-//                 SfxItemSet aSet( pClpDoc->GetAttrPool(), aFrameFormatSetRange );
+            if( Imp()->GetDrawView()->IsGroupEntered() ||
+                ( !pObj->GetUserCall() && pObj->GetUpGroup()) )
+            {
+                SfxItemSet aSet( pClpDoc->GetAttrPool(), aFrameFormatSetRange );
 
-//                 SwFormatAnchor aAnchor( RndStdIds::FLY_AT_PARA );
-//                 aAnchor.SetAnchor( &aPos );
-//                 aSet.Put( aAnchor );
+                SwFormatAnchor aAnchor( RndStdIds::FLY_AT_PARA );
+                aAnchor.SetAnchor( &aPos );
+                aSet.Put( aAnchor );
 
-//                 SdrObject *const pNew =
-//                     pClpDoc->CloneSdrObj( *pObj );
+                SdrObject *const pNew =
+                    pClpDoc->CloneSdrObj( *pObj );
 
-//                 SwPaM aTemp(aPos);
-//                 pClpDoc->getIDocumentContentOperations().InsertDrawObj(aTemp, *pNew, aSet );
-//             }
-//             else
-//             {
-//                 SwDrawContact *pContact = static_cast<SwDrawContact*>(GetUserCall( pObj ));
-//                 SwFrameFormat *pFormat = pContact->GetFormat();
-//                 SwFormatAnchor aAnchor( pFormat->GetAnchor() );
-//                 if ((RndStdIds::FLY_AT_PARA == aAnchor.GetAnchorId()) ||
-//                     (RndStdIds::FLY_AT_CHAR == aAnchor.GetAnchorId()) ||
-//                     (RndStdIds::FLY_AT_FLY  == aAnchor.GetAnchorId()) ||
-//                     (RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId()))
-//                 {
-//                     aAnchor.SetAnchor( &aPos );
-//                 }
+                SwPaM aTemp(aPos);
+                pClpDoc->getIDocumentContentOperations().InsertDrawObj(aTemp, *pNew, aSet );
+            }
+            else
+            {
+                SwDrawContact *pContact = static_cast<SwDrawContact*>(GetUserCall( pObj ));
+                SwFrameFormat *pFormat = pContact->GetFormat();
+                SwFormatAnchor aAnchor( pFormat->GetAnchor() );
+                if ((RndStdIds::FLY_AT_PARA == aAnchor.GetAnchorId()) ||
+                    (RndStdIds::FLY_AT_CHAR == aAnchor.GetAnchorId()) ||
+                    (RndStdIds::FLY_AT_FLY  == aAnchor.GetAnchorId()) ||
+                    (RndStdIds::FLY_AS_CHAR == aAnchor.GetAnchorId()))
+                {
+                    aAnchor.SetAnchor( &aPos );
+                }
 
-//                 pClpDoc->getIDocumentLayoutAccess().CopyLayoutFormat( *pFormat, aAnchor, true, true );
-//             }
-//         }
-//         bRet = true;
-//     }
-//     else
-//         bRet = CopySelToDoc( pClpDoc );     // copy the selections
+                pClpDoc->getIDocumentLayoutAccess().CopyLayoutFormat( *pFormat, aAnchor, true, true );
+            }
+        }
+        bRet = true;
+    }
+    else
+        bRet = CopySelToDoc( pClpDoc );     // copy the selections
 
-//     pClpDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::NONE );
-//     pClpDoc->getIDocumentFieldsAccess().UnlockExpFields();
-//     if( !pClpDoc->getIDocumentFieldsAccess().IsExpFieldsLocked() )
-//         pClpDoc->getIDocumentFieldsAccess().UpdateExpFields(nullptr, true);
+    pClpDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::NONE );
+    pClpDoc->getIDocumentFieldsAccess().UnlockExpFields();
+    if( !pClpDoc->getIDocumentFieldsAccess().IsExpFieldsLocked() )
+        pClpDoc->getIDocumentFieldsAccess().UpdateExpFields(nullptr, true);
 
-//     return bRet;
+    return bRet;
 }
 
 static const Point &lcl_FindBasePos( const SwFrame *pFrame, const Point &rPt )
