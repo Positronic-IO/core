@@ -402,8 +402,6 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
 
     // this guard is created here to have it destruction at the end of the method
     SfxInstanceCloseGuard_Impl aModelGuard;
-
-    bool bIsPDFExport = false;
     switch(nId)
     {
         case SID_VERSION:
@@ -498,8 +496,6 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         case SID_EXPORTDOCASPDF:
         case SID_DIRECTEXPORTDOCASPDF:
-            bIsPDFExport = true;
-            SAL_FALLTHROUGH;
         case SID_EXPORTDOCASEPUB:
         case SID_DIRECTEXPORTDOCASEPUB:
         case SID_EXPORTDOC:
@@ -507,223 +503,11 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         case SID_SAVEASREMOTE:
         case SID_SAVEDOC:
         {
-            // derived class may decide to abort this
-            if( !QuerySlotExecutable( nId ) )
-            {
-                rReq.SetReturnValue( SfxBoolItem( 0, false ) );
-                return;
-            }
-
-            //!! detailed analysis of an error code
-            SfxObjectShellRef xLock( this );
-
-            // the model can not be closed till the end of this method
-            // if somebody tries to close it during this time the model will be closed
-            // at the end of the method
-            aModelGuard.Init_Impl( uno::Reference< util::XCloseable >( GetModel(), uno::UNO_QUERY ) );
-
-            ErrCode nErrorCode = ERRCODE_NONE;
-
-            // by default versions should be preserved always except in case of an explicit
-            // SaveAs via GUI, so the flag must be set accordingly
-            pImpl->bPreserveVersions = (nId == SID_SAVEDOC);
-            try
-            {
-                SfxErrorContext aEc( ERRCTX_SFX_SAVEASDOC, GetTitle() ); // ???
-
-                if ( nId == SID_SAVEASDOC || nId == SID_SAVEASREMOTE )
-                {
-                    // in case of plugin mode the SaveAs operation means SaveTo
-                    const SfxBoolItem* pViewOnlyItem = SfxItemSet::GetItem<SfxBoolItem>(GetMedium()->GetItemSet(), SID_VIEWONLY, false);
-                    if ( pViewOnlyItem && pViewOnlyItem->GetValue() )
-                        rReq.AppendItem( SfxBoolItem( SID_SAVETO, true ) );
-                }
-
-                // TODO/LATER: do the following GUI related actions in standalone method
-
-                // Introduce a status indicator for GUI operation
-                const SfxUnoAnyItem* pStatusIndicatorItem = rReq.GetArg<SfxUnoAnyItem>(SID_PROGRESS_STATUSBAR_CONTROL);
-                if ( !pStatusIndicatorItem )
-                {
-                    // get statusindicator
-                    uno::Reference< task::XStatusIndicator > xStatusIndicator;
-                    uno::Reference < frame::XController > xCtrl( GetModel()->getCurrentController() );
-                    if ( xCtrl.is() )
-                    {
-                        uno::Reference< task::XStatusIndicatorFactory > xStatFactory( xCtrl->getFrame(), uno::UNO_QUERY );
-                        if( xStatFactory.is() )
-                            xStatusIndicator = xStatFactory->createStatusIndicator();
-                    }
-
-                    OSL_ENSURE( xStatusIndicator.is(), "Can not retrieve default status indicator!" );
-
-                    if ( xStatusIndicator.is() )
-                    {
-                        SfxUnoAnyItem aStatIndItem( SID_PROGRESS_STATUSBAR_CONTROL, uno::makeAny( xStatusIndicator ) );
-
-                        if ( nId == SID_SAVEDOC )
-                        {
-                            // in case of saving it is not possible to transport the parameters from here
-                            // but it is not clear here whether the saving will be done or saveAs operation
-                            GetMedium()->GetItemSet()->Put( aStatIndItem );
-                        }
-
-                        rReq.AppendItem( aStatIndItem );
-                    }
-                }
-                else if ( nId == SID_SAVEDOC )
-                {
-                    // in case of saving it is not possible to transport the parameters from here
-                    // but it is not clear here whether the saving will be done or saveAs operation
-                    GetMedium()->GetItemSet()->Put( *pStatusIndicatorItem );
-                }
-
-                // Introduce an interaction handler for GUI operation
-                const SfxUnoAnyItem* pInteractionHandlerItem = rReq.GetArg<SfxUnoAnyItem>(SID_INTERACTIONHANDLER);
-                if ( !pInteractionHandlerItem )
-                {
-                    uno::Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
-                    uno::Reference< task::XInteractionHandler2 > xInteract(
-                        task::InteractionHandler::createWithParent(xContext, nullptr) );
-
-                    SfxUnoAnyItem aInteractionItem( SID_INTERACTIONHANDLER, uno::makeAny( xInteract ) );
-                    if ( nId == SID_SAVEDOC )
-                    {
-                        // in case of saving it is not possible to transport the parameters from here
-                        // but it is not clear here whether the saving will be done or saveAs operation
-                        GetMedium()->GetItemSet()->Put( aInteractionItem );
-                    }
-
-                    rReq.AppendItem( aInteractionItem );
-                }
-                else if ( nId == SID_SAVEDOC )
-                {
-                    // in case of saving it is not possible to transport the parameters from here
-                    // but it is not clear here whether the saving will be done or saveAs operation
-                    GetMedium()->GetItemSet()->Put( *pInteractionHandlerItem );
-                }
-
-
-                bool bPreselectPassword = false;
-                const SfxUnoAnyItem* pOldEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(GetMedium()->GetItemSet(), SID_ENCRYPTIONDATA, false);
-                const SfxStringItem* pOldPasswordItem = SfxItemSet::GetItem<SfxStringItem>(GetMedium()->GetItemSet(), SID_PASSWORD, false);
-                if ( pOldEncryptionDataItem || pOldPasswordItem )
-                    bPreselectPassword = true;
-
-                uno::Sequence< beans::PropertyValue > aDispatchArgs;
-                if ( rReq.GetArgs() )
-                    TransformItems( nId,
-                                    *rReq.GetArgs(),
-                                     aDispatchArgs );
-
-                bool bForceSaveAs = nId == SID_SAVEDOC && IsReadOnlyMedium();
-                const SfxSlot* pSlot = GetModule()->GetSlotPool()->GetSlot( bForceSaveAs ? SID_SAVEASDOC : nId );
-                if ( !pSlot )
-                    throw uno::Exception("no slot", nullptr);
-
-                SfxStoringHelper aHelper;
-
-                if ( QueryHiddenInformation( bIsPDFExport ? HiddenWarningFact::WhenCreatingPDF : HiddenWarningFact::WhenSaving, nullptr ) != RET_YES )
-                {
-                    // the user has decided not to store the document
-                    throw task::ErrorCodeIOException(
-                        "SfxObjectShell::ExecFile_Impl: ERRCODE_IO_ABORT",
-                        uno::Reference< uno::XInterface >(), sal_uInt32(ERRCODE_IO_ABORT));
-                }
-
-                aHelper.GUIStoreModel( GetModel(),
-                                       OUString::createFromAscii( pSlot->GetUnoName() ),
-                                       aDispatchArgs,
-                                       bPreselectPassword,
-                                       GetDocumentSignatureState() );
-
-
-                // merge aDispatchArgs to the request
-                SfxAllItemSet aResultParams( GetPool() );
-                TransformParameters( nId,
-                                     aDispatchArgs,
-                                     aResultParams );
-                rReq.SetArgs( aResultParams );
-
-                // the StoreAsURL/StoreToURL method have called this method with false
-                // so it has to be restored to true here since it is a call from GUI
-                GetMedium()->SetUpdatePickList( true );
-
-                // TODO: in future it must be done in following way
-                // if document is opened from GUI, it immediately appears in the picklist
-                // if the document is a new one then it appears in the picklist immediately
-                // after SaveAs operation triggered from GUI
-            }
-            catch( const task::ErrorCodeIOException& aErrorEx )
-            {
-                nErrorCode = ErrCode(aErrorEx.ErrCode);
-            }
-            catch( Exception& )
-            {
-                nErrorCode = ERRCODE_IO_GENERAL;
-            }
-
-            // by default versions should be preserved always except in case of an explicit
-            // SaveAs via GUI, so the flag must be reset to guarantee this
-            pImpl->bPreserveVersions = true;
-            ErrCode lErr=GetErrorCode();
-
-            if ( !lErr && nErrorCode )
-                lErr = nErrorCode;
-
-            if ( lErr && nErrorCode == ERRCODE_NONE )
-            {
-                const SfxBoolItem* pWarnItem = rReq.GetArg<SfxBoolItem>(SID_FAIL_ON_WARNING);
-                if ( pWarnItem && pWarnItem->GetValue() )
-                    nErrorCode = lErr;
-            }
-
-            // may be nErrorCode should be shown in future
-            if ( lErr != ERRCODE_IO_ABORT )
-            {
-                SfxErrorContext aEc(ERRCTX_SFX_SAVEASDOC,GetTitle());
-                ErrorHandler::HandleError( lErr );
-            }
-
-            if ( nId == SID_EXPORTDOCASPDF )
-            {
-                // This function is used by the SendMail function that needs information if a export
-                // file was written or not. This could be due to cancellation of the export
-                // or due to an error. So IO abort must be handled like an error!
-                nErrorCode = ( lErr != ERRCODE_IO_ABORT ) && ( nErrorCode == ERRCODE_NONE ) ? nErrorCode : lErr;
-            }
-
-            if ( ( nId == SID_SAVEASDOC || nId == SID_SAVEASREMOTE ) && nErrorCode == ERRCODE_NONE )
-            {
-                const SfxBoolItem* saveTo = rReq.GetArg<SfxBoolItem>(SID_SAVETO);
-                if (saveTo == nullptr || !saveTo->GetValue())
-                {
-                    SfxViewFrame *pFrame = GetFrame();
-                    if (pFrame)
-                        pFrame->RemoveInfoBar("readonly");
-                    SetReadOnlyUI(false);
-                }
-            }
-
-            rReq.SetReturnValue( SfxBoolItem(0, nErrorCode == ERRCODE_NONE ) );
-
-            ResetError();
-
-            Invalidate();
             break;
         }
 
         case SID_SAVEACOPY:
         {
-            SfxAllItemSet aArgs( GetPool() );
-            aArgs.Put( SfxBoolItem( SID_SAVEACOPYITEM, true ) );
-            SfxRequest aSaveACopyReq( SID_EXPORTDOC, SfxCallMode::API, aArgs );
-            ExecFile_Impl( aSaveACopyReq );
-            if ( !aSaveACopyReq.IsDone() )
-            {
-                rReq.Ignore();
-                return;
-            }
             break;
         }
 
