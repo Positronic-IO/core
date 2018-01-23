@@ -65,17 +65,13 @@ $(eval $(call gb_Module_add_check_targets,sc,\
 	CppunitTest_sc_cache_test \
 ))
 
-#removing for viewonly
-#ifneq ($(ENABLE_HEADLESS),TRUE)
-#ifeq ($(OS),LINUX)
-#$(eval $(call gb_Module_add_check_targets,sc,\
-#	CppunitTest_sc_tiledrendering \
-#))
-#endif
-#endif
-
-#CppunitTest_sc_copypaste \
-#removing for viewonly
+ifneq ($(ENABLE_HEADLESS),TRUE)
+ifeq ($(OS),LINUX)
+$(eval $(call gb_Module_add_check_targets,sc,\
+	CppunitTest_sc_tiledrendering \
+))
+endif
+endif
 
 $(eval $(call gb_Module_add_slowcheck_targets,sc, \
 	CppunitTest_sc_cond_format_merge \
@@ -83,6 +79,7 @@ $(eval $(call gb_Module_add_slowcheck_targets,sc, \
 	CppunitTest_sc_subsequent_filters_test \
 	CppunitTest_sc_subsequent_export_test \
 	CppunitTest_sc_html_export_test \
+	CppunitTest_sc_copypaste \
 	CppunitTest_sc_pivottable_filters_test \
 ))
 
