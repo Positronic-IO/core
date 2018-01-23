@@ -1168,26 +1168,27 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 {
                     bool bSignPDF = IsSignPDF(m_xObjSh);
 
-                    auto pInfoBar = AppendInfoBar("readonly", SfxResId(bSignPDF ? STR_READONLY_PDF : STR_READONLY_DOCUMENT), InfoBarType::Info);
-                    if (pInfoBar)
-                    {
-                        if (bSignPDF)
-                        {
-                            // SID_SIGNPDF opened a read-write PDF
-                            // read-only for signing purposes.
-                            VclPtrInstance<PushButton> xSignButton(&GetWindow());
-                            xSignButton->SetText(SfxResId(STR_READONLY_SIGN));
-                            xSignButton->SetSizePixel(xSignButton->GetOptimalSize());
-                            xSignButton->SetClickHdl(LINK(this, SfxViewFrame, SignDocumentHandler));
-                            pInfoBar->addButton(xSignButton);
-                        }
+                    //VIEWONLY
+                    // auto pInfoBar = AppendInfoBar("readonly", SfxResId(bSignPDF ? STR_READONLY_PDF : STR_READONLY_DOCUMENT), InfoBarType::Info);
+                    // if (pInfoBar)
+                    // {
+                    //     if (bSignPDF)
+                    //     {
+                    //         // SID_SIGNPDF opened a read-write PDF
+                    //         // read-only for signing purposes.
+                    //         VclPtrInstance<PushButton> xSignButton(&GetWindow());
+                    //         xSignButton->SetText(SfxResId(STR_READONLY_SIGN));
+                    //         xSignButton->SetSizePixel(xSignButton->GetOptimalSize());
+                    //         xSignButton->SetClickHdl(LINK(this, SfxViewFrame, SignDocumentHandler));
+                    //         pInfoBar->addButton(xSignButton);
+                    //     }
 
-                        VclPtrInstance<PushButton> xBtn(&GetWindow());
-                        xBtn->SetText(SfxResId(STR_READONLY_EDIT));
-                        xBtn->SetSizePixel(xBtn->GetOptimalSize());
-                        xBtn->SetClickHdl(LINK(this, SfxViewFrame, SwitchReadOnlyHandler));
-                        pInfoBar->addButton(xBtn);
-                    }
+                    //     // VclPtrInstance<PushButton> xBtn(&GetWindow());
+                    //     // xBtn->SetText(SfxResId(STR_READONLY_EDIT));
+                    //     // xBtn->SetSizePixel(xBtn->GetOptimalSize());
+                    //     // xBtn->SetClickHdl(LINK(this, SfxViewFrame, SwitchReadOnlyHandler));
+                    //     // pInfoBar->addButton(xBtn);
+                    // }
                 }
 
                 if (SfxClassificationHelper::IsClassified(m_xObjSh->getDocProperties()))

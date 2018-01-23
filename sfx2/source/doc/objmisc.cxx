@@ -331,7 +331,8 @@ bool SfxObjectShell::IsReadOnlyUI() const
 */
 
 {
-    return pImpl->bReadOnlyUI;
+    // return pImpl->bReadOnlyUI;
+    return true;
 }
 
 
@@ -368,11 +369,13 @@ void SfxObjectShell::SetReadOnlyUI( bool bReadOnly )
 */
 
 {
-    if ( bReadOnly != pImpl->bReadOnlyUI )
-    {
-        pImpl->bReadOnlyUI = bReadOnly;
-        Broadcast( SfxHint(SfxHintId::ModeChanged) );
-    }
+    //VIEWONLY
+    bReadOnly = true;
+    // if ( bReadOnly != pImpl->bReadOnlyUI )
+    // {
+    //     pImpl->bReadOnlyUI = bReadOnly;
+    //     Broadcast( SfxHint(SfxHintId::ModeChanged) );
+    // }
 }
 
 
@@ -382,8 +385,9 @@ void SfxObjectShell::SetReadOnly()
     // medium open mode is adjusted accordingly, and the write lock
     // on the file is removed.
 
-     if ( pMedium && !IsReadOnlyMedium() )
-    {
+    //VIEWONLY
+    //  if ( pMedium && !IsReadOnlyMedium() )
+    // {
         bool bWasROUI = IsReadOnly();
 
         pMedium->UnlockFile( false );
@@ -396,15 +400,17 @@ void SfxObjectShell::SetReadOnly()
         pMedium->SetOpenMode( SFX_STREAM_READONLY, true );
         pMedium->GetItemSet()->Put( SfxBoolItem( SID_DOC_READONLY, true ) );
 
-        if ( !bWasROUI )
-            Broadcast( SfxHint(SfxHintId::ModeChanged) );
-    }
+        // if ( !bWasROUI )
+        //     Broadcast( SfxHint(SfxHintId::ModeChanged) );
+    // }
 }
 
 
 bool SfxObjectShell::IsReadOnly() const
 {
-    return pImpl->bReadOnlyUI || pMedium == nullptr;
+    //VIEWONLY
+    // return pImpl->bReadOnlyUI || pMedium == nullptr;
+    return true;
 }
 
 
