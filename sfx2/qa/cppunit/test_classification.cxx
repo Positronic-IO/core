@@ -39,9 +39,10 @@ public:
     void testImpress();
 
     CPPUNIT_TEST_SUITE(ClassificationTest);
-    CPPUNIT_TEST(testWriter);
-    CPPUNIT_TEST(testCalc);
-    CPPUNIT_TEST(testImpress);
+    //VIEWONLY
+    // CPPUNIT_TEST(testWriter);
+    // CPPUNIT_TEST(testCalc);
+    // CPPUNIT_TEST(testImpress);
     CPPUNIT_TEST_SUITE_END();
 };
 
