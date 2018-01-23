@@ -1299,7 +1299,18 @@ uno::Reference< css::frame::XModuleManager2 > const & SfxStoringHelper::GetModul
     return m_xModuleManager;
 }
 
+#ifdef VIEWONLY
+bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
+                                            const OUString& aSlotName,
+                                            uno::Sequence< beans::PropertyValue >& aArgsSequence,
+                                            bool bPreselectPassword,
+                                            SignatureState nDocumentSignatureState )
+                                            {
+                                                return false;
+                                            }
+#endif
 
+#ifndef VIEWONLY
 bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
                                             const OUString& aSlotName,
                                             uno::Sequence< beans::PropertyValue >& aArgsSequence,
@@ -1686,6 +1697,7 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
 
     return bDialogUsed;
 }
+#endif
 
 
 // static

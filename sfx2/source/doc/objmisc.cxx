@@ -236,9 +236,17 @@ bool SfxObjectShell::IsEnableSetModified() const
     return pImpl->m_bEnableSetModified && !IsReadOnly();
 }
 
-
+#ifdef VIEWONLY
 bool SfxObjectShell::IsModified()
 {
+    return false;
+}
+#endif
+
+#ifndef VIEWONLY
+bool SfxObjectShell::IsModified()
+{
+    return false;
     if ( pImpl->m_bIsModified )
         return true;
 
@@ -277,7 +285,7 @@ bool SfxObjectShell::IsModified()
 
     return false;
 }
-
+#endif
 
 void SfxObjectShell::SetModified( bool bModifiedP )
 {
