@@ -32,11 +32,28 @@ $(eval $(call gb_Module_add_targets,sc,\
 
 endif
 
+# ifneq ($(OS),IOS)
+# $(eval $(call gb_Module_add_check_targets,sc,\
+# 	Library_scqahelper \
+# 	$(if $(and $(filter $(COM),MSC),$(MERGELIBS)),, \
+# 		CppunitTest_sc_ucalc) \
+# 	CppunitTest_sc_bugfix_test \
+# 	CppunitTest_sc_filters_test \
+# 	CppunitTest_sc_rangelst_test \
+# 	CppunitTest_sc_range_test \
+# 	CppunitTest_sc_mark_test \
+# 	CppunitTest_sc_core \
+# 	CppunitTest_sc_dataprovider \
+# 	CppunitTest_sc_datatransformation \
+# 	CppunitTest_sc_cache_test \
+# ))
+
+#remove cut/paste unit tests for viewonly
 ifneq ($(OS),IOS)
 $(eval $(call gb_Module_add_check_targets,sc,\
 	Library_scqahelper \
 	$(if $(and $(filter $(COM),MSC),$(MERGELIBS)),, \
-		CppunitTest_sc_ucalc) \
+		) \
 	CppunitTest_sc_bugfix_test \
 	CppunitTest_sc_filters_test \
 	CppunitTest_sc_rangelst_test \
