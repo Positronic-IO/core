@@ -442,7 +442,7 @@ bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
     return bNotify;
 }
 
-#ifdef READONLY
+#ifdef VIEWONLY
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
     // Just do something with it to  make the compiler happy ugh!
@@ -451,7 +451,7 @@ bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 }
 #endif
 
-#ifndef READONLY
+#ifndef VIEWONLY
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
     bool bNotify( false );
