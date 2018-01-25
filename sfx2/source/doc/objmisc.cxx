@@ -246,7 +246,6 @@ bool SfxObjectShell::IsModified()
 #ifndef VIEWONLY
 bool SfxObjectShell::IsModified()
 {
-    return false;
     if ( pImpl->m_bIsModified )
         return true;
 
@@ -388,14 +387,16 @@ void SfxObjectShell::SetReadOnly()
     //VIEWONLY
     //  if ( pMedium && !IsReadOnlyMedium() )
     // {
-        bool bWasROUI = IsReadOnly();
+        // bool bWasROUI = IsReadOnly();
 
         pMedium->UnlockFile( false );
 
         // the storage-based mediums are already based on the temporary file
         // so UnlockFile has already closed the locking stream
         if ( !pMedium->HasStorage_Impl() && IsLoadingFinished() )
+        {
             pMedium->CloseInStream();
+        }
 
         pMedium->SetOpenMode( SFX_STREAM_READONLY, true );
         pMedium->GetItemSet()->Put( SfxBoolItem( SID_DOC_READONLY, true ) );

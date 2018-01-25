@@ -442,11 +442,18 @@ bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
     return bNotify;
 }
 
+#ifdef READONLY
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
-#ifndef READONLY
+    // Just do something with it to  make the compiler happy ugh!
+    UIElement aToolbarElement = implts_findToolbar( rResourceURL );
     return false;
+}
 #endif
+
+#ifndef READONLY
+bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
+{
     bool bNotify( false );
 
     SolarMutexClearableGuard aReadLock;
@@ -570,6 +577,7 @@ bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 
     return bNotify;
 }
+#endif
 
 bool ToolbarLayoutManager::destroyToolbar( const OUString& rResourceURL )
 {

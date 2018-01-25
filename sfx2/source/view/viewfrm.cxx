@@ -1166,7 +1166,7 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                     ( m_xObjSh->GetCreateMode() != SfxObjectCreateMode::EMBEDDED ||
                         (( pVSh = m_xObjSh->GetViewShell()) && (pFSh = pVSh->GetFormShell()) && pFSh->IsDesignMode())))
                 {
-                    bool bSignPDF = IsSignPDF(m_xObjSh);
+                    //bool bSignPDF = IsSignPDF(m_xObjSh);
 
                     //VIEWONLY
                     // auto pInfoBar = AppendInfoBar("readonly", SfxResId(bSignPDF ? STR_READONLY_PDF : STR_READONLY_DOCUMENT), InfoBarType::Info);
