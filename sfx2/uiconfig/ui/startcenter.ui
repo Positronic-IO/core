@@ -34,28 +34,28 @@
     <property name="can_focus">False</property>
     <child>
       <object class="GtkMenuItem" id="filter_writer">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="label" translatable="yes">Writer Templates</property>
       </object>
     </child>
     <child>
       <object class="GtkMenuItem" id="filter_calc">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="label" translatable="yes">Calc Templates</property>
       </object>
     </child>
     <child>
       <object class="GtkMenuItem" id="filter_impress">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="label" translatable="yes">Impress Templates</property>
       </object>
     </child>
     <child>
       <object class="GtkMenuItem" id="filter_draw">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="label" translatable="yes">Draw Templates</property>
       </object>
@@ -68,7 +68,7 @@
     </child>
     <child>
       <object class="GtkMenuItem" id="manage">
-        <property name="visible">True</property>
+        <property name="visible">False</property>
         <property name="can_focus">False</property>
         <property name="label" translatable="yes">Manage Templates</property>
       </object>
@@ -100,7 +100,7 @@
     <property name="pixbuf">framework/res/remote-documents.png</property>
   </object>
   <object class="GtkImage" id="templates_all_image">
-    <property name="visible">True</property>
+    <property name="visible">False</property>
     <property name="can_focus">False</property>
     <property name="pixbuf">framework/res/templates_32.png</property>
   </object>
@@ -215,7 +215,7 @@
                         <child>
                           <object class="GtkToggleButton" id="templates_all:filtermenu">
                             <property name="label" translatable="yes">T_emplates</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="margin_left">6</property>
@@ -246,7 +246,7 @@
                         </child>
                         <child>
                           <object class="GtkLabel" id="create_label">
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">False</property>
                             <property name="margin_left">12</property>
                             <property name="margin_bottom">6</property>
@@ -262,7 +262,7 @@
                         <child>
                           <object class="GtkButton" id="writer_all">
                             <property name="label" translatable="yes">_Writer Document</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
@@ -282,7 +282,7 @@
                         <child>
                           <object class="GtkButton" id="calc_all">
                             <property name="label" translatable="yes">_Calc Spreadsheet</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
@@ -302,7 +302,7 @@
                         <child>
                           <object class="GtkButton" id="impress_all">
                             <property name="label" translatable="yes">_Impress Presentation</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
@@ -322,7 +322,7 @@
                         <child>
                           <object class="GtkButton" id="draw_all">
                             <property name="label" translatable="yes">_Draw Drawing</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
@@ -342,7 +342,7 @@
                         <child>
                           <object class="GtkButton" id="math_all">
                             <property name="label" translatable="yes">_Math Formula</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
@@ -362,7 +362,7 @@
                         <child>
                           <object class="GtkButton" id="database_all">
                             <property name="label" translatable="yes">_Base Database</property>
-                            <property name="visible">True</property>
+                            <property name="visible">False</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
                             <property name="has_tooltip">True</property>
