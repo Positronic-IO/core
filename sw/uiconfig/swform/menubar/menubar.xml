@@ -24,7 +24,7 @@
       <menu:menuitem menu:id=".uno:RecentFileList"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
-      <menu:menuseparator/>
+      <!-- <menu:menuseparator/>
       <menu:menu menu:id=".uno:TemplateMenu">
           <menu:menupopup>
               <menu:menuitem menu:id=".uno:OpenTemplate"/>
@@ -40,11 +40,11 @@
       <menu:menuitem menu:id=".uno:SaveAll"/>
       <menu:menuitem menu:id=".uno:CheckOut"/>
       <menu:menuitem menu:id=".uno:CancelCheckOut"/>
-      <menu:menuitem menu:id=".uno:CheckIn"/>
+      <menu:menuitem menu:id=".uno:CheckIn"/> -->
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Reload"/>
       <menu:menuitem menu:id=".uno:VersionDialog"/>
-      <menu:menuseparator/>
+      <!-- <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ExportTo"/>
       <menu:menuitem menu:id=".uno:ExportToPDF"/>
       <menu:menu menu:id=".uno:SendToMenu">
@@ -69,21 +69,21 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:PrintPreview"/>
       <menu:menuitem menu:id=".uno:Print"/>
-      <menu:menuitem menu:id=".uno:PrinterSetup"/>
+      <menu:menuitem menu:id=".uno:PrinterSetup"/> -->
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Quit"/>
     </menu:menupopup>
   </menu:menu>
   <menu:menu menu:id=".uno:EditMenu">
     <menu:menupopup>
-      <menu:menuitem menu:id=".uno:Undo"/>
+      <!-- <menu:menuitem menu:id=".uno:Undo"/>
       <menu:menuitem menu:id=".uno:Redo"/>
       <menu:menuitem menu:id=".uno:Repeat"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Cut"/>
+      <menu:menuitem menu:id=".uno:Cut"/> -->
       <menu:menuitem menu:id=".uno:Copy"/>
-      <menu:menuitem menu:id=".uno:Paste"/>
-      <menu:menuitem menu:id=".uno:PasteSpecial"/>
+      <!-- <menu:menuitem menu:id=".uno:Paste"/>
+      <menu:menuitem menu:id=".uno:PasteSpecial"/> -->
       <menu:menuitem menu:id=".uno:SelectTextMode"/>
       <menu:menu menu:id=".uno:SelectionModeMenu">
         <menu:menupopup>
