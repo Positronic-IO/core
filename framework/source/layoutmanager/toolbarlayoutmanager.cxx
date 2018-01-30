@@ -442,142 +442,134 @@ bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
     return bNotify;
 }
 
-#ifdef VIEWONLY
+// TODO: This needs to be a compiler flag. figure it out Tim!
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
-    // Just do something with it to  make the compiler happy ugh!
-    UIElement aToolbarElement = implts_findToolbar( rResourceURL );
+    const OUString& gfybro = rResourceURL;
     return false;
+    // bool bNotify( false );
+
+    // SolarMutexClearableGuard aReadLock;
+    // uno::Reference< frame::XFrame > xFrame( m_xFrame );
+    // uno::Reference< awt::XWindow2 > xContainerWindow( m_xContainerWindow );
+    // aReadLock.clear();
+
+    // bNotify = false;
+
+    // if ( !xFrame.is() || !xContainerWindow.is() )
+    //     return false;
+
+    // UIElement aToolbarElement = implts_findToolbar( rResourceURL );
+    // if ( !aToolbarElement.m_xUIElement.is()  )
+    // {
+    //     uno::Reference< ui::XUIElement > xUIElement;
+
+    //     uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
+    //     aPropSeq[0].Name = "Frame";
+    //     aPropSeq[0].Value <<= m_xFrame;
+    //     aPropSeq[1].Name = "Persistent";
+    //     aPropSeq[1].Value <<= true;
+    //     uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
+    //     aReadLock.clear();
+
+    //     implts_setToolbarCreation();
+    //     try
+    //     {
+    //         if ( xUIElementFactory.is() )
+    //             xUIElement = xUIElementFactory->createUIElement( rResourceURL, aPropSeq );
+    //     }
+    //     catch (const container::NoSuchElementException&)
+    //     {
+    //     }
+    //     catch (const lang::IllegalArgumentException&)
+    //     {
+    //     }
+    //     implts_setToolbarCreation( false );
+
+    //     if ( xUIElement.is() )
+    //     {
+    //         uno::Reference< awt::XWindow > xWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
+    //         uno::Reference< awt::XDockableWindow > xDockWindow( xWindow, uno::UNO_QUERY );
+    //         if ( xDockWindow.is() && xWindow.is() )
+    //         {
+    //             try
+    //             {
+    //                 xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >(
+    //                     static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                 xWindow->addWindowListener( uno::Reference< awt::XWindowListener >(
+    //                     static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                 xDockWindow->enableDocking( true );
+    //             }
+    //             catch (const uno::Exception&)
+    //             {
+    //             }
+    //         }
+
+    //         bool bVisible =  false;
+    //         bool bFloating = false;
+
+    //         /* SAFE AREA ----------------------------------------------------------------------------------------------- */
+    //         SolarMutexClearableGuard aWriteLock;
+
+    //         UIElement& rElement = impl_findToolbar( rResourceURL );
+    //         if (rElement.m_xUIElement.is())
+    //         {
+    //             // somebody else must have created it while we released
+    //             // the SolarMutex - just dispose our new instance and
+    //             // do nothing. (We have to dispose either the new or the
+    //             // existing m_xUIElement.)
+    //             aWriteLock.clear();
+    //             uno::Reference<lang::XComponent> const xC(xUIElement, uno::UNO_QUERY);
+    //             xC->dispose();
+    //             return false;
+    //         }
+    //         if ( !rElement.m_aName.isEmpty() )
+    //         {
+    //             // Reuse a local entry so we are able to use the latest
+    //             // UI changes for this document.
+    //             implts_setElementData( rElement, xDockWindow );
+    //             rElement.m_xUIElement = xUIElement;
+    //             bVisible = rElement.m_bVisible;
+    //             bFloating = rElement.m_bFloating;
+    //         }
+    //         else
+    //         {
+    //             // Create new UI element and try to read its state data
+    //             UIElement aNewToolbar( rResourceURL, UIRESOURCETYPE_TOOLBAR, xUIElement );
+    //             implts_readWindowStateData( rResourceURL, aNewToolbar );
+    //             implts_setElementData( aNewToolbar, xDockWindow );
+    //             implts_insertToolbar( aNewToolbar );
+    //             bVisible = aNewToolbar.m_bVisible;
+    //             bFloating = rElement.m_bFloating;
+    //         }
+    //         aWriteLock.clear();
+    //         /* SAFE AREA ----------------------------------------------------------------------------------------------- */
+
+    //         // set toolbar menu style according to customize command state
+    //         SvtCommandOptions aCmdOptions;
+
+    //         SolarMutexGuard aGuard;
+    //         VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
+    //         if ( pWindow && pWindow->GetType() == WindowType::TOOLBOX )
+    //         {
+    //             ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
+    //             ToolBoxMenuType nMenuType = pToolbar->GetMenuType();
+    //             if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "ConfigureDialog" ))
+    //                 pToolbar->SetMenuType( nMenuType & ~ToolBoxMenuType::Customize );
+    //             else
+    //                 pToolbar->SetMenuType( nMenuType | ToolBoxMenuType::Customize );
+    //         }
+    //         bNotify = true;
+
+    //         implts_sortUIElements();
+
+    //         if ( bVisible && !bFloating )
+    //             implts_setLayoutDirty();
+    //     }
+    // }
+
+    // return bNotify;
 }
-#endif
-
-#ifndef VIEWONLY
-bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
-{
-    bool bNotify( false );
-
-    SolarMutexClearableGuard aReadLock;
-    uno::Reference< frame::XFrame > xFrame( m_xFrame );
-    uno::Reference< awt::XWindow2 > xContainerWindow( m_xContainerWindow );
-    aReadLock.clear();
-
-    bNotify = false;
-
-    if ( !xFrame.is() || !xContainerWindow.is() )
-        return false;
-
-    UIElement aToolbarElement = implts_findToolbar( rResourceURL );
-    if ( !aToolbarElement.m_xUIElement.is()  )
-    {
-        uno::Reference< ui::XUIElement > xUIElement;
-
-        uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
-        aPropSeq[0].Name = "Frame";
-        aPropSeq[0].Value <<= m_xFrame;
-        aPropSeq[1].Name = "Persistent";
-        aPropSeq[1].Value <<= true;
-        uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
-        aReadLock.clear();
-
-        implts_setToolbarCreation();
-        try
-        {
-            if ( xUIElementFactory.is() )
-                xUIElement = xUIElementFactory->createUIElement( rResourceURL, aPropSeq );
-        }
-        catch (const container::NoSuchElementException&)
-        {
-        }
-        catch (const lang::IllegalArgumentException&)
-        {
-        }
-        implts_setToolbarCreation( false );
-
-        if ( xUIElement.is() )
-        {
-            uno::Reference< awt::XWindow > xWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
-            uno::Reference< awt::XDockableWindow > xDockWindow( xWindow, uno::UNO_QUERY );
-            if ( xDockWindow.is() && xWindow.is() )
-            {
-                try
-                {
-                    xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >(
-                        static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                    xWindow->addWindowListener( uno::Reference< awt::XWindowListener >(
-                        static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                    xDockWindow->enableDocking( true );
-                }
-                catch (const uno::Exception&)
-                {
-                }
-            }
-
-            bool bVisible =  false;
-            bool bFloating = false;
-
-            /* SAFE AREA ----------------------------------------------------------------------------------------------- */
-            SolarMutexClearableGuard aWriteLock;
-
-            UIElement& rElement = impl_findToolbar( rResourceURL );
-            if (rElement.m_xUIElement.is())
-            {
-                // somebody else must have created it while we released
-                // the SolarMutex - just dispose our new instance and
-                // do nothing. (We have to dispose either the new or the
-                // existing m_xUIElement.)
-                aWriteLock.clear();
-                uno::Reference<lang::XComponent> const xC(xUIElement, uno::UNO_QUERY);
-                xC->dispose();
-                return false;
-            }
-            if ( !rElement.m_aName.isEmpty() )
-            {
-                // Reuse a local entry so we are able to use the latest
-                // UI changes for this document.
-                implts_setElementData( rElement, xDockWindow );
-                rElement.m_xUIElement = xUIElement;
-                bVisible = rElement.m_bVisible;
-                bFloating = rElement.m_bFloating;
-            }
-            else
-            {
-                // Create new UI element and try to read its state data
-                UIElement aNewToolbar( rResourceURL, UIRESOURCETYPE_TOOLBAR, xUIElement );
-                implts_readWindowStateData( rResourceURL, aNewToolbar );
-                implts_setElementData( aNewToolbar, xDockWindow );
-                implts_insertToolbar( aNewToolbar );
-                bVisible = aNewToolbar.m_bVisible;
-                bFloating = rElement.m_bFloating;
-            }
-            aWriteLock.clear();
-            /* SAFE AREA ----------------------------------------------------------------------------------------------- */
-
-            // set toolbar menu style according to customize command state
-            SvtCommandOptions aCmdOptions;
-
-            SolarMutexGuard aGuard;
-            VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
-            if ( pWindow && pWindow->GetType() == WindowType::TOOLBOX )
-            {
-                ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
-                ToolBoxMenuType nMenuType = pToolbar->GetMenuType();
-                if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "ConfigureDialog" ))
-                    pToolbar->SetMenuType( nMenuType & ~ToolBoxMenuType::Customize );
-                else
-                    pToolbar->SetMenuType( nMenuType | ToolBoxMenuType::Customize );
-            }
-            bNotify = true;
-
-            implts_sortUIElements();
-
-            if ( bVisible && !bFloating )
-                implts_setLayoutDirty();
-        }
-    }
-
-    return bNotify;
-}
-#endif
 
 bool ToolbarLayoutManager::destroyToolbar( const OUString& rResourceURL )
 {
