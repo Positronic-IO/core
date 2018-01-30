@@ -1303,6 +1303,10 @@ uno::Reference< css::frame::XModuleManager2 > const & SfxStoringHelper::GetModul
     return m_xModuleManager;
 }
 
+//////////////////////////////////////////////////////////////
+// Functionality Commented out.
+// TODOD: Add compiler flag to enable functionality.
+/////////////////////////////////////////////////////////////
 
 bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
                                             const OUString& aSlotName,
@@ -1310,395 +1314,405 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
                                             bool bPreselectPassword,
                                             const OUString& _aSuggestedName,
                                             SignatureState nDocumentSignatureState )
-{
-    OUString aSuggestedName = _aSuggestedName;
-    ModelData_Impl aModelData( *this, xModel, aArgsSequence );
+                                            {
+                                                return false;
+                                            }
 
-    bool bDialogUsed = false;
+// bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
+//                                             const OUString& aSlotName,
+//                                             uno::Sequence< beans::PropertyValue >& aArgsSequence,
+//                                             bool bPreselectPassword,
+//                                             const OUString& _aSuggestedName,
+//                                             SignatureState nDocumentSignatureState )
+// {
+//     OUString aSuggestedName = _aSuggestedName;
+//     ModelData_Impl aModelData( *this, xModel, aArgsSequence );
 
-    INetURLObject aURL;
+//     bool bDialogUsed = false;
 
-    bool bSetStandardName = false; // can be set only for SaveAs
+//     INetURLObject aURL;
 
-    // parse the slot name
-    bool bRemote = false;
-    sal_Int8 nStoreMode = getStoreModeFromSlotName( aSlotName );
+//     bool bSetStandardName = false; // can be set only for SaveAs
 
-    if ( nStoreMode == SAVEASREMOTE_REQUESTED )
-    {
-        nStoreMode = SAVEAS_REQUESTED;
-        bRemote = true;
-    }
+//     // parse the slot name
+//     bool bRemote = false;
+//     sal_Int8 nStoreMode = getStoreModeFromSlotName( aSlotName );
 
-    sal_Int8 nStatusSave = STATUS_NO_ACTION;
+//     if ( nStoreMode == SAVEASREMOTE_REQUESTED )
+//     {
+//         nStoreMode = SAVEAS_REQUESTED;
+//         bRemote = true;
+//     }
 
-    ::comphelper::SequenceAsHashMap::const_iterator aSaveACopyIter =
-                        aModelData.GetMediaDescr().find( ::rtl::OUString("SaveACopy") );
-    if ( aSaveACopyIter != aModelData.GetMediaDescr().end() )
-    {
-        bool bSaveACopy = false;
-        aSaveACopyIter->second >>= bSaveACopy;
-        if ( bSaveACopy )
-            nStoreMode = EXPORT_REQUESTED | SAVEACOPY_REQUESTED | WIDEEXPORT_REQUESTED;
-    }
-    // handle the special cases
-    if ( nStoreMode & SAVEAS_REQUESTED )
-    {
-        ::comphelper::SequenceAsHashMap::const_iterator aSaveToIter =
-                        aModelData.GetMediaDescr().find( OUString("SaveTo") );
-        if ( aSaveToIter != aModelData.GetMediaDescr().end() )
-        {
-            bool bWideExport = false;
-            aSaveToIter->second >>= bWideExport;
-            if ( bWideExport )
-                nStoreMode = EXPORT_REQUESTED | WIDEEXPORT_REQUESTED;
-        }
+//     sal_Int8 nStatusSave = STATUS_NO_ACTION;
 
-        // if saving is not acceptable the warning must be shown even in case of SaveAs operation
-        if ( ( nStoreMode & SAVEAS_REQUESTED ) && aModelData.CheckSaveAcceptable( STATUS_SAVEAS ) == STATUS_NO_ACTION )
-            throw task::ErrorCodeIOException(
-                "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
-                uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
-    }
-    else if ( nStoreMode & SAVE_REQUESTED )
-    {
-        // if saving is not acceptable by the configuration the warning must be shown
-        nStatusSave = aModelData.CheckSaveAcceptable( STATUS_SAVE );
+//     ::comphelper::SequenceAsHashMap::const_iterator aSaveACopyIter =
+//                         aModelData.GetMediaDescr().find( ::rtl::OUString("SaveACopy") );
+//     if ( aSaveACopyIter != aModelData.GetMediaDescr().end() )
+//     {
+//         bool bSaveACopy = false;
+//         aSaveACopyIter->second >>= bSaveACopy;
+//         if ( bSaveACopy )
+//             nStoreMode = EXPORT_REQUESTED | SAVEACOPY_REQUESTED | WIDEEXPORT_REQUESTED;
+//     }
+//     // handle the special cases
+//     if ( nStoreMode & SAVEAS_REQUESTED )
+//     {
+//         ::comphelper::SequenceAsHashMap::const_iterator aSaveToIter =
+//                         aModelData.GetMediaDescr().find( OUString("SaveTo") );
+//         if ( aSaveToIter != aModelData.GetMediaDescr().end() )
+//         {
+//             bool bWideExport = false;
+//             aSaveToIter->second >>= bWideExport;
+//             if ( bWideExport )
+//                 nStoreMode = EXPORT_REQUESTED | WIDEEXPORT_REQUESTED;
+//         }
 
-        if ( nStatusSave == STATUS_NO_ACTION )
-            throw task::ErrorCodeIOException(
-                "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
-                uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
-        else if ( nStatusSave == STATUS_SAVE )
-        {
-            // check whether it is possible to use save operation
-            nStatusSave = aModelData.CheckStateForSave();
-        }
+//         // if saving is not acceptable the warning must be shown even in case of SaveAs operation
+//         if ( ( nStoreMode & SAVEAS_REQUESTED ) && aModelData.CheckSaveAcceptable( STATUS_SAVEAS ) == STATUS_NO_ACTION )
+//             throw task::ErrorCodeIOException(
+//                 "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
+//                 uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
+//     }
+//     else if ( nStoreMode & SAVE_REQUESTED )
+//     {
+//         // if saving is not acceptable by the configuration the warning must be shown
+//         nStatusSave = aModelData.CheckSaveAcceptable( STATUS_SAVE );
 
-        if ( nStatusSave == STATUS_NO_ACTION )
-        {
-            throw task::ErrorCodeIOException(
-                "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
-                uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
-        }
-        else if ( nStatusSave != STATUS_SAVE )
-        {
-            // this should be a usual SaveAs operation
-            nStoreMode = SAVEAS_REQUESTED;
-            if ( nStatusSave == STATUS_SAVEAS_STANDARDNAME )
-                bSetStandardName = true;
-        }
-    }
+//         if ( nStatusSave == STATUS_NO_ACTION )
+//             throw task::ErrorCodeIOException(
+//                 "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
+//                 uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
+//         else if ( nStatusSave == STATUS_SAVE )
+//         {
+//             // check whether it is possible to use save operation
+//             nStatusSave = aModelData.CheckStateForSave();
+//         }
 
-    if ( !( nStoreMode & EXPORT_REQUESTED ) )
-    {
-        // if it is no export, warn user that the signature will be removed
-        if (  SignatureState::OK == nDocumentSignatureState
-           || SignatureState::INVALID == nDocumentSignatureState
-           || SignatureState::NOTVALIDATED == nDocumentSignatureState
-           || SignatureState::PARTIAL_OK == nDocumentSignatureState)
-        {
-            if (ScopedVclPtrInstance<MessageDialog>(nullptr, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE),
-                              VclMessageType::Question, VCL_BUTTONS_YES_NO)->Execute() != RET_YES)
-            {
-                // the user has decided not to store the document
-                throw task::ErrorCodeIOException(
-                    "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
-                    uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
-            }
-        }
-    }
+//         if ( nStatusSave == STATUS_NO_ACTION )
+//         {
+//             throw task::ErrorCodeIOException(
+//                 "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
+//                 uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
+//         }
+//         else if ( nStatusSave != STATUS_SAVE )
+//         {
+//             // this should be a usual SaveAs operation
+//             nStoreMode = SAVEAS_REQUESTED;
+//             if ( nStatusSave == STATUS_SAVEAS_STANDARDNAME )
+//                 bSetStandardName = true;
+//         }
+//     }
 
-    if ( nStoreMode & SAVE_REQUESTED && nStatusSave == STATUS_SAVE )
-    {
-        // Document properties can contain streams that should be freed before storing
-        aModelData.FreeDocumentProps();
+//     if ( !( nStoreMode & EXPORT_REQUESTED ) )
+//     {
+//         // if it is no export, warn user that the signature will be removed
+//         if (  SignatureState::OK == nDocumentSignatureState
+//            || SignatureState::INVALID == nDocumentSignatureState
+//            || SignatureState::NOTVALIDATED == nDocumentSignatureState
+//            || SignatureState::PARTIAL_OK == nDocumentSignatureState)
+//         {
+//             if (ScopedVclPtrInstance<MessageDialog>(nullptr, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE),
+//                               VclMessageType::Question, VCL_BUTTONS_YES_NO)->Execute() != RET_YES)
+//             {
+//                 // the user has decided not to store the document
+//                 throw task::ErrorCodeIOException(
+//                     "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_ABORT",
+//                     uno::Reference< uno::XInterface >(), ERRCODE_IO_ABORT);
+//             }
+//         }
+//     }
 
-        if ( aModelData.GetStorable2().is() )
-        {
-            try
-            {
-                aModelData.GetStorable2()->storeSelf( aModelData.GetMediaDescr().getAsConstPropertyValueList() );
-            }
-            catch (const lang::IllegalArgumentException& e)
-            {
-                SAL_WARN("sfx", "Ignoring parameters! "
-                    "ModelData considers this illegal:  " << e.Message);
-                aModelData.GetStorable()->store();
-            }
-        }
-        else
-        {
-            OSL_FAIL( "XStorable2 is not supported by the model!\n" );
-            aModelData.GetStorable()->store();
-        }
+//     if ( nStoreMode & SAVE_REQUESTED && nStatusSave == STATUS_SAVE )
+//     {
+//         // Document properties can contain streams that should be freed before storing
+//         aModelData.FreeDocumentProps();
 
-        return false;
-    }
+//         if ( aModelData.GetStorable2().is() )
+//         {
+//             try
+//             {
+//                 aModelData.GetStorable2()->storeSelf( aModelData.GetMediaDescr().getAsConstPropertyValueList() );
+//             }
+//             catch (const lang::IllegalArgumentException& e)
+//             {
+//                 SAL_WARN("sfx", "Ignoring parameters! "
+//                     "ModelData considers this illegal:  " << e.Message);
+//                 aModelData.GetStorable()->store();
+//             }
+//         }
+//         else
+//         {
+//             OSL_FAIL( "XStorable2 is not supported by the model!\n" );
+//             aModelData.GetStorable()->store();
+//         }
 
-    // preselect a filter for the storing process
-    uno::Sequence< beans::PropertyValue > aFilterProps = aModelData.GetPreselectedFilter_Impl( nStoreMode );
+//         return false;
+//     }
 
-    DBG_ASSERT( aFilterProps.getLength(), "No filter for storing!\n" );
-    if ( !aFilterProps.getLength() )
-        throw task::ErrorCodeIOException(
-            "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
-            uno::Reference< uno::XInterface >(), ERRCODE_IO_INVALIDPARAMETER);
+//     // preselect a filter for the storing process
+//     uno::Sequence< beans::PropertyValue > aFilterProps = aModelData.GetPreselectedFilter_Impl( nStoreMode );
 
-    ::comphelper::SequenceAsHashMap aFilterPropsHM( aFilterProps );
-    OUString aFilterName = aFilterPropsHM.getUnpackedValueOrDefault(
-                                                                    "Name",
-                                                                    OUString() );
+//     DBG_ASSERT( aFilterProps.getLength(), "No filter for storing!\n" );
+//     if ( !aFilterProps.getLength() )
+//         throw task::ErrorCodeIOException(
+//             "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
+//             uno::Reference< uno::XInterface >(), ERRCODE_IO_INVALIDPARAMETER);
 
-    const OUString sFilterNameString(aFilterNameString);
+//     ::comphelper::SequenceAsHashMap aFilterPropsHM( aFilterProps );
+//     OUString aFilterName = aFilterPropsHM.getUnpackedValueOrDefault(
+//                                                                     "Name",
+//                                                                     OUString() );
 
-    OUString aFilterFromMediaDescr = aModelData.GetMediaDescr().getUnpackedValueOrDefault(
-                                                    sFilterNameString,
-                                                    OUString() );
-    OUString aOldFilterName = aModelData.GetDocProps().getUnpackedValueOrDefault(
-                                                    sFilterNameString,
-                                                    OUString() );
+//     const OUString sFilterNameString(aFilterNameString);
 
-    bool bUseFilterOptions = false;
-    ::comphelper::SequenceAsHashMap::const_iterator aFileNameIter = aModelData.GetMediaDescr().find( OUString("URL") );
+//     OUString aFilterFromMediaDescr = aModelData.GetMediaDescr().getUnpackedValueOrDefault(
+//                                                     sFilterNameString,
+//                                                     OUString() );
+//     OUString aOldFilterName = aModelData.GetDocProps().getUnpackedValueOrDefault(
+//                                                     sFilterNameString,
+//                                                     OUString() );
 
-    const OUString sFilterOptionsString(aFilterOptionsString);
-    const OUString sFilterDataString(aFilterDataString);
-    const OUString sFilterFlagsString("FilterFlags");
+//     bool bUseFilterOptions = false;
+//     ::comphelper::SequenceAsHashMap::const_iterator aFileNameIter = aModelData.GetMediaDescr().find( OUString("URL") );
 
-    if ( ( nStoreMode & EXPORT_REQUESTED ) && ( nStoreMode & PDFEXPORT_REQUESTED ) && !( nStoreMode & PDFDIRECTEXPORT_REQUESTED ) )
-    {
-        // this is PDF export, the filter options dialog should be shown before the export
-        aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
-        if ( aModelData.GetMediaDescr().find( sFilterFlagsString ) == aModelData.GetMediaDescr().end()
-          && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end()
-          && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
-        {
-            // execute filter options dialog since no options are set in the media descriptor
-            if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
-                bDialogUsed = true;
-        }
-    }
+//     const OUString sFilterOptionsString(aFilterOptionsString);
+//     const OUString sFilterDataString(aFilterDataString);
+//     const OUString sFilterFlagsString("FilterFlags");
 
-    if ( aFileNameIter == aModelData.GetMediaDescr().end() )
-    {
-        sal_Int16 nDialog = SFX2_IMPL_DIALOG_CONFIG;
+//     if ( ( nStoreMode & EXPORT_REQUESTED ) && ( nStoreMode & PDFEXPORT_REQUESTED ) && !( nStoreMode & PDFDIRECTEXPORT_REQUESTED ) )
+//     {
+//         // this is PDF export, the filter options dialog should be shown before the export
+//         aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
+//         if ( aModelData.GetMediaDescr().find( sFilterFlagsString ) == aModelData.GetMediaDescr().end()
+//           && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end()
+//           && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
+//         {
+//             // execute filter options dialog since no options are set in the media descriptor
+//             if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
+//                 bDialogUsed = true;
+//         }
+//     }
 
-        if( bRemote )
-        {
-            nDialog = SFX2_IMPL_DIALOG_REMOTE;
-        }
-        else
-        {
-            ::comphelper::SequenceAsHashMap::const_iterator aDlgIter =
-                aModelData.GetMediaDescr().find( OUString("UseSystemDialog") );
-            if ( aDlgIter != aModelData.GetMediaDescr().end() )
-            {
-                bool bUseSystemDialog = true;
-                if ( aDlgIter->second >>= bUseSystemDialog )
-                {
-                    if ( bUseSystemDialog )
-                        nDialog = SFX2_IMPL_DIALOG_SYSTEM;
-                    else
-                        nDialog = SFX2_IMPL_DIALOG_OOO;
-                }
-            }
-        }
+//     if ( aFileNameIter == aModelData.GetMediaDescr().end() )
+//     {
+//         sal_Int16 nDialog = SFX2_IMPL_DIALOG_CONFIG;
 
-        // The Dispatch supports parameter FolderName that overwrites SuggestedSaveAsDir
-        OUString aSuggestedDir = aModelData.GetMediaDescr().getUnpackedValueOrDefault("FolderName", OUString() );
-        if ( aSuggestedDir.isEmpty() )
-        {
-            aSuggestedDir = aModelData.GetMediaDescr().getUnpackedValueOrDefault("SuggestedSaveAsDir", OUString() );
-            if ( aSuggestedDir.isEmpty() )
-                aSuggestedDir = aModelData.GetDocProps().getUnpackedValueOrDefault("SuggestedSaveAsDir", OUString() );
-        }
+//         if( bRemote )
+//         {
+//             nDialog = SFX2_IMPL_DIALOG_REMOTE;
+//         }
+//         else
+//         {
+//             ::comphelper::SequenceAsHashMap::const_iterator aDlgIter =
+//                 aModelData.GetMediaDescr().find( OUString("UseSystemDialog") );
+//             if ( aDlgIter != aModelData.GetMediaDescr().end() )
+//             {
+//                 bool bUseSystemDialog = true;
+//                 if ( aDlgIter->second >>= bUseSystemDialog )
+//                 {
+//                     if ( bUseSystemDialog )
+//                         nDialog = SFX2_IMPL_DIALOG_SYSTEM;
+//                     else
+//                         nDialog = SFX2_IMPL_DIALOG_OOO;
+//                 }
+//             }
+//         }
 
-        aSuggestedName = aModelData.GetMediaDescr().getUnpackedValueOrDefault("SuggestedSaveAsName", OUString() );
-        if ( aSuggestedName.isEmpty() )
-            aSuggestedName = aModelData.GetDocProps().getUnpackedValueOrDefault("SuggestedSaveAsName", OUString() );
+//         // The Dispatch supports parameter FolderName that overwrites SuggestedSaveAsDir
+//         OUString aSuggestedDir = aModelData.GetMediaDescr().getUnpackedValueOrDefault("FolderName", OUString() );
+//         if ( aSuggestedDir.isEmpty() )
+//         {
+//             aSuggestedDir = aModelData.GetMediaDescr().getUnpackedValueOrDefault("SuggestedSaveAsDir", OUString() );
+//             if ( aSuggestedDir.isEmpty() )
+//                 aSuggestedDir = aModelData.GetDocProps().getUnpackedValueOrDefault("SuggestedSaveAsDir", OUString() );
+//         }
 
-        OUString sStandardDir;
-        ::comphelper::SequenceAsHashMap::const_iterator aStdDirIter =
-            aModelData.GetMediaDescr().find( OUString("StandardDir") );
-        if ( aStdDirIter != aModelData.GetMediaDescr().end() )
-            aStdDirIter->second >>= sStandardDir;
+//         aSuggestedName = aModelData.GetMediaDescr().getUnpackedValueOrDefault("SuggestedSaveAsName", OUString() );
+//         if ( aSuggestedName.isEmpty() )
+//             aSuggestedName = aModelData.GetDocProps().getUnpackedValueOrDefault("SuggestedSaveAsName", OUString() );
 
-        css::uno::Sequence< OUString >  aBlackList;
+//         OUString sStandardDir;
+//         ::comphelper::SequenceAsHashMap::const_iterator aStdDirIter =
+//             aModelData.GetMediaDescr().find( OUString("StandardDir") );
+//         if ( aStdDirIter != aModelData.GetMediaDescr().end() )
+//             aStdDirIter->second >>= sStandardDir;
 
-        ::comphelper::SequenceAsHashMap::const_iterator aBlackListIter =
-            aModelData.GetMediaDescr().find( OUString("BlackList") );
-        if ( aBlackListIter != aModelData.GetMediaDescr().end() )
-            aBlackListIter->second >>= aBlackList;
+//         css::uno::Sequence< OUString >  aBlackList;
 
-        bool bExit = false;
-        while ( !bExit )
-        {
-            // in case the dialog is opened a second time the folder should be the same as previously navigated to by the user, not what was handed over by initial parameters
-            bUseFilterOptions = aModelData.OutputFileDialog( nStoreMode, aFilterProps, bSetStandardName, aSuggestedName, bPreselectPassword, aSuggestedDir, nDialog, sStandardDir, aBlackList );
-            if ( nStoreMode == SAVEAS_REQUESTED )
-            {
-                // in case of saving check filter for possible alien warning
-                OUString aSelFilterName = aModelData.GetMediaDescr().getUnpackedValueOrDefault(
-                                                                                sFilterNameString,
-                                                                                OUString() );
-                sal_Int8 nStatusFilterSave = aModelData.CheckFilter( aSelFilterName );
-                if ( nStatusFilterSave == STATUS_SAVEAS_STANDARDNAME )
-                {
-                    // switch to best filter
-                    bSetStandardName = true;
-                }
-                else if ( nStatusFilterSave == STATUS_SAVE )
-                {
-                    // user confirmed alien filter or "good" filter is used
-                    bExit = true;
-                }
-            }
-            else
-                bExit = true;
-        }
+//         ::comphelper::SequenceAsHashMap::const_iterator aBlackListIter =
+//             aModelData.GetMediaDescr().find( OUString("BlackList") );
+//         if ( aBlackListIter != aModelData.GetMediaDescr().end() )
+//             aBlackListIter->second >>= aBlackList;
 
-        bDialogUsed = true;
-        aFileNameIter = aModelData.GetMediaDescr().find( OUString("URL") );
-    }
-    else
-    {
-        // the target file name is provided so check if new filter options
-        // are provided or old options can be used
-        if ( aFilterFromMediaDescr.equals( aOldFilterName ) )
-        {
-            ::comphelper::SequenceAsHashMap::const_iterator aIter =
-                                            aModelData.GetDocProps().find( sFilterOptionsString );
-            if ( aIter != aModelData.GetDocProps().end()
-              && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end() )
-                aModelData.GetMediaDescr()[aIter->first] = aIter->second;
+//         bool bExit = false;
+//         while ( !bExit )
+//         {
+//             // in case the dialog is opened a second time the folder should be the same as previously navigated to by the user, not what was handed over by initial parameters
+//             bUseFilterOptions = aModelData.OutputFileDialog( nStoreMode, aFilterProps, bSetStandardName, aSuggestedName, bPreselectPassword, aSuggestedDir, nDialog, sStandardDir, aBlackList );
+//             if ( nStoreMode == SAVEAS_REQUESTED )
+//             {
+//                 // in case of saving check filter for possible alien warning
+//                 OUString aSelFilterName = aModelData.GetMediaDescr().getUnpackedValueOrDefault(
+//                                                                                 sFilterNameString,
+//                                                                                 OUString() );
+//                 sal_Int8 nStatusFilterSave = aModelData.CheckFilter( aSelFilterName );
+//                 if ( nStatusFilterSave == STATUS_SAVEAS_STANDARDNAME )
+//                 {
+//                     // switch to best filter
+//                     bSetStandardName = true;
+//                 }
+//                 else if ( nStatusFilterSave == STATUS_SAVE )
+//                 {
+//                     // user confirmed alien filter or "good" filter is used
+//                     bExit = true;
+//                 }
+//             }
+//             else
+//                 bExit = true;
+//         }
 
-            aIter = aModelData.GetDocProps().find( sFilterDataString );
-            if ( aIter != aModelData.GetDocProps().end()
-              && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
-                aModelData.GetMediaDescr()[aIter->first] = aIter->second;
-        }
-    }
+//         bDialogUsed = true;
+//         aFileNameIter = aModelData.GetMediaDescr().find( OUString("URL") );
+//     }
+//     else
+//     {
+//         // the target file name is provided so check if new filter options
+//         // are provided or old options can be used
+//         if ( aFilterFromMediaDescr.equals( aOldFilterName ) )
+//         {
+//             ::comphelper::SequenceAsHashMap::const_iterator aIter =
+//                                             aModelData.GetDocProps().find( sFilterOptionsString );
+//             if ( aIter != aModelData.GetDocProps().end()
+//               && aModelData.GetMediaDescr().find( sFilterOptionsString ) == aModelData.GetMediaDescr().end() )
+//                 aModelData.GetMediaDescr()[aIter->first] = aIter->second;
 
-    if ( aFileNameIter != aModelData.GetMediaDescr().end() )
-    {
-        OUString aFileName;
-        aFileNameIter->second >>= aFileName;
-        aURL.SetURL( aFileName );
-        DBG_ASSERT( aURL.GetProtocol() != INetProtocol::NotValid, "Illegal URL!" );
+//             aIter = aModelData.GetDocProps().find( sFilterDataString );
+//             if ( aIter != aModelData.GetDocProps().end()
+//               && aModelData.GetMediaDescr().find( sFilterDataString ) == aModelData.GetMediaDescr().end() )
+//                 aModelData.GetMediaDescr()[aIter->first] = aIter->second;
+//         }
+//     }
 
-        ::comphelper::SequenceAsHashMap::const_iterator aIter =
-                                aModelData.GetMediaDescr().find( sFilterNameString );
+//     if ( aFileNameIter != aModelData.GetMediaDescr().end() )
+//     {
+//         OUString aFileName;
+//         aFileNameIter->second >>= aFileName;
+//         aURL.SetURL( aFileName );
+//         DBG_ASSERT( aURL.GetProtocol() != INetProtocol::NotValid, "Illegal URL!" );
 
-        if ( aIter != aModelData.GetMediaDescr().end() )
-            aIter->second >>= aFilterName;
-        else
-            aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
+//         ::comphelper::SequenceAsHashMap::const_iterator aIter =
+//                                 aModelData.GetMediaDescr().find( sFilterNameString );
 
-        DBG_ASSERT( !aFilterName.isEmpty(), "Illegal filter!" );
-    }
-    else
-    {
-        SAL_WARN( "sfx", "This code must be unreachable!\n" );
-        throw task::ErrorCodeIOException(
-            "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
-            uno::Reference< uno::XInterface >(), ERRCODE_IO_INVALIDPARAMETER);
-    }
+//         if ( aIter != aModelData.GetMediaDescr().end() )
+//             aIter->second >>= aFilterName;
+//         else
+//             aModelData.GetMediaDescr()[sFilterNameString] <<= aFilterName;
 
-    ::comphelper::SequenceAsHashMap::const_iterator aIter =
-                            aModelData.GetMediaDescr().find( OUString("FilterFlags") );
-    bool bFilterFlagsSet = ( aIter != aModelData.GetMediaDescr().end() );
+//         DBG_ASSERT( !aFilterName.isEmpty(), "Illegal filter!" );
+//     }
+//     else
+//     {
+//         SAL_WARN( "sfx", "This code must be unreachable!\n" );
+//         throw task::ErrorCodeIOException(
+//             "SfxStoringHelper::GUIStoreModel: ERRCODE_IO_INVALIDPARAMETER",
+//             uno::Reference< uno::XInterface >(), ERRCODE_IO_INVALIDPARAMETER);
+//     }
 
-    if( !( nStoreMode & PDFEXPORT_REQUESTED ) && !bFilterFlagsSet
-        && ( ( nStoreMode & EXPORT_REQUESTED ) || bUseFilterOptions ) )
-    {
-        // execute filter options dialog
-        if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
-            bDialogUsed = true;
-    }
+//     ::comphelper::SequenceAsHashMap::const_iterator aIter =
+//                             aModelData.GetMediaDescr().find( OUString("FilterFlags") );
+//     bool bFilterFlagsSet = ( aIter != aModelData.GetMediaDescr().end() );
 
-    // so the arguments will not change any more and can be stored to the main location
-    aArgsSequence = aModelData.GetMediaDescr().getAsConstPropertyValueList();
+//     if( !( nStoreMode & PDFEXPORT_REQUESTED ) && !bFilterFlagsSet
+//         && ( ( nStoreMode & EXPORT_REQUESTED ) || bUseFilterOptions ) )
+//     {
+//         // execute filter options dialog
+//         if ( aModelData.ExecuteFilterDialog_Impl( aFilterName ) )
+//             bDialogUsed = true;
+//     }
 
-    // store the document and handle it's docinfo
-    SvtSaveOptions aOptions;
+//     // so the arguments will not change any more and can be stored to the main location
+//     aArgsSequence = aModelData.GetMediaDescr().getAsConstPropertyValueList();
 
-    DocumentSettingsGuard aSettingsGuard( aModelData.GetModel(), aModelData.IsRecommendReadOnly(), nStoreMode & EXPORT_REQUESTED );
+//     // store the document and handle it's docinfo
+//     SvtSaveOptions aOptions;
 
-    OSL_ENSURE( aModelData.GetMediaDescr().find( OUString( "Password" ) ) == aModelData.GetMediaDescr().end(), "The Password property of MediaDescriptor should not be used here!" );
-    if ( aOptions.IsDocInfoSave()
-      && ( !aModelData.GetStorable()->hasLocation()
-          || INetURLObject( aModelData.GetStorable()->getLocation() ) != aURL ) )
-    {
-        // this is definitely not a Save operation
-        // so the document info can be updated
+//     DocumentSettingsGuard aSettingsGuard( aModelData.GetModel(), aModelData.IsRecommendReadOnly(), nStoreMode & EXPORT_REQUESTED );
 
-        // on export document info must be preserved
-        uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            aModelData.GetModel(), uno::UNO_QUERY_THROW);
-        uno::Reference<util::XCloneable> xCloneable(
-            xDPS->getDocumentProperties(), uno::UNO_QUERY_THROW);
-        uno::Reference<document::XDocumentProperties> xOldDocProps(
-            xCloneable->createClone(), uno::UNO_QUERY_THROW);
+//     OSL_ENSURE( aModelData.GetMediaDescr().find( OUString( "Password" ) ) == aModelData.GetMediaDescr().end(), "The Password property of MediaDescriptor should not be used here!" );
+//     if ( aOptions.IsDocInfoSave()
+//       && ( !aModelData.GetStorable()->hasLocation()
+//           || INetURLObject( aModelData.GetStorable()->getLocation() ) != aURL ) )
+//     {
+//         // this is definitely not a Save operation
+//         // so the document info can be updated
 
-        // use dispatch API to show document info dialog
-        if ( aModelData.ShowDocumentInfoDialog() )
-            bDialogUsed = true;
-        else
-        {
-            OSL_FAIL( "Can't execute document info dialog!\n" );
-        }
+//         // on export document info must be preserved
+//         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
+//             aModelData.GetModel(), uno::UNO_QUERY_THROW);
+//         uno::Reference<util::XCloneable> xCloneable(
+//             xDPS->getDocumentProperties(), uno::UNO_QUERY_THROW);
+//         uno::Reference<document::XDocumentProperties> xOldDocProps(
+//             xCloneable->createClone(), uno::UNO_QUERY_THROW);
 
-        try {
-            // Document properties can contain streams that should be freed before storing
-            aModelData.FreeDocumentProps();
-            if ( nStoreMode & EXPORT_REQUESTED )
-                aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
-            else
-                aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
-        }
-        catch( const uno::Exception& )
-        {
-            if ( nStoreMode & EXPORT_REQUESTED )
-            {
-                SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
-            }
-            throw;
-        }
+//         // use dispatch API to show document info dialog
+//         if ( aModelData.ShowDocumentInfoDialog() )
+//             bDialogUsed = true;
+//         else
+//         {
+//             OSL_FAIL( "Can't execute document info dialog!\n" );
+//         }
 
-        if ( nStoreMode & EXPORT_REQUESTED )
-        {
-            SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
-        }
-    }
-    else
-    {
-        // Document properties can contain streams that should be freed before storing
-        aModelData.FreeDocumentProps();
+//         try {
+//             // Document properties can contain streams that should be freed before storing
+//             aModelData.FreeDocumentProps();
+//             if ( nStoreMode & EXPORT_REQUESTED )
+//                 aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
+//             else
+//                 aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
+//         }
+//         catch( const uno::Exception& )
+//         {
+//             if ( nStoreMode & EXPORT_REQUESTED )
+//             {
+//                 SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
+//             }
+//             throw;
+//         }
 
-        // this is actually a save operation with different parameters
-        // so storeTo or storeAs without DocInfo operations are used
-        if ( nStoreMode & EXPORT_REQUESTED )
-            aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
-        else
-            aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
-    }
+//         if ( nStoreMode & EXPORT_REQUESTED )
+//         {
+//             SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
+//         }
+//     }
+//     else
+//     {
+//         // Document properties can contain streams that should be freed before storing
+//         aModelData.FreeDocumentProps();
 
-    // Launch PDF viewer
-    if ( nStoreMode & PDFEXPORT_REQUESTED )
-    {
-        FilterConfigItem aItem( "Office.Common/Filter/PDF/Export/" );
-        bool aViewPDF = aItem.ReadBool( "ViewPDFAfterExport", false );
+//         // this is actually a save operation with different parameters
+//         // so storeTo or storeAs without DocInfo operations are used
+//         if ( nStoreMode & EXPORT_REQUESTED )
+//             aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
+//         else
+//             aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::NO_DECODE ), aArgsSequence );
+//     }
 
-        if ( aViewPDF )
-        {
-            uno::Reference<XSystemShellExecute> xSystemShellExecute(SystemShellExecute::create( ::comphelper::getProcessComponentContext() ) );
-            xSystemShellExecute->execute( aURL.GetMainURL( INetURLObject::NO_DECODE ), "", SystemShellExecuteFlags::URIS_ONLY );
-        }
-    }
+//     // Launch PDF viewer
+//     if ( nStoreMode & PDFEXPORT_REQUESTED )
+//     {
+//         FilterConfigItem aItem( "Office.Common/Filter/PDF/Export/" );
+//         bool aViewPDF = aItem.ReadBool( "ViewPDFAfterExport", false );
 
-    return bDialogUsed;
-}
+//         if ( aViewPDF )
+//         {
+//             uno::Reference<XSystemShellExecute> xSystemShellExecute(SystemShellExecute::create( ::comphelper::getProcessComponentContext() ) );
+//             xSystemShellExecute->execute( aURL.GetMainURL( INetURLObject::NO_DECODE ), "", SystemShellExecuteFlags::URIS_ONLY );
+//         }
+//     }
+
+//     return bDialogUsed;
+// }
 
 
 // static

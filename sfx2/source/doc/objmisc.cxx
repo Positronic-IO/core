@@ -265,47 +265,56 @@ bool SfxObjectShell::IsEnableSetModified() const
     return pImpl->m_bEnableSetModified && !IsReadOnly();
 }
 
+//////////////////////////////////////////////////////////////
+// Functionality Commented out.
+// TODOD: Add compiler flag to enable functionality.
+/////////////////////////////////////////////////////////////
 
 bool SfxObjectShell::IsModified()
 {
-    if ( pImpl->m_bIsModified )
-        return true;
-
-    if ( !pImpl->m_xDocStorage.is() || IsReadOnly() )
-    {
-        // if the document still has no storage and is not set to be modified explicitly it is not modified
-        // a readonly document is also not modified
-
-        return false;
-    }
-
-    if (pImpl->mpObjectContainer)
-    {
-        uno::Sequence < OUString > aNames = GetEmbeddedObjectContainer().GetObjectNames();
-        for ( sal_Int32 n=0; n<aNames.getLength(); n++ )
-        {
-            uno::Reference < embed::XEmbeddedObject > xObj = GetEmbeddedObjectContainer().GetEmbeddedObject( aNames[n] );
-            OSL_ENSURE( xObj.is(), "An empty entry in the embedded objects list!\n" );
-            if ( xObj.is() )
-            {
-                try
-                {
-                    sal_Int32 nState = xObj->getCurrentState();
-                    if ( nState != embed::EmbedStates::LOADED )
-                    {
-                        uno::Reference< util::XModifiable > xModifiable( xObj->getComponent(), uno::UNO_QUERY );
-                        if ( xModifiable.is() && xModifiable->isModified() )
-                            return true;
-                    }
-                }
-                catch( uno::Exception& )
-                {}
-            }
-        }
-    }
-
     return false;
 }
+
+// bool SfxObjectShell::IsModified()
+// {
+//     if ( pImpl->m_bIsModified )
+//         return true;
+
+//     if ( !pImpl->m_xDocStorage.is() || IsReadOnly() )
+//     {
+//         // if the document still has no storage and is not set to be modified explicitly it is not modified
+//         // a readonly document is also not modified
+
+//         return false;
+//     }
+
+//     if (pImpl->mpObjectContainer)
+//     {
+//         uno::Sequence < OUString > aNames = GetEmbeddedObjectContainer().GetObjectNames();
+//         for ( sal_Int32 n=0; n<aNames.getLength(); n++ )
+//         {
+//             uno::Reference < embed::XEmbeddedObject > xObj = GetEmbeddedObjectContainer().GetEmbeddedObject( aNames[n] );
+//             OSL_ENSURE( xObj.is(), "An empty entry in the embedded objects list!\n" );
+//             if ( xObj.is() )
+//             {
+//                 try
+//                 {
+//                     sal_Int32 nState = xObj->getCurrentState();
+//                     if ( nState != embed::EmbedStates::LOADED )
+//                     {
+//                         uno::Reference< util::XModifiable > xModifiable( xObj->getComponent(), uno::UNO_QUERY );
+//                         if ( xModifiable.is() && xModifiable->isModified() )
+//                             return true;
+//                     }
+//                 }
+//                 catch( uno::Exception& )
+//                 {}
+//             }
+//         }
+//     }
+
+//     return false;
+// }
 
 
 void SfxObjectShell::SetModified( bool bModifiedP )
