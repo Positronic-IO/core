@@ -26,7 +26,7 @@
             <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:CloseDoc"/>
-            <menu:menuitem menu:id=".uno:Save"/>
+            <!-- <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
             <menu:menuitem menu:id=".uno:SaveAll"/>
             <menu:menuitem menu:id=".uno:CheckOut"/>
@@ -41,19 +41,19 @@
                     <menu:menuseparator/>
                     <menu:menuitem menu:id=".uno:DBSendReportToWriter"/>
                 </menu:menupopup>
-            </menu:menu>
+            </menu:menu> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Quit"/>
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Undo"/>
+            <!-- <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/> -->
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
-            <menu:menuitem menu:id=".uno:PasteSpecial"/>
+            <!-- <menu:menuitem menu:id=".uno:Paste"/> -->
+            <!-- <menu:menuitem menu:id=".uno:PasteSpecial"/> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:DBDelete"/>
             <menu:menuitem menu:id=".uno:DBRename"/>

@@ -428,11 +428,18 @@ void SaveAsMenuController::impl_setPopupMenu()
     if ( !pVCLPopupMenu )
         return;
 
-    pVCLPopupMenu->InsertItem( ".uno:SaveAs", nullptr );
-    pVCLPopupMenu->InsertItem( ".uno:ExportTo", nullptr );
-    pVCLPopupMenu->InsertItem( ".uno:SaveAsTemplate", nullptr );
-    pVCLPopupMenu->InsertSeparator();
-    pVCLPopupMenu->InsertItem( ".uno:SaveAsRemote", nullptr );
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    // #ifndef VIEWONLY
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAs", nullptr );
+    // pVCLPopupMenu->InsertItem( ".uno:ExportTo", nullptr );
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAsTemplate", nullptr );
+    // pVCLPopupMenu->InsertSeparator();
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAsRemote", nullptr );
+    // #endif
 }
 
 OUString SaveAsMenuController::getImplementationName()

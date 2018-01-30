@@ -26,19 +26,19 @@
             <menu:menuitem menu:id=".uno:CloseDoc"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
-            <menu:menu menu:id=".uno:TemplateMenu">
+            <!-- <menu:menu menu:id=".uno:TemplateMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:OpenTemplate"/>
                     <menu:menuitem menu:id=".uno:SaveAsTemplate"/>
                     <menu:menuseparator/>
                     <menu:menuitem menu:id=".uno:NewDoc"/>
                 </menu:menupopup>
-            </menu:menu>
+            </menu:menu> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Reload"/>
             <menu:menuitem menu:id=".uno:VersionDialog"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Save"/>
+            <!-- <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAsRemote"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
             <menu:menuitem menu:id=".uno:SaveACopy"/>
@@ -63,7 +63,7 @@
             <menu:menuitem menu:id=".uno:PrintPreview"/>
             <menu:menuitem menu:id=".uno:Print"/>
             <menu:menuitem menu:id=".uno:PrinterSetup"/>
-            <menu:menuseparator/>
+            <menu:menuseparator/> -->
             <menu:menu menu:id=".uno:SignaturesMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:Signature"/>
@@ -77,13 +77,13 @@
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Undo"/>
+            <!-- <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuitem menu:id=".uno:Redo"/>
             <menu:menuitem menu:id=".uno:Repeat"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/> -->
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
+            <!-- <menu:menuitem menu:id=".uno:Paste"/>
             <menu:menuitem menu:id=".uno:PasteSpecial"/>
             <menu:menu menu:id=".uno:PasteOnly">
                 <menu:menupopup>
@@ -91,7 +91,7 @@
                     <menu:menuitem menu:id=".uno:PasteOnlyValue"/>
                     <menu:menuitem menu:id=".uno:PasteOnlyFormula"/>
                 </menu:menupopup>
-            </menu:menu>
+            </menu:menu> -->
             <menu:menuitem menu:id=".uno:SelectAll"/>
             <menu:menu menu:id=".uno:EditSelectMenu">
                 <menu:menupopup>

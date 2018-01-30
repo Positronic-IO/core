@@ -26,7 +26,7 @@
             <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:CloseDoc"/>
-            <menu:menuitem menu:id=".uno:Save"/>
+            <!-- <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
             <menu:menuitem menu:id=".uno:SaveAll"/>
             <menu:menuseparator/>
@@ -35,19 +35,19 @@
                     <menu:menuitem menu:id=".uno:TextDocument"/>
                     <menu:menuitem menu:id=".uno:Spreadsheet"/>
                 </menu:menupopup>
-            </menu:menu>
+            </menu:menu> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Quit"/>
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu" >
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Undo"/>
+            <!-- <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuitem menu:id=".uno:Redo"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/> -->
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
+            <!-- <menu:menuitem menu:id=".uno:Paste"/> -->
             <menu:menu menu:id=".uno:Select">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:SelectAll"/>
