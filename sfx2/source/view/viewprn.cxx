@@ -661,96 +661,101 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
         case SID_PRINTDOC: // display the printer selection and properties dialogue : File > Print...
         case SID_PRINTDOCDIRECT: // Print the document directly, without displaying the dialogue
         {
-            SfxObjectShell* pDoc = GetObjectShell();
+            //////////////////////////////////////////////////////////////
+            // Functionality Commented out.
+            // TODOD: Add compiler flag to enable functionality.
+            /////////////////////////////////////////////////////////////
 
-            // derived class may decide to abort this
-            if( pDoc == nullptr || !pDoc->QuerySlotExecutable( nId ) )
-            {
-                rReq.SetReturnValue( SfxBoolItem( 0, false ) );
-                return;
-            }
+            // SfxObjectShell* pDoc = GetObjectShell();
 
-            if ( !bSilent && pDoc->QueryHiddenInformation( HiddenWarningFact::WhenPrinting, nullptr ) != RET_YES )
-                return;
+            // // derived class may decide to abort this
+            // if( pDoc == nullptr || !pDoc->QuerySlotExecutable( nId ) )
+            // {
+            //     rReq.SetReturnValue( SfxBoolItem( 0, false ) );
+            //     return;
+            // }
 
-            // should we print only the selection or the whole document
-            const SfxBoolItem* pSelectItem = rReq.GetArg<SfxBoolItem>(SID_SELECTION);
-            bool bSelection = ( pSelectItem != nullptr && pSelectItem->GetValue() );
-            // detect non api call from writer ( that adds SID_SELECTION ) and reset bIsAPI
-            if ( pSelectItem && rReq.GetArgs()->Count() == 1 )
-                bIsAPI = false;
+            // if ( !bSilent && pDoc->QueryHiddenInformation( HiddenWarningFact::WhenPrinting, nullptr ) != RET_YES )
+            //     return;
 
-            uno::Sequence < beans::PropertyValue > aProps;
-            if ( bIsAPI )
-            {
-                // supported properties:
-                // String PrinterName
-                // String FileName
-                // Int16 From
-                // Int16 To
-                // In16 Copies
-                // String RangeText
-                // bool Selection
-                // bool Asynchron
-                // bool Collate
-                // bool Silent
+            // // should we print only the selection or the whole document
+            // const SfxBoolItem* pSelectItem = rReq.GetArg<SfxBoolItem>(SID_SELECTION);
+            // bool bSelection = ( pSelectItem != nullptr && pSelectItem->GetValue() );
+            // // detect non api call from writer ( that adds SID_SELECTION ) and reset bIsAPI
+            // if ( pSelectItem && rReq.GetArgs()->Count() == 1 )
+            //     bIsAPI = false;
 
-                // the TransformItems function overwrite aProps
-                TransformItems( nId, *rReq.GetArgs(), aProps, GetInterface()->GetSlot(nId) );
+            // uno::Sequence < beans::PropertyValue > aProps;
+            // if ( bIsAPI )
+            // {
+            //     // supported properties:
+            //     // String PrinterName
+            //     // String FileName
+            //     // Int16 From
+            //     // Int16 To
+            //     // In16 Copies
+            //     // String RangeText
+            //     // bool Selection
+            //     // bool Asynchron
+            //     // bool Collate
+            //     // bool Silent
 
-                for ( sal_Int32 nProp=0; nProp < aProps.getLength(); ++nProp )
-                {
-                    if ( aProps[nProp].Name == "Copies" )
-                    {
-                        aProps[nProp]. Name = "CopyCount";
-                    }
-                    else if ( aProps[nProp].Name == "RangeText" )
-                    {
-                        aProps[nProp]. Name = "Pages";
-                    }
-                    else if ( aProps[nProp].Name == "Asynchron" )
-                    {
-                        aProps[nProp]. Name = "Wait";
-                        bool bAsynchron = false;
-                        aProps[nProp].Value >>= bAsynchron;
-                        aProps[nProp].Value <<= (!bAsynchron);
-                    }
-                    else if ( aProps[nProp].Name == "Silent" )
-                    {
-                        aProps[nProp]. Name = "MonitorVisible";
-                        bool bPrintSilent = false;
-                        aProps[nProp].Value >>= bPrintSilent;
-                        aProps[nProp].Value <<= (!bPrintSilent);
-                    }
-                }
-            }
+            //     // the TransformItems function overwrite aProps
+            //     TransformItems( nId, *rReq.GetArgs(), aProps, GetInterface()->GetSlot(nId) );
 
-            // we will add the "PrintSelectionOnly" or "HideHelpButton" properties
-            // we have to increase the capacity of aProps
-            sal_Int32 nLen = aProps.getLength();
-            aProps.realloc( nLen + 1 );
+            //     for ( sal_Int32 nProp=0; nProp < aProps.getLength(); ++nProp )
+            //     {
+            //         if ( aProps[nProp].Name == "Copies" )
+            //         {
+            //             aProps[nProp]. Name = "CopyCount";
+            //         }
+            //         else if ( aProps[nProp].Name == "RangeText" )
+            //         {
+            //             aProps[nProp]. Name = "Pages";
+            //         }
+            //         else if ( aProps[nProp].Name == "Asynchron" )
+            //         {
+            //             aProps[nProp]. Name = "Wait";
+            //             bool bAsynchron = false;
+            //             aProps[nProp].Value >>= bAsynchron;
+            //             aProps[nProp].Value <<= (!bAsynchron);
+            //         }
+            //         else if ( aProps[nProp].Name == "Silent" )
+            //         {
+            //             aProps[nProp]. Name = "MonitorVisible";
+            //             bool bPrintSilent = false;
+            //             aProps[nProp].Value >>= bPrintSilent;
+            //             aProps[nProp].Value <<= (!bPrintSilent);
+            //         }
+            //     }
+            // }
 
-            // HACK: writer sets the SID_SELECTION item when printing directly and expects
-            // to get only the selection document in that case (see getSelectionObject)
-            // however it also reacts to the PrintContent property. We need this distinction here, too,
-            // else one of the combinations print / print direct and selection / all will not work.
-            // it would be better if writer handled this internally
-            if( nId == SID_PRINTDOCDIRECT )
-            {
-                aProps[nLen].Name = "PrintSelectionOnly";
-                aProps[nLen].Value = makeAny( bSelection );
-            }
-            else // if nId == SID_PRINTDOC ; nothing to do with the previous HACK
-            {
-                // should the printer selection and properties dialogue display an help button
-                aProps[nLen].Name = "HideHelpButton";
-                aProps[nLen].Value = makeAny( bPrintOnHelp );
-            }
+            // // we will add the "PrintSelectionOnly" or "HideHelpButton" properties
+            // // we have to increase the capacity of aProps
+            // sal_Int32 nLen = aProps.getLength();
+            // aProps.realloc( nLen + 1 );
 
-            ExecPrint( aProps, bIsAPI, (nId == SID_PRINTDOCDIRECT) );
+            // // HACK: writer sets the SID_SELECTION item when printing directly and expects
+            // // to get only the selection document in that case (see getSelectionObject)
+            // // however it also reacts to the PrintContent property. We need this distinction here, too,
+            // // else one of the combinations print / print direct and selection / all will not work.
+            // // it would be better if writer handled this internally
+            // if( nId == SID_PRINTDOCDIRECT )
+            // {
+            //     aProps[nLen].Name = "PrintSelectionOnly";
+            //     aProps[nLen].Value = makeAny( bSelection );
+            // }
+            // else // if nId == SID_PRINTDOC ; nothing to do with the previous HACK
+            // {
+            //     // should the printer selection and properties dialogue display an help button
+            //     aProps[nLen].Name = "HideHelpButton";
+            //     aProps[nLen].Value = makeAny( bPrintOnHelp );
+            // }
 
-            // FIXME: Recording
-            rReq.Done();
+            // ExecPrint( aProps, bIsAPI, (nId == SID_PRINTDOCDIRECT) );
+
+            // // FIXME: Recording
+            // rReq.Done();
             break;
         }
 
