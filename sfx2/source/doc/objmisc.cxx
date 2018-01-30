@@ -363,7 +363,13 @@ bool SfxObjectShell::IsReadOnlyUI() const
 */
 
 {
-    return pImpl->bReadOnlyUI;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    //return pImpl->bReadOnlyUI;
+    return true;
 }
 
 
@@ -400,11 +406,17 @@ void SfxObjectShell::SetReadOnlyUI( bool bReadOnly )
 */
 
 {
-    if ( bReadOnly != pImpl->bReadOnlyUI )
-    {
-        pImpl->bReadOnlyUI = bReadOnly;
-        Broadcast( SfxHint(SFX_HINT_MODECHANGED) );
-    }
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    bReadOnly = true;
+    // if ( bReadOnly != pImpl->bReadOnlyUI )
+    // {
+    //     pImpl->bReadOnlyUI = bReadOnly;
+    //     Broadcast( SfxHint(SFX_HINT_MODECHANGED) );
+    // }
 }
 
 
@@ -414,8 +426,13 @@ void SfxObjectShell::SetReadOnly()
     // medium open mode is adjusted accordingly, and the write lock
     // on the file is removed.
 
-     if ( pMedium && !IsReadOnlyMedium() )
-    {
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    //  if ( pMedium && !IsReadOnlyMedium() )
+    // {
         bool bWasROUI = IsReadOnly();
 
         pMedium->UnlockFile( false );
@@ -428,15 +445,21 @@ void SfxObjectShell::SetReadOnly()
         pMedium->SetOpenMode( SFX_STREAM_READONLY, true );
         pMedium->GetItemSet()->Put( SfxBoolItem( SID_DOC_READONLY, true ) );
 
-        if ( !bWasROUI )
-            Broadcast( SfxHint(SFX_HINT_MODECHANGED) );
-    }
+    //     if ( !bWasROUI )
+    //         Broadcast( SfxHint(SFX_HINT_MODECHANGED) );
+    // }
 }
 
 
 bool SfxObjectShell::IsReadOnly() const
 {
-    return pImpl->bReadOnlyUI || pMedium == nullptr;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    //return pImpl->bReadOnlyUI || pMedium == nullptr;
+    return true;
 }
 
 
