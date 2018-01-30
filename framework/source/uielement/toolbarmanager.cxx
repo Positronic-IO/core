@@ -1599,163 +1599,170 @@ IMPL_LINK( ToolBarManager, MenuSelect, Menu*, pMenu, bool )
         if ( m_bDisposed )
             return true;
 
-        switch ( pMenu->GetCurItemId() )
-        {
-            case MENUITEM_TOOLBAR_CUSTOMIZETOOLBAR:
-            {
-                Reference< XDispatch > xDisp;
-                css::util::URL aURL;
-                if ( m_xFrame.is() )
-                {
-                    Reference< XDispatchProvider > xProv( m_xFrame, UNO_QUERY );
-                    aURL.Complete = ".uno:ConfigureDialog";
-                    m_xURLTransformer->parseStrict( aURL );
-                    if ( xProv.is() )
-                        xDisp = xProv->queryDispatch( aURL, OUString(), 0 );
-                }
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-                if ( xDisp.is() )
-                {
-                    Sequence< PropertyValue > aPropSeq( 1 );
+    // #ifndef VIEWONLY
+    //     switch ( pMenu->GetCurItemId() )
+    //     {
+    //         case MENUITEM_TOOLBAR_CUSTOMIZETOOLBAR:
+    //         {
+    //             Reference< XDispatch > xDisp;
+    //             css::util::URL aURL;
+    //             if ( m_xFrame.is() )
+    //             {
+    //                 Reference< XDispatchProvider > xProv( m_xFrame, UNO_QUERY );
+    //                 aURL.Complete = ".uno:ConfigureDialog";
+    //                 m_xURLTransformer->parseStrict( aURL );
+    //                 if ( xProv.is() )
+    //                     xDisp = xProv->queryDispatch( aURL, OUString(), 0 );
+    //             }
 
-                    aPropSeq[ 0 ].Name = "ResourceURL";
-                    aPropSeq[ 0 ].Value <<= m_aResourceName;
+    //             if ( xDisp.is() )
+    //             {
+    //                 Sequence< PropertyValue > aPropSeq( 1 );
 
-                    xDisp->dispatch( aURL, aPropSeq );
-                }
-                break;
-            }
+    //                 aPropSeq[ 0 ].Name = "ResourceURL";
+    //                 aPropSeq[ 0 ].Value <<= m_aResourceName;
 
-            case MENUITEM_TOOLBAR_DOCKTOOLBAR:
-            {
-                ExecuteInfo* pExecuteInfo = new ExecuteInfo;
+    //                 xDisp->dispatch( aURL, aPropSeq );
+    //             }
+    //             break;
+    //         }
 
-                pExecuteInfo->aToolbarResName = m_aResourceName;
-                pExecuteInfo->nCmd            = EXEC_CMD_DOCKTOOLBAR;
-                pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
+    //         case MENUITEM_TOOLBAR_DOCKTOOLBAR:
+    //         {
+    //             ExecuteInfo* pExecuteInfo = new ExecuteInfo;
 
-                Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
-                break;
-            }
+    //             pExecuteInfo->aToolbarResName = m_aResourceName;
+    //             pExecuteInfo->nCmd            = EXEC_CMD_DOCKTOOLBAR;
+    //             pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
 
-            case MENUITEM_TOOLBAR_DOCKALLTOOLBAR:
-            {
-                ExecuteInfo* pExecuteInfo = new ExecuteInfo;
+    //             Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
+    //             break;
+    //         }
 
-                pExecuteInfo->aToolbarResName = m_aResourceName;
-                pExecuteInfo->nCmd            = EXEC_CMD_DOCKALLTOOLBARS;
-                pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
+    //         case MENUITEM_TOOLBAR_DOCKALLTOOLBAR:
+    //         {
+    //             ExecuteInfo* pExecuteInfo = new ExecuteInfo;
 
-                Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
-                break;
-            }
+    //             pExecuteInfo->aToolbarResName = m_aResourceName;
+    //             pExecuteInfo->nCmd            = EXEC_CMD_DOCKALLTOOLBARS;
+    //             pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
 
-            case MENUITEM_TOOLBAR_LOCKTOOLBARPOSITION:
-            {
-                Reference< XLayoutManager > xLayoutManager = getLayoutManagerFromFrame( m_xFrame );
-                if ( xLayoutManager.is() )
-                {
-                    Reference< XDockableWindow > xDockable( VCLUnoHelper::GetInterface( m_pToolBar ), UNO_QUERY );
+    //             Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
+    //             break;
+    //         }
 
-                    if( xDockable->isLocked() )
-                        xLayoutManager->unlockWindow( m_aResourceName );
-                    else
-                        xLayoutManager->lockWindow( m_aResourceName );
-                }
-                break;
-            }
+    //         case MENUITEM_TOOLBAR_LOCKTOOLBARPOSITION:
+    //         {
+    //             Reference< XLayoutManager > xLayoutManager = getLayoutManagerFromFrame( m_xFrame );
+    //             if ( xLayoutManager.is() )
+    //             {
+    //                 Reference< XDockableWindow > xDockable( VCLUnoHelper::GetInterface( m_pToolBar ), UNO_QUERY );
 
-            case MENUITEM_TOOLBAR_CLOSE:
-            {
-                ExecuteInfo* pExecuteInfo = new ExecuteInfo;
+    //                 if( xDockable->isLocked() )
+    //                     xLayoutManager->unlockWindow( m_aResourceName );
+    //                 else
+    //                     xLayoutManager->lockWindow( m_aResourceName );
+    //             }
+    //             break;
+    //         }
 
-                pExecuteInfo->aToolbarResName = m_aResourceName;
-                pExecuteInfo->nCmd            = EXEC_CMD_CLOSETOOLBAR;
-                pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
-                pExecuteInfo->xWindow         = VCLUnoHelper::GetInterface( m_pToolBar );
+    //         case MENUITEM_TOOLBAR_CLOSE:
+    //         {
+    //             ExecuteInfo* pExecuteInfo = new ExecuteInfo;
 
-                Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
-                break;
-            }
+    //             pExecuteInfo->aToolbarResName = m_aResourceName;
+    //             pExecuteInfo->nCmd            = EXEC_CMD_CLOSETOOLBAR;
+    //             pExecuteInfo->xLayoutManager  = getLayoutManagerFromFrame( m_xFrame );
+    //             pExecuteInfo->xWindow         = VCLUnoHelper::GetInterface( m_pToolBar );
 
-            default:
-            {
-                sal_uInt16 nId = pMenu->GetCurItemId();
-                if(( nId > 0 ) && ( nId < TOOLBOX_MENUITEM_START ))
-                // Items in the "enable/disable" sub-menu
-                {
-                    // toggle toolbar button visibility
-                    OUString aCommand = pMenu->GetItemCommand( nId );
+    //             Application::PostUserEvent( LINK(nullptr, ToolBarManager, ExecuteHdl_Impl), pExecuteInfo );
+    //             break;
+    //         }
 
-                    Reference< XLayoutManager > xLayoutManager = getLayoutManagerFromFrame( m_xFrame );
-                    if ( xLayoutManager.is() )
-                    {
-                        Reference< XUIElementSettings > xUIElementSettings( xLayoutManager->getElement( m_aResourceName ), UNO_QUERY );
-                        if ( xUIElementSettings.is() )
-                        {
-                            Reference< XIndexContainer > xItemContainer( xUIElementSettings->getSettings( true ), UNO_QUERY );
-                            sal_Int32 nCount = xItemContainer->getCount();
-                            for ( sal_Int32 i = 0; i < nCount; i++ )
-                            {
-                                Sequence< PropertyValue > aProp;
-                                sal_Int32                 nVisibleIndex( -1 );
-                                OUString             aCommandURL;
-                                bool                  bVisible( false );
+    //         default:
+    //         {
+    //             sal_uInt16 nId = pMenu->GetCurItemId();
+    //             if(( nId > 0 ) && ( nId < TOOLBOX_MENUITEM_START ))
+    //             // Items in the "enable/disable" sub-menu
+    //             {
+    //                 // toggle toolbar button visibility
+    //                 OUString aCommand = pMenu->GetItemCommand( nId );
 
-                                if ( xItemContainer->getByIndex( i ) >>= aProp )
-                                {
-                                    for ( sal_Int32 j = 0; j < aProp.getLength(); j++ )
-                                    {
-                                        if ( aProp[j].Name == ITEM_DESCRIPTOR_COMMANDURL )
-                                        {
-                                            aProp[j].Value >>= aCommandURL;
-                                        }
-                                        else if ( aProp[j].Name == ITEM_DESCRIPTOR_VISIBLE )
-                                        {
-                                            aProp[j].Value >>= bVisible;
-                                            nVisibleIndex = j;
-                                        }
-                                    }
+    //                 Reference< XLayoutManager > xLayoutManager = getLayoutManagerFromFrame( m_xFrame );
+    //                 if ( xLayoutManager.is() )
+    //                 {
+    //                     Reference< XUIElementSettings > xUIElementSettings( xLayoutManager->getElement( m_aResourceName ), UNO_QUERY );
+    //                     if ( xUIElementSettings.is() )
+    //                     {
+    //                         Reference< XIndexContainer > xItemContainer( xUIElementSettings->getSettings( true ), UNO_QUERY );
+    //                         sal_Int32 nCount = xItemContainer->getCount();
+    //                         for ( sal_Int32 i = 0; i < nCount; i++ )
+    //                         {
+    //                             Sequence< PropertyValue > aProp;
+    //                             sal_Int32                 nVisibleIndex( -1 );
+    //                             OUString             aCommandURL;
+    //                             bool                  bVisible( false );
 
-                                    if (( aCommandURL == aCommand ) && ( nVisibleIndex >= 0 ))
-                                    {
-                                        // We have found the requested item, toggle the visible flag
-                                        // and write back the configuration settings to the toolbar
-                                        aProp[nVisibleIndex].Value = makeAny( !bVisible );
-                                        try
-                                        {
-                                            xItemContainer->replaceByIndex( i, makeAny( aProp ));
-                                            xUIElementSettings->setSettings( xItemContainer );
-                                            Reference< XPropertySet > xPropSet( xUIElementSettings, UNO_QUERY );
-                                            if ( xPropSet.is() )
-                                            {
-                                                Reference< XUIConfigurationPersistence > xUICfgMgr;
-                                                if (( xPropSet->getPropertyValue("ConfigurationSource") >>= xUICfgMgr ) && ( xUICfgMgr.is() ))
-                                                    xUICfgMgr->store();
-                                            }
-                                        }
-                                        catch (const Exception&)
-                                        {
-                                        }
+    //                             if ( xItemContainer->getByIndex( i ) >>= aProp )
+    //                             {
+    //                                 for ( sal_Int32 j = 0; j < aProp.getLength(); j++ )
+    //                                 {
+    //                                     if ( aProp[j].Name == ITEM_DESCRIPTOR_COMMANDURL )
+    //                                     {
+    //                                         aProp[j].Value >>= aCommandURL;
+    //                                     }
+    //                                     else if ( aProp[j].Name == ITEM_DESCRIPTOR_VISIBLE )
+    //                                     {
+    //                                         aProp[j].Value >>= bVisible;
+    //                                         nVisibleIndex = j;
+    //                                     }
+    //                                 }
 
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                // The list of "hidden items", i.e. items which are disabled on
-                // the toolbar hence shown in the context menu for easier access,
-                // which are managed by the owning toolbar.
-                {
-                    m_pToolBar->TriggerItem( pMenu->GetCurItemId()
-                                             - TOOLBOX_MENUITEM_START );
-                }
-                break;
-            }
-        }
+    //                                 if (( aCommandURL == aCommand ) && ( nVisibleIndex >= 0 ))
+    //                                 {
+    //                                     // We have found the requested item, toggle the visible flag
+    //                                     // and write back the configuration settings to the toolbar
+    //                                     aProp[nVisibleIndex].Value = makeAny( !bVisible );
+    //                                     try
+    //                                     {
+    //                                         xItemContainer->replaceByIndex( i, makeAny( aProp ));
+    //                                         xUIElementSettings->setSettings( xItemContainer );
+    //                                         Reference< XPropertySet > xPropSet( xUIElementSettings, UNO_QUERY );
+    //                                         if ( xPropSet.is() )
+    //                                         {
+    //                                             Reference< XUIConfigurationPersistence > xUICfgMgr;
+    //                                             if (( xPropSet->getPropertyValue("ConfigurationSource") >>= xUICfgMgr ) && ( xUICfgMgr.is() ))
+    //                                                 xUICfgMgr->store();
+    //                                         }
+    //                                     }
+    //                                     catch (const Exception&)
+    //                                     {
+    //                                     }
+
+    //                                     break;
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             else
+    //             // The list of "hidden items", i.e. items which are disabled on
+    //             // the toolbar hence shown in the context menu for easier access,
+    //             // which are managed by the owning toolbar.
+    //             {
+    //                 m_pToolBar->TriggerItem( pMenu->GetCurItemId()
+    //                                          - TOOLBOX_MENUITEM_START );
+    //             }
+    //             break;
+    //         }
+    //     }
+    // #endif
 
         // remove all entries - deactivate is not reliable
         // The method checks if we are already disposed and in that case does nothing!

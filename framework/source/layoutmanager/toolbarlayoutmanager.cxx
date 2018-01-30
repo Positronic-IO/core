@@ -203,39 +203,46 @@ void ToolbarLayoutManager::implts_setDockingAreaWindowSizes( const awt::Rectangl
 
 void ToolbarLayoutManager::doLayout(const ::Size& aContainerSize)
 {
-    SolarMutexResettableGuard aWriteLock;
-    bool bLayoutInProgress( m_bLayoutInProgress );
-    m_bLayoutInProgress = true;
-    awt::Rectangle aDockingArea = putRectangleValueToAWT( m_aDockingArea );
-    aWriteLock.clear();
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    if ( bLayoutInProgress )
-        return;
+    // #ifndef VIEWONLY
+    // SolarMutexResettableGuard aWriteLock;
+    // bool bLayoutInProgress( m_bLayoutInProgress );
+    // m_bLayoutInProgress = true;
+    // awt::Rectangle aDockingArea = putRectangleValueToAWT( m_aDockingArea );
+    // aWriteLock.clear();
 
-    // Retrieve row/column dependent data from all docked user-interface elements
-    for ( sal_Int32 i = 0; i < DOCKINGAREAS_COUNT; i++ )
-    {
-        bool bReverse( isReverseOrderDockingArea( i ));
-        std::vector< SingleRowColumnWindowData > aRowColumnsWindowData;
+    // if ( bLayoutInProgress )
+    //     return;
 
-        implts_getDockingAreaElementInfos( (ui::DockingArea)i, aRowColumnsWindowData );
+    // // Retrieve row/column dependent data from all docked user-interface elements
+    // for ( sal_Int32 i = 0; i < DOCKINGAREAS_COUNT; i++ )
+    // {
+    //     bool bReverse( isReverseOrderDockingArea( i ));
+    //     std::vector< SingleRowColumnWindowData > aRowColumnsWindowData;
 
-        sal_Int32 nOffset( 0 );
-        const sal_uInt32 nCount = aRowColumnsWindowData.size();
-        for ( sal_uInt32 j = 0; j < nCount; ++j )
-        {
-            sal_uInt32 nIndex = bReverse ? nCount-j-1 : j;
-            implts_calcWindowPosSizeOnSingleRowColumn( i, nOffset, aRowColumnsWindowData[nIndex], aContainerSize );
-            nOffset += aRowColumnsWindowData[j].nStaticSize;
-        }
-    }
+    //     implts_getDockingAreaElementInfos( (ui::DockingArea)i, aRowColumnsWindowData );
 
-    implts_setDockingAreaWindowSizes( aDockingArea );
+    //     sal_Int32 nOffset( 0 );
+    //     const sal_uInt32 nCount = aRowColumnsWindowData.size();
+    //     for ( sal_uInt32 j = 0; j < nCount; ++j )
+    //     {
+    //         sal_uInt32 nIndex = bReverse ? nCount-j-1 : j;
+    //         implts_calcWindowPosSizeOnSingleRowColumn( i, nOffset, aRowColumnsWindowData[nIndex], aContainerSize );
+    //         nOffset += aRowColumnsWindowData[j].nStaticSize;
+    //     }
+    // }
 
-    aWriteLock.reset();
-    m_bLayoutDirty      = false;
-    m_bLayoutInProgress = false;
-    aWriteLock.clear();
+    // implts_setDockingAreaWindowSizes( aDockingArea );
+
+    // aWriteLock.reset();
+    // m_bLayoutDirty      = false;
+    // m_bLayoutInProgress = false;
+    // aWriteLock.clear();
+    // #endif
 }
 
 bool ToolbarLayoutManager::implts_isParentWindowVisible() const
@@ -324,26 +331,33 @@ Rectangle ToolbarLayoutManager::implts_calcDockingArea()
         }
     }
 
-    // Sum up max heights from every row/column
-    if ( !aWindowVector.empty() )
-    {
-        for ( sal_Int32 i = 0; i <= ui::DockingArea_DOCKINGAREA_RIGHT; i++ )
-        {
-            sal_Int32 nSize( 0 );
-            const sal_uInt32 nCount = aRowColumnSizes[i].size();
-            for ( sal_uInt32 j = 0; j < nCount; j++ )
-                nSize += aRowColumnSizes[i][j];
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-            if ( i == ui::DockingArea_DOCKINGAREA_TOP )
-                aBorderSpace.Top() = nSize;
-            else if ( i == ui::DockingArea_DOCKINGAREA_BOTTOM )
-                aBorderSpace.Bottom() = nSize;
-            else if ( i == ui::DockingArea_DOCKINGAREA_LEFT )
-                aBorderSpace.Left() = nSize;
-            else
-                aBorderSpace.Right() = nSize;
-        }
-    }
+    // #ifndef VIEWONLY
+    // // Sum up max heights from every row/column
+    // if ( !aWindowVector.empty() )
+    // {
+    //     for ( sal_Int32 i = 0; i <= ui::DockingArea_DOCKINGAREA_RIGHT; i++ )
+    //     {
+    //         sal_Int32 nSize( 0 );
+    //         const sal_uInt32 nCount = aRowColumnSizes[i].size();
+    //         for ( sal_uInt32 j = 0; j < nCount; j++ )
+    //             nSize += aRowColumnSizes[i][j];
+
+    //         if ( i == ui::DockingArea_DOCKINGAREA_TOP )
+    //             aBorderSpace.Top() = nSize;
+    //         else if ( i == ui::DockingArea_DOCKINGAREA_BOTTOM )
+    //             aBorderSpace.Bottom() = nSize;
+    //         else if ( i == ui::DockingArea_DOCKINGAREA_LEFT )
+    //             aBorderSpace.Left() = nSize;
+    //         else
+    //             aBorderSpace.Right() = nSize;
+    //     }
+    // }
+    // #endif
 
     return aBorderSpace;
 }
@@ -398,9 +412,18 @@ bool ToolbarLayoutManager::isPreviewFrame()
 void ToolbarLayoutManager::createStaticToolbars()
 {
     resetDockingArea();
-    implts_createCustomToolBars();
-    implts_createAddonsToolBars();
-    implts_createNonContextSensitiveToolBars();
+
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
+
+    // #ifndef VIEWONLY
+    // implts_createCustomToolBars();
+    // implts_createAddonsToolBars();
+    // implts_createNonContextSensitiveToolBars();
+    // #endif
+
     implts_sortUIElements();
 }
 
@@ -441,128 +464,137 @@ bool ToolbarLayoutManager::requestToolbar( const OUString& rResourceURL )
 
 bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
 {
-    bool bNotify( false );
+    //////////////////////////////////////////////////////////////
+    // Functionality overriden to be read only. & return false.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    SolarMutexClearableGuard aReadLock;
-    uno::Reference< frame::XFrame > xFrame( m_xFrame );
-    uno::Reference< awt::XWindow2 > xContainerWindow( m_xContainerWindow );
-    aReadLock.clear();
+    return false;
 
-    bNotify = false;
+    // #ifndef VIEWONLY
+    // bool bNotify( false );
 
-    if ( !xFrame.is() || !xContainerWindow.is() )
-        return false;
+    // SolarMutexClearableGuard aReadLock;
+    // uno::Reference< frame::XFrame > xFrame( m_xFrame );
+    // uno::Reference< awt::XWindow2 > xContainerWindow( m_xContainerWindow );
+    // aReadLock.clear();
 
-    UIElement aToolbarElement = implts_findToolbar( rResourceURL );
-    if ( !aToolbarElement.m_xUIElement.is()  )
-    {
-        uno::Reference< ui::XUIElement > xUIElement;
+    // bNotify = false;
 
-        uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
-        aPropSeq[0].Name = "Frame";
-        aPropSeq[0].Value <<= m_xFrame;
-        aPropSeq[1].Name = "Persistent";
-        aPropSeq[1].Value <<= true;
-        uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
-        aReadLock.clear();
+    // if ( !xFrame.is() || !xContainerWindow.is() )
+    //     return false;
 
-        implts_setToolbarCreation();
-        try
-        {
-            if ( xUIElementFactory.is() )
-                xUIElement = xUIElementFactory->createUIElement( rResourceURL, aPropSeq );
-        }
-        catch (const container::NoSuchElementException&)
-        {
-        }
-        catch (const lang::IllegalArgumentException&)
-        {
-        }
-        implts_setToolbarCreation( false );
+    // UIElement aToolbarElement = implts_findToolbar( rResourceURL );
+    // if ( !aToolbarElement.m_xUIElement.is()  )
+    // {
+    //     uno::Reference< ui::XUIElement > xUIElement;
 
-        if ( xUIElement.is() )
-        {
-            uno::Reference< awt::XWindow > xWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
-            uno::Reference< awt::XDockableWindow > xDockWindow( xWindow, uno::UNO_QUERY );
-            if ( xDockWindow.is() && xWindow.is() )
-            {
-                try
-                {
-                    xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >(
-                        static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                    xWindow->addWindowListener( uno::Reference< awt::XWindowListener >(
-                        static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                    xDockWindow->enableDocking( true );
-                }
-                catch (const uno::Exception&)
-                {
-                }
-            }
+    //     uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
+    //     aPropSeq[0].Name = "Frame";
+    //     aPropSeq[0].Value <<= m_xFrame;
+    //     aPropSeq[1].Name = "Persistent";
+    //     aPropSeq[1].Value <<= true;
+    //     uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
+    //     aReadLock.clear();
 
-            bool bVisible =  false;
-            bool bFloating = false;
+    //     implts_setToolbarCreation();
+    //     try
+    //     {
+    //         if ( xUIElementFactory.is() )
+    //             xUIElement = xUIElementFactory->createUIElement( rResourceURL, aPropSeq );
+    //     }
+    //     catch (const container::NoSuchElementException&)
+    //     {
+    //     }
+    //     catch (const lang::IllegalArgumentException&)
+    //     {
+    //     }
+    //     implts_setToolbarCreation( false );
 
-            /* SAFE AREA ----------------------------------------------------------------------------------------------- */
-            SolarMutexClearableGuard aWriteLock;
+    //     if ( xUIElement.is() )
+    //     {
+    //         uno::Reference< awt::XWindow > xWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
+    //         uno::Reference< awt::XDockableWindow > xDockWindow( xWindow, uno::UNO_QUERY );
+    //         if ( xDockWindow.is() && xWindow.is() )
+    //         {
+    //             try
+    //             {
+    //                 xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >(
+    //                     static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                 xWindow->addWindowListener( uno::Reference< awt::XWindowListener >(
+    //                     static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                 xDockWindow->enableDocking( true );
+    //             }
+    //             catch (const uno::Exception&)
+    //             {
+    //             }
+    //         }
 
-            UIElement& rElement = impl_findToolbar( rResourceURL );
-            if (rElement.m_xUIElement.is())
-            {
-                // somebody else must have created it while we released
-                // the SolarMutex - just dispose our new instance and
-                // do nothing. (We have to dispose either the new or the
-                // existing m_xUIElement.)
-                aWriteLock.clear();
-                uno::Reference<lang::XComponent> const xC(xUIElement, uno::UNO_QUERY);
-                xC->dispose();
-                return false;
-            }
-            if ( !rElement.m_aName.isEmpty() )
-            {
-                // Reuse a local entry so we are able to use the latest
-                // UI changes for this document.
-                implts_setElementData( rElement, xDockWindow );
-                rElement.m_xUIElement = xUIElement;
-                bVisible = rElement.m_bVisible;
-                bFloating = rElement.m_bFloating;
-            }
-            else
-            {
-                // Create new UI element and try to read its state data
-                UIElement aNewToolbar( rResourceURL, UIRESOURCETYPE_TOOLBAR, xUIElement );
-                implts_readWindowStateData( rResourceURL, aNewToolbar );
-                implts_setElementData( aNewToolbar, xDockWindow );
-                implts_insertToolbar( aNewToolbar );
-                bVisible = aNewToolbar.m_bVisible;
-                bFloating = rElement.m_bFloating;
-            }
-            aWriteLock.clear();
-            /* SAFE AREA ----------------------------------------------------------------------------------------------- */
+    //         bool bVisible =  false;
+    //         bool bFloating = false;
 
-            // set toolbar menu style according to customize command state
-            SvtCommandOptions aCmdOptions;
+    //         /* SAFE AREA ----------------------------------------------------------------------------------------------- */
+    //         SolarMutexClearableGuard aWriteLock;
 
-            SolarMutexGuard aGuard;
-            VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
-            if ( pWindow && pWindow->GetType() == WINDOW_TOOLBOX )
-            {
-                ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
-                ToolBoxMenuType nMenuType = pToolbar->GetMenuType();
-                if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "ConfigureDialog" ))
-                    pToolbar->SetMenuType( nMenuType & ~ToolBoxMenuType::Customize );
-                else
-                    pToolbar->SetMenuType( nMenuType | ToolBoxMenuType::Customize );
-            }
-            bNotify = true;
+    //         UIElement& rElement = impl_findToolbar( rResourceURL );
+    //         if (rElement.m_xUIElement.is())
+    //         {
+    //             // somebody else must have created it while we released
+    //             // the SolarMutex - just dispose our new instance and
+    //             // do nothing. (We have to dispose either the new or the
+    //             // existing m_xUIElement.)
+    //             aWriteLock.clear();
+    //             uno::Reference<lang::XComponent> const xC(xUIElement, uno::UNO_QUERY);
+    //             xC->dispose();
+    //             return false;
+    //         }
+    //         if ( !rElement.m_aName.isEmpty() )
+    //         {
+    //             // Reuse a local entry so we are able to use the latest
+    //             // UI changes for this document.
+    //             implts_setElementData( rElement, xDockWindow );
+    //             rElement.m_xUIElement = xUIElement;
+    //             bVisible = rElement.m_bVisible;
+    //             bFloating = rElement.m_bFloating;
+    //         }
+    //         else
+    //         {
+    //             // Create new UI element and try to read its state data
+    //             UIElement aNewToolbar( rResourceURL, UIRESOURCETYPE_TOOLBAR, xUIElement );
+    //             implts_readWindowStateData( rResourceURL, aNewToolbar );
+    //             implts_setElementData( aNewToolbar, xDockWindow );
+    //             implts_insertToolbar( aNewToolbar );
+    //             bVisible = aNewToolbar.m_bVisible;
+    //             bFloating = rElement.m_bFloating;
+    //         }
+    //         aWriteLock.clear();
+    //         /* SAFE AREA ----------------------------------------------------------------------------------------------- */
 
-            implts_sortUIElements();
+    //         // set toolbar menu style according to customize command state
+    //         SvtCommandOptions aCmdOptions;
 
-            if ( bVisible && !bFloating )
-                implts_setLayoutDirty();
-        }
-    }
+    //         SolarMutexGuard aGuard;
+    //         VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
+    //         if ( pWindow && pWindow->GetType() == WINDOW_TOOLBOX )
+    //         {
+    //             ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
+    //             ToolBoxMenuType nMenuType = pToolbar->GetMenuType();
+    //             if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "ConfigureDialog" ))
+    //                 pToolbar->SetMenuType( nMenuType & ~ToolBoxMenuType::Customize );
+    //             else
+    //                 pToolbar->SetMenuType( nMenuType | ToolBoxMenuType::Customize );
+    //         }
+    //         bNotify = true;
 
-    return bNotify;
+    //         implts_sortUIElements();
+
+    //         if ( bVisible && !bFloating )
+    //             implts_setLayoutDirty();
+    //     }
+    // }
+
+    // return bNotify;
+    // #endif
 }
 
 bool ToolbarLayoutManager::destroyToolbar( const OUString& rResourceURL )
@@ -1077,263 +1109,298 @@ OUString ToolbarLayoutManager::implts_generateGenericAddonToolbarTitle( sal_Int3
 
 void ToolbarLayoutManager::implts_createAddonsToolBars()
 {
-    SolarMutexClearableGuard aWriteLock;
-    if ( !m_pAddonOptions )
-        m_pAddonOptions = new AddonsOptions;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
-    uno::Reference< frame::XFrame > xFrame( m_xFrame );
-    aWriteLock.clear();
+    // #ifndef VIEWONLY
+    // SolarMutexClearableGuard aWriteLock;
+    // if ( !m_pAddonOptions )
+    //     m_pAddonOptions = new AddonsOptions;
 
-    if (isPreviewFrame())
-        return; // no addon toolbars for preview frame!
+    // uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
+    // uno::Reference< frame::XFrame > xFrame( m_xFrame );
+    // aWriteLock.clear();
 
-    uno::Sequence< uno::Sequence< beans::PropertyValue > > aAddonToolBarData;
-    uno::Reference< ui::XUIElement >                       xUIElement;
+    // if (isPreviewFrame())
+    //     return; // no addon toolbars for preview frame!
 
-    sal_uInt32 nCount = m_pAddonOptions->GetAddonsToolBarCount();
-    OUString aElementType( "toolbar" );
+    // uno::Sequence< uno::Sequence< beans::PropertyValue > > aAddonToolBarData;
+    // uno::Reference< ui::XUIElement >                       xUIElement;
 
-    uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
-    aPropSeq[0].Name = "Frame";
-    aPropSeq[0].Value <<= xFrame;
-    aPropSeq[1].Name = "ConfigurationData";
-    for ( sal_uInt32 i = 0; i < nCount; i++ )
-    {
-        OUString aAddonToolBarName( "private:resource/toolbar/addon_" +
-                m_pAddonOptions->GetAddonsToolbarResourceName(i) );
-        aAddonToolBarData = m_pAddonOptions->GetAddonsToolBarPart( i );
-        aPropSeq[1].Value <<= aAddonToolBarData;
+    // sal_uInt32 nCount = m_pAddonOptions->GetAddonsToolBarCount();
+    // OUString aElementType( "toolbar" );
 
-        UIElement aElement = implts_findToolbar( aAddonToolBarName );
+    // uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
+    // aPropSeq[0].Name = "Frame";
+    // aPropSeq[0].Value <<= xFrame;
+    // aPropSeq[1].Name = "ConfigurationData";
+    // for ( sal_uInt32 i = 0; i < nCount; i++ )
+    // {
+    //     OUString aAddonToolBarName( "private:resource/toolbar/addon_" +
+    //             m_pAddonOptions->GetAddonsToolbarResourceName(i) );
+    //     aAddonToolBarData = m_pAddonOptions->GetAddonsToolBarPart( i );
+    //     aPropSeq[1].Value <<= aAddonToolBarData;
 
-        // #i79828
-        // It's now possible that we are called more than once. Be sure to not create
-        // add-on toolbars more than once!
-        if ( aElement.m_xUIElement.is() )
-            continue;
+    //     UIElement aElement = implts_findToolbar( aAddonToolBarName );
 
-        try
-        {
-            xUIElement = xUIElementFactory->createUIElement( aAddonToolBarName, aPropSeq );
-            if ( xUIElement.is() )
-            {
-                uno::Reference< awt::XDockableWindow > xDockWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
-                if ( xDockWindow.is() )
-                {
-                    try
-                    {
-                        xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >( static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                        xDockWindow->enableDocking( true );
-                        uno::Reference< awt::XWindow > xWindow( xDockWindow, uno::UNO_QUERY );
-                        if ( xWindow.is() )
-                            xWindow->addWindowListener( uno::Reference< awt::XWindowListener >( static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
-                    }
-                    catch (const uno::Exception&)
-                    {
-                    }
-                }
+    //     // #i79828
+    //     // It's now possible that we are called more than once. Be sure to not create
+    //     // add-on toolbars more than once!
+    //     if ( aElement.m_xUIElement.is() )
+    //         continue;
 
-                OUString aGenericAddonTitle = implts_generateGenericAddonToolbarTitle( i+1 );
+    //     try
+    //     {
+    //         xUIElement = xUIElementFactory->createUIElement( aAddonToolBarName, aPropSeq );
+    //         if ( xUIElement.is() )
+    //         {
+    //             uno::Reference< awt::XDockableWindow > xDockWindow( xUIElement->getRealInterface(), uno::UNO_QUERY );
+    //             if ( xDockWindow.is() )
+    //             {
+    //                 try
+    //                 {
+    //                     xDockWindow->addDockableWindowListener( uno::Reference< awt::XDockableWindowListener >( static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                     xDockWindow->enableDocking( true );
+    //                     uno::Reference< awt::XWindow > xWindow( xDockWindow, uno::UNO_QUERY );
+    //                     if ( xWindow.is() )
+    //                         xWindow->addWindowListener( uno::Reference< awt::XWindowListener >( static_cast< OWeakObject * >( this ), uno::UNO_QUERY ));
+    //                 }
+    //                 catch (const uno::Exception&)
+    //                 {
+    //                 }
+    //             }
 
-                if ( !aElement.m_aName.isEmpty() )
-                {
-                    // Reuse a local entry so we are able to use the latest
-                    // UI changes for this document.
-                    implts_setElementData( aElement, xDockWindow );
-                    aElement.m_xUIElement = xUIElement;
-                    if ( aElement.m_aUIName.isEmpty() )
-                    {
-                        aElement.m_aUIName = aGenericAddonTitle;
-                        implts_writeWindowStateData( aElement );
-                    }
-                }
-                else
-                {
-                    // Create new UI element and try to read its state data
-                    UIElement aNewToolbar( aAddonToolBarName, aElementType, xUIElement );
-                    aNewToolbar.m_bFloating = true;
-                    implts_readWindowStateData( aAddonToolBarName, aNewToolbar );
-                    implts_setElementData( aNewToolbar, xDockWindow );
-                    if ( aNewToolbar.m_aUIName.isEmpty() )
-                    {
-                        aNewToolbar.m_aUIName = aGenericAddonTitle;
-                        implts_writeWindowStateData( aNewToolbar );
-                    }
-                    implts_insertToolbar( aNewToolbar );
-                }
+    //             OUString aGenericAddonTitle = implts_generateGenericAddonToolbarTitle( i+1 );
 
-                uno::Reference< awt::XWindow > xWindow( xDockWindow, uno::UNO_QUERY );
-                if ( xWindow.is() )
-                {
-                    // Set generic title for add-on toolbar
-                    SolarMutexGuard aGuard;
-                    VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
-                    if ( pWindow->GetText().isEmpty() )
-                        pWindow->SetText( aGenericAddonTitle );
-                    if ( pWindow->GetType() == WINDOW_TOOLBOX )
-                    {
-                        ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
-                        pToolbar->SetMenuType();
-                    }
-                }
-            }
-        }
-        catch (const container::NoSuchElementException&)
-        {
-        }
-        catch (const lang::IllegalArgumentException&)
-        {
-        }
-    }
+    //             if ( !aElement.m_aName.isEmpty() )
+    //             {
+    //                 // Reuse a local entry so we are able to use the latest
+    //                 // UI changes for this document.
+    //                 implts_setElementData( aElement, xDockWindow );
+    //                 aElement.m_xUIElement = xUIElement;
+    //                 if ( aElement.m_aUIName.isEmpty() )
+    //                 {
+    //                     aElement.m_aUIName = aGenericAddonTitle;
+    //                     implts_writeWindowStateData( aElement );
+    //                 }
+    //             }
+    //             else
+    //             {
+    //                 // Create new UI element and try to read its state data
+    //                 UIElement aNewToolbar( aAddonToolBarName, aElementType, xUIElement );
+    //                 aNewToolbar.m_bFloating = true;
+    //                 implts_readWindowStateData( aAddonToolBarName, aNewToolbar );
+    //                 implts_setElementData( aNewToolbar, xDockWindow );
+    //                 if ( aNewToolbar.m_aUIName.isEmpty() )
+    //                 {
+    //                     aNewToolbar.m_aUIName = aGenericAddonTitle;
+    //                     implts_writeWindowStateData( aNewToolbar );
+    //                 }
+    //                 implts_insertToolbar( aNewToolbar );
+    //             }
+
+    //             uno::Reference< awt::XWindow > xWindow( xDockWindow, uno::UNO_QUERY );
+    //             if ( xWindow.is() )
+    //             {
+    //                 // Set generic title for add-on toolbar
+    //                 SolarMutexGuard aGuard;
+    //                 VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
+    //                 if ( pWindow->GetText().isEmpty() )
+    //                     pWindow->SetText( aGenericAddonTitle );
+    //                 if ( pWindow->GetType() == WINDOW_TOOLBOX )
+    //                 {
+    //                     ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
+    //                     pToolbar->SetMenuType();
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     catch (const container::NoSuchElementException&)
+    //     {
+    //     }
+    //     catch (const lang::IllegalArgumentException&)
+    //     {
+    //     }
+    // }
+    // #endif
 }
 
 void ToolbarLayoutManager::implts_createCustomToolBars()
 {
-    SolarMutexClearableGuard aReadLock;
-    if ( !m_bComponentAttached )
-        return;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
-    uno::Reference< frame::XFrame > xFrame( m_xFrame );
-    uno::Reference< ui::XUIConfigurationManager > xModuleCfgMgr( m_xModuleCfgMgr, uno::UNO_QUERY );
-    uno::Reference< ui::XUIConfigurationManager > xDocCfgMgr( m_xDocCfgMgr, uno::UNO_QUERY );
-    aReadLock.clear();
+    // #ifndef VIEWONLY
+    // SolarMutexClearableGuard aReadLock;
+    // if ( !m_bComponentAttached )
+    //     return;
 
-    if ( xFrame.is() )
-    {
-        if (isPreviewFrame())
-            return; // no custom toolbars for preview frame!
+    // uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
+    // uno::Reference< frame::XFrame > xFrame( m_xFrame );
+    // uno::Reference< ui::XUIConfigurationManager > xModuleCfgMgr( m_xModuleCfgMgr, uno::UNO_QUERY );
+    // uno::Reference< ui::XUIConfigurationManager > xDocCfgMgr( m_xDocCfgMgr, uno::UNO_QUERY );
+    // aReadLock.clear();
 
-        uno::Sequence< uno::Sequence< beans::PropertyValue > > aTbxSeq;
-        if ( xDocCfgMgr.is() )
-        {
-            aTbxSeq = xDocCfgMgr->getUIElementsInfo( ui::UIElementType::TOOLBAR );
-            implts_createCustomToolBars( aTbxSeq ); // first create all document based toolbars
-        }
-        if ( xModuleCfgMgr.is() )
-        {
-            aTbxSeq = xModuleCfgMgr->getUIElementsInfo( ui::UIElementType::TOOLBAR );
-            implts_createCustomToolBars( aTbxSeq ); // second create module based toolbars
-        }
-    }
+    // if ( xFrame.is() )
+    // {
+    //     if (isPreviewFrame())
+    //         return; // no custom toolbars for preview frame!
+
+    //     uno::Sequence< uno::Sequence< beans::PropertyValue > > aTbxSeq;
+    //     if ( xDocCfgMgr.is() )
+    //     {
+    //         aTbxSeq = xDocCfgMgr->getUIElementsInfo( ui::UIElementType::TOOLBAR );
+    //         implts_createCustomToolBars( aTbxSeq ); // first create all document based toolbars
+    //     }
+    //     if ( xModuleCfgMgr.is() )
+    //     {
+    //         aTbxSeq = xModuleCfgMgr->getUIElementsInfo( ui::UIElementType::TOOLBAR );
+    //         implts_createCustomToolBars( aTbxSeq ); // second create module based toolbars
+    //     }
+    // }
+    // #endif
 }
 
 void ToolbarLayoutManager::implts_createNonContextSensitiveToolBars()
 {
-    SolarMutexClearableGuard aReadLock;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    if ( !m_xPersistentWindowState.is() || !m_xFrame.is() || !m_bComponentAttached )
-        return;
+    // #ifndef VIEWONLY
+    // SolarMutexClearableGuard aReadLock;
 
-    uno::Reference< ui::XUIElementFactory >  xUIElementFactory( m_xUIElementFactoryManager );
-    uno::Reference< container::XNameAccess > xPersistentWindowState( m_xPersistentWindowState );
-    aReadLock.clear();
+    // if ( !m_xPersistentWindowState.is() || !m_xFrame.is() || !m_bComponentAttached )
+    //     return;
 
-    if (isPreviewFrame())
-        return;
+    // uno::Reference< ui::XUIElementFactory >  xUIElementFactory( m_xUIElementFactoryManager );
+    // uno::Reference< container::XNameAccess > xPersistentWindowState( m_xPersistentWindowState );
+    // aReadLock.clear();
 
-    std::vector< OUString > aMakeVisibleToolbars;
+    // if (isPreviewFrame())
+    //     return;
 
-    try
-    {
-        uno::Sequence< OUString > aToolbarNames = xPersistentWindowState->getElementNames();
+    // std::vector< OUString > aMakeVisibleToolbars;
 
-        if ( aToolbarNames.getLength() > 0 )
-        {
-            OUString aElementType;
-            OUString aElementName;
-            OUString aName;
+    // try
+    // {
+    //     uno::Sequence< OUString > aToolbarNames = xPersistentWindowState->getElementNames();
 
-            uno::Reference< ui::XUIElement > xUIElement;
-            aMakeVisibleToolbars.reserve(aToolbarNames.getLength());
+    //     if ( aToolbarNames.getLength() > 0 )
+    //     {
+    //         OUString aElementType;
+    //         OUString aElementName;
+    //         OUString aName;
 
-            SolarMutexGuard g;
+    //         uno::Reference< ui::XUIElement > xUIElement;
+    //         aMakeVisibleToolbars.reserve(aToolbarNames.getLength());
 
-            const OUString* pTbNames = aToolbarNames.getConstArray();
-            for ( sal_Int32 i = 0; i < aToolbarNames.getLength(); i++ )
-            {
-                aName = pTbNames[i];
-                parseResourceURL( aName, aElementType, aElementName );
+    //         SolarMutexGuard g;
 
-                // Check that we only create:
-                // - Toolbars (the statusbar is also member of the persistent window state)
-                // - Not custom toolbars, there are created with their own method (implts_createCustomToolbars)
-                if ( aElementType.equalsIgnoreAsciiCase("toolbar") &&
-                     aElementName.indexOf( "custom_" ) == -1 )
-                {
-                    UIElement aNewToolbar = implts_findToolbar( aName );
-                    bool bFound = ( aNewToolbar.m_aName == aName );
-                    if ( !bFound )
-                        implts_readWindowStateData( aName, aNewToolbar );
+    //         const OUString* pTbNames = aToolbarNames.getConstArray();
+    //         for ( sal_Int32 i = 0; i < aToolbarNames.getLength(); i++ )
+    //         {
+    //             aName = pTbNames[i];
+    //             parseResourceURL( aName, aElementType, aElementName );
 
-                    if ( aNewToolbar.m_bVisible && !aNewToolbar.m_bContextSensitive )
-                    {
-                        if ( !bFound )
-                            implts_insertToolbar( aNewToolbar );
-                        aMakeVisibleToolbars.push_back( aName );
-                    }
-                }
-            }
-        }
-    }
-    catch (const uno::RuntimeException&)
-    {
-        throw;
-    }
-    catch (const uno::Exception&)
-    {
-    }
+    //             // Check that we only create:
+    //             // - Toolbars (the statusbar is also member of the persistent window state)
+    //             // - Not custom toolbars, there are created with their own method (implts_createCustomToolbars)
+    //             if ( aElementType.equalsIgnoreAsciiCase("toolbar") &&
+    //                  aElementName.indexOf( "custom_" ) == -1 )
+    //             {
+    //                 UIElement aNewToolbar = implts_findToolbar( aName );
+    //                 bool bFound = ( aNewToolbar.m_aName == aName );
+    //                 if ( !bFound )
+    //                     implts_readWindowStateData( aName, aNewToolbar );
 
-    if ( !aMakeVisibleToolbars.empty() )
-    {
-        for (auto const& rURL : aMakeVisibleToolbars)
-        {
-            this->requestToolbar(rURL);
-        }
-    }
+    //                 if ( aNewToolbar.m_bVisible && !aNewToolbar.m_bContextSensitive )
+    //                 {
+    //                     if ( !bFound )
+    //                         implts_insertToolbar( aNewToolbar );
+    //                     aMakeVisibleToolbars.push_back( aName );
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // catch (const uno::RuntimeException&)
+    // {
+    //     throw;
+    // }
+    // catch (const uno::Exception&)
+    // {
+    // }
+
+    // if ( !aMakeVisibleToolbars.empty() )
+    // {
+    //     for (auto const& rURL : aMakeVisibleToolbars)
+    //     {
+    //         this->requestToolbar(rURL);
+    //     }
+    // }
+    // #endif
 }
 
 void ToolbarLayoutManager::implts_createCustomToolBars( const uno::Sequence< uno::Sequence< beans::PropertyValue > >& aTbxSeqSeq )
 {
-    const uno::Sequence< beans::PropertyValue >* pTbxSeq = aTbxSeqSeq.getConstArray();
-    for ( sal_Int32 i = 0; i < aTbxSeqSeq.getLength(); i++ )
-    {
-        const uno::Sequence< beans::PropertyValue >& rTbxSeq = pTbxSeq[i];
-        OUString aTbxResName;
-        OUString aTbxTitle;
-        for ( sal_Int32 j = 0; j < rTbxSeq.getLength(); j++ )
-        {
-            if ( rTbxSeq[j].Name == "ResourceURL" )
-                rTbxSeq[j].Value >>= aTbxResName;
-            else if ( rTbxSeq[j].Name == "UIName" )
-                rTbxSeq[j].Value >>= aTbxTitle;
-        }
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-        // Only create custom toolbars. Their name have to start with "custom_"!
-        if ( !aTbxResName.isEmpty() && ( aTbxResName.indexOf( "custom_" ) != -1 ) )
-            implts_createCustomToolBar( aTbxResName, aTbxTitle );
-    }
+    // #ifndef VIEWONLY
+    // const uno::Sequence< beans::PropertyValue >* pTbxSeq = aTbxSeqSeq.getConstArray();
+    // for ( sal_Int32 i = 0; i < aTbxSeqSeq.getLength(); i++ )
+    // {
+    //     const uno::Sequence< beans::PropertyValue >& rTbxSeq = pTbxSeq[i];
+    //     OUString aTbxResName;
+    //     OUString aTbxTitle;
+    //     for ( sal_Int32 j = 0; j < rTbxSeq.getLength(); j++ )
+    //     {
+    //         if ( rTbxSeq[j].Name == "ResourceURL" )
+    //             rTbxSeq[j].Value >>= aTbxResName;
+    //         else if ( rTbxSeq[j].Name == "UIName" )
+    //             rTbxSeq[j].Value >>= aTbxTitle;
+    //     }
+
+    //     // Only create custom toolbars. Their name have to start with "custom_"!
+    //     if ( !aTbxResName.isEmpty() && ( aTbxResName.indexOf( "custom_" ) != -1 ) )
+    //         implts_createCustomToolBar( aTbxResName, aTbxTitle );
+    // }
+    // #endif
 }
 
 void ToolbarLayoutManager::implts_createCustomToolBar( const OUString& aTbxResName, const OUString& aTitle )
 {
-    if ( !aTbxResName.isEmpty() )
-    {
-        if ( !createToolbar( aTbxResName ) )
-            SAL_WARN("fwk.uielement", "ToolbarLayoutManager cannot create custom toolbar");
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-        uno::Reference< ui::XUIElement > xUIElement = getToolbar( aTbxResName );
+    // #ifndef VIEWONLY
+    // if ( !aTbxResName.isEmpty() )
+    // {
+    //     if ( !createToolbar( aTbxResName ) )
+    //         SAL_WARN("fwk.uielement", "ToolbarLayoutManager cannot create custom toolbar");
 
-        if ( !aTitle.isEmpty() && xUIElement.is() )
-        {
-            SolarMutexGuard aGuard;
+    //     uno::Reference< ui::XUIElement > xUIElement = getToolbar( aTbxResName );
 
-            vcl::Window* pWindow = getWindowFromXUIElement( xUIElement );
-            if ( pWindow  )
-                pWindow->SetText( aTitle );
-        }
-    }
+    //     if ( !aTitle.isEmpty() && xUIElement.is() )
+    //     {
+    //         SolarMutexGuard aGuard;
+
+    //         vcl::Window* pWindow = getWindowFromXUIElement( xUIElement );
+    //         if ( pWindow  )
+    //             pWindow->SetText( aTitle );
+    //     }
+    // }
+    // #endif
 }
 
 void ToolbarLayoutManager::implts_reparentToolbars()

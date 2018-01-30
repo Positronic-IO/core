@@ -125,48 +125,55 @@ throw ( RuntimeException, std::exception )
 void SAL_CALL GenericToolbarController::execute( sal_Int16 KeyModifier )
 throw ( RuntimeException, std::exception )
 {
-    Reference< XDispatch >       xDispatch;
-    Reference< XURLTransformer > xURLTransformer;
-    OUString                     aCommandURL;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    {
-        SolarMutexGuard aSolarMutexGuard;
+    // #ifndef VIEWONLY
+    // Reference< XDispatch >       xDispatch;
+    // Reference< XURLTransformer > xURLTransformer;
+    // OUString                     aCommandURL;
 
-        if ( m_bDisposed )
-            throw DisposedException();
+    // {
+    //     SolarMutexGuard aSolarMutexGuard;
 
-        if ( m_bInitialized &&
-             m_xFrame.is() &&
-             !m_aCommandURL.isEmpty() )
-        {
-            xURLTransformer = URLTransformer::create(m_xContext);
+    //     if ( m_bDisposed )
+    //         throw DisposedException();
 
-            aCommandURL = m_aCommandURL;
-            URLToDispatchMap::iterator pIter = m_aListenerMap.find( m_aCommandURL );
-            if ( pIter != m_aListenerMap.end() )
-                xDispatch = pIter->second;
-        }
-    }
+    //     if ( m_bInitialized &&
+    //          m_xFrame.is() &&
+    //          !m_aCommandURL.isEmpty() )
+    //     {
+    //         xURLTransformer = URLTransformer::create(m_xContext);
 
-    if ( xDispatch.is() && xURLTransformer.is() )
-    {
-        css::util::URL aTargetURL;
-        Sequence<PropertyValue>   aArgs( 1 );
+    //         aCommandURL = m_aCommandURL;
+    //         URLToDispatchMap::iterator pIter = m_aListenerMap.find( m_aCommandURL );
+    //         if ( pIter != m_aListenerMap.end() )
+    //             xDispatch = pIter->second;
+    //     }
+    // }
 
-        // Add key modifier to argument list
-        aArgs[0].Name  = "KeyModifier";
-        aArgs[0].Value <<= KeyModifier;
+    // if ( xDispatch.is() && xURLTransformer.is() )
+    // {
+    //     css::util::URL aTargetURL;
+    //     Sequence<PropertyValue>   aArgs( 1 );
 
-        aTargetURL.Complete = aCommandURL;
-        xURLTransformer->parseStrict( aTargetURL );
+    //     // Add key modifier to argument list
+    //     aArgs[0].Name  = "KeyModifier";
+    //     aArgs[0].Value <<= KeyModifier;
 
-        // Execute dispatch asynchronously
-        ExecuteInfo* pExecuteInfo = new ExecuteInfo;
-        pExecuteInfo->xDispatch     = xDispatch;
-        pExecuteInfo->aTargetURL    = aTargetURL;
-        pExecuteInfo->aArgs         = aArgs;
-        Application::PostUserEvent( LINK(nullptr, GenericToolbarController , ExecuteHdl_Impl), pExecuteInfo );
-    }
+    //     aTargetURL.Complete = aCommandURL;
+    //     xURLTransformer->parseStrict( aTargetURL );
+
+    //     // Execute dispatch asynchronously
+    //     ExecuteInfo* pExecuteInfo = new ExecuteInfo;
+    //     pExecuteInfo->xDispatch     = xDispatch;
+    //     pExecuteInfo->aTargetURL    = aTargetURL;
+    //     pExecuteInfo->aArgs         = aArgs;
+    //     Application::PostUserEvent( LINK(nullptr, GenericToolbarController , ExecuteHdl_Impl), pExecuteInfo );
+    // }
+    // #endif
 }
 
 void GenericToolbarController::statusChanged( const FeatureStateEvent& Event )
@@ -341,27 +348,33 @@ void SAL_CALL MenuToolbarController::click() throw (RuntimeException, std::excep
 Reference< XWindow > SAL_CALL
 MenuToolbarController::createPopupWindow() throw (css::uno::RuntimeException, std::exception)
 {
-    if ( !pMenu )
-    {
-        Reference< XDispatchProvider > xDispatch;
-        Reference< XURLTransformer > xURLTransformer = URLTransformer::create( m_xContext );
-        pMenu = VclPtr<Toolbarmenu>::Create();
-        m_xMenuManager.set( new MenuBarManager( m_xContext, m_xFrame, xURLTransformer, xDispatch, m_aModuleIdentifier, pMenu, false, false ) );
-        if (m_xMenuManager.is())
-        {
-            MenuBarManager& rMgr = dynamic_cast<MenuBarManager&>(*m_xMenuManager.get());
-            rMgr.SetItemContainer(m_xMenuDesc);
-        }
-    }
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    if ( !pMenu || !m_pToolbar )
-        return nullptr;
+    // #ifndef VIEWONLY
+    // if ( !pMenu )
+    // {
+    //     Reference< XDispatchProvider > xDispatch;
+    //     Reference< XURLTransformer > xURLTransformer = URLTransformer::create( m_xContext );
+    //     pMenu = VclPtr<Toolbarmenu>::Create();
+    //     m_xMenuManager.set( new MenuBarManager( m_xContext, m_xFrame, xURLTransformer, xDispatch, m_aModuleIdentifier, pMenu, false, false ) );
+    //     if (m_xMenuManager.is())
+    //     {
+    //         MenuBarManager& rMgr = dynamic_cast<MenuBarManager&>(*m_xMenuManager.get());
+    //         rMgr.SetItemContainer(m_xMenuDesc);
+    //     }
+    // }
 
-    OSL_ENSURE ( pMenu->GetItemCount(), "Empty PopupMenu!" );
+    // if ( !pMenu || !m_pToolbar )
+    //     return nullptr;
 
-    ::Rectangle aRect( m_pToolbar->GetItemRect( m_nID ) );
-    pMenu->Execute( m_pToolbar, aRect, PopupMenuFlags::ExecuteDown );
+    // OSL_ENSURE ( pMenu->GetItemCount(), "Empty PopupMenu!" );
 
+    // ::Rectangle aRect( m_pToolbar->GetItemRect( m_nID ) );
+    // pMenu->Execute( m_pToolbar, aRect, PopupMenuFlags::ExecuteDown );
+    // #endif
     return nullptr;
 }
 } // namespace

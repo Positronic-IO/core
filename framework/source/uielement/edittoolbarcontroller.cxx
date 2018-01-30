@@ -197,22 +197,29 @@ bool EditToolbarController::PreNotify( NotifyEvent& rNEvt )
 
 void EditToolbarController::executeControlCommand( const css::frame::ControlCommand& rControlCommand )
 {
-    if ( rControlCommand.Command.startsWith( "SetText" ))
-    {
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name.startsWith( "Text" ))
-            {
-                OUString aText;
-                rControlCommand.Arguments[i].Value >>= aText;
-                m_pEditControl->SetText( aText );
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-                // send notification
-                notifyTextChanged( aText );
-                break;
-            }
-        }
-    }
+    // #ifndef VIEWONLY
+    // if ( rControlCommand.Command.startsWith( "SetText" ))
+    // {
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name.startsWith( "Text" ))
+    //         {
+    //             OUString aText;
+    //             rControlCommand.Arguments[i].Value >>= aText;
+    //             m_pEditControl->SetText( aText );
+
+    //             // send notification
+    //             notifyTextChanged( aText );
+    //             break;
+    //         }
+    //     }
+    // }
+    // #endif
 }
 
 } // namespace

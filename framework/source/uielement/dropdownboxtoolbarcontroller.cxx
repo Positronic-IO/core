@@ -124,17 +124,24 @@ DropdownToolbarController::DropdownToolbarController(
     ComplexToolbarController( rxContext, rFrame, pToolbar, nID, aCommand )
     ,   m_pListBoxControl( nullptr )
 {
-    m_pListBoxControl = VclPtr<ListBoxControl>::Create( m_pToolbar, WB_DROPDOWN|WB_AUTOHSCROLL|WB_BORDER, this );
-    if ( nWidth == 0 )
-        nWidth = 100;
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-    // default dropdown size
-    ::Size aLogicalSize( 0, 160 );
-    ::Size aPixelSize = m_pListBoxControl->LogicToPixel( aLogicalSize, MapUnit::MapAppFont );
+    // #ifndef VIEWONLY
+    // m_pListBoxControl = VclPtr<ListBoxControl>::Create( m_pToolbar, WB_DROPDOWN|WB_AUTOHSCROLL|WB_BORDER, this );
+    // if ( nWidth == 0 )
+    //     nWidth = 100;
 
-    m_pListBoxControl->SetSizePixel( ::Size( nWidth, aPixelSize.Height() ));
-    m_pToolbar->SetItemWindow( m_nID, m_pListBoxControl );
-    m_pListBoxControl->SetDropDownLineCount( 5 );
+    // // default dropdown size
+    // ::Size aLogicalSize( 0, 160 );
+    // ::Size aPixelSize = m_pListBoxControl->LogicToPixel( aLogicalSize, MapUnit::MapAppFont );
+
+    // m_pListBoxControl->SetSizePixel( ::Size( nWidth, aPixelSize.Height() ));
+    // m_pToolbar->SetItemWindow( m_nID, m_pListBoxControl );
+    // m_pListBoxControl->SetDropDownLineCount( 5 );
+    // #endif
 }
 
 DropdownToolbarController::~DropdownToolbarController()
@@ -188,109 +195,116 @@ void DropdownToolbarController::LoseFocus()
 
 void DropdownToolbarController::executeControlCommand( const css::frame::ControlCommand& rControlCommand )
 {
-    if ( rControlCommand.Command == "SetList" )
-    {
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "List" )
-            {
-                Sequence< OUString > aList;
-                m_pListBoxControl->Clear();
+    //////////////////////////////////////////////////////////////
+    // Functionality Commented out.
+    // TODOD: Add compiler flag to enable functionality.
+    /////////////////////////////////////////////////////////////
 
-                rControlCommand.Arguments[i].Value >>= aList;
-                for ( sal_Int32 j = 0; j < aList.getLength(); j++ )
-                    m_pListBoxControl->InsertEntry( aList[j] );
+    // #ifndef VIEWONLY
+    // if ( rControlCommand.Command == "SetList" )
+    // {
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "List" )
+    //         {
+    //             Sequence< OUString > aList;
+    //             m_pListBoxControl->Clear();
 
-                m_pListBoxControl->SelectEntryPos( 0 );
+    //             rControlCommand.Arguments[i].Value >>= aList;
+    //             for ( sal_Int32 j = 0; j < aList.getLength(); j++ )
+    //                 m_pListBoxControl->InsertEntry( aList[j] );
 
-                // send notification
-                uno::Sequence< beans::NamedValue > aInfo { { "List", css::uno::makeAny(aList) } };
-                addNotifyInfo( "ListChanged",
-                               getDispatchFromCommand( m_aCommandURL ),
-                               aInfo );
+    //             m_pListBoxControl->SelectEntryPos( 0 );
 
-                break;
-            }
-        }
-    }
-    else if ( rControlCommand.Command == "AddEntry" )
-    {
-        sal_Int32      nPos( LISTBOX_APPEND );
-        OUString   aText;
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "Text" )
-            {
-                if ( rControlCommand.Arguments[i].Value >>= aText )
-                    m_pListBoxControl->InsertEntry( aText, nPos );
-                break;
-            }
-        }
-    }
-    else if ( rControlCommand.Command == "InsertEntry" )
-    {
-        sal_Int32      nPos( LISTBOX_APPEND );
-        OUString   aText;
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "Pos" )
-            {
-                sal_Int32 nTmpPos = 0;
-                if ( rControlCommand.Arguments[i].Value >>= nTmpPos )
-                {
-                    if (( nTmpPos >= 0 ) &&
-                        ( nTmpPos < sal_Int32( m_pListBoxControl->GetEntryCount() )))
-                        nPos = nTmpPos;
-                }
-            }
-            else if ( rControlCommand.Arguments[i].Name == "Text" )
-                rControlCommand.Arguments[i].Value >>= aText;
-        }
+    //             // send notification
+    //             uno::Sequence< beans::NamedValue > aInfo { { "List", css::uno::makeAny(aList) } };
+    //             addNotifyInfo( "ListChanged",
+    //                            getDispatchFromCommand( m_aCommandURL ),
+    //                            aInfo );
 
-        m_pListBoxControl->InsertEntry( aText, nPos );
-    }
-    else if ( rControlCommand.Command == "RemoveEntryPos" )
-    {
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "Pos" )
-            {
-                sal_Int32 nPos( -1 );
-                if ( rControlCommand.Arguments[i].Value >>= nPos )
-                {
-                    if ( 0 <= nPos && nPos < sal_Int32( m_pListBoxControl->GetEntryCount() ))
-                        m_pListBoxControl->RemoveEntry( nPos );
-                }
-                break;
-            }
-        }
-    }
-    else if ( rControlCommand.Command == "RemoveEntryText" )
-    {
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "Text" )
-            {
-                OUString aText;
-                if ( rControlCommand.Arguments[i].Value >>= aText )
-                    m_pListBoxControl->RemoveEntry( aText );
-                break;
-            }
-        }
-    }
-    else if ( rControlCommand.Command == "SetDropDownLines" )
-    {
-        for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
-        {
-            if ( rControlCommand.Arguments[i].Name == "Lines" )
-            {
-                sal_Int32 nValue( 5 );
-                rControlCommand.Arguments[i].Value >>= nValue;
-                m_pListBoxControl->SetDropDownLineCount( sal_uInt16( nValue ));
-                break;
-            }
-        }
-    }
+    //             break;
+    //         }
+    //     }
+    // }
+    // else if ( rControlCommand.Command == "AddEntry" )
+    // {
+    //     sal_Int32      nPos( LISTBOX_APPEND );
+    //     OUString   aText;
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "Text" )
+    //         {
+    //             if ( rControlCommand.Arguments[i].Value >>= aText )
+    //                 m_pListBoxControl->InsertEntry( aText, nPos );
+    //             break;
+    //         }
+    //     }
+    // }
+    // else if ( rControlCommand.Command == "InsertEntry" )
+    // {
+    //     sal_Int32      nPos( LISTBOX_APPEND );
+    //     OUString   aText;
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "Pos" )
+    //         {
+    //             sal_Int32 nTmpPos = 0;
+    //             if ( rControlCommand.Arguments[i].Value >>= nTmpPos )
+    //             {
+    //                 if (( nTmpPos >= 0 ) &&
+    //                     ( nTmpPos < sal_Int32( m_pListBoxControl->GetEntryCount() )))
+    //                     nPos = nTmpPos;
+    //             }
+    //         }
+    //         else if ( rControlCommand.Arguments[i].Name == "Text" )
+    //             rControlCommand.Arguments[i].Value >>= aText;
+    //     }
+
+    //     m_pListBoxControl->InsertEntry( aText, nPos );
+    // }
+    // else if ( rControlCommand.Command == "RemoveEntryPos" )
+    // {
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "Pos" )
+    //         {
+    //             sal_Int32 nPos( -1 );
+    //             if ( rControlCommand.Arguments[i].Value >>= nPos )
+    //             {
+    //                 if ( 0 <= nPos && nPos < sal_Int32( m_pListBoxControl->GetEntryCount() ))
+    //                     m_pListBoxControl->RemoveEntry( nPos );
+    //             }
+    //             break;
+    //         }
+    //     }
+    // }
+    // else if ( rControlCommand.Command == "RemoveEntryText" )
+    // {
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "Text" )
+    //         {
+    //             OUString aText;
+    //             if ( rControlCommand.Arguments[i].Value >>= aText )
+    //                 m_pListBoxControl->RemoveEntry( aText );
+    //             break;
+    //         }
+    //     }
+    // }
+    // else if ( rControlCommand.Command == "SetDropDownLines" )
+    // {
+    //     for ( sal_Int32 i = 0; i < rControlCommand.Arguments.getLength(); i++ )
+    //     {
+    //         if ( rControlCommand.Arguments[i].Name == "Lines" )
+    //         {
+    //             sal_Int32 nValue( 5 );
+    //             rControlCommand.Arguments[i].Value >>= nValue;
+    //             m_pListBoxControl->SetDropDownLineCount( sal_uInt16( nValue ));
+    //             break;
+    //         }
+    //     }
+    // }
+    // #endif
 }
 
 } // namespace
