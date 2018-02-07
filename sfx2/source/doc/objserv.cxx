@@ -405,8 +405,10 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
 
     // this guard is created here to have it destruction at the end of the method
     SfxInstanceCloseGuard_Impl aModelGuard;
-
+#ifdef NOTVIEWONLY
     bool bIsPDFExport = false;
+#endif
+
     switch(nId)
     {
         case SID_VERSION:
@@ -502,13 +504,16 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         case SID_EXPORTDOCASPDF:
         case SID_DIRECTEXPORTDOCASPDF:
+#ifdef NOTVIEWONLY
             bIsPDFExport = true;
             SAL_FALLTHROUGH;
+#endif
         case SID_EXPORTDOC:
         case SID_SAVEASDOC:
         case SID_SAVEASREMOTE:
         case SID_SAVEDOC:
         {
+#ifdef NOTVIEWONLY
             // derived class may decide to abort this
             if( !QuerySlotExecutable( nId ) )
             {
@@ -713,11 +718,13 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             ResetError();
 
             Invalidate();
+#endif
             break;
         }
 
         case SID_SAVEACOPY:
         {
+#ifdef NOTVIEWONLY
             SfxAllItemSet aArgs( GetPool() );
             aArgs.Put( SfxBoolItem( SID_SAVEACOPYITEM, true ) );
             SfxRequest aSaveACopyReq( SID_EXPORTDOC, SfxCallMode::API, aArgs );
@@ -727,6 +734,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 rReq.Ignore();
                 return;
             }
+#endif
             break;
         }
 
