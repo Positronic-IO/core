@@ -653,6 +653,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
         case SID_PRINTDOC: // display the printer selection and properties dialogue : File > Print...
         case SID_PRINTDOCDIRECT: // Print the document directly, without displaying the dialogue
         {
+#ifdef NOTVIEWONLY
             SfxObjectShell* pDoc = GetObjectShell();
 
             // derived class may decide to abort this
@@ -743,6 +744,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
 
             // FIXME: Recording
             rReq.Done();
+#endif
             break;
         }
 
