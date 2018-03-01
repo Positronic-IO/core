@@ -37,8 +37,8 @@
 #include <svx/svdpagv.hxx>
 #include <svx/svdogrp.hxx>
 #include <svx/svdundo.hxx>
-#include <vcl/layout.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sot/formats.hxx>
 #include <xmloff/autolayout.hxx>
 
@@ -244,8 +244,9 @@ SdDrawDocument* SdDrawDocument::OpenBookmarkDoc(SfxMedium* pMedium)
 
     if (!bOK)
     {
-        ScopedVclPtrInstance< MessageDialog > aErrorBox(nullptr, SdResId(STR_READ_DATA_ERROR));
-        aErrorBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_READ_DATA_ERROR)));
+        xErrorBox->run();
 
         CloseBookmarkDoc();
         pBookmarkDoc = nullptr;
@@ -465,7 +466,11 @@ bool SdDrawDocument::InsertBookmarkAsPage(
             pBMPage->GetLowerBorder()   != pRefPage->GetLowerBorder())
         {
             OUString aStr(SdResId(STR_SCALE_OBJECTS));
-            sal_uInt16 nBut = ScopedVclPtrInstance<QueryBox>(nullptr, MessBoxStyle::YesNoCancel, aStr)->Execute();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           aStr));
+            xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+            sal_uInt16 nBut = xQueryBox->run();
 
             bScaleObjects = nBut == RET_YES;
             bContinue     = nBut != RET_CANCEL;

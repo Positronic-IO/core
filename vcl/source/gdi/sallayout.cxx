@@ -270,6 +270,12 @@ void ImplLayoutRuns::AddRun( int nCharPos0, int nCharPos1, bool bRTL )
         nCharPos1 = nTemp;
     }
 
+    if (maRuns.size() >= 2 && nCharPos0 == maRuns[maRuns.size() - 2] && nCharPos1 == maRuns[maRuns.size() - 1])
+    {
+        //this run is the same as the last
+        return;
+    }
+
     // append new run
     maRuns.push_back( nCharPos0 );
     maRuns.push_back( nCharPos1 );
@@ -409,10 +415,7 @@ ImplLayoutArgs::ImplLayoutArgs(const OUString& rStr,
     else
     {
         // handle weak BiDi mode
-
-        UBiDiLevel nLevel = UBIDI_DEFAULT_LTR;
-        if( mnFlags & SalLayoutFlags::BiDiRtl )
-            nLevel = UBIDI_DEFAULT_RTL;
+        UBiDiLevel nLevel = (mnFlags & SalLayoutFlags::BiDiRtl)? 1 : 0;
 
         // prepare substring for BiDi analysis
         // TODO: reuse allocated pParaBidi
@@ -767,7 +770,7 @@ void GenericSalLayout::Justify( DeviceCoordinate nNewWidth )
     if( nNewWidth < nMaxGlyphWidth)
         nNewWidth = nMaxGlyphWidth;
     nNewWidth -= pGlyphIterRight->mnOrigWidth;
-    pGlyphIterRight->maLinearPos.X() = maBasePoint.X() + nNewWidth;
+    pGlyphIterRight->maLinearPos.setX( maBasePoint.X() + nNewWidth );
 
     // justify glyph widths and positions
     int nDiffWidth = nNewWidth - nOldWidth;
@@ -778,7 +781,7 @@ void GenericSalLayout::Justify( DeviceCoordinate nNewWidth )
         for( pGlyphIter = m_GlyphItems.begin(); pGlyphIter != pGlyphIterRight; ++pGlyphIter )
         {
             // move glyph to justified position
-            pGlyphIter->maLinearPos.X() += nDeltaSum;
+            pGlyphIter->maLinearPos.AdjustX(nDeltaSum );
 
             // do not stretch non-stretchable glyphs
             if( pGlyphIter->IsDiacritic() || (nStretchable <= 0) )
@@ -801,7 +804,7 @@ void GenericSalLayout::Justify( DeviceCoordinate nNewWidth )
             {
                 int nX = pGlyphIter->maLinearPos.X() - maBasePoint.X();
                 nX = static_cast<int>(nX * fSqueeze);
-                pGlyphIter->maLinearPos.X() = nX + maBasePoint.X();
+                pGlyphIter->maLinearPos.setX( nX + maBasePoint.X() );
             }
         }
         // adjust glyph widths to new positions
@@ -847,7 +850,7 @@ void GenericSalLayout::ApplyAsianKerning(const OUString& rStr)
 
         // adjust the glyph positions to the new glyph widths
         if( pGlyphIter+1 != pGlyphIterEnd )
-            pGlyphIter->maLinearPos.X() += nOffset;
+            pGlyphIter->maLinearPos.AdjustX(nOffset );
     }
 }
 
@@ -961,8 +964,8 @@ int GenericSalLayout::GetNextGlyphs(int nLen, const GlyphItem** pGlyphs,
             break;
     }
 
-    aRelativePos.X() /= mnUnitsPerPixel;
-    aRelativePos.Y() /= mnUnitsPerPixel;
+    aRelativePos.setX( aRelativePos.X() / ( mnUnitsPerPixel) );
+    aRelativePos.setY( aRelativePos.Y() / ( mnUnitsPerPixel) );
     rPos = GetDrawPosition( aRelativePos );
 
     return nCount;
@@ -988,7 +991,7 @@ void GenericSalLayout::MoveGlyph( int nStart, long nNewXPos )
     {
         for( std::vector<GlyphItem>::iterator pGlyphIterEnd = m_GlyphItems.end(); pGlyphIter != pGlyphIterEnd; ++pGlyphIter )
         {
-            pGlyphIter->maLinearPos.X() += nXDelta;
+            pGlyphIter->maLinearPos.AdjustX(nXDelta );
         }
     }
 }
@@ -1206,15 +1209,27 @@ void MultiSalLayout::AdjustLayout( ImplLayoutArgs& rArgs )
     double fUnitMul = 1.0;
     for( n = 0; n < nLevel; ++n )
         maFallbackRuns[n].ResetPos();
+
+    int nFirstValid = -1;
+    for( n = 0; n < nLevel; ++n )
+    {
+        if(nValid[n] > 0)
+        {
+            nFirstValid = n;
+            break;
+        }
+    }
+    assert(nFirstValid >= 0);
+
     // get the next codepoint index that needs fallback
-    int nActiveCharPos = pGlyphs[0]->mnCharPos;
+    int nActiveCharPos = pGlyphs[nFirstValid]->mnCharPos;
     int nActiveCharIndex = nActiveCharPos - mnMinCharPos;
     // get the end index of the active run
     int nLastRunEndChar = (nActiveCharIndex >= 0 && vRtl[nActiveCharIndex]) ?
         rArgs.mnEndCharPos : rArgs.mnMinCharPos - 1;
-    int nRunVisibleEndChar = pGlyphs[0]->mnCharPos;
+    int nRunVisibleEndChar = pGlyphs[nFirstValid]->mnCharPos;
     // merge the fallback levels
-    while( nValid[0] && (nLevel > 0))
+    while( nValid[nFirstValid] && (nLevel > 0))
     {
         // find best fallback level
         for( n = 0; n < nLevel; ++n )
@@ -1241,15 +1256,15 @@ void MultiSalLayout::AdjustLayout( ImplLayoutArgs& rArgs )
         {
             // drop the NotDef glyphs in the base layout run if a fallback run exists
             while (
-                    (maFallbackRuns[n-1].PosIsInRun(pGlyphs[0]->mnCharPos)) &&
-                    (!maFallbackRuns[n].PosIsInAnyRun(pGlyphs[0]->mnCharPos))
+                    (maFallbackRuns[n-1].PosIsInRun(pGlyphs[nFirstValid]->mnCharPos)) &&
+                    (!maFallbackRuns[n].PosIsInAnyRun(pGlyphs[nFirstValid]->mnCharPos))
                   )
             {
                 mpLayouts[0]->DropGlyph( nStartOld[0] );
                 nStartOld[0] = nStartNew[0];
-                nValid[0] = mpLayouts[0]->GetNextGlyphs(1, &pGlyphs[0], aPos, nStartNew[0]);
+                nValid[nFirstValid] = mpLayouts[0]->GetNextGlyphs(1, &pGlyphs[nFirstValid], aPos, nStartNew[0]);
 
-                if( !nValid[0] )
+                if( !nValid[nFirstValid] )
                    break;
             }
         }
@@ -1301,9 +1316,9 @@ void MultiSalLayout::AdjustLayout( ImplLayoutArgs& rArgs )
             else
             {
                 // break when a fallback is needed and available
-                bool bNeedFallback = maFallbackRuns[0].PosIsInRun(pGlyphs[0]->mnCharPos);
+                bool bNeedFallback = maFallbackRuns[0].PosIsInRun(pGlyphs[nFirstValid]->mnCharPos);
                 if( bNeedFallback )
-                    if (!maFallbackRuns[nLevel-1].PosIsInRun(pGlyphs[0]->mnCharPos))
+                    if (!maFallbackRuns[nLevel-1].PosIsInRun(pGlyphs[nFirstValid]->mnCharPos))
                         break;
                 // break when change from resolved to unresolved base layout run
                 if( bKeepNotDef && !bNeedFallback )
@@ -1356,7 +1371,7 @@ void MultiSalLayout::AdjustLayout( ImplLayoutArgs& rArgs )
                   nRunAdvance -= aMultiArgs.mpDXArray[nLastRunEndChar - mnMinCharPos];
             }
             nLastRunEndChar = nRunVisibleEndChar;
-            nRunVisibleEndChar = pGlyphs[0]->mnCharPos;
+            nRunVisibleEndChar = pGlyphs[nFirstValid]->mnCharPos;
             // the requested width is still in pixel units
             // => convert it to base level font units
             nRunAdvance *= mnUnitsPerPixel;
@@ -1373,7 +1388,7 @@ void MultiSalLayout::AdjustLayout( ImplLayoutArgs& rArgs )
         nXPos += nRunAdvance;
 
         // prepare for next fallback run
-        nActiveCharPos = pGlyphs[0]->mnCharPos;
+        nActiveCharPos = pGlyphs[nFirstValid]->mnCharPos;
         // it essential that the runs don't get ahead of themselves and in the
         // if( bKeepNotDef && !bNeedFallback ) statement above, the next run may
         // have already been reached on the base level

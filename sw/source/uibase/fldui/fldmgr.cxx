@@ -832,13 +832,14 @@ sal_uInt16 SwFieldMgr::GetFormatId(sal_uInt16 nTypeId, sal_uInt32 nFormatId) con
             {
                 Sequence<sal_Int16> aTypes = m_xNumberingInfo->getSupportedNumberingTypes();
                 const sal_Int16* pTypes = aTypes.getConstArray();
+                sal_Int32 nOffset = aSwFields[nPos].nFormatLength;
                 sal_Int32 nValidEntry = 0;
                 for (sal_Int32 nType = 0; nType < aTypes.getLength(); nType++)
                 {
                     sal_Int16 nCurrent = pTypes[nType];
                     if (nCurrent > NumberingType::CHARS_LOWER_LETTER_N)
                     {
-                        if (nValidEntry == static_cast<sal_Int32>(nFormatId))
+                        if (nValidEntry == static_cast<sal_Int32>(nFormatId) - nOffset)
                         {
                             nId = pTypes[nType];
                             break;
@@ -1094,7 +1095,21 @@ bool SwFieldMgr::InsertField(
             SwGetRefFieldType* pTyp =
                 static_cast<SwGetRefFieldType*>( pCurShell->GetFieldType(0, SwFieldIds::GetRef) );
             sal_uInt16 nSeqNo = static_cast<sal_uInt16>(rData.m_sPar2.toInt32());
-            pField = new SwGetRefField(pTyp, rData.m_sPar1, nSubType, nSeqNo, nFormatId);
+            OUString sReferenceLanguage;
+            // handle language-variant formats
+            if (nFormatId >= SAL_N_ELEMENTS(FMT_REF_ARY))
+            {
+                LanguageType nLang = GetCurrLanguage();
+                if (nLang == LANGUAGE_HUNGARIAN)
+                {
+                    if (nFormatId >= SAL_N_ELEMENTS(FMT_REF_ARY) * 2)
+                        sReferenceLanguage = "Hu";
+                    else
+                        sReferenceLanguage = "hu";
+                }
+                nFormatId %= SAL_N_ELEMENTS(FMT_REF_ARY);
+            }
+            pField = new SwGetRefField(pTyp, rData.m_sPar1, sReferenceLanguage, nSubType, nSeqNo, nFormatId);
             bExp = true;
             break;
         }
@@ -1497,7 +1512,7 @@ bool SwFieldMgr::InsertField(
         // start dialog, not before the field is inserted tdf#99529
         pCurShell->Left(CRSR_SKIP_CHARS,
                 false, (INP_VAR == (nSubType & 0xff)) ? 1 : 2, false );
-        pCurShell->StartInputFieldDlg(pField, false, rData.m_pParent);
+        pCurShell->StartInputFieldDlg(pField, false, true, rData.m_pParent);
 
         pCurShell->Pop(SwCursorShell::PopMode::DeleteCurrent);
     }

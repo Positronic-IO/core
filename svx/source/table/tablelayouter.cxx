@@ -499,7 +499,7 @@ sal_Int32 TableLayouter::distribute( LayoutVector& rLayouts, sal_Int32 nDistribu
 
     sal_Int32 nSize = 0;
     for( nIndex = 0; nIndex < nCount; ++nIndex )
-        nSize += rLayouts[nIndex].mnSize;
+        nSize = o3tl::saturating_add(nSize, rLayouts[nIndex].mnSize);
 
     return nSize;
 }
@@ -798,7 +798,7 @@ void TableLayouter::LayoutTableHeight( tools::Rectangle& rArea, bool bFit )
 
     // now scale if wanted and needed
     if( bFit && nCurrentHeight != rArea.getHeight() )
-        distribute( maRows, rArea.getHeight() - nCurrentHeight );
+        distribute(maRows, o3tl::saturating_sub<sal_Int32>(rArea.getHeight(), nCurrentHeight));
 
     // last step, update left edges
     sal_Int32 nNewHeight = 0;
@@ -867,10 +867,10 @@ void TableLayouter::updateCells( tools::Rectangle& rRectangle )
                 if( getCellArea( xCell, aPos, aCellArea ) )
                 {
                     tools::Rectangle aCellRect;
-                    aCellRect.Left() = aCellArea.getMinX();
-                    aCellRect.Right() = aCellArea.getMaxX();
-                    aCellRect.Top() = aCellArea.getMinY();
-                    aCellRect.Bottom() = aCellArea.getMaxY();
+                    aCellRect.SetLeft( aCellArea.getMinX() );
+                    aCellRect.SetRight( aCellArea.getMaxX() );
+                    aCellRect.SetTop( aCellArea.getMinY() );
+                    aCellRect.SetBottom( aCellArea.getMaxY() );
                     aCellRect.Move( rRectangle.Left(), rRectangle.Top() );
                     xCell->setCellRect( aCellRect );
                 }
@@ -1111,7 +1111,7 @@ void TableLayouter::DistributeRows( ::tools::Rectangle& rArea, sal_Int32 nFirstR
         if( nHeight < nMinHeight )
         {
             sal_Int32 nNeededHeight = nRows * nMinHeight;
-            rArea.Bottom() += nNeededHeight - nAllHeight;
+            rArea.AdjustBottom(nNeededHeight - nAllHeight );
             nHeight = nMinHeight;
             nAllHeight = nRows * nMinHeight;
         }

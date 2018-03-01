@@ -777,6 +777,7 @@ namespace xmloff { namespace token {
         XML_FILL_IMAGE_REF_POINT_X,
         XML_FILL_IMAGE_REF_POINT_Y,
         XML_FILL_IMAGE_WIDTH,
+        XML_FILL_RULE,
         XML_FILTER,
         XML_FILTER_AND,
         XML_FILTER_CONDITION,
@@ -3299,6 +3300,9 @@ namespace xmloff { namespace token {
         XML_ZEROS_NUMERATOR_DIGITS,
         XML_ZEROS_DENOMINATOR_DIGITS,
         XML_INTEGER_FRACTION_DELIMITER,
+
+        // tdf#115319
+        XML_REFERENCE_LANGUAGE,
 
         XML_TOKEN_END
     };

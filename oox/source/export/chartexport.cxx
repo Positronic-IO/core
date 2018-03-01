@@ -60,6 +60,8 @@
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
 #include <com/sun/star/chart2/DataPointGeometry3D.hpp>
 #include <com/sun/star/chart2/DataPointLabel.hpp>
+#include <com/sun/star/chart2/DataPointCustomLabelField.hpp>
+#include <com/sun/star/chart2/DataPointCustomLabelFieldType.hpp>
 #include <com/sun/star/chart2/Symbol.hpp>
 #include <com/sun/star/chart2/data/XDataSource.hpp>
 #include <com/sun/star/chart2/data/XDataSink.hpp>
@@ -74,6 +76,7 @@
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XServiceName.hpp>
 
@@ -735,15 +738,21 @@ void ChartExport::exportChart( const Reference< css::chart::XChartDocument >& xC
             pFS->endElement( FSNS( XML_c, XML_floor ) );
         }
 
-        // sideWall
-
-        // backWall
-        Reference< beans::XPropertySet > xBackWall( mxNewDiagram->getWall(), uno::UNO_QUERY );
-        if( xBackWall.is() )
+        // LibreOffice doesn't distinguish between sideWall and backWall (both are using the same color).
+        // It is controlled by the same Wall property.
+        Reference< beans::XPropertySet > xWall( mxNewDiagram->getWall(), uno::UNO_QUERY );
+        if( xWall.is() )
         {
+            // sideWall
+            pFS->startElement( FSNS( XML_c, XML_sideWall ),
+                FSEND );
+            exportShapeProps( xWall );
+            pFS->endElement( FSNS( XML_c, XML_sideWall ) );
+
+            // backWall
             pFS->startElement( FSNS( XML_c, XML_backWall ),
                 FSEND );
-            exportShapeProps( xBackWall );
+            exportShapeProps( xWall );
             pFS->endElement( FSNS( XML_c, XML_backWall ) );
         }
 
@@ -1153,7 +1162,11 @@ void ChartExport::exportPlotArea( const Reference< css::chart::XChartDocument >&
      * eg: Fill and Outline
      */
     Reference< css::chart::X3DDisplay > xWallFloorSupplier( mxDiagram, uno::UNO_QUERY );
-    if( xWallFloorSupplier.is() )
+    // tdf#114139 For 2D charts Plot Area equivalent is Chart Wall.
+    // Unfortunately LibreOffice doesn't have Plot Area equivalent for 3D charts.
+    // It means that Plot Area couldn't be displayed and changed for 3D chars in LibreOffice.
+    // We cannot write Wall attributes into Plot Area for 3D charts, because Wall us used as background wall.
+    if( !mbIs3DChart && xWallFloorSupplier.is() )
     {
         Reference< beans::XPropertySet > xWallPropSet( xWallFloorSupplier->getWall(), uno::UNO_QUERY );
         if( xWallPropSet.is() )
@@ -1311,19 +1324,27 @@ void ChartExport::exportBitmapFill( const Reference< XPropertySet >& xPropSet )
         uno::Reference< lang::XMultiServiceFactory > xFact( getModel(), uno::UNO_QUERY );
         try
         {
-            uno::Reference< container::XNameAccess > xBitmap( xFact->createInstance("com.sun.star.drawing.BitmapTable"), uno::UNO_QUERY );
-            uno::Any rValue = xBitmap->getByName( sFillBitmapName );
-            OUString sBitmapURL;
-            if( rValue >>= sBitmapURL )
+            uno::Reference< container::XNameAccess > xBitmapTable( xFact->createInstance("com.sun.star.drawing.BitmapTable"), uno::UNO_QUERY );
+            uno::Any rValue = xBitmapTable->getByName( sFillBitmapName );
+            if (rValue.has<uno::Reference<awt::XBitmap>>())
             {
-                WriteBlipFill( xPropSet, sBitmapURL, XML_a, true, true );
+                uno::Reference<awt::XBitmap> xBitmap = rValue.get<uno::Reference<awt::XBitmap>>();
+                uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+                if (xGraphic.is())
+                {
+                    WriteXGraphicBlipFill(xPropSet, xGraphic, XML_a, true, true);
+                }
+            }
+            else if (rValue.has<OUString>()) // TODO: Remove, when not used anymore
+            {
+                OUString sBitmapURL = rValue.get<OUString>();
+                WriteBlipFill(xPropSet, sBitmapURL, XML_a, true, true);
             }
         }
         catch (const uno::Exception & rEx)
         {
             SAL_INFO("oox", "ChartExport::exportBitmapFill " << rEx);
         }
-
     }
 }
 
@@ -2818,9 +2839,20 @@ void ChartExport::_exportAxis(
     {
         double dMinorUnit = 0;
         mAny >>= dMinorUnit;
-        pFS->singleElement( FSNS( XML_c, XML_minorUnit ),
-            XML_val, IS( dMinorUnit ),
-            FSEND );
+        if( GetProperty( xAxisProp, "StepHelpCount" ) )
+        {
+            sal_Int32 dMinorUnitCount = 0;
+            mAny >>= dMinorUnitCount;
+            // tdf#114168 Don't save minor unit if number of step help count is 5 (which is default for MS Excel),
+            // to allow proper .xlsx import. If minorUnit is set and majorUnit not, then it is impossible
+            // to calculate StepHelpCount.
+            if( dMinorUnitCount != 5 )
+            {
+                pFS->singleElement( FSNS( XML_c, XML_minorUnit ),
+                    XML_val, IS( dMinorUnit ),
+                    FSEND );
+            }
+        }
     }
 
     if( nAxisType == XML_valAx && GetProperty( xAxisProp, "DisplayUnits" ) )
@@ -2900,17 +2932,111 @@ const char* toOOXMLPlacement( sal_Int32 nPlacement )
     return "outEnd";
 }
 
-void writeLabelProperties(
-    const FSHelperPtr& pFS, const uno::Reference<beans::XPropertySet>& xPropSet, const LabelPlacementParam& rLabelParam )
+OUString getFieldTypeString( const chart2::DataPointCustomLabelFieldType aType )
+{
+    switch (aType)
+    {
+    case chart2::DataPointCustomLabelFieldType_CATEGORYNAME:
+        return OUString("CATEGORYNAME");
+
+    case chart2::DataPointCustomLabelFieldType_SERIESNAME:
+        return OUString("SERIESNAME");
+
+    case chart2::DataPointCustomLabelFieldType_VALUE:
+        return OUString("VALUE");
+
+    case chart2::DataPointCustomLabelFieldType_CELLREF:
+        return OUString("CELLREF");
+
+    default:
+        break;
+    }
+    return OUString();
+}
+
+void writeRunProperties( ChartExport* pChartExport, Reference<XPropertySet>& xPropertySet )
+{
+    bool bDummy = false;
+    sal_Int32 nDummy;
+    pChartExport->WriteRunProperties(xPropertySet, false, XML_rPr, true, bDummy, nDummy);
+}
+
+void writeCustomLabel( const FSHelperPtr& pFS, ChartExport* pChartExport,
+                       const Sequence<Reference<chart2::XDataPointCustomLabelField>>& rCustomLabelFields )
+{
+    pFS->startElement(FSNS(XML_c, XML_tx), FSEND);
+    pFS->startElement(FSNS(XML_c, XML_rich), FSEND);
+
+    // TODO: body properties?
+    pFS->singleElement(FSNS(XML_a, XML_bodyPr), FSEND);
+
+    OUString sFieldType;
+    bool bNewParagraph;
+    pFS->startElement(FSNS(XML_a, XML_p), FSEND);
+
+    for (auto& rField : rCustomLabelFields)
+    {
+        Reference<XPropertySet> xPropertySet(rField, UNO_QUERY);
+        chart2::DataPointCustomLabelFieldType aType = rField->getFieldType();
+        sFieldType.clear();
+        bNewParagraph = false;
+
+        if (aType == chart2::DataPointCustomLabelFieldType_NEWLINE)
+            bNewParagraph = true;
+        else if (aType != chart2::DataPointCustomLabelFieldType_TEXT)
+            sFieldType = getFieldTypeString(aType);
+
+        if (bNewParagraph)
+        {
+            pFS->endElement(FSNS(XML_a, XML_p));
+            pFS->startElement(FSNS(XML_a, XML_p), FSEND);
+            continue;
+        }
+
+        if (sFieldType.isEmpty())
+        {
+            // Normal text run
+            pFS->startElement(FSNS(XML_a, XML_r), FSEND);
+            writeRunProperties(pChartExport, xPropertySet);
+
+            pFS->startElement(FSNS(XML_a, XML_t), FSEND);
+            pFS->writeEscaped(rField->getString());
+            pFS->endElement(FSNS(XML_a, XML_t));
+
+            pFS->endElement(FSNS(XML_a, XML_r));
+        }
+        else
+        {
+            // Field
+            pFS->startElement(FSNS(XML_a, XML_fld), XML_id, USS(rField->getGuid()), XML_type, USS(sFieldType), FSEND);
+            writeRunProperties(pChartExport, xPropertySet);
+
+            pFS->startElement(FSNS(XML_a, XML_t), FSEND);
+            pFS->writeEscaped(rField->getString());
+            pFS->endElement(FSNS(XML_a, XML_t));
+
+            pFS->endElement(FSNS(XML_a, XML_fld));
+        }
+    }
+
+    pFS->endElement(FSNS(XML_a, XML_p));
+    pFS->endElement(FSNS(XML_c, XML_rich));
+    pFS->endElement(FSNS(XML_c, XML_tx));
+}
+
+void writeLabelProperties( const FSHelperPtr& pFS, ChartExport* pChartExport,
+    const uno::Reference<beans::XPropertySet>& xPropSet, const LabelPlacementParam& rLabelParam )
 {
     if (!xPropSet.is())
         return;
 
     chart2::DataPointLabel aLabel;
+    Sequence<Reference<chart2::XDataPointCustomLabelField>> aCustomLabelFields;
     sal_Int32 nLabelBorderWidth = 0;
     sal_Int32 nLabelBorderColor = 0x00FFFFFF;
 
     xPropSet->getPropertyValue("Label") >>= aLabel;
+    xPropSet->getPropertyValue("CustomLabelFields") >>= aCustomLabelFields;
     xPropSet->getPropertyValue("LabelBorderWidth") >>= nLabelBorderWidth;
     xPropSet->getPropertyValue("LabelBorderColor") >>= nLabelBorderColor;
 
@@ -2930,6 +3056,9 @@ void writeLabelProperties(
         pFS->endElement(FSNS(XML_a, XML_ln));
         pFS->endElement(FSNS(XML_c, XML_spPr));
     }
+
+    if (aCustomLabelFields.getLength() > 0)
+        writeCustomLabel(pFS, pChartExport, aCustomLabelFields);
 
     if (rLabelParam.mbExport)
     {
@@ -2963,6 +3092,24 @@ void ChartExport::exportDataLabels(
 
     FSHelperPtr pFS = GetFS();
     pFS->startElement(FSNS(XML_c, XML_dLbls), FSEND);
+
+    bool bLinkedNumFmt = true;
+    if (GetProperty(xPropSet, "LinkNumberFormatToSource"))
+        mAny >>= bLinkedNumFmt;
+
+    if (GetProperty(xPropSet, "NumberFormat"))
+    {
+        sal_Int32 nKey = 0;
+        mAny >>= nKey;
+
+        OUString aNumberFormatString = getNumberFormatCode(nKey);
+        OString sNumberFormatString = OUStringToOString(aNumberFormatString, RTL_TEXTENCODING_UTF8);
+
+        pFS->singleElement(FSNS(XML_c, XML_numFmt),
+            XML_formatCode, sNumberFormatString.getStr(),
+            XML_sourceLinked, bLinkedNumFmt ? "1" : "0",
+            FSEND);
+    }
 
     uno::Sequence<sal_Int32> aAttrLabelIndices;
     xPropSet->getPropertyValue("AttributedDataPoints") >>= aAttrLabelIndices;
@@ -3026,12 +3173,12 @@ void ChartExport::exportDataLabels(
         // Individual label property that overwrites the baseline.
         pFS->startElement(FSNS(XML_c, XML_dLbl), FSEND);
         pFS->singleElement(FSNS(XML_c, XML_idx), XML_val, I32S(nIdx), FSEND);
-        writeLabelProperties(pFS, xLabelPropSet, aParam);
+        writeLabelProperties(pFS, this, xLabelPropSet, aParam);
         pFS->endElement(FSNS(XML_c, XML_dLbl));
     }
 
     // Baseline label properties for all labels.
-    writeLabelProperties(pFS, xPropSet, aParam);
+    writeLabelProperties(pFS, this, xPropSet, aParam);
 
     pFS->singleElement(FSNS(XML_c, XML_showLeaderLines),
             XML_val, "0",

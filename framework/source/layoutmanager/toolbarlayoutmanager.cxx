@@ -60,7 +60,6 @@ ToolbarLayoutManager::ToolbarLayoutManager(
     m_eDockOperation( DOCKOP_ON_COLROW ),
     m_ePreviewDetection( PREVIEWFRAME_UNKNOWN ),
     m_pAddonOptions( nullptr ),
-    m_pGlobalSettings( nullptr ),
     m_bComponentAttached( false ),
     m_bLayoutDirty( false ),
     m_bGlobalSettings( false ),
@@ -75,8 +74,8 @@ ToolbarLayoutManager::ToolbarLayoutManager(
 
 ToolbarLayoutManager::~ToolbarLayoutManager()
 {
-    delete m_pGlobalSettings;
-    delete m_pAddonOptions;
+    m_pGlobalSettings.reset();
+    m_pAddonOptions.reset();
 }
 
 //  XInterface
@@ -335,13 +334,13 @@ tools::Rectangle ToolbarLayoutManager::implts_calcDockingArea()
                 nSize += aRowColumnSizes[i][j];
 
             if ( i == sal_Int32(ui::DockingArea_DOCKINGAREA_TOP) )
-                aBorderSpace.Top() = nSize;
+                aBorderSpace.SetTop( nSize );
             else if ( i == sal_Int32(ui::DockingArea_DOCKINGAREA_BOTTOM) )
-                aBorderSpace.Bottom() = nSize;
+                aBorderSpace.SetBottom( nSize );
             else if ( i == sal_Int32(ui::DockingArea_DOCKINGAREA_LEFT) )
-                aBorderSpace.Left() = nSize;
+                aBorderSpace.SetLeft( nSize );
             else
-                aBorderSpace.Right() = nSize;
+                aBorderSpace.SetRight( nSize );
         }
     }
 
@@ -1079,7 +1078,7 @@ void ToolbarLayoutManager::implts_createAddonsToolBars()
 {
     SolarMutexClearableGuard aWriteLock;
     if ( !m_pAddonOptions )
-        m_pAddonOptions = new AddonsOptions;
+        m_pAddonOptions.reset( new AddonsOptions );
 
     uno::Reference< ui::XUIElementFactory > xUIElementFactory( m_xUIElementFactoryManager );
     uno::Reference< frame::XFrame > xFrame( m_xFrame );
@@ -1835,9 +1834,9 @@ void ToolbarLayoutManager::implts_getUIElementVectorCopy( UIElementVector& rCopy
     aReadLock.clear();
 
     if ( xTopDockingAreaWindow.is() )
-        aSize.Width() = xTopDockingAreaWindow->getPosSize().Height;
+        aSize.setWidth( xTopDockingAreaWindow->getPosSize().Height );
     if ( xBottomDockingAreaWindow.is() )
-        aSize.Height() = xBottomDockingAreaWindow->getPosSize().Height;
+        aSize.setHeight( xBottomDockingAreaWindow->getPosSize().Height );
 
     return aSize;
 }
@@ -2577,10 +2576,10 @@ void ToolbarLayoutManager::implts_setLayoutInProgress( bool bInProgress )
 {
     ::tools::Rectangle aRect( rRect );
 
-    aRect.Left() -= nHotZoneOffset;
-    aRect.Top() -= nHotZoneOffset;
-    aRect.Right() += nHotZoneOffset;
-    aRect.Bottom() += nHotZoneOffset;
+    aRect.AdjustLeft( -nHotZoneOffset );
+    aRect.AdjustTop( -nHotZoneOffset );
+    aRect.AdjustRight(nHotZoneOffset );
+    aRect.AdjustBottom(nHotZoneOffset );
 
     return aRect;
 }
@@ -3088,9 +3087,9 @@ void ToolbarLayoutManager::implts_setTrackingRect( ui::DockingArea eDockingArea,
 {
     ::Point aPoint( rTrackingRect.TopLeft());
     if ( isHorizontalDockingArea( eDockingArea ))
-        aPoint.X() = rMousePos.X();
+        aPoint.setX( rMousePos.X() );
     else
-        aPoint.Y() = rMousePos.Y();
+        aPoint.setY( rMousePos.Y() );
     rTrackingRect.SetPos( aPoint );
 }
 

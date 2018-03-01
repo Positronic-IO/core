@@ -93,7 +93,10 @@ IMPL_ABSTDLG_BASE(SwAbstractSfxDialog_Impl);
 IMPL_ABSTDLG_BASE(AbstractSwAsciiFilterDlg_Impl);
 IMPL_ABSTDLG_BASE(VclAbstractDialog_Impl);
 IMPL_ABSTDLG_BASE(AbstractSplitTableDialog_Impl);
-IMPL_ABSTDLG_BASE(AbstractSwBreakDlg_Impl);
+short AbstractSwBreakDlg_Impl::Execute()
+{
+    return m_xDlg->run();
+}
 IMPL_ABSTDLG_BASE(AbstractTabDialog_Impl);
 IMPL_ABSTDLG_BASE(AbstractSwConvertTableDlg_Impl);
 IMPL_ABSTDLG_BASE(AbstractSwInsertDBColAutoPilot_Impl);
@@ -149,11 +152,6 @@ void AbstractTabDialog_Impl::SetText( const OUString& rStr )
     pDlg->SetText( rStr );
 }
 
-OUString AbstractTabDialog_Impl::GetText() const
-{
-    return pDlg->GetText();
-}
-
 IMPL_LINK_NOARG(AbstractApplyTabDialog_Impl, ApplyHdl, Button*, void)
 {
     if (pDlg->Apply())
@@ -186,11 +184,6 @@ void SwAbstractSfxDialog_Impl::SetText( const OUString& rStr )
     pDlg->SetText( rStr );
 }
 
-OUString SwAbstractSfxDialog_Impl::GetText() const
-{
-    return pDlg->GetText();
-}
-
 void AbstractSwAsciiFilterDlg_Impl::FillOptions( SwAsciiOptions& rOptions )
 {
     pDlg->FillOptions(rOptions);
@@ -203,17 +196,17 @@ SplitTable_HeadlineOption AbstractSplitTableDialog_Impl::GetSplitMode()
 
 OUString AbstractSwBreakDlg_Impl::GetTemplateName()
 {
-    return pDlg->GetTemplateName();
+    return m_xDlg->GetTemplateName();
 }
 
 sal_uInt16 AbstractSwBreakDlg_Impl:: GetKind()
 {
-    return pDlg->GetKind();
+    return m_xDlg->GetKind();
 }
 
 ::boost::optional<sal_uInt16> AbstractSwBreakDlg_Impl:: GetPageNumber()
 {
-    return pDlg->GetPageNumber();
+    return m_xDlg->GetPageNumber();
 }
 
 void AbstractSwConvertTableDlg_Impl::GetValues( sal_Unicode& rDelim,SwInsertTableOptions& rInsTableFlags,
@@ -280,11 +273,6 @@ void AbstractSwLabDlg_Impl::SetText( const OUString& rStr )
     pDlg->SetText( rStr );
 }
 
-OUString AbstractSwLabDlg_Impl::GetText() const
-{
-    return pDlg->GetText();
-}
-
 const OUString& AbstractSwLabDlg_Impl::GetBusinessCardStr() const
 {
     return pDlg->GetBusinessCardStr();
@@ -343,11 +331,6 @@ void AbstractSwFieldDlg_Impl::SetInputSet( const SfxItemSet* pInSet )
 void AbstractSwFieldDlg_Impl::SetText( const OUString& rStr )
 {
     pDlg->SetText( rStr );
-}
-
-OUString AbstractSwFieldDlg_Impl::GetText() const
-{
-    return pDlg->GetText();
 }
 
 void AbstractSwFieldDlg_Impl::Start()
@@ -637,9 +620,9 @@ OUString AbstractMailMergeWizard_Impl::GetReloadDocument() const
     return pDlg->GetReloadDocument();
 }
 
-bool AbstractMailMergeWizard_Impl::ShowPage( sal_uInt16 nLevel )
+void AbstractMailMergeWizard_Impl::ShowPage( sal_uInt16 nLevel )
 {
-    return pDlg->skipUntil(nLevel);
+    pDlg->skipUntil(nLevel);
 }
 
 sal_uInt16 AbstractMailMergeWizard_Impl::GetRestartPage() const
@@ -696,11 +679,9 @@ VclPtr<VclAbstractDialog> SwAbstractDialogFactory_Impl::CreateSwInsertBookmarkDl
     return VclPtr<VclAbstractDialog_Impl>::Create( pDlg );
 }
 
-VclPtr<AbstractSwBreakDlg> SwAbstractDialogFactory_Impl::CreateSwBreakDlg(vcl::Window *pParent,
-                                                                     SwWrtShell &rSh)
+VclPtr<AbstractSwBreakDlg> SwAbstractDialogFactory_Impl::CreateSwBreakDlg(weld::Window* pParent, SwWrtShell &rSh)
 {
-    VclPtr<SwBreakDlg> pDlg = VclPtr<SwBreakDlg>::Create(pParent, rSh);
-    return VclPtr<AbstractSwBreakDlg_Impl>::Create(pDlg);
+    return VclPtr<AbstractSwBreakDlg_Impl>::Create(new SwBreakDlg(pParent, rSh));
 }
 
 VclPtr<VclAbstractDialog> SwAbstractDialogFactory_Impl::CreateSwChangeDBDlg(SwView& rVw)

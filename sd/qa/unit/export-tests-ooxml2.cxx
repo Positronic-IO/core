@@ -126,6 +126,13 @@ public:
     void testTdf114848();
     void testTdf68759();
     void testTdf90626();
+    void testTdf107608();
+    void testTdf111786();
+    void testFontScale();
+    void testTdf115394();
+    void testTdf115394Zero();
+    void testBulletsAsImage();
+    void testTdf111789();
 
     CPPUNIT_TEST_SUITE(SdOOXMLExportTest2);
 
@@ -177,6 +184,13 @@ public:
     CPPUNIT_TEST(testTdf114848);
     CPPUNIT_TEST(testTdf68759);
     CPPUNIT_TEST(testTdf90626);
+    CPPUNIT_TEST(testTdf107608);
+    CPPUNIT_TEST(testTdf111786);
+    CPPUNIT_TEST(testFontScale);
+    CPPUNIT_TEST(testTdf115394);
+    CPPUNIT_TEST(testTdf115394Zero);
+    CPPUNIT_TEST(testBulletsAsImage);
+    CPPUNIT_TEST(testTdf111789);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -1351,6 +1365,177 @@ void SdOOXMLExportTest2::testTdf90626()
     assertXPath(pXmlDocContent, "/p:sld/p:cSld/p:spTree/p:sp[2]/p:txBody/a:p[2]/a:pPr/a:buSzPct", "val", "150568");
     assertXPath(pXmlDocContent, "/p:sld/p:cSld/p:spTree/p:sp[2]/p:txBody/a:p[3]/a:pPr/a:buSzPct", "val", "100000");
     assertXPath(pXmlDocContent, "/p:sld/p:cSld/p:spTree/p:sp[2]/p:txBody/a:p[4]/a:pPr/a:buSzPct", "val", "150568");
+}
+
+void SdOOXMLExportTest2::testTdf107608()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf107608.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    uno::Reference< beans::XPropertySet > xShape( getShapeFromPage( 0, 0, xDocShRef ) );
+    uno::Reference< beans::XPropertySet > xPropSet( xShape, uno::UNO_QUERY_THROW );
+
+    drawing::FillStyle aFillStyle( drawing::FillStyle_NONE );
+    xPropSet->getPropertyValue("FillStyle") >>= aFillStyle;
+    CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_HATCH, aFillStyle);
+
+    bool bBackgroundFill = false;
+    xPropSet->getPropertyValue("FillBackground") >>= bBackgroundFill;
+    CPPUNIT_ASSERT(bBackgroundFill);
+
+    sal_Int32 nBackgroundColor;
+    xPropSet->getPropertyValue("FillColor") >>= nBackgroundColor;
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0x92D050), nBackgroundColor);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf111786()
+{
+    // Export line transparency with the color
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf111786.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    uno::Reference< beans::XPropertySet > xShape( getShapeFromPage( 0, 0, xDocShRef ) );
+    uno::Reference< beans::XPropertySet > xPropSet( xShape, uno::UNO_QUERY_THROW );
+
+    sal_uInt32 nLineColor;
+    xPropSet->getPropertyValue("LineColor") >>= nLineColor;
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(0x3465A4), nLineColor);
+
+    sal_Int16 nTransparency;
+    xPropSet->getPropertyValue("LineTransparence") >>= nTransparency;
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int16>(33), nTransparency);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testFontScale()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/font-scale.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    xmlDocPtr pXmlDocContent = parseExport(tempFile, "ppt/slides/slide1.xml");
+
+    // Rounding errors possible, approximate value
+    OUString sScale = getXPath(pXmlDocContent, "/p:sld/p:cSld/p:spTree/p:sp/p:txBody/a:bodyPr/a:normAutofit", "fontScale");
+    if (sScale != "73000" && sScale != "72000" && sScale != "74000")
+        CPPUNIT_ASSERT_EQUAL(OUString("73000"), sScale);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf115394()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/tdf115394.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    double fTransitionDuration;
+
+    // Slow in MS formats
+    SdPage* pPage1 = xDocShRef->GetDoc()->GetSdPage(0, PageKind::Standard);
+    fTransitionDuration = pPage1->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(1.0, fTransitionDuration);
+
+    // Medium in MS formats
+    SdPage* pPage2 = xDocShRef->GetDoc()->GetSdPage(1, PageKind::Standard);
+    fTransitionDuration = pPage2->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.75, fTransitionDuration);
+
+    // Fast in MS formats
+    SdPage* pPage3 = xDocShRef->GetDoc()->GetSdPage(2, PageKind::Standard);
+    fTransitionDuration = pPage3->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.5, fTransitionDuration);
+
+    // Custom values
+    SdPage* pPage4 = xDocShRef->GetDoc()->GetSdPage(3, PageKind::Standard);
+    fTransitionDuration = pPage4->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.25, fTransitionDuration);
+
+    SdPage* pPage5 = xDocShRef->GetDoc()->GetSdPage(4, PageKind::Standard);
+    fTransitionDuration = pPage5->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(4.25, fTransitionDuration);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf115394Zero()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/tdf115394-zero.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    double fTransitionDuration;
+
+    SdPage* pPage = xDocShRef->GetDoc()->GetSdPage(0, PageKind::Standard);
+    fTransitionDuration = pPage->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.01, fTransitionDuration);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testBulletsAsImage()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/BulletsAsImage.odp"), ODP);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    uno::Reference<beans::XPropertySet> xShape(getShapeFromPage(0, 0, xDocShRef));
+    uno::Reference<text::XTextRange> const xParagraph(getParagraphFromShape(0, xShape));
+    uno::Reference<beans::XPropertySet> xPropSet(xParagraph, uno::UNO_QUERY_THROW);
+
+    uno::Reference<container::XIndexAccess> xLevels(xPropSet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+    uno::Sequence<beans::PropertyValue> aProperties;
+    xLevels->getByIndex(0) >>= aProperties; // 1st level
+    uno::Reference<awt::XBitmap> xBitmap;
+    for (const beans::PropertyValue& rProperty : aProperties)
+    {
+        if (rProperty.Name == "GraphicBitmap")
+        {
+            xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
+        }
+    }
+    CPPUNIT_ASSERT_MESSAGE("No bitmap for the bullets", xBitmap.is());
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf111789()
+{
+    // Shadow properties were not exported for text shapes.
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf111789.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    // First text shape has some shadow
+    {
+        uno::Reference< beans::XPropertySet > xShape( getShapeFromPage( 0, 0, xDocShRef ) );
+        bool bHasShadow = false;
+        xShape->getPropertyValue("Shadow") >>= bHasShadow;
+        CPPUNIT_ASSERT(bHasShadow);
+        double fShadowDist = 0.0;
+        xShape->getPropertyValue("ShadowXDistance") >>= fShadowDist;
+        CPPUNIT_ASSERT_EQUAL(static_cast<double>(273), fShadowDist);
+        xShape->getPropertyValue("ShadowYDistance") >>= fShadowDist;
+        CPPUNIT_ASSERT_EQUAL(static_cast<double>(273), fShadowDist);
+        sal_Int32 nColor = 0;
+        xShape->getPropertyValue("ShadowColor") >>= nColor;
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0xFF0000), nColor);
+        sal_Int32 nTransparency = 0;
+        xShape->getPropertyValue("ShadowTransparence") >>= nTransparency;
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(7), nTransparency);
+    }
+
+    // Second text shape has no shadow
+    {
+        uno::Reference< beans::XPropertySet > xShape( getShapeFromPage( 1, 0, xDocShRef ) );
+        bool bHasShadow = false;
+        xShape->getPropertyValue("Shadow") >>= bHasShadow;
+        CPPUNIT_ASSERT(!bHasShadow);
+    }
+
+    xDocShRef->DoClose();
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdOOXMLExportTest2);

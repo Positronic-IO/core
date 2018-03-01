@@ -110,6 +110,7 @@
 #include <swtable.hxx>
 #include <docsh.hxx>
 #include <fesh.hxx>
+#include <itabenum.hxx>
 
 using namespace ::com::sun::star;
 using ::editeng::SvxBorderLine;
@@ -230,7 +231,7 @@ static void lcl_SetSpecialProperty(SwFrameFormat* pFormat,
             {
                 sal_Int32 nRepeat = 0;
                 aValue >>= nRepeat;
-                if( nRepeat >= 0 && nRepeat < USHRT_MAX )
+                if( nRepeat >= 0 && nRepeat < SAL_MAX_UINT16 )
                     pFormat->GetDoc()->SetRowsToRepeat( *pTable, static_cast<sal_uInt16>(nRepeat) );
             }
         }
@@ -774,8 +775,7 @@ SwXCell::SwXCell(SwFrameFormat* pTableFormat, const SwStartNode& rStartNode) :
 SwXCell::~SwXCell()
 {
     SolarMutexGuard aGuard;
-    if(GetRegisteredIn())
-        GetRegisteredIn()->Remove(this);
+    EndListeningAll();
 }
 
 namespace
@@ -1276,8 +1276,7 @@ SwXTextTableRow::SwXTextTableRow(SwFrameFormat* pFormat, SwTableLine* pLn) :
 SwXTextTableRow::~SwXTextTableRow()
 {
     SolarMutexGuard aGuard;
-    if(GetRegisteredIn())
-        GetRegisteredIn()->Remove(this);
+    EndListeningAll();
 }
 
 uno::Reference< beans::XPropertySetInfo > SwXTextTableRow::getPropertySetInfo()
@@ -1337,7 +1336,7 @@ void SwXTextTableRow::setPropertyValue(const OUString& rPropertyName, const uno:
                         sal_Int32 nHeight = 0;
                         aValue >>= nHeight;
                          Size aSz(aFrameSize.GetSize());
-                        aSz.Height() = convertMm100ToTwip(nHeight);
+                        aSz.setHeight( convertMm100ToTwip(nHeight) );
                         aFrameSize.SetSize(aSz);
                     }
                     pDoc->SetAttr(aFrameSize, *pLn->ClaimFrameFormat());
@@ -2038,7 +2037,7 @@ SwFrameFormat* SwXTextTable::GetFrameFormat()
 
 void SwXTextTable::initialize(sal_Int32 nR, sal_Int32 nC)
 {
-    if (!m_pImpl->IsDescriptor() || nR <= 0 || nC <= 0 || nR >= USHRT_MAX || nC >= USHRT_MAX)
+    if (!m_pImpl->IsDescriptor() || nR <= 0 || nC <= 0 || nR >= SAL_MAX_UINT16 || nC >= SAL_MAX_UINT16)
         throw uno::RuntimeException();
     m_pImpl->m_nRows = static_cast<sal_uInt16>(nR);
     m_pImpl->m_nColumns = static_cast<sal_uInt16>(nC);
@@ -2218,7 +2217,7 @@ uno::Reference<table::XCell>  SwXTextTable::getCellByPosition(sal_Int32 nColumn,
     SolarMutexGuard aGuard;
     SwFrameFormat* pFormat(GetFrameFormat());
     // sheet is unimportant
-    if(nColumn >= 0 && nRow >= 0 && nColumn < USHRT_MAX && nRow < USHRT_MAX && pFormat)
+    if(nColumn >= 0 && nRow >= 0 && pFormat)
     {
         auto pXCell = lcl_CreateXCell(pFormat, nColumn, nRow);
         if(pXCell)
@@ -2263,7 +2262,7 @@ uno::Reference<table::XCellRange>  SwXTextTable::getCellRangeByPosition(sal_Int3
 {
     SolarMutexGuard aGuard;
     SwFrameFormat* pFormat(GetFrameFormat());
-    if(pFormat && nRight < USHRT_MAX && nBottom < USHRT_MAX &&
+    if(pFormat &&
             nLeft <= nRight && nTop <= nBottom &&
             nLeft >= 0 && nRight >= 0 && nTop >= 0 && nBottom >= 0 )
     {
@@ -2504,7 +2503,7 @@ void SwXTextTable::setPropertyValue(const OUString& rPropertyName, const uno::An
         if ( pEntry->nFlags & beans::PropertyAttribute::READONLY)
             throw beans::PropertyVetoException("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
 
-        if(0xFF == pEntry->nMemberId)
+        if(0xBF == pEntry->nMemberId)
         {
             lcl_SetSpecialProperty(pFormat, pEntry, aValue);
         }
@@ -2756,7 +2755,7 @@ uno::Any SwXTextTable::getPropertyValue(const OUString& rPropertyName)
 
     if(pFormat)
     {
-        if(0xFF == pEntry->nMemberId)
+        if(0xBF == pEntry->nMemberId)
         {
             aRet = lcl_GetSpecialProperty(pFormat, pEntry );
         }
@@ -3100,7 +3099,7 @@ void SwXTextTable::Impl::Modify(
 {
     if(pOld && pOld->Which() == RES_REMOVE_UNO_OBJECT &&
         static_cast<void*>(GetRegisteredIn()) == static_cast<const SwPtrMsgPoolItem *>(pOld)->pObject )
-            GetRegisteredIn()->Remove(this);
+            EndListeningAll();
     else
         ClientModify(this, pOld, pNew);
     uno::Reference<uno::XInterface> const xThis(m_wThis);

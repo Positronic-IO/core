@@ -25,14 +25,13 @@
 #include <sfx2/viewsh.hxx>
 #include <svl/itemiter.hxx>
 #include <svl/languageoptions.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/configitem.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <sal/macros.h>
 
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
-#include <helpids.h>
 #include <page.hxx>
 #include <svx/pageitem.hxx>
 #include <editeng/brushitem.hxx>
@@ -106,10 +105,10 @@ SvxPageUsage PosToPageUsage_Impl( sal_uInt16 nPos )
 Size GetMinBorderSpace_Impl( const SvxShadowItem& rShadow, const SvxBoxItem& rBox )
 {
     Size aSz;
-    aSz.Height() = rShadow.CalcShadowSpace( SvxShadowItemSide::BOTTOM ) + rBox.CalcLineSpace( SvxBoxItemLine::BOTTOM );
-    aSz.Height() += rShadow.CalcShadowSpace( SvxShadowItemSide::TOP ) + rBox.CalcLineSpace( SvxBoxItemLine::TOP );
-    aSz.Width() = rShadow.CalcShadowSpace( SvxShadowItemSide::LEFT ) + rBox.CalcLineSpace( SvxBoxItemLine::LEFT );
-    aSz.Width() += rShadow.CalcShadowSpace( SvxShadowItemSide::RIGHT ) + rBox.CalcLineSpace( SvxBoxItemLine::RIGHT );
+    aSz.setHeight( rShadow.CalcShadowSpace( SvxShadowItemSide::BOTTOM ) + rBox.CalcLineSpace( SvxBoxItemLine::BOTTOM ) );
+    aSz.AdjustHeight(rShadow.CalcShadowSpace( SvxShadowItemSide::TOP ) + rBox.CalcLineSpace( SvxBoxItemLine::TOP ) );
+    aSz.setWidth( rShadow.CalcShadowSpace( SvxShadowItemSide::LEFT ) + rBox.CalcLineSpace( SvxBoxItemLine::LEFT ) );
+    aSz.AdjustWidth(rShadow.CalcShadowSpace( SvxShadowItemSide::RIGHT ) + rBox.CalcLineSpace( SvxBoxItemLine::RIGHT ) );
     return aSz;
 }
 
@@ -1376,7 +1375,11 @@ DeactivateRC SvxPageDescPage::DeactivatePage( SfxItemSet* _pSet )
 
     if ( ePaper != PAPER_SCREEN_4_3 && ePaper != PAPER_SCREEN_16_9 && ePaper != PAPER_SCREEN_16_10 && IsMarginOutOfRange() )
     {
-        if (ScopedVclPtrInstance<QueryBox>(this, MessBoxStyle::YesNo | MessBoxStyle::DefaultNo, m_pPrintRangeQueryText->GetText())->Execute() == RET_NO)
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       m_pPrintRangeQueryText->GetText()));
+        xQueryBox->set_default_response(RET_NO);
+        if (xQueryBox->run() == RET_NO)
         {
             MetricField* pField = nullptr;
             if ( IsPrinterRangeOverflow( *m_pLeftMarginEdit, nFirstLeftMargin, nLastLeftMargin, MARGIN_LEFT ) )
@@ -1410,7 +1413,7 @@ DeactivateRC SvxPageDescPage::DeactivatePage( SfxItemSet* _pSet )
                     GetCoreValue( *m_pPaperHeightEdit, eUnit ) );
 
         // put, if current size is different to the value in _pSet
-        const SvxSizeItem* pSize = static_cast<const SvxSizeItem*>(GetItem( *_pSet, SID_ATTR_PAGE_SIZE ));
+        const SvxSizeItem* pSize = GetItem( *_pSet, SID_ATTR_PAGE_SIZE );
         if ( aSize.Width() && ( !pSize || !IsEqualSize_Impl( pSize, aSize ) ) )
             _pSet->Put( SvxSizeItem( nWh, aSize ) );
     }

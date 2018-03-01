@@ -15,12 +15,8 @@ boost_patches += boost.gcc47679.patch
 #https://svn.boost.org/trac/boost/ticket/6142
 boost_patches += boost.6142.warnings.patch.1
 
-# https://svn.boost.org/trac/boost/ticket/9885
-boost_patches += boost.multi_array.C4510.warnings.patch
 # https://svn.boost.org/trac/boost/ticket/9903
 boost_patches += boost.utility.Wundef.warnings.patch
-
-boost_patches += boost.auto_link.patch
 
 boost_patches += boost.noiconv.patch
 

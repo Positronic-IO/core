@@ -883,6 +883,13 @@ uno::Sequence< OUString > PropValVector::getNames()
 
 void StyleSheetTable::ApplyStyleSheets( const FontTablePtr& rFontTable )
 {
+    if (!m_pImpl->m_bIsNewDoc)
+    {
+        // tdf#72942: do not import styles from document being inserted,
+        // while they corrupts original styles in master document
+        return;
+    }
+
     try
     {
         uno::Reference< style::XStyleFamiliesSupplier > xStylesSupplier( m_pImpl->m_xTextDocument, uno::UNO_QUERY_THROW );
@@ -1247,21 +1254,6 @@ const StyleSheetEntryPtr StyleSheetTable::FindStyleSheetByISTD(const OUString& s
 }
 
 
-const StyleSheetEntryPtr StyleSheetTable::FindStyleSheetByStyleName(const OUString& sIndex)
-{
-    StyleSheetEntryPtr pRet;
-    for(StyleSheetEntryPtr & rpEntry : m_pImpl->m_aStyleSheetEntries)
-    {
-        if( rpEntry->sStyleName == sIndex)
-        {
-            pRet = rpEntry;
-            break;
-        }
-    }
-    return pRet;
-}
-
-
 const StyleSheetEntryPtr StyleSheetTable::FindStyleSheetByConvertedStyleName(const OUString& sIndex)
 {
     StyleSheetEntryPtr pRet;
@@ -1508,6 +1500,14 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
 void StyleSheetTable::applyDefaults(bool bParaProperties)
 {
     try{
+
+        if (!m_pImpl->m_bIsNewDoc)
+        {
+            // tdf#72942: do not corrupts original styles in master document
+            // during inserting of text from second document
+            return;
+        }
+
         if(!m_pImpl->m_xTextDefaults.is())
         {
             m_pImpl->m_xTextDefaults.set(

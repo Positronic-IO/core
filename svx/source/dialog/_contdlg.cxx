@@ -21,7 +21,6 @@
 
 #include <vcl/wrkwin.hxx>
 #include <tools/helpers.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/eitem.hxx>
 #include <sfx2/ctrlitem.hxx>
 #include <sfx2/dispatch.hxx>
@@ -44,7 +43,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/virdev.hxx>
 #include "dlgunit.hxx"
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 
 SFX_IMPL_FLOATINGWINDOW_WITHID( SvxContourDlgChildWindow, SID_CONTOUR_DLG );
 
@@ -120,8 +119,8 @@ tools::PolyPolygon SvxContourDlg::CreateAutoContour( const Graphic& rGraphic,
 
             if ( pVDev->SetOutputSizePixel( rSizePix ) )
             {
-                pVDev->SetLineColor( Color( COL_BLACK ) );
-                pVDev->SetFillColor( Color( COL_BLACK ) );
+                pVDev->SetLineColor( COL_BLACK );
+                pVDev->SetFillColor( COL_BLACK );
 
                 for( sal_uInt16 i = 0; i < nCount; i++ )
                 {
@@ -150,7 +149,7 @@ tools::PolyPolygon SvxContourDlg::CreateAutoContour( const Graphic& rGraphic,
     }
     else if( rGraphic.GetType() != GraphicType::NONE )
     {
-        const Graphic   aTmpGrf( rGraphic.GetGDIMetaFile().GetMonochromeMtf( Color( COL_BLACK ) ) );
+        const Graphic   aTmpGrf( rGraphic.GetGDIMetaFile().GetMonochromeMtf( COL_BLACK ) );
         ScopedVclPtrInstance< VirtualDevice > pVDev;
         Size            aSizePix( pVDev->LogicToPixel( aTmpGrf.GetPrefSize(), aTmpGrf.GetPrefMapMode() ) );
 
@@ -159,9 +158,15 @@ tools::PolyPolygon SvxContourDlg::CreateAutoContour( const Graphic& rGraphic,
             double fWH = static_cast<double>(aSizePix.Width()) / aSizePix.Height();
 
             if( fWH <= 1.0 )
-                aSizePix.Width() = FRound( ( aSizePix.Height() = 512 ) * fWH );
+            {
+                aSizePix.setHeight(512);
+                aSizePix.setWidth( FRound( ( aSizePix.Height() ) * fWH ) );
+            }
             else
-                aSizePix.Height() = FRound( ( aSizePix.Width() = 512 ) / fWH );
+            {
+                aSizePix.setWidth(512);
+                aSizePix.setHeight( FRound( ( aSizePix.Width() ) / fWH ) );
+            }
         }
 
         if( pVDev->SetOutputSizePixel( aSizePix ) )
@@ -273,7 +278,7 @@ SvxSuperContourDlg::SvxSuperContourDlg(SfxBindings *_pBindings, SfxChildWindow *
     m_pTbx1->SetSizePixel( aTbxSize );
     m_pTbx1->SetSelectHdl( LINK( this, SvxSuperContourDlg, Tbx1ClickHdl ) );
 
-    aPos.X() += aTbxSize.Width() + LogicToPixel( Size( 3, 0 ), MapMode( MapUnit::MapAppFont ) ).Width();
+    aPos.AdjustX(aTbxSize.Width() + LogicToPixel( Size( 3, 0 ), MapMode( MapUnit::MapAppFont ) ).Width() );
     m_pMtfTolerance->SetPosPixel( aPos );
     m_pMtfTolerance->SetValue( 10 );
 
@@ -317,8 +322,9 @@ bool SvxSuperContourDlg::Close()
 
     if (m_pTbx1->IsItemEnabled(mnApplyId))
     {
-        ScopedVclPtrInstance< MessageDialog > aQBox( this,"QuerySaveContourChangesDialog","svx/ui/querysavecontchangesdialog.ui");
-        const long  nRet = aQBox->Execute();
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querysavecontchangesdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QuerySaveContourChangesDialog"));
+        const short nRet = xQBox->run();
 
         if ( nRet == RET_YES )
         {
@@ -438,9 +444,10 @@ IMPL_LINK( SvxSuperContourDlg, Tbx1ClickHdl, ToolBox*, pTbx, void )
     {
         if (m_pTbx1->IsItemChecked(mnWorkSpaceId))
         {
-            ScopedVclPtrInstance< MessageDialog > aQBox( this,"QueryDeleteContourDialog","svx/ui/querydeletecontourdialog.ui" );
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querydeletecontourdialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QueryDeleteContourDialog"));
 
-            if ( !m_pContourWnd->IsContourChanged() || ( aQBox->Execute() == RET_YES ) )
+            if (!m_pContourWnd->IsContourChanged() || (xQBox->run() == RET_YES))
                 m_pContourWnd->SetWorkplaceMode( true );
             else
                 m_pTbx1->CheckItem(mnWorkSpaceId, false);
@@ -512,9 +519,10 @@ IMPL_LINK( SvxSuperContourDlg, Tbx1ClickHdl, ToolBox*, pTbx, void )
             m_pStbStatus->Invalidate();
         else if ( bGraphicLinked )
         {
-            ScopedVclPtrInstance<MessageDialog> aQBox(this, "QueryUnlinkGraphicsDialog",
-                                                      "svx/ui/queryunlinkgraphicsdialog.ui");
-            if (aQBox->Execute() != RET_YES)
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/queryunlinkgraphicsdialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QueryUnlinkGraphicsDialog"));
+
+            if (xQBox->run() != RET_YES)
             {
                 bPipette = false;
                 m_pTbx1->CheckItem(mnPipetteId, bPipette);
@@ -662,10 +670,10 @@ IMPL_LINK( SvxSuperContourDlg, PipetteHdl, ContourWindow&, rWnd, void )
     m_pStbStatus->SetLineColor( rColor );
     m_pStbStatus->SetFillColor( rColor );
 
-    aRect.Left() += 4;
-    aRect.Top() += 4;
-    aRect.Right() -= 4;
-    aRect.Bottom() -= 4;
+    aRect.AdjustLeft(4 );
+    aRect.AdjustTop(4 );
+    aRect.AdjustRight( -4 );
+    aRect.AdjustBottom( -4 );
 
     m_pStbStatus->DrawRect( aRect );
 
@@ -694,7 +702,9 @@ IMPL_LINK( SvxSuperContourDlg, PipetteClickHdl, ContourWindow&, rWnd, void )
 
             if( !!aMask )
             {
-                ScopedVclPtrInstance< MessageDialog > aQBox( this,"QueryNewContourDialog","svx/ui/querynewcontourdialog.ui" );
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querynewcontourdialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QueryNewContourDialog"));
+
                 bool        bNewContour;
 
                 aRedoGraphic = Graphic();
@@ -702,7 +712,7 @@ IMPL_LINK( SvxSuperContourDlg, PipetteClickHdl, ContourWindow&, rWnd, void )
                 aGraphic = Graphic( BitmapEx( aBmp, aMask ) );
                 mnGrfChanged++;
 
-                bNewContour = ( aQBox->Execute() == RET_YES );
+                bNewContour = (xQBox->run() == RET_YES);
                 rWnd.SetGraphic( aGraphic, bNewContour );
 
                 if( bNewContour )

@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SW_INC_AUTHRATR_HXX
 #define INCLUDED_SW_INC_AUTHRATR_HXX
 
-#include <tools/solar.h>
 #include <tools/color.hxx>
 #include "swdllapi.h"
 
@@ -29,7 +28,7 @@ class SW_DLLPUBLIC AuthorCharAttr
 public:
     sal_uInt16  m_nItemId;
     sal_uInt16  m_nAttr;
-    ColorData m_nColor;
+    Color m_nColor;
 
     AuthorCharAttr();
 

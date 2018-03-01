@@ -25,7 +25,6 @@
 #include <dialmgr.hxx>
 #include <tools/mapunit.hxx>
 #include <i18nlangtag/mslangid.hxx>
-#include <helpids.h>
 #include <editeng/numitem.hxx>
 #include <svl/eitem.hxx>
 #include <vcl/layout.hxx>
@@ -38,7 +37,6 @@
 #include <svl/intitem.hxx>
 #include <sfx2/objsh.hxx>
 #include <vcl/graph.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
 #include <cuicharmap.hxx>
@@ -808,15 +806,16 @@ SvxBitmapPickTabPage::SvxBitmapPickTabPage(vcl::Window* pParent,
     GalleryExplorer::FillObjList(GALLERY_THEME_BULLETS, aGrfNames);
 
     size_t i = 0;
-    for(std::vector<OUString>::iterator it = aGrfNames.begin(); it != aGrfNames.end(); ++it, ++i)
+    for (auto & grfName : aGrfNames)
     {
         m_pExamplesVS->InsertItem( i + 1, i);
 
-        INetURLObject aObj(*it);
+        INetURLObject aObj(grfName);
         if(aObj.GetProtocol() == INetProtocol::File)
-            *it = aObj.PathToFileName();
+            grfName = aObj.PathToFileName();
 
-        m_pExamplesVS->SetItemText( i + 1, *it );
+        m_pExamplesVS->SetItemText( i + 1, grfName );
+        ++i;
     }
 
     if(aGrfNames.empty())
@@ -1050,13 +1049,14 @@ IMPL_LINK_NOARG(SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl, Button*, void)
 
                 aGrfNames.push_back(aUserGalleryURL);
                 size_t i = 0;
-                for(std::vector<OUString>::iterator it = aGrfNames.begin(); it != aGrfNames.end(); ++it, ++i)
+                for (auto & grfName : aGrfNames)
                 {
                     m_pExamplesVS->InsertItem( i + 1, i);
-                    INetURLObject aObj(*it);
+                    INetURLObject aObj(grfName);
                     if(aObj.GetProtocol() == INetProtocol::File)
-                        *it = aObj.PathToFileName();
-                    m_pExamplesVS->SetItemText( i + 1, *it );
+                        grfName = aObj.PathToFileName();
+                    m_pExamplesVS->SetItemText( i + 1, grfName );
+                    ++i;
                 }
 
                 if(aGrfNames.empty())
@@ -1138,7 +1138,7 @@ SvxNumOptionsTabPage::SvxNumOptionsTabPage(vcl::Window* pParent,
 
     get(m_pPreviewWIN, "preview");
 
-    m_pPreviewWIN->SetBackground(Wallpaper(Color(COL_TRANSPARENT)));
+    m_pPreviewWIN->SetBackground(Wallpaper(COL_TRANSPARENT));
     SetExchangeSupport();
     aActBulletFont = lcl_GetDefaultBulletFont();
 
@@ -1996,14 +1996,12 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, PopupActivateHdl_Impl, MenuButton *, void)
             GalleryExplorer::BeginLocking(GALLERY_THEME_BULLETS);
 
             Graphic aGraphic;
-            OUString sGrfName;
-            std::vector<OUString>::const_iterator it = aGrfNames.begin();
-            for(size_t i = 0; it != aGrfNames.end(); ++it, ++i)
+            size_t i = 0;
+            for (auto & grfName : aGrfNames)
             {
-                sGrfName = *it;
-                INetURLObject aObj(sGrfName);
+                INetURLObject aObj(grfName);
                 if(aObj.GetProtocol() == INetProtocol::File)
-                    sGrfName = aObj.PathToFileName();
+                    grfName = aObj.PathToFileName();
 
                 if(GalleryExplorer::GetGraphicObj( GALLERY_THEME_BULLETS, i, &aGraphic))
                 {
@@ -2020,14 +2018,15 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, PopupActivateHdl_Impl, MenuButton *, void)
                     }
                     Image aImage(aBitmap);
 
-                    pPopup->InsertItem(MN_GALLERY_ENTRY + i, sGrfName, aImage );
+                    pPopup->InsertItem(MN_GALLERY_ENTRY + i, grfName, aImage );
                 }
                 else
                 {
                     Image aImage;
                     pPopup->InsertItem(
-                        MN_GALLERY_ENTRY + i, sGrfName, aImage );
+                        MN_GALLERY_ENTRY + i, grfName, aImage );
                 }
+                ++i;
             }
             GalleryExplorer::EndLocking(GALLERY_THEME_BULLETS);
         }
@@ -2127,10 +2126,10 @@ IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
                 if(bWidth)
                 {
                     long nDelta = nWidthVal - aInitSize[i].Width();
-                    aSize.Width() = nWidthVal;
+                    aSize.setWidth( nWidthVal );
                     if (bRatio)
                     {
-                        aSize.Height() = aInitSize[i].Height() + static_cast<long>(static_cast<double>(nDelta) / fSizeRatio);
+                        aSize.setHeight( aInitSize[i].Height() + static_cast<long>(static_cast<double>(nDelta) / fSizeRatio) );
                         m_pHeightMF->SetUserValue(m_pHeightMF->Normalize(
                             OutputDevice::LogicToLogic( aSize.Height(), eCoreUnit, MapUnit::Map100thMM )),
                                 FUNIT_100TH_MM);
@@ -2139,10 +2138,10 @@ IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
                 else
                 {
                     long nDelta = nHeightVal - aInitSize[i].Height();
-                    aSize.Height() = nHeightVal;
+                    aSize.setHeight( nHeightVal );
                     if (bRatio)
                     {
-                        aSize.Width() = aInitSize[i].Width() + static_cast<long>(static_cast<double>(nDelta) * fSizeRatio);
+                        aSize.setWidth( aInitSize[i].Width() + static_cast<long>(static_cast<double>(nDelta) * fSizeRatio) );
                         m_pWidthMF->SetUserValue(m_pWidthMF->Normalize(
                             OutputDevice::LogicToLogic( aSize.Width(), eCoreUnit, MapUnit::Map100thMM )),
                                 FUNIT_100TH_MM);
@@ -2229,20 +2228,20 @@ void SvxNumOptionsTabPage::EditModifyHdl_Impl( Edit* pEdit )
     SetModified();
 }
 
-static sal_uInt16 lcl_DrawGraphic(VirtualDevice* pVDev, const SvxNumberFormat &rFmt, sal_uInt16 nXStart,
-                        sal_uInt16 nYMiddle, sal_uInt16 nDivision)
+static long lcl_DrawGraphic(VirtualDevice* pVDev, const SvxNumberFormat &rFmt, long nXStart,
+                        long nYMiddle, long nDivision)
 {
     const SvxBrushItem* pBrushItem = rFmt.GetBrush();
-    sal_uInt16 nRet = 0;
+    long nRet = 0;
     if(pBrushItem)
     {
         const Graphic* pGrf = pBrushItem->GetGraphic();
         if(pGrf)
         {
             Size aGSize( rFmt.GetGraphicSize() );
-            aGSize.Width() /= nDivision;
-            nRet = static_cast<sal_uInt16>(aGSize.Width());
-            aGSize.Height() /= nDivision;
+            aGSize.setWidth( aGSize.Width() / nDivision );
+            nRet = aGSize.Width();
+            aGSize.setHeight( aGSize.Height() / nDivision );
             pGrf->Draw( pVDev, Point(nXStart,nYMiddle - ( aGSize.Height() / 2) ),
                     pVDev->PixelToLogic( aGSize ) );
         }
@@ -2251,27 +2250,27 @@ static sal_uInt16 lcl_DrawGraphic(VirtualDevice* pVDev, const SvxNumberFormat &r
 
 }
 
-static sal_uInt16 lcl_DrawBullet(VirtualDevice* pVDev,
-            const SvxNumberFormat& rFmt, sal_uInt16 nXStart,
-            sal_uInt16 nYStart, const Size& rSize)
+static long lcl_DrawBullet(VirtualDevice* pVDev,
+            const SvxNumberFormat& rFmt, long nXStart,
+            long nYStart, const Size& rSize)
 {
     vcl::Font aTmpFont(pVDev->GetFont());
 
     // via Uno it's possible that no font has been set!
     vcl::Font aFont(rFmt.GetBulletFont() ? *rFmt.GetBulletFont() : aTmpFont);
     Size aTmpSize(rSize);
-    aTmpSize.Width() *= rFmt.GetBulletRelSize();
-    aTmpSize.Width() /= 100 ;
-    aTmpSize.Height() *= rFmt.GetBulletRelSize();
-    aTmpSize.Height() /= 100 ;
+    aTmpSize.setWidth( aTmpSize.Width() * ( rFmt.GetBulletRelSize()) );
+    aTmpSize.setWidth( aTmpSize.Width() / 100 ) ;
+    aTmpSize.setHeight( aTmpSize.Height() * ( rFmt.GetBulletRelSize()) );
+    aTmpSize.setHeight( aTmpSize.Height() / 100 ) ;
     // in case of a height of zero it is drawed in original height
     if(!aTmpSize.Height())
-        aTmpSize.Height() = 1;
+        aTmpSize.setHeight( 1 );
     aFont.SetFontSize(aTmpSize);
     aFont.SetTransparent(true);
     Color aBulletColor = rFmt.GetBulletColor();
-    if(aBulletColor.GetColor() == COL_AUTO)
-        aBulletColor = Color(pVDev->GetFillColor().IsDark() ? COL_WHITE : COL_BLACK);
+    if(aBulletColor == COL_AUTO)
+        aBulletColor = pVDev->GetFillColor().IsDark() ? COL_WHITE : COL_BLACK;
     else if(aBulletColor == pVDev->GetFillColor())
         aBulletColor.Invert();
     aFont.SetColor(aBulletColor);
@@ -2280,7 +2279,7 @@ static sal_uInt16 lcl_DrawBullet(VirtualDevice* pVDev,
     long nY = nYStart;
     nY -= ((aTmpSize.Height() - rSize.Height())/ 2);
     pVDev->DrawText( Point(nXStart, nY), aText );
-    sal_uInt16 nRet = static_cast<sal_uInt16>(pVDev->GetTextWidth(aText));
+    long nRet = pVDev->GetTextWidth(aText);
 
     pVDev->SetFont(aTmpFont);
     return nRet;
@@ -2319,21 +2318,21 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
 
     if (pActNum)
     {
-        sal_uInt16 nWidthRelation = 30; // chapter dialog
+        long nWidthRelation = 30; // chapter dialog
 
         // height per level
-        sal_uInt16 nXStep = sal::static_int_cast<sal_uInt16>(aSize.Width() / (3 * pActNum->GetLevelCount()));
+        long nXStep = aSize.Width() / (3 * pActNum->GetLevelCount());
         if (pActNum->GetLevelCount() < 10)
             nXStep /= 2;
-        sal_uInt16 nYStart = 4;
+        long nYStart = 4;
         // the whole height mustn't be used for a single level
-        sal_uInt16 nYStep = sal::static_int_cast<sal_uInt16>((aSize.Height() - 6)/ (pActNum->GetLevelCount() > 1 ? pActNum->GetLevelCount() : 5));
+        long nYStep = (aSize.Height() - 6)/ (pActNum->GetLevelCount() > 1 ? pActNum->GetLevelCount() : 5);
 
         aStdFont = OutputDevice::GetDefaultFont(DefaultFontType::UI_SANS, MsLangId::getSystemLanguage(), GetDefaultFontFlags::OnlyOne);
         aStdFont.SetColor(aTextColor);
         aStdFont.SetFillColor(aBackColor);
 
-        sal_uInt16 nFontHeight = nYStep * 6 / 10;
+        long nFontHeight = nYStep * 6 / 10;
         if (bPosition)
             nFontHeight = nYStep * 15 / 10;
         aStdFont.SetFontSize(Size( 0, nFontHeight ));
@@ -2343,7 +2342,7 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
 
         if (bPosition)
         {
-            sal_uInt16 nLineHeight = nFontHeight * 8 / 7;
+            long nLineHeight = nFontHeight * 8 / 7;
             sal_uInt8 nStart = 0;
             while (!(nActLevel & (1<<nStart)))
             {
@@ -2357,15 +2356,15 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                 const SvxNumberFormat &rFmt = pActNum->GetLevel(nLevel);
                 aNum.GetLevelVal()[nLevel] = rFmt.GetStart();
 
-                sal_uInt16 nXStart( 0 );
+                long nXStart( 0 );
                 short nTextOffset( 0 );
-                sal_uInt16 nNumberXPos( 0 );
+                long nNumberXPos( 0 );
                 if (rFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION)
                 {
                     nXStart = rFmt.GetAbsLSpace() / nWidthRelation;
                     nTextOffset = rFmt.GetCharTextDistance() / nWidthRelation;
                     nNumberXPos = nXStart;
-                    sal_uInt16 nFirstLineOffset = (-rFmt.GetFirstLineOffset()) / nWidthRelation;
+                    long nFirstLineOffset = (-rFmt.GetFirstLineOffset()) / nWidthRelation;
 
                     if (nFirstLineOffset <= nNumberXPos)
                         nNumberXPos = nNumberXPos - nFirstLineOffset;
@@ -2384,14 +2383,14 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     }
                     else
                     {
-                        nNumberXPos = static_cast<sal_uInt16>(nTmpNumberXPos);
+                        nNumberXPos = nTmpNumberXPos;
                     }
                 }
 
-                sal_uInt16 nBulletWidth = 0;
+                long nBulletWidth = 0;
                 if (SVX_NUM_BITMAP == (rFmt.GetNumberingType() &(~LINK_TOKEN)))
                 {
-                    sal_uInt16 nYMiddle = nYStart + ( nFontHeight / 2 );
+                    long nYMiddle = nYStart + ( nFontHeight / 2 );
                     nBulletWidth = rFmt.IsShowSymbol() ? lcl_DrawGraphic(pVDev.get(), rFmt, nNumberXPos, nYMiddle, nWidthRelation) : 0;
                 }
                 else if (SVX_NUM_CHAR_SPECIAL == rFmt.GetNumberingType())
@@ -2408,15 +2407,15 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     vcl::Font aSaveFont = pVDev->GetFont();
                     vcl::Font aColorFont(aSaveFont);
                     Color aTmpBulletColor = rFmt.GetBulletColor();
-                    if (aTmpBulletColor.GetColor() == COL_AUTO)
-                        aTmpBulletColor = Color(aBackColor.IsDark() ? COL_WHITE : COL_BLACK);
+                    if (aTmpBulletColor == COL_AUTO)
+                        aTmpBulletColor = aBackColor.IsDark() ? COL_WHITE : COL_BLACK;
                     else if (aTmpBulletColor == aBackColor)
                         aTmpBulletColor.Invert();
                     aColorFont.SetColor(aTmpBulletColor);
                     pVDev->SetFont(aColorFont);
                     pVDev->DrawText(Point(nNumberXPos, nYStart), aText);
                     pVDev->SetFont(aSaveFont);
-                    nBulletWidth = sal_uInt16(pVDev->GetTextWidth(aText));
+                    nBulletWidth = pVDev->GetTextWidth(aText);
                     nPreNum++;
                 }
                 if (rFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT &&
@@ -2425,10 +2424,10 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     pVDev->SetFont(aStdFont);
                     OUString aText(' ');
                     pVDev->DrawText( Point(nNumberXPos, nYStart), aText );
-                    nBulletWidth = nBulletWidth + static_cast<sal_uInt16>(pVDev->GetTextWidth(aText));
+                    nBulletWidth = nBulletWidth + pVDev->GetTextWidth(aText);
                 }
 
-                sal_uInt16 nTextXPos( 0 );
+                long nTextXPos( 0 );
                 if (rFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION)
                 {
                     nTextXPos = nXStart;
@@ -2443,7 +2442,7 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     {
                         case SvxNumberFormat::LISTTAB:
                         {
-                            nTextXPos = static_cast<sal_uInt16>(rFmt.GetListtabPos() / nWidthRelation);
+                            nTextXPos = rFmt.GetListtabPos() / nWidthRelation;
                             if (nTextXPos < nNumberXPos + nBulletWidth)
                             {
                                 nTextXPos = nNumberXPos + nBulletWidth;
@@ -2458,7 +2457,7 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                         break;
                     }
 
-                    nXStart = static_cast<sal_uInt16>(rFmt.GetIndentAt() / nWidthRelation);
+                    nXStart = rFmt.GetIndentAt() / nWidthRelation;
                 }
 
                 ::tools::Rectangle aRect1(Point(nTextXPos, nYStart + nFontHeight / 2), Size(aSize.Width() / 2, 2));
@@ -2485,7 +2484,7 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
             {
                 const SvxNumberFormat &rFmt = pActNum->GetLevel(nLevel);
                 aNum.GetLevelVal()[ nLevel ] = rFmt.GetStart();
-                sal_uInt16 nXStart( 0 );
+                long nXStart( 0 );
                 pVDev->SetFillColor( aBackColor );
 
                 if (rFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION)
@@ -2501,17 +2500,17 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     }
                     else
                     {
-                        nXStart = static_cast<sal_uInt16>(nTmpXStart);
+                        nXStart = nTmpXStart;
                     }
                 }
                 nXStart /= 2;
                 nXStart += 2;
-                sal_uInt16 nTextOffset = 2 * nXStep;
+                long nTextOffset = 2 * nXStep;
                 if (SVX_NUM_BITMAP == (rFmt.GetNumberingType()&(~LINK_TOKEN)))
                 {
                     if (rFmt.IsShowSymbol())
                     {
-                        sal_uInt16 nYMiddle = nYStart + ( nFontHeight / 2 );
+                        long nYMiddle = nYStart + ( nFontHeight / 2 );
                         nTextOffset = lcl_DrawGraphic(pVDev.get(), rFmt, nXStart, nYMiddle, nWidthRelation);
                         nTextOffset = nTextOffset + nXStep;
                     }
@@ -2528,8 +2527,8 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                 {
                     vcl::Font aColorFont(aStdFont);
                     Color aTmpBulletColor = rFmt.GetBulletColor();
-                    if (aTmpBulletColor.GetColor() == COL_AUTO)
-                        aTmpBulletColor = Color(aBackColor.IsDark() ? COL_WHITE : COL_BLACK);
+                    if (aTmpBulletColor == COL_AUTO)
+                        aTmpBulletColor = aBackColor.IsDark() ? COL_WHITE : COL_BLACK;
                     else if (aTmpBulletColor == aBackColor)
                         aTmpBulletColor.Invert();
                     aColorFont.SetColor(aTmpBulletColor);
@@ -2540,7 +2539,7 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
                     OUString aText(pActNum->MakeNumString(aNum));
                     pVDev->DrawText(Point(nXStart, nYStart), aText);
                     pVDev->SetFont(aStdFont);
-                    nTextOffset = static_cast<sal_uInt16>(pVDev->GetTextWidth(aText));
+                    nTextOffset = pVDev->GetTextWidth(aText);
                     nTextOffset = nTextOffset + nXStep;
                     nPreNum++;
                 }
@@ -2607,7 +2606,7 @@ SvxNumPositionTabPage::SvxNumPositionTabPage(vcl::Window* pParent,
     get(m_pStandardPB, "standard");
     get(m_pPreviewWIN, "preview");
 
-    m_pPreviewWIN->SetBackground(Wallpaper(Color(COL_TRANSPARENT)));
+    m_pPreviewWIN->SetBackground(Wallpaper(COL_TRANSPARENT));
 
     m_pRelativeCB->Check();
     m_pAlignLB->SetSelectHdl(LINK(this, SvxNumPositionTabPage, EditModifyHdl_Impl));
@@ -3228,7 +3227,7 @@ IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
                     if(0 == i)
                     {
                         long nTmp = aNumFmt.GetFirstLineOffset();
-                        aNumFmt.SetAbsLSpace( sal_uInt16(nValue - nTmp));
+                        aNumFmt.SetAbsLSpace( nValue - nTmp);
                     }
                     else
                     {
@@ -3236,7 +3235,7 @@ IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
                                     pActNum->GetLevel( i - 1 ).GetFirstLineOffset() -
                                     pActNum->GetLevel( i ).GetFirstLineOffset();
 
-                        aNumFmt.SetAbsLSpace( sal_uInt16(nValue + nTmp));
+                        aNumFmt.SetAbsLSpace( nValue + nTmp);
                     }
                 }
                 else
@@ -3253,7 +3252,7 @@ IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
                 // together with the FirstLineOffset the AbsLSpace must be changed, too
                 long nDiff = nValue + aNumFmt.GetFirstLineOffset();
                 long nAbsLSpace = aNumFmt.GetAbsLSpace();
-                aNumFmt.SetAbsLSpace(sal_uInt16(nAbsLSpace + nDiff));
+                aNumFmt.SetAbsLSpace(nAbsLSpace + nDiff);
                 aNumFmt.SetFirstLineOffset( -static_cast<short>(nValue) );
             }
 

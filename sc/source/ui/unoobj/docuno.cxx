@@ -44,12 +44,12 @@
 #include <sfx2/printer.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/pdfextoutdevdata.hxx>
 #include <vcl/waitobj.hxx>
 #include <unotools/charclass.hxx>
 #include <tools/multisel.hxx>
 #include <toolkit/awt/vclxdevice.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/saveopt.hxx>
 
 #include <float.h>
@@ -228,7 +228,6 @@ using sc::TwipsToHMM;
 #define SCMODELOBJ_SERVICE          "com.sun.star.sheet.SpreadsheetDocument"
 #define SCDOCSETTINGS_SERVICE       "com.sun.star.sheet.SpreadsheetDocumentSettings"
 #define SCDOC_SERVICE               "com.sun.star.document.OfficeDocument"
-#define SCDATAPROVIDERACCESS_SERVICE "com.sun.star.chart2.XDataProviderAccess"
 
 SC_SIMPLE_SERVICE_INFO( ScAnnotationsObj, "ScAnnotationsObj", "com.sun.star.sheet.CellAnnotations" )
 SC_SIMPLE_SERVICE_INFO( ScDrawPagesObj, "ScDrawPagesObj", "com.sun.star.drawing.DrawPages" )
@@ -549,6 +548,25 @@ OUString ScModelObj::getPartHash( int nPart )
     return (pViewData->GetDocument()->GetHashCode(nPart, nHashCode) ? OUString::number(nHashCode) : OUString());
 }
 
+VclPtr<vcl::Window> ScModelObj::getDocWindow()
+{
+    SolarMutexGuard aGuard;
+
+    // There seems to be no clear way of getting the grid window for this
+    // particular document, hence we need to hope we get the right window.
+    ScViewData* pViewData = ScDocShell::GetViewData();
+    VclPtr<vcl::Window> pWindow;
+    if (pViewData)
+        pWindow = pViewData->GetActiveWin();
+
+    LokChartHelper aChartHelper(pViewData->GetViewShell());
+    vcl::Window* pChartWindow = aChartHelper.GetWindow();
+    if (pChartWindow)
+        pWindow = pChartWindow;
+
+    return pWindow;
+}
+
 Size ScModelObj::getDocumentSize()
 {
     Size aSize(10, 10); // minimum size
@@ -583,40 +601,31 @@ Size ScModelObj::getDocumentSize()
     return aSize;
 }
 
+
 void ScModelObj::postKeyEvent(int nType, int nCharCode, int nKeyCode)
 {
     SolarMutexGuard aGuard;
 
-    // There seems to be no clear way of getting the grid window for this
-    // particular document, hence we need to hope we get the right window.
-    ScViewData* pViewData = ScDocShell::GetViewData();
-    vcl::Window* pWindow = pViewData->GetActiveWin();
-
+    VclPtr<vcl::Window> pWindow = getDocWindow();
     if (!pWindow)
         return;
 
-    KeyEvent aEvent(nCharCode, nKeyCode, 0);
-
-    ScTabViewShell * pTabViewShell = pViewData->GetViewShell();
-    LokChartHelper aChartHelper(pTabViewShell);
-    vcl::Window* pChartWindow = aChartHelper.GetWindow();
-    if (pChartWindow)
-    {
-        pWindow = pChartWindow;
-    }
-
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = pWindow;
     switch (nType)
     {
     case LOK_KEYEVENT_KEYINPUT:
-        pWindow->KeyInput(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyInput;
         break;
     case LOK_KEYEVENT_KEYUP:
-        pWindow->KeyUp(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyUp;
         break;
     default:
         assert(false);
-        break;
     }
+
+    pLOKEv->maKeyEvent = KeyEvent(nCharCode, nKeyCode, 0);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void ScModelObj::postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier)
@@ -651,40 +660,29 @@ void ScModelObj::postMouseEvent(int nType, int nX, int nY, int nCount, int nButt
             return;
     }
 
-
-    // Calc operates in pixels...
-    Point aPos(nX * pViewData->GetPPTX(), nY * pViewData->GetPPTY());
-    MouseEvent aEvent(aPos, nCount,
-            MouseEventModifiers::SIMPLECLICK, nButtons, nModifier);
-
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = pGridWindow;
     switch (nType)
     {
     case LOK_MOUSEEVENT_MOUSEBUTTONDOWN:
-        pGridWindow->MouseButtonDown(aEvent);
-
-        // Invoke the context menu
-        if (nButtons & MOUSE_RIGHT)
-        {
-            const CommandEvent aCEvt(aPos, CommandEventId::ContextMenu, true, nullptr);
-            pGridWindow->Command(aCEvt);
-        }
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonDown;
         break;
     case LOK_MOUSEEVENT_MOUSEBUTTONUP:
-        pGridWindow->MouseButtonUp(aEvent);
-
-        // sometimes MouseButtonDown captures mouse and starts tracking, and VCL
-        // will not take care of releasing that with tiled rendering
-        if (pGridWindow->IsTracking())
-            pGridWindow->EndTracking(TrackingEventFlags::DontCallHdl);
-
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonUp;
         break;
     case LOK_MOUSEEVENT_MOUSEMOVE:
-        pGridWindow->MouseMove(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowMouseMove;
         break;
     default:
         assert(false);
-        break;
     }
+
+    // Calc operates in pixels...
+    const Point aPos(nX * pViewData->GetPPTX(), nY * pViewData->GetPPTY());
+    pLOKEv->maMouseEvent = MouseEvent(aPos, nCount,
+                                      MouseEventModifiers::SIMPLECLICK,
+                                      nButtons, nModifier);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void ScModelObj::setTextSelection(int nType, int nX, int nY)
@@ -1899,8 +1897,7 @@ void SAL_CALL ScModelObj::render( sal_Int32 nSelRenderer, const uno::Any& aSelec
     {
         // Similar to as in and when calling ScTransferObj::PaintToDev()
 
-        Point aPoint;
-        tools::Rectangle aBound( aPoint, pDev->GetOutputSize());
+        tools::Rectangle aBound( Point(), pDev->GetOutputSize());
 
         ScViewData aViewData(nullptr,nullptr);
         aViewData.InitData( &rDoc );
@@ -2855,7 +2852,7 @@ sal_Bool SAL_CALL ScModelObj::supportsService( const OUString& rServiceName )
 
 uno::Sequence<OUString> SAL_CALL ScModelObj::getSupportedServiceNames()
 {
-    return {SCMODELOBJ_SERVICE, SCDOCSETTINGS_SERVICE, SCDOC_SERVICE, SCDATAPROVIDERACCESS_SERVICE};
+    return {SCMODELOBJ_SERVICE, SCDOCSETTINGS_SERVICE, SCDOC_SERVICE};
 }
 
 // XUnoTunnel
@@ -4490,11 +4487,10 @@ void SAL_CALL ScScenariosObj::addNewByName( const OUString& aName,
             }
         }
 
-        Color aColor( COL_LIGHTGRAY );  // Default
         ScScenarioFlags const nFlags = ScScenarioFlags::ShowFrame | ScScenarioFlags::PrintFrame
                                      | ScScenarioFlags::TwoWay    | ScScenarioFlags::Protected;
 
-        pDocShell->MakeScenario( nTab, aName, aComment, aColor, nFlags, aMarkData );
+        pDocShell->MakeScenario( nTab, aName, aComment, COL_LIGHTGRAY, nFlags, aMarkData );
     }
 }
 

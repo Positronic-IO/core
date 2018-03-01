@@ -87,7 +87,6 @@ OStatement_Base::~OStatement_Base()
 {
     osl_atomic_increment( &m_refCount );
     disposing();
-    delete m_pSQLAnalyzer;
 }
 
 void OStatement_Base::disposeResultSet()
@@ -122,8 +121,6 @@ void OStatement_BASE2::disposing()
 
     m_pConnection.clear();
 
-    dispose_ChildImpl();
-
     if ( m_pParseTree )
     {
         delete m_pParseTree;
@@ -140,7 +137,7 @@ void SAL_CALL OStatement_Base::acquire() throw()
 
 void SAL_CALL OStatement_BASE2::release() throw()
 {
-    release_ChildImpl();
+    OStatement_BASE::release();
 }
 
 Any SAL_CALL OStatement_Base::queryInterface( const Type & rType )
@@ -431,7 +428,7 @@ void OStatement_Base::construct(const OUString& sql)
     // create the column mapping
     createColumnMapping();
 
-    m_pSQLAnalyzer = new OSQLAnalyzer(m_pConnection.get());
+    m_pSQLAnalyzer.reset( new OSQLAnalyzer(m_pConnection.get()) );
 
     Reference<XIndexesSupplier> xIndexSup(xTunnel,UNO_QUERY);
     if(xIndexSup.is())
@@ -457,7 +454,7 @@ void OStatement_Base::initializeResultSet(OResultSet* _pResult)
 {
     GetAssignValues();
 
-    _pResult->setSqlAnalyzer(m_pSQLAnalyzer);
+    _pResult->setSqlAnalyzer(m_pSQLAnalyzer.get());
     _pResult->setOrderByColumns(m_aOrderbyColumnNumber);
     _pResult->setOrderByAscending(m_aOrderbyAscending);
     _pResult->setBindingRow(m_aRow);

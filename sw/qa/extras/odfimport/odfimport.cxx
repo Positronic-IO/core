@@ -458,7 +458,7 @@ DECLARE_ODFIMPORT_TEST(testFdo75872_ooo33, "fdo75872_ooo33.odt")
     uno::Reference<drawing::XShape> xShape = getShape(1);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_BLACK),
            getProperty<sal_Int32>(xShape, "LineColor"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(RGB_COLORDATA(153, 204, 255)),
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(Color(153, 204, 255)),
            getProperty<sal_Int32>(xShape, "FillColor"));
 }
 
@@ -466,9 +466,9 @@ DECLARE_ODFIMPORT_TEST(testFdo75872_aoo40, "fdo75872_aoo40.odt")
 {
     // graphics default style: line color and fill color changed
     uno::Reference<drawing::XShape> xShape = getShape(1);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(RGB_COLORDATA(128, 128, 128)),
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(Color(128, 128, 128)),
            getProperty<sal_Int32>(xShape, "LineColor"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(RGB_COLORDATA(0xCF, 0xE7, 0xF5)),
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(Color(0xCF, 0xE7, 0xF5)),
            getProperty<sal_Int32>(xShape, "FillColor"));
 }
 
@@ -880,6 +880,11 @@ DECLARE_ODFIMPORT_TEST(testBlankBeforeFirstPage, "tdf94882.odt")
     CPPUNIT_ASSERT_EQUAL_MESSAGE("The first page should be blank",
         OUString("0"), parseDump("count(/root/page[1]/body)")
     );
+}
+
+DECLARE_ODFIMPORT_TEST(testTdf115079, "tdf115079.odt")
+{
+    // This document caused segfault when layouting
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

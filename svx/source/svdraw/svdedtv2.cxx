@@ -32,7 +32,6 @@
 #include "svdfmtf.hxx"
 #include <svx/svdetc.hxx>
 #include <sfx2/basedlgs.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/eeitem.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
@@ -1209,9 +1208,9 @@ void SdrEditView::EqualizeMarkedObjects(bool bWidth)
         tools::Rectangle aLogicRect(pObj->GetLogicRect());
         Size aLogicRectSize(aLogicRect.GetSize());
         if (bWidth)
-            aLogicRectSize.Width() = aLastRectSize.Width();
+            aLogicRectSize.setWidth( aLastRectSize.Width() );
         else
-            aLogicRectSize.Height() = aLastRectSize.Height();
+            aLogicRectSize.setHeight( aLastRectSize.Height() );
         aLogicRect.SetSize(aLogicRectSize);
         if (bUndo)
             AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pObj));

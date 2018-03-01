@@ -33,6 +33,8 @@
 #include <objectformatter.hxx>
 #include <viewopt.hxx>
 #include <calbck.hxx>
+#include <ndindex.hxx>
+#include <pam.hxx>
 
 #define ENDNOTE 0x80000000
 
@@ -342,7 +344,7 @@ SwTwips SwFootnoteContFrame::GrowFrame( SwTwips nDist, bool bTst, bool )
 
         if( IsVertical() && !IsVertLR() )
         {
-            aFrm.Pos().X() -= nDist;
+            aFrm.Pos().AdjustX( -nDist );
         }
     }
     long nGrow = nDist - nAvail,
@@ -385,11 +387,11 @@ SwTwips SwFootnoteContFrame::GrowFrame( SwTwips nDist, bool bTst, bool )
 
             // We can only respect the boundless wish so much
             SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
-            aFrm.SSize().Height() -= nDist;
+            aFrm.SSize().AdjustHeight( -nDist );
 
             if( IsVertical() && !IsVertLR() )
             {
-                aFrm.Pos().X() += nDist;
+                aFrm.Pos().AdjustX(nDist );
             }
         }
 
@@ -790,14 +792,11 @@ bool SwFrame::IsFootnoteAllowed() const
     if ( !IsInDocBody() )
         return false;
 
-    if ( IsInTab() )
-    {
-        // no footnotes in repeated headlines
-        const SwTabFrame *pTab = const_cast<SwFrame*>(this)->ImplFindTabFrame();
-        assert(pTab);
-        if ( pTab->IsFollow() )
-            return !pTab->IsInHeadline( *this );
-    }
+    // no footnotes in repeated headlines
+    const SwTabFrame *pTab = IsInTab() ? const_cast<SwFrame*>(this)->ImplFindTabFrame() : nullptr;
+    if (pTab && pTab->IsFollow())
+        return !pTab->IsInHeadline( *this );
+
     return true;
 }
 
@@ -2743,7 +2742,7 @@ bool SwContentFrame::MoveFootnoteCntFwd( bool bMakePage, SwFootnoteBossFrame *pO
                     {
                         SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pNewUp);
                         aFrm.Pos() = pTmpFootnote->getFrameArea().Pos();
-                        aFrm.Pos().Y() += 1; // for notifications
+                        aFrm.Pos().AdjustY(1 ); // for notifications
                     }
 
                     // If the section frame has a successor then the latter needs

@@ -106,7 +106,7 @@ PrinterOptions::~PrinterOptions()
 {
 }
 
-bool PrinterOptions::ReadFromConfig( bool i_bFile )
+void PrinterOptions::ReadFromConfig( bool i_bFile )
 {
     bool bSuccess = false;
     // save old state in case something goes wrong
@@ -180,7 +180,6 @@ bool PrinterOptions::ReadFromConfig( bool i_bFile )
 
     if( ! bSuccess )
         *this = aOldValues;
-    return bSuccess;
 }
 
 bool Printer::DrawTransformBitmapExDirect(
@@ -211,13 +210,13 @@ void Printer::DrawDeviceBitmap( const Point& rDestPt, const Size& rDestSize,
         // bitmap, but perform a full alpha blend against a white
         // background here.
         Bitmap aBmp( rBmpEx.GetBitmap() );
-        aBmp.Blend( rBmpEx.GetAlpha(), Color( COL_WHITE) );
+        aBmp.Blend( rBmpEx.GetAlpha(), COL_WHITE );
         DrawBitmap( rDestPt, rDestSize, rSrcPtPixel, rSrcSizePixel, aBmp );
     }
     else
     {
         Bitmap aBmp( rBmpEx.GetBitmap() ), aMask( rBmpEx.GetMask() );
-        aBmp.Replace( aMask, Color( COL_WHITE ) );
+        aBmp.Replace( aMask, COL_WHITE );
         ImplPrintTransparent( aBmp, aMask, rDestPt, rDestSize, rSrcPtPixel, rSrcSizePixel );
     }
 }
@@ -734,7 +733,6 @@ void Printer::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
                          const Point& rDestPt, const Size& rDestSize,
                          const Point& rSrcPtPixel, const Size& rSrcSizePixel )
 {
-    Point       aPt;
     Point       aDestPt( LogicToPixel( rDestPt ) );
     Size        aDestSz( LogicToPixel( rDestSize ) );
     tools::Rectangle   aSrcRect( rSrcPtPixel, rSrcSizePixel );
@@ -753,21 +751,21 @@ void Printer::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
     // mirrored horizontically
     if( aDestSz.Width() < 0 )
     {
-        aDestSz.Width() = -aDestSz.Width();
-        aDestPt.X() -= ( aDestSz.Width() - 1 );
+        aDestSz.setWidth( -aDestSz.Width() );
+        aDestPt.AdjustX( -( aDestSz.Width() - 1 ) );
         nMirrFlags |= BmpMirrorFlags::Horizontal;
     }
 
     // mirrored vertically
     if( aDestSz.Height() < 0 )
     {
-        aDestSz.Height() = -aDestSz.Height();
-        aDestPt.Y() -= ( aDestSz.Height() - 1 );
+        aDestSz.setHeight( -aDestSz.Height() );
+        aDestPt.AdjustY( -( aDestSz.Height() - 1 ) );
         nMirrFlags |= BmpMirrorFlags::Vertical;
     }
 
     // source cropped?
-    if( aSrcRect != tools::Rectangle( aPt, aMask.GetSizePixel() ) )
+    if( aSrcRect != tools::Rectangle( Point(), aMask.GetSizePixel() ) )
         aMask.Crop( aSrcRect );
 
     // destination mirrored
@@ -802,12 +800,12 @@ void Printer::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
     RectangleVector aRectangles;
     aWorkRgn.GetRegionRectangles(aRectangles);
 
-    for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+    for (auto const& rectangle : aRectangles)
     {
-        const Point aMapPt(pMapX[aRectIter->Left()], pMapY[aRectIter->Top()]);
+        const Point aMapPt(pMapX[rectangle.Left()], pMapY[rectangle.Top()]);
         const Size aMapSz(
-            pMapX[aRectIter->Right() + 1] - aMapPt.X(),      // pMapX[L + W] -> L + ((R - L) + 1) -> R + 1
-            pMapY[aRectIter->Bottom() + 1] - aMapPt.Y());    // same for Y
+            pMapX[rectangle.Right() + 1] - aMapPt.X(),      // pMapX[L + W] -> L + ((R - L) + 1) -> R + 1
+            pMapY[rectangle.Bottom() + 1] - aMapPt.Y());    // same for Y
 
         DrawRect(tools::Rectangle(aMapPt, aMapSz));
     }
@@ -1397,10 +1395,10 @@ void Printer::ImplFindPaperFormatForUserSize( JobSetup& aJobSetup, bool bMatchNe
     }
 }
 
-bool Printer::SetPaper( Paper ePaper )
+void Printer::SetPaper( Paper ePaper )
 {
     if ( mbInPrintPage )
-        return false;
+        return;
 
     if ( maJobSetup.ImplGetConstData().GetPaperFormat() != ePaper )
     {
@@ -1419,7 +1417,7 @@ bool Printer::SetPaper( Paper ePaper )
         {
             mbNewJobSetup = true;
             maJobSetup = aJobSetup;
-            return true;
+            return;
         }
 
         ReleaseGraphics();
@@ -1432,13 +1430,8 @@ bool Printer::SetPaper( Paper ePaper )
             maJobSetup = aJobSetup;
             ImplUpdatePageData();
             ImplUpdateFontList();
-            return true;
         }
-        else
-            return false;
     }
-
-    return true;
 }
 
 bool Printer::SetPaperSizeUser( const Size& rSize )
@@ -1559,10 +1552,10 @@ const PaperInfo& Printer::GetPaperInfo( int nPaper ) const
     return mpInfoPrinter->m_aPaperFormats[nPaper];
 }
 
-bool Printer::SetDuplexMode( DuplexMode eDuplex )
+void Printer::SetDuplexMode( DuplexMode eDuplex )
 {
     if ( mbInPrintPage )
-        return false;
+        return;
 
     if ( maJobSetup.ImplGetConstData().GetDuplexMode() != eDuplex )
     {
@@ -1575,7 +1568,7 @@ bool Printer::SetDuplexMode( DuplexMode eDuplex )
         {
             mbNewJobSetup = true;
             maJobSetup = aJobSetup;
-            return true;
+            return;
         }
 
         ReleaseGraphics();
@@ -1586,13 +1579,8 @@ bool Printer::SetDuplexMode( DuplexMode eDuplex )
             maJobSetup = aJobSetup;
             ImplUpdatePageData();
             ImplUpdateFontList();
-            return true;
         }
-        else
-            return false;
     }
-
-    return true;
 }
 
 Paper Printer::GetPaper() const
@@ -1619,11 +1607,10 @@ OUString Printer::GetPaperBinName( sal_uInt16 nPaperBin ) const
         return OUString();
 }
 
-bool Printer::SetCopyCount( sal_uInt16 nCopy, bool bCollate )
+void Printer::SetCopyCount( sal_uInt16 nCopy, bool bCollate )
 {
     mnCopyCount = nCopy;
     mbCollateCopy = bCollate;
-    return true;
 }
 
 ErrCode Printer::ImplSalPrinterErrorCodeToVCL( SalPrinterError nError )
@@ -1645,11 +1632,10 @@ ErrCode Printer::ImplSalPrinterErrorCodeToVCL( SalPrinterError nError )
     return nVCLError;
 }
 
-bool Printer::EndJob()
+void Printer::EndJob()
 {
-    bool bRet = false;
     if ( !IsJobActive() )
-        return bRet;
+        return;
 
     SAL_WARN_IF( mbInPrintPage, "vcl.gdi", "Printer::EndJob() - StartPage() without EndPage() called" );
 
@@ -1663,15 +1649,13 @@ bool Printer::EndJob()
         maJobName.clear();
 
         mbDevOutput = false;
-        bRet = mpPrinter->EndJob();
+        mpPrinter->EndJob();
         // FIXME: Do not destroy the printer asynchronously as Win95
         // can't handle destroying a printer object and printing
         // at the same time
         ImplGetSVData()->mpDefInst->DestroyPrinter( mpPrinter );
         mpPrinter = nullptr;
     }
-
-    return bRet;
 }
 
 void Printer::ImplStartPage()

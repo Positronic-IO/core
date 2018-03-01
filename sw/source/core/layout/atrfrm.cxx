@@ -79,6 +79,7 @@
 #include <calbck.hxx>
 #include <pagedeschint.hxx>
 #include <drawdoc.hxx>
+#include <hints.hxx>
 
 #ifndef NDEBUG
 #include <ndtxt.hxx>
@@ -171,10 +172,23 @@ static void lcl_DelHFFormat( SwClient *pToRemove, SwFrameFormat *pFormat )
     }
 }
 
+void SwFormatFrameSize::ScaleMetrics(long lMult, long lDiv) {
+    // Don't inherit the SvxSizeItem override (might or might not be relevant; added "just in case"
+    // when changing SwFormatFrameSize to derive from SvxSizeItem instead of directly from
+    // SfxPoolItem):
+    return SfxPoolItem::ScaleMetrics(lMult, lDiv);
+}
+
+bool SwFormatFrameSize::HasMetrics() const {
+    // Don't inherit the SvxSizeItem override (might or might not be relevant; added "just in case"
+    // when changing SwFormatFrameSize to derive from SvxSizeItem instead of directly from
+    // SfxPoolItem):
+    return SfxPoolItem::HasMetrics();
+}
+
 // Partially implemented inline in hxx
 SwFormatFrameSize::SwFormatFrameSize( SwFrameSize eSize, SwTwips nWidth, SwTwips nHeight )
-    : SfxPoolItem( RES_FRM_SIZE ),
-    m_aSize( nWidth, nHeight ),
+    : SvxSizeItem( RES_FRM_SIZE, {nWidth, nHeight} ),
     m_eFrameHeightType( eSize ),
     m_eFrameWidthType( ATT_FIX_SIZE )
 {
@@ -183,7 +197,7 @@ SwFormatFrameSize::SwFormatFrameSize( SwFrameSize eSize, SwTwips nWidth, SwTwips
 
 SwFormatFrameSize& SwFormatFrameSize::operator=( const SwFormatFrameSize& rCpy )
 {
-    m_aSize = rCpy.GetSize();
+    SvxSizeItem::operator=(rCpy);
     m_eFrameHeightType = rCpy.GetHeightSizeType();
     m_eFrameWidthType = rCpy.GetWidthSizeType();
     m_nHeightPercent = rCpy.GetHeightPercent();
@@ -198,7 +212,7 @@ bool SwFormatFrameSize::operator==( const SfxPoolItem& rAttr ) const
     assert(SfxPoolItem::operator==(rAttr));
     return( m_eFrameHeightType  == static_cast<const SwFormatFrameSize&>(rAttr).m_eFrameHeightType &&
             m_eFrameWidthType  == static_cast<const SwFormatFrameSize&>(rAttr).m_eFrameWidthType &&
-            m_aSize           == static_cast<const SwFormatFrameSize&>(rAttr).GetSize()&&
+            SvxSizeItem::operator==(rAttr)&&
             m_nWidthPercent   == static_cast<const SwFormatFrameSize&>(rAttr).GetWidthPercent() &&
             m_eWidthPercentRelation == static_cast<const SwFormatFrameSize&>(rAttr).GetWidthPercentRelation() &&
             m_nHeightPercent  == static_cast<const SwFormatFrameSize&>(rAttr).GetHeightPercent() &&
@@ -219,8 +233,8 @@ bool SwFormatFrameSize::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
         case MID_FRMSIZE_SIZE:
         {
             awt::Size aTmp;
-            aTmp.Height = convertTwipToMm100(m_aSize.Height());
-            aTmp.Width = convertTwipToMm100(m_aSize.Width());
+            aTmp.Height = convertTwipToMm100(GetHeight());
+            aTmp.Width = convertTwipToMm100(GetWidth());
             rVal <<= aTmp;
         }
         break;
@@ -243,14 +257,14 @@ bool SwFormatFrameSize::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
             rVal <<= SwFormatFrameSize::SYNCED == GetWidthPercent();
         break;
         case MID_FRMSIZE_WIDTH :
-            rVal <<= static_cast<sal_Int32>(convertTwipToMm100(m_aSize.Width()));
+            rVal <<= static_cast<sal_Int32>(convertTwipToMm100(GetWidth()));
         break;
         case MID_FRMSIZE_HEIGHT:
             // #95848# returned size should never be zero.
             // (there was a bug that allowed for setting height to 0.
             // Thus there some documents existing with that not allowed
             // attribute value which may cause problems on import.)
-            rVal <<= static_cast<sal_Int32>(convertTwipToMm100(m_aSize.Height() < MINLAY ? MINLAY : m_aSize.Height() ));
+            rVal <<= static_cast<sal_Int32>(convertTwipToMm100(GetHeight() < MINLAY ? MINLAY : GetHeight() ));
         break;
         case MID_FRMSIZE_SIZE_TYPE:
             rVal <<= static_cast<sal_Int16>(GetHeightSizeType());
@@ -282,10 +296,10 @@ bool SwFormatFrameSize::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
                 Size aTmp(aVal.Width, aVal.Height);
                 if(bConvert)
                 {
-                    aTmp.Height() = convertMm100ToTwip(aTmp.Height());
-                    aTmp.Width() = convertMm100ToTwip(aTmp.Width());
+                    aTmp.setHeight( convertMm100ToTwip(aTmp.Height()) );
+                    aTmp.setWidth( convertMm100ToTwip(aTmp.Width()) );
                 }
-                m_aSize = aTmp;
+                SetSize(aTmp);
             }
         }
         break;
@@ -350,7 +364,7 @@ bool SwFormatFrameSize::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
                     nWd = convertMm100ToTwip(nWd);
                 if(nWd < MINLAY)
                    nWd = MINLAY;
-                m_aSize.Width() = nWd;
+                SetWidth(nWd);
             }
             else
                 bRet = false;
@@ -365,7 +379,7 @@ bool SwFormatFrameSize::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
                     nHg = convertMm100ToTwip(nHg);
                 if(nHg < MINLAY)
                     nHg = MINLAY;
-                m_aSize.Height() = nHg;
+                SetHeight(nHg);
             }
             else
                 bRet = false;
@@ -411,7 +425,7 @@ void SwFormatFrameSize::dumpAsXml(xmlTextWriterPtr pWriter) const
     xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
 
     std::stringstream aSize;
-    aSize << m_aSize;
+    aSize << GetSize();
     xmlTextWriterWriteAttribute(pWriter, BAD_CAST("size"), BAD_CAST(aSize.str().c_str()));
 
     xmlTextWriterWriteAttribute(pWriter, BAD_CAST("eFrameHeightType"), BAD_CAST(OString::number(m_eFrameHeightType).getStr()));
@@ -1095,7 +1109,7 @@ bool SwFormatCol::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
             {
                 m_bOrtho = pSwColums->IsAutomaticWidth();
                 m_nLineWidth = pSwColums->GetSepLineWidth();
-                m_aLineColor.SetColor(pSwColums->GetSepLineColor());
+                m_aLineColor = pSwColums->GetSepLineColor();
                 m_nLineHeight = pSwColums->GetSepLineHeightRelative();
                 switch ( pSwColums->GetSepLineStyle() )
                 {
@@ -2055,16 +2069,16 @@ void SwFormatChain::SetPrev( SwFlyFrameFormat *pFormat )
 {
     if ( pFormat )
         pFormat->Add( &aPrev );
-    else if ( aPrev.GetRegisteredIn() )
-        aPrev.GetRegisteredIn()->Remove( &aPrev );
+    else
+        aPrev.EndListeningAll();
 }
 
 void SwFormatChain::SetNext( SwFlyFrameFormat *pFormat )
 {
     if ( pFormat )
         pFormat->Add( &aNext );
-    else if ( aNext.GetRegisteredIn() )
-        aNext.GetRegisteredIn()->Remove( &aNext );
+    else
+        aNext.EndListeningAll();
 }
 
 bool SwFormatChain::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
@@ -2322,7 +2336,7 @@ bool SwTextGridItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
             sal_Int32 nTmp = 0;
             bRet = (rVal >>= nTmp);
             nTmp = convertMm100ToTwip( nTmp );
-            if( bRet && (nTmp >= 0) && ( nTmp <= USHRT_MAX) )
+            if( bRet && (nTmp >= 0) && ( nTmp <= SAL_MAX_UINT16) )
             {
                 // rhbz#1043551 round up to 5pt -- 0 causes divide-by-zero
                 // in layout; 1pt ties the painting code up in knots for
@@ -2695,7 +2709,7 @@ SwRect SwFrameFormat::FindLayoutRect( const bool bPrtArea, const Point* pPoint )
                 else
                 {
                     aRet = pFrame->getFrameArea();
-                    --aRet.Pos().Y();
+                    aRet.Pos().AdjustY( -1 );
                 }
                 pFrame = nullptr;       // the rect is finished by now
             }

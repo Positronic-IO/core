@@ -39,6 +39,7 @@
 #include <vcl/fltcall.hxx>
 #include <vcl/FilterConfigItem.hxx>
 #include <vcl/graphictools.hxx>
+#include <vcl/weld.hxx>
 #include <strings.hrc>
 
 #include <math.h>
@@ -396,18 +397,18 @@ bool PSWriter::WritePS( const Graphic& rGraphic, SvStream& rTargetStream, Filter
     nBoundingY2 = pMTF->GetPrefSize().Height();
 
     pGDIStack = nullptr;
-    aColor = Color( COL_TRANSPARENT );
+    aColor = COL_TRANSPARENT;
     bLineColor = true;
-    aLineColor = Color( COL_BLACK );
+    aLineColor = COL_BLACK;
     bFillColor = true;
-    aFillColor = Color( COL_WHITE );
+    aFillColor = COL_WHITE;
     bTextFillColor = true;
-    aTextFillColor = Color( COL_BLACK );
+    aTextFillColor = COL_BLACK;
     fLineWidth = 1;
     fMiterLimit = 15; // use same limit as most graphic systems and basegfx
     eLineCap = SvtGraphicStroke::capButt;
     eJoinType = SvtGraphicStroke::joinMiter;
-    aBackgroundColor = Color( COL_WHITE );
+    aBackgroundColor = COL_WHITE;
     eTextAlign = ALIGN_BASELINE;
 
     nNextChrSetId = 1;
@@ -439,8 +440,10 @@ bool PSWriter::WritePS( const Graphic& rGraphic, SvStream& rTargetStream, Filter
     if ( mbStatus && mnLevelWarning && pFilterConfigItem )
     {
         std::locale loc = Translate::Create("flt");
-        ScopedVclPtrInstance< InfoBox > aInfoBox(nullptr, Translate::get(KEY_VERSION_CHECK, loc));
-        aInfoBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      Translate::get(KEY_VERSION_CHECK, loc)));
+        xInfoBox->run();
     }
 
     if ( xStatusIndicator.is() )
@@ -492,11 +495,12 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
             nLines *= aSizeBitmap.Height();
             ImplWriteLong( nLines );
             sal_Int32 nCount2, nCount = 4;
-            const BitmapColor aBlack( pAcc->GetBestMatchingColor( Color( COL_BLACK ) ) );
+            const BitmapColor aBlack( pAcc->GetBestMatchingColor( COL_BLACK ) );
             for ( long nY = 0; nY < aSizeBitmap.Height(); nY++ )
             {
                 nCount2 = 0;
                 char nVal = 0;
+                Scanline pScanline = pAcc->GetScanline( nY );
                 for ( long nX = 0; nX < aSizeBitmap.Width(); nX++ )
                 {
                     if ( !nCount2 )
@@ -506,7 +510,7 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
                         nCount2 = 312;
                     }
                     nVal <<= 1;
-                    if ( pAcc->GetPixel( nY, nX ) == aBlack )
+                    if ( pAcc->GetPixelFromData( pScanline, nX ) == aBlack )
                         nVal |= 1;
                     if ( ! ( --nCount ) )
                     {
@@ -1139,7 +1143,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                         MapMode aMapMode( aSubstitute.GetPrefMapMode() );
                         Size aOutSize( OutputDevice::LogicToLogic( aSize, rVDev.GetMapMode(), aMapMode ) );
                         Point aOrigin( OutputDevice::LogicToLogic( aPoint, rVDev.GetMapMode(), aMapMode ) );
-                        aOrigin.Y() += aOutSize.Height();
+                        aOrigin.AdjustY(aOutSize.Height() );
                         aMapMode.SetOrigin( aOrigin );
                         aMapMode.SetScaleX( Fraction(aOutSize.Width() / ( nBoundingBox[ 2 ] - nBoundingBox[ 0 ] )) );
                         aMapMode.SetScaleY( Fraction(aOutSize.Height() / ( nBoundingBox[ 3 ] - nBoundingBox[ 1 ] )) );
@@ -1181,8 +1185,8 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                 if( fScaleX != 1.0 || fScaleY != 1.0 )
                 {
                     aTmpMtf.Scale( fScaleX, fScaleY );
-                    aSrcPt.X() = FRound( aSrcPt.X() * fScaleX );
-                    aSrcPt.Y() = FRound( aSrcPt.Y() * fScaleY );
+                    aSrcPt.setX( FRound( aSrcPt.X() * fScaleX ) );
+                    aSrcPt.setY( FRound( aSrcPt.Y() * fScaleY ) );
                 }
 
                 nMoveX = aDestPt.X() - aSrcPt.X();
@@ -1756,9 +1760,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
             ImplWriteLine( "image" );
             for ( long y = 0; y < nHeight; y++ )
             {
+                Scanline pScanlineRead = pAcc->GetScanline( y );
                 for ( long x = 0; x < nWidth; x++ )
                 {
-                    ImplWriteHexByte( pAcc->GetPixelIndex( y, x ) );
+                    ImplWriteHexByte( pAcc->GetIndexFromData( pScanlineRead, x ) );
                 }
             }
             mpPS->WriteUChar( 10 );
@@ -1794,9 +1799,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                     StartCompression();
                     for ( long y = 0; y < nHeight; y++ )
                     {
+                        Scanline pScanlineRead = pAcc->GetScanline( y );
                         for ( long x = 0; x < nWidth; x++ )
                         {
-                            Compress( pAcc->GetPixelIndex( y, x ) );
+                            Compress( pAcc->GetIndexFromData( pScanlineRead, x ) );
                         }
                     }
                     EndCompression();
@@ -1805,9 +1811,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                 {
                     for ( long y = 0; y < nHeight; y++ )
                     {
+                        Scanline pScanlineRead = pAcc->GetScanline( y );
                         for ( long x = 0; x < nWidth; x++ )
                         {
-                            ImplWriteHexByte( pAcc->GetPixelIndex( y, x ) );
+                            ImplWriteHexByte( pAcc->GetIndexFromData( pScanlineRead, x ) );
                         }
                     }
                 }
@@ -1857,9 +1864,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                         StartCompression();
                         for ( long y = 0; y < nHeight; y++ )
                         {
+                            Scanline pScanlineRead = pAcc->GetScanline( y );
                             for ( long x = 0; x < nWidth; x++ )
                             {
-                                Compress( pAcc->GetPixelIndex( y, x ) );
+                                Compress( pAcc->GetIndexFromData( pScanlineRead, x ) );
                             }
                         }
                         EndCompression();
@@ -1868,9 +1876,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                     {
                         for ( long y = 0; y < nHeight; y++ )
                         {
+                            Scanline pScanlineRead = pAcc->GetScanline( y );
                             for ( long x = 0; x < nWidth; x++ )
                             {
-                                ImplWriteHexByte( pAcc->GetPixelIndex( y, x ) );
+                                ImplWriteHexByte( pAcc->GetIndexFromData( pScanlineRead, x ) );
                             }
                         }
                     }
@@ -1904,9 +1913,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                         StartCompression();
                         for ( long y = 0; y < nHeight; y++ )
                         {
+                            Scanline pScanlineRead = pAcc->GetScanline( y );
                             for ( long x = 0; x < nWidth; x++ )
                             {
-                                const BitmapColor aBitmapColor( pAcc->GetPixel( y, x ) );
+                                const BitmapColor aBitmapColor( pAcc->GetPixelFromData( pScanlineRead, x ) );
                                 Compress( aBitmapColor.GetRed() );
                                 Compress( aBitmapColor.GetGreen() );
                                 Compress( aBitmapColor.GetBlue() );
@@ -1918,9 +1928,10 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
                     {
                         for ( long y = 0; y < nHeight; y++ )
                         {
+                            Scanline pScanline = pAcc->GetScanline( y );
                             for ( long x = 0; x < nWidth; x++ )
                             {
-                                const BitmapColor aBitmapColor( pAcc->GetPixel( y, x ) );
+                                const BitmapColor aBitmapColor( pAcc->GetPixelFromData( pScanline, x ) );
                                 ImplWriteHexByte( aBitmapColor.GetRed() );
                                 ImplWriteHexByte( aBitmapColor.GetGreen() );
                                 ImplWriteHexByte( aBitmapColor.GetBlue() );
@@ -1941,7 +1952,7 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
         if ( nHeightLeft )
         {
             nHeightLeft++;
-            aSourcePos.Y() = static_cast<long>( rPoint.Y() + ( nYHeightOrg * ( nHeightOrg - nHeightLeft ) ) / nHeightOrg );
+            aSourcePos.setY( static_cast<long>( rPoint.Y() + ( nYHeightOrg * ( nHeightOrg - nHeightLeft ) ) / nHeightOrg ) );
         }
     }
 }
@@ -2075,9 +2086,9 @@ void PSWriter::ImplSetAttrForText( const Point& rPoint )
     if ( eTextAlign != ALIGN_BASELINE )
     {                                                       // PostScript does not know about FontAlignment
         if ( eTextAlign == ALIGN_TOP )                      // -> so I assume that
-            aPoint.Y() += ( aSize.Height() * 4 / 5 );       // the area under the baseline
+            aPoint.AdjustY( aSize.Height() * 4 / 5 );       // the area under the baseline
         else if ( eTextAlign == ALIGN_BOTTOM )              // is about 20% of the font size
-            aPoint.Y() -= ( aSize.Height() / 5 );
+            aPoint.AdjustY( -( aSize.Height() / 5 ) );
     }
     ImplMoveTo( aPoint );
     if ( nRotation )

@@ -22,11 +22,11 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/awt/XBitmap.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/graph.hxx>
 #include <svtools/grfmgr.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 
 #include <editeng/brushitem.hxx>
 #include <editeng/unoprnms.hxx>
@@ -220,15 +220,15 @@ Sequence<beans::PropertyValue> SvxUnoNumberingRules::getNumberingRuleByIndex(sal
 
     {
         const SvxBrushItem* pBrush = rFmt.GetBrush();
-        if(pBrush && pBrush->GetGraphicObject())
+        const Graphic* pGraphic = nullptr;
+        if (pBrush)
+            pGraphic = pBrush->GetGraphic();
+        if (pGraphic)
         {
-            const GraphicObject* pGrafObj = pBrush->GetGraphicObject();
-            OUString aURL( UNO_NAME_GRAPHOBJ_URLPREFIX);
-            aURL += OStringToOUString(pGrafObj->GetUniqueID(),
-                RTL_TEXTENCODING_ASCII_US);
+            uno::Reference<awt::XBitmap> xBitmap(pGraphic->GetXGraphic(), uno::UNO_QUERY);
+            aVal <<= xBitmap;
 
-            aVal <<= aURL;
-            const beans::PropertyValue aGraphicProp( "GraphicURL", -1, aVal, beans::PropertyState_DIRECT_VALUE);
+            const beans::PropertyValue aGraphicProp("GraphicBitmap", -1, aVal, beans::PropertyState_DIRECT_VALUE);
             pArray[nIdx++] = aGraphicProp;
         }
     }
@@ -352,13 +352,14 @@ void SvxUnoNumberingRules::setNumberingRuleByIndex(const Sequence<beans::Propert
                 continue;
             }
         }
-        else if ( rPropName == "Graphic" )
+        else if ( rPropName == "GraphicBitmap" )
         {
-            Reference< awt::XBitmap > xBmp;
-            if( aVal >>= xBmp )
+            uno::Reference<awt::XBitmap> xBitmap;
+            if(aVal >>= xBitmap)
             {
-                Graphic aGraf( VCLUnoHelper::GetBitmap( xBmp ) );
-                SvxBrushItem aBrushItem(aGraf, GPOS_AREA, SID_ATTR_BRUSH);
+                uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+                Graphic aGraphic(xGraphic);
+                SvxBrushItem aBrushItem(aGraphic, GPOS_AREA, SID_ATTR_BRUSH);
                 aFmt.SetGraphicBrush( &aBrushItem );
                 continue;
             }
@@ -397,7 +398,7 @@ void SvxUnoNumberingRules::setNumberingRuleByIndex(const Sequence<beans::Propert
             sal_Int32 nMargin = 0;
             if( aVal >>= nMargin )
             {
-                aFmt.SetAbsLSpace(static_cast<sal_uInt16>(nMargin));
+                aFmt.SetAbsLSpace(nMargin);
                 continue;
             }
         }

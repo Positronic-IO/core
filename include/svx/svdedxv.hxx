@@ -74,7 +74,8 @@ class SVX_DLLPUBLIC SdrObjEditView: public SdrGlueEditView, public EditViewCallb
 
 protected:
     // TextEdit
-    SdrObjectWeakRef            mxTextEditObj;         // current object in TextEdit
+    tools::WeakReference<SdrTextObj>
+                                mxTextEditObj;         // current object in TextEdit
     SdrPageView*                pTextEditPV;
     SdrOutliner*                pTextEditOutliner;     // outliner for the TextEdit
     OutlinerView*               pTextEditOutlinerView; // current view of the outliners
@@ -215,7 +216,7 @@ public:
     bool IsTextEditInSelectionMode() const;
 
     // If sb needs the object out of the TextEdit:
-    SdrObject* GetTextEditObject() const { return mxTextEditObj.get(); }
+    SdrTextObj* GetTextEditObject() const { return mxTextEditObj.get(); }
 
     // info about TextEditPageView. Default is 0L.
     virtual SdrPageView* GetTextEditPageView() const override;

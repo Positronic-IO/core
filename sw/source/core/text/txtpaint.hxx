@@ -72,7 +72,7 @@ class DbgRect : public SwDbgOut
 public:
         DbgRect( OutputDevice* pOut, const tools::Rectangle &rRect,
                  const bool bOn,
-                 ColorData eColor );
+                 Color eColor );
 };
 
 inline SwDbgOut::SwDbgOut( OutputDevice* pOutDev, const bool bOn )
@@ -85,7 +85,7 @@ inline DbgBackColor::DbgBackColor( OutputDevice* pOutDev, const bool bOn )
     if( pOut )
     {
         aOldFillColor = pOut->GetFillColor();
-        pOut->SetFillColor( Color(COL_RED) );
+        pOut->SetFillColor( COL_RED );
     }
 }
 
@@ -99,7 +99,7 @@ inline DbgBackColor::~DbgBackColor()
 
 inline DbgRect::DbgRect( OutputDevice* pOutDev, const tools::Rectangle &rRect,
                          const bool bOn,
-                         ColorData eColor )
+                         Color eColor )
     : SwDbgOut( pOutDev, bOn )
 {
     if( pOut )
@@ -108,7 +108,7 @@ inline DbgRect::DbgRect( OutputDevice* pOutDev, const tools::Rectangle &rRect,
         Color aLineColor = pOut->GetLineColor();
         pOut->SetLineColor( aColor );
         Color aFillColor = pOut->GetFillColor();
-        pOut->SetFillColor( Color(COL_TRANSPARENT) );
+        pOut->SetFillColor( COL_TRANSPARENT );
         pOut->DrawRect( rRect );
         pOut->SetLineColor( aLineColor );
         pOut->SetFillColor( aFillColor );

@@ -54,6 +54,8 @@
 #include <tools/colordata.hxx>
 #include <tools/fontenum.hxx>
 
+#include <stylesbuffer.hxx>
+
 using namespace com::sun::star;
 
 namespace os = orcus::spreadsheet;
@@ -1148,7 +1150,8 @@ void ScOrcusStyles::fill::applyToItemSet(SfxItemSet& rSet) const
         return;
     }
 
-    rSet.Put(SvxBrushItem(maBgColor, ATTR_BACKGROUND));
+    if (maPattern.equalsIgnoreAsciiCase("solid"))
+        rSet.Put(SvxBrushItem(maFgColor, ATTR_BACKGROUND));
 }
 
 ScOrcusStyles::protection::protection():
@@ -1173,7 +1176,7 @@ ScOrcusStyles::border::border():
 
 ScOrcusStyles::border::border_line::border_line():
     meStyle(SvxBorderLineStyle::SOLID),
-    maColor(COL_WHITE),
+    maColor(COL_BLACK),
     mnWidth(0)
 {
 }
@@ -1262,8 +1265,10 @@ ScOrcusStyles::xf::xf():
     mnNumberFormatId(0),
     mnStyleXf(0),
     mbAlignment(false),
-    meHor_alignment(SvxCellHorJustify::Right),
-    meVer_alignment(SvxCellVerJustify::Bottom)
+    meHorAlignment(SvxCellHorJustify::Standard),
+    meVerAlignment(SvxCellVerJustify::Standard),
+    meHorAlignMethod(SvxCellJustifyMethod::Auto),
+    meVerAlignMethod(SvxCellJustifyMethod::Auto)
 {
 }
 
@@ -1329,8 +1334,10 @@ void ScOrcusStyles::applyXfToItemSet(SfxItemSet& rSet, const xf& rXf)
 
     if(rXf.mbAlignment)
     {
-        rSet.Put(SvxHorJustifyItem(rXf.meHor_alignment, ATTR_HOR_JUSTIFY));
-        rSet.Put(SvxVerJustifyItem(rXf.meVer_alignment, ATTR_VER_JUSTIFY));
+        rSet.Put(SvxHorJustifyItem(rXf.meHorAlignment, ATTR_HOR_JUSTIFY));
+        rSet.Put(SvxVerJustifyItem(rXf.meVerAlignment, ATTR_VER_JUSTIFY));
+        rSet.Put(SvxJustifyMethodItem(rXf.meHorAlignMethod, ATTR_HOR_JUSTIFY_METHOD));
+        rSet.Put(SvxJustifyMethodItem(rXf.meVerAlignMethod, ATTR_VER_JUSTIFY_METHOD));
     }
 }
 
@@ -1484,12 +1491,13 @@ void ScOrcusStyles::set_font_underline_color(orcus::spreadsheet::color_elem_t al
     maCurrentFont.maUnderlineColor = Color(alpha, red, green, blue);
 }
 
-void ScOrcusStyles::set_font_color(orcus::spreadsheet::color_elem_t alpha,
+void ScOrcusStyles::set_font_color(orcus::spreadsheet::color_elem_t /*alpha*/,
             orcus::spreadsheet::color_elem_t red,
             orcus::spreadsheet::color_elem_t green,
             orcus::spreadsheet::color_elem_t blue)
 {
-    maCurrentFont.maColor = Color(alpha, red, green, blue);
+    // Ignore the alpha value for now.
+    maCurrentFont.maColor = Color(red, green, blue);
     maCurrentFont.mbHasFontAttr = true;
 }
 
@@ -1574,15 +1582,19 @@ void ScOrcusStyles::set_fill_pattern_type(const char* s, size_t n)
     maCurrentFill.mbHasFillAttr = true;
 }
 
-void ScOrcusStyles::set_fill_fg_color(orcus::spreadsheet::color_elem_t alpha, orcus::spreadsheet::color_elem_t red, orcus::spreadsheet::color_elem_t green, orcus::spreadsheet::color_elem_t blue)
+void ScOrcusStyles::set_fill_fg_color(
+    orcus::spreadsheet::color_elem_t /*alpha*/, orcus::spreadsheet::color_elem_t red, orcus::spreadsheet::color_elem_t green, orcus::spreadsheet::color_elem_t blue)
 {
-    maCurrentFill.maFgColor = Color(alpha, red, green, blue);
+    // Ignore the alpha element for now.
+    maCurrentFill.maFgColor = Color(red, green, blue);
     maCurrentFill.mbHasFillAttr = true;
 }
 
-void ScOrcusStyles::set_fill_bg_color(orcus::spreadsheet::color_elem_t alpha, orcus::spreadsheet::color_elem_t red, orcus::spreadsheet::color_elem_t green, orcus::spreadsheet::color_elem_t blue)
+void ScOrcusStyles::set_fill_bg_color(
+    orcus::spreadsheet::color_elem_t /*alpha*/, orcus::spreadsheet::color_elem_t red, orcus::spreadsheet::color_elem_t green, orcus::spreadsheet::color_elem_t blue)
 {
-    maCurrentFill.maBgColor = Color(alpha, red, green, blue);
+    // Ignore the alpha element for now.
+    maCurrentFill.maBgColor = Color(red, green, blue);
     maCurrentFill.mbHasFillAttr = true;
 }
 
@@ -1607,39 +1619,62 @@ void ScOrcusStyles::set_border_style(
     border::border_line& current_line = maCurrentBorder.border_lines[dir];
     switch (style)
     {
-        case orcus::spreadsheet::border_style_t::unknown:
-        case orcus::spreadsheet::border_style_t::none:
         case orcus::spreadsheet::border_style_t::solid:
+            current_line.meStyle = SvxBorderLineStyle::SOLID;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
+            break;
         case orcus::spreadsheet::border_style_t::hair:
+            current_line.meStyle = SvxBorderLineStyle::SOLID;
+            current_line.mnWidth = oox::xls::API_LINE_HAIR;
+            break;
         case orcus::spreadsheet::border_style_t::medium:
+            current_line.meStyle = SvxBorderLineStyle::SOLID;
+            current_line.mnWidth = oox::xls::API_LINE_MEDIUM;
+            break;
         case orcus::spreadsheet::border_style_t::thick:
+            current_line.meStyle = SvxBorderLineStyle::SOLID;
+            current_line.mnWidth = oox::xls::API_LINE_THICK;
+            break;
         case orcus::spreadsheet::border_style_t::thin:
             current_line.meStyle = SvxBorderLineStyle::SOLID;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
             break;
         case orcus::spreadsheet::border_style_t::dash_dot:
             current_line.meStyle = SvxBorderLineStyle::DASH_DOT;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
             break;
         case orcus::spreadsheet::border_style_t::dash_dot_dot:
             current_line.meStyle = SvxBorderLineStyle::DASH_DOT_DOT;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
             break;
         case orcus::spreadsheet::border_style_t::dashed:
             current_line.meStyle = SvxBorderLineStyle::DASHED;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
             break;
         case orcus::spreadsheet::border_style_t::dotted:
             current_line.meStyle = SvxBorderLineStyle::DOTTED;
+            current_line.mnWidth = oox::xls::API_LINE_THIN;
             break;
         case orcus::spreadsheet::border_style_t::double_border:
             current_line.meStyle = SvxBorderLineStyle::DOUBLE;
+            current_line.mnWidth = oox::xls::API_LINE_THICK;
             break;
         case orcus::spreadsheet::border_style_t::medium_dash_dot:
         case orcus::spreadsheet::border_style_t::slant_dash_dot:
             current_line.meStyle = SvxBorderLineStyle::DASH_DOT;
+            current_line.mnWidth = oox::xls::API_LINE_MEDIUM;
             break;
         case orcus::spreadsheet::border_style_t::medium_dash_dot_dot:
             current_line.meStyle = SvxBorderLineStyle::DASH_DOT_DOT;
+            current_line.mnWidth = oox::xls::API_LINE_MEDIUM;
             break;
         case orcus::spreadsheet::border_style_t::medium_dashed:
             current_line.meStyle = SvxBorderLineStyle::DASHED;
+            current_line.mnWidth = oox::xls::API_LINE_MEDIUM;
+            break;
+        case orcus::spreadsheet::border_style_t::unknown:
+        case orcus::spreadsheet::border_style_t::none:
+            current_line.mnWidth = oox::xls::API_LINE_NONE;
             break;
         default:
             ;
@@ -1648,13 +1683,13 @@ void ScOrcusStyles::set_border_style(
 }
 
 void ScOrcusStyles::set_border_color(orcus::spreadsheet::border_direction_t dir,
-            orcus::spreadsheet::color_elem_t alpha,
+            orcus::spreadsheet::color_elem_t /*alpha*/,
             orcus::spreadsheet::color_elem_t red,
             orcus::spreadsheet::color_elem_t green,
             orcus::spreadsheet::color_elem_t blue)
 {
     border::border_line& current_line = maCurrentBorder.border_lines[dir];
-    current_line.maColor = Color(alpha, red, green, blue);
+    current_line.maColor = Color(red, green, blue);
 }
 
 void ScOrcusStyles::set_border_width(orcus::spreadsheet::border_direction_t  dir, double val, orcus::length_unit_t  unit )
@@ -1807,17 +1842,24 @@ void ScOrcusStyles::set_xf_horizontal_alignment(orcus::spreadsheet::hor_alignmen
     switch (align)
     {
         case os::hor_alignment_t::left:
-            maCurrentXF.meHor_alignment = SvxCellHorJustify::Left;
-        break;
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Left;
+            break;
         case os::hor_alignment_t::right:
-            maCurrentXF.meHor_alignment = SvxCellHorJustify::Right;
-        break;
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Right;
+            break;
         case os::hor_alignment_t::center:
-            maCurrentXF.meHor_alignment = SvxCellHorJustify::Center;
-        break;
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Center;
+            break;
         case os::hor_alignment_t::justified:
-            maCurrentXF.meHor_alignment = SvxCellHorJustify::Standard;
-        break;
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Block;
+            break;
+        case os::hor_alignment_t::distributed:
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Block;
+            maCurrentXF.meHorAlignMethod = SvxCellJustifyMethod::Distribute;
+            break;
+        case os::hor_alignment_t::unknown:
+            maCurrentXF.meHorAlignment = SvxCellHorJustify::Standard;
+            break;
         default:
             ;
     }
@@ -1829,17 +1871,24 @@ void ScOrcusStyles::set_xf_vertical_alignment(orcus::spreadsheet::ver_alignment_
     switch (align)
     {
         case os::ver_alignment_t::top:
-            maCurrentXF.meVer_alignment = SvxCellVerJustify::Top;
-        break;
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Top;
+            break;
         case os::ver_alignment_t::bottom:
-            maCurrentXF.meVer_alignment = SvxCellVerJustify::Bottom;
-        break;
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Bottom;
+            break;
         case os::ver_alignment_t::middle:
-            maCurrentXF.meVer_alignment = SvxCellVerJustify::Center;
-        break;
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Center;
+            break;
         case os::ver_alignment_t::justified:
-            maCurrentXF.meVer_alignment = SvxCellVerJustify::Standard;
-        break;
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Block;
+            break;
+        case os::ver_alignment_t::distributed:
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Block;
+            maCurrentXF.meVerAlignMethod = SvxCellJustifyMethod::Distribute;
+            break;
+        case os::ver_alignment_t::unknown:
+            maCurrentXF.meVerAlignment = SvxCellVerJustify::Standard;
+            break;
         default:
             ;
     }

@@ -64,6 +64,7 @@
 #include <formula/errorcodes.hxx>
 #include <externalrefmgr.hxx>
 #include <stlpool.hxx>
+#include <hints.hxx>
 
 #include <orcusfiltersimpl.hxx>
 #include <orcusfilters.hxx>
@@ -234,6 +235,14 @@ public:
 #ifdef UNX
     void testUnicodeFileNameGnumeric();
 #endif
+    void testCondFormatFormulaListenerXLSX();
+
+    void testMergedCellsXLSXML();
+    void testBackgroundColorStandardXLSXML();
+    void testNamedExpressionsXLSXML();
+    void testEmptyRowsXLSXML();
+    void testBorderDirectionsXLSXML();
+    void testBorderColorsXLSXML();
 
     CPPUNIT_TEST_SUITE(ScFiltersTest);
     CPPUNIT_TEST(testBooleanFormatXLSX);
@@ -356,6 +365,13 @@ public:
 #ifdef UNX
     CPPUNIT_TEST(testUnicodeFileNameGnumeric);
 #endif
+    CPPUNIT_TEST(testMergedCellsXLSXML);
+    CPPUNIT_TEST(testBackgroundColorStandardXLSXML);
+    CPPUNIT_TEST(testNamedExpressionsXLSXML);
+    CPPUNIT_TEST(testEmptyRowsXLSXML);
+    CPPUNIT_TEST(testBorderDirectionsXLSXML);
+    CPPUNIT_TEST(testBorderColorsXLSXML);
+    CPPUNIT_TEST(testCondFormatFormulaListenerXLSX);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -973,7 +989,7 @@ void ScFiltersTest::testBorderODS()
     CPPUNIT_ASSERT(pRight);
     CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pRight->GetBorderLineStyle());
     CPPUNIT_ASSERT_EQUAL(5L, pRight->GetWidth());
-    CPPUNIT_ASSERT_EQUAL(Color(COL_BLUE), pRight->GetColor());
+    CPPUNIT_ASSERT_EQUAL(COL_BLUE, pRight->GetColor());
 
     xDocSh->DoClose();
 }
@@ -1270,7 +1286,7 @@ void checkCellValidity( const ScAddress& rValBaseAddr, const ScRange& rRange, co
     SCROW nBRow( rValBaseAddr.Row() );
     SCTAB nTab( static_cast<sal_Int32>(rValBaseAddr.Tab()) );
     //get from the document the data validation entry we are checking against
-    const SfxUInt32Item* pItem = static_cast<const SfxUInt32Item*>(rDoc.GetAttr(nBCol, nBRow, nTab, ATTR_VALIDDATA) );
+    const SfxUInt32Item* pItem = rDoc.GetAttr(nBCol, nBRow, nTab, ATTR_VALIDDATA);
     const ScValidationData* pValData = rDoc.GetValidationEntry( pItem->GetValue() );
     CPPUNIT_ASSERT(pValData);
 
@@ -1279,7 +1295,7 @@ void checkCellValidity( const ScAddress& rValBaseAddr, const ScRange& rRange, co
     {
         for(SCROW j = rRange.aStart.Row(); j <= rRange.aEnd.Row(); ++j)
         {
-            const SfxUInt32Item* pItemTest = static_cast<const SfxUInt32Item*>( rDoc.GetAttr(i, j, nTab, ATTR_VALIDDATA) );
+            const SfxUInt32Item* pItemTest = rDoc.GetAttr(i, j, nTab, ATTR_VALIDDATA);
             const ScValidationData* pValDataTest = rDoc.GetValidationEntry( pItemTest->GetValue() );
             //prevent string operations for occurring unnecessarily
             if(!(pValDataTest && pValData->GetKey() == pValDataTest->GetKey()))
@@ -2163,7 +2179,7 @@ void ScFiltersTest::testCondFormatThemeColorXLSX()
 
     CPPUNIT_ASSERT_EQUAL(Color(157, 195, 230), pDataBarFormatData->maPositiveColor);
     CPPUNIT_ASSERT(pDataBarFormatData->mpNegativeColor.get());
-    CPPUNIT_ASSERT_EQUAL(Color(COL_LIGHTRED), *pDataBarFormatData->mpNegativeColor.get());
+    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, *pDataBarFormatData->mpNegativeColor.get());
 
     CPPUNIT_ASSERT_EQUAL(size_t(1), rDoc.GetCondFormList(1)->size());
     pFormat = rDoc.GetCondFormat(0, 0, 1);
@@ -3402,7 +3418,7 @@ namespace {
 
 void checkValidationFormula(const ScAddress& rPos, const ScDocument& rDoc, const OUString& rExpectedFormula)
 {
-    const SfxUInt32Item* pItem = static_cast<const SfxUInt32Item*>(rDoc.GetAttr(rPos, ATTR_VALIDDATA) );
+    const SfxUInt32Item* pItem = rDoc.GetAttr(rPos, ATTR_VALIDDATA);
     CPPUNIT_ASSERT(pItem);
     sal_uLong nKey = pItem->GetValue();
     const ScValidationData* pData = rDoc.GetValidationEntry(nKey);
@@ -3498,6 +3514,324 @@ void ScFiltersTest::testUnicodeFileNameGnumeric()
 }
 #endif
 
+void ScFiltersTest::testMergedCellsXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("merged-cells.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load merged-cells.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    // B1:C1 is merged.
+    ScRange aMergedRange(1,0,0); // B1
+    rDoc.ExtendTotalMerge(aMergedRange);
+    CPPUNIT_ASSERT_EQUAL(ScRange(1,0,0,2,0,0), aMergedRange);
+
+    // D1:F1 is merged.
+    aMergedRange = ScRange(3,0,0); // D1
+    rDoc.ExtendTotalMerge(aMergedRange);
+    CPPUNIT_ASSERT_EQUAL(ScRange(3,0,0,5,0,0), aMergedRange);
+
+    // A2:A3 is merged.
+    aMergedRange = ScRange(0,1,0); // A2
+    rDoc.ExtendTotalMerge(aMergedRange);
+    CPPUNIT_ASSERT_EQUAL(ScRange(0,1,0,0,2,0), aMergedRange);
+
+    // A4:A6 is merged.
+    aMergedRange = ScRange(0,3,0); // A4
+    rDoc.ExtendTotalMerge(aMergedRange);
+    CPPUNIT_ASSERT_EQUAL(ScRange(0,3,0,0,5,0), aMergedRange);
+
+    // C3:F6 is merged.
+    aMergedRange = ScRange(2,2,0); // C3
+    rDoc.ExtendTotalMerge(aMergedRange);
+    CPPUNIT_ASSERT_EQUAL(ScRange(2,2,0,5,5,0), aMergedRange);
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testBackgroundColorStandardXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("background-color-standard.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load background-color-standard.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    struct Check
+    {
+        OUString aCellValue;
+        Color aFontColor;
+        Color aBgColor;
+    };
+
+    const std::vector<Check> aChecks =
+    {
+        { OUString("Background Color"), COL_BLACK, COL_TRANSPARENT        },
+        { OUString("Dark Red"),         COL_WHITE, Color(192,  0,    0)   },
+        { OUString("Red"),              COL_WHITE, Color(255,  0,    0)   },
+        { OUString("Orange"),           COL_WHITE, Color(255, 192,   0)   },
+        { OUString("Yellow"),           COL_WHITE, Color(255, 255,   0)   },
+        { OUString("Light Green"),      COL_WHITE, Color(146, 208,  80)   },
+        { OUString("Green"),            COL_WHITE, Color(  0, 176,  80)   },
+        { OUString("Light Blue"),       COL_WHITE, Color(  0, 176, 240)   },
+        { OUString("Blue"),             COL_WHITE, Color(  0, 112, 192)   },
+        { OUString("Dark Blue"),        COL_WHITE, Color(  0,  32,  96)   },
+        { OUString("Purple"),           COL_WHITE, Color(112,  48, 160)   },
+    };
+
+    for (size_t nRow = 0; nRow < aChecks.size(); ++nRow)
+    {
+        ScAddress aPos(0, nRow, 0);
+        OUString aStr = rDoc.GetString(aPos);
+        CPPUNIT_ASSERT_EQUAL(aChecks[nRow].aCellValue, aStr);
+
+        const ScPatternAttr* pPat = rDoc.GetPattern(aPos);
+        CPPUNIT_ASSERT(pPat);
+
+        const SvxColorItem& rColor = pPat->GetItem(ATTR_FONT_COLOR);
+        CPPUNIT_ASSERT_EQUAL(aChecks[nRow].aFontColor, rColor.GetValue());
+
+        const SvxBrushItem& rBgColor = pPat->GetItem(ATTR_BACKGROUND);
+        CPPUNIT_ASSERT_EQUAL(aChecks[nRow].aBgColor, rBgColor.GetColor());
+    }
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testNamedExpressionsXLSXML()
+{
+    {
+        // global named expressions
+
+        ScDocShellRef xDocSh = loadDoc("named-exp-global.", FORMAT_XLS_XML);
+        CPPUNIT_ASSERT_MESSAGE("Failed to load named-exp-global.xml", xDocSh.is());
+        ScDocument& rDoc = xDocSh->GetDocument();
+
+        // A7
+        ScAddress aPos(0,6,0);
+        CPPUNIT_ASSERT_EQUAL(15.0, rDoc.GetValue(aPos));
+        ASSERT_FORMULA_EQUAL(rDoc, aPos, "SUM(MyRange)", nullptr);
+
+        // B7
+        aPos.IncCol();
+        CPPUNIT_ASSERT_EQUAL(55.0, rDoc.GetValue(aPos));
+        ASSERT_FORMULA_EQUAL(rDoc, aPos, "SUM(MyRange2)", nullptr);
+
+        const ScRangeData* pRD = rDoc.GetRangeName()->findByUpperName("MYRANGE");
+        CPPUNIT_ASSERT(pRD);
+        pRD = rDoc.GetRangeName()->findByUpperName("MYRANGE2");
+        CPPUNIT_ASSERT(pRD);
+
+        xDocSh->DoClose();
+    }
+
+    {
+        // sheet-local named expressions
+
+        ScDocShellRef xDocSh = loadDoc("named-exp-local.", FORMAT_XLS_XML);
+        CPPUNIT_ASSERT_MESSAGE("Failed to load named-exp-local.xml", xDocSh.is());
+        ScDocument& rDoc = xDocSh->GetDocument();
+
+        // A7 on Sheet1
+        ScAddress aPos(0,6,0);
+        CPPUNIT_ASSERT_EQUAL(27.0, rDoc.GetValue(aPos));
+        ASSERT_FORMULA_EQUAL(rDoc, aPos, "SUM(MyRange)", nullptr);
+
+        // A7 on Sheet2
+        aPos.IncTab();
+        CPPUNIT_ASSERT_EQUAL(74.0, rDoc.GetValue(aPos));
+        ASSERT_FORMULA_EQUAL(rDoc, aPos, "SUM(MyRange)", nullptr);
+
+        const ScRangeName* pRN = rDoc.GetRangeName(0);
+        CPPUNIT_ASSERT(pRN);
+        const ScRangeData* pRD = pRN->findByUpperName("MYRANGE");
+        CPPUNIT_ASSERT(pRD);
+        pRN = rDoc.GetRangeName(1);
+        CPPUNIT_ASSERT(pRN);
+        pRD = pRN->findByUpperName("MYRANGE");
+        CPPUNIT_ASSERT(pRD);
+
+        xDocSh->DoClose();
+    }
+}
+
+void ScFiltersTest::testEmptyRowsXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("empty-rows.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load empty-rows.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    {
+        // Expected output table content.  0 = empty cell
+        std::vector<std::vector<const char*>> aOutputCheck = {
+            { "Top row, followed by 2 empty rows.", nullptr },
+            { nullptr, nullptr },
+            { nullptr, nullptr },
+            { nullptr,     "1" },
+            { nullptr,     "2" },
+            { nullptr,     "3" },
+            { nullptr,     "4" },
+            { nullptr,     "5" },
+            { nullptr,    "15" },
+        };
+
+        ScRange aDataRange;
+        aDataRange.Parse("A1:B9");
+        bool bSuccess = checkOutput(&rDoc, aDataRange, aOutputCheck, "Expected output");
+        CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
+    }
+
+    ScAddress aPos;
+    aPos.Parse("B9");
+    ASSERT_FORMULA_EQUAL(rDoc, aPos, "SUM(B4:B8)", nullptr);
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testBorderDirectionsXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("border-directions.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load border-directions.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    struct Check
+    {
+        ScAddress aPos;
+        bool bTop;
+        bool bBottom;
+        bool bLeft;
+        bool bRight;
+        bool bTLtoBR;
+        bool bTRtoBL;
+    };
+
+    std::vector<Check> aChecks = {
+        { { 1,  1, 0 },  true, false, false, false, false, false }, // B2 - top
+        { { 1,  3, 0 }, false, false,  true, false, false, false }, // B4 - left
+        { { 1,  5, 0 }, false, false, false,  true, false, false }, // B6 - right
+        { { 1,  7, 0 }, false,  true, false, false, false, false }, // B8 - bottom
+        { { 1,  9, 0 }, false, false, false, false,  true, false }, // B10 - tl to br
+        { { 1, 11, 0 }, false, false, false, false, false,  true }, // B12 - tr to bl
+        { { 1, 13, 0 }, false, false, false, false,  true,  true }, // B14 - cross-diagonal
+    };
+
+    auto funcCheckBorder = []( bool bHasBorder, const editeng::SvxBorderLine* pLine ) -> bool
+    {
+        if (bHasBorder)
+        {
+            if (!pLine)
+            {
+                std::cout << "Border was expected, but not found!" << std::endl;
+                return false;
+            }
+
+            if (SvxBorderLineStyle::SOLID != pLine->GetBorderLineStyle())
+            {
+                std::cout << "Border type was expected to be of SOLID, but is not." << std::endl;
+                return false;
+            }
+
+            if (COL_BLACK != pLine->GetColor())
+            {
+                std::cout << "Border color was expected to be black, but is not." << std::endl;
+                return false;
+            }
+        }
+        else
+        {
+            if (pLine)
+            {
+                std::cout << "Border was not expected, but is found!" << std::endl;
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    for (const Check& c : aChecks)
+    {
+        const ScPatternAttr* pPat = rDoc.GetPattern(c.aPos);
+        CPPUNIT_ASSERT(pPat);
+
+        const SvxBoxItem& rBox = pPat->GetItem(ATTR_BORDER);
+
+        const editeng::SvxBorderLine* pLine = rBox.GetTop();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bTop, pLine));
+
+        pLine = rBox.GetBottom();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bBottom, pLine));
+
+        pLine = rBox.GetLeft();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bLeft, pLine));
+
+        pLine = rBox.GetRight();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bRight, pLine));
+
+        pLine = pPat->GetItem(ATTR_BORDER_TLBR).GetLine();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bTLtoBR, pLine));
+
+        pLine = pPat->GetItem(ATTR_BORDER_BLTR).GetLine();
+        CPPUNIT_ASSERT(funcCheckBorder(c.bTRtoBL, pLine));
+    }
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testBorderColorsXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("border-colors.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load border-colors.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    // B3 - red
+    const ScPatternAttr* pPat = rDoc.GetPattern(ScAddress(1,2,0));
+    CPPUNIT_ASSERT(pPat);
+    const editeng::SvxBorderLine* pLine = pPat->GetItem(ATTR_BORDER).GetRight();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(255,0,0), pLine->GetColor());
+
+    // B4 - blue
+    pPat = rDoc.GetPattern(ScAddress(1,3,0));
+    CPPUNIT_ASSERT(pPat);
+    pLine = pPat->GetItem(ATTR_BORDER).GetRight();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(0,112,192), pLine->GetColor());
+
+    // B5 - green
+    pPat = rDoc.GetPattern(ScAddress(1,4,0));
+    CPPUNIT_ASSERT(pPat);
+    pLine = pPat->GetItem(ATTR_BORDER).GetRight();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(0,176,80), pLine->GetColor());
+
+    // B7 - yellow (left), purple (right), light blue (cross)
+    pPat = rDoc.GetPattern(ScAddress(1,6,0));
+    CPPUNIT_ASSERT(pPat);
+
+    pLine = pPat->GetItem(ATTR_BORDER).GetLeft();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(255,255,0), pLine->GetColor()); // yellow
+
+    pLine = pPat->GetItem(ATTR_BORDER).GetRight();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(112,48,160), pLine->GetColor()); // purple
+
+    pLine = pPat->GetItem(ATTR_BORDER_TLBR).GetLine();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(0,176,240), pLine->GetColor()); // light blue
+
+    pLine = pPat->GetItem(ATTR_BORDER_BLTR).GetLine();
+    CPPUNIT_ASSERT(pLine);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(Color(0,176,240), pLine->GetColor()); // light blue
+
+    xDocSh->DoClose();
+}
+
 void ScFiltersTest::testCondFormatXLSB()
 {
     ScDocShellRef xDocSh = loadDoc("cond_format.", FORMAT_XLSB);
@@ -3565,6 +3899,47 @@ void ScFiltersTest::testActiveXCheckboxXLSX()
     sal_Int16 nState;
     xPropertySet->getPropertyValue("State") >>= nState;
     CPPUNIT_ASSERT_EQUAL(sal_Int16(1), nState);
+
+    xDocSh->DoClose();
+}
+
+namespace {
+
+struct PaintListener : public SfxListener
+{
+    bool mbCalled = false;
+    virtual void Notify(SfxBroadcaster& /*rBC*/, const SfxHint& rHint) override
+    {
+        const ScPaintHint* pPaintHint = dynamic_cast<const ScPaintHint*>(&rHint);
+        if (pPaintHint)
+        {
+            if (pPaintHint->GetStartCol() <= 0 && pPaintHint->GetEndCol() >= 0
+                    && pPaintHint->GetStartRow() <= 9 && pPaintHint->GetEndRow() >= 9)
+            {
+                mbCalled = true;
+            }
+        }
+    }
+};
+
+}
+
+void ScFiltersTest::testCondFormatFormulaListenerXLSX()
+{
+    ScDocShellRef xDocSh = loadDoc("cond_format_formula_listener.", FORMAT_XLSX);
+    PaintListener aListener;
+    aListener.StartListening(*xDocSh);
+    ScDocument& rDoc = xDocSh->GetDocument();
+    ScConditionalFormatList* pList = rDoc.GetCondFormList(0);
+    CPPUNIT_ASSERT(pList);
+
+    CPPUNIT_ASSERT_EQUAL(size_t(1), pList->size());
+    ScConditionalFormat* pFormat = pList->begin()->get();
+    CPPUNIT_ASSERT(pFormat);
+    rDoc.SetDocVisible(true);
+    rDoc.SetValue(0, 0, 0, 2.0);
+
+    CPPUNIT_ASSERT(aListener.mbCalled);
 
     xDocSh->DoClose();
 }

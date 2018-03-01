@@ -41,7 +41,6 @@
 
 #include <helpids.h>
 #include <dlgedfac.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 
 
 #define SECTION_OFFSET  3
@@ -182,7 +181,7 @@ void OReportWindow::Resize()
         nLeftMargin     = m_aViewsWindow->LogicToPixel(Size(nLeftMargin,0)).Width();
         nRightMargin    = m_aViewsWindow->LogicToPixel(Size(nRightMargin,0)).Width();
 
-        aPageSize.Height() = m_aHRuler->GetSizePixel().Height();
+        aPageSize.setHeight( m_aHRuler->GetSizePixel().Height() );
 
         const long nTermp(m_aViewsWindow->getTotalHeight() + aPageSize.Height());
         long nSectionsHeight = ::std::max<long>(nTermp,aTotalOutputSize.Height());
@@ -192,10 +191,10 @@ void OReportWindow::Resize()
         m_aHRuler->SetMargin1(0);
         m_aHRuler->SetMargin2(aPageSize.Width() - nLeftMargin - nRightMargin);
 
-        aStartPoint.Y() += aPageSize.Height();
+        aStartPoint.AdjustY(aPageSize.Height() );
         nSectionsHeight -= aStartPoint.Y();
 
-        aStartPoint.X() = aOffset.X();
+        aStartPoint.setX( aOffset.X() );
 
         m_aViewsWindow->SetPosSizePixel(aStartPoint,Size(aTotalOutputSize.Width(),nSectionsHeight));
     }

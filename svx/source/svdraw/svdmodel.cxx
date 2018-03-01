@@ -108,6 +108,7 @@ struct SdrModelImpl
     SdrUndoFactory* mpUndoFactory;
 
     bool mbAnchoredTextOverflowLegacy; // tdf#99729 compatibility flag
+    bool mbHoriAlignIgnoreTrailingWhitespace; // tdf#115639 compatibility flag
 };
 
 
@@ -118,6 +119,7 @@ void SdrModel::ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* _pEmbe
     mpImpl->mpUndoManager=nullptr;
     mpImpl->mpUndoFactory=nullptr;
     mpImpl->mbAnchoredTextOverflowLegacy = false;
+    mpImpl->mbHoriAlignIgnoreTrailingWhitespace = false;
     mbInDestruction = false;
     aObjUnit=SdrEngineDefaults::GetMapFraction();
     eObjUnit=SdrEngineDefaults::GetMapUnit();
@@ -1005,7 +1007,7 @@ void SdrModel::ImpSetUIUnit()
 
     // end preparations, set member values
     aUIUnitFact = Fraction(sal_Int32(nMul), sal_Int32(nDiv));
-    TakeUnitStr(eUIUnit, aUIUnitStr);
+    aUIUnitStr = GetUnitString(eUIUnit);
 }
 
 void SdrModel::SetScaleUnit(MapUnit eMap, const Fraction& rFrac)
@@ -1072,81 +1074,42 @@ void SdrModel::SetUIUnit(FieldUnit eUnit, const Fraction& rScale)
     }
 }
 
-void SdrModel::TakeUnitStr(FieldUnit eUnit, OUString& rStr)
+OUString SdrModel::GetUnitString(FieldUnit eUnit)
 {
     switch(eUnit)
     {
         default:
         case FUNIT_NONE   :
         case FUNIT_CUSTOM :
-        {
-            rStr.clear();
-            break;
-        }
+            return OUString();
         case FUNIT_100TH_MM:
-        {
-            rStr = "/100mm";
-            break;
-        }
+            return OUString{"/100mm"};
         case FUNIT_MM     :
-        {
-            rStr = "mm";
-            break;
-        }
+            return OUString{"mm"};
         case FUNIT_CM     :
-        {
-            rStr = "cm";
-            break;
-        }
+            return OUString{"cm"};
         case FUNIT_M      :
-        {
-            rStr = "m";
-            break;
-        }
+            return OUString{"m"};
         case FUNIT_KM     :
-        {
-            rStr ="km";
-            break;
-        }
+            return OUString{"km"};
         case FUNIT_TWIP   :
-        {
-            rStr = "twip";
-            break;
-        }
+            return OUString{"twip"};
         case FUNIT_POINT  :
-        {
-            rStr = "pt";
-            break;
-        }
+            return OUString{"pt"};
         case FUNIT_PICA   :
-        {
-            rStr = "pica";
-            break;
-        }
+            return OUString{"pica"};
         case FUNIT_INCH   :
-        {
-            rStr = "\"";
-            break;
-        }
+            return OUString{"\""};
         case FUNIT_FOOT   :
-        {
-            rStr = "ft";
-            break;
-        }
+            return OUString{"ft"};
         case FUNIT_MILE   :
-        {
-            rStr = "mile(s)";
-            break;
-        }
+            return OUString{"mile(s)"};
         case FUNIT_PERCENT:
-        {
-            rStr = "%";
-            break;
-        }
+            return OUString{"%"};
     }
 }
 
-void SdrModel::TakeMetricStr(long nVal, OUString& rStr, bool bNoUnitChars, sal_Int32 nNumDigits) const
+OUString SdrModel::GetMetricString(long nVal, bool bNoUnitChars, sal_Int32 nNumDigits) const
 {
     // #i22167#
     // change to double precision usage to not lose decimal places
@@ -1212,7 +1175,7 @@ void SdrModel::TakeMetricStr(long nVal, OUString& rStr, bool bNoUnitChars, sal_I
             aBuf.insert(0, '0');
     }
 
-    sal_Unicode cDec( rLoc.getNumDecimalSep()[0] );
+    const sal_Unicode cDec( rLoc.getNumDecimalSep()[0] );
 
     // insert the decimal mark character
     sal_Int32 nBeforeDecimalMark = aBuf.getLength() - nDecimalMark;
@@ -1222,13 +1185,19 @@ void SdrModel::TakeMetricStr(long nVal, OUString& rStr, bool bNoUnitChars, sal_I
 
     if(!LocaleDataWrapper::isNumTrailingZeros())
     {
+        sal_Int32 aPos=aBuf.getLength()-1;
+
         // Remove all trailing zeros.
-        while (!aBuf.isEmpty() && aBuf[aBuf.getLength()-1] == '0')
-            aBuf.remove(aBuf.getLength()-1, 1);
+        while (aPos>=0 && aBuf[aPos]=='0')
+            --aPos;
 
         // Remove decimal if it's the last character.
-        if (!aBuf.isEmpty() && aBuf[aBuf.getLength()-1] == cDec)
-            aBuf.remove(aBuf.getLength()-1, 1);
+        if (aPos>=0 && aBuf[aPos]==cDec)
+            --aPos;
+
+        // Adjust aPos to index first char to be truncated, if any
+        if (++aPos<aBuf.getLength())
+            aBuf.truncate(aPos);
     }
 
     // if necessary, add separators before every third digit
@@ -1259,10 +1228,10 @@ void SdrModel::TakeMetricStr(long nVal, OUString& rStr, bool bNoUnitChars, sal_I
     if(!bNoUnitChars)
         aBuf.append(aUIUnitStr);
 
-    rStr = aBuf.makeStringAndClear();
+    return aBuf.makeStringAndClear();
 }
 
-void SdrModel::TakeAngleStr(long nAngle, OUString& rStr)
+OUString SdrModel::GetAngleString(long nAngle)
 {
     bool bNeg = nAngle < 0;
 
@@ -1289,34 +1258,33 @@ void SdrModel::TakeAngleStr(long nAngle, OUString& rStr)
 
     aBuf.append(DEGREE_CHAR);
 
-    rStr = aBuf.makeStringAndClear();
+    return aBuf.makeStringAndClear();
 }
 
-void SdrModel::TakePercentStr(const Fraction& rVal, OUString& rStr)
+OUString SdrModel::GetPercentString(const Fraction& rVal)
 {
     sal_Int32 nMul(rVal.GetNumerator());
     sal_Int32 nDiv(rVal.GetDenominator());
-    bool bNeg(nMul < 0);
+    bool bNeg {false};
 
-    if(nDiv < 0)
+    if (nDiv < 0)
+    {
         bNeg = !bNeg;
-
-    if(nMul < 0)
-        nMul = -nMul;
-
-    if(nDiv < 0)
         nDiv = -nDiv;
+    }
 
-    nMul *= 100;
-    nMul += nDiv/2;
-    nMul /= nDiv;
+    if (nMul < 0)
+    {
+        bNeg = !bNeg;
+        nMul = -nMul;
+    }
 
-    rStr = OUString::number(nMul);
+    sal_Int32 nPct = ((nMul*100) + nDiv/2)/nDiv;
 
-    if(bNeg)
-        rStr = "-" + rStr;
+    if (bNeg)
+        nPct = -nPct;
 
-    rStr += "%";
+    return OUString::number(nPct) + "%";
 }
 
 void SdrModel::SetChanged(bool bFlg)
@@ -1867,6 +1835,17 @@ bool SdrModel::IsAnchoredTextOverflowLegacy() const
     return mpImpl->mbAnchoredTextOverflowLegacy;
 }
 
+void SdrModel::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
+{
+    mpImpl->mbHoriAlignIgnoreTrailingWhitespace = bEnabled;
+    pDrawOutliner->SetHoriAlignIgnoreTrailingWhitespace(bEnabled);
+}
+
+bool SdrModel::IsHoriAlignIgnoreTrailingWhitespace() const
+{
+    return mpImpl->mbHoriAlignIgnoreTrailingWhitespace;
+}
+
 void SdrModel::ReformatAllTextObjects()
 {
     ImpReformatAllTextObjects();
@@ -1916,6 +1895,13 @@ void SdrModel::ReadUserDataSequenceValue(const css::beans::PropertyValue* pValue
             mpImpl->mbAnchoredTextOverflowLegacy = bBool;
         }
     }
+    if (pValue->Name == "HoriAlignIgnoreTrailingWhitespace")
+    {
+        if (pValue->Value >>= bBool)
+        {
+            SetHoriAlignIgnoreTrailingWhitespace(bBool);
+        }
+    }
 }
 
 template <typename T>
@@ -1928,6 +1914,8 @@ void SdrModel::WriteUserDataSequence(css::uno::Sequence < css::beans::PropertyVa
 {
     std::vector< std::pair< OUString, Any > > aUserData;
     addPair(aUserData, "AnchoredTextOverflowLegacy", IsAnchoredTextOverflowLegacy());
+    if (IsHoriAlignIgnoreTrailingWhitespace())
+        addPair(aUserData, "HoriAlignIgnoreTrailingWhitespace", IsHoriAlignIgnoreTrailingWhitespace());
 
     const sal_Int32 nOldLength = rValues.getLength();
     rValues.realloc(nOldLength + aUserData.size());

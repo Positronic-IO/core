@@ -87,7 +87,6 @@ class SwAbstractSfxDialog_Impl :public SfxAbstractDialog
     DECL_ABSTDLG_BASE(SwAbstractSfxDialog_Impl,SfxModalDialog)
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual void        SetText( const OUString& rStr ) override;
-    virtual OUString    GetText() const override;
 };
 
 class AbstractSwAsciiFilterDlg_Impl : public AbstractSwAsciiFilterDlg
@@ -104,12 +103,19 @@ class VclAbstractDialog_Impl : public VclAbstractDialog
 
 class AbstractSwBreakDlg_Impl : public AbstractSwBreakDlg
 {
-    DECL_ABSTDLG_BASE(AbstractSwBreakDlg_Impl,SwBreakDlg)
+protected:
+    std::unique_ptr<SwBreakDlg> m_xDlg;
+public:
+    explicit AbstractSwBreakDlg_Impl(SwBreakDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual OUString                        GetTemplateName() override;
     virtual sal_uInt16                      GetKind() override;
     virtual ::boost::optional<sal_uInt16>   GetPageNumber() override;
-
 };
+
 class AbstractSplitTableDialog_Impl : public AbstractSplitTableDialog // add for
 {
     DECL_ABSTDLG_BASE(AbstractSplitTableDialog_Impl, SwSplitTableDlg)
@@ -126,7 +132,6 @@ class AbstractTabDialog_Impl : virtual public SfxAbstractTabDialog
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
         //From class Window.
     virtual void        SetText( const OUString& rStr ) override;
-    virtual OUString    GetText() const override;
 };
 
 class AbstractApplyTabDialog_Impl : public AbstractTabDialog_Impl, virtual public SfxAbstractApplyTabDialog
@@ -177,7 +182,6 @@ class AbstractSwLabDlg_Impl  : public AbstractSwLabDlg
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
         //From class Window.
     virtual void        SetText( const OUString& rStr ) override;
-    virtual OUString    GetText() const override;
     virtual const OUString& GetBusinessCardStr() const override;
     virtual Printer *GetPrt() override;
 };
@@ -206,7 +210,6 @@ class AbstractSwFieldDlg_Impl : public AbstractSwFieldDlg
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
         //From class Window.
     virtual void                SetText( const OUString& rStr ) override;
-    virtual OUString            GetText() const override;
     virtual void                Start() override;  //this method from SfxTabDialog
     virtual void                ShowReferencePage() override;
     virtual void                Initialize(SfxChildWinInfo *pInfo) override;
@@ -367,7 +370,7 @@ public:
     virtual sal_Int32 GetResult() override;
 
     virtual OUString            GetReloadDocument() const override;
-    virtual bool                ShowPage( sal_uInt16 nLevel ) override;
+    virtual void                ShowPage( sal_uInt16 nLevel ) override;
     virtual sal_uInt16          GetRestartPage() const override;
 };
 
@@ -388,7 +391,7 @@ public:
     virtual VclPtr<AbstractSwAsciiFilterDlg>  CreateSwAsciiFilterDlg ( SwDocShell& rDocSh,
                                                                 SvStream* pStream ) override;
     virtual VclPtr<VclAbstractDialog> CreateSwInsertBookmarkDlg( vcl::Window *pParent, SwWrtShell &rSh, SfxRequest& rReq ) override;
-    virtual VclPtr<AbstractSwBreakDlg> CreateSwBreakDlg(vcl::Window *pParent, SwWrtShell &rSh) override;
+    virtual VclPtr<AbstractSwBreakDlg> CreateSwBreakDlg(weld::Window *pParent, SwWrtShell &rSh) override;
     virtual VclPtr<VclAbstractDialog> CreateSwChangeDBDlg(SwView& rVw) override;
     virtual VclPtr<SfxAbstractTabDialog>  CreateSwCharDlg(vcl::Window* pParent, SwView& pVw, const SfxItemSet& rCoreSet,
         SwCharDlgMode nDialogMode, const OUString* pFormatStr = nullptr) override;

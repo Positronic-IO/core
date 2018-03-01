@@ -139,17 +139,17 @@ void SdDrawDocument::CreateLayoutTemplates()
     SfxItemSet& rISet = pSheet->GetItemSet();
 
     ::basegfx::B2DPolyPolygon aNullPolyPolygon;
-    Color    aNullCol(RGB_Color(COL_DEFAULT_SHAPE_STROKE));
+    Color    aNullCol(COL_DEFAULT_SHAPE_STROKE);
 
     XDash     aNullDash;
-    XGradient aNullGrad(aNullCol,RGB_Color(COL_WHITE));
+    XGradient aNullGrad(aNullCol,COL_WHITE);
               aNullGrad.SetStartIntens( 100 );
               aNullGrad.SetEndIntens( 100 );
     XHatch    aNullHatch(aNullCol);
 
                     // Line attributes (Extended OutputDevice)
     rISet.Put(XLineStyleItem(drawing::LineStyle_SOLID));
-    rISet.Put(XLineColorItem(OUString(), RGB_Color(COL_DEFAULT_SHAPE_STROKE)));
+    rISet.Put(XLineColorItem(OUString(), COL_DEFAULT_SHAPE_STROKE));
     rISet.Put(XLineWidthItem(0));
     rISet.Put(XLineDashItem(aNullDash));
     rISet.Put(XLineStartItem(aNullPolyPolygon));
@@ -162,19 +162,18 @@ void SdDrawDocument::CreateLayoutTemplates()
 
                     // Fill attributes (Extended OutputDevice)
     rISet.Put(XFillStyleItem(drawing::FillStyle_SOLID));
-    rISet.Put(XFillColorItem(OUString(), RGB_Color(COL_DEFAULT_SHAPE_FILLING)));
+    rISet.Put(XFillColorItem(OUString(), COL_DEFAULT_SHAPE_FILLING));
 
     rISet.Put( XFillGradientItem( aNullGrad) );
     rISet.Put(XFillHatchItem(aNullHatch));
     Size    aNullSize( 32, 32 );
-    Color   aNullColor( COL_WHITE );
     Bitmap  aNullBmp( aNullSize, 8 );
-    aNullBmp.Erase( aNullColor );
+    aNullBmp.Erase( COL_WHITE );
     rISet.Put(XFillBitmapItem(Graphic(aNullBmp)));
 
                     // Shadow attributes (Drawing Engine)
     rISet.Put(makeSdrShadowItem(false));
-    rISet.Put(makeSdrShadowColorItem(RGB_Color(COL_GRAY)));
+    rISet.Put(makeSdrShadowColorItem(COL_GRAY));
     rISet.Put(makeSdrShadowXDistItem(200));         // 3 mm Shadow distance
     rISet.Put(makeSdrShadowYDistItem(200));
 
@@ -215,7 +214,7 @@ void SdDrawDocument::CreateLayoutTemplates()
     rISet.Put(SvxCaseMapItem(SvxCaseMap::NotMapped, EE_CHAR_CASEMAP ));
     rISet.Put(SvxEmphasisMarkItem(FontEmphasisMark::NONE, EE_CHAR_EMPHASISMARK));
     rISet.Put(SvxCharReliefItem(FontRelief::NONE, EE_CHAR_RELIEF));
-    rISet.Put(SvxColorItem(Color(COL_AUTO), EE_CHAR_COLOR ));
+    rISet.Put(SvxColorItem(COL_AUTO, EE_CHAR_COLOR ));
 
     // Paragraph attributes (Edit Engine)
     rISet.Put(SvxLRSpaceItem(EE_PARA_LRSPACE));
@@ -260,7 +259,7 @@ void SdDrawDocument::CreateLayoutTemplates()
     pISet = &pSheet->GetItemSet();
 
     pISet->Put(XLineStyleItem(drawing::LineStyle_SOLID));
-    pISet->Put(XLineColorItem(OUString(), RGB_Color(COL_BLACK)));
+    pISet->Put(XLineColorItem(OUString(), COL_BLACK));
     pISet->Put(XLineWidthItem(150));
 
     ::basegfx::B2DPolygon aArrow;
@@ -282,7 +281,7 @@ void SdDrawDocument::CreateLayoutTemplates()
     pISet = &pSheet->GetItemSet();
 
     pISet->Put(makeSdrShadowItem(true));
-    pISet->Put(makeSdrShadowColorItem(RGB_Color(COL_GRAY)));
+    pISet->Put(makeSdrShadowColorItem(COL_GRAY));
     pISet->Put(makeSdrShadowXDistItem(200));        // 3 mm shadow distance
     pISet->Put(makeSdrShadowYDistItem(200));
 
@@ -294,7 +293,7 @@ void SdDrawDocument::CreateLayoutTemplates()
     pISet = &pSheet->GetItemSet();
 
     pISet->Put(XFillStyleItem(drawing::FillStyle_NONE));
-    pISet->Put(XLineColorItem(OUString(), RGB_Color(COL_BLACK)));
+    pISet->Put(XLineColorItem(OUString(), COL_BLACK));
 
     // Object no fill no line
 
@@ -378,10 +377,10 @@ void SdDrawDocument::CreateLayoutTemplates()
 
     pISet->Put(XLineStyleItem(drawing::LineStyle_NONE));
     pISet->Put(XFillStyleItem(drawing::FillStyle_SOLID));
-    pISet->Put(XFillColorItem(OUString(), RGB_Color(COL_CYAN)));
+    pISet->Put(XFillColorItem(OUString(), COL_CYAN));
 
     pISet->Put(makeSdrShadowItem(true));
-    pISet->Put(makeSdrShadowColorItem(RGB_Color(COL_GRAY)));
+    pISet->Put(makeSdrShadowColorItem(COL_GRAY));
     pISet->Put(makeSdrShadowXDistItem(200));        // 2 mm shadow distance
     pISet->Put(makeSdrShadowYDistItem(200));
 
@@ -401,11 +400,10 @@ void SdDrawDocument::CreateLayoutTemplates()
 
     // Don't get color from the color table, because the color might have been
     // deleted or changed there
-    Color aOrange4(255, 204, 153);
-    pISet->Put(XFillColorItem(OUString(), aOrange4));
+    pISet->Put(XFillColorItem(OUString(), Color(255, 204, 153))); // orange
 
     pISet->Put(makeSdrShadowItem(true));
-    pISet->Put(makeSdrShadowColorItem(RGB_Color(COL_GRAY)));
+    pISet->Put(makeSdrShadowColorItem(COL_GRAY));
     pISet->Put(makeSdrShadowXDistItem(200));        // 2 mm shadow distance
     pISet->Put(makeSdrShadowYDistItem(200));
 
@@ -477,7 +475,7 @@ void SdDrawDocument::CreateLayoutTemplates()
     pISet = &pSheet->GetItemSet();
 
     pISet->Put(XFillStyleItem(drawing::FillStyle_NONE));
-    pISet->Put(XLineColorItem(OUString(), RGB_Color(COL_BLACK)));
+    pISet->Put(XLineColorItem(OUString(), COL_BLACK));
 
     pISet->Put(SvxFontHeightItem(423, 100, EE_CHAR_FONTHEIGHT ));         // 12 pt
 
@@ -544,15 +542,15 @@ void SdDrawDocument::CreateDefaultCellStyles()
     pSheet->SetHelpId( OUString(), HID_SD_CELL_STYLE_DEFAULT );
     SfxItemSet& rISet = pSheet->GetItemSet();
 
-    Color    aNullCol(RGB_Color(COL_BLACK));
+    Color    aNullCol(COL_BLACK);
 
-    XGradient aNullGrad(aNullCol,RGB_Color(COL_WHITE));
+    XGradient aNullGrad(aNullCol,COL_WHITE);
               aNullGrad.SetStartIntens( 100 );
               aNullGrad.SetEndIntens( 100 );
     XHatch    aNullHatch(aNullCol);
 
     rISet.Put(XFillStyleItem(drawing::FillStyle_SOLID));
-    rISet.Put(XFillColorItem(OUString(), RGB_Color(0x00ccccff)));
+    rISet.Put(XFillColorItem(OUString(), 0x00ccccff));
 
     vcl::Font aLatinFont, aCJKFont, aCTLFont;
 
@@ -575,7 +573,7 @@ void SdDrawDocument::CreateDefaultCellStyles()
     rISet.Put( SvxFontHeightItem( 635, 100, EE_CHAR_FONTHEIGHT_CJK ) ); // 18 pt
     rISet.Put( SvxFontHeightItem( convertFontHeightToCTL( 635 ), 100, EE_CHAR_FONTHEIGHT_CTL ) ); // 18 pt
 
-    rISet.Put(SvxColorItem(Color(COL_AUTO), EE_CHAR_COLOR ));
+    rISet.Put(SvxColorItem(COL_AUTO, EE_CHAR_COLOR ));
 
     // Paragraph attributes (Edit Engine)
     rISet.Put(SvxLRSpaceItem(EE_PARA_LRSPACE));
@@ -605,89 +603,89 @@ void SdDrawDocument::CreateDefaultCellStyles()
 
     // ---- default --------------------------------------------------
 
-    Any aGray1( implMakeSolidCellStyle( pSSPool, "gray1" , aDefaultCellStyleName, RGB_COLORDATA(230,230,230)));
-    Any aGray2( implMakeSolidCellStyle( pSSPool, "gray2" , aDefaultCellStyleName, RGB_COLORDATA(204,204,204)));
-    Any aGray3( implMakeSolidCellStyle( pSSPool, "gray3" , aDefaultCellStyleName, RGB_COLORDATA(179,179,179)));
+    Any aGray1( implMakeSolidCellStyle( pSSPool, "gray1" , aDefaultCellStyleName, Color(230,230,230)));
+    Any aGray2( implMakeSolidCellStyle( pSSPool, "gray2" , aDefaultCellStyleName, Color(204,204,204)));
+    Any aGray3( implMakeSolidCellStyle( pSSPool, "gray3" , aDefaultCellStyleName, Color(179,179,179)));
 
     implCreateTableTemplate( xTableFamily, "default" , aGray1, aGray3, aGray2 );
 
     // ---- BW ------------------------------------------------
 
-    Any aBW1( implMakeSolidCellStyle( pSSPool, "bw1" , aDefaultCellStyleName, RGB_COLORDATA(255,255,255)));
-    Any aBW2( implMakeSolidCellStyle( pSSPool, "bw2" , aDefaultCellStyleName, RGB_COLORDATA(230,230,230)));
-    Any aBW3( implMakeSolidCellStyle( pSSPool, "bw3" , aDefaultCellStyleName, RGB_COLORDATA(0,0,0)));
+    Any aBW1( implMakeSolidCellStyle( pSSPool, "bw1" , aDefaultCellStyleName, Color(255,255,255)));
+    Any aBW2( implMakeSolidCellStyle( pSSPool, "bw2" , aDefaultCellStyleName, Color(230,230,230)));
+    Any aBW3( implMakeSolidCellStyle( pSSPool, "bw3" , aDefaultCellStyleName, Color(0,0,0)));
 
     implCreateTableTemplate( xTableFamily, "bw" , aBW1, aBW3, aBW2 );
 
     // ---- Orange --------------------------------------------------
 
-    Any aOrange1( implMakeSolidCellStyle( pSSPool, "orange1" , aDefaultCellStyleName, RGB_COLORDATA(255,204,153)));
-    Any aOrange2( implMakeSolidCellStyle( pSSPool, "orange2" , aDefaultCellStyleName, RGB_COLORDATA(255,153,102)));
-    Any aOrange3( implMakeSolidCellStyle( pSSPool, "orange3" , aDefaultCellStyleName, RGB_COLORDATA(255,102,51)));
+    Any aOrange1( implMakeSolidCellStyle( pSSPool, "orange1" , aDefaultCellStyleName, Color(255,204,153)));
+    Any aOrange2( implMakeSolidCellStyle( pSSPool, "orange2" , aDefaultCellStyleName, Color(255,153,102)));
+    Any aOrange3( implMakeSolidCellStyle( pSSPool, "orange3" , aDefaultCellStyleName, Color(255,102,51)));
 
     implCreateTableTemplate( xTableFamily, "orange" , aOrange1, aOrange3, aOrange2 );
 
     // ---- Turquoise --------------------------------------------------
 
-    Any aTurquoise1( implMakeSolidCellStyle( pSSPool, "turquoise1" , aDefaultCellStyleName, RGB_COLORDATA(71,184,184)));
-    Any aTurquoise2( implMakeSolidCellStyle( pSSPool, "turquoise2" , aDefaultCellStyleName, RGB_COLORDATA(51,163,163)));
-    Any aTurquoise3( implMakeSolidCellStyle( pSSPool, "turquoise3" , aDefaultCellStyleName, RGB_COLORDATA(25,138,138)));
+    Any aTurquoise1( implMakeSolidCellStyle( pSSPool, "turquoise1" , aDefaultCellStyleName, Color(71,184,184)));
+    Any aTurquoise2( implMakeSolidCellStyle( pSSPool, "turquoise2" , aDefaultCellStyleName, Color(51,163,163)));
+    Any aTurquoise3( implMakeSolidCellStyle( pSSPool, "turquoise3" , aDefaultCellStyleName, Color(25,138,138)));
 
     implCreateTableTemplate( xTableFamily, "turquoise" , aTurquoise1, aTurquoise3, aTurquoise2 );
 
     // ---- Gray ------------------------------------------------
 
-    Any aBlue1( implMakeSolidCellStyle( pSSPool, "blue1" , aDefaultCellStyleName, RGB_COLORDATA(153,204,255)));
-    Any aBlue2( implMakeSolidCellStyle( pSSPool, "blue2" , aDefaultCellStyleName, RGB_COLORDATA(0,153,255)));
-    Any aBlue3( implMakeSolidCellStyle( pSSPool, "blue3" , aDefaultCellStyleName, RGB_COLORDATA(0,102,204)));
+    Any aBlue1( implMakeSolidCellStyle( pSSPool, "blue1" , aDefaultCellStyleName, Color(153,204,255)));
+    Any aBlue2( implMakeSolidCellStyle( pSSPool, "blue2" , aDefaultCellStyleName, Color(0,153,255)));
+    Any aBlue3( implMakeSolidCellStyle( pSSPool, "blue3" , aDefaultCellStyleName, Color(0,102,204)));
 
     implCreateTableTemplate( xTableFamily, "blue" , aBlue1, aBlue3, aBlue2 );
 
     // ---- Sun ------------------------------------------------
 
-    Any aSun1( implMakeSolidCellStyle( pSSPool, "sun1" , aDefaultCellStyleName, RGB_COLORDATA(230,230,255)));
-    Any aSun2( implMakeSolidCellStyle( pSSPool, "sun2" , aDefaultCellStyleName, RGB_COLORDATA(204,204,255)));
-    Any aSun3( implMakeSolidCellStyle( pSSPool, "sun3" , aDefaultCellStyleName, RGB_COLORDATA(153,153,255)));
+    Any aSun1( implMakeSolidCellStyle( pSSPool, "sun1" , aDefaultCellStyleName, Color(230,230,255)));
+    Any aSun2( implMakeSolidCellStyle( pSSPool, "sun2" , aDefaultCellStyleName, Color(204,204,255)));
+    Any aSun3( implMakeSolidCellStyle( pSSPool, "sun3" , aDefaultCellStyleName, Color(153,153,255)));
 
     implCreateTableTemplate( xTableFamily, "sun" , aSun1, aSun3, aSun2 );
 
     // ---- Earth ----------------------------------------------
 
-    Any aEarth1( implMakeSolidCellStyle( pSSPool, "earth1" , aDefaultCellStyleName, RGB_COLORDATA(255,255,204)));
-    Any aEarth2( implMakeSolidCellStyle( pSSPool, "earth2" , aDefaultCellStyleName, RGB_COLORDATA(255,204,153)));
-    Any aEarth3( implMakeSolidCellStyle( pSSPool, "earth3" , aDefaultCellStyleName, RGB_COLORDATA(204,102,51)));
+    Any aEarth1( implMakeSolidCellStyle( pSSPool, "earth1" , aDefaultCellStyleName, Color(255,255,204)));
+    Any aEarth2( implMakeSolidCellStyle( pSSPool, "earth2" , aDefaultCellStyleName, Color(255,204,153)));
+    Any aEarth3( implMakeSolidCellStyle( pSSPool, "earth3" , aDefaultCellStyleName, Color(204,102,51)));
 
     implCreateTableTemplate( xTableFamily, "earth" , aEarth1, aEarth3, aEarth2 );
 
     // ---- Green ----------------------------------------------
 
-    Any aGreen1( implMakeSolidCellStyle( pSSPool, "green1" , aDefaultCellStyleName, RGB_COLORDATA(255,255,204)));
-    Any aGreen2( implMakeSolidCellStyle( pSSPool, "green2" , aDefaultCellStyleName, RGB_COLORDATA(148,189,94)));
-    Any aGreen3( implMakeSolidCellStyle( pSSPool, "green3" , aDefaultCellStyleName, RGB_COLORDATA(92,133,38)));
+    Any aGreen1( implMakeSolidCellStyle( pSSPool, "green1" , aDefaultCellStyleName, Color(255,255,204)));
+    Any aGreen2( implMakeSolidCellStyle( pSSPool, "green2" , aDefaultCellStyleName, Color(148,189,94)));
+    Any aGreen3( implMakeSolidCellStyle( pSSPool, "green3" , aDefaultCellStyleName, Color(92,133,38)));
 
     implCreateTableTemplate( xTableFamily, "green" , aGreen1, aGreen3, aGreen2 );
 
     // ---- Seaweed ----------------------------------------------
 
-    Any aSeetang1( implMakeSolidCellStyle( pSSPool, "seetang1" , aDefaultCellStyleName, RGB_COLORDATA(204,255,255)));
-    Any aSeetang2( implMakeSolidCellStyle( pSSPool, "seetang2" , aDefaultCellStyleName, RGB_COLORDATA(71,184,184)));
-    Any aSeetang3( implMakeSolidCellStyle( pSSPool, "seetang3" , aDefaultCellStyleName, RGB_COLORDATA(51,163,163)));
+    Any aSeetang1( implMakeSolidCellStyle( pSSPool, "seetang1" , aDefaultCellStyleName, Color(204,255,255)));
+    Any aSeetang2( implMakeSolidCellStyle( pSSPool, "seetang2" , aDefaultCellStyleName, Color(71,184,184)));
+    Any aSeetang3( implMakeSolidCellStyle( pSSPool, "seetang3" , aDefaultCellStyleName, Color(51,163,163)));
 
     implCreateTableTemplate( xTableFamily, "seetang" , aSeetang1, aSeetang3, aSeetang2 );
 
     // ---- LightBlue ----------------------------------------------
 
-    Any aLightBlue1( implMakeSolidCellStyle( pSSPool, "lightblue1" , aDefaultCellStyleName, RGB_COLORDATA(255,255,255)));
-    Any aLightBlue2( implMakeSolidCellStyle( pSSPool, "lightblue2" , aDefaultCellStyleName, RGB_COLORDATA(230,230,255)));
-    Any aLightBlue3( implMakeSolidCellStyle( pSSPool, "lightblue3" , aDefaultCellStyleName, RGB_COLORDATA(153,153,204)));
+    Any aLightBlue1( implMakeSolidCellStyle( pSSPool, "lightblue1" , aDefaultCellStyleName, Color(255,255,255)));
+    Any aLightBlue2( implMakeSolidCellStyle( pSSPool, "lightblue2" , aDefaultCellStyleName, Color(230,230,255)));
+    Any aLightBlue3( implMakeSolidCellStyle( pSSPool, "lightblue3" , aDefaultCellStyleName, Color(153,153,204)));
 
     implCreateTableTemplate( xTableFamily, "lightblue" , aLightBlue1, aLightBlue3, aLightBlue2 );
 
     // ---- Yellow ----------------------------------------------
 
-    Any aYellow1( implMakeSolidCellStyle( pSSPool, "yellow1" , aDefaultCellStyleName, RGB_COLORDATA(255,255,204)));
-    Any aYellow2( implMakeSolidCellStyle( pSSPool, "yellow2" , aDefaultCellStyleName, RGB_COLORDATA(255,255,153)));
-    Any aYellow3( implMakeSolidCellStyle( pSSPool, "yellow3" , aDefaultCellStyleName, RGB_COLORDATA(255,204,153)));
+    Any aYellow1( implMakeSolidCellStyle( pSSPool, "yellow1" , aDefaultCellStyleName, Color(255,255,204)));
+    Any aYellow2( implMakeSolidCellStyle( pSSPool, "yellow2" , aDefaultCellStyleName, Color(255,255,153)));
+    Any aYellow3( implMakeSolidCellStyle( pSSPool, "yellow3" , aDefaultCellStyleName, Color(255,204,153)));
 
     implCreateTableTemplate( xTableFamily, "yellow" , aYellow1, aYellow3, aYellow2 );
 }
@@ -896,20 +894,21 @@ void SdDrawDocument::SpellObject(SdrTextObj* pObj)
 
             if (mbHasOnlineSpellErrors)
             {
-                sd::ModifyGuard aGuard( this );
-                SdrModel* pModel = pObj->GetModel();
-                bool bLock = false;
-                if ( pModel )
+                OutlinerParaObject* pOPO = pOutl->CreateParaObject();
+                if (pOPO)
                 {
-                    bLock = pModel->isLocked();
-                    pModel->setLock(true);
-                }
-                // taking text from the outliner
-                pObj->SetOutlinerParaObject( pOutl->CreateParaObject() );
+                    if (!( *pOPO == *pObj->GetOutlinerParaObject() ) ||
+                         !pObj->GetOutlinerParaObject()->isWrongListEqual( *pOPO ))
+                    {
+                        sd::ModifyGuard aGuard( this );
 
-                pObj->BroadcastObjectChange();
-                if ( pModel )
-                    pModel->setLock(bLock);
+                        // taking text from the outliner
+                        // use non-broadcasting version to avoid O(n^2)
+                        pObj->NbcSetOutlinerParaObject( pOPO );
+                        pOPO = nullptr;
+                    }
+                }
+                delete pOPO;
             }
         }
 
@@ -1203,7 +1202,7 @@ void SdDrawDocument::SetTextDefaults() const
     aNumberFormat.SetBulletFont(&aBulletFont);
     aNumberFormat.SetBulletChar( 0x25CF );  // StarBats: 0xF000 + 34
     aNumberFormat.SetBulletRelSize(45);
-    aNumberFormat.SetBulletColor(Color(COL_AUTO));
+    aNumberFormat.SetBulletColor(COL_AUTO);
     aNumberFormat.SetStart(1);
     aNumberFormat.SetNumAdjust(SvxAdjust::Left);
 

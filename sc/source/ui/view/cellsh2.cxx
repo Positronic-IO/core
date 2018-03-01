@@ -172,7 +172,7 @@ static bool lcl_GetSortParam( const ScViewData* pData, const ScSortParam& rSortP
         ((rSortParam.nCol1 == rSortParam.nCol2 && aExternalRange.aStart.Col() != aExternalRange.aEnd.Col()) ||
          (rSortParam.nRow1 == rSortParam.nRow2 && aExternalRange.aStart.Row() != aExternalRange.aEnd.Row())))
     {
-        pTabViewShell->AddHighlightRange( aExternalRange,Color( COL_LIGHTBLUE ) );
+        pTabViewShell->AddHighlightRange( aExternalRange,COL_LIGHTBLUE );
         ScRange rExtendRange( aExternalRange.aStart.Col(), aExternalRange.aStart.Row(), nTab, aExternalRange.aEnd.Col(), aExternalRange.aEnd.Row(), nTab );
         OUString aExtendStr(rExtendRange.Format(ScRefFlags::VALID, pDoc));
 
@@ -380,6 +380,7 @@ void ScCellShell::ExecuteDB( SfxRequest& rReq )
                     aSortParam.bCaseSens        = false;
                     aSortParam.bNaturalSort     = false;
                     aSortParam.bIncludeComments = false;
+                    aSortParam.bIncludeGraphicObjects = true;
                     aSortParam.bIncludePattern  = true;
                     aSortParam.bInplace         = true;
                     aSortParam.maKeyState[0].bDoSort = true;
@@ -433,6 +434,8 @@ void ScCellShell::ExecuteDB( SfxRequest& rReq )
                             aSortParam.bNaturalSort = static_cast<const SfxBoolItem*>(pItem)->GetValue();
                         if ( pArgs->GetItemState( SID_SORT_INCCOMMENTS, true, &pItem ) == SfxItemState::SET )
                             aSortParam.bIncludeComments = static_cast<const SfxBoolItem*>(pItem)->GetValue();
+                        if ( pArgs->GetItemState( SID_SORT_INCIMAGES, true, &pItem ) == SfxItemState::SET )
+                            aSortParam.bIncludeGraphicObjects = static_cast<const SfxBoolItem*>(pItem)->GetValue();
                         if ( pArgs->GetItemState( SID_SORT_ATTRIBS, true, &pItem ) == SfxItemState::SET )
                             aSortParam.bIncludePattern = static_cast<const SfxBoolItem*>(pItem)->GetValue();
                         if ( pArgs->GetItemState( SID_SORT_USERDEF, true, &pItem ) == SfxItemState::SET )
@@ -519,6 +522,8 @@ void ScCellShell::ExecuteDB( SfxRequest& rReq )
                                             rOutParam.bNaturalSort ) );
                                 rReq.AppendItem( SfxBoolItem( SID_SORT_INCCOMMENTS,
                                             rOutParam.bIncludeComments ) );
+                                rReq.AppendItem( SfxBoolItem( SID_SORT_INCIMAGES,
+                                            rOutParam.bIncludeGraphicObjects ) );
                                 rReq.AppendItem( SfxBoolItem( SID_SORT_ATTRIBS,
                                     rOutParam.bIncludePattern ) );
                                 sal_uInt16 nUser = rOutParam.bUserDef ? ( rOutParam.nUserIndex + 1 ) : 0;
@@ -806,6 +811,7 @@ void ScCellShell::ExecuteDB( SfxRequest& rReq )
             ExecuteXMLSourceDialog();
         break;
         case FID_VALIDATION:
+        case FID_CURRENTVALIDATION:
             {
                 const SfxPoolItem* pItem;
                 const SfxItemSet* pArgs = rReq.GetArgs();
@@ -832,8 +838,8 @@ void ScCellShell::ExecuteDB( SfxRequest& rReq )
                     SCROW nCurY = GetViewData()->GetCurY();
                     SCTAB nTab = GetViewData()->GetTabNo();
                     ScAddress aCursorPos( nCurX, nCurY, nTab );
-                    sal_uLong nIndex = static_cast<const SfxUInt32Item*>(pDoc->GetAttr(
-                                nCurX, nCurY, nTab, ATTR_VALIDDATA ))->GetValue();
+                    sal_uLong nIndex = pDoc->GetAttr(
+                                nCurX, nCurY, nTab, ATTR_VALIDDATA )->GetValue();
                     if ( nIndex )
                     {
                         const ScValidationData* pOldData = pDoc->GetValidationEntry( nIndex );

@@ -20,19 +20,14 @@
 #define INCLUDED_SW_INC_DOC_HXX
 
 // SwDoc interfaces
-#include "IDocumentMarkAccess.hxx"
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
-#include <vcl/timer.hxx>
+#include <o3tl/deleter.hxx>
 #include <vcl/idle.hxx>
-#include <sal/macros.h>
 #include "swdllapi.h"
 #include "swtypes.hxx"
-#include "swatrset.hxx"
 #include "toxe.hxx"
 #include "flyenum.hxx"
 #include "flypos.hxx"
-#include "itabenum.hxx"
 #include "swdbdata.hxx"
 #include <com/sun/star/linguistic2/XSpellChecker1.hpp>
 #include <com/sun/star/linguistic2/XHyphenatedWord.hpp>
@@ -47,9 +42,8 @@
 #include "docary.hxx"
 #include "pagedesc.hxx"
 #include "tblenum.hxx"
-
-#include <svtools/embedhlp.hxx>
-
+#include "ndarr.hxx"
+#include "ndtyp.hxx"
 #include <memory>
 #include <set>
 #include <unordered_map>
@@ -175,7 +169,11 @@ class IDocumentState;
 class IDocumentLayoutAccess;
 class IDocumentStylePoolAccess;
 class IDocumentExternalData;
+class IDocumentMarkAccess;
 class SetGetExpFields;
+struct SwInsertTableOptions;
+enum class SvMacroItemId : sal_uInt16;
+enum class SvxFrameDirection;
 
 namespace sw { namespace mark {
     class MarkManager;
@@ -289,7 +287,8 @@ class SW_DLLPUBLIC SwDoc final
     SwTOXTypes      *mpTOXTypes;                   //< Tables/indices
     SwDefTOXBase_Impl * mpDefTOXBases;             //< defaults of SwTOXBase's
 
-    SwDBManager         *mpDBManager;              //< Pointer to the DBManager for evaluation of DB-fields.
+    std::unique_ptr<SwDBManager, o3tl::default_delete<SwDBManager>> m_pOwnDBManager; //< own DBManager
+    SwDBManager * m_pDBManager; //< DBManager for evaluation of DB-fields.
 
     SwNumRule       *mpOutlineRule;
     SwFootnoteInfo       *mpFootnoteInfo;
@@ -310,7 +309,7 @@ class SW_DLLPUBLIC SwDoc final
     // Hash map to find numrules by name
     mutable std::unordered_map<OUString, SwNumRule *> maNumRuleMap;
 
-    SwPagePreviewPrtData *mpPgPViewPrtData;        //< Indenting / spacing for printing of page view.
+    std::unique_ptr<SwPagePreviewPrtData> m_pPgPViewPrtData; //< Indenting / spacing for printing of page view.
     SwPaM           *mpExtInputRing;
 
     IStyleAccess    *mpStyleAccess;                //< handling of automatic styles
@@ -518,7 +517,7 @@ public:
     ::sw::DocumentContentOperationsManager & GetDocumentContentOperationsManager();
 
     bool UpdateParRsid( SwTextNode *pTextNode, sal_uInt32 nVal = 0 );
-    bool UpdateRsid( const SwPaM &rRg, sal_Int32 nLen );
+    void UpdateRsid( const SwPaM &rRg, sal_Int32 nLen );
 
     // IDocumentStylePoolAccess
     IDocumentStylePoolAccess const & getIDocumentStylePoolAccess() const;
@@ -694,8 +693,8 @@ public:
     bool IsInVerticalText( const SwPosition& rPos ) const;
 
     // Database  and DB-Manager
-    void SetDBManager( SwDBManager* pNewMgr )     { mpDBManager = pNewMgr; }
-    SwDBManager* GetDBManager() const             { return mpDBManager; }
+    void SetDBManager( SwDBManager* pNewMgr )     { m_pDBManager = pNewMgr; }
+    SwDBManager* GetDBManager() const             { return m_pDBManager; }
     void ChangeDBFields( const std::vector<OUString>& rOldNames,
                         const OUString& rNewName );
     void SetInitDBFields(bool b);
@@ -752,6 +751,10 @@ public:
 
     // Query default attribute in this document.
     const SfxPoolItem& GetDefault( sal_uInt16 nFormatHint ) const;
+    template<class T> const T&  GetDefault( TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T&>(GetDefault(sal_uInt16(nWhich)));
+    }
 
     // Do not expand text attributes.
     bool DontExpandFormat( const SwPosition& rPos, bool bFlag = true );
@@ -1188,19 +1191,19 @@ public:
     bool TableToText( const SwTableNode* pTableNd, sal_Unicode cCh );
 
     // Create columns / rows in table.
-    bool InsertCol( const SwCursor& rCursor,
+    void InsertCol( const SwCursor& rCursor,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
     bool InsertCol( const SwSelBoxes& rBoxes,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
-    bool InsertRow( const SwCursor& rCursor,
+    void InsertRow( const SwCursor& rCursor,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
     bool InsertRow( const SwSelBoxes& rBoxes,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
 
     // Delete Columns/Rows in table.
     bool DeleteRowCol( const SwSelBoxes& rBoxes, bool bColumn = false );
-    bool DeleteRow( const SwCursor& rCursor );
-    bool DeleteCol( const SwCursor& rCursor );
+    void DeleteRow( const SwCursor& rCursor );
+    void DeleteCol( const SwCursor& rCursor );
 
     // Split / concatenate boxes in table.
     bool SplitTable( const SwSelBoxes& rBoxes, bool bVert,
@@ -1253,7 +1256,7 @@ public:
 
     void AppendUndoForInsertFromDB( const SwPaM& rPam, bool bIsTable );
 
-    bool SetColRowWidthHeight( SwTableBox& rAktBox, TableChgWidthHeightType eType,
+    bool SetColRowWidthHeight( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
                                 SwTwips nAbsDiff, SwTwips nRelDiff );
     SwTableBoxFormat* MakeTableBoxFormat();
     SwTableLineFormat* MakeTableLineFormat();
@@ -1261,7 +1264,7 @@ public:
     // helper function: cleanup before checking number value
     bool IsNumberFormat( const OUString& rString, sal_uInt32& F_Index, double& fOutNumber);
     // Check if box has numerical value. Change format of box if required.
-    void ChkBoxNumFormat( SwTableBox& rAktBox, bool bCallUpdate );
+    void ChkBoxNumFormat( SwTableBox& rCurrentBox, bool bCallUpdate );
     void SetTableBoxFormulaAttrs( SwTableBox& rBox, const SfxItemSet& rSet );
     void ClearBoxNumAttrs( const SwNodeIndex& rNode );
     void ClearLineNumAttrs( SwPosition const & rPos );
@@ -1270,9 +1273,9 @@ public:
                         const SwTable* pCpyTable, bool bCpyName = false,
                         bool bCorrPos = false );
 
-    bool UnProtectCells( const OUString& rTableName );
+    void UnProtectCells( const OUString& rTableName );
     bool UnProtectCells( const SwSelBoxes& rBoxes );
-    bool UnProtectTables( const SwPaM& rPam );
+    void UnProtectTables( const SwPaM& rPam );
     bool HasTableAnyProtection( const SwPosition* pPos,
                               const OUString* pTableName,
                               bool* pFullTableProtection );
@@ -1395,7 +1398,7 @@ public:
     const SwFormatINetFormat* FindINetAttr( const OUString& rName ) const;
 
     // Call into intransparent Basic; expect possible Return String.
-    bool ExecMacro( const SvxMacro& rMacro, OUString* pRet, SbxArray* pArgs );
+    void ExecMacro( const SvxMacro& rMacro, OUString* pRet, SbxArray* pArgs );
 
     // Call into intransparent Basic / JavaScript.
     sal_uInt16 CallEvent( SvMacroItemId nEvent, const SwCallMouseEvent& rCallEvent,
@@ -1445,7 +1448,7 @@ public:
     void ClearDoc();        // Deletes all content!
 
     // Query /set data for PagePreview.
-    const SwPagePreviewPrtData* GetPreviewPrtData() const { return mpPgPViewPrtData; }
+    const SwPagePreviewPrtData* GetPreviewPrtData() const { return m_pPgPViewPrtData.get(); }
 
     // If pointer == 0 destroy pointer in document.
     // Else copy object.

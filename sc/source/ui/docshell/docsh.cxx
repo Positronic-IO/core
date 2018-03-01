@@ -25,7 +25,7 @@
 #include <comphelper/fileformat.h>
 #include <comphelper/classids.hxx>
 #include <formula/errorcodes.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/waitobj.hxx>
 #include <rtl/bootstrap.hxx>
@@ -145,7 +145,7 @@ using ::std::vector;
 
 static const sal_Char pFilterSc50[]     = "StarCalc 5.0";
 static const sal_Char pFilterXML[]      = "StarOffice XML (Calc)";
-static const sal_Char pFilterAscii[]    = "Text - txt - csv (StarCalc)";
+static const sal_Char pFilterAscii[]    = SC_TEXT_CSV_FILTER_NAME;
 static const sal_Char pFilterLotus[]    = "Lotus";
 static const sal_Char pFilterQPro6[]    = "Quattro Pro 6.0";
 static const sal_Char pFilterExcel4[]   = "MS Excel 4.0";
@@ -473,14 +473,29 @@ bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css
         {
             // Generator is not LibreOffice.  Ask if the user wants to perform
             // full re-calculation.
-            ScopedVclPtrInstance<QueryBox> aBox(
-                GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                ScGlobal::GetRscString(STR_QUERY_FORMULA_RECALC_ONLOAD_ODS));
-            aBox->SetCheckBoxText(ScGlobal::GetRscString(STR_ALWAYS_PERFORM_SELECTED));
+            vcl::Window* pWin = GetActiveDialogParent();
 
-            bHardRecalc = aBox->Execute() == RET_YES;
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr,
+                        "modules/scalc/ui/recalcquerydialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("RecalcQueryDialog"));
+            xQueryBox->set_primary_text(ScGlobal::GetRscString(STR_QUERY_FORMULA_RECALC_ONLOAD_ODS));
+            xQueryBox->set_default_response(RET_YES);
+            std::unique_ptr<weld::CheckButton> xWarningOnBox(xBuilder->weld_check_button("ask"));
 
-            if (aBox->GetCheckBoxState())
+            //fdo#75121, a bit tricky because the widgets we want to align with
+            //don't actually exist in the ui description, they're implied
+            std::unique_ptr<weld::Container> xOrigParent(xWarningOnBox->weld_parent());
+            std::unique_ptr<weld::Container> xContentArea(xQueryBox->weld_message_area());
+            xOrigParent->remove(xWarningOnBox.get());
+            xContentArea->add(xWarningOnBox.get());
+
+            bHardRecalc = xQueryBox->run() == RET_YES;
+
+            //put them back as they were
+            xContentArea->remove(xWarningOnBox.get());
+            xOrigParent->add(xWarningOnBox.get());
+
+            if (xWarningOnBox->get_active())
             {
                 // Always perform selected action in the future.
                 std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
@@ -708,12 +723,28 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                         ScAppOptions aAppOptions = SC_MOD()->GetAppOptions();
                         if ( aAppOptions.GetShowSharedDocumentWarning() )
                         {
-                            ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(), MessBoxStyle::Ok,
-                                ScGlobal::GetRscString( STR_SHARED_DOC_WARNING ) );
-                            aBox->SetDefaultCheckBoxText();
-                            aBox->Execute();
-                            bool bChecked = aBox->GetCheckBoxState();
-                            if ( bChecked )
+                            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+
+                            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr,
+                                        "modules/scalc/ui/sharedwarningdialog.ui"));
+                            std::unique_ptr<weld::MessageDialog> xWarningBox(xBuilder->weld_message_dialog("SharedWarningDialog"));
+                            std::unique_ptr<weld::CheckButton> xWarningOnBox(xBuilder->weld_check_button("ask"));
+
+                            //fdo#75121, a bit tricky because the widgets we want to align with
+                            //don't actually exist in the ui description, they're implied
+                            std::unique_ptr<weld::Container> xOrigParent(xWarningOnBox->weld_parent());
+                            std::unique_ptr<weld::Container> xContentArea(xWarningBox->weld_message_area());
+                            xOrigParent->remove(xWarningOnBox.get());
+                            xContentArea->add(xWarningOnBox.get());
+
+                            xWarningBox->run();
+
+                            //put them back as they were
+                            xContentArea->remove(xWarningOnBox.get());
+                            xOrigParent->add(xWarningOnBox.get());
+
+                            bool bChecked = xWarningOnBox->get_active();
+                            if (bChecked)
                             {
                                 aAppOptions.SetShowSharedDocumentWarning( !bChecked );
                                 SC_MOD()->SetAppOptions( aAppOptions );
@@ -835,8 +866,14 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                             OUString aMessage( ScGlobal::GetRscString( STR_FILE_LOCKED_SAVE_LATER ) );
                                             aMessage = aMessage.replaceFirst( "%1", aUserName );
 
-                                            ScopedVclPtrInstance< WarningBox > aBox( GetActiveDialogParent(), MessBoxStyle::RetryCancel | MessBoxStyle::DefaultRetry, aMessage );
-                                            if ( aBox->Execute() == RET_RETRY )
+                                            vcl::Window* pWin = GetActiveDialogParent();
+                                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                                       VclMessageType::Warning, VclButtonsType::NONE,
+                                                                                       aMessage));
+                                            xWarn->add_button(Button::GetStandardText(StandardButtonType::Retry), RET_RETRY);
+                                            xWarn->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+                                            xWarn->set_default_response(RET_RETRY);
+                                            if (xWarn->run() == RET_RETRY)
                                             {
                                                 bRetry = true;
                                             }
@@ -910,9 +947,11 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                     }
                                     else
                                     {
-                                        ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(), MessBoxStyle::Ok,
-                                            ScGlobal::GetRscString( STR_DOC_NOLONGERSHARED ) );
-                                        aBox->Execute();
+                                        vcl::Window* pWin = GetActiveDialogParent();
+                                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                                                   ScGlobal::GetRscString(STR_DOC_NOLONGERSHARED)));
+                                        xWarn->run();
 
                                         SfxBindings* pBindings = GetViewBindings();
                                         if ( pBindings )
@@ -951,10 +990,11 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                 {
                     if ( GetDocument().GetExternalRefManager()->containsUnsavedReferences() )
                     {
-                        ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(), MessBoxStyle::YesNo,
-                                ScGlobal::GetRscString( STR_UNSAVED_EXT_REF ) );
-
-                        if( RET_NO == aBox->Execute())
+                        vcl::Window* pWin = GetActiveDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                                   ScGlobal::GetRscString(STR_UNSAVED_EXT_REF)));
+                        if (RET_NO == xWarn->run())
                         {
                             SetError(ERRCODE_IO_ABORT); // this error code will produce no error message, but will break the further saving process
                         }
@@ -1714,6 +1754,10 @@ bool ScDocShell::SaveAs( SfxMedium& rMedium )
     if (bNeedsRehash)
         // legacy xls hash double-hashed by SHA1 is also supported.
         bNeedsRehash = ScPassHashHelper::needsPassHashRegen(aDocument, PASSHASH_XL, PASSHASH_SHA1);
+    if (bNeedsRehash)
+    {   // SHA256 explicitly supported in ODF 1.2, implicitly in ODF 1.1
+        bNeedsRehash = ScPassHashHelper::needsPassHashRegen(aDocument, PASSHASH_SHA256);
+    }
 
     if (pViewShell && bNeedsRehash)
     {
@@ -1979,8 +2023,7 @@ void ScDocShell::AsciiSave( SvStream& rStream, const ScImportOptions& rAsciiOpt 
         if ( bTabProtect )
         {
             const ScProtectionAttr* pProtAttr =
-                static_cast<const ScProtectionAttr*>( aDocument.GetAttr(
-                                                            nCol, nRow, nTab, ATTR_PROTECTION ));
+                aDocument.GetAttr( nCol, nRow, nTab, ATTR_PROTECTION );
             if ( pProtAttr->GetHideCell() ||
                     ( eType == CELLTYPE_FORMULA && bShowFormulas &&
                       pProtAttr->GetHideFormula() ) )
@@ -2081,8 +2124,7 @@ void ScDocShell::AsciiSave( SvStream& rStream, const ScImportOptions& rAsciiOpt 
         if ( bFixedWidth )
         {
             SvxCellHorJustify eHorJust =
-                static_cast<const SvxHorJustifyItem*>( aDocument.GetAttr( nCol, nRow,
-                nTab, ATTR_HOR_JUSTIFY ))->GetValue();
+                aDocument.GetAttr( nCol, nRow, nTab, ATTR_HOR_JUSTIFY )->GetValue();
             lcl_ScDocShell_GetFixedWidthString( aString, aDocument, nTab, nCol,
                     !bString, eHorJust );
             rStream.WriteUnicodeOrByteText( aString );
@@ -3259,6 +3301,9 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportSLK(SvStream &rStream)
     aDocument.SetDocOptions(aDocOpt);
     aDocument.MakeTable(0);
     aDocument.EnableExecuteLink(false);
+    aDocument.SetInsertingFromOtherDoc(true);
+    aDocument.SetImportingXML(true);
+
     ScImportExport aImpEx(&aDocument);
     return aImpEx.ImportStream(rStream, OUString(), SotClipboardFormatId::SYLK);
 }

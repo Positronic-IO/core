@@ -185,7 +185,7 @@ class SfxDocTplService_Impl
     Sequence< OUString >        maTemplateDirs;
     Sequence< OUString >        maInternalTemplateDirs;
     OUString                    maRootURL;
-    std::vector< NamePair_Impl* > maNames;
+    std::vector< std::unique_ptr<NamePair_Impl> > maNames;
     lang::Locale                maLocale;
     Content                     maRootContent;
     bool                        mbIsInitialized : 1;
@@ -346,7 +346,7 @@ public:
 
 class GroupData_Impl
 {
-    vector< DocTemplates_EntryData_Impl* > maEntries;
+    std::vector< std::unique_ptr<DocTemplates_EntryData_Impl> > maEntries;
     OUString            maTitle;
     OUString            maHierarchyURL;
     OUString            maTargetURL;
@@ -355,7 +355,6 @@ class GroupData_Impl
 
 public:
     explicit            GroupData_Impl( const OUString& rTitle );
-                        ~GroupData_Impl();
 
     void                setInUse() { mbInUse = true; }
     void                setHierarchy( bool bInHierarchy ) { mbInHierarchy = bInHierarchy; }
@@ -373,7 +372,7 @@ public:
                                   const OUString& rType,
                                   const OUString& rHierURL );
     size_t                          count() { return maEntries.size(); }
-    DocTemplates_EntryData_Impl*    getEntry( size_t nPos ) { return maEntries[ nPos ]; }
+    DocTemplates_EntryData_Impl*    getEntry( size_t nPos ) { return maEntries[ nPos ].get(); }
 };
 
 
@@ -506,11 +505,11 @@ void SfxDocTplService_Impl::readFolderList()
     const size_t nCount = std::min(SAL_N_ELEMENTS(TEMPLATE_SHORT_NAMES_ARY), SAL_N_ELEMENTS(TEMPLATE_LONG_NAMES_ARY));
     for (size_t i = 0; i < nCount; ++i)
     {
-        NamePair_Impl* pPair = new NamePair_Impl;
+        std::unique_ptr<NamePair_Impl> pPair( new NamePair_Impl );
         pPair->maShortName  = OUString::createFromAscii(TEMPLATE_SHORT_NAMES_ARY[i]);
         pPair->maLongName   = SfxResId(TEMPLATE_LONG_NAMES_ARY[i]);
 
-        maNames.push_back( pPair );
+        maNames.push_back( std::move(pPair) );
     }
 }
 
@@ -519,7 +518,7 @@ OUString SfxDocTplService_Impl::getLongName( const OUString& rShortName )
 {
     OUString         aRet;
 
-    for (NamePair_Impl* pPair : maNames)
+    for (auto const & pPair : maNames)
     {
         if ( pPair->maShortName == rShortName )
         {
@@ -1086,9 +1085,6 @@ SfxDocTplService_Impl::SfxDocTplService_Impl( const uno::Reference< XComponentCo
 SfxDocTplService_Impl::~SfxDocTplService_Impl()
 {
     ::osl::MutexGuard aGuard( maMutex );
-
-    for (NamePair_Impl* p : maNames)
-        delete p;
     maNames.clear();
 }
 
@@ -2291,8 +2287,8 @@ WaitWindow_Impl::WaitWindow_Impl() : WorkWindow(nullptr, WB_BORDER | WB_3DLOOK)
     maText = SfxResId(RID_CNT_STR_WAITING);
     maRect = GetTextRect(aRect, maText, mnTextStyle);
     aRect = maRect;
-    aRect.Right() += 2 * X_OFFSET;
-    aRect.Bottom() += 2 * Y_OFFSET;
+    aRect.AdjustRight(2 * X_OFFSET );
+    aRect.AdjustBottom(2 * Y_OFFSET );
     maRect.SetPos(Point(X_OFFSET, Y_OFFSET));
     SetOutputSizePixel(aRect.GetSize());
 
@@ -2644,14 +2640,6 @@ GroupData_Impl::GroupData_Impl( const OUString& rTitle )
 }
 
 
-GroupData_Impl::~GroupData_Impl()
-{
-    for (DocTemplates_EntryData_Impl* p : maEntries)
-        delete p;
-    maEntries.clear();
-}
-
-
 DocTemplates_EntryData_Impl* GroupData_Impl::addEntry( const OUString& rTitle,
                                           const OUString& rTargetURL,
                                           const OUString& rType,
@@ -2660,9 +2648,9 @@ DocTemplates_EntryData_Impl* GroupData_Impl::addEntry( const OUString& rTitle,
     DocTemplates_EntryData_Impl* pData = nullptr;
     bool EntryFound = false;
 
-    for (DocTemplates_EntryData_Impl* p : maEntries)
+    for (auto const & p : maEntries)
     {
-        pData = p;
+        pData = p.get();
         if ( pData->getTitle() == rTitle )
         {
             EntryFound = true;
@@ -2680,7 +2668,7 @@ DocTemplates_EntryData_Impl* GroupData_Impl::addEntry( const OUString& rTitle,
             pData->setHierarchyURL( rHierURL );
             pData->setHierarchy( true );
         }
-        maEntries.push_back( pData );
+        maEntries.emplace_back( pData );
     }
     else
     {

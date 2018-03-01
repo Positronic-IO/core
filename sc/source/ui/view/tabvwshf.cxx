@@ -29,7 +29,8 @@
 #include <svl/languageoptions.hxx>
 #include <svl/stritem.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/objface.hxx>
 #include <svx/svxdlg.hxx>
 #include <editeng/colritem.hxx>
@@ -388,8 +389,9 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
                     OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
+                    vcl::Window* pWin = GetDialogParent();
                     ScopedVclPtr<AbstractScStringInputDlg> pDlg(pFact->CreateScStringInputDlg(
-                        GetDialogParent(), aDlgTitle, ScResId(SCSTR_NAME),
+                        pWin ? pWin->GetFrameWeld() : nullptr, aDlgTitle, ScResId(SCSTR_NAME),
                         aName, GetStaticInterface()->GetSlot(nSlot)->GetCommand(),
                         pHelpId));
 
@@ -428,9 +430,9 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                                 }
                                 else
                                 {
-                                    nRet = ScopedVclPtrInstance<MessageDialog>(GetDialogParent(),
-                                                     aErrMsg
-                                                   )->Execute();
+                                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                              VclMessageType::Warning, VclButtonsType::Ok, aErrMsg));
+                                    nRet = xBox->run();
                                 }
                             }
                         }
@@ -619,21 +621,26 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                         }
                     }
 
+                    vcl::Window* pWin = GetDialogParent();
                     if (bTabWithPivotTable)
                     {
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_QUERY_PIVOTTABLE_DELTAB)));
+                        xQueryBox->set_default_response(RET_NO);
+
                         // Hard warning as there is potential of data loss on deletion
-                        bDoIt = ( RET_YES ==
-                                ScopedVclPtrInstance<QueryBox>( GetDialogParent(),
-                                            MessBoxStyle::YesNo | MessBoxStyle::DefaultNo,
-                                            ScGlobal::GetRscString(STR_QUERY_PIVOTTABLE_DELTAB))->Execute() );
+                        bDoIt = (RET_YES == xQueryBox->run());
                     }
                     else
                     {
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_QUERY_DELTAB)));
+                        xQueryBox->set_default_response(RET_YES);
+
                         // no parameter given, ask for confirmation
-                        bDoIt = ( RET_YES ==
-                                ScopedVclPtrInstance<QueryBox>( GetDialogParent(),
-                                            MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                            ScGlobal::GetRscString(STR_QUERY_DELTAB))->Execute() );
+                        bDoIt = (RET_YES == xQueryBox->run());
                     }
                 }
 

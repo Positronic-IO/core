@@ -1612,9 +1612,9 @@ void SVGTextWriter::implWriteTextPortion( const Point& rPos,
     const vcl::Font&                        rFont = mpVDev->GetFont();
 
     if( rFont.GetAlignment() == ALIGN_TOP )
-        aBaseLinePos.Y() += aMetric.GetAscent();
+        aBaseLinePos.AdjustY(aMetric.GetAscent() );
     else if( rFont.GetAlignment() == ALIGN_BOTTOM )
-        aBaseLinePos.Y() -= aMetric.GetDescent();
+        aBaseLinePos.AdjustY( -(aMetric.GetDescent()) );
 
     implMap( rPos, aPos );
 
@@ -2022,7 +2022,7 @@ void SVGActionWriter::ImplWriteShape( const SVGShapeDescriptor& rShape )
 
     ImplMap( rShape.maShapePolyPoly, aPolyPoly );
 
-    const bool  bLineOnly = ( rShape.maShapeFillColor == Color( COL_TRANSPARENT ) ) && ( !rShape.mapShapeGradient.get() );
+    const bool  bLineOnly = ( rShape.maShapeFillColor == COL_TRANSPARENT ) && ( !rShape.mapShapeGradient.get() );
     tools::Rectangle   aBoundRect( aPolyPoly.GetBoundRect() );
 
     maAttributeWriter.AddPaintAttr( rShape.maShapeLineColor, rShape.maShapeFillColor, &aBoundRect, rShape.mapShapeGradient.get() );
@@ -2250,9 +2250,10 @@ void SVGActionWriter::ImplWriteGradientLinear( const tools::PolyPolygon& rPolyPo
                 // Setting x value of a gradient vector to rotation center to
                 // place a gradient vector in a target polygon.
                 // This would help editing it in SVG editors like inkscape.
-                aPoly[ 0 ].X() = aPoly[ 1 ].X() = aCenter.X();
-                aPoly[ 0 ].Y() = aRect.Top();
-                aPoly[ 1 ].Y() = aRect.Bottom();
+                aPoly[ 0 ].setX( aCenter.X() );
+                aPoly[ 1 ].setX( aCenter.X() );
+                aPoly[ 0 ].setY( aRect.Top() );
+                aPoly[ 1 ].setY( aRect.Bottom() );
                 aPoly.Rotate( aCenter, nAngle );
 
                 mrExport.AddAttribute( XML_NAMESPACE_NONE, aXMLAttrX1, OUString::number( aPoly[ 0 ].X() ) );
@@ -2393,8 +2394,8 @@ void SVGActionWriter::ImplWriteMask( GDIMetaFile& rMtf,
     if( fScaleX != 1.0 || fScaleY != 1.0 )
     {
         rMtf.Scale( fScaleX, fScaleY );
-        aSrcPt.X() = FRound( aSrcPt.X() * fScaleX );
-        aSrcPt.Y() = FRound( aSrcPt.Y() * fScaleY );
+        aSrcPt.setX( FRound( aSrcPt.X() * fScaleX ) );
+        aSrcPt.setY( FRound( aSrcPt.Y() * fScaleY ) );
     }
 
     nMoveX = rDestPt.X() - aSrcPt.X();
@@ -2458,11 +2459,11 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
             Color aReliefColor( COL_LIGHTGRAY );
             Color aTextColor( mpVDev->GetTextColor() );
 
-            if ( aTextColor.GetColor() == COL_BLACK )
-                aTextColor = Color( COL_WHITE );
+            if ( aTextColor == COL_BLACK )
+                aTextColor = COL_WHITE;
 
-            if ( aTextColor.GetColor() == COL_WHITE )
-                aReliefColor = Color( COL_BLACK );
+            if ( aTextColor == COL_WHITE )
+                aReliefColor = COL_BLACK;
 
 
             Point aPos( rPos );
@@ -2491,8 +2492,8 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
                 Color aTextColor( mpVDev->GetTextColor() );
                 Color aShadowColor( COL_BLACK );
 
-                if ( (aTextColor.GetColor() == COL_BLACK) || (aTextColor.GetLuminance() < 8) )
-                    aShadowColor = Color( COL_LIGHTGRAY );
+                if ( (aTextColor == COL_BLACK) || (aTextColor.GetLuminance() < 8) )
+                    aShadowColor = COL_LIGHTGRAY;
 
                 Point aPos( rPos );
                 aPos += Point( nOff, nOff );
@@ -2523,7 +2524,7 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
                 aPos = rPos + Point( +6, +0);
                 ImplWriteText( aPos, rText, pDXArray, nWidth, mpVDev->GetTextColor() );
 
-                ImplWriteText( rPos, rText, pDXArray, nWidth, Color( COL_WHITE ) );
+                ImplWriteText( rPos, rText, pDXArray, nWidth, COL_WHITE );
             }
         }
     }
@@ -2542,9 +2543,9 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
     const vcl::Font&                        rFont = mpVDev->GetFont();
 
     if( rFont.GetAlignment() == ALIGN_TOP )
-        aBaseLinePos.Y() += aMetric.GetAscent();
+        aBaseLinePos.AdjustY(aMetric.GetAscent() );
     else if( rFont.GetAlignment() == ALIGN_BOTTOM )
-        aBaseLinePos.Y() -= aMetric.GetDescent();
+        aBaseLinePos.AdjustY( -(aMetric.GetDescent()) );
 
     ImplMap( rPos, aPos );
 
@@ -2607,7 +2608,7 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
     {
         if( nLen > 1 )
         {
-            aNormSize.Width() = pDX[ nLen - 2 ] + mpVDev->GetTextWidth( OUString(rText[nLen - 1]) );
+            aNormSize.setWidth( pDX[ nLen - 2 ] + mpVDev->GetTextWidth( OUString(rText[nLen - 1]) ) );
 
             if( nWidth && aNormSize.Width() && ( nWidth != aNormSize.Width() ) )
             {
@@ -2683,10 +2684,10 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
             {
                 const long nYLinePos = aBaseLinePos.Y() - FRound( aMetric.GetAscent() * 0.26 );
 
-                aPoly[ 0 ].X() = aBaseLinePos.X(); aPoly[ 0 ].Y() = nYLinePos - ( nLineHeight >> 1 );
-                aPoly[ 1 ].X() = aBaseLinePos.X() + aNormSize.Width() - 1; aPoly[ 1 ].Y() = aPoly[ 0 ].Y();
-                aPoly[ 2 ].X() = aPoly[ 1 ].X(); aPoly[ 2 ].Y() = aPoly[ 0 ].Y() + nLineHeight - 1;
-                aPoly[ 3 ].X() = aPoly[ 0 ].X(); aPoly[ 3 ].Y() = aPoly[ 2 ].Y();
+                aPoly[ 0 ].setX( aBaseLinePos.X() ); aPoly[ 0 ].setY( nYLinePos - ( nLineHeight >> 1 ) );
+                aPoly[ 1 ].setX( aBaseLinePos.X() + aNormSize.Width() - 1 ); aPoly[ 1 ].setY( aPoly[ 0 ].Y() );
+                aPoly[ 2 ].setX( aPoly[ 1 ].X() ); aPoly[ 2 ].setY( aPoly[ 0 ].Y() + nLineHeight - 1 );
+                aPoly[ 3 ].setX( aPoly[ 0 ].X() ); aPoly[ 3 ].setY( aPoly[ 2 ].Y() );
 
                 ImplWritePolyPolygon( aPoly, false );
             }
@@ -2695,10 +2696,10 @@ void SVGActionWriter::ImplWriteText( const Point& rPos, const OUString& rText,
             {
                 const long  nYLinePos = aBaseLinePos.Y() + ( nLineHeight << 1 );
 
-                aPoly[ 0 ].X() = aBaseLinePos.X(); aPoly[ 0 ].Y() = nYLinePos - ( nLineHeight >> 1 );
-                aPoly[ 1 ].X() = aBaseLinePos.X() + aNormSize.Width() - 1; aPoly[ 1 ].Y() = aPoly[ 0 ].Y();
-                aPoly[ 2 ].X() = aPoly[ 1 ].X(); aPoly[ 2 ].Y() = aPoly[ 0 ].Y() + nLineHeight - 1;
-                aPoly[ 3 ].X() = aPoly[ 0 ].X(); aPoly[ 3 ].Y() = aPoly[ 2 ].Y();
+                aPoly[ 0 ].setX( aBaseLinePos.X() ); aPoly[ 0 ].setY( nYLinePos - ( nLineHeight >> 1 ) );
+                aPoly[ 1 ].setX( aBaseLinePos.X() + aNormSize.Width() - 1 ); aPoly[ 1 ].setY( aPoly[ 0 ].Y() );
+                aPoly[ 2 ].setX( aPoly[ 1 ].X() ); aPoly[ 2 ].setY( aPoly[ 0 ].Y() + nLineHeight - 1 );
+                aPoly[ 3 ].setX( aPoly[ 0 ].X() ); aPoly[ 3 ].setY( aPoly[ 2 ].Y() );
 
                 ImplWritePolyPolygon( aPoly, false );
             }
@@ -2714,8 +2715,7 @@ void SVGActionWriter::ImplWriteBmp( const BitmapEx& rBmpEx,
     if( !!rBmpEx )
     {
         BitmapEx aBmpEx( rBmpEx );
-        Point    aPoint;
-        const tools::Rectangle aBmpRect( aPoint, rBmpEx.GetSizePixel() );
+        const tools::Rectangle aBmpRect( Point(), rBmpEx.GetSizePixel() );
         const tools::Rectangle aSrcRect( rSrcPt, rSrcSz );
 
         if( aSrcRect != aBmpRect )
@@ -2962,7 +2962,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
 
                     if( rPoly.GetSize() )
                     {
-                        maAttributeWriter.AddPaintAttr( mpVDev->GetLineColor(), Color( COL_TRANSPARENT ) );
+                        maAttributeWriter.AddPaintAttr( mpVDev->GetLineColor(), COL_TRANSPARENT );
                         ImplAddLineAttr( pA->GetLineInfo() );
                         ImplWritePolyPolygon( rPoly, true );
                     }
@@ -3280,7 +3280,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
                         ImplWriteShape( *mapCurShape );
 
                         mapCurShape->maShapeFillColor = mapCurShape->maShapeLineColor;
-                        mapCurShape->maShapeLineColor = Color(COL_TRANSPARENT);
+                        mapCurShape->maShapeLineColor = COL_TRANSPARENT;
                         mapCurShape->mnStrokeWidth = 0;
                         mapCurShape->maDashArray.clear();
                         mapCurShape->maLineJoin = basegfx::B2DLineJoin::Miter;

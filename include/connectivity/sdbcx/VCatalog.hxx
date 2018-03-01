@@ -30,9 +30,9 @@
 #include <cppuhelper/compbase.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <connectivity/CommonTools.hxx>
-#include <connectivity/OSubComponent.hxx>
 #include <connectivity/sdbcx/IRefreshable.hxx>
 #include <connectivity/dbtoolsdllapi.hxx>
+#include <memory>
 
 namespace connectivity
 {
@@ -54,20 +54,18 @@ namespace connectivity
         class OOO_DLLPUBLIC_DBTOOLS SAL_NO_VTABLE OCatalog :
                             public OCatalog_BASE,
                             public IRefreshableGroups,
-                            public IRefreshableUsers,
-                            public connectivity::OSubComponent<OCatalog, OCatalog_BASE>
+                            public IRefreshableUsers
         {
-            friend class connectivity::OSubComponent<OCatalog, OCatalog_BASE>;
         protected:
 
             ::osl::Mutex        m_aMutex;
 
             // this members are deleted when the dtor is called
             // they are hold weak
-            OCollection*        m_pTables;
-            OCollection*        m_pViews;
-            OCollection*        m_pGroups;
-            OCollection*        m_pUsers;
+            std::unique_ptr<OCollection> m_pTables;
+            std::unique_ptr<OCollection> m_pViews;
+            std::unique_ptr<OCollection> m_pGroups;
+            std::unique_ptr<OCollection> m_pUsers;
 
             css::uno::Reference< css::sdbc::XDatabaseMetaData > m_xMetaData; // just to make things easier
 
@@ -103,8 +101,6 @@ namespace connectivity
 
             // ::cppu::OComponentHelper
             virtual void SAL_CALL disposing() override;
-            // XInterface
-            void SAL_CALL release() throw() override;
             // XTablesSupplier
             virtual css::uno::Reference< css::container::XNameAccess > SAL_CALL getTables(  ) override;
             // XViewsSupplier

@@ -742,7 +742,7 @@ namespace vclcanvas
                     if( aBmpEx.IsAlpha() )
                     {
                         Bitmap aMask( aBmpEx.GetAlpha().GetBitmap() );
-                        aMask.MakeMono( 253 );
+                        aMask.MakeMonochrome(253);
                         aBmpEx = BitmapEx( aBmpEx.GetBitmap(), aMask );
                     }
                     else if( aBmpEx.IsTransparent() )
@@ -1094,9 +1094,11 @@ namespace vclcanvas
 
                     default:
                     {
+                        Scanline pScan = pWriteAccess->GetScanline( y );
+
                         for( x=0; x<nWidth; ++x )
                         {
-                            pWriteAccess->SetPixel( y, x, BitmapColor( data[ nCurrPos   ],
+                            pWriteAccess->SetPixelOnData( pScan, x, BitmapColor( data[ nCurrPos   ],
                                                                        data[ nCurrPos+1 ],
                                                                        data[ nCurrPos+2 ] ) );
                             nCurrPos += 4;

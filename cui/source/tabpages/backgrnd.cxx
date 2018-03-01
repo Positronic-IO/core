@@ -21,9 +21,9 @@
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <unotools/pathoptions.hxx>
 #include <vcl/builderfactory.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/idle.hxx>
+#include <vcl/window.hxx>
 #include <tools/urlobj.hxx>
 #include <sfx2/dialoghelper.hxx>
 #include <sfx2/objsh.hxx>
@@ -51,6 +51,7 @@
 #include <svl/intitem.hxx>
 #include <sfx2/request.hxx>
 #include <svtools/grfmgr.hxx>
+#include <comphelper/lok.hxx>
 
 using namespace css;
 
@@ -205,7 +206,7 @@ void BackgroundPreviewImpl::NotifyChange( const Color& rColor )
     {
         const static Color aTranspCol( COL_TRANSPARENT );
 
-        SetFillColor( rColor == aTranspCol ? GetSettings().GetStyleSettings().GetFieldColor() : Color(rColor.GetRGBColor()) );
+        SetFillColor( rColor == aTranspCol ? GetSettings().GetStyleSettings().GetFieldColor() : rColor.GetRGBColor() );
         Invalidate(aDrawRect);
     }
 }
@@ -235,36 +236,36 @@ void BackgroundPreviewImpl::recalcDrawPos()
         Size aSize = GetOutputSizePixel();
         // InnerSize == Size without one pixel border
         Size aInnerSize = aSize;
-        aInnerSize.Width() -= 2;
-        aInnerSize.Height() -= 2;
+        aInnerSize.AdjustWidth( -2 );
+        aInnerSize.AdjustHeight( -2 );
         aDrawSize = pBitmap->GetSizePixel();
 
         // bitmap bigger than preview window?
         if (aDrawSize.Width() > aInnerSize.Width())
         {
-            aDrawSize.Height() = aDrawSize.Height() * aInnerSize.Width() / aDrawSize.Width();
+            aDrawSize.setHeight( aDrawSize.Height() * aInnerSize.Width() / aDrawSize.Width() );
             if (aDrawSize.Height() > aInnerSize.Height())
             {
-                aDrawSize.Width() = aDrawSize.Height();
-                aDrawSize.Height() = aInnerSize.Height();
+                aDrawSize.setWidth( aDrawSize.Height() );
+                aDrawSize.setHeight( aInnerSize.Height() );
             }
             else
-                aDrawSize.Width() = aInnerSize.Width();
+                aDrawSize.setWidth( aInnerSize.Width() );
         }
         else if (aDrawSize.Height() > aInnerSize.Height())
         {
-            aDrawSize.Width() = aDrawSize.Width() * aInnerSize.Height() / aDrawSize.Height();
+            aDrawSize.setWidth( aDrawSize.Width() * aInnerSize.Height() / aDrawSize.Height() );
             if (aDrawSize.Width() > aInnerSize.Width())
             {
-                aDrawSize.Height() = aDrawSize.Width();
-                aDrawSize.Width() = aInnerSize.Width();
+                aDrawSize.setHeight( aDrawSize.Width() );
+                aDrawSize.setWidth( aInnerSize.Width() );
             }
             else
-                aDrawSize.Height() = aInnerSize.Height();
+                aDrawSize.setHeight( aInnerSize.Height() );
         }
 
-        aDrawPos.X() = (aSize.Width()  - aDrawSize.Width())  / 2;
-        aDrawPos.Y() = (aSize.Height() - aDrawSize.Height()) / 2;
+        aDrawPos.setX( (aSize.Width()  - aDrawSize.Width())  / 2 );
+        aDrawPos.setY( (aSize.Height() - aDrawSize.Height()) / 2 );
     }
 }
 
@@ -283,7 +284,7 @@ void BackgroundPreviewImpl::Paint(vcl::RenderContext& rRenderContext, const ::to
 
     if (bIsBmp)
     {
-        rRenderContext.SetFillColor(Color(COL_TRANSPARENT));
+        rRenderContext.SetFillColor(COL_TRANSPARENT);
     }
     rRenderContext.DrawRect(aDrawRect);
 
@@ -758,7 +759,7 @@ bool SvxBackgroundTabPage::FillItemSet( SfxItemSet* rCoreSet )
         else if ( SfxItemState::DEFAULT == rOldSet.GetItemState( nWhich, false ) )
             rCoreSet->ClearItem( nWhich );
     }
-    else if ( SID_ATTR_BRUSH_CHAR == nSlot && aBgdColor != Color( COL_WHITE ) )
+    else if ( SID_ATTR_BRUSH_CHAR == nSlot && aBgdColor != COL_WHITE )
     {
         rCoreSet->Put( SvxBrushItem( aBgdColor, nWhich ) );
         bModified = true;
@@ -878,7 +879,7 @@ void SvxBackgroundTabPage::RaiseLoadError_Impl()
 {
     SfxErrorContext aContext( ERRCTX_SVX_BACKGROUND,
                               OUString(),
-                              this,
+                              GetFrameWeld(),
                               RID_SVXERRCTX,
                               SvxResLocale() );
 
@@ -1044,7 +1045,7 @@ SvxGraphicPosition SvxBackgroundTabPage::GetGraphicPosition_Impl()
 IMPL_LINK_NOARG(SvxBackgroundTabPage, BackgroundColorHdl_Impl, ValueSet*, void)
 {
     sal_uInt16 nItemId = m_pBackgroundColorSet->GetSelectItemId();
-    Color aColor = nItemId ? ( m_pBackgroundColorSet->GetItemColor( nItemId ) ) : Color( COL_TRANSPARENT );
+    Color aColor = nItemId ? ( m_pBackgroundColorSet->GetItemColor( nItemId ) ) : COL_TRANSPARENT;
     aBgdColor = aColor;
     m_bColorSelected = true;
     m_pPreviewWin1->NotifyChange( aBgdColor );

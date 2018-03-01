@@ -356,6 +356,10 @@ void SvxCSS1BorderInfo::SetBorderLine( SvxBoxItemLine nLine, SvxBoxItem &rBoxIte
     rBoxItem.SetLine( &aBorderLine, nLine );
 }
 
+#if __cplusplus <= 201402
+constexpr sal_uInt16 SvxCSS1PropertyInfo::UNSET_BORDER_DISTANCE;
+#endif
+
 SvxCSS1PropertyInfo::SvxCSS1PropertyInfo()
 {
     for(SvxCSS1BorderInfo* & rp : m_aBorderInfos)
@@ -427,7 +431,7 @@ void SvxCSS1PropertyInfo::Clear()
 
     m_ePosition = SVX_CSS1_POS_NONE;
     m_nTopBorderDistance = m_nBottomBorderDistance =
-    m_nLeftBorderDistance = m_nRightBorderDistance = USHRT_MAX;
+    m_nLeftBorderDistance = m_nRightBorderDistance = UNSET_BORDER_DISTANCE;
 
     m_nNumberingType = SVX_NUM_CHARS_UPPER_LETTER;
     m_cBulletChar = ' ';
@@ -476,13 +480,13 @@ void SvxCSS1PropertyInfo::Merge( const SvxCSS1PropertyInfo& rProp )
         }
     }
 
-    if( USHRT_MAX != rProp.m_nTopBorderDistance )
+    if( UNSET_BORDER_DISTANCE != rProp.m_nTopBorderDistance )
         m_nTopBorderDistance = rProp.m_nTopBorderDistance;
-    if( USHRT_MAX != rProp.m_nBottomBorderDistance )
+    if( UNSET_BORDER_DISTANCE != rProp.m_nBottomBorderDistance )
         m_nBottomBorderDistance = rProp.m_nBottomBorderDistance;
-    if( USHRT_MAX != rProp.m_nLeftBorderDistance )
+    if( UNSET_BORDER_DISTANCE != rProp.m_nLeftBorderDistance )
         m_nLeftBorderDistance = rProp.m_nLeftBorderDistance;
-    if( USHRT_MAX != rProp.m_nRightBorderDistance )
+    if( UNSET_BORDER_DISTANCE != rProp.m_nRightBorderDistance )
         m_nRightBorderDistance = rProp.m_nRightBorderDistance;
 
     m_nColumnCount = rProp.m_nColumnCount;
@@ -587,10 +591,10 @@ void SvxCSS1PropertyInfo::SetBoxItem( SfxItemSet& rItemSet,
                                       sal_uInt16 nMinBorderDist,
                                       const SvxBoxItem *pDfltItem )
 {
-    bool bChg = m_nTopBorderDistance != USHRT_MAX ||
-                m_nBottomBorderDistance != USHRT_MAX ||
-                m_nLeftBorderDistance != USHRT_MAX ||
-                m_nRightBorderDistance != USHRT_MAX;
+    bool bChg = m_nTopBorderDistance != UNSET_BORDER_DISTANCE ||
+                m_nBottomBorderDistance != UNSET_BORDER_DISTANCE ||
+                m_nLeftBorderDistance != UNSET_BORDER_DISTANCE ||
+                m_nRightBorderDistance != UNSET_BORDER_DISTANCE;
 
     for( size_t i=0; !bChg && i<SAL_N_ELEMENTS(m_aBorderInfos); ++i )
         bChg = m_aBorderInfos[i]!=nullptr;
@@ -626,25 +630,25 @@ void SvxCSS1PropertyInfo::SetBoxItem( SfxItemSet& rItemSet,
         {
         case 0: nLine = SvxBoxItemLine::TOP;
                 nDist = m_nTopBorderDistance;
-                m_nTopBorderDistance = USHRT_MAX;
+                m_nTopBorderDistance = UNSET_BORDER_DISTANCE;
                 break;
         case 1: nLine = SvxBoxItemLine::BOTTOM;
                 nDist = m_nBottomBorderDistance;
-                m_nBottomBorderDistance = USHRT_MAX;
+                m_nBottomBorderDistance = UNSET_BORDER_DISTANCE;
                 break;
         case 2: nLine = SvxBoxItemLine::LEFT;
                 nDist = m_nLeftBorderDistance;
-                m_nLeftBorderDistance = USHRT_MAX;
+                m_nLeftBorderDistance = UNSET_BORDER_DISTANCE;
                 break;
         case 3: nLine = SvxBoxItemLine::RIGHT;
                 nDist = m_nRightBorderDistance;
-                m_nRightBorderDistance = USHRT_MAX;
+                m_nRightBorderDistance = UNSET_BORDER_DISTANCE;
                 break;
         }
 
         if( aBoxItem.GetLine( nLine ) )
         {
-            if( USHRT_MAX == nDist )
+            if( UNSET_BORDER_DISTANCE == nDist )
                 nDist = aBoxItem.GetDistance( nLine );
 
             if( nDist < nMinBorderDist )
@@ -720,7 +724,6 @@ SvxCSS1Parser::SvxCSS1Parser( SfxItemPool& rPool, const OUString& rBaseURL,
     pPropInfo( nullptr ),
     nMinFixLineSpace(  MM50/2 ),
     eDfltEnc( RTL_TEXTENCODING_DONTKNOW ),
-    nScriptFlags( Css1ScriptFlags::AllMask ),
     bIgnoreFontFamily( false )
 {
     // also initialize item IDs
@@ -1055,18 +1058,11 @@ static void ParseCSS1_font_size( const CSS1Expression *pExpr,
     {
         SvxFontHeightItem aFontHeight( nHeight, nPropHeight,
                                        aItemIds.nFontHeight );
-        if( rParser.IsSetWesternProps() )
-            rItemSet.Put( aFontHeight );
-        if( rParser.IsSetCJKProps() )
-        {
-            aFontHeight.SetWhich( aItemIds.nFontHeightCJK );
-            rItemSet.Put( aFontHeight );
-        }
-        if( rParser.IsSetCTLProps() )
-        {
-            aFontHeight.SetWhich( aItemIds.nFontHeightCTL );
-            rItemSet.Put( aFontHeight );
-        }
+        rItemSet.Put( aFontHeight );
+        aFontHeight.SetWhich( aItemIds.nFontHeightCJK );
+        rItemSet.Put( aFontHeight );
+        aFontHeight.SetWhich( aItemIds.nFontHeightCTL );
+        rItemSet.Put( aFontHeight );
     }
 }
 
@@ -1131,25 +1127,18 @@ static void ParseCSS1_font_family( const CSS1Expression *pExpr,
     {
         SvxFontItem aFont( FAMILY_DONTKNOW, aName, OUString(), PITCH_DONTKNOW,
                             eEnc, aItemIds.nFont );
-        if( rParser.IsSetWesternProps() )
-            rItemSet.Put( aFont );
-        if( rParser.IsSetCJKProps() )
-        {
-            aFont.SetWhich( aItemIds.nFontCJK );
-            rItemSet.Put( aFont );
-        }
-        if( rParser.IsSetCTLProps() )
-        {
-            aFont.SetWhich( aItemIds.nFontCTL );
-            rItemSet.Put( aFont );
-        }
+        rItemSet.Put( aFont );
+        aFont.SetWhich( aItemIds.nFontCJK );
+        rItemSet.Put( aFont );
+        aFont.SetWhich( aItemIds.nFontCTL );
+        rItemSet.Put( aFont );
     }
 }
 
 static void ParseCSS1_font_weight( const CSS1Expression *pExpr,
                                    SfxItemSet &rItemSet,
                                    SvxCSS1PropertyInfo& /*rPropInfo*/,
-                                   const SvxCSS1Parser& rParser )
+                                   const SvxCSS1Parser& /*rParser*/ )
 {
     OSL_ENSURE( pExpr, "no expression" );
 
@@ -1163,18 +1152,11 @@ static void ParseCSS1_font_weight( const CSS1Expression *pExpr,
                                         nWeight ) )
             {
                 SvxWeightItem aWeight( static_cast<FontWeight>(nWeight), aItemIds.nWeight );
-                if( rParser.IsSetWesternProps() )
-                    rItemSet.Put( aWeight );
-                if( rParser.IsSetCJKProps() )
-                {
-                    aWeight.SetWhich( aItemIds.nWeightCJK );
-                    rItemSet.Put( aWeight );
-                }
-                if( rParser.IsSetCTLProps() )
-                {
-                    aWeight.SetWhich( aItemIds.nWeightCTL );
-                    rItemSet.Put( aWeight );
-                }
+                rItemSet.Put( aWeight );
+                aWeight.SetWhich( aItemIds.nWeightCJK );
+                rItemSet.Put( aWeight );
+                aWeight.SetWhich( aItemIds.nWeightCTL );
+                rItemSet.Put( aWeight );
             }
         }
         break;
@@ -1183,18 +1165,11 @@ static void ParseCSS1_font_weight( const CSS1Expression *pExpr,
             sal_uInt16 nWeight = static_cast<sal_uInt16>(pExpr->GetNumber());
             SvxWeightItem aWeight( nWeight>400 ? WEIGHT_BOLD : WEIGHT_NORMAL,
                                    aItemIds.nWeight );
-            if( rParser.IsSetWesternProps() )
-                rItemSet.Put( aWeight );
-            if( rParser.IsSetCJKProps() )
-            {
-                aWeight.SetWhich( aItemIds.nWeightCJK );
-                rItemSet.Put( aWeight );
-            }
-            if( rParser.IsSetCTLProps() )
-            {
-                aWeight.SetWhich( aItemIds.nWeightCTL );
-                rItemSet.Put( aWeight );
-            }
+            rItemSet.Put( aWeight );
+            aWeight.SetWhich( aItemIds.nWeightCJK );
+            rItemSet.Put( aWeight );
+            aWeight.SetWhich( aItemIds.nWeightCTL );
+            rItemSet.Put( aWeight );
         }
         break;
 
@@ -1206,7 +1181,7 @@ static void ParseCSS1_font_weight( const CSS1Expression *pExpr,
 static void ParseCSS1_font_style( const CSS1Expression *pExpr,
                                   SfxItemSet &rItemSet,
                                   SvxCSS1PropertyInfo& /*rPropInfo*/,
-                                  const SvxCSS1Parser& rParser )
+                                  const SvxCSS1Parser& /*rParser*/ )
 {
     OSL_ENSURE( pExpr, "no expression" );
 
@@ -1254,18 +1229,11 @@ static void ParseCSS1_font_style( const CSS1Expression *pExpr,
     if( bPosture )
     {
         SvxPostureItem aPosture( eItalic, aItemIds.nPosture );
-        if( rParser.IsSetWesternProps() )
-            rItemSet.Put( aPosture );
-        if( rParser.IsSetCJKProps() )
-        {
-            aPosture.SetWhich( aItemIds.nPostureCJK );
-            rItemSet.Put( aPosture );
-        }
-        if( rParser.IsSetCTLProps() )
-        {
-            aPosture.SetWhich( aItemIds.nPostureCTL );
-            rItemSet.Put( aPosture );
-        }
+        rItemSet.Put( aPosture );
+        aPosture.SetWhich( aItemIds.nPostureCJK );
+        rItemSet.Put( aPosture );
+        aPosture.SetWhich( aItemIds.nPostureCTL );
+        rItemSet.Put( aPosture );
     }
 
     if( bCaseMap )
@@ -1576,7 +1544,7 @@ static void ParseCSS1_background( const CSS1Expression *pExpr,
         SvxBrushItem aBrushItem( aItemIds.nBrush );
 
         if( bTransparent )
-            aBrushItem.SetColor( Color(COL_TRANSPARENT));
+            aBrushItem.SetColor( COL_TRANSPARENT);
         else if( bColor )
             aBrushItem.SetColor( aColor );
 
@@ -1628,7 +1596,7 @@ static void ParseCSS1_background_color( const CSS1Expression *pExpr,
         SvxBrushItem aBrushItem( aItemIds.nBrush );
 
         if( bTransparent )
-            aBrushItem.SetColor( Color(COL_TRANSPARENT) );
+            aBrushItem.SetColor( COL_TRANSPARENT );
         else if( bColor )
             aBrushItem.SetColor( aColor);
 
@@ -1781,34 +1749,20 @@ static void ParseCSS1_font( const CSS1Expression *pExpr,
     // Since "font" resets all values for which nothing is specified,
     // we do it here.
     SvxPostureItem aPosture( eItalic, aItemIds.nPosture );
-    if( rParser.IsSetWesternProps() )
-        rItemSet.Put( aPosture );
-    if( rParser.IsSetCJKProps() )
-    {
-        aPosture.SetWhich( aItemIds.nPostureCJK );
-        rItemSet.Put( aPosture );
-    }
-    if( rParser.IsSetCTLProps() )
-    {
-        aPosture.SetWhich( aItemIds.nPostureCTL );
-        rItemSet.Put( aPosture );
-    }
+    rItemSet.Put( aPosture );
+    aPosture.SetWhich( aItemIds.nPostureCJK );
+    rItemSet.Put( aPosture );
+    aPosture.SetWhich( aItemIds.nPostureCTL );
+    rItemSet.Put( aPosture );
 
     rItemSet.Put( SvxCaseMapItem( eCaseMap, aItemIds.nCaseMap ) );
 
     SvxWeightItem aWeight( eWeight, aItemIds.nWeight );
-    if( rParser.IsSetWesternProps() )
-        rItemSet.Put( aWeight );
-    if( rParser.IsSetCJKProps() )
-    {
-        aWeight.SetWhich( aItemIds.nWeightCJK );
-        rItemSet.Put( aWeight );
-    }
-    if( rParser.IsSetCTLProps() )
-    {
-        aWeight.SetWhich( aItemIds.nWeightCTL );
-        rItemSet.Put( aWeight );
-    }
+    rItemSet.Put( aWeight );
+    aWeight.SetWhich( aItemIds.nWeightCJK );
+    rItemSet.Put( aWeight );
+    aWeight.SetWhich( aItemIds.nWeightCTL );
+    rItemSet.Put( aWeight );
 
     // font-size
     CSS1Expression aExpr( pExpr->GetType(), pExpr->GetString(),
@@ -1852,10 +1806,14 @@ static void ParseCSS1_letter_spacing( const CSS1Expression *pExpr,
 
     case CSS1_PIXLENGTH:
         {
-            long nPWidth = static_cast<long>(pExpr->GetNumber());
-            long nPHeight = 0;
-            SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
-            rItemSet.Put( SvxKerningItem( static_cast<short>(nPWidth), aItemIds.nKerning ) );
+            double fHeight = pExpr->GetNumber();
+            if (fHeight < SAL_MAX_INT32/2.0 && fHeight > SAL_MIN_INT32/2.0)
+            {
+                long nPWidth = static_cast<long>(fHeight);
+                long nPHeight = 0;
+                SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
+                rItemSet.Put( SvxKerningItem( static_cast<short>(nPWidth), aItemIds.nKerning ) );
+            }
         }
         break;
 
@@ -2143,10 +2101,14 @@ static void ParseCSS1_margin_right( const CSS1Expression *pExpr,
         break;
     case CSS1_PIXLENGTH:
         {
-            nRight = static_cast<long>(pExpr->GetNumber());
-            long nPHeight = 0;
-            SvxCSS1Parser::PixelToTwip( nRight, nPHeight );
-            bSet = true;
+            double fRight = pExpr->GetNumber();
+            if (fRight < SAL_MAX_INT32/2.0 && fRight > SAL_MIN_INT32/2.0)
+            {
+                nRight = static_cast<long>(fRight);
+                long nPHeight = 0;
+                SvxCSS1Parser::PixelToTwip( nRight, nPHeight );
+                bSet = true;
+            }
         }
         break;
     case CSS1_PERCENTAGE:
@@ -2201,13 +2163,17 @@ static void ParseCSS1_margin_top( const CSS1Expression *pExpr,
         break;
     case CSS1_PIXLENGTH:
         {
-            long nPWidth = 0;
-            long nPHeight =  static_cast<long>(pExpr->GetNumber());
-            if( nPHeight < 0 )
-                nPHeight = 0;
-            SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
-            nUpper = static_cast<sal_uInt16>(nPHeight);
-            bSet = true;
+            double fHeight = pExpr->GetNumber();
+            if (fHeight < SAL_MAX_INT32/2.0 && fHeight > SAL_MIN_INT32/2.0)
+            {
+                long nPWidth = 0;
+                long nPHeight =  static_cast<long>(fHeight);
+                if( nPHeight < 0 )
+                    nPHeight = 0;
+                SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
+                nUpper = static_cast<sal_uInt16>(nPHeight);
+                bSet = true;
+            }
         }
         break;
     case CSS1_PERCENTAGE:
@@ -2259,13 +2225,17 @@ static void ParseCSS1_margin_bottom( const CSS1Expression *pExpr,
         break;
     case CSS1_PIXLENGTH:
         {
-            long nPWidth = 0;
-            long nPHeight =  static_cast<long>(pExpr->GetNumber());
-            if( nPHeight < 0 )
-                nPHeight = 0;
-            SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
-            nLower = static_cast<sal_uInt16>(nPHeight);
-            bSet = true;
+            double fHeight = pExpr->GetNumber();
+            if (fHeight < SAL_MAX_INT32/2.0 && fHeight > SAL_MIN_INT32/2.0)
+            {
+                long nPWidth = 0;
+                long nPHeight =  static_cast<long>(fHeight);
+                if( nPHeight < 0 )
+                    nPHeight = 0;
+                SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
+                nLower = static_cast<sal_uInt16>(nPHeight);
+                bSet = true;
+            }
         }
         break;
     case CSS1_PERCENTAGE:
@@ -2459,23 +2429,27 @@ static bool ParseCSS1_padding_xxx( const CSS1Expression *pExpr,
             long nTmp = pExpr->GetSLength();
             if( nTmp < 0 )
                 nTmp = 0;
-            else if( nTmp > USHRT_MAX-1 )
-                nTmp = USHRT_MAX-1;
+            else if( nTmp > SvxCSS1PropertyInfo::UNSET_BORDER_DISTANCE-1 )
+                nTmp = SvxCSS1PropertyInfo::UNSET_BORDER_DISTANCE-1;
             nDist = static_cast<sal_uInt16>(nTmp);
             bSet = true;
         }
         break;
     case CSS1_PIXLENGTH:
         {
-            long nPWidth = static_cast<long>(pExpr->GetNumber());
-            long nPHeight = 0;
-            if( nPWidth < 0 )
-                nPWidth = 0;
-            SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
-            if( nPWidth > USHRT_MAX-1 )
-                nPWidth = USHRT_MAX-1;
-            nDist = static_cast<sal_uInt16>(nPWidth);
-            bSet = true;
+            double fWidth = pExpr->GetNumber();
+            if (fWidth < SAL_MAX_INT32/2.0 && fWidth > SAL_MIN_INT32/2.0)
+            {
+                long nPWidth = static_cast<long>(fWidth);
+                long nPHeight = 0;
+                if( nPWidth < 0 )
+                    nPWidth = 0;
+                SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
+                if( nPWidth > SvxCSS1PropertyInfo::UNSET_BORDER_DISTANCE-1 )
+                    nPWidth = SvxCSS1PropertyInfo::UNSET_BORDER_DISTANCE-1;
+                nDist = static_cast<sal_uInt16>(nPWidth);
+                bSet = true;
+            }
         }
         break;
     case CSS1_PERCENTAGE:
@@ -2605,12 +2579,13 @@ static void ParseCSS1_border_xxx( const CSS1Expression *pExpr,
 
         case CSS1_PIXLENGTH:
             {
-                bool bHori = nWhichLine == SvxBoxItemLine::TOP ||
-                             nWhichLine == SvxBoxItemLine::BOTTOM;
                 // One Pixel becomes a hairline (is prettier)
                 double fWidth = pExpr->GetNumber();
                 if (fWidth > 1.0 && fWidth < SAL_MAX_INT32/2.0)
                 {
+                    bool bHori = nWhichLine == SvxBoxItemLine::TOP ||
+                                 nWhichLine == SvxBoxItemLine::BOTTOM;
+
                     long nPWidth = bHori ? 0 : fWidth;
                     long nPHeight = bHori ? fWidth : 0;
                     SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
@@ -2680,13 +2655,19 @@ static void ParseCSS1_border_xxx_width( const CSS1Expression *pExpr,
 
     case CSS1_PIXLENGTH:
         {
-            bool bHori = nWhichLine == SvxBoxItemLine::TOP ||
-                         nWhichLine == SvxBoxItemLine::BOTTOM;
-            long nWidthL = static_cast<long>(pExpr->GetNumber());
-            long nPWidth = bHori ? 0 : nWidthL;
-            long nPHeight = bHori ? nWidthL : 0;
-            SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
-            nWidth = static_cast<sal_uInt16>(bHori ? nPHeight : nPWidth);
+            double fLength = pExpr->GetNumber();
+            if (fLength < SAL_MAX_INT32/2.0 && fLength > SAL_MIN_INT32/2.0)
+            {
+                long nWidthL = static_cast<long>(fLength);
+
+                bool bHori = nWhichLine == SvxBoxItemLine::TOP ||
+                             nWhichLine == SvxBoxItemLine::BOTTOM;
+
+                long nPWidth = bHori ? 0 : nWidthL;
+                long nPHeight = bHori ? nWidthL : 0;
+                SvxCSS1Parser::PixelToTwip( nPWidth, nPHeight );
+                nWidth = static_cast<sal_uInt16>(bHori ? nPHeight : nPWidth);
+            }
         }
         break;
 
@@ -3091,7 +3072,7 @@ static void ParseCSS1_orphans( const CSS1Expression *pExpr,
 static void ParseCSS1_so_language( const CSS1Expression *pExpr,
                                SfxItemSet &rItemSet,
                                SvxCSS1PropertyInfo& /*rPropInfo*/,
-                               const SvxCSS1Parser& rParser )
+                               const SvxCSS1Parser& /*rParser*/ )
 {
     if( CSS1_IDENT == pExpr->GetType() ||
         CSS1_STRING == pExpr->GetType() )
@@ -3100,18 +3081,11 @@ static void ParseCSS1_so_language( const CSS1Expression *pExpr,
         if( LANGUAGE_DONTKNOW != eLang )
         {
             SvxLanguageItem aLang( eLang, aItemIds.nLanguage );
-            if( rParser.IsSetWesternProps() )
-                rItemSet.Put( aLang );
-            if( rParser.IsSetCJKProps() )
-            {
-                aLang.SetWhich( aItemIds.nLanguageCJK );
-                rItemSet.Put( aLang );
-            }
-            if( rParser.IsSetCTLProps() )
-            {
-                aLang.SetWhich( aItemIds.nLanguageCTL );
-                rItemSet.Put( aLang );
-            }
+            rItemSet.Put( aLang );
+            aLang.SetWhich( aItemIds.nLanguageCJK );
+            rItemSet.Put( aLang );
+            aLang.SetWhich( aItemIds.nLanguageCTL );
+            rItemSet.Put( aLang );
         }
     }
 }

@@ -32,7 +32,7 @@
 #include <basic/sbx.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/sharedstringpool.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/msgbox.hxx>
 #include <rtl/math.hxx>
 
@@ -181,7 +181,7 @@ bool ScValidationData::GetErrMsg( OUString& rTitle, OUString& rMsg,
 }
 
 bool ScValidationData::DoScript( const ScAddress& rPos, const OUString& rInput,
-                                ScFormulaCell* pCell, vcl::Window* pParent ) const
+                                ScFormulaCell* pCell, weld::Window* pParent ) const
 {
     ScDocument* pDocument = GetDocument();
     SfxObjectShell* pDocSh = pDocument->GetDocumentShell();
@@ -251,9 +251,10 @@ bool ScValidationData::DoScript( const ScAddress& rPos, const OUString& rInput,
     // Macro not found (only with input)
     {
         //TODO: different error message, if found, but not bAllowed ??
-
-        ScopedVclPtrInstance< MessageDialog > aBox( pParent, ScGlobal::GetRscString(STR_VALID_MACRONOTFOUND));
-        aBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent,
+                                                  VclMessageType::Warning, VclButtonsType::Ok,
+                                                  ScGlobal::GetRscString(STR_VALID_MACRONOTFOUND)));
+        xBox->run();
     }
 
     return bScriptReturnedFalse;
@@ -262,7 +263,7 @@ bool ScValidationData::DoScript( const ScAddress& rPos, const OUString& rInput,
     // true -> abort
 
 bool ScValidationData::DoMacro( const ScAddress& rPos, const OUString& rInput,
-                                ScFormulaCell* pCell, vcl::Window* pParent ) const
+                                ScFormulaCell* pCell, weld::Window* pParent ) const
 {
     if ( SfxApplication::IsXScriptURL( aErrorTitle ) )
     {
@@ -356,9 +357,10 @@ bool ScValidationData::DoMacro( const ScAddress& rPos, const OUString& rInput,
     if ( !bDone && !pCell )         // Macro not found (only with input)
     {
         //TODO: different error message, if found, but not bAllowed ??
-
-        ScopedVclPtrInstance< MessageDialog > aBox(pParent, ScGlobal::GetRscString(STR_VALID_MACRONOTFOUND));
-        aBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent,
+                                                  VclMessageType::Warning, VclButtonsType::Ok,
+                                                  ScGlobal::GetRscString(STR_VALID_MACRONOTFOUND)));
+        xBox->run();
     }
 
     return bRet;
@@ -372,11 +374,11 @@ void ScValidationData::DoCalcError( ScFormulaCell* pCell ) const
 
     // true -> abort
 
-bool ScValidationData::DoError( vcl::Window* pParent, const OUString& rInput,
-                                const ScAddress& rPos ) const
+bool ScValidationData::DoError(weld::Window* pParent, const OUString& rInput,
+                               const ScAddress& rPos) const
 {
     if ( eErrorStyle == SC_VALERR_MACRO )
-        return DoMacro( rPos, rInput, nullptr, pParent );
+        return DoMacro(rPos, rInput, nullptr, pParent);
 
     //  Output error message
 
@@ -387,29 +389,39 @@ bool ScValidationData::DoError( vcl::Window* pParent, const OUString& rInput,
     if (aMessage.isEmpty())
         aMessage = ScGlobal::GetRscString( STR_VALID_DEFERROR );
 
-    //TODO: ErrorBox / WarningBox / InfoBox ?
-    //TODO: (with InfoBox always OK-Button only)
-
-    MessBoxStyle nStyle = MessBoxStyle::NONE;
+    VclButtonsType eStyle = VclButtonsType::Ok;
+    VclMessageType eType = VclMessageType::Error;
     switch (eErrorStyle)
     {
-        case SC_VALERR_STOP:
-            nStyle = MessBoxStyle::Ok | MessBoxStyle::DefaultOk;
+        case SC_VALERR_INFO:
+            eType = VclMessageType::Info;
+            eStyle = VclButtonsType::OkCancel;
             break;
         case SC_VALERR_WARNING:
-            nStyle = MessBoxStyle::OkCancel | MessBoxStyle::DefaultCancel;
-            break;
-        case SC_VALERR_INFO:
-            nStyle = MessBoxStyle::OkCancel | MessBoxStyle::DefaultOk;
+            eType = VclMessageType::Warning;
+            eStyle = VclButtonsType::OkCancel;
             break;
         default:
-        {
-            // added to avoid warnings
-        }
+            break;
     }
 
-    ScopedVclPtrInstance< MessBox > aBox( pParent, nStyle, 0, aTitle, aMessage );
-    sal_uInt16 nRet = aBox->Execute();
+    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent, eType,
+                                              eStyle, aMessage));
+    xBox->set_title(aTitle);
+
+    switch (eErrorStyle)
+    {
+        case SC_VALERR_INFO:
+            xBox->set_default_response(RET_OK);
+            break;
+        case SC_VALERR_WARNING:
+            xBox->set_default_response(RET_CANCEL);
+            break;
+        default:
+            break;
+    }
+
+    short nRet = xBox->run();
 
     return ( eErrorStyle == SC_VALERR_STOP || nRet == RET_CANCEL );
 }

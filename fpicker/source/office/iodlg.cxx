@@ -40,7 +40,6 @@
 #include <svtools/sfxecode.hxx>
 #include <svtools/svtabbx.hxx>
 #include <svtools/treelistentry.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 
 #include <fpicker/strings.hrc>
 #include <svtools/helpids.h>
@@ -69,6 +68,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 
 #include <comphelper/interaction.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 
@@ -118,7 +118,7 @@ namespace
     OUString getMostCurrentFilter( std::unique_ptr<SvtExpFileDlg_Impl> const & pImpl )
     {
         assert( pImpl && "invalid impl pointer" );
-        const SvtFileDialogFilter_Impl* pFilter = pImpl->_pUserFilter;
+        const SvtFileDialogFilter_Impl* pFilter = pImpl->_pUserFilter.get();
 
         if ( !pFilter )
             pFilter = pImpl->GetCurFilter();
@@ -390,7 +390,7 @@ public:
 
         // Resize the Splitter to fit the height
         Size splitterNewSize = _pSplitter->GetSizePixel( );
-        splitterNewSize.Height() = aSize.Height();
+        splitterNewSize.setHeight( aSize.Height() );
         _pSplitter->SetSizePixel( splitterNewSize );
         sal_Int32 nMinX = pImpl->_pPlaces->GetPosPixel( ).X( );
         sal_Int32 nMaxX = _pFileView->GetPosPixel( ).X( ) + _pFileView->GetSizePixel( ).Width() - nMinX;
@@ -398,7 +398,7 @@ public:
 
         // Resize the places list box to fit the height of the FileView
         Size placesNewSize(pImpl->_pPlaces->GetSizePixel());
-        placesNewSize.Height() = aSize.Height();
+        placesNewSize.setHeight( aSize.Height() );
         pImpl->_pPlaces->SetSizePixel( placesNewSize );
     }
 
@@ -563,6 +563,8 @@ void SvtFileDialog::Init_Impl
     get(pImpl->_pLbTemplates, "shared");
     get(pImpl->_pFtImageTemplates, "shared_label");
     get(pImpl->_pLbImageTemplates, "shared");
+    get(pImpl->_pFtImageAnchor, "shared_label");
+    get(pImpl->_pLbImageAnchor, "shared");
 
     pImpl->_pLbImageTemplates->setMaxWidthChars(40);
     pImpl->_pLbFilter->setMaxWidthChars(40);
@@ -765,8 +767,7 @@ IMPL_LINK_NOARG( SvtFileDialog, NewFolderHdl_Impl, Button*, void)
 void SvtFileDialog::createNewUserFilter( const OUString& _rNewFilter )
 {
     // delete the old user filter and create a new one
-    DELETEZ( pImpl->_pUserFilter );
-    pImpl->_pUserFilter = new SvtFileDialogFilter_Impl( _rNewFilter, _rNewFilter );
+    pImpl->_pUserFilter.reset( new SvtFileDialogFilter_Impl( _rNewFilter, _rNewFilter ) );
 
     // remember the extension
     bool bIsAllFiles = _rNewFilter == FILEDIALOG_FILTER_ALL;
@@ -907,7 +908,7 @@ void SvtFileDialog::OpenHdl_Impl(void const * pVoid)
     // MBA->PB: ?!
     if ( aFileName.isEmpty() && pVoid == pImpl->_pEdFileName && pImpl->_pUserFilter )
     {
-        DELETEZ( pImpl->_pUserFilter );
+        pImpl->_pUserFilter.reset();
         return;
     }
 
@@ -1074,8 +1075,9 @@ void SvtFileDialog::OpenHdl_Impl(void const * pVoid)
                     "$filename$",
                     aFileObj.getName(INetURLObject::LAST_SEGMENT, true, INetURLObject::DecodeMechanism::WithCharset)
                 );
-                ScopedVclPtrInstance< MessageDialog > aBox(this, aMsg, VclMessageType::Question, VclButtonsType::YesNo);
-                if ( aBox->Execute() != RET_YES )
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Question, VclButtonsType::YesNo, aMsg));
+                if (xBox->run() != RET_YES)
                     return;
             }
             else
@@ -1119,8 +1121,9 @@ void SvtFileDialog::OpenHdl_Impl(void const * pVoid)
                     }
                     sError = sError.replaceFirst( "$name$", sInvalidFile );
 
-                    ScopedVclPtrInstance< MessageDialog > aError(this, sError);
-                    aError->Execute();
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                              VclMessageType::Warning, VclButtonsType::Ok, sError));
+                    xBox->run();
                     return;
                 }
             }
@@ -1178,7 +1181,7 @@ IMPL_LINK_NOARG( SvtFileDialog, FilterSelectHdl_Impl, ListBox&, void )
         {
             // Store the old filter for the auto extension handling
             OUString sLastFilterExt = pImpl->GetCurFilter()->GetExtension();
-            DELETEZ( pImpl->_pUserFilter );
+            pImpl->_pUserFilter.reset();
 
             // if applicable remove filter of the user
             pImpl->SetCurFilter( pSelectedFilter, sSelectedFilterDisplayName );
@@ -1682,7 +1685,8 @@ short SvtFileDialog::Execute()
 
 void SvtFileDialog::StartExecuteModal( const Link<Dialog&,void>& rEndDialogHdl )
 {
-    PrepareExecute();
+    if (!PrepareExecute())
+        return;
 
     // start of the dialog
     ModalDialog::StartExecuteModal( rEndDialogHdl );
@@ -1797,6 +1801,9 @@ void SvtFileDialog::EnableControl( Control* _pControl, bool _bEnable )
 
 short SvtFileDialog::PrepareExecute()
 {
+    if (comphelper::LibreOfficeKit::isActive())
+        return 0;
+
     OUString aEnvValue;
     if ( getEnvironmentValue( "WorkDirMustContainRemovableMedia", aEnvValue ) && aEnvValue == "1" )
     {
@@ -1828,8 +1835,10 @@ short SvtFileDialog::PrepareExecute()
 
                 if ( bEmpty )
                 {
-                    ScopedVclPtrInstance< MessageDialog > aBox(this, FpsResId(STR_SVT_NOREMOVABLEDEVICE));
-                    aBox->Execute();
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                              VclMessageType::Warning, VclButtonsType::Ok,
+                                                              FpsResId(STR_SVT_NOREMOVABLEDEVICE)));
+                    xBox->run();
                     return 0;
                 }
             }
@@ -2376,6 +2385,12 @@ Control* SvtFileDialog::getControl( sal_Int16 _nControlId, bool _bLabelControl )
                     :   static_cast< Control* >( pImpl->_pLbImageTemplates );
             break;
 
+        case LISTBOX_IMAGE_ANCHOR:
+            pReturn =   _bLabelControl
+                    ?   static_cast< Control* >( pImpl->_pFtImageAnchor )
+                    :   static_cast< Control* >( pImpl->_pLbImageAnchor );
+            break;
+
         case LISTBOX_VERSION_LABEL:
             pReturn = pImpl->_pFtFileVersion;
             break;
@@ -2386,6 +2401,10 @@ Control* SvtFileDialog::getControl( sal_Int16 _nControlId, bool _bLabelControl )
 
         case LISTBOX_IMAGE_TEMPLATE_LABEL:
             pReturn = pImpl->_pFtImageTemplates;
+            break;
+
+        case LISTBOX_IMAGE_ANCHOR_LABEL:
+            pReturn = pImpl->_pFtImageAnchor;
             break;
 
         case PUSHBUTTON_OK:
@@ -2464,7 +2483,7 @@ void SvtFileDialog::AddControls_Impl( )
         _pPrevWin->Show();
 
         _pPrevBmp = VclPtr<FixedBitmap>::Create( _pPrevWin, WinBits( WB_BORDER ) );
-        _pPrevBmp->SetBackground( Wallpaper( Color( COL_WHITE ) ) );
+        _pPrevBmp->SetBackground( Wallpaper( COL_WHITE ) );
         _pPrevBmp->SetSizePixel(_pPrevWin->GetSizePixel());
         _pPrevBmp->Show();
         _pPrevBmp->SetAccessibleName(FpsResId(STR_PREVIEW));
@@ -2526,6 +2545,14 @@ void SvtFileDialog::AddControls_Impl( )
 
         pImpl->_pLbImageTemplates->SetHelpId( HID_FILEOPEN_IMAGE_TEMPLATE );
         pImpl->_pLbImageTemplates->Show();
+    }
+    else if ( _nPickerFlags & PickerFlags::ImageAnchor )
+    {
+        pImpl->_pFtImageAnchor->SetText( FpsResId( STR_SVT_FILEPICKER_IMAGE_ANCHOR ) );
+        pImpl->_pFtImageAnchor->Show();
+
+        pImpl->_pLbImageAnchor->SetHelpId( HID_FILEOPEN_IMAGE_ANCHOR );
+        pImpl->_pLbImageAnchor->Show();
     }
 
     pImpl->_pPlaces = VclPtr<PlacesListBox>::Create(_pContainer, this, FpsResId(STR_PLACES_TITLE), WB_BORDER);
@@ -2721,16 +2748,16 @@ IMPL_LINK_NOARG( SvtFileDialog, Split_Hdl, Splitter*, void )
     // Resize the places list
     sal_Int32 nPlaceX = pImpl->_pPlaces->GetPosPixel( ).X();
     Size placeSize = pImpl->_pPlaces->GetSizePixel( );
-    placeSize.Width() = nSplitPos - nPlaceX;
+    placeSize.setWidth( nSplitPos - nPlaceX );
     pImpl->_pPlaces->SetSizePixel( placeSize );
 
     // Change Pos and size of the fileview
     Point fileViewPos = _pFileView->GetPosPixel();
     sal_Int32 nOldX = fileViewPos.X();
     sal_Int32 nNewX = nSplitPos + _pSplitter->GetSizePixel().Width();
-    fileViewPos.X() = nNewX;
+    fileViewPos.setX( nNewX );
     Size fileViewSize = _pFileView->GetSizePixel();
-    fileViewSize.Width() -= ( nNewX - nOldX );
+    fileViewSize.AdjustWidth( -( nNewX - nOldX ) );
     _pFileView->SetPosSizePixel( fileViewPos, fileViewSize );
 
     _pSplitter->SetPosPixel( Point( placeSize.Width(), _pSplitter->GetPosPixel().Y() ) );

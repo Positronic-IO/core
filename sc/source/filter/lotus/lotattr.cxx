@@ -51,14 +51,14 @@ LotAttrCache::LotAttrCache (LOTUS_ROOT* pLotRoot)
     pDocPool = mpLotusRoot->pDoc->GetPool();
 
     pColTab = new Color [ 8 ];
-    pColTab[ 0 ] = Color( COL_WHITE );
-    pColTab[ 1 ] = Color( COL_LIGHTBLUE );
-    pColTab[ 2 ] = Color( COL_LIGHTGREEN );
-    pColTab[ 3 ] = Color( COL_LIGHTCYAN );
-    pColTab[ 4 ] = Color( COL_LIGHTRED );
-    pColTab[ 5 ] = Color( COL_LIGHTMAGENTA );
-    pColTab[ 6 ] = Color( COL_YELLOW );
-    pColTab[ 7 ] = Color( COL_BLACK );
+    pColTab[ 0 ] = COL_WHITE;
+    pColTab[ 1 ] = COL_LIGHTBLUE;
+    pColTab[ 2 ] = COL_LIGHTGREEN;
+    pColTab[ 3 ] = COL_LIGHTCYAN;
+    pColTab[ 4 ] = COL_LIGHTRED;
+    pColTab[ 5 ] = COL_LIGHTMAGENTA;
+    pColTab[ 6 ] = COL_YELLOW;
+    pColTab[ 7 ] = COL_BLACK;
 
     ppColorItems[ 0 ] = new SvxColorItem( GetColor( 1 ), ATTR_FONT_COLOR );     // 1
     ppColorItems[ 1 ] = new SvxColorItem( GetColor( 2 ), ATTR_FONT_COLOR );
@@ -67,7 +67,7 @@ LotAttrCache::LotAttrCache (LOTUS_ROOT* pLotRoot)
     ppColorItems[ 4 ] = new SvxColorItem( GetColor( 5 ), ATTR_FONT_COLOR );
     ppColorItems[ 5 ] = new SvxColorItem( GetColor( 6 ), ATTR_FONT_COLOR );     // 6
 
-    pWhite = new SvxColorItem( Color( COL_WHITE ), ATTR_FONT_COLOR );
+    pWhite = new SvxColorItem( COL_WHITE, ATTR_FONT_COLOR );
 }
 
 LotAttrCache::~LotAttrCache()
@@ -96,9 +96,9 @@ const ScPatternAttr& LotAttrCache::GetPattAttr( const LotAttrWK3& rAttr )
     ScPatternAttr*  pNewPatt = new ScPatternAttr(pDocPool);
 
     SfxItemSet&     rItemSet = pNewPatt->GetItemSet();
-    ENTRY *pAkt = new ENTRY( pNewPatt );
+    ENTRY *pCurrent = new ENTRY( pNewPatt );
 
-    pAkt->nHash0 = nRefHash;
+    pCurrent->nHash0 = nRefHash;
 
     mpLotusRoot->maFontBuff.Fill( rAttr.nFont, rItemSet );
 
@@ -144,7 +144,7 @@ const ScPatternAttr& LotAttrCache::GetPattAttr( const LotAttrWK3& rAttr )
         rItemSet.Put( aHorJustify );
     }
 
-    aEntries.push_back(std::unique_ptr<ENTRY>(pAkt));
+    aEntries.push_back(std::unique_ptr<ENTRY>(pCurrent));
 
     return *pNewPatt;
 }
@@ -188,7 +188,7 @@ void LotAttrCol::SetAttr( const SCROW nRow, const ScPatternAttr& rAttr )
 {
     // Actually with the current implementation of MAXROWCOUNT>=64k and nRow
     // being read as sal_uInt16 there's no chance that nRow would be invalid..
-    SAL_WARN_IF( !ValidRow(nRow), "sc", "*LotAttrCol::SetAttr(): ... and failed?!" );
+    SAL_WARN_IF( !ValidRow(nRow), "sc.filter", "*LotAttrCol::SetAttr(): ... and failed?!" );
 
     std::vector<std::unique_ptr<ENTRY> >::reverse_iterator iterLast = aEntries.rbegin();
 
@@ -198,21 +198,21 @@ void LotAttrCol::SetAttr( const SCROW nRow, const ScPatternAttr& rAttr )
             (*iterLast)->nLastRow = nRow;
         else
         {
-            ENTRY *pAkt = new ENTRY;
+            ENTRY *pCurrent = new ENTRY;
 
-            pAkt->pPattAttr = &rAttr;
-            pAkt->nFirstRow = pAkt->nLastRow = nRow;
+            pCurrent->pPattAttr = &rAttr;
+            pCurrent->nFirstRow = pCurrent->nLastRow = nRow;
 
-            aEntries.push_back(std::unique_ptr<ENTRY>(pAkt));
+            aEntries.push_back(std::unique_ptr<ENTRY>(pCurrent));
         }
     }
     else
     {   // first entry
-        ENTRY *pAkt = new ENTRY;
-        pAkt->pPattAttr = &rAttr;
-        pAkt->nFirstRow = pAkt->nLastRow = nRow;
+        ENTRY *pCurrent = new ENTRY;
+        pCurrent->pPattAttr = &rAttr;
+        pCurrent->nFirstRow = pCurrent->nLastRow = nRow;
 
-        aEntries.push_back(std::unique_ptr<ENTRY>(pAkt));
+        aEntries.push_back(std::unique_ptr<ENTRY>(pCurrent));
     }
 }
 

@@ -196,10 +196,10 @@ tools::Rectangle EditView::GetInvalidateRect() const
     {
         tools::Rectangle aRect( pImpEditView->aOutArea );
         long nMore = pImpEditView->GetWindow()->PixelToLogic( Size( pImpEditView->GetInvalidateMore(), 0 ) ).Width();
-        aRect.Left() -= nMore;
-        aRect.Right() += nMore;
-        aRect.Top() -= nMore;
-        aRect.Bottom() += nMore;
+        aRect.AdjustLeft( -nMore );
+        aRect.AdjustRight(nMore );
+        aRect.AdjustTop( -nMore );
+        aRect.AdjustBottom(nMore );
         return aRect;
     }
 }
@@ -408,7 +408,7 @@ const Pointer& EditView::GetPointer() const
 
 vcl::Cursor* EditView::GetCursor() const
 {
-    return pImpEditView->pCursor;
+    return pImpEditView->pCursor.get();
 }
 
 void EditView::InsertText( const OUString& rStr, bool bSelect )

@@ -115,6 +115,8 @@ bool ImplScaleConvolutionHor(Bitmap& rSource, Bitmap& rTarget, const double& rSc
         {
             for(long y(0); y < nHeight; y++)
             {
+                Scanline pScanline = pWriteAcc->GetScanline( y );
+                Scanline pScanlineRead = pReadAcc->GetScanline( y );
                 for(long x(0); x < nNewWidth; x++)
                 {
                     const long aBaseIndex(x * aNumberOfContributions);
@@ -133,11 +135,11 @@ bool ImplScaleConvolutionHor(Bitmap& rSource, Bitmap& rTarget, const double& rSc
 
                         if(pReadAcc->HasPalette())
                         {
-                            aColor = pReadAcc->GetPaletteColor(pReadAcc->GetPixelIndex(y, pPixels[aIndex]));
+                            aColor = pReadAcc->GetPaletteColor(pReadAcc->GetIndexFromData(pScanlineRead, pPixels[aIndex]));
                         }
                         else
                         {
-                            aColor = pReadAcc->GetPixel(y, pPixels[aIndex]);
+                            aColor = pReadAcc->GetPixelFromData(pScanlineRead, pPixels[aIndex]);
                         }
 
                         aValueRed += aWeight * aColor.GetRed();
@@ -150,7 +152,7 @@ bool ImplScaleConvolutionHor(Bitmap& rSource, Bitmap& rTarget, const double& rSc
                         static_cast< sal_uInt8 >(MinMax(static_cast< sal_Int32 >(aValueGreen / aSum), 0, 255)),
                         static_cast< sal_uInt8 >(MinMax(static_cast< sal_Int32 >(aValueBlue / aSum), 0, 255)));
 
-                    pWriteAcc->SetPixel(y, x, aResultColor);
+                    pWriteAcc->SetPixelOnData(pScanline, x, aResultColor);
                 }
             }
 

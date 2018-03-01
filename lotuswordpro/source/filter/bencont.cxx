@@ -170,8 +170,8 @@ LtcBenContainer::LtcBenContainer(LwpSvStream * pStream)
 *   @param  number of bytes read
 *   @return BenError
 */
-BenError LtcBenContainer::Read(void * pBuffer, unsigned long MaxSize,
-  unsigned long * pAmtRead)
+BenError LtcBenContainer::Read(void * pBuffer, size_t MaxSize,
+  size_t* pAmtRead)
 {
     *pAmtRead = cpStream->Read(pBuffer, MaxSize);
     return BenErr_OK;
@@ -182,11 +182,10 @@ BenError LtcBenContainer::Read(void * pBuffer, unsigned long MaxSize,
 *   @param  number of bytes to be read
 *   @return BenError
 */
-BenError LtcBenContainer::ReadKnownSize(void * pBuffer, unsigned long Amt)
+BenError LtcBenContainer::ReadKnownSize(void * pBuffer, size_t Amt)
 {
-    sal_uLong ulLength;
-    ulLength = cpStream->Read(pBuffer, Amt);
-    if(ulLength == Amt)
+    size_t ulLength = cpStream->Read(pBuffer, Amt);
+    if (ulLength == Amt)
     {
         return BenErr_OK;
     }
@@ -254,26 +253,47 @@ LtcUtBenValueStream * LtcBenContainer::FindValueStreamWithPropertyName(const cha
     return FindNextValueStreamWithPropertyName(sPropertyName);
 }
 
-sal_uInt32 GetSvStreamSize(SvStream * pStream)
+sal_uInt64 GetSvStreamSize(SvStream * pStream)
 {
-    sal_uInt32 nCurPos = pStream->Tell();
+    sal_uInt64 nCurPos = pStream->Tell();
     pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 ulLength = pStream->Tell();
+    sal_uInt64 ulLength = pStream->Tell();
     pStream->Seek(nCurPos);
 
     return ulLength;
+}
+
+namespace
+{
+    void readDataInBlocks(SvStream& rSt, sal_uInt64 nDLen, std::vector<sal_uInt8>& rData)
+    {
+        //read data in blocks as its more likely large values are simply broken
+        //and we'll run out of data before we need to realloc
+        for (sal_uInt64 i = 0; i < nDLen; i+= SAL_MAX_UINT16)
+        {
+           size_t nOldSize = rData.size();
+           size_t nBlock = std::min<size_t>(SAL_MAX_UINT16, nDLen - nOldSize);
+           rData.resize(nOldSize + nBlock);
+           size_t nReadBlock = rSt.ReadBytes(rData.data() + nOldSize, nBlock);
+           if (nBlock != nReadBlock)
+           {
+               rData.resize(nOldSize + nReadBlock);
+               break;
+           }
+        }
+    }
 }
 
 /**
 *   Find hazily according to object ID
 *   @param  pObjectname - format as "GrXX,XXXXXXXX" wherein XX is high part of object ID, and XXXXXXXX is low part
 */
-void LtcBenContainer::CreateGraphicStream(SvStream * &pStream, const char *pObjectName)
+std::vector<sal_uInt8> LtcBenContainer::GetGraphicData(const char *pObjectName)
 {
+    std::vector<sal_uInt8> aData;
     if (!pObjectName)
     {
-        pStream = nullptr;
-        return;
+        return aData;
     }
     // construct the string of property name
     char sSName[64]="";
@@ -287,45 +307,37 @@ void LtcBenContainer::CreateGraphicStream(SvStream * &pStream, const char *pObje
     std::unique_ptr<SvStream> xS(FindValueStreamWithPropertyName(sSName));
     std::unique_ptr<SvStream> xD(FindValueStreamWithPropertyName(sDName));
 
-    sal_uInt32 nDLen = 0;
+    sal_uInt64 nDLen = 0;
     if (xD)
     {
         nDLen = GetSvStreamSize(xD.get());
     }
-    sal_uInt32 nLen = nDLen;
+    sal_uInt64 nSLen = 0;
     if (xS)
     {
-        nLen += GetSvStreamSize(xS.get()) ;
+        nSLen = GetSvStreamSize(xS.get()) ;
     }
 
+    sal_uInt64 nLen = nDLen + nSLen;
     OSL_ENSURE(nLen > 0, "expected a non-0 length");
     // the 'D' stream is NULL or it has invalid length
     if (nLen <= 0)
     {
-        pStream = nullptr;
-        return;
+        return aData;
     }
 
-    char * pBuf = new char[nLen];
-    assert(pBuf != nullptr);
-    char * pPointer = pBuf;
     if (xD)
     {
-        xD->ReadBytes(pPointer, nDLen);
+        readDataInBlocks(*xD, nDLen, aData);
         xD.reset();
     }
-    pPointer += nDLen;
     if (xS)
     {
-        xS->ReadBytes(pPointer, nLen - nDLen);
+        readDataInBlocks(*xS, nSLen, aData);
         xS.reset();
     }
 
-    SvMemoryStream* pMemStream = new SvMemoryStream(pBuf, nLen, StreamMode::READ);
-    assert(pMemStream != nullptr);
-    pMemStream->ObjectOwnsMemory(true);
-
-    pStream = pMemStream;
+    return aData;
 }
 
 sal_uLong LtcBenContainer::remainingSize() const

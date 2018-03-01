@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/print.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/metaact.hxx>
@@ -140,6 +140,7 @@ public:
     typedef std::unordered_map< OUString, css::uno::Sequence< sal_Bool > > ChoiceDisableMap;
 
     VclPtr< Printer >                                           mxPrinter;
+    VclPtr<vcl::Window>                                         mxWindow;
     css::uno::Sequence< css::beans::PropertyValue >             maUIOptions;
     std::vector< css::beans::PropertyValue >                    maUIProperties;
     std::vector< bool >                                         maUIPropertyEnabled;
@@ -207,10 +208,11 @@ public:
     void resetPaperToLastConfigured();
 };
 
-PrinterController::PrinterController( const VclPtr<Printer>& i_xPrinter )
+PrinterController::PrinterController(const VclPtr<Printer>& i_xPrinter, const VclPtr<vcl::Window>& i_xWindow)
     : mpImplData( new ImplPrinterControllerData )
 {
     mpImplData->mxPrinter = i_xPrinter;
+    mpImplData->mxWindow = i_xWindow;
 }
 
 static OUString queryFile( Printer const * pPrinter )
@@ -303,10 +305,10 @@ bool Printer::PreparePrintJob(std::shared_ptr<PrinterController> xController,
     {
         if (xController->isShowDialogs())
         {
-            ScopedVclPtrInstance<MessageDialog> aBox(
-                nullptr, "ErrorNoPrinterDialog",
-                "vcl/ui/errornoprinterdialog.ui");
-            aBox->Execute();
+            VclPtr<vcl::Window> xParent = xController->getWindow();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(xParent ? xParent->GetFrameWeld() : nullptr, "vcl/ui/errornoprinterdialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("ErrorNoPrinterDialog"));
+            xBox->run();
         }
         xController->setValue( "IsDirect",
                                css::uno::makeAny( false ) );
@@ -441,8 +443,8 @@ bool Printer::PreparePrintJob(std::shared_ptr<PrinterController> xController,
         css::awt::Size aSizeVal;
         if( pPgSizeVal && (pPgSizeVal->Value >>= aSizeVal) )
         {
-            aMPS.aPaperSize.Width() = aSizeVal.Width;
-            aMPS.aPaperSize.Height() = aSizeVal.Height;
+            aMPS.aPaperSize.setWidth( aSizeVal.Width );
+            aMPS.aPaperSize.setHeight( aSizeVal.Height );
         }
 
         xController->setMultipage( aMPS );
@@ -454,10 +456,10 @@ bool Printer::PreparePrintJob(std::shared_ptr<PrinterController> xController,
     {
         if( xController->getFilteredPageCount() == 0 )
         {
-            ScopedVclPtrInstance<MessageDialog> aBox(
-                nullptr, "ErrorNoContentDialog",
-                "vcl/ui/errornocontentdialog.ui");
-            aBox->Execute();
+            VclPtr<vcl::Window> xParent = xController->getWindow();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(xParent ? xParent->GetFrameWeld() : nullptr, "vcl/ui/errornocontentdialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("ErrorNoContentDialog"));
+            xBox->run();
             return false;
         }
     }
@@ -768,6 +770,11 @@ const VclPtr<Printer>& PrinterController::getPrinter() const
     return mpImplData->mxPrinter;
 }
 
+const VclPtr<vcl::Window>& PrinterController::getWindow() const
+{
+    return mpImplData->mxWindow;
+}
+
 void PrinterController::setPrinter( const VclPtr<Printer>& i_rPrinter )
 {
     mpImplData->mxPrinter = i_rPrinter;
@@ -788,7 +795,7 @@ void PrinterController::resetPrinterOptions( bool i_bFileOutput )
     mpImplData->mxPrinter->SetPrinterOptions( aOpt );
 }
 
-bool PrinterController::setupPrinter( vcl::Window* i_pParent )
+void PrinterController::setupPrinter( vcl::Window* i_pParent )
 {
     bool bRet = false;
 
@@ -854,7 +861,6 @@ bool PrinterController::setupPrinter( vcl::Window* i_pParent )
         }
         xPrinter->Pop();
     }
-    return bRet;
 }
 
 PrinterController::PageSize vcl::ImplPrinterControllerData::modifyJobSetup( const css::uno::Sequence< css::beans::PropertyValue >& i_rProps )
@@ -899,8 +905,8 @@ PrinterController::PageSize vcl::ImplPrinterControllerData::modifyJobSetup( cons
 
     if( aIsSize.Width && aIsSize.Height )
     {
-        aPageSize.aSize.Width() = aIsSize.Width;
-        aPageSize.aSize.Height() = aIsSize.Height;
+        aPageSize.aSize.setWidth( aIsSize.Width );
+        aPageSize.aSize.setHeight( aIsSize.Height );
 
         Size aRealPaperSize( getRealPaperSize( aPageSize.aSize, true/*bNoNUP*/ ) );
         if( aRealPaperSize != aCurSize )
@@ -1043,8 +1049,8 @@ static void appendSubPage( GDIMetaFile& o_rMtf, const tools::Rectangle& i_rClipR
         o_rMtf.AddAction( new MetaMapModeAction( MapMode( MapUnit::Map100thMM ) ) );
 
         tools::Rectangle aBorderRect( i_rClipRect );
-        o_rMtf.AddAction( new MetaLineColorAction( Color( COL_BLACK ), true ) );
-        o_rMtf.AddAction( new MetaFillColorAction( Color( COL_TRANSPARENT ), false ) );
+        o_rMtf.AddAction( new MetaLineColorAction( COL_BLACK, true ) );
+        o_rMtf.AddAction( new MetaFillColorAction( COL_TRANSPARENT, false ) );
         o_rMtf.AddAction( new MetaRectAction( aBorderRect ) );
 
         // restore gstate
@@ -1105,10 +1111,10 @@ PrinterController::PageSize PrinterController::getFilteredPageFile( int i_nFilte
     // multi page area: page size minus margins + one time spacing right and down
     // the added spacing is so each subpage can be calculated including its spacing
     Size aMPArea( aPaperSize );
-    aMPArea.Width()  -= rMPS.nLeftMargin + rMPS.nRightMargin;
-    aMPArea.Width()  += rMPS.nHorizontalSpacing;
-    aMPArea.Height() -= rMPS.nTopMargin + rMPS.nBottomMargin;
-    aMPArea.Height() += rMPS.nVerticalSpacing;
+    aMPArea.AdjustWidth( -(rMPS.nLeftMargin + rMPS.nRightMargin) );
+    aMPArea.AdjustWidth(rMPS.nHorizontalSpacing );
+    aMPArea.AdjustHeight( -(rMPS.nTopMargin + rMPS.nBottomMargin) );
+    aMPArea.AdjustHeight(rMPS.nVerticalSpacing );
 
     // determine offsets
     long nAdvX = aMPArea.Width() / rMPS.nColumns;
@@ -1254,7 +1260,7 @@ DrawModeFlags PrinterController::removeTransparencies( GDIMetaFile const & i_rIn
         // in N-Up printing we have no "page" background operation
         // we also have no way to determine the paper color
         // so let's go for white, which will kill 99.9% of the real cases
-        aBg = Color( COL_WHITE );
+        aBg = COL_WHITE;
     }
     mpImplData->mxPrinter->RemoveTransparenciesFromMetaFile( i_rIn, o_rOut, nMaxBmpDPIX, nMaxBmpDPIY,
                                                              rPrinterOptions.IsReduceTransparency(),

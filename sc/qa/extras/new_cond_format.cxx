@@ -23,12 +23,13 @@
 
 using namespace css;
 
-namespace sc_apitest {
+inline std::ostream& operator<<(std::ostream& rStrm, const Color& rColor)
+{
+    rStrm << "Color: R:" << static_cast<int>(rColor.GetRed()) << " G:" << static_cast<int>(rColor.GetGreen()) << " B: " << static_cast<int>(rColor.GetBlue());
+    return rStrm;
+}
 
-// tearDown checks this value before disposing mxCompnent
-// if NUMBER_OF_TESTS is less than the number of tests that call init(),
-// then the component is created again but not disposed, resulting in temp file leak
-#define NUMBER_OF_TESTS 7
+namespace sc_apitest {
 
 class ScConditionalFormatTest : public CalcUnoApiTest
 {
@@ -58,12 +59,8 @@ public:
     CPPUNIT_TEST_SUITE_END();
 private:
 
-    static sal_Int32 nTest;
-    static uno::Reference< lang::XComponent > mxComponent;
+    uno::Reference< lang::XComponent > mxComponent;
 };
-
-sal_Int32 ScConditionalFormatTest::nTest = 0;
-uno::Reference< lang::XComponent > ScConditionalFormatTest::mxComponent;
 
 ScConditionalFormatTest::ScConditionalFormatTest()
     : CalcUnoApiTest("sc/qa/extras/testdocuments/")
@@ -72,17 +69,9 @@ ScConditionalFormatTest::ScConditionalFormatTest()
 
 uno::Reference< uno::XInterface > ScConditionalFormatTest::init(sal_Int32 nIndex)
 {
-    if(!mxComponent.is())
-    {
-        // get the test file
-        OUString aFileURL;
-        createFileURL("new_cond_format_api.ods", aFileURL);
-        mxComponent = loadFromDesktop(aFileURL);
-    }
-    CPPUNIT_ASSERT_MESSAGE("Component not loaded", mxComponent.is());
-
     // get the first sheet
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
     uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), uno::UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet( xIndex->getByIndex(nIndex), uno::UNO_QUERY_THROW);
 
@@ -367,10 +356,10 @@ void ScConditionalFormatTest::testDataBarProperties()
 namespace {
 
 void testColorScaleEntry(uno::Reference<sheet::XColorScaleEntry> const & xEntry,
-        sal_Int32 nType, const OUString& rString, sal_uInt32 nColor)
+        sal_Int32 nType, const OUString& rString, Color nColor)
 {
     CPPUNIT_ASSERT_EQUAL(nType, xEntry->getType());
-    CPPUNIT_ASSERT_EQUAL(nColor, sal_uInt32(xEntry->getColor()));
+    CPPUNIT_ASSERT_EQUAL(nColor, Color(xEntry->getColor()));
     switch (nType)
     {
         case sheet::ColorScaleEntryType::COLORSCALE_VALUE:
@@ -387,9 +376,9 @@ void testColorScaleEntry(uno::Reference<sheet::XColorScaleEntry> const & xEntry,
 }
 
 void testColorScaleEntries(uno::Reference<beans::XPropertySet> const & xPropSet, sal_Int32 nEntries,
-        sal_Int32 nMinType, const OUString& rMinString, sal_uInt32 nMinColor,
-        sal_Int32 nMediumType, const OUString& rMediumString, sal_uInt32 nMediumColor,
-        sal_Int32 nMaxType, const OUString& rMaxString, sal_uInt32 nMaxColor)
+        sal_Int32 nMinType, const OUString& rMinString, Color nMinColor,
+        sal_Int32 nMediumType, const OUString& rMediumString, Color nMediumColor,
+        sal_Int32 nMaxType, const OUString& rMaxString, Color nMaxColor)
 {
     uno::Any aAny = xPropSet->getPropertyValue("ColorScaleEntries");
     CPPUNIT_ASSERT(aAny.hasValue());
@@ -456,18 +445,16 @@ void ScConditionalFormatTest::testColorScaleProperties()
 
 void ScConditionalFormatTest::setUp()
 {
-    nTest++;
     CalcUnoApiTest::setUp();
+    // get the test file
+    OUString aFileURL;
+    createFileURL("new_cond_format_api.ods", aFileURL);
+    mxComponent = loadFromDesktop(aFileURL);
 }
 
 void ScConditionalFormatTest::tearDown()
 {
-    if (nTest == NUMBER_OF_TESTS)
-    {
-        closeDocument(mxComponent);
-        mxComponent.clear();
-    }
-
+    closeDocument(mxComponent);
     CalcUnoApiTest::tearDown();
 }
 

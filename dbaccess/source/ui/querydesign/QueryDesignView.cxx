@@ -31,7 +31,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/msgbox.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <browserids.hxx>
 #include "SelectionBrowseBox.hxx"
 #include <strings.hrc>
@@ -741,7 +741,12 @@ namespace
                         {
                             // only show the messagebox the first time
                             if (!bCritsOnAsterikWarning)
-                                ScopedVclPtrInstance<MessageDialog>(_pView, DBA_RES(STR_QRY_CRITERIA_ON_ASTERISK))->Execute();
+                            {
+                                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView ? _pView->GetFrameWeld() : nullptr,
+                                                                          VclMessageType::Warning, VclButtonsType::Ok,
+                                                                          DBA_RES(STR_QRY_CRITERIA_ON_ASTERISK)));
+                                xBox->run();
+                            }
                             bCritsOnAsterikWarning = true;
                             continue;
                         }
@@ -892,7 +897,12 @@ namespace
                     {
                         // only show the  MessageBox the first time
                         if (!bCritsOnAsterikWarning)
-                            ScopedVclPtrInstance<MessageDialog>(_pView, DBA_RES(STR_QRY_ORDERBY_ON_ASTERISK))->Execute();
+                        {
+                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView ? _pView->GetFrameWeld() : nullptr,
+                                                                      VclMessageType::Warning, VclButtonsType::Ok,
+                                                                      DBA_RES(STR_QRY_ORDERBY_ON_ASTERISK)));
+                            xBox->run();
+                        }
                         bCritsOnAsterikWarning = true;
                         continue;
                     }
@@ -1685,18 +1695,15 @@ namespace
         return eErrorCode;
     }
 
-    namespace
+    OQueryTableWindow* lcl_findColumnInTables( const OUString& _rColumName, const OJoinTableView::OTableWindowMap& _rTabList, OTableFieldDescRef const & _rInfo )
     {
-        OQueryTableWindow* lcl_findColumnInTables( const OUString& _rColumName, const OJoinTableView::OTableWindowMap& _rTabList, OTableFieldDescRef const & _rInfo )
+        for (auto const& table : _rTabList)
         {
-            for (auto const& table : _rTabList)
-            {
-                OQueryTableWindow* pTabWin = static_cast< OQueryTableWindow* >( table.second.get() );
-                if ( pTabWin && pTabWin->ExistsField( _rColumName, _rInfo ) )
-                    return pTabWin;
-            }
-            return nullptr;
+            OQueryTableWindow* pTabWin = static_cast< OQueryTableWindow* >( table.second.get() );
+            if ( pTabWin && pTabWin->ExistsField( _rColumName, _rInfo ) )
+                return pTabWin;
         }
+        return nullptr;
     }
 
     void InsertColumnRef(const OQueryDesignView* _pView,
@@ -2530,10 +2537,10 @@ void OQueryDesignView::resizeDocumentView(tools::Rectangle& _rPlayground)
     Size    aSplitSize( _rPlayground.GetSize().Width(), m_aSplitter->GetSizePixel().Height() );
 
     if( ( aSplitPos.Y() + aSplitSize.Height() ) > ( aPlaygroundSize.Height() ))
-        aSplitPos.Y() = aPlaygroundSize.Height() - aSplitSize.Height();
+        aSplitPos.setY( aPlaygroundSize.Height() - aSplitSize.Height() );
 
     if( aSplitPos.Y() <= aPlaygroundPos.Y() )
-        aSplitPos.Y() = aPlaygroundPos.Y() + sal_Int32(aPlaygroundSize.Height() * 0.2);
+        aSplitPos.setY( aPlaygroundPos.Y() + sal_Int32(aPlaygroundSize.Height() * 0.2) );
 
     // position the table
     Size aTableViewSize(aPlaygroundSize.Width(), aSplitPos.Y() - aPlaygroundPos.Y());

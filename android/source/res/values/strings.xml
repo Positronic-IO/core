@@ -7,7 +7,7 @@
     <string name="app_about_name"><b>LibreOffice Viewer \'Beta\'</b></string>
     <string name="app_version">Version: %1$s\nBuild ID: %2$s</string>
     <string name="app_description">LibreOffice Viewer is a document viewer based on LibreOffice.</string>
-    <string name="app_credits">http://www.libreoffice.org</string>
+    <string name="app_credits">https://www.libreoffice.org</string>
     <string name="app_vendor">This release was supplied by $VENDOR.</string>
     <string name="temp_file_saving_disabled">This file is read-only, saving is disabled.</string>
 
@@ -136,6 +136,7 @@
 
     <!-- Presentation Mode Strings -->
     <string name="action_presentation">Slide show</string>
+    <string name="action_add_slide">Add Slide</string>
     <string name="alert_copy_svg_slide_show_to_clipboard">Your Android device doesn\'t support in-app svg slideshow. We copied the slideshow link to clipboard. Please press home button, open a modern web browser, paste in the address bar, and go.</string>
     <string name="alert_copy_svg_slide_show_to_clipboard_dismiss">OK</string>
     <string name="slideshow_action_back">Back</string>
@@ -154,6 +155,7 @@
     <string name="calc_optimal_length_confirm">OK</string>
     <string name="calc_optimal_length_default_text">Enter Extra Length in 100th/mm</string>
     <string name="calc_alert_double_click_optimal_length">Hint: Double tap on a header sets optimal width/height.</string>
+    <string name="action_add_worksheet">Add Worksheet</string>
 
     <!-- Password dialog strings -->
     <string name="action_pwd_dialog_OK">OK</string>

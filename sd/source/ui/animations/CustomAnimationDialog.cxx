@@ -45,7 +45,8 @@
 #include <vcl/field.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/menu.hxx>
@@ -1060,7 +1061,7 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
     get(mpLBAfterEffect, "aeffect_list" );
     get(mpFTDimColor, "dim_color_label" );
     get(mpCLBDimColor, "dim_color_list" );
-    mpCLBDimColor->SelectEntry(Color(COL_BLACK));
+    mpCLBDimColor->SelectEntry(COL_BLACK);
     get(mpFTTextAnim, "text_animation_label" );
     get(mpLBTextAnim, "text_animation_list" );
     get(mpMFTextDelay,"text_delay" );
@@ -1527,9 +1528,12 @@ void CustomAnimationEffectTabPage::openSoundFileDialog()
             {
                 OUString aStrWarning(SdResId(STR_WARNING_NOSOUNDFILE));
                 aStrWarning = aStrWarning.replaceFirst("%", aFile);
-                ScopedVclPtrInstance< WarningBox > aWarningBox( nullptr, MessBoxStyle::RetryCancel, WB_3DLOOK, aStrWarning );
-                aWarningBox->SetModalInputMode (true);
-                bQuitLoop = aWarningBox->Execute() != RET_RETRY;
+                std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(nullptr,
+                                                           VclMessageType::Warning, VclButtonsType::NONE,
+                                                           aStrWarning));
+                xWarn->add_button(Button::GetStandardText(StandardButtonType::Retry), RET_RETRY);
+                xWarn->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+                bQuitLoop = xWarn->run() != RET_RETRY;
 
                 bValidSoundFile=false;
             }

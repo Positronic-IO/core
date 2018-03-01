@@ -358,9 +358,9 @@ void SvxTextEditSourceImpl::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
                     // Once SdrHintKind::BeginEdit is broadcast, each EditSource of
                     // AccessibleCell will handle it here and call below:
                     // mpView->GetTextEditOutliner()->SetNotifyHdl(), which
-                    // will replace the Notifer for current editable cell. It
+                    // will replace the Notifier for current editable cell. It
                     // is totally wrong. So add check here to avoid the
-                    // incorrect replacement of notifer.
+                    // incorrect replacement of notifier.
 
                     // Currently it only happens on the editsource of
                     // AccessibleCell
@@ -948,8 +948,8 @@ Point SvxTextEditSourceImpl::LogicToPixel( const Point& rPoint, const MapMode& r
     else if( IsValid() && mpModel )
     {
         Point aPoint1( rPoint );
-        aPoint1.X() += maTextOffset.X();
-        aPoint1.Y() += maTextOffset.Y();
+        aPoint1.AdjustX(maTextOffset.X() );
+        aPoint1.AdjustY(maTextOffset.Y() );
 
         Point aPoint2( OutputDevice::LogicToLogic( aPoint1, rMapMode,
                                                    MapMode(mpModel->GetScaleUnit()) ) );
@@ -984,8 +984,8 @@ Point SvxTextEditSourceImpl::PixelToLogic( const Point& rPoint, const MapMode& r
         Point aPoint2( OutputDevice::LogicToLogic( aPoint1,
                                                    MapMode(mpModel->GetScaleUnit()),
                                                    rMapMode ) );
-        aPoint2.X() -= maTextOffset.X();
-        aPoint2.Y() -= maTextOffset.Y();
+        aPoint2.AdjustX( -(maTextOffset.X()) );
+        aPoint2.AdjustY( -(maTextOffset.Y()) );
 
         return aPoint2;
     }

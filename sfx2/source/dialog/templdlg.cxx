@@ -374,8 +374,8 @@ void SfxTemplatePanelControl::StateChanged( StateChangedType nStateChange )
         Point aPoint = pEditWin->OutputToScreenPixel( pEditWin->GetPosPixel() );
         aPoint = GetParent()->ScreenToOutputPixel( aPoint );
         Size aWinSize = GetSizePixel();
-        aPoint.X() += aSize.Width() - aWinSize.Width() - 20;
-        aPoint.Y() += aSize.Height() / 2 - aWinSize.Height() / 2;
+        aPoint.AdjustX(aSize.Width() - aWinSize.Width() - 20 );
+        aPoint.AdjustY(aSize.Height() / 2 - aWinSize.Height() / 2 );
         // SetFloatingPos( aPoint );
     }
 
@@ -522,8 +522,8 @@ public:
 
 StyleTree_Impl::~StyleTree_Impl()
 {
-    for(StyleTreeArr_Impl::const_iterator it = pChildren.begin(); it != pChildren.end(); ++it)
-        delete *it;
+    for (auto const& child : pChildren)
+        delete child;
 }
 
 StyleTreeArr_Impl& MakeTree_Impl(StyleTreeArr_Impl& rArr)
@@ -861,7 +861,7 @@ SfxCommonTemplateDialog_Impl::~SfxCommonTemplateDialog_Impl()
         EndListening(*pStyleSheetPool);
     pStyleSheetPool = nullptr;
     pTreeBox.disposeAndClear();
-    delete pIdle;
+    pIdle.reset();
     if ( m_pDeletionWatcher )
         m_pDeletionWatcher->signal();
     aFmtLb.disposeAndClear();
@@ -1402,7 +1402,7 @@ IMPL_LINK_NOARG( SfxCommonTemplateDialog_Impl, TimeOut, Timer *, void )
             }
         }
         bDontUpdate=false;
-        DELETEZ(pIdle);
+        pIdle.reset();
     }
     else
         pIdle->Start();
@@ -1488,7 +1488,7 @@ void SfxCommonTemplateDialog_Impl::Notify(SfxBroadcaster& /*rBC*/, const SfxHint
     {
         if(!pIdle)
         {
-            pIdle=new Idle("SfxCommonTemplate");
+            pIdle.reset(new Idle("SfxCommonTemplate"));
             pIdle->SetPriority(TaskPriority::LOWEST);
             pIdle->SetInvokeHandler(LINK(this,SfxCommonTemplateDialog_Impl,TimeOut));
         }
@@ -1885,31 +1885,25 @@ void SfxCommonTemplateDialog_Impl::DeleteHdl()
         // we only want to show the dialog once and if we want to delete a style in use (UX-advice)
         if ( bUsedStyle )
         {
-        #if defined UNX
-            ScopedVclPtrInstance<MessageDialog> aBox(SfxGetpApp()->GetTopWindow(), aMsg,
-                               VclMessageType::Question, VclButtonsType::YesNo);
-        #else
-            ScopedVclPtrInstance<MessageDialog> aBox(GetWindow(), aMsg,
-                               VclMessageType::Question, VclButtonsType::YesNo);
-        #endif
-            aApproved = aBox->Execute() == RET_YES;
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                                     VclMessageType::Question, VclButtonsType::YesNo,
+                                                                     aMsg));
+            aApproved = xBox->run() == RET_YES;
         }
 
         // if there are no used styles selected or the user approved the changes
         if ( !bUsedStyle || aApproved )
         {
-            std::vector<SvTreeListEntry*>::const_iterator it = aList.begin(), itEnd = aList.end();
-
-            for (; it != itEnd; ++it)
+            for (auto const& elem : aList)
             {
-                const OUString aTemplName(pTreeBox ? pTreeBox->GetEntryText(*it) : aFmtLb->GetEntryText(*it));
+                const OUString aTemplName(pTreeBox ? pTreeBox->GetEntryText(elem) : aFmtLb->GetEntryText(elem));
                 bDontUpdate = true; // To prevent the Treelistbox to shut down while deleting
                 Execute_Impl( SID_STYLE_DELETE, aTemplName,
                               OUString(), static_cast<sal_uInt16>(GetFamilyItem_Impl()->GetFamily()) );
 
                 if ( pTreeBox )
                 {
-                    pTreeBox->RemoveParentKeepChildren( *it );
+                    pTreeBox->RemoveParentKeepChildren(elem);
                     bDontUpdate = false;
                 }
             }
@@ -2312,7 +2306,7 @@ void SfxTemplateDialog_Impl::Resize()
             pTreeBox->SetPosPixel(aFmtPos);
     }
     else
-        aFmtSize.Height() += aFilterSize.Height();
+        aFmtSize.AdjustHeight(aFilterSize.Height() );
 
     aFilterLb->SetSizePixel(aFilterSize);
     aFmtLb->SetSizePixel( aFmtSize );

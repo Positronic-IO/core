@@ -22,6 +22,7 @@
 #include <toolkit/awt/vclxwindow.hxx>
 #include <browserids.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <dbaccess/dataview.hxx>
 #include <tools/diagnose_ex.h>
@@ -176,35 +177,6 @@ OGenericUnoController::OGenericUnoController(const Reference< XComponentContext 
     }
 }
 
-#ifdef _MSC_VER
-
-#pragma warning(push)
-#pragma warning(disable:4702)
-
-OGenericUnoController::OGenericUnoController()
-    :OGenericUnoController_Base( getMutex() )
-    ,m_pView(nullptr)
-#ifdef DBG_UTIL
-    ,m_bDescribingSupportedFeatures( false )
-#endif
-    ,m_aAsyncInvalidateAll(LINK(this, OGenericUnoController, OnAsyncInvalidateAll))
-    ,m_aAsyncCloseTask(LINK(this, OGenericUnoController, OnAsyncCloseTask))
-    ,m_aCurrentFrame( *this )
-    ,m_bPreview(false)
-    ,m_bReadOnly(false)
-    ,m_bCurrentlyModified(false)
-{
-    SAL_WARN("dbaccess.ui", "OGenericUnoController::OGenericUnoController: illegal call!" );
-    // This ctor only exists because the MSVC compiler complained about an unresolved external
-    // symbol. It should not be used at all. Since using it yields strange runtime problems,
-    // we simply abort here.
-    abort();
-}
-
-#pragma warning(pop)
-
-#endif
-
 OGenericUnoController::~OGenericUnoController()
 {
 
@@ -233,7 +205,7 @@ bool OGenericUnoController::Construct(vcl::Window* /*pParent*/)
     {
         SAL_WARN("dbaccess.ui","OGenericUnoController::Construct: could not create (or start listening at) the database context!");
         // at least notify the user. Though the whole component does not make any sense without the database context ...
-        ShowServiceNotAvailableError(getView(), "com.sun.star.sdb.DatabaseContext", true);
+        ShowServiceNotAvailableError(getFrameWeld(), "com.sun.star.sdb.DatabaseContext", true);
     }
 
     return true;
@@ -1300,6 +1272,11 @@ void SAL_CALL OGenericUnoController::dispose()
 {
     SolarMutexGuard aSolarGuard;
     OGenericUnoController_Base::dispose();
+}
+
+weld::Window* OGenericUnoController::getFrameWeld() const
+{
+    return m_pView ? m_pView->GetFrameWeld() : nullptr;
 }
 
 }   // namespace dbaui

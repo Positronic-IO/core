@@ -368,7 +368,7 @@ Time tools::Time::GetUTCOffset()
         nTempTime += aTimeZone.StandardBias;
     else if ( nTimeZoneRet == TIME_ZONE_ID_DAYLIGHT )
         nTempTime += aTimeZone.DaylightBias;
-    tools::Time aTime( 0, (sal_uInt16)abs( nTempTime ) );
+    tools::Time aTime( 0, static_cast<sal_uInt16>(abs( nTempTime )) );
     if ( nTempTime > 0 )
         aTime = -aTime;
     return aTime;
@@ -450,7 +450,7 @@ sal_uInt64 tools::Time::GetMonotonicTicks()
     static mach_timebase_info_data_t info = { 0, 0 };
     if ( 0 == info.numer )
         mach_timebase_info( &info );
-    nMicroSeconds = mach_absolute_time() * (double) (info.numer / info.denom) / 1000;
+    nMicroSeconds = mach_absolute_time() * static_cast<double>(info.numer / info.denom) / 1000;
 #else
 #if defined(USE_CLOCK_GETTIME)
     struct timespec currentTime;

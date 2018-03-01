@@ -805,7 +805,7 @@ again:
             // delete current row in Keyset
             if (m_pFileSet.is())
             {
-                OSL_ENSURE(eCursorPosition == IResultSetHelper::NEXT, "Falsche CursorPosition!");
+                OSL_ENSURE(eCursorPosition == IResultSetHelper::NEXT, "Wrong CursorPosition!");
                 eCursorPosition = IResultSetHelper::NEXT;
                 nOffset = 1;
             }
@@ -1111,11 +1111,11 @@ void OResultSet::sortRows()
     }
 
     OSortIndex::TKeyTypeVector eKeyType(m_aOrderbyColumnNumber.size());
-    std::vector<sal_Int32>::const_iterator aOrderByIter = m_aOrderbyColumnNumber.begin();
-    for (std::vector<sal_Int16>::size_type i=0;aOrderByIter != m_aOrderbyColumnNumber.end(); ++aOrderByIter,++i)
+    size_t i = 0;
+    for (auto const& elem : m_aOrderbyColumnNumber)
     {
-        OSL_ENSURE(static_cast<sal_Int32>(m_aSelectRow->get().size()) > *aOrderByIter,"Invalid Index");
-        switch ((*(m_aSelectRow->get().begin()+*aOrderByIter))->getValue().getTypeKind())
+        OSL_ENSURE(static_cast<sal_Int32>(m_aSelectRow->get().size()) > elem,"Invalid Index");
+        switch ((*(m_aSelectRow->get().begin()+elem))->getValue().getTypeKind())
         {
             case DataType::CHAR:
             case DataType::VARCHAR:
@@ -1144,7 +1144,8 @@ void OResultSet::sortRows()
                 SAL_WARN( "connectivity.drivers","OFILECursor::Execute: Data type not implemented");
                 break;
         }
-        (m_aSelectRow->get())[*aOrderByIter]->setBound(true);
+        (m_aSelectRow->get())[elem]->setBound(true);
+        ++i;
     }
 
     m_pSortIndex = new OSortIndex(eKeyType,m_aOrderbyAscending);
@@ -1166,7 +1167,7 @@ void OResultSet::sortRows()
 }
 
 
-bool OResultSet::OpenImpl()
+void OResultSet::OpenImpl()
 {
     OSL_ENSURE(m_pSQLAnalyzer,"No analyzer set with setSqlAnalyzer!");
     if(!m_pTable.is())
@@ -1383,7 +1384,7 @@ bool OResultSet::OpenImpl()
             if(!m_pTable->InsertRow(*m_aAssignValues, m_xColsIdx))
             {
                 m_nFilePos  = 0;
-                return false;
+                return;
             }
 
             m_nRowCountResult = 1;
@@ -1395,8 +1396,6 @@ bool OResultSet::OpenImpl()
 
     // reset FilePos
     m_nFilePos  = 0;
-
-    return true;
 }
 
 Sequence< sal_Int8 > OResultSet::getUnoTunnelImplementationId()
@@ -1432,7 +1431,7 @@ void OResultSet::setBoundedColumns(const OValueRefRow& _rRow,
     const OUString sRealName = OMetaConnection::getPropMap().getNameByIndex(PROPERTY_ID_REALNAME);
     const OUString sType     = OMetaConnection::getPropMap().getNameByIndex(PROPERTY_ID_TYPE);
 
-    std::map<OSQLColumns::Vector::iterator,sal_Bool> aSelectIters;
+    std::map<OSQLColumns::Vector::iterator,bool> aSelectIters;
     OValueRefVector::Vector::const_iterator aRowIter = _rRow->get().begin()+1;
     for (sal_Int32 i=0; // the first column is the bookmark column
          aRowIter != _rRow->get().end();

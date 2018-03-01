@@ -783,9 +783,7 @@ void GtkSalFrame::InvalidateGraphics()
     {
         m_pGraphics->DeInit();
         m_pGraphics->SetWindow(nullptr);
-        delete m_pGraphics;
-        m_pGraphics = nullptr;
-        m_bGraphics = false;
+        m_pGraphics.reset();
     }
 }
 
@@ -803,7 +801,7 @@ GtkSalFrame::~GtkSalFrame()
         gdk_region_destroy( m_pRegion );
     }
 
-    delete m_pIMHandler;
+    m_pIMHandler.reset();
 
     GtkWidget *pEventWidget = getMouseEventWidget();
     for (auto handler_id : m_aMouseSignalIds)
@@ -1053,8 +1051,7 @@ void GtkSalFrame::InitCommon()
 
 static void lcl_set_accept_focus( GtkWindow* pWindow )
 {
-    if (GetGtkSalData()->GetGtkDisplay()->getWMAdaptor()->getWindowManagerName().startsWith("Metacity") ||
-        GetGtkSalData()->GetGtkDisplay()->getWMAdaptor()->getWindowManagerName().endsWith("Muffin)") )
+    if (GetGtkSalData()->GetGtkDisplay()->getWMAdaptor()->getWindowManagerName().startsWith("Metacity"))
     {
        /*  Metacity considers a toolbar type window as should not
         *  have focus on mapping, yet it believes it should unfocus
@@ -1327,16 +1324,16 @@ SalGraphics* GtkSalFrame::AcquireGraphics()
 
     if( !m_pGraphics )
     {
-        m_pGraphics = new GtkSalGraphics( this, m_pWindow, m_nXScreen );
+        m_pGraphics.reset( new GtkSalGraphics( this, m_pWindow, m_nXScreen ) );
     }
     m_bGraphics = true;
-    return m_pGraphics;
+    return m_pGraphics.get();
 }
 
 void GtkSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
 {
     (void) pGraphics;
-    assert( pGraphics == m_pGraphics );
+    assert( pGraphics == m_pGraphics.get() );
     m_bGraphics = false;
 }
 
@@ -1900,8 +1897,8 @@ void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rect
 
         // #i110881# for the benefit of compiz set a max size here
         // else setting to fullscreen fails for unknown reasons
-        m_aMaxSize.Width() = aNewMonitor.width;
-        m_aMaxSize.Height() = aNewMonitor.height;
+        m_aMaxSize.setWidth( aNewMonitor.width );
+        m_aMaxSize.setHeight( aNewMonitor.height );
     }
 
     if( pSize && eType == SetType::UnFullscreen )
@@ -2325,7 +2322,7 @@ void GtkSalFrame::SetInputContext( SalInputContext* pContext )
 
     // create a new im context
     if( ! m_pIMHandler )
-        m_pIMHandler = new IMHandler( this );
+        m_pIMHandler.reset( new IMHandler( this ) );
 }
 
 void GtkSalFrame::EndExtTextInput( EndExtTextInputFlags nFlags )
@@ -2350,7 +2347,7 @@ void GtkSalFrame::UpdateSettings( AllSettings& rSettings )
     if( ! m_pWindow )
         return;
 
-    GtkSalGraphics* pGraphics = m_pGraphics;
+    GtkSalGraphics* pGraphics = m_pGraphics.get();
     bool bFreeGraphics = false;
     if( ! pGraphics )
     {
@@ -2432,11 +2429,7 @@ void GtkSalFrame::createNewWindow( ::Window aNewParent, bool bXEmbed, SalX11Scre
         m_pGraphics->SetDrawable( None, m_nXScreen );
 
     // first deinit frame
-    if( m_pIMHandler )
-    {
-        delete m_pIMHandler;
-        m_pIMHandler = nullptr;
-    }
+    m_pIMHandler.reset();
     if( m_pRegion )
     {
         gdk_region_destroy( m_pRegion );
@@ -2789,9 +2782,7 @@ gboolean GtkSalFrame::signalExpose( GtkWidget*, GdkEventExpose* pEvent, gpointer
 {
     GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
 
-    const bool bImmediate = OpenGLHelper::isVCLOpenGLEnabled() || pThis->m_bFullscreen;
-
-    struct SalPaintEvent aEvent( pEvent->area.x, pEvent->area.y, pEvent->area.width, pEvent->area.height, bImmediate );
+    struct SalPaintEvent aEvent( pEvent->area.x, pEvent->area.y, pEvent->area.width, pEvent->area.height, OpenGLHelper::isVCLOpenGLEnabled() );
 
     pThis->CallCallback( SalEvent::Paint, &aEvent );
 
@@ -2896,7 +2887,7 @@ gboolean GtkSalFrame::signalFocus( GtkWidget*, GdkEventFocus* pEvent, gpointer f
         pThis->m_nKeyModifiers = ModKeyFlags::NONE;
 
     if( pThis->m_pIMHandler )
-        pThis->m_pIMHandler->focusChanged( pEvent->in );
+        pThis->m_pIMHandler->focusChanged( pEvent->in != 0 );
 
     // ask for changed printers like generic implementation
     if( pEvent->in && pSalInstance->isPrinterInit() )

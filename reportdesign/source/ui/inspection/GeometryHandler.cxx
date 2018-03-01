@@ -421,8 +421,8 @@ uno::Any SAL_CALL GeometryHandler::getPropertyValue(const OUString & PropertyNam
         case PROPERTY_ID_CONTROLBACKGROUND:
             {
                 aPropertyValue = m_xReportComponent->getPropertyValue( PropertyName );
-                sal_Int32 nColor = COL_TRANSPARENT;
-                if ( (aPropertyValue >>= nColor) && static_cast<sal_Int32>(COL_TRANSPARENT) == nColor )
+                Color nColor = COL_TRANSPARENT;
+                if ( (aPropertyValue >>= nColor) && COL_TRANSPARENT == nColor )
                     aPropertyValue.clear();
             }
             break;
@@ -1257,14 +1257,14 @@ uno::Any SAL_CALL GeometryHandler::convertToControlValue(const OUString & Proper
                 sal_Int16 nParagraphAdjust = sal_Int16(style::ParagraphAdjust_LEFT);
                 aPropertyValue >>= nParagraphAdjust;
                 if (static_cast<sal_uInt32>(nParagraphAdjust) < SAL_N_ELEMENTS(RID_STR_PARAADJUST_CONST) - 1)
-                    aControlValue <<= RptResId(RID_STR_VERTICAL_ALIGN_CONST[nParagraphAdjust]);
+                    aControlValue <<= RptResId(RID_STR_PARAADJUST_CONST[nParagraphAdjust]);
             }
             break;
         case PROPERTY_ID_BACKCOLOR:
         case PROPERTY_ID_CONTROLBACKGROUND:
             {
-                sal_Int32 nColor = COL_TRANSPARENT;
-                if ( (aPropertyValue >>= nColor) && static_cast<sal_Int32>(COL_TRANSPARENT) == nColor )
+                Color nColor = COL_TRANSPARENT;
+                if ( (aPropertyValue >>= nColor) && COL_TRANSPARENT == nColor )
                     aPropertyValue.clear();
             }
             SAL_FALLTHROUGH;

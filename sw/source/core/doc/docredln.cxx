@@ -57,6 +57,7 @@
 #include <strings.hrc>
 #include <unoport.hxx>
 #include <wrtsh.hxx>
+#include <txtfld.hxx>
 
 #include <flowfrm.hxx>
 
@@ -578,13 +579,12 @@ SwRedlineTable::size_type SwRedlineTable::GetPos(const SwRangeRedline* p) const
     return it - maVector.begin();
 }
 
-bool SwRedlineTable::Remove( const SwRangeRedline* p )
+void SwRedlineTable::Remove( const SwRangeRedline* p )
 {
     const size_type nPos = GetPos(p);
     if (nPos == npos)
-        return false;
+        return;
     Remove(nPos);
-    return true;
 }
 
 void SwRedlineTable::Remove( size_type nP )
@@ -1789,9 +1789,18 @@ OUString SwRangeRedline::GetDescr()
         bDeletePaM = true;
     }
 
+    OUString sDescr = pPaM->GetText();
+    if (const SwTextNode *pTextNode = pPaM->GetNode().GetTextNode())
+    {
+        if (const SwTextAttr* pTextAttr = pTextNode->GetFieldTextAttrAt(pPaM->GetPoint()->nContent.GetIndex() - 1, true ))
+        {
+            sDescr = pTextAttr->GetFormatField().GetField()->GetFieldName();
+        }
+    }
+
     // replace $1 in description by description of the redlines text
     const OUString aTmpStr = SwResId(STR_START_QUOTE)
-        + ShortenString(pPaM->GetText(), nUndoStringLength, SwResId(STR_LDOTS))
+        + ShortenString(sDescr, nUndoStringLength, SwResId(STR_LDOTS))
         + SwResId(STR_END_QUOTE);
 
     SwRewriter aRewriter;
@@ -1838,11 +1847,10 @@ void SwRangeRedline::dumpAsXml(xmlTextWriterPtr pWriter) const
     xmlTextWriterEndElement(pWriter);
 }
 
-bool SwExtraRedlineTable::Insert( SwExtraRedline* p )
+void SwExtraRedlineTable::Insert( SwExtraRedline* p )
 {
     m_aExtraRedlines.push_back( p );
     //p->CallDisplayFunc();
-    return true;
 }
 
 void SwExtraRedlineTable::DeleteAndDestroy( sal_uInt16 nPos, sal_uInt16 nLen )

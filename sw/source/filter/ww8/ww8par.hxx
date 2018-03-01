@@ -408,6 +408,10 @@ public:
     void SetToggleBiDiAttrFlags(sal_uInt16 nFlags) {nToggleBiDiAttrFlags = nFlags;}
 
     const SfxPoolItem* GetFormatAttr(const SwPosition& rPos, sal_uInt16 nWhich);
+    template<class T> const T* GetFormatAttr( const SwPosition& rPos, TypedWhichId<T> nWhich )
+    {
+        return static_cast<const T*>(GetFormatAttr(rPos, sal_uInt16(nWhich)));
+    }
     const SfxPoolItem* GetStackAttr(const SwPosition& rPos, sal_uInt16 nWhich);
 };
 
@@ -589,9 +593,9 @@ private:
     WW8SwFlyPara* mpSFlyPara;
     SwPaM* mpPreviousNumPaM;
     const SwNumRule* mpPrevNumRule;
-    WW8TabDesc* mpTableDesc;
+    std::unique_ptr<WW8TabDesc> mxTableDesc;
     int mnInTable;
-    sal_uInt16 mnAktColl;
+    sal_uInt16 mnCurrentColl;
     sal_Unicode mcSymbol;
     bool mbIgnoreText;
     bool mbSymbol;
@@ -616,12 +620,12 @@ class SwWW8Shade
 public:
     Color aColor;
     SwWW8Shade(bool bVer67, const WW8_SHD& rSHD);
-    SwWW8Shade(ColorData nFore, ColorData nBack, sal_uInt16 nIndex)
+    SwWW8Shade(Color nFore, Color nBack, sal_uInt16 nIndex)
     {
         SetShade(nFore, nBack, nIndex);
     }
 private:
-    void SetShade(ColorData nFore, ColorData nBack, sal_uInt16 nIndex);
+    void SetShade(Color nFore, Color nBack, sal_uInt16 nIndex);
 };
 
 //    Formulas
@@ -975,7 +979,7 @@ struct ANLDRuleMap
     OUString msOutlineNumRule;    // WinWord 6 numbering, variant 1
     OUString msNumberingNumRule;  // WinWord 6 numbering, variant 2
     SwNumRule* GetNumRule(const SwDoc& rDoc, sal_uInt8 nNumType);
-    void SetNumRule(const SwNumRule*, sal_uInt8 nNumType);
+    void SetNumRule(const OUString& rNumRule, sal_uInt8 nNumType);
 };
 
 struct SprmReadInfo;
@@ -1035,7 +1039,7 @@ struct WW8TabBandDesc
     void ReadDef(bool bVer67, const sal_uInt8* pS, short nLen);
     void ProcessDirection(const sal_uInt8* pParams);
     void ProcessSprmTSetBRC(int nBrcVer, const sal_uInt8* pParamsTSetBRC);
-    void ProcessSprmTTableBorders(int nBrcVer, const sal_uInt8* pParams);
+    void ProcessSprmTTableBorders(int nBrcVer, const sal_uInt8* pParams, sal_uInt16 nParamsLen);
     void ProcessSprmTDxaCol(const sal_uInt8* pParamsTDxaCol);
     void ProcessSprmTDelete(const sal_uInt8* pParamsTDelete);
     void ProcessSprmTInsert(const sal_uInt8* pParamsTInsert);
@@ -1194,6 +1198,11 @@ private:
     */
     std::vector<const SwCharFormat*> m_aRubyCharFormats;
 
+    /*
+    For fuzzing keep track of source offset of inserted graphics
+    */
+    std::set<sal_uLong> m_aGrafPosSet;
+
     WW8PostProcessAttrsInfo * m_pPostProcessAttrsInfo;
 
     std::shared_ptr<WW8Fib> m_xWwFib;
@@ -1208,9 +1217,9 @@ private:
     std::set<const SwNode*> m_aTextNodesHavingLeftIndentSet; // #i105414#
 
     std::unique_ptr<WW8RStyle> m_xStyles;     // pointer to the style reading class
-    SwFormat* m_pAktColl;        // collection to be created now
+    SwFormat* m_pCurrentColl;        // collection to be created now
                             // ( always 0 outside of a Style-Def )
-    std::unique_ptr<SfxItemSet> m_xAktItemSet;// character attributes to be read in now
+    std::unique_ptr<SfxItemSet> m_xCurrentItemSet;// character attributes to be read in now
                             // (always 0 outside of the WW8ListManager Ctor)
     std::vector<SwWW8StyInf> m_vColl;
     const SwTextFormatColl* m_pDfltTextFormatColl;    // Default
@@ -1221,9 +1230,9 @@ private:
     std::unique_ptr<WW8FlyPara> m_xWFlyPara;      // WW-parameter
     std::unique_ptr<WW8SwFlyPara> m_xSFlyPara;    // Sw parameters created from previous
 
-    WW8TabDesc* m_pTableDesc;     // description of table properties
+    std::unique_ptr<WW8TabDesc> m_xTableDesc;     // description of table properties
     //Keep track of tables within tables
-    std::stack<WW8TabDesc*> m_aTableStack;
+    std::stack<std::unique_ptr<WW8TabDesc>> m_aTableStack;
 
     ANLDRuleMap m_aANLDRules;
     std::unique_ptr<WW8_OLST> m_xNumOlst;         // position in text
@@ -1265,7 +1274,7 @@ private:
     rtl_TextEncoding m_eStructCharSet;  // rtl_TextEncoding for structures
     rtl_TextEncoding m_eHardCharSet;    // Hard rtl_TextEncoding-Attribute
     sal_uInt16 m_nProgress;           // percentage for Progressbar
-    sal_uInt16 m_nAktColl;            // per WW-count
+    sal_uInt16 m_nCurrentColl;          // per WW-count
     sal_uInt16 m_nFieldNum;             // serial nummer for that
     sal_uInt16 m_nLFOPosition;
 
@@ -1323,7 +1332,7 @@ private:
 
     bool m_bEmbeddObj;        // EmbeddField is being read
 
-    bool m_bAktAND_fNumberAcross; // current active Annotated List Deskriptor - ROW flag
+    bool m_bCurrentAND_fNumberAcross; // current active Annotated List Deskriptor - ROW flag
 
     bool m_bNoLnNumYet;       // no Line Numbering has been activated yet (we import
                             //     the very 1st Line Numbering and ignore the rest)
@@ -1338,7 +1347,6 @@ private:
 
     bool m_bBidi;
     bool m_bReadTable;
-    std::shared_ptr<SwPaM> m_pTableEndPaM;
     // Indicate that currently on loading a TOC, managed by Read_F_TOX() and End_Field()
     bool m_bLoadingTOXCache;
     int m_nEmbeddedTOXLevel;
@@ -1470,7 +1478,7 @@ private:
             SwFrameFormat const *pFlyFormat, WW8_FSPA const *pF);
 
     bool IsDropCap();
-    bool IsListOrDropcap() { return (!m_xAktItemSet  || m_bDropCap); };
+    bool IsListOrDropcap() { return (!m_xCurrentItemSet  || m_bDropCap); };
 
     //Apo == Absolutely Positioned Object, MSWord's old-style frames
     WW8FlyPara *ConstructApo(const ApoTestResults &rApo,
@@ -1615,13 +1623,13 @@ private:
 
 // Ver8 lists
 
-    void RegisterNumFormatOnTextNode(sal_uInt16 nActLFO, sal_uInt8 nActLevel,
+    void RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO, sal_uInt8 nCurrentLevel,
                                  const bool bSetAttr = true);
 
     void RegisterNumFormatOnStyle(sal_uInt16 nStyle);
-    void SetStylesList(sal_uInt16 nStyle, sal_uInt16 nActLFO,
-        sal_uInt8 nActLevel);
-    void RegisterNumFormat(sal_uInt16 nActLFO, sal_uInt8 nActLevel);
+    void SetStylesList(sal_uInt16 nStyle, sal_uInt16 nCurrentLFO,
+        sal_uInt8 nCurrentLevel);
+    void RegisterNumFormat(sal_uInt16 nCurrentLFO, sal_uInt8 nCurrentLevel);
 
 // to be replaced by calls in the appropriate extended SvxMSDffManager
 
@@ -1860,8 +1868,8 @@ public:     // really private, but can only be done public
 
     const WW8Fib& GetFib() const    { return *m_xWwFib; }
     SwDoc& GetDoc() const           { return m_rDoc; }
-    sal_uInt16 GetNAktColl()  const     { return m_nAktColl; }
-    void SetNAktColl( sal_uInt16 nColl ) { m_nAktColl = nColl;    }
+    sal_uInt16 GetNAktColl()  const     { return m_nCurrentColl; }
+    void SetNAktColl( sal_uInt16 nColl ) { m_nCurrentColl = nColl;    }
     std::unique_ptr<SfxItemSet> SetAktItemSet(SfxItemSet* pItemSet);
     sal_uInt16 StyleUsingLFO( sal_uInt16 nLFOIndex ) const ;
     const SwFormat* GetStyleWithOrgWWName( OUString const & rName ) const ;
@@ -1870,7 +1878,7 @@ public:     // really private, but can only be done public
     static void PicRead( SvStream *pDataStream, WW8_PIC *pPic, bool bVer67);
     static bool ImportOleWMF( tools::SvRef<SotStorage> xSrc1, GDIMetaFile &rWMF,
         long &rX, long &rY);
-    static ColorData GetCol(sal_uInt8 nIco);
+    static Color GetCol(sal_uInt8 nIco);
 
     SwWW8ImplReader( sal_uInt8 nVersionPara, SotStorage* pStorage, SvStream* pSt,
         SwDoc& rD, const OUString& rBaseURL, bool bNewDoc, bool bSkipImages, SwPosition const &rPos );

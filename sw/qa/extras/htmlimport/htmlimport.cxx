@@ -26,6 +26,18 @@ class HtmlImportTest : public SwModelTestBase
 {
     public:
         HtmlImportTest() : SwModelTestBase("sw/qa/extras/htmlimport/data/", "HTML (StarWriter)") {}
+    private:
+        std::unique_ptr<Resetter> preTest(const char* /*filename*/) override
+        {
+            if (getTestName().indexOf("ReqIf") != -1)
+            {
+                setImportFilterOptions("xhtmlns=reqif-xhtml");
+                // Bypass type detection, this is an XHTML fragment only.
+                setImportFilterName("HTML (StarWriter)");
+            }
+
+            return nullptr;
+        }
 };
 
 #define DECLARE_HTMLIMPORT_TEST(TestName, filename) DECLARE_SW_IMPORT_TEST(TestName, filename, nullptr, HtmlImportTest)
@@ -269,6 +281,20 @@ DECLARE_HTMLIMPORT_TEST(testTableBorder1px, "table_border_1px.html")
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected cell left border", sal_Int16(0), aBorder.InnerLineWidth);
     aBorder = getProperty<table::BorderLine2>(xCellB2, "RightBorder");
     CPPUNIT_ASSERT_MESSAGE("Missing cell right border", aBorder.InnerLineWidth > 0);
+}
+
+DECLARE_HTMLIMPORT_TEST(testOutlineLevel, "outline-level.html")
+{
+    // This was 0, HTML imported into Writer lost the outline numbering for
+    // Heading 1 styles.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1),
+                         getProperty<sal_Int32>(getParagraph(1), "OutlineLevel"));
+}
+
+DECLARE_HTMLIMPORT_TEST(testReqIfBr, "reqif-br.xhtml")
+{
+    // <reqif-xhtml:br/> was not recognized as a line break from a ReqIf file.
+    CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("aaa\nbbb"));
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

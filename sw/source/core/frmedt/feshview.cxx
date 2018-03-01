@@ -837,7 +837,7 @@ static void lcl_NotifyNeighbours( const SdrMarkList *pLst )
                 bCheckNeighbours = true;
                 pFly->InvalidatePos();
                 SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pFly);
-                aFrm.Pos().Y() += 1;
+                aFrm.Pos().AdjustY(1 );
             }
 
             pPage = pFly->FindPageFrame();
@@ -884,7 +884,7 @@ static void lcl_NotifyNeighbours( const SdrMarkList *pLst )
                 {
                     pAct->InvalidatePos();
                     SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pAct);
-                    aFrm.Pos().Y() += 1;
+                    aFrm.Pos().AdjustY(1 );
                 }
             }
         }
@@ -1567,7 +1567,7 @@ const SdrObject* SwFEShell::GetBestObject( bool bNext, GotoObjFlags eType, bool 
                 aCurPos = pFly->getFrameArea().Pos();
             }
             else
-                aCurPos = pObj->GetCurrentBoundRect().TopLeft();
+                aCurPos = pObj->GetSnapRect().TopLeft();
 
             // Special case if another object is on same Y.
             if( aCurPos != aPos &&          // only when it is not me
@@ -1802,10 +1802,10 @@ bool SwFEShell::ImpEndCreate()
             // The crsr should not be too far away
             bCharBound = true;
             tools::Rectangle aRect( aTmp.SVRect() );
-            aRect.Left()  -= MM50*2;
-            aRect.Top()   -= MM50*2;
-            aRect.Right() += MM50*2;
-            aRect.Bottom()+= MM50*2;
+            aRect.AdjustLeft( -(MM50*2) );
+            aRect.AdjustTop( -(MM50*2) );
+            aRect.AdjustRight(MM50*2 );
+            aRect.AdjustBottom(MM50*2 );
 
             if( !aRect.IsOver( rBound ) && !::GetHtmlMode( GetDoc()->GetDocShell() ))
                 bCharBound = false;
@@ -2635,13 +2635,13 @@ bool SwFEShell::GetObjAttr( SfxItemSet &rSet ) const
     return true;
 }
 
-bool SwFEShell::SetObjAttr( const SfxItemSet& rSet )
+void SwFEShell::SetObjAttr( const SfxItemSet& rSet )
 {
     SET_CURR_SHELL( this );
 
     if ( !rSet.Count() )
     { OSL_ENSURE( false, "SetObjAttr, empty set." );
-        return false;
+        return;
     }
 
     StartAllAction();
@@ -2658,7 +2658,6 @@ bool SwFEShell::SetObjAttr( const SfxItemSet& rSet )
     EndUndo( SwUndoId::INSATTR );
     EndAllActionAndCall();
     GetDoc()->getIDocumentState().SetModified();
-    return true;
 }
 
 bool SwFEShell::IsAlignPossible() const

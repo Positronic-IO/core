@@ -538,8 +538,8 @@ void UsageInfo::save()
     {
         OString aUsageInfoMsg = "Document Type;Command;Count";
 
-        for (UsageMap::const_iterator it = maUsage.begin(); it != maUsage.end(); ++it)
-            aUsageInfoMsg += "\n" + it->first.toUtf8() + ";" + OString::number(it->second);
+        for (auto const& elem : maUsage)
+            aUsageInfoMsg += "\n" + elem.first.toUtf8() + ";" + OString::number(elem.second);
 
         sal_uInt64 written = 0;
         file.write(aUsageInfoMsg.pData->buffer, aUsageInfoMsg.getLength(), written);
@@ -970,12 +970,10 @@ void SfxDispatchController_Impl::StateChanged( sal_uInt16 nSID, SfxItemState eSt
             InterceptLOKStateChangeEvent(pDispatcher->GetFrame(), aEvent, pState);
         }
 
-        Sequence< OUString > seqNames = pDispatch->GetListeners().getContainedTypes();
-        sal_Int32 nLength = seqNames.getLength();
-        for (sal_Int32 i = 0; i < nLength; ++i)
+        for (const OUString& rName: pDispatch->GetListeners().getContainedTypes())
         {
-            if (seqNames[i] == aDispatchURL.Main || seqNames[i] == aDispatchURL.Complete)
-                sendStatusChanged(seqNames[i], aEvent);
+            if (rName == aDispatchURL.Main || rName == aDispatchURL.Complete)
+                sendStatusChanged(rName, aEvent);
         }
     }
 }
@@ -1007,6 +1005,7 @@ static void InterceptLOKStateChangeEvent(const SfxViewFrame* pViewFrame, const c
         aEvent.FeatureURL.Path == "RightPara" ||
         aEvent.FeatureURL.Path == "Shadowed" ||
         aEvent.FeatureURL.Path == "SpellOnline" ||
+        aEvent.FeatureURL.Path == "OnlineAutoFormat" ||
         aEvent.FeatureURL.Path == "SubScript" ||
         aEvent.FeatureURL.Path == "SuperScript" ||
         aEvent.FeatureURL.Path == "Strikeout" ||
@@ -1092,7 +1091,8 @@ static void InterceptLOKStateChangeEvent(const SfxViewFrame* pViewFrame, const c
              aEvent.FeatureURL.Path == "FontDialog" ||
              aEvent.FeatureURL.Path == "ParagraphDialog" ||
              aEvent.FeatureURL.Path == "OutlineBullet" ||
-             aEvent.FeatureURL.Path == "InsertIndexesEntry")
+             aEvent.FeatureURL.Path == "InsertIndexesEntry" ||
+             aEvent.FeatureURL.Path == "TransformDialog")
 
     {
         aBuffer.append(aEvent.IsEnabled ? OUString("enabled") : OUString("disabled"));

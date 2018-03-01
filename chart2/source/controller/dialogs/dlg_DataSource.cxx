@@ -23,13 +23,11 @@
 #include "ChartTypeTemplateProvider.hxx"
 #include <DiagramHelper.hxx>
 #include "DialogModel.hxx"
-#include <helpids.h>
 
 #include "tp_RangeChooser.hxx"
 #include "tp_DataSource.hxx"
 
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx> // for RET_OK
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;

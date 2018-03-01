@@ -16,7 +16,8 @@
 #include <svx/colorbox.hxx>
 #include <svx/xtable.hxx>
 #include <svx/drawitem.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 namespace {
 
@@ -150,9 +151,9 @@ void ScDataBarSettingsDlg::dispose()
 
 void ScDataBarSettingsDlg::Init()
 {
-    mpLbNeg->SelectEntry(Color(COL_LIGHTRED));
-    mpLbAxisCol->SelectEntry(Color(COL_BLACK));
-    mpLbPos->SelectEntry(Color(COL_LIGHTBLUE));
+    mpLbNeg->SelectEntry(COL_LIGHTRED);
+    mpLbAxisCol->SelectEntry(COL_BLACK);
+    mpLbPos->SelectEntry(COL_LIGHTBLUE);
     mpBtnOk->SetClickHdl( LINK( this, ScDataBarSettingsDlg, OkBtnHdl ) );
 
     mpLbTypeMin->SetSelectHdl( LINK( this, ScDataBarSettingsDlg, TypeSelectHdl ) );
@@ -256,8 +257,10 @@ IMPL_LINK_NOARG( ScDataBarSettingsDlg, OkBtnHdl, Button*, void )
     if(bWarn)
     {
         //show warning message and don't close
-        ScopedVclPtrInstance< WarningBox > aWarn(this, MessBoxStyle::Ok, maStrWarnSameValue );
-        aWarn->Execute();
+        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                   maStrWarnSameValue));
+        xWarn->run();
     }
     else
     {

@@ -41,6 +41,7 @@
 #include <svl/hint.hxx>
 #include <tools/gen.hxx>
 #include <svl/zforlist.hxx>
+#include <svl/typedwhich.hxx>
 
 #include <cassert>
 #include <memory>
@@ -242,7 +243,8 @@ enum ScDocumentMode
 {
     SCDOCMODE_DOCUMENT,
     SCDOCMODE_CLIP,
-    SCDOCMODE_UNDO
+    SCDOCMODE_UNDO,
+    SCDOCMODE_FUNCTIONACCESS
 };
 
 enum CommentCaptionState
@@ -250,6 +252,12 @@ enum CommentCaptionState
     ALLSHOWN,                   // All comments captions are shown
     ALLHIDDEN,                  // All comments captions are hidden
     MIXED                       // There are comments in shown and hidden.
+};
+
+enum RangeNameScope
+{
+    GLOBAL,                    // A range name can be defined
+    SHEET                      // with two scope on Manage Names dialog.
 };
 
 struct ScDocStat
@@ -473,6 +481,7 @@ private:
     bool                bCalculatingFormulaTree;
     bool                bIsClip;
     bool                bIsUndo;
+    bool                bIsFunctionAccess;
     bool                bIsVisible;                     // set from view ctor
 
     bool                bIsEmbedded;                    // display/adjust Embedded area?
@@ -606,6 +615,7 @@ public:
     SC_DLLPUBLIC ScRangeName*  GetRangeName() const;
     void                       SetRangeName(SCTAB nTab, ScRangeName* pNew);
     void                       SetRangeName( ScRangeName* pNewRangeName );
+    bool                       IsAddressInRangeName( RangeNameScope eScope, ScAddress& rAddress);
 
     /** Find a named expression / range name in either global or a local scope.
         @param  nTab
@@ -1029,9 +1039,9 @@ public:
 
                     //  return TRUE = number format is set
     SC_DLLPUBLIC bool SetString( SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rString,
-                                 ScSetStringParam* pParam = nullptr );
+                                 const ScSetStringParam * pParam = nullptr );
     SC_DLLPUBLIC bool SetString( const ScAddress& rPos, const OUString& rString,
-                                 ScSetStringParam* pParam = nullptr );
+                                 const ScSetStringParam* pParam = nullptr );
 
     /**
      * This method manages the lifecycle of the passed edit text object. When
@@ -1135,6 +1145,7 @@ public:
 
     /** Returns true, if there is any data to create a selection list for rPos. */
     bool            HasSelectionData( SCCOL nCol, SCROW nRow, SCTAB nTab ) const;
+    bool            HasValidationData( SCCOL nCol, SCROW nRow, SCTAB nTab ) const;
 
     /**
      * Check if the specified range contains either: 1) one non-empty cell, 2)
@@ -1187,7 +1198,7 @@ public:
                                    SCCOL& rEndCol, SCROW& rEndRow, SCTAB nTab,
                                    bool bRefresh = false );
     bool              ExtendMerge( ScRange& rRange, bool bRefresh = false );
-    void              ExtendTotalMerge( ScRange& rRange ) const;
+    SC_DLLPUBLIC void ExtendTotalMerge( ScRange& rRange ) const;
     SC_DLLPUBLIC void ExtendOverlapped( SCCOL& rStartCol, SCROW& rStartRow,
                                         SCCOL nEndCol, SCROW nEndRow, SCTAB nTab ) const;
     SC_DLLPUBLIC void ExtendOverlapped( ScRange& rRange ) const;
@@ -1311,6 +1322,8 @@ public:
                                 If TRUE, do not adjust the left column.
                         @param  bConsiderCellNotes
                                 If TRUE, consider the presence of cell notes besides data.
+                        @param  bConsiderCellDrawObjects
+                                If TRUE, consider the presence of draw objects anchored to the cell.
 
                         @returns true if there is any data, false if not.
                      */
@@ -1318,7 +1331,8 @@ public:
                                           SCTAB nTab, SCCOL& rStartCol, SCROW& rStartRow,
                                           SCCOL& rEndCol, SCROW& rEndRow, bool bColumnsOnly,
                                           bool bStickyTopRow = false, bool bStickyLeftCol = false,
-                                          bool bConsiderCellNotes = false ) const;
+                                          bool bConsiderCellNotes = false,
+                                          bool bConsiderCellDrawObjects = false ) const;
 
     /**
      * Return the last non-empty row position in given columns that's no
@@ -1421,6 +1435,7 @@ public:
     bool               IsClipboard() const                         { return bIsClip; }
     bool               IsUndoEnabled() const                       { return mbUndoEnabled; }
     SC_DLLPUBLIC void  EnableUndo( bool bVal );
+    bool                IsFunctionAccess() const        { return bIsFunctionAccess; }
 
     bool                         IsAdjustHeightLocked() const               { return nAdjustHeightLock != 0; }
     void                         LockAdjustHeight()                          { ++nAdjustHeightLock; }
@@ -1440,7 +1455,7 @@ public:
     void                         SetClipArea( const ScRange& rArea, bool bCut = false );
 
     SC_DLLPUBLIC bool            IsDocVisible() const                        { return bIsVisible; }
-    void                         SetDocVisible( bool bSet );
+    SC_DLLPUBLIC void            SetDocVisible( bool bSet );
 
     bool                         HasOLEObjectsInArea( const ScRange& rRange, const ScMarkData* pTabMark = nullptr );
 
@@ -1607,7 +1622,15 @@ public:
                                               double& rResult );
 
     SC_DLLPUBLIC const SfxPoolItem*         GetAttr( SCCOL nCol, SCROW nRow, SCTAB nTab, sal_uInt16 nWhich ) const;
+    template<class T> const T*              GetAttr( SCCOL nCol, SCROW nRow, SCTAB nTab, TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T*>(GetAttr(nCol, nRow, nTab, sal_uInt16(nWhich)));
+    }
     SC_DLLPUBLIC const SfxPoolItem*         GetAttr( const ScAddress& rPos, sal_uInt16 nWhich ) const;
+    template<class T> const T*              GetAttr( const ScAddress& rPos, TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T*>(GetAttr(rPos, sal_uInt16(nWhich)));
+    }
     SC_DLLPUBLIC const ScPatternAttr*       GetPattern( SCCOL nCol, SCROW nRow, SCTAB nTab ) const;
     SC_DLLPUBLIC const ScPatternAttr*       GetPattern( const ScAddress& rPos ) const;
     SC_DLLPUBLIC const ScPatternAttr*       GetMostUsedPattern( SCCOL nCol, SCROW nStartRow, SCROW nEndRow, SCTAB nTab ) const;
@@ -1622,6 +1645,10 @@ public:
                                                            const ScConditionalFormatList& rList,
                                                            const std::vector<sal_uInt32>& rIndex ) const;
     const SfxPoolItem*                      GetEffItem( SCCOL nCol, SCROW nRow, SCTAB nTab, sal_uInt16 nWhich ) const;
+    template<class T> const T*              GetEffItem( SCCOL nCol, SCROW nRow, SCTAB nTab, TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T*>(GetEffItem(nCol, nRow, nTab, sal_uInt16(nWhich)));
+    }
 
     SC_DLLPUBLIC const css::uno::Reference< css::i18n::XBreakIterator >& GetBreakIterator();
     bool                        HasStringWeakCharacters( const OUString& rString );
@@ -2003,7 +2030,7 @@ public:
     void            SetInsertingFromOtherDoc( bool bVal ) { bInsertingFromOtherDoc = bVal; }
     bool            IsInsertingFromOtherDoc() const { return bInsertingFromOtherDoc; }
     void            SetLoadingMedium( bool bVal );
-    void            SetImportingXML( bool bVal );
+    SC_DLLPUBLIC void SetImportingXML( bool bVal );
     bool            IsImportingXML() const { return bImportingXML; }
     bool            IsCalcingAfterLoad() const { return bCalcingAfterLoad; }
     void            SetNoListening( bool bVal ) { bNoListening = bVal; }

@@ -175,9 +175,9 @@ bool SwEditShell::GetCurAttr( SfxItemSet& rSet,
     return GetPaMAttr( GetCursor(), rSet, bMergeIndentValuesOfNumRule );
 }
 
-bool SwEditShell::GetCurParAttr( SfxItemSet& rSet) const
+void SwEditShell::GetCurParAttr( SfxItemSet& rSet) const
 {
-    return GetPaMParAttr( GetCursor(), rSet );
+    GetPaMParAttr( GetCursor(), rSet );
 }
 
 bool SwEditShell::GetPaMParAttr( SwPaM* pPaM, SfxItemSet& rSet ) const
@@ -474,8 +474,7 @@ bool SwEditShell::IsMoveLeftMargin( bool bRight, bool bModulus ) const
 {
     bool bRet = true;
 
-    const SvxTabStopItem& rTabItem = static_cast<const SvxTabStopItem&>(GetDoc()->
-                                GetDefault( RES_PARATR_TABSTOP ));
+    const SvxTabStopItem& rTabItem = GetDoc()->GetDefault( RES_PARATR_TABSTOP );
     sal_uInt16 nDefDist = static_cast<sal_uInt16>(rTabItem.Count() ? rTabItem[0].GetTabPos() : 1134);
     if( !nDefDist )
         return false;

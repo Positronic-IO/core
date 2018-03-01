@@ -292,10 +292,8 @@ namespace cairocanvas
    *
    * Note: some text effects are not rendered due to lacking generic canvas or cairo canvas
    *       implementation. See issues 92657, 92658, 92659, 92660, 97529
-   *
-   * @return true, if successful
    **/
-    bool TextLayout::draw( CairoSharedPtr const &        pSCairo,
+    void TextLayout::draw( CairoSharedPtr const &        pSCairo,
                            OutputDevice&                 rOutDev,
                            const Point&                  rOutpos,
                            const rendering::ViewState&   viewState,
@@ -328,14 +326,12 @@ namespace cairocanvas
         //Pull all the fonts we need to render the text
         typedef std::pair<SystemFontData,int> FontLevel;
         std::vector<FontLevel> aFontData;
-        SystemGlyphDataVector::const_iterator aGlyphIter=aSysLayoutData.rGlyphData.begin();
-        const SystemGlyphDataVector::const_iterator aGlyphEnd=aSysLayoutData.rGlyphData.end();
-        for( ; aGlyphIter != aGlyphEnd; ++aGlyphIter )
+        for (auto const& glyph : aSysLayoutData.rGlyphData)
         {
-            if( aFontData.empty() || aGlyphIter->fallbacklevel != aFontData.back().second )
+            if( aFontData.empty() || glyph.fallbacklevel != aFontData.back().second )
             {
-                aFontData.emplace_back(rOutDev.GetSysFontData(aGlyphIter->fallbacklevel),
-                                              aGlyphIter->fallbacklevel);
+                aFontData.emplace_back(rOutDev.GetSysFontData(glyph.fallbacklevel),
+                                              glyph.fallbacklevel);
                 if( !isCairoRenderable(aFontData.back().first) )
                 {
                     bCairoRenderable = false;
@@ -360,40 +356,36 @@ namespace cairocanvas
                 rOutDev.DrawTextArray( rOutpos, maText.Text, aOffsets.get(),
                                        ::canvas::tools::numeric_cast<sal_uInt16>(maText.StartPosition),
                                        ::canvas::tools::numeric_cast<sal_uInt16>(maText.Length) );
-                return true;
+                return;
             }
             else                                               // VCL FALLBACK - without advances
             {
                 rOutDev.DrawText( rOutpos, maText.Text,
                                   ::canvas::tools::numeric_cast<sal_uInt16>(maText.StartPosition),
                                   ::canvas::tools::numeric_cast<sal_uInt16>(maText.Length) );
-                return true;
+                return;
             }
         }
 
         if (aSysLayoutData.rGlyphData.empty())
-            return false; //??? false?
+            return; //??? false?
 
         /**
          * Setup platform independent glyph vector into cairo-based glyphs vector.
          **/
 
         // Loop through the fonts used and render the matching glyphs for each
-        std::vector<FontLevel>::const_iterator aFontDataIter = aFontData.begin();
-        const std::vector<FontLevel>::const_iterator aFontDataEnd = aFontData.end();
-        for( ; aFontDataIter != aFontDataEnd; ++aFontDataIter )
+        for (auto const& elemFontData : aFontData)
         {
-            const SystemFontData &rSysFontData = aFontDataIter->first;
+            const SystemFontData &rSysFontData = elemFontData.first;
 
             // setup glyphs
             std::vector<cairo_glyph_t> cairo_glyphs;
             cairo_glyphs.reserve( 256 );
 
-            aGlyphIter=aSysLayoutData.rGlyphData.begin();
-            for( ; aGlyphIter != aGlyphEnd; ++aGlyphIter )
+            for (auto const& systemGlyph : aSysLayoutData.rGlyphData)
             {
-                SystemGlyphData systemGlyph = *aGlyphIter;
-                if( systemGlyph.fallbacklevel != aFontDataIter->second )
+                if( systemGlyph.fallbacklevel != elemFontData.second )
                     continue;
 
                 cairo_glyph_t aGlyph;
@@ -503,7 +495,6 @@ namespace cairocanvas
             cairo_font_face_destroy(font_face);
             cairo_font_options_destroy(options);
         }
-        return true;
     }
 
     namespace

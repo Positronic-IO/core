@@ -1220,13 +1220,13 @@ void SAL_CALL SvxShape::setSize( const awt::Size& rSize )
             //aRect.SetSize(aLocalSize); // this call subtract 1 // http://www.openoffice.org/issues/show_bug.cgi?id=83193
             if ( !aLocalSize.Width() )
             {
-                aRect.Right() = RECT_EMPTY;
+                aRect.SetWidthEmpty();
             }
             else
                 aRect.setWidth(aLocalSize.Width());
             if ( !aLocalSize.Height() )
             {
-                aRect.Bottom() = RECT_EMPTY;
+                aRect.SetHeightEmpty();
             }
             else
                 aRect.setHeight(aLocalSize.Height());
@@ -2065,8 +2065,8 @@ bool SvxShape::setPropertyValueImpl( const OUString&, const SfxItemPropertySimpl
             basegfx::B2DHomMatrix aNewHomogenMatrix;
             mpObj->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
 
-            aVclPoint.X() += basegfx::fround(aNewHomogenMatrix.get(0, 2));
-            aVclPoint.Y() += basegfx::fround(aNewHomogenMatrix.get(1, 2));
+            aVclPoint.AdjustX(basegfx::fround(aNewHomogenMatrix.get(0, 2)) );
+            aVclPoint.AdjustY(basegfx::fround(aNewHomogenMatrix.get(1, 2)) );
 
             // #88657# metric of pool maybe twips (writer)
             ForceMetricToItemPoolMetric(aVclPoint);
@@ -2514,8 +2514,8 @@ bool SvxShape::getPropertyValueImpl( const OUString&, const SfxItemPropertySimpl
         basegfx::B2DHomMatrix aNewHomogenMatrix;
         mpObj->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
 
-        aVclPoint.X() -= basegfx::fround(aNewHomogenMatrix.get(0, 2));
-        aVclPoint.Y() -= basegfx::fround(aNewHomogenMatrix.get(1, 2));
+        aVclPoint.AdjustX( -(basegfx::fround(aNewHomogenMatrix.get(0, 2))) );
+        aVclPoint.AdjustY( -(basegfx::fround(aNewHomogenMatrix.get(1, 2))) );
 
         awt::Point aPnt( aVclPoint.X(), aVclPoint.Y() );
         rValue <<= aPnt;

@@ -715,12 +715,12 @@ void XclImpDrawObjBase::ConvertFillStyle( SdrObject& rSdrObj, const XclObjFillDa
 
             XOBitmap aXOBitmap( aBitmap );
             aXOBitmap.Bitmap2Array();
-            if( aXOBitmap.GetBackgroundColor().GetColor() == COL_BLACK )
+            if( aXOBitmap.GetBackgroundColor() == COL_BLACK )
                 ::std::swap( aPattColor, aBackColor );
             aXOBitmap.SetPixelColor( aPattColor );
             aXOBitmap.SetBackgroundColor( aBackColor );
             aXOBitmap.Array2Bitmap();
-            aBitmap = aXOBitmap.GetBitmap();
+            aBitmap = aXOBitmap.GetBitmap().GetBitmapRef();
 
             rSdrObj.SetMergedItem(XFillStyleItem(drawing::FillStyle_BITMAP));
             rSdrObj.SetMergedItem(XFillBitmapItem(EMPTY_OUSTRING, Graphic(aBitmap)));
@@ -1257,26 +1257,26 @@ SdrObjectPtr XclImpArcObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const t
         case EXC_OBJ_ARC_TR:
             nStartAngle = 0;
             nEndAngle = 9000;
-            aNewRect.Left() -= rAnchorRect.GetWidth();
-            aNewRect.Bottom() += rAnchorRect.GetHeight();
+            aNewRect.AdjustLeft( -(rAnchorRect.GetWidth()) );
+            aNewRect.AdjustBottom(rAnchorRect.GetHeight() );
         break;
         case EXC_OBJ_ARC_TL:
             nStartAngle = 9000;
             nEndAngle = 18000;
-            aNewRect.Right() += rAnchorRect.GetWidth();
-            aNewRect.Bottom() += rAnchorRect.GetHeight();
+            aNewRect.AdjustRight(rAnchorRect.GetWidth() );
+            aNewRect.AdjustBottom(rAnchorRect.GetHeight() );
         break;
         case EXC_OBJ_ARC_BL:
             nStartAngle = 18000;
             nEndAngle = 27000;
-            aNewRect.Right() += rAnchorRect.GetWidth();
-            aNewRect.Top() -= rAnchorRect.GetHeight();
+            aNewRect.AdjustRight(rAnchorRect.GetWidth() );
+            aNewRect.AdjustTop( -(rAnchorRect.GetHeight()) );
         break;
         case EXC_OBJ_ARC_BR:
             nStartAngle = 27000;
             nEndAngle = 0;
-            aNewRect.Left() -= rAnchorRect.GetWidth();
-            aNewRect.Top() -= rAnchorRect.GetHeight();
+            aNewRect.AdjustLeft( -(rAnchorRect.GetWidth()) );
+            aNewRect.AdjustTop( -(rAnchorRect.GetHeight()) );
         break;
     }
     SdrObjKind eObjKind = maFillData.IsFilled() ? OBJ_SECT : OBJ_CARC;
@@ -3176,7 +3176,7 @@ void XclImpSolverContainer::RemoveSdrObjectInfo( SdrObject& rSdrObj )
 
 void XclImpSolverContainer::UpdateConnectorRules()
 {
-    for (SvxMSDffConnectorRule* pRule : aCList)
+    for (auto const & pRule : aCList)
     {
         UpdateConnection( pRule->nShapeA, pRule->pAObj, &pRule->nSpFlagsA );
         UpdateConnection( pRule->nShapeB, pRule->pBObj, &pRule->nSpFlagsB );
@@ -3186,10 +3186,6 @@ void XclImpSolverContainer::UpdateConnectorRules()
 
 void XclImpSolverContainer::RemoveConnectorRules()
 {
-    // base class from SVX uses plain untyped tools/List
-    for (SvxMSDffConnectorRule* p : aCList) {
-        delete p;
-    }
     aCList.clear();
     maSdrInfoMap.clear();
     maSdrObjMap.clear();
@@ -3219,12 +3215,12 @@ XclImpSimpleDffConverter::~XclImpSimpleDffConverter()
 
 bool XclImpSimpleDffConverter::GetColorFromPalette( sal_uInt16 nIndex, Color& rColor ) const
 {
-    ColorData nColor = GetPalette().GetColorData( nIndex );
+    Color nColor = GetPalette().GetColor( nIndex );
 
     if( nColor == COL_AUTO )
         return false;
 
-    rColor.SetColor( nColor );
+    rColor = nColor;
     return true;
 }
 

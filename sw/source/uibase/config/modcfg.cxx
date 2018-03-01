@@ -32,13 +32,10 @@
 #include <itabenum.hxx>
 #include <modcfg.hxx>
 #include <fldupde.hxx>
-#include <unotools/configmgr.hxx>
-#include <unotools/syslocaleoptions.hxx>
 #include <caption.hxx>
 
 #include <unomid.h>
 
-using namespace utl;
 using namespace com::sun::star::uno;
 
 #define GLOB_NAME_CALC      0
@@ -224,7 +221,7 @@ const Sequence<OUString>& SwRevisionConfig::GetPropertyNames()
     static Sequence<OUString> aNames;
     if(!aNames.getLength())
     {
-        const int nCount = 8;
+        const int nCount = 9;
         aNames.realloc(nCount);
         static const char* aPropNames[] =
         {
@@ -235,7 +232,8 @@ const Sequence<OUString>& SwRevisionConfig::GetPropertyNames()
             "TextDisplay/ChangedAttribute/Attribute",   // 4
             "TextDisplay/ChangedAttribute/Color",       // 5
             "LinesChanged/Mark",                        // 6
-            "LinesChanged/Color"                        // 7
+            "LinesChanged/Color",                       // 7
+            "ShowInlineTooltip"                         // 8
         };
         OUString* pNames = aNames.getArray();
         for(int i = 0; i < nCount; i++)
@@ -257,7 +255,7 @@ SwRevisionConfig::SwRevisionConfig() :
     aFormatAttr.m_nItemId = SID_ATTR_CHAR_WEIGHT;
     aFormatAttr.m_nAttr = WEIGHT_BOLD;
     aFormatAttr.m_nColor = COL_BLACK;
-
+    bShowInlineTooltip = true;
     Load();
 }
 
@@ -301,19 +299,18 @@ void SwRevisionConfig::ImplCommit()
 
     for(int nProp = 0; nProp < aNames.getLength(); nProp++)
     {
-        sal_Int32 nVal = -1;
         switch(nProp)
         {
-            case 0 : nVal = lcl_ConvertAttrToCfg(aInsertAttr); break;
-            case 1 : nVal = aInsertAttr.m_nColor  ; break;
-            case 2 : nVal = lcl_ConvertAttrToCfg(aDeletedAttr); break;
-            case 3 : nVal = aDeletedAttr.m_nColor ; break;
-            case 4 : nVal = lcl_ConvertAttrToCfg(aFormatAttr); break;
-            case 5 : nVal = aFormatAttr.m_nColor  ; break;
-            case 6 : nVal = nMarkAlign          ; break;
-            case 7 : nVal = aMarkColor.GetColor(); break;
+            case 0 : pValues[nProp] <<= lcl_ConvertAttrToCfg(aInsertAttr); break;
+            case 1 : pValues[nProp] <<= aInsertAttr.m_nColor;   break;
+            case 2 : pValues[nProp] <<= lcl_ConvertAttrToCfg(aDeletedAttr); break;
+            case 3 : pValues[nProp] <<= aDeletedAttr.m_nColor;  break;
+            case 4 : pValues[nProp] <<= lcl_ConvertAttrToCfg(aFormatAttr); break;
+            case 5 : pValues[nProp] <<= aFormatAttr.m_nColor;   break;
+            case 6 : pValues[nProp] <<= nMarkAlign;             break;
+            case 7 : pValues[nProp] <<= aMarkColor.GetColor();  break;
+            case 8 : pValues[nProp] <<= bShowInlineTooltip;     break;
         }
-        pValues[nProp] <<= nVal;
     }
     PutProperties(aNames, aValues);
 }
@@ -365,7 +362,8 @@ void SwRevisionConfig::Load()
                 case 4 : lcl_ConvertCfgToAttr(nVal, aFormatAttr); break;
                 case 5 : aFormatAttr.m_nColor     = nVal; break;
                 case 6 : nMarkAlign = sal::static_int_cast< sal_uInt16, sal_Int32>(nVal); break;
-                case 7 : aMarkColor.SetColor(nVal); break;
+                case 7 : aMarkColor = nVal; break;
+                case 8 : bShowInlineTooltip = *o3tl::doAccess<bool>(pValues[nProp]);
             }
         }
     }
@@ -1086,13 +1084,7 @@ void SwInsertConfig::Load()
         }
         else if (nProp == INS_PROP_CAP_CAPTIONORDERNUMBERINGFIRST)
         {
-            if (!utl::ConfigManager::IsFuzzing())
-            {
-                //#i61007#  initialize caption order, right now only HUNGARIAN seems to need a different order
-                SvtSysLocaleOptions aSysLocaleOptions;
-                const LanguageTag& rLang = aSysLocaleOptions.GetRealLanguageTag();
-                bCaptionOrderNumberingFirst = (rLang.getLanguage() == "hu");
-            }
+            bCaptionOrderNumberingFirst = false;
         }
 
     }

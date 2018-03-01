@@ -59,19 +59,15 @@ using namespace com::sun::star::script;
 using namespace com::sun::star::beans;
 using namespace com::sun::star::uno;
 using namespace com::sun::star::bridge::oleautomation;
-namespace ole_adapter
-{
+
 extern std::unordered_map<sal_uIntPtr, sal_uIntPtr> AdapterToWrapperMap;
 extern std::unordered_map<sal_uIntPtr, sal_uIntPtr> WrapperToAdapterMap;
-typedef std::unordered_map<sal_uIntPtr, sal_uIntPtr>::iterator IT_Wrap;
-typedef std::unordered_map<sal_uIntPtr, sal_uIntPtr>::iterator CIT_Wrap;
+
 //Maps IUnknown pointers to a weak reference of the respective wrapper class (e.g.
 // IUnknownWrapperImpl. It is the responsibility of the wrapper to remove the entry when
 // it is being destroyed.
 // Used to ensure that an Automation object is always mapped to the same UNO objects.
 extern std::unordered_map<sal_uIntPtr, WeakReference<XInterface> > ComPtrToWrapperMap;
-typedef std::unordered_map<sal_uIntPtr, WeakReference<XInterface> >::iterator IT_Com;
-typedef std::unordered_map<sal_uIntPtr, WeakReference<XInterface> >::const_iterator CIT_Com;
 
 // Maps XInterface pointers to a weak reference of its wrapper class (i.e.
 // InterfaceOleWrapper_Impl). It is the responsibility of the wrapper to remove the entry when
@@ -80,8 +76,6 @@ typedef std::unordered_map<sal_uIntPtr, WeakReference<XInterface> >::const_itera
 // UNO interface is mapped again to COM then the IDispach of the first mapped instance
 // must be returned.
 extern std::unordered_map<sal_uIntPtr, WeakReference<XInterface> > UnoObjToWrapperMap;
-typedef std::unordered_map<sal_uIntPtr, WeakReference<XInterface> >::iterator IT_Uno;
-typedef std::unordered_map<sal_uIntPtr, WeakReference<XInterface> >::const_iterator CIT_Uno;
 
 // createUnoObjectWrapper gets a wrapper instance by calling createUnoWrapperInstance
     // and initializes it via XInitialization. The wrapper object is required to implement
@@ -554,15 +548,15 @@ void UnoConversionUtilities<T>::variantToAny( const VARIANTARG* pArg, Any& rAny,
             throw CannotConvertException(
                 "[automation bridge]UnoConversionUtilities<T>::variantToAny \n"
                 "Cannot convert the value of vartype :\"" +
-                OUString::number((sal_Int32) var.vt) +
+                OUString::number(static_cast<sal_Int32>(var.vt)) +
                 "\"  to the expected UNO type of type class: " +
-                OUString::number((sal_Int32) ptype.getTypeClass()),
+                OUString::number(static_cast<sal_Int32>(ptype.getTypeClass())),
                 nullptr, TypeClass_UNKNOWN, FailReason::TYPE_NOT_SUPPORTED,0);
 
         if (bFail)
             throw IllegalArgumentException(
                 "[automation bridge]UnoConversionUtilities<T>:variantToAny\n"
-                "The provided VARIANT of type\" " + OUString::number((sal_Int32) var.vt) +
+                "The provided VARIANT of type\" " + OUString::number(static_cast<sal_Int32>(var.vt)) +
                 "\" is unappropriate for conversion!", Reference<XInterface>(), -1);
     }
     catch (const CannotConvertException &)
@@ -630,14 +624,14 @@ void UnoConversionUtilities<T>::anyToVariant(VARIANT* pVariant, const Any& rAny,
                         "Cannot convert the value of type :\"" +
                         rAny.getValueTypeName() +
                         "\"  to the expected Automation type of VARTYPE: " +
-                        OUString::number((sal_Int32)type),
+                        OUString::number(static_cast<sal_Int32>(type)),
                         nullptr, TypeClass_UNKNOWN, FailReason::TYPE_NOT_SUPPORTED,0);
 
                 throw BridgeRuntimeError(
                     "[automation bridge]UnoConversionUtilities<T>::anyToVariant \n"
                     "Conversion of any with " +
                     rAny.getValueType().getTypeName() +
-                    " to VARIANT with type: " + OUString::number((sal_Int32) type) +
+                    " to VARIANT with type: " + OUString::number(static_cast<sal_Int32>(type)) +
                     " failed! Error code: " + OUString::number(hr));
 
             }
@@ -1368,7 +1362,7 @@ void UnoConversionUtilities<T>::createUnoObjectWrapper(const Any & rObj, VARIANT
 
         Reference<XInterface> xIntWrapper;
         // Does a UNO wrapper exist already ?
-        IT_Uno it_uno = UnoObjToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(xInt.get()));
+        auto it_uno = UnoObjToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(xInt.get()));
         if(it_uno != UnoObjToWrapperMap.end())
         {
             xIntWrapper =  it_uno->second;
@@ -1383,9 +1377,9 @@ void UnoConversionUtilities<T>::createUnoObjectWrapper(const Any & rObj, VARIANT
         else
         {
             Reference<XInterface> xIntComWrapper = xInt;
-            typedef std::unordered_map<sal_uIntPtr,sal_uIntPtr>::iterator IT;
+
             // Adapter? then get the COM wrapper to which the adapter delegates its calls
-            IT it= AdapterToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(xInt.get()));
+            auto it = AdapterToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(xInt.get()));
             if( it != AdapterToWrapperMap.end() )
                 xIntComWrapper= reinterpret_cast<XInterface*>(it->second);
 
@@ -1729,7 +1723,7 @@ Any UnoConversionUtilities<T>::createOleObjectWrapper(VARIANT* pVar, const Type&
     // wrap ordinary dispatch objects. The dispatch-UNO objects usually are adapted to represent
     // particular UNO interfaces.
     Reference<XInterface> xIntWrapper;
-    CIT_Com cit_currWrapper= ComPtrToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(spUnknown.p));
+    auto cit_currWrapper= ComPtrToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(spUnknown.p));
     if(cit_currWrapper != ComPtrToWrapperMap.end())
             xIntWrapper = cit_currWrapper->second;
     if (xIntWrapper.is())
@@ -1738,7 +1732,7 @@ Any UnoConversionUtilities<T>::createOleObjectWrapper(VARIANT* pVar, const Type&
         //find the proper Adapter. The pointer in the WrapperToAdapterMap are valid as long as
         //we get a pointer to the wrapper from ComPtrToWrapperMap, because the Adapter hold references
         //to the wrapper.
-        CIT_Wrap it = WrapperToAdapterMap.find(reinterpret_cast<sal_uIntPtr>(xIntWrapper.get()));
+        auto it = WrapperToAdapterMap.find(reinterpret_cast<sal_uIntPtr>(xIntWrapper.get()));
         if (it == WrapperToAdapterMap.end())
         {
             // No adapter available.
@@ -2366,7 +2360,6 @@ inline void reduceRange( Any& any)
     }
 }
 
-} // end namespace
 #endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

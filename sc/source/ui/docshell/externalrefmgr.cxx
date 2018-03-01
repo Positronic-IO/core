@@ -51,7 +51,8 @@
 #include <tools/urlobj.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/ucbhelper.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <stringutil.hxx>
 #include <scmatrix.hxx>
 #include <columnspanset.hxx>
@@ -2365,6 +2366,15 @@ ScDocument* ScExternalRefManager::getInMemorySrcDocument(sal_uInt16 nFileId)
     if (!pFileName)
         return nullptr;
 
+    // Do not load document until it was allowed
+    SfxObjectShell* pDocShell = mpDoc->GetDocumentShell();
+    if ( pDocShell )
+    {
+        const comphelper::EmbeddedObjectContainer& rContainer = pDocShell->GetEmbeddedObjectContainer();
+        if ( !rContainer.getUserAllowsLinkUpdate() )
+            return nullptr;
+    }
+
     ScDocument* pSrcDoc = nullptr;
     ScDocShell* pShell = static_cast<ScDocShell*>(SfxObjectShell::GetFirst(checkSfxObjectShell<ScDocShell>, false));
     while (pShell)
@@ -2672,6 +2682,9 @@ void ScExternalRefManager::maybeCreateRealFileName(sal_uInt16 nFileId)
 
 OUString ScExternalRefManager::getOwnDocumentName() const
 {
+    if (utl::ConfigManager::IsFuzzing())
+        return OUString("file:///tmp/document");
+
     SfxObjectShell* pShell = mpDoc->GetDocumentShell();
     if (!pShell)
         // This should not happen!
@@ -3183,9 +3196,11 @@ void ScExternalRefManager::Notify( SfxBroadcaster&, const SfxHint& rHint )
         {
             case SfxEventHintId::PrepareCloseDoc:
                 {
-                    ScopedVclPtrInstance<WarningBox> aBox( ScDocShell::GetActiveDialogParent(), MessBoxStyle::Ok,
-                                        ScGlobal::GetRscString( STR_CLOSE_WITH_UNSAVED_REFS ) );
-                    aBox->Execute();
+                    vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                               VclMessageType::Warning, VclButtonsType::Ok,
+                                                               ScGlobal::GetRscString(STR_CLOSE_WITH_UNSAVED_REFS)));
+                    xWarn->run();
                 }
                 break;
             case SfxEventHintId::SaveDocDone:

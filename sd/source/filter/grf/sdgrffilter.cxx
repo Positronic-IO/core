@@ -17,9 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifdef _MSC_VER
-#pragma warning (disable:4190)
-#endif
 #include <com/sun/star/drawing/GraphicExportFilter.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/graphic/XGraphicProvider.hpp>
@@ -29,7 +26,7 @@
 
 #include <unotools/localfilehelper.hxx>
 #include <vcl/errinf.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
 #include <sfx2/sfxsids.hrc>
@@ -152,8 +149,9 @@ void SdGRFFilter::HandleGraphicFilterError( ErrCode nFilterError, ErrCode nStrea
         ErrorHandler::HandleError( ERRCODE_IO_GENERAL );
     else
     {
-        ScopedVclPtrInstance< MessageDialog > aErrorBox(nullptr, pId ? SdResId(pId) : OUString());
-        aErrorBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Warning, VclButtonsType::Ok, pId ? SdResId(pId) : OUString()));
+        xErrorBox->run();
     }
 }
 
@@ -181,8 +179,8 @@ bool SdGRFFilter::Import()
             Size        aGrfSize( OutputDevice::LogicToLogic( aGraphic.GetPrefSize(),
                                   aGraphic.GetPrefMapMode(), MapMode(MapUnit::Map100thMM)));
 
-            aPagSize.Width() -= pPage->GetLeftBorder() + pPage->GetRightBorder();
-            aPagSize.Height() -= pPage->GetUpperBorder() + pPage->GetLowerBorder();
+            aPagSize.AdjustWidth( -(pPage->GetLeftBorder() + pPage->GetRightBorder()) );
+            aPagSize.AdjustHeight( -(pPage->GetUpperBorder() + pPage->GetLowerBorder()) );
 
             // scale to fit page
             if ( ( ( aGrfSize.Height() > aPagSize.Height() ) || ( aGrfSize.Width() > aPagSize.Width() ) ) &&
@@ -194,19 +192,19 @@ bool SdGRFFilter::Import()
                 // adjust graphic to page size (scales)
                 if( fGrfWH < fWinWH )
                 {
-                    aGrfSize.Width() = static_cast<long>( aPagSize.Height() * fGrfWH );
-                    aGrfSize.Height() = aPagSize.Height();
+                    aGrfSize.setWidth( static_cast<long>( aPagSize.Height() * fGrfWH ) );
+                    aGrfSize.setHeight( aPagSize.Height() );
                 }
                 else if( fGrfWH > 0.F )
                 {
-                    aGrfSize.Width() = aPagSize.Width();
-                    aGrfSize.Height()= static_cast<long>( aPagSize.Width() / fGrfWH );
+                    aGrfSize.setWidth( aPagSize.Width() );
+                    aGrfSize.setHeight( static_cast<long>( aPagSize.Width() / fGrfWH ) );
                 }
             }
 
             // set output rectangle for graphic
-            aPos.X() = ( ( aPagSize.Width() - aGrfSize.Width() ) >> 1 ) + pPage->GetLeftBorder();
-            aPos.Y() = ( ( aPagSize.Height() - aGrfSize.Height() ) >> 1 )  + pPage->GetUpperBorder();
+            aPos.setX( ( ( aPagSize.Width() - aGrfSize.Width() ) >> 1 ) + pPage->GetLeftBorder() );
+            aPos.setY( ( ( aPagSize.Height() - aGrfSize.Height() ) >> 1 )  + pPage->GetUpperBorder() );
 
             pPage->InsertObject( new SdrGrafObj( aGraphic, ::tools::Rectangle( aPos, aGrfSize ) ) );
             bRet = true;

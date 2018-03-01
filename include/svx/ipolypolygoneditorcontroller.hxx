@@ -20,8 +20,10 @@
 #ifndef INCLUDED_SVX_IPOLYPOLYGONEDITORCONTROLLER_HXX
 #define INCLUDED_SVX_IPOLYPOLYGONEDITORCONTROLLER_HXX
 
+#include <sal/config.h>
+
+#include <sal/types.h>
 #include <svx/svxdllapi.h>
-#include <svx/svdedtv.hxx>
 
 
 //   Defines
@@ -47,7 +49,7 @@ enum class SdrObjClosedKind
     Closed       // closed object (polygon, ...)
 };
 
-class IPolyPolygonEditorController
+class SAL_DLLPUBLIC_RTTI IPolyPolygonEditorController
 {
 public:
     virtual void DeleteMarkedPoints() = 0;

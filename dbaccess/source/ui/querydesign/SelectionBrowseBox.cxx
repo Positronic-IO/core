@@ -36,7 +36,7 @@
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <stringconstants.hxx>
 #include "QTableWindow.hxx"
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include "QueryDesignFieldUndoAct.hxx"
 #include <sqlmessage.hxx>
@@ -345,7 +345,7 @@ void OSelectionBrowseBox::Init()
     {
         const Size aTemp(pControl->GetOptimalSize());
         if ( aTemp.Height() > aHeight.Height() )
-            aHeight.Height() = aTemp.Height();
+            aHeight.setHeight( aTemp.Height() );
     }
     SetDataRowHeight(aHeight.Height());
     SetTitleLines(1);
@@ -523,7 +523,10 @@ void OSelectionBrowseBox::InitController(CellControllerRef& /*rController*/, lon
                 m_pVisibleCell->GetBox().EnableInput(false);
                 OUString aMessage(DBA_RES(STR_QRY_ORDERBY_UNRELATED));
                 OQueryDesignView* paDView = getDesignView();
-                ScopedVclPtrInstance<InfoBox>(paDView, aMessage)->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(paDView ? paDView->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              aMessage));
+                xInfoBox->run();
             }
         }   break;
         case BROW_ORDER_ROW:
@@ -1231,7 +1234,7 @@ void OSelectionBrowseBox::PaintCell(OutputDevice& rDev, const tools::Rectangle& 
 void OSelectionBrowseBox::PaintStatusCell(OutputDevice& rDev, const tools::Rectangle& rRect) const
 {
     tools::Rectangle aRect(rRect);
-    aRect.TopLeft().Y() -= 2;
+    aRect.TopLeft().AdjustY( -2 );
     OUString  aLabel(DBA_RES(STR_QUERY_HANDLETEXT));
 
    // from BROW_CRIT2_ROW onwards all rows are shown "or"
@@ -1466,7 +1469,7 @@ tools::Rectangle OSelectionBrowseBox::GetInvalidRect( sal_uInt16 nColId )
 
     // now update the left side
     tools::Rectangle aFieldRect(GetCellRect( 0, nColId )); // used instead of GetFieldRectPixel
-    aInvalidRect.Left() = aFieldRect.Left();
+    aInvalidRect.SetLeft( aFieldRect.Left() );
 
     return aInvalidRect;
 }
@@ -1896,8 +1899,8 @@ Size OSelectionBrowseBox::CalcOptimalSize( const Size& _rAvailable )
 {
     Size aReturn( _rAvailable.Width(), GetTitleHeight() );
 
-    aReturn.Height() += ( m_nVisibleCount ? m_nVisibleCount : 15 ) * GetDataRowHeight();
-    aReturn.Height() += 40; // just some space
+    aReturn.AdjustHeight(( m_nVisibleCount ? m_nVisibleCount : 15 ) * GetDataRowHeight() );
+    aReturn.AdjustHeight(40 ); // just some space
 
     return aReturn;
 }

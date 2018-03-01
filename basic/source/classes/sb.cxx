@@ -657,7 +657,7 @@ SbClassModuleObject::SbClassModuleObject( SbModule* pClassModule )
                 pNewMethod->pMod = this;
                 pNewMethod->SetParent( this );
                 pMethods->PutDirect( pNewMethod, i );
-                StartListening( pNewMethod->GetBroadcaster(), true );
+                StartListening(pNewMethod->GetBroadcaster(), DuplicateHandling::Prevent);
             }
         }
     }
@@ -709,7 +709,7 @@ SbClassModuleObject::SbClassModuleObject( SbModule* pClassModule )
             pNewProp->ResetFlag( SbxFlagBits::NoBroadcast ); // except the Broadcast if it was set
             pProcedureProp->SetFlags( nFlags_ );
             pProps->PutDirect( pNewProp, i );
-            StartListening( pNewProp->GetBroadcaster(), true );
+            StartListening(pNewProp->GetBroadcaster(), DuplicateHandling::Prevent);
         }
         else
         {
@@ -1068,7 +1068,7 @@ void StarBASIC::Insert( SbxVariable* pVar )
     {
         pModules.emplace_back(static_cast<SbModule*>(pVar));
         pVar->SetParent( this );
-        StartListening( pVar->GetBroadcaster(), true );
+        StartListening(pVar->GetBroadcaster(), DuplicateHandling::Prevent);
     }
     else
     {
@@ -1204,10 +1204,9 @@ void StarBASIC::InitAllModules( StarBASIC const * pBasicNotToInit )
         }
     }
 
-    ModuleInitDependencyMap::iterator it;
-    for( it = aMIDMap.begin() ; it != aMIDMap.end(); ++it )
+    for (auto & elem : aMIDMap)
     {
-        ClassModuleRunInitItem& rItem = it->second;
+        ClassModuleRunInitItem& rItem = elem.second;
         SbModule::implProcessModuleRunInit( aMIDMap, rItem );
     }
 
@@ -1936,10 +1935,9 @@ Reference< frame::XModel > StarBASIC::GetModelFromBasic( SbxObject* pBasic )
 void StarBASIC::DetachAllDocBasicItems()
 {
     std::unordered_map< const StarBASIC *, DocBasicItemRef >& rItems = GaDocBasicItems::get();
-    auto it = rItems.begin(), itEnd = rItems.end();
-    for (; it != itEnd; ++it)
+    for (auto const& item : rItems)
     {
-        DocBasicItemRef xItem = it->second;
+        DocBasicItemRef xItem = item.second;
         xItem->setDisposed(true);
     }
 }

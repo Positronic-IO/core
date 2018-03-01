@@ -1083,16 +1083,16 @@ void SdXMLLineShapeContext::StartElement(const uno::Reference< xml::sax::XAttrib
         pOuterSequence->realloc(2);
         awt::Point* pInnerSequence = pOuterSequence->getArray();
 
-        *pInnerSequence = awt::Point( mnX1 - aTopLeft.X, mnY1 - aTopLeft.Y);
+        *pInnerSequence = awt::Point(o3tl::saturating_sub(mnX1, aTopLeft.X), o3tl::saturating_sub(mnY1, aTopLeft.Y));
         pInnerSequence++;
-        *pInnerSequence = awt::Point( mnX2 - aTopLeft.X, mnY2 - aTopLeft.Y);
+        *pInnerSequence = awt::Point(o3tl::saturating_sub(mnX2, aTopLeft.X), o3tl::saturating_sub(mnY2, aTopLeft.Y));
 
         xPropSet->setPropertyValue("Geometry", Any(aPolyPoly));
     }
 
     // set sizes for transformation
-    maSize.Width = aBottomRight.X - aTopLeft.X;
-    maSize.Height = aBottomRight.Y - aTopLeft.Y;
+    maSize.Width = o3tl::saturating_sub(aBottomRight.X, aTopLeft.X);
+    maSize.Height = o3tl::saturating_sub(aBottomRight.Y, aTopLeft.Y);
     maPosition.X = aTopLeft.X;
     maPosition.Y = aTopLeft.Y;
 
@@ -1100,7 +1100,6 @@ void SdXMLLineShapeContext::StartElement(const uno::Reference< xml::sax::XAttrib
     SetTransformation();
 
     SdXMLShapeContext::StartElement(xAttrList);
-
 }
 
 
@@ -2403,15 +2402,10 @@ void SdXMLGraphicObjectShapeContext::StartElement( const css::uno::Reference< cs
             {
                 if( !maURL.isEmpty() )
                 {
-                    uno::Any aAny;
-                    aAny <<= GetImport().ResolveGraphicObjectURL( maURL, GetImport().isGraphicLoadOnDemandSupported() );
-                    try
+                    uno::Reference<graphic::XGraphic> xGraphic = GetImport().loadGraphicByURL(maURL);
+                    if (xGraphic.is())
                     {
-                        xPropset->setPropertyValue("GraphicURL", aAny );
-                        xPropset->setPropertyValue("GraphicStreamURL", aAny );
-                    }
-                    catch (const lang::IllegalArgumentException&)
-                    {
+                        xPropset->setPropertyValue("Graphic", uno::makeAny(xGraphic));
                     }
                 }
             }
@@ -2440,23 +2434,15 @@ void SdXMLGraphicObjectShapeContext::StartElement( const css::uno::Reference< cs
 
 void SdXMLGraphicObjectShapeContext::EndElement()
 {
-    if( mxBase64Stream.is() )
+    if (mxBase64Stream.is())
     {
-        OUString sURL( GetImport().ResolveGraphicObjectURLFromBase64( mxBase64Stream ) );
-        if( !sURL.isEmpty() )
+        uno::Reference<graphic::XGraphic> xGraphic(GetImport().loadGraphicFromBase64(mxBase64Stream));
+        if (xGraphic.is())
         {
-            try
+            uno::Reference<beans::XPropertySet> xProperties(mxShape, uno::UNO_QUERY);
+            if (xProperties.is())
             {
-                uno::Reference< beans::XPropertySet > xProps(mxShape, uno::UNO_QUERY);
-                if(xProps.is())
-                {
-                    const uno::Any aAny( uno::makeAny( sURL ) );
-                    xProps->setPropertyValue("GraphicURL", aAny );
-                    xProps->setPropertyValue("GraphicStreamURL", aAny );
-                }
-            }
-            catch (const lang::IllegalArgumentException&)
-            {
+                xProperties->setPropertyValue("Graphic", uno::makeAny(xGraphic));
             }
         }
     }
@@ -3364,6 +3350,41 @@ void SdXMLFrameShapeContext::removeGraphicFromImportContext(const SvXMLImportCon
             DBG_UNHANDLED_EXCEPTION_WHEN( "Error in cleanup of multiple graphic object import." );
         }
     }
+}
+
+namespace
+{
+uno::Reference<beans::XPropertySet> getGraphicPropertySetFromImportContext(const SvXMLImportContext& rContext)
+{
+    uno::Reference<beans::XPropertySet> aPropertySet;
+    const SdXMLGraphicObjectShapeContext* pSdXMLGraphicObjectShapeContext = dynamic_cast<const SdXMLGraphicObjectShapeContext*>(&rContext);
+
+    if (pSdXMLGraphicObjectShapeContext)
+        aPropertySet.set(pSdXMLGraphicObjectShapeContext->getShape(), uno::UNO_QUERY);
+
+    return aPropertySet;
+}
+
+} // end anonymous namespace
+
+uno::Reference<graphic::XGraphic> SdXMLFrameShapeContext::getGraphicFromImportContext(const SvXMLImportContext& rContext) const
+{
+    uno::Reference<graphic::XGraphic> xGraphic;
+    try
+    {
+        const uno::Reference<beans::XPropertySet> xPropertySet = getGraphicPropertySetFromImportContext(rContext);
+
+        if (xPropertySet.is())
+        {
+            xPropertySet->getPropertyValue("Graphic") >>= xGraphic;
+        }
+    }
+    catch( uno::Exception& )
+    {
+        DBG_UNHANDLED_EXCEPTION_WHEN("Error in cleanup of multiple graphic object import.");
+    }
+
+    return xGraphic;
 }
 
 OUString SdXMLFrameShapeContext::getGraphicURLFromImportContext(const SvXMLImportContext& rContext) const

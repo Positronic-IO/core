@@ -161,7 +161,7 @@ void SwGrfShell::Execute(SfxRequest &rReq)
                 vcl::Window* pWin = GetView().GetWindow();
                 if (pWin)
                 {
-                    nState = GraphicHelper::HasToSaveTransformedImage(pWin);
+                    nState = GraphicHelper::HasToSaveTransformedImage(pWin->GetFrameWeld());
                 }
             }
             else
@@ -347,8 +347,8 @@ void SwGrfShell::Execute(SfxRequest &rReq)
                 aSet.Put( aSzItm );
 
                 Size aSz( aSizeCopy.GetWidthPercent(), aSizeCopy.GetHeightPercent() );
-                if( SwFormatFrameSize::SYNCED == aSz.Width() )   aSz.Width() = 0;
-                if( SwFormatFrameSize::SYNCED == aSz.Height() )  aSz.Height() = 0;
+                if( SwFormatFrameSize::SYNCED == aSz.Width() )   aSz.setWidth( 0 );
+                if( SwFormatFrameSize::SYNCED == aSz.Height() )  aSz.setHeight( 0 );
 
                 aSzItm.SetSize( aSz );
                 aSzItm.SetWhich( SID_ATTR_GRAF_FRMSIZE_PERCENT );
@@ -528,7 +528,7 @@ void SwGrfShell::Execute(SfxRequest &rReq)
                 // RotGrfFlyFrame: Get and process evtl. changed RotationAngle
                 if ( SfxItemState::SET == pSet->GetItemState(SID_ATTR_TRANSFORM_ANGLE, false, &pItem ))
                 {
-                    const sal_uInt32 aNewRotation((static_cast<const SfxUInt32Item*>(pItem)->GetValue() / 10) % 3600);
+                    const sal_Int32 aNewRotation((static_cast<const SfxInt32Item*>(pItem)->GetValue() / 10) % 3600);
 
                     // RotGrfFlyFrame: Possible rotation change here, SwFlyFrameAttrMgr aMgr is available
                     aMgr.SetRotation(nCurrentRotation, aNewRotation, aUnrotatedSize);

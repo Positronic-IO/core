@@ -276,10 +276,12 @@ DocObjectWrapper::invoke( const OUString& aFunctionName, const Sequence< Any >& 
             aOutParam.realloc( nOutParamCount );
             sal_Int16* pOutParamIndex = aOutParamIndex.getArray();
             Any* pOutParam = aOutParam.getArray();
-            for ( OutParamMap::iterator aIt = aOutParamMap.begin(); aIt != aOutParamMap.end(); ++aIt, ++pOutParamIndex, ++pOutParam )
+            for (auto const& outParam : aOutParamMap)
             {
-                *pOutParamIndex = aIt->first;
-                *pOutParam = aIt->second;
+                *pOutParamIndex = outParam.first;
+                *pOutParam = outParam.second;
+                ++pOutParamIndex;
+                ++pOutParam;
             }
         }
     }
@@ -409,7 +411,10 @@ uno::Reference< vba::XVBACompatibility > getVBACompatibility( const uno::Referen
 
 bool getDefaultVBAMode( StarBASIC* pb )
 {
-    uno::Reference< vba::XVBACompatibility > xVBACompat = getVBACompatibility( getDocumentModel( pb ) );
+    uno::Reference< frame::XModel > xModel( getDocumentModel( pb ) );
+    if (!xModel.is())
+        return false;
+    uno::Reference< vba::XVBACompatibility > xVBACompat = getVBACompatibility( xModel );
     return xVBACompat.is() && xVBACompat->getVBACompatibilityMode();
 }
 
@@ -531,7 +536,7 @@ SbMethod* SbModule::GetMethod( const OUString& rName, SbxDataType t )
         pMeth->SetParent( this );
         pMeth->SetFlags( SbxFlagBits::Read );
         pMethods->Put( pMeth, pMethods->Count() );
-        StartListening( pMeth->GetBroadcaster(), true );
+        StartListening(pMeth->GetBroadcaster(), DuplicateHandling::Prevent);
     }
     // The method is per default valid, because it could be
     // created from the compiler (code generator) as well.
@@ -569,7 +574,7 @@ SbProperty* SbModule::GetProperty( const OUString& rName, SbxDataType t )
         pProp->SetFlag( SbxFlagBits::ReadWrite );
         pProp->SetParent( this );
         pProps->Put( pProp, pProps->Count() );
-        StartListening( pProp->GetBroadcaster(), true );
+        StartListening(pProp->GetBroadcaster(), DuplicateHandling::Prevent);
     }
     return pProp;
 }
@@ -588,7 +593,7 @@ void SbModule::GetProcedureProperty( const OUString& rName, SbxDataType t )
         pProp->SetFlag( SbxFlagBits::ReadWrite );
         pProp->SetParent( this );
         pProps->Put( pProp, pProps->Count() );
-        StartListening( pProp->GetBroadcaster(), true );
+        StartListening(pProp->GetBroadcaster(), DuplicateHandling::Prevent);
     }
 }
 

@@ -35,14 +35,13 @@ extern "C" {
 #include "JpegReader.hxx"
 #include "JpegWriter.hxx"
 #include <memory>
+#include <unotools/configmgr.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/graphicfilter.hxx>
 
-#define WarningLimit 1000
-
 #ifdef _MSC_VER
-#pragma warning(push, 1) /* disable to __declspec(align()) aligned warning */
-#pragma warning (disable: 4324)
+#pragma warning(push)
+#pragma warning (disable: 4324) /* disable to __declspec(align()) aligned warning */
 #endif
 
 struct ErrorManagerStruct
@@ -71,6 +70,11 @@ extern "C" void outputMessage (j_common_ptr cinfo)
     SAL_WARN("vcl.filter", "failure reading JPEG: " << buffer);
 }
 
+static int GetWarningLimit()
+{
+    return utl::ConfigManager::IsFuzzing() ? 10 : 1000;
+}
+
 extern "C" void emitMessage (j_common_ptr cinfo, int msg_level)
 {
     if (msg_level < 0)
@@ -79,7 +83,7 @@ extern "C" void emitMessage (j_common_ptr cinfo, int msg_level)
         // reasonable limit (initially using ImageMagick's current limit of
         // 1000), then bail.
         // https://libjpeg-turbo.org/pmwiki/uploads/About/TwoIssueswiththeJPEGStandard.pdf
-        if (cinfo->err->num_warnings++ > WarningLimit)
+        if (++cinfo->err->num_warnings > GetWarningLimit())
             cinfo->err->error_exit(cinfo);
         else
             cinfo->err->output_message(cinfo);
@@ -203,6 +207,9 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
     long nWidth = rContext.cinfo.output_width;
     long nHeight = rContext.cinfo.output_height;
 
+    if (nWidth > 2000 && nHeight > 2000 && utl::ConfigManager::IsFuzzing())
+        return;
+
     bool bGray = (rContext.cinfo.output_components == 1);
 
     JPEGCreateBitmapParam aCreateBitmapParam;
@@ -244,6 +251,7 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
                 eScanlineFormat = ScanlineFormat::N8BitPal;
                 nPixelSize = 1;
             }
+#if defined(JCS_EXTENSIONS)
             else if (eFinalFormat == ScanlineFormat::N32BitTcBgra)
             {
                 best_out_color_space = JCS_EXT_BGRA;
@@ -262,7 +270,7 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
                 eScanlineFormat = eFinalFormat;
                 nPixelSize = 4;
             }
-
+#endif
             if (rContext.cinfo.jpeg_color_space == JCS_YCCK)
                 rContext.cinfo.out_color_space = JCS_CMYK;
 
@@ -290,6 +298,7 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
                 if (rContext.cinfo.out_color_space == JCS_CMYK)
                 {
                     // convert CMYK to RGB
+                    Scanline pScanline = pAccess->GetScanline(yIndex);
                     for (long cmyk = 0, x = 0; cmyk < nWidth * 4; cmyk += 4, ++x)
                     {
                         int color_C = 255 - rContext.pCYMKBuffer[cmyk + 0];
@@ -301,7 +310,7 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
                         sal_uInt8 cGreen = aRangeLimit[255L - (color_M + color_K)];
                         sal_uInt8 cBlue = aRangeLimit[255L - (color_Y + color_K)];
 
-                        pAccess->SetPixel(yIndex, x, BitmapColor(cRed, cGreen, cBlue));
+                        pAccess->SetPixelOnData(pScanline, x, BitmapColor(cRed, cGreen, cBlue));
                     }
                 }
                 else

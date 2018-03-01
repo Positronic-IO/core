@@ -64,7 +64,7 @@
 #include <tools/urlobj.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/mimeconfighelper.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/window.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
@@ -275,8 +275,8 @@ class ModelData_Impl
     uno::Reference< frame::XStorable2 > m_xStorable2;
 
     OUString m_aModuleName;
-    ::comphelper::SequenceAsHashMap* m_pDocumentPropsHM;
-    ::comphelper::SequenceAsHashMap* m_pModulePropsHM;
+    std::unique_ptr<::comphelper::SequenceAsHashMap> m_pDocumentPropsHM;
+    std::unique_ptr<::comphelper::SequenceAsHashMap> m_pModulePropsHM;
 
     ::comphelper::SequenceAsHashMap m_aMediaDescrHM;
 
@@ -381,18 +381,14 @@ ModelData_Impl::ModelData_Impl( SfxStoringHelper& aOwner,
 ModelData_Impl::~ModelData_Impl()
 {
     FreeDocumentProps();
-    delete m_pDocumentPropsHM;
-    delete m_pModulePropsHM;
+    m_pDocumentPropsHM.reset();
+    m_pModulePropsHM.reset();
 }
 
 
 void ModelData_Impl::FreeDocumentProps()
 {
-    if ( m_pDocumentPropsHM )
-    {
-        delete m_pDocumentPropsHM;
-        m_pDocumentPropsHM = nullptr;
-    }
+    m_pDocumentPropsHM.reset();
 }
 
 
@@ -430,7 +426,7 @@ uno::Reference< frame::XStorable2 > const & ModelData_Impl::GetStorable2()
 const ::comphelper::SequenceAsHashMap& ModelData_Impl::GetDocProps()
 {
     if ( !m_pDocumentPropsHM )
-        m_pDocumentPropsHM = new ::comphelper::SequenceAsHashMap( GetModel()->getArgs() );
+        m_pDocumentPropsHM.reset( new ::comphelper::SequenceAsHashMap( GetModel()->getArgs() ) );
 
     return *m_pDocumentPropsHM;
 }
@@ -457,7 +453,7 @@ const ::comphelper::SequenceAsHashMap& ModelData_Impl::GetModuleProps()
         m_pOwner->GetModuleManager()->getByName( GetModuleName() ) >>= aModuleProps;
         if ( !aModuleProps.getLength() )
             throw uno::RuntimeException(); // TODO;
-        m_pModulePropsHM = new ::comphelper::SequenceAsHashMap( aModuleProps );
+        m_pModulePropsHM.reset( new ::comphelper::SequenceAsHashMap( aModuleProps ) );
     }
 
     return *m_pModulePropsHM;
@@ -670,10 +666,10 @@ sal_Int8 ModelData_Impl::CheckSaveAcceptable( sal_Int8 nCurStatus )
           && GetMediaDescr().find( OUString("VersionComment") ) == GetMediaDescr().end() )
         {
             // notify the user that SaveAs is going to be done
-            vcl::Window* pWin = SfxStoringHelper::GetModelWindow( m_xModel );
-            ScopedVclPtrInstance<MessageDialog> aMessageBox(pWin, SfxResId(STR_NEW_FILENAME_SAVE),
-                                      VclMessageType::Question, VclButtonsType::OkCancel);
-            if ( aMessageBox->Execute() == RET_OK )
+            vcl::Window* pWin = SfxStoringHelper::GetModelWindow(m_xModel);
+            std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                             VclMessageType::Question, VclButtonsType::OkCancel, SfxResId(STR_NEW_FILENAME_SAVE)));
+            if (xMessageBox->run() == RET_OK)
                 nResult = STATUS_SAVEAS;
             else
                 nResult = STATUS_NO_ACTION;
@@ -1392,8 +1388,9 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
            || SignatureState::NOTVALIDATED == nDocumentSignatureState
            || SignatureState::PARTIAL_OK == nDocumentSignatureState)
         {
-            if (ScopedVclPtrInstance<MessageDialog>(nullptr, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE),
-                              VclMessageType::Question, VclButtonsType::YesNo)->Execute() != RET_YES)
+            std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(nullptr,
+                                                             VclMessageType::Question, VclButtonsType::YesNo, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE)));
+            if (xMessageBox->run() != RET_YES)
             {
                 // the user has decided not to store the document
                 throw task::ErrorCodeIOException(
@@ -1806,9 +1803,9 @@ bool SfxStoringHelper::WarnUnacceptableFormat( const uno::Reference< frame::XMod
         return true;
 
     vcl::Window* pWin = SfxStoringHelper::GetModelWindow( xModel );
-    ScopedVclPtrInstance< SfxAlienWarningDialog > aDlg( pWin, aOldUIName, aDefExtension, bDefIsAlien );
+    SfxAlienWarningDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr, aOldUIName, aDefExtension, bDefIsAlien);
 
-    return aDlg->Execute() == RET_OK;
+    return aDlg.run() == RET_OK;
 }
 
 vcl::Window* SfxStoringHelper::GetModelWindow( const uno::Reference< frame::XModel >& xModel )

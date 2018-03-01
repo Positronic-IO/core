@@ -213,11 +213,11 @@ void ScCsvGrid::InitColors()
     OSL_PRECOND(mpColorConfig, "the object hasn't been initialized properly");
     if ( !mpColorConfig )
         return;
-    maBackColor.SetColor( static_cast< sal_uInt32 >( mpColorConfig->GetColorValue( ::svtools::DOCCOLOR ).nColor ) );
-    maGridColor.SetColor( static_cast< sal_uInt32 >( mpColorConfig->GetColorValue( ::svtools::CALCGRID ).nColor ) );
-    maGridPBColor.SetColor( static_cast< sal_uInt32 >( mpColorConfig->GetColorValue( ::svtools::CALCPAGEBREAK ).nColor ) );
-    maAppBackColor.SetColor( static_cast< sal_uInt32 >( mpColorConfig->GetColorValue( ::svtools::APPBACKGROUND ).nColor ) );
-    maTextColor.SetColor( static_cast< sal_uInt32 >( mpColorConfig->GetColorValue( ::svtools::FONTCOLOR ).nColor ) );
+    maBackColor = mpColorConfig->GetColorValue( ::svtools::DOCCOLOR ).nColor;
+    maGridColor = mpColorConfig->GetColorValue( ::svtools::CALCGRID ).nColor;
+    maGridPBColor = mpColorConfig->GetColorValue( ::svtools::CALCPAGEBREAK ).nColor;
+    maAppBackColor = mpColorConfig->GetColorValue( ::svtools::APPBACKGROUND ).nColor;
+    maTextColor = mpColorConfig->GetColorValue( ::svtools::FONTCOLOR ).nColor;
 
     const StyleSettings& rSett = GetSettings().GetStyleSettings();
     maHeaderBackColor = rSett.GetFaceColor();
@@ -734,7 +734,7 @@ void ScCsvGrid::DoSelectAction( sal_uInt32 nColIndex, sal_uInt16 nModifier )
 
 void ScCsvGrid::ImplSetTextLineSep(
         sal_Int32 nLine, const OUString& rTextLine,
-        const OUString& rSepChars, sal_Unicode cTextSep, bool bMergeSep )
+        const OUString& rSepChars, sal_Unicode cTextSep, bool bMergeSep, bool bRemoveSpace )
 {
     if( nLine < GetFirstVisLine() ) return;
 
@@ -756,7 +756,7 @@ void ScCsvGrid::ImplSetTextLineSep(
         bool bIsQuoted = false;
         bool bOverflowCell = false;
         pChar = ScImportExport::ScanNextFieldFromString( pChar, aCellText,
-                cTextSep, pSepChars, bMergeSep, bIsQuoted, bOverflowCell );
+                cTextSep, pSepChars, bMergeSep, bIsQuoted, bOverflowCell, bRemoveSpace );
         /* TODO: signal overflow somewhere in UI */
 
         // update column width
@@ -988,8 +988,7 @@ void ScCsvGrid::Command( const CommandEvent& rCEvt )
         break;
         case CommandEventId::Wheel:
         {
-            Point aPoint;
-            tools::Rectangle aRect( aPoint, maWinSize );
+            tools::Rectangle aRect( Point(), maWinSize );
             if( aRect.IsInside( rCEvt.GetMousePosPixel() ) )
             {
                 const CommandWheelData* pData = rCEvt.GetWheelData();
@@ -1195,7 +1194,7 @@ void ScCsvGrid::ImplDrawRowHeaders()
     mpBackgrDev->DrawRect( aRect );
 
     mpBackgrDev->SetFillColor( maHeaderBackColor );
-    aRect.Bottom() = GetY( GetLastVisLine() + 1 );
+    aRect.SetBottom( GetY( GetLastVisLine() + 1 ) );
     mpBackgrDev->DrawRect( aRect );
 
     // line numbers
@@ -1219,7 +1218,7 @@ void ScCsvGrid::ImplDrawRowHeaders()
     }
     else
         mpBackgrDev->DrawLine( aRect.TopRight(), aRect.BottomRight() );
-    aRect.Top() = GetHdrHeight();
+    aRect.SetTop( GetHdrHeight() );
     mpBackgrDev->DrawGrid( aRect, Size( 1, GetLineHeight() ), DrawGridFlags::HorzLines );
 }
 
@@ -1351,8 +1350,8 @@ void ScCsvGrid::ImplInvertCursor( sal_Int32 nPos )
         sal_Int32 nX = GetX( nPos ) - 1;
         tools::Rectangle aRect( Point( nX, 0 ), Size( 3, GetHdrHeight() ) );
         ImplInvertRect( *mpGridDev.get(), aRect );
-        aRect.Top() = GetHdrHeight() + 1;
-        aRect.Bottom() = GetY( GetLastVisLine() + 1 );
+        aRect.SetTop( GetHdrHeight() + 1 );
+        aRect.SetBottom( GetY( GetLastVisLine() + 1 ) );
         ImplInvertRect( *mpGridDev.get(), aRect );
     }
 }

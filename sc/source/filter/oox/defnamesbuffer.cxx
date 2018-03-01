@@ -39,6 +39,7 @@
 #include <tokenarray.hxx>
 #include <tokenuno.hxx>
 #include <compiler.hxx>
+#include <document.hxx>
 
 namespace oox {
 namespace xls {
@@ -323,7 +324,6 @@ void DefinedName::createNameObject( sal_Int32 nIndex )
 std::unique_ptr<ScTokenArray> DefinedName::getScTokens(
         const css::uno::Sequence<css::sheet::ExternalLinkInfo>& rExternalLinks )
 {
-    ScTokenArray aTokenArray;
     ScCompiler aCompiler(&getScDocument(), ScAddress(0, 0, mnCalcSheet), formula::FormulaGrammar::GRAM_OOXML);
     aCompiler.SetExternalLinks( rExternalLinks);
     std::unique_ptr<ScTokenArray> pArray(aCompiler.CompileString(maModel.maFormula));
@@ -332,6 +332,7 @@ std::unique_ptr<ScTokenArray> DefinedName::getScTokens(
     // after, a resulting error must be reset.
     FormulaError nErr = pArray->GetCodeError();
     aCompiler.CompileTokenArray();
+    getScDocument().CheckLinkFormulaNeedingCheck( *pArray);
     pArray->DelRPN();
     pArray->SetCodeError(nErr);
 

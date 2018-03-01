@@ -192,7 +192,7 @@ BibToolBar::BibToolBar(vcl::Window* pParent, Link<void*,void> aLink)
 
     SetOutStyle(TOOLBOX_STYLE_FLAT);
     Size a2Size(GetOutputSizePixel());
-    a2Size.Width()=100;
+    a2Size.setWidth(100 );
     aLBSource->SetSizePixel(a2Size);
     aLBSource->SetDropDownLineCount(9);
     aLBSource->Show();
@@ -508,8 +508,7 @@ IMPL_LINK_NOARG( BibToolBar, MenuHdl, ToolBox*, void)
             SendDispatch(nTBC_BT_AUTOFILTER, aPropVal);
         }
 
-        Point aPoint;
-        MouseEvent aLeave( aPoint, 0, MouseEventModifiers::LEAVEWINDOW | MouseEventModifiers::SYNTHETIC );
+        MouseEvent aLeave( Point(), 0, MouseEventModifiers::LEAVEWINDOW | MouseEventModifiers::SYNTHETIC );
         MouseMove( aLeave );
         SetItemDown(nTBC_BT_AUTOFILTER, false);
 
@@ -584,9 +583,9 @@ void BibToolBar::AdjustToolBox()
     Size aOldSize = GetSizePixel();
     Size aSize = CalcWindowSizePixel();
     if ( !aSize.Width() )
-        aSize.Width() = aOldSize.Width();
+        aSize.setWidth( aOldSize.Width() );
     else if ( !aSize.Height() )
-        aSize.Height() = aOldSize.Height();
+        aSize.setHeight( aOldSize.Height() );
 
     Size aTbSize = GetSizePixel();
     if (

@@ -66,7 +66,6 @@ bool    SwAuthEntry::operator==(const SwAuthEntry& rComp)
 SwAuthorityFieldType::SwAuthorityFieldType(SwDoc* pDoc)
     : SwFieldType( SwFieldIds::TableOfAuthorities ),
     m_pDoc(pDoc),
-    m_SortKeyArr(3),
     m_cPrefix('['),
     m_cSuffix(']'),
     m_bIsSequence(false),
@@ -134,7 +133,7 @@ sal_IntPtr SwAuthorityFieldType::AddField(const OUString& rFieldContents)
     return nRet;
 }
 
-bool SwAuthorityFieldType::AddField(sal_IntPtr nHandle)
+void SwAuthorityFieldType::AddField(sal_IntPtr nHandle)
 {
     for (auto &rpTemp : m_DataArr)
     {
@@ -144,11 +143,10 @@ bool SwAuthorityFieldType::AddField(sal_IntPtr nHandle)
             rpTemp->AddRef();
             //re-generate positions of the fields
             DelSequenceArray();
-            return true;
+            return;
         }
     }
     OSL_FAIL("SwAuthorityFieldType::AddField(sal_IntPtr) failed");
-    return false;
 }
 
 const SwAuthEntry*  SwAuthorityFieldType::GetEntryByHandle(sal_IntPtr nHandle) const
@@ -274,8 +272,8 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
                 pTextNode->getLayoutFrame( rDoc.getIDocumentLayoutAccess().GetCurrentLayout() ) &&
                 pTextNode->GetNodes().IsDocNodes() )
             {
-                SwTOXAuthority* pNew = new SwTOXAuthority( *pTextNode,
-                                                            *pFormatField, aIntl );
+                std::unique_ptr<SwTOXAuthority> pNew(
+                    new SwTOXAuthority(*pTextNode, *pFormatField, aIntl));
 
                 for(SwTOXSortTabBases::size_type i = 0; i < aSortArr.size(); ++i)
                 {
@@ -285,7 +283,7 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
                         //only the first occurrence in the document
                         //has to be in the array
                         if(*pOld < *pNew)
-                            DELETEZ(pNew);
+                            pNew.reset();
                         else // remove the old content
                         {
                             aSortArr.erase(aSortArr.begin() + i);
@@ -306,7 +304,7 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
                             break;
                         ++j;
                     }
-                    aSortArr.insert(aSortArr.begin() + j, pNew);
+                    aSortArr.insert(aSortArr.begin() + j, pNew.release());
                 }
             }
         }
@@ -336,7 +334,7 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
     return 0;
 }
 
-bool SwAuthorityFieldType::QueryValue( Any& rVal, sal_uInt16 nWhichId ) const
+void SwAuthorityFieldType::QueryValue( Any& rVal, sal_uInt16 nWhichId ) const
 {
     switch( nWhichId )
     {
@@ -386,10 +384,9 @@ bool SwAuthorityFieldType::QueryValue( Any& rVal, sal_uInt16 nWhichId ) const
     default:
         assert(false);
     }
-    return true;
 }
 
-bool    SwAuthorityFieldType::PutValue( const Any& rAny, sal_uInt16 nWhichId )
+void SwAuthorityFieldType::PutValue( const Any& rAny, sal_uInt16 nWhichId )
 {
     bool bRet = true;
     switch( nWhichId )
@@ -437,7 +434,10 @@ bool    SwAuthorityFieldType::PutValue( const Any& rAny, sal_uInt16 nWhichId )
             {
                 m_SortKeyArr.clear();
                 const PropertyValues* pValues = aSeq.getConstArray();
-                for(sal_Int32 i = 0; i < aSeq.getLength() && i < USHRT_MAX / 4; i++)
+                //TODO: Limiting to the first SAL_MAX_UINT16 elements of aSeq so that size of
+                // m_SortKeyArr remains in range of sal_uInt16, as GetSortKeyCount and GetSortKey
+                // still expect m_SortKeyArr to be indexed by sal_uInt16:
+                for(sal_Int32 i = 0; i < aSeq.getLength() && i < SAL_MAX_UINT16; i++)
                 {
                     const PropertyValue* pValue = pValues[i].getConstArray();
                     SwTOXSortKey aSortKey;
@@ -464,7 +464,6 @@ bool    SwAuthorityFieldType::PutValue( const Any& rAny, sal_uInt16 nWhichId )
     default:
         assert(false);
     }
-    return bRet;
 }
 
 void SwAuthorityFieldType::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )

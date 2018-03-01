@@ -144,7 +144,6 @@
 
 #include <cppuhelper/exc_hlp.hxx>
 #include <unotools/confignode.hxx>
-#include <helpids.h>
 
 #include <ReportControllerObserver.hxx>
 
@@ -2329,14 +2328,14 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
         { XATTR_FILLBMP_POS,        true },
         { XATTR_FILLBMP_SIZEX,      true },
         { XATTR_FILLBMP_SIZEY,      true },
+        { XATTR_FILLFLOATTRANSPARENCE,  true },
+        { XATTR_SECONDARYFILLCOLOR,     true },
         { XATTR_FILLBMP_SIZELOG,        true },
         { XATTR_FILLBMP_TILEOFFSETX,    true },
         { XATTR_FILLBMP_TILEOFFSETY,    true },
         { XATTR_FILLBMP_STRETCH,        true },
         { XATTR_FILLBMP_POSOFFSETX,     true },
         { XATTR_FILLBMP_POSOFFSETY,     true },
-        { XATTR_FILLFLOATTRANSPARENCE,  true },
-        { XATTR_SECONDARYFILLCOLOR,     true },
         { XATTR_FILLBACKGROUND,     true },
         { SID_ATTR_METRIC,      true }
     };
@@ -2354,7 +2353,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
     const Graphic aNullGraphic;
     const ::Color aNullLineCol(COL_DEFAULT_SHAPE_STROKE); // #i121448# Use defined default color
     const ::Color aNullFillCol(COL_DEFAULT_SHAPE_FILLING); // #i121448# Use defined default color
-    const XGradient aNullGrad(RGB_Color(COL_BLACK), RGB_Color(COL_WHITE));
+    const XGradient aNullGrad(COL_BLACK, COL_WHITE);
     const XHatch aNullHatch(aNullLineCol);
 
     std::vector<SfxPoolItem*> pDefaults
@@ -2378,14 +2377,14 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
         new XFillBmpPosItem,
         new XFillBmpSizeXItem,
         new XFillBmpSizeYItem,
+        new XFillFloatTransparenceItem(aNullGrad, false),
+        new XSecondaryFillColorItem("", aNullFillCol),
         new XFillBmpSizeLogItem,
         new XFillBmpTileOffsetXItem,
         new XFillBmpTileOffsetYItem,
         new XFillBmpStretchItem,
         new XFillBmpPosOffsetXItem,
         new XFillBmpPosOffsetYItem,
-        new XFillFloatTransparenceItem(aNullGrad, false),
-        new XSecondaryFillColorItem("", aNullFillCol),
         new XFillBackgroundItem,
         new SfxUInt16Item(RPTUI_ID_METRIC,static_cast<sal_uInt16>(eUserMetric))
     };

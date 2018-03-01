@@ -141,12 +141,12 @@ void SwFrameAreaDefinition::transform_translate(const Point& rOffset)
 
     if (aFrm.Pos().X() != FAR_AWAY)
     {
-        aFrm.Pos().X() += rOffset.X();
+        aFrm.Pos().AdjustX(rOffset.X() );
     }
 
     if (aFrm.Pos().Y() != FAR_AWAY)
     {
-        aFrm.Pos().Y() += rOffset.Y();
+        aFrm.Pos().AdjustY(rOffset.Y() );
     }
 }
 
@@ -399,7 +399,7 @@ void SwSectionFrame::CheckDirection( bool bVert )
     {
         const SwViewShell *pSh = getRootFrame()->GetCurrShell();
         const bool bBrowseMode = pSh && pSh->GetViewOptions()->getBrowseMode();
-        CheckDir(static_cast<const SvxFrameDirectionItem&>(pFormat->GetFormatAttr(RES_FRAMEDIR)).GetValue(),
+        CheckDir(pFormat->GetFormatAttr(RES_FRAMEDIR).GetValue(),
                     bVert, true, bBrowseMode );
     }
     else
@@ -413,7 +413,7 @@ void SwFlyFrame::CheckDirection( bool bVert )
     {
         const SwViewShell *pSh = getRootFrame()->GetCurrShell();
         const bool bBrowseMode = pSh && pSh->GetViewOptions()->getBrowseMode();
-        CheckDir(static_cast<const SvxFrameDirectionItem&>(pFormat->GetFormatAttr(RES_FRAMEDIR)).GetValue(),
+        CheckDir(pFormat->GetFormatAttr(RES_FRAMEDIR).GetValue(),
                     bVert, false, bBrowseMode );
     }
     else
@@ -427,7 +427,7 @@ void SwTabFrame::CheckDirection( bool bVert )
     {
         const SwViewShell *pSh = getRootFrame()->GetCurrShell();
         const bool bBrowseMode = pSh && pSh->GetViewOptions()->getBrowseMode();
-        CheckDir(static_cast<const SvxFrameDirectionItem&>(pFormat->GetFormatAttr(RES_FRAMEDIR)).GetValue(),
+        CheckDir(pFormat->GetFormatAttr(RES_FRAMEDIR).GetValue(),
                     bVert, true, bBrowseMode );
     }
     else
@@ -1517,7 +1517,7 @@ SwTwips SwFrame::Shrink( SwTwips nDist, bool bTst, bool bInfo )
  * size changes. There is always a frame that takes the maximum possible space (the frame that
  * contains the Body text) and zero or more frames which only take the space needed (header/footer
  * area, footnote container). If one of these frames changes, the body-text-frame has to grow or
- * shrink accordingly, even tough it's fixed.
+ * shrink accordingly, even though it's fixed.
  *
  * !! Is it possible to do this in a generic way and not restrict it to the page and a distinct
  * frame which takes the maximum space (controlled using the FrameSize attribute)?
@@ -1560,7 +1560,7 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
         SwRect aInva( pUp->getFrameArea() );
         if ( pViewShell )
         {
-            aInva.Pos().X() = pViewShell->VisArea().Left();
+            aInva.Pos().setX( pViewShell->VisArea().Left() );
             aInva.Width( pViewShell->VisArea().Width() );
         }
         if ( nDiff > 0 )
@@ -1637,12 +1637,12 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
         {
             {
                 SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pUp);
-                aFrm.SSize().Height() += nChg;
+                aFrm.SSize().AdjustHeight(nChg );
             }
 
             {
                 SwFrameAreaDefinition::FramePrintAreaWriteAccess aPrt(*pUp);
-                aPrt.SSize().Height() += nChg;
+                aPrt.SSize().AdjustHeight(nChg );
             }
 
             if ( pViewShell )
@@ -1673,7 +1673,7 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
                 if ( IsBodyFrame() )
                 {
                     SwFrameAreaDefinition::FramePrintAreaWriteAccess aPrt(*this);
-                    aPrt.SSize().Height() = nOldFrameHeight;
+                    aPrt.SSize().setHeight( nOldFrameHeight );
                 }
 
                 if ( pUp->GetUpper() )
@@ -1682,10 +1682,10 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
                 }
 
                 SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
-                aFrm.SSize().Height() = nOldFrameHeight;
+                aFrm.SSize().setHeight( nOldFrameHeight );
 
                 SwFrameAreaDefinition::FramePrintAreaWriteAccess aPrt(*this);
-                aPrt.SSize().Height() = nOldPrtHeight;
+                aPrt.SSize().setHeight( nOldPrtHeight );
 
                 mbCompletePaint = bOldComplete;
             }
@@ -1787,7 +1787,7 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
 
                         if( aRectFnSet.IsVert() && !aRectFnSet.IsVertL2R() )
                         {
-                            aFrm.Pos().X() += nAdd;
+                            aFrm.Pos().AdjustX(nAdd );
                         }
                     }
 
@@ -1812,7 +1812,7 @@ SwTwips SwFrame::AdjustNeighbourhood( SwTwips nDiff, bool bTst )
 
             if( aRectFnSet.IsVert() && !aRectFnSet.IsVertL2R() )
             {
-                aFrm.Pos().X() += nReal;
+                aFrm.Pos().AdjustX(nReal );
             }
         }
 
@@ -2047,7 +2047,7 @@ SwTwips SwContentFrame::GrowFrame( SwTwips nDist, bool bTst, bool bInfo )
 
                 if( IsVertical() && !IsVertLR() )
                 {
-                    aFrm.Pos().X() -= nDist;
+                    aFrm.Pos().AdjustX( -nDist );
                 }
             }
 
@@ -2087,7 +2087,7 @@ SwTwips SwContentFrame::GrowFrame( SwTwips nDist, bool bTst, bool bInfo )
 
             if( IsVertical()&& !IsVertLR() )
             {
-                aFrm.Pos().X() -= nDist;
+                aFrm.Pos().AdjustX( -nDist );
             }
         }
 
@@ -2183,7 +2183,7 @@ SwTwips SwContentFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
 
             if( IsVertical() && !IsVertLR() )
             {
-                aFrm.Pos().X() += nDist;
+                aFrm.Pos().AdjustX(nDist );
             }
         }
 
@@ -2579,7 +2579,7 @@ SwTwips SwLayoutFrame::GrowFrame( SwTwips nDist, bool bTst, bool bInfo )
 
         if( bChgPos && !IsVertLR() )
         {
-            aFrm.Pos().X() -= nDist;
+            aFrm.Pos().AdjustX( -nDist );
         }
 
         bMoveAccFrame = true;
@@ -2665,7 +2665,7 @@ SwTwips SwLayoutFrame::GrowFrame( SwTwips nDist, bool bTst, bool bInfo )
 
             if( bChgPos && !IsVertLR() )
             {
-                aFrm.Pos().X() = nFramePos - nReal;
+                aFrm.Pos().setX( nFramePos - nReal );
             }
 
             bMoveAccFrame = true;
@@ -2772,7 +2772,7 @@ SwTwips SwLayoutFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
 
         if( bChgPos && !IsVertLR() )
         {
-            aFrm.Pos().X() += nReal;
+            aFrm.Pos().AdjustX(nReal );
         }
 
         bMoveAccFrame = true;
@@ -2797,7 +2797,7 @@ SwTwips SwLayoutFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
 
                 if( bChgPos && !IsVertLR() )
                 {
-                    aFrm.Pos().X() += nRealDist - nReal;
+                    aFrm.Pos().AdjustX(nRealDist - nReal );
                 }
 
                 OSL_ENSURE( !IsAccessibleFrame(), "bMoveAccFrame has to be set!" );
@@ -2814,7 +2814,7 @@ SwTwips SwLayoutFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
 
             if( bChgPos && !IsVertLR() )
             {
-                aFrm.Pos().X() += nTmp - nReal;
+                aFrm.Pos().AdjustX(nTmp - nReal );
             }
 
             OSL_ENSURE( !IsAccessibleFrame(), "bMoveAccFrame has to be set!" );
@@ -3455,7 +3455,7 @@ static void InvaPercentFlys( SwFrame *pFrame, SwTwips nDiff )
                                         pFly->GetAnchorFrame()->GetUpper();
                     // ... and we have already more than 90% height and we
                     // not allow the text to go through...
-                    // then a notifycation could cause an endless loop, e.g.
+                    // then a notification could cause an endless loop, e.g.
                     // 100% height and no text wrap inside a cell of a table.
                     if( pFly->getFrameArea().Height()*10 >
                         ( nDiff + pRel->getFramePrintArea().Height() )*9 &&

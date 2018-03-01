@@ -28,6 +28,7 @@
 #include <com/sun/star/awt/Gradient.hpp>
 #include <com/sun/star/text/GraphicCrop.hpp>
 #include <com/sun/star/awt/Size.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
 #include <com/sun/star/drawing/ColorMode.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
@@ -600,14 +601,24 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
                 if( maBlipProps.mxGraphic.is() && rPropMap.supportsProperty( ShapeProperty::FillBitmapUrl ) )
                 {
                     Reference< XGraphic > xGraphic = lclCheckAndApplyDuotoneTransform( maBlipProps, maBlipProps.mxGraphic, rGraphicHelper, nPhClr );
+                    uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
                     // TODO: "rotate with shape" is not possible with our current core
 
                     OUString aGraphicUrl = rGraphicHelper.createGraphicObject( xGraphic );
                     // push bitmap or named bitmap to property map
-                    if( !aGraphicUrl.isEmpty() && rPropMap.supportsProperty( ShapeProperty::FillBitmapNameFromUrl ) && rPropMap.setProperty( ShapeProperty::FillBitmapNameFromUrl, aGraphicUrl ) )
-                        eFillStyle = FillStyle_BITMAP;
-                    else if( !aGraphicUrl.isEmpty() && rPropMap.setProperty( ShapeProperty::FillBitmapUrl, aGraphicUrl ) )
-                        eFillStyle = FillStyle_BITMAP;
+
+                    if (!aGraphicUrl.isEmpty())
+                    {
+                        if (rPropMap.supportsProperty(ShapeProperty::FillBitmapNameFromUrl) &&
+                            rPropMap.setProperty(ShapeProperty::FillBitmapNameFromUrl, xGraphic))
+                        {
+                            eFillStyle = FillStyle_BITMAP;
+                        }
+                        else if (rPropMap.setProperty(ShapeProperty::FillBitmapUrl, aGraphicUrl))
+                        {
+                            eFillStyle = FillStyle_BITMAP;
+                        }
+                    }
 
                     // set other bitmap properties, if bitmap has been inserted into the map
                     if( eFillStyle == FillStyle_BITMAP )
@@ -673,10 +684,15 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
                     Color aColor( maPatternProps.maPattFgColor );
                     if( aColor.isUsed() && maPatternProps.moPattPreset.has() )
                     {
-                        // we do not support hatches that have background
-                        // color too, so all this is some best-effort approach
                         eFillStyle = FillStyle_HATCH;
                         rPropMap.setProperty( ShapeProperty::FillHatch, createHatch( maPatternProps.moPattPreset.get(), aColor.getColor( rGraphicHelper, nPhClr ) ) );
+
+                        // Set background color for hatch
+                        if(maPatternProps.maPattBgColor.isUsed())
+                        {
+                            rPropMap.setProperty( ShapeProperty::FillBackground, true );
+                            rPropMap.setProperty( ShapeProperty::FillColor, maPatternProps.maPattBgColor.getColor( rGraphicHelper, nPhClr ) );
+                        }
                     }
                     else if ( maPatternProps.maPattBgColor.isUsed() )
                     {
@@ -733,11 +749,6 @@ void GraphicProperties::pushToPropMap( PropertyMap& rPropMap, const GraphicHelpe
             nContrast = 0;
         }
         rPropMap.setProperty(PROP_Graphic, xGraphic);
-
-        // do we still need to set GraphicURL as well? (TODO)
-        OUString aGraphicUrl = rGraphicHelper.createGraphicObject( xGraphic );
-        if( !aGraphicUrl.isEmpty() )
-            rPropMap.setProperty(PROP_GraphicURL, aGraphicUrl);
 
         // cropping
         if ( maBlipProps.moClipRect.has() )

@@ -20,27 +20,30 @@ export ASAN_OPTIONS="detect_leaks=0"
 
 make fuzzers
 
-#some minimal fonts required
-cp $SRC/libreoffice/extras/source/truetype/symbol/opens___.ttf instdir/share/fonts/truetype/Liberation* $OUT
-#minimal runtime requirements
-rm -rf $OUT/services $OUT/types $OUT/*rdb
-mkdir $OUT/services
 pushd instdir/program
-cp -r *fuzzer *rc types.rdb types $OUT
-head -c -14 services.rdb  > $OUT/services.rdb
-tail -c +85 ./services/services.rdb >> $OUT/services.rdb
+head -c -14 services.rdb  > templateservices.rdb
+tail -c +85 ./services/services.rdb >> templateservices.rdb
+for a in *fuzzer; do
+    #some minimal fonts required
+    cp $a $OUT
+    mkdir -p $OUT/$a.fonts
+    cp $SRC/libreoffice/extras/source/truetype/symbol/opens___.ttf ../share/fonts/truetype/Liberation* $OUT/$a.fonts
+    #minimal runtime requirements
+    cp templateservices.rdb $OUT/$a.services.rdb
+    cp types.rdb $OUT/$a.types.rdb
+    cp types/offapi.rdb $OUT/$a.moretypes.rdb
+    cat > $OUT/$a.unorc << EOF
+[Bootstrap]
+URE_INTERNAL_LIB_DIR=\${ORIGIN}
+UNO_TYPES=\${ORIGIN}/$a.types.rdb \${ORIGIN}/$a.moretypes.rdb
+UNO_SERVICES=\${ORIGIN}/$a.services.rdb
+EOF
+done
 popd
 
 #starting corpuses
 cp $SRC/*_seed_corpus.zip $OUT
 #fuzzing dictionaries
-cp $SRC/gif.dict $OUT/giffuzzer.dict
-cp $SRC/jpeg.dict $OUT/jpgfuzzer.dict
-cp $SRC/png.dict $OUT/pngfuzzer.dict
-cp $SRC/tiff.dict $OUT/tiffuzzer.dict
-cp $SRC/xml.dict $OUT/fodtfuzzer.dict
-cp $SRC/xml.dict $OUT/fodsfuzzer.dict
-cp $SRC/xml.dict $OUT/fodpfuzzer.dict
-cp $SRC/xml.dict $OUT/fodgfuzzer.dict
-cp $SRC/xml.dict $OUT/mmlfuzzer.dict
-cp $SRC/html_tags.dict $OUT/htmlfuzzer.dict
+cp $SRC/*.dict $OUT
+#options files
+cp $SRC/libreoffice/vcl/workben/*.options $OUT

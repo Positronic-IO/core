@@ -106,13 +106,13 @@ static int          nVisibleFloats      = 0;
 static void doReparentPresentationDialogues( SalDisplay const * pDisplay )
 {
     GetGenericUnixSalData()->ErrorTrapPush();
-    while( !aPresentationReparentList.empty() )
+    for (auto const& elem : aPresentationReparentList)
     {
         int x, y;
         ::Window aRoot, aChild;
         unsigned int w, h, bw, d;
         XGetGeometry( pDisplay->GetDisplay(),
-                      aPresentationReparentList.front(),
+                      elem,
                       &aRoot,
                       &x, &y, &w, &h, &bw, &d );
         XTranslateCoordinates( pDisplay->GetDisplay(),
@@ -122,11 +122,11 @@ static void doReparentPresentationDialogues( SalDisplay const * pDisplay )
                                &x, &y,
                                &aChild );
         XReparentWindow( pDisplay->GetDisplay(),
-                         aPresentationReparentList.front(),
+                         elem,
                          aRoot,
                          x, y );
-        aPresentationReparentList.pop_front();
     }
+    aPresentationReparentList.clear();
     if( hPresFocusWindow )
         XSetInputFocus( pDisplay->GetDisplay(), hPresFocusWindow, PointerRoot, CurrentTime );
     XSync( pDisplay->GetDisplay(), False );
@@ -698,7 +698,11 @@ void X11SalFrame::Init( SalFrameStyleFlags nSalFrameStyle, SalX11Screen nXScreen
         int  n = 0;
         a[n++] = pDisplay_->getWMAdaptor()->getAtom( WMAdaptor::WM_DELETE_WINDOW );
 
-#ifndef DBG_UTIL
+// LibreOffice advertises NET_WM_PING atom, so mutter rightfully warns of an unresponsive application during debugging.
+// Hack that out unconditionally for debug builds, as per https://bugzilla.redhat.com/show_bug.cgi?id=981149
+// upstream refuses to make this configurable in any way.
+// NOTE: You need to use the 'gen' backend for this to work (SAL_USE_VCLPLUGIN=gen)
+#if OSL_DEBUG_LEVEL < 1
         if( pDisplay_->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_PING ) )
             a[n++] = pDisplay_->getWMAdaptor()->getAtom( WMAdaptor::NET_WM_PING );
 #endif
@@ -822,9 +826,6 @@ X11SalFrame::X11SalFrame( SalFrame *pParent, SalFrameStyleFlags nSalFrameStyle,
 {
     GenericUnixSalData *pData = GetGenericUnixSalData();
 
-    // initialize frame geometry
-    memset( &maGeometry, 0, sizeof(maGeometry) );
-
     mpParent                    = static_cast< X11SalFrame* >( pParent );
 
     mbTransientForRoot          = false;
@@ -881,10 +882,6 @@ X11SalFrame::X11SalFrame( SalFrame *pParent, SalFrameStyleFlags nSalFrameStyle,
 
     mnIconID                    = SV_ICON_ID_OFFICE;
 
-    m_pClipRectangles           = nullptr;
-    m_nCurClipRect              = 0;
-    m_nMaxClipRect              = 0;
-
     if( mpParent )
         mpParent->maChildren.push_back( this );
 
@@ -895,12 +892,7 @@ X11SalFrame::~X11SalFrame()
 {
     notifyDelete();
 
-    if( m_pClipRectangles )
-    {
-        delete [] m_pClipRectangles;
-        m_pClipRectangles = nullptr;
-        m_nCurClipRect = m_nMaxClipRect = 0;
-    }
+    m_vClipRectangles.clear();
 
     if( mhStackingWindow )
         aPresentationReparentList.remove( mhStackingWindow );
@@ -926,7 +918,7 @@ X11SalFrame::~X11SalFrame()
     {
         mpInputContext->UnsetICFocus( this );
         mpInputContext->Unmap( this );
-        delete mpInputContext;
+        mpInputContext.reset();
     }
 
     if( GetWindow() == hPresentationWindow )
@@ -938,13 +930,13 @@ X11SalFrame::~X11SalFrame()
     if( pGraphics_ )
     {
         pGraphics_->DeInit();
-        delete pGraphics_;
+        pGraphics_.reset();
     }
 
     if( pFreeGraphics_ )
     {
         pFreeGraphics_->DeInit();
-        delete pFreeGraphics_;
+        pFreeGraphics_.reset();
     }
 
     // reset all OpenGL contexts using this window
@@ -1002,27 +994,25 @@ SalGraphics *X11SalFrame::AcquireGraphics()
 
     if( pFreeGraphics_ )
     {
-        pGraphics_      = pFreeGraphics_;
-        pFreeGraphics_  = nullptr;
+        pGraphics_      = std::move(pFreeGraphics_);
     }
     else
     {
-        pGraphics_ = new X11SalGraphics();
+        pGraphics_.reset(new X11SalGraphics());
         pGraphics_->Init( this, GetWindow(), m_nXScreen );
     }
 
-    return pGraphics_;
+    return pGraphics_.get();
 }
 
 void X11SalFrame::ReleaseGraphics( SalGraphics *pGraphics )
 {
-    SAL_WARN_IF( pGraphics != pGraphics_, "vcl", "SalFrame::ReleaseGraphics pGraphics!=pGraphics_" );
+    SAL_WARN_IF( pGraphics != pGraphics_.get(), "vcl", "SalFrame::ReleaseGraphics pGraphics!=pGraphics_" );
 
-    if( pGraphics != pGraphics_ )
+    if( pGraphics != pGraphics_.get() )
         return;
 
-    pFreeGraphics_  = pGraphics_;
-    pGraphics_      = nullptr;
+    pFreeGraphics_  = std::move(pGraphics_);
 }
 
 void X11SalFrame::updateGraphics( bool bClear )
@@ -1801,10 +1791,10 @@ void X11SalFrame::SetWindowState( const SalFrameState *pState )
                 bool bVert(pState->mnState & WindowStateState::MaximizedVert);
                 GetDisplay()->getWMAdaptor()->maximizeFrame( this, bHorz, bVert );
             }
-            maRestorePosSize.Left() = pState->mnX;
-            maRestorePosSize.Top() = pState->mnY;
-            maRestorePosSize.Right() = maRestorePosSize.Left() + pState->mnWidth;
-            maRestorePosSize.Right() = maRestorePosSize.Left() + pState->mnHeight;
+            maRestorePosSize.SetLeft( pState->mnX );
+            maRestorePosSize.SetTop( pState->mnY );
+            maRestorePosSize.SetRight( maRestorePosSize.Left() + pState->mnWidth );
+            maRestorePosSize.SetRight( maRestorePosSize.Left() + pState->mnHeight );
         }
         else if( mbMaximizedHorz || mbMaximizedVert )
             GetDisplay()->getWMAdaptor()->maximizeFrame( this, false, false );
@@ -2369,7 +2359,7 @@ void X11SalFrame::SetInputContext( SalInputContext* pContext )
     {
         vcl::I18NStatus& rStatus( vcl::I18NStatus::get() );
         rStatus.setParent( this );
-        mpInputContext = new SalI18N_InputContext( this );
+        mpInputContext.reset( new SalI18N_InputContext( this ) );
         if (mpInputContext->UseContext())
         {
               mpInputContext->ExtendEventMask( GetShellWindow() );
@@ -2410,7 +2400,7 @@ void X11SalFrame::UpdateSettings( AllSettings& rSettings )
 {
     StyleSettings aStyleSettings = rSettings.GetStyleSettings();
     aStyleSettings.SetCursorBlinkTime( 500 );
-    aStyleSettings.SetMenuBarTextColor( aStyleSettings.GetPersonaMenuBarTextColor().get_value_or( Color( COL_BLACK ) ) );
+    aStyleSettings.SetMenuBarTextColor( aStyleSettings.GetPersonaMenuBarTextColor().get_value_or( COL_BLACK ) );
     rSettings.SetStyleSettings( aStyleSettings );
 }
 
@@ -3777,9 +3767,9 @@ bool X11SalFrame::HandleReparentEvent( XReparentEvent *pEvent )
             Size aSize(maGeometry.nWidth, maGeometry.nHeight);
 
             if (nFrameWidth  > nScreenWidth)
-                aSize.Width()  = nScreenWidth  - maGeometry.nRightDecoration - maGeometry.nLeftDecoration;
+                aSize.setWidth( nScreenWidth  - maGeometry.nRightDecoration - maGeometry.nLeftDecoration );
             if (nFrameHeight > nScreenHeight)
-                aSize.Height() = nScreenHeight - maGeometry.nBottomDecoration - maGeometry.nTopDecoration;
+                aSize.setHeight( nScreenHeight - maGeometry.nBottomDecoration - maGeometry.nTopDecoration );
 
             SetSize( aSize );
             bResized = false;
@@ -4099,9 +4089,7 @@ bool X11SalFrame::Dispatch( XEvent *pEvent )
 
 void X11SalFrame::ResetClipRegion()
 {
-    delete [] m_pClipRectangles;
-    m_pClipRectangles = nullptr;
-    m_nCurClipRect = m_nMaxClipRect = 0;
+    m_vClipRectangles.clear();
 
     const int   dest_kind   = ShapeBounding;
     const int   op          = ShapeSet;
@@ -4130,27 +4118,15 @@ void X11SalFrame::ResetClipRegion()
                               op, ordering );
 }
 
-void X11SalFrame::BeginSetClipRegion( sal_uLong nRects )
+void X11SalFrame::BeginSetClipRegion( sal_uIntPtr /*nRects*/ )
 {
-    delete [] m_pClipRectangles;
-    if( nRects )
-        m_pClipRectangles = new XRectangle[nRects];
-    else
-        m_pClipRectangles = nullptr;
-    m_nMaxClipRect = static_cast<int>(nRects);
-    m_nCurClipRect = 0;
+    m_vClipRectangles.clear();
 }
 
 void X11SalFrame::UnionClipRegion( long nX, long nY, long nWidth, long nHeight )
 {
-    if( m_pClipRectangles && m_nCurClipRect < m_nMaxClipRect )
-    {
-        m_pClipRectangles[m_nCurClipRect].x      = nX;
-        m_pClipRectangles[m_nCurClipRect].y      = nY;
-        m_pClipRectangles[m_nCurClipRect].width  = nWidth;
-        m_pClipRectangles[m_nCurClipRect].height = nHeight;
-        m_nCurClipRect++;
-    }
+    m_vClipRectangles.emplace_back( XRectangle { static_cast<short>(nX), static_cast<short>(nY),
+                                                 static_cast<unsigned short>(nWidth), static_cast<unsigned short>(nHeight) } );
 }
 
 void X11SalFrame::EndSetClipRegion()
@@ -4164,8 +4140,8 @@ void X11SalFrame::EndSetClipRegion()
                               aShapeWindow,
                               dest_kind,
                               0, 0, // x_off, y_off
-                              m_pClipRectangles,
-                              m_nCurClipRect,
+                              m_vClipRectangles.data(),
+                              m_vClipRectangles.size(),
                               op, ordering );
 
 }

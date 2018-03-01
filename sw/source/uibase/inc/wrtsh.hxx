@@ -46,6 +46,7 @@ class SvxAutoCorrect;
 class NaviContentBookmark;
 struct SwCallMouseEvent;
 class SfxStringListItem;
+enum class SvMacroItemId : sal_uInt16;
 
 namespace i18nutil {
     struct SearchOptions2;
@@ -401,7 +402,7 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
 
     // jump to bookmark and set the "selections-flags" correctly again
     void GotoMark( const ::sw::mark::IMark* const pMark );
-    bool GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect );
+    void GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect );
     void GotoMark( const OUString& rName );
     bool GoNextBookmark(); // true when there still was one
     bool GoPrevBookmark();
@@ -470,7 +471,7 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
         sal_uInt16 nSeqNo = 0 );
     bool GotoNextTOXBase( const OUString* pName = nullptr);
     bool GotoTable( const OUString& rName );
-    bool GotoFormatField( const SwFormatField& rField );
+    void GotoFormatField( const SwFormatField& rField );
     const SwRangeRedline* GotoRedline( SwRedlineTable::size_type nArrPos, bool bSelect);
 
     void ChangeHeaderOrFooter(const OUString& rStyleName, bool bHeader, bool bOn, bool bShowWarning);

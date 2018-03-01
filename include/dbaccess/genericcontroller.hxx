@@ -90,6 +90,7 @@ namespace com { namespace sun { namespace star {
 } } }
 
 namespace vcl { class Window; }
+namespace weld { class Window; }
 class NotifyEvent;
 
 namespace dbaui
@@ -294,6 +295,7 @@ namespace dbaui
 
         // methods
         OGenericUnoController( const css::uno::Reference< css::uno::XComponentContext >& _rM );
+        OGenericUnoController() = delete;
         const ::comphelper::NamedValueCollection&
                                     getInitParams() const   { return m_aInitParameters; }
 
@@ -414,6 +416,7 @@ namespace dbaui
     public:
         const css::uno::Reference< css::uno::XComponentContext >& getORB() const { return m_xContext; }
         ODataView*  getView() const { return m_pView; }
+        weld::Window* getFrameWeld() const;
         void        setView( const VclPtr<ODataView>& i_rView );
         void        clearView();
         // shows a error box if the SQLExceptionInfo is valid
@@ -530,11 +533,6 @@ namespace dbaui
         virtual void SAL_CALL removeKeyHandler( const css::uno::Reference< css::awt::XKeyHandler >& xHandler ) override;
         virtual void SAL_CALL addMouseClickHandler( const css::uno::Reference< css::awt::XMouseClickHandler >& xHandler ) override;
         virtual void SAL_CALL removeMouseClickHandler( const css::uno::Reference< css::awt::XMouseClickHandler >& xHandler ) override;
-
-    protected:
-#ifdef _MSC_VER
-        OGenericUnoController();    // never implemented
-#endif
     };
 }
 

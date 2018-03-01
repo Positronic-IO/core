@@ -13,6 +13,8 @@ import android.graphics.PointF;
 import android.util.Log;
 import android.view.KeyEvent;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.libreoffice.kit.DirectBufferAllocator;
 import org.libreoffice.kit.Document;
 import org.libreoffice.kit.LibreOfficeKit;
@@ -114,6 +116,10 @@ class LOKitTileProvider implements TileProvider {
 
         if (mDocument.getDocumentType() == Document.DOCTYPE_PRESENTATION) {
             mContext.getToolbarController().disableMenuItem(R.id.action_presentation, false);
+            mContext.getToolbarController().disableMenuItem(R.id.action_add_slide, false);
+        }
+        if (mDocument.getDocumentType() == Document.DOCTYPE_SPREADSHEET) {
+            mContext.getToolbarController().disableMenuItem(R.id.action_add_worksheet, false);
         }
 
         // Writer documents always have one part, so hide the navigation drawer.
@@ -158,6 +164,37 @@ class LOKitTileProvider implements TileProvider {
                 }
             }
         });
+    }
+
+    public void addPart(){
+        int parts = mDocument.getParts();
+        if(mDocument.getDocumentType() == Document.DOCTYPE_SPREADSHEET){
+            try{
+                JSONObject jsonObject = new JSONObject();
+                JSONObject values = new JSONObject();
+                JSONObject values2 = new JSONObject();
+                values.put("type", "long");
+                values.put("value", 0); //add to the last
+                values2.put("type", "string");
+                values2.put("value", "");
+                jsonObject.put("Name", values2);
+                jsonObject.put("Index", values);
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:Insert", jsonObject.toString()));
+            }catch (JSONException e) {
+                e.printStackTrace();
+            }
+        } else if (mDocument.getDocumentType() == Document.DOCTYPE_PRESENTATION){
+            LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertPage"));
+        }
+
+        String partName = mDocument.getPartName(parts);
+        if (partName.isEmpty()) {
+            partName = getGenericPartName(parts);
+        }
+        mDocument.setPart(parts);
+        resetDocumentSize();
+        final DocumentPartView partView = new DocumentPartView(parts, partName);
+        mContext.getDocumentPartView().add(partView);
     }
 
     @Override
@@ -579,6 +616,7 @@ class LOKitTileProvider implements TileProvider {
     private void setGraphicSelection(int type, PointF documentCoordinate) {
         int x = (int) pixelToTwip(documentCoordinate.x, mDPI);
         int y = (int) pixelToTwip(documentCoordinate.y, mDPI);
+        LibreOfficeMainActivity.setDocumentChanged(true);
         mDocument.setGraphicSelection(type, x, y);
     }
 

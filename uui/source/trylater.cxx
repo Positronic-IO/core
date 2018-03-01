@@ -18,26 +18,32 @@
  */
 
 #include <unotools/resmgr.hxx>
+#include <vcl/button.hxx>
+#include <vcl/svapp.hxx>
 #include <strings.hrc>
 #include "trylater.hxx"
 
-TryLaterQueryBox::TryLaterQueryBox(vcl::Window* pParent, const std::locale& rResLocale, const OUString& aMessage)
-    : MessBox(pParent, MessBoxStyle::NONE, 0, Translate::get(STR_TRYLATER_TITLE, rResLocale), aMessage)
+TryLaterQueryBox::TryLaterQueryBox(weld::Window* pParent, const std::locale& rResLocale, const OUString& rMessage, bool bEnableOverride)
+    : m_xQueryBox(Application::CreateMessageDialog(pParent, VclMessageType::Question, VclButtonsType::NONE, rMessage))
 {
-    SetImage( QueryBox::GetStandardImage() );
+    m_xQueryBox->set_title(Translate::get(STR_TRYLATER_TITLE, rResLocale));
 
-    AddButton(Translate::get(STR_TRYLATER_RETRYSAVING_BTN, rResLocale), RET_YES,
-            ButtonDialogFlags::Default | ButtonDialogFlags::OK | ButtonDialogFlags::Focus);
-    AddButton(Translate::get(STR_TRYLATER_SAVEAS_BTN, rResLocale), RET_NO);
-    AddButton( StandardButtonType::Cancel, RET_CANCEL, ButtonDialogFlags::Cancel );
-
-    SetButtonHelpText( RET_YES, OUString() );
-    SetButtonHelpText( RET_NO, OUString() );
+    // Currently we don't have the retry/save-as functionality implemented for cases when file is locked.
+    // So threat them mutually exclusive with overwrite here. TODO/LATER: just add the overwrite option
+    // as third option when retrying and saving with another name would be possible along with overwriting
+    if (bEnableOverride)
+    {
+        m_xQueryBox->add_button(Translate::get(STR_FILECHANGED_SAVEANYWAY_BTN, rResLocale), RET_IGNORE);
+        m_xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+        m_xQueryBox->set_default_response(RET_IGNORE);
+    }
+    else
+    {
+        m_xQueryBox->add_button(Translate::get(STR_TRYLATER_RETRYSAVING_BTN, rResLocale), RET_YES);
+        m_xQueryBox->add_button(Translate::get(STR_TRYLATER_SAVEAS_BTN, rResLocale), RET_NO);
+        m_xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+        m_xQueryBox->set_default_response(RET_YES);
+    }
 }
-
-TryLaterQueryBox::~TryLaterQueryBox()
-{
-}
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

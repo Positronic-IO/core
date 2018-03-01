@@ -39,7 +39,7 @@
 #include <set>
 
 ScCondFrmtEntry::ScCondFrmtEntry(vcl::Window* pParent, ScDocument* pDoc, const ScAddress& rPos)
-    : VclContainer(pParent, WB_CLIPCHILDREN | WB_BORDER)
+    : VclContainer(pParent, WB_CLIPCHILDREN | WB_BORDER | WB_CHILDDLGCTRL)
     , mbActive(false)
     , maStrCondition(ScResId(SCSTR_CONDITION))
     , mpDoc(pDoc)
@@ -115,7 +115,7 @@ void ScCondFrmtEntry::SetHeight()
     {
         Size aSize = GetSizePixel();
         const long nPad = LogicToPixel(Size(0, 2), MapMode(MapUnit::MapAppFont)).getHeight();
-        aSize.Height() = nMaxHeight + nPad;
+        aSize.setHeight( nMaxHeight + nPad );
         SetSizePixel(aSize);
     }
 }
@@ -207,7 +207,7 @@ ScConditionFrmtEntry::ScConditionFrmtEntry(vcl::Window* pParent, ScDocument* pDo
 
     Init(pDialogParent);
 
-    StartListening(*pDoc->GetStyleSheetPool(), true);
+    StartListening(*pDoc->GetStyleSheetPool(), DuplicateHandling::Prevent);
 
     if(pFormatEntry)
     {
@@ -936,8 +936,8 @@ void ScColorScale3FrmtEntry::Init()
     maLbEntryTypeMin->SetSelectHdl( LINK( this, ScColorScale3FrmtEntry, EntryTypeHdl ) );
     maLbEntryTypeMax->SetSelectHdl( LINK( this, ScColorScale3FrmtEntry, EntryTypeHdl ) );
     maLbEntryTypeMiddle->SetSelectHdl( LINK( this, ScColorScale3FrmtEntry, EntryTypeHdl ) );
-    maLbColMin->SelectEntry(Color(COL_LIGHTRED));
-    maLbColMiddle->SelectEntry(Color(COL_YELLOW));
+    maLbColMin->SelectEntry(COL_LIGHTRED);
+    maLbColMiddle->SelectEntry(COL_YELLOW);
     maLbColMax->SelectEntry(Color(0x00CC00));
 }
 
@@ -1230,7 +1230,7 @@ ScDateFrmtEntry::ScDateFrmtEntry(vcl::Window* pParent, ScDocument* pDoc, const S
 
     Init();
 
-    StartListening(*pDoc->GetStyleSheetPool(), true);
+    StartListening(*pDoc->GetStyleSheetPool(), DuplicateHandling::Prevent);
 
     if(pFormat)
     {

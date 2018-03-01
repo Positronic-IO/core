@@ -69,7 +69,7 @@ using ::com::sun::star::beans::XPropertySetInfo;
 
 namespace sd {
 
-// go recursivly through all shapes in the given XShapes collection and return true as soon as the
+// go recursively through all shapes in the given XShapes collection and return true as soon as the
 // given shape is found. nIndex is incremented for each shape with the same shape type as the given
 // shape is found until the given shape is found.
 static bool getShapeIndex(  const Reference< XShapes >& xShapes, const Reference< XShape >& xShape, sal_Int32& nIndex )
@@ -250,7 +250,7 @@ void CustomAnimationListEntryItem::InitViewData( SvTreeListBox* pView, SvTreeLis
 
     Size aSize( width, pView->GetTextHeight() );
     if( aSize.Height() < nItemMinHeight )
-        aSize.Height() = nItemMinHeight;
+        aSize.setHeight( nItemMinHeight );
     pViewData->maSize = aSize;
 }
 
@@ -277,12 +277,12 @@ void CustomAnimationListEntryItem::Paint(const Point& rPos, SvTreeListBox& rDev,
         //FIXME With previous image not defined in CustomAnimation.src
     }
 
-    aPos.X() += nIconWidth;
+    aPos.AdjustX(nIconWidth );
 
 
     rRenderContext.DrawText(aPos, rRenderContext.GetEllipsisString(msDescription, rDev.GetOutputSizePixel().Width() - aPos.X()));
 
-    aPos.Y() += nIconWidth;
+    aPos.AdjustY(nIconWidth );
 
     OUString sImage;
     switch (mpEffect->getPresetClass())
@@ -318,12 +318,12 @@ void CustomAnimationListEntryItem::Paint(const Point& rPos, SvTreeListBox& rDev,
         BitmapEx aBitmap(sImage);
         Image aImage(aBitmap);
         Point aImagePos(aPos);
-        aImagePos.Y() += (aSize.Height()/2 - aImage.GetSizePixel().Height()) >> 1;
+        aImagePos.AdjustY((aSize.Height()/2 - aImage.GetSizePixel().Height()) >> 1 );
         rRenderContext.DrawImage(aImagePos, aImage);
     }
 
-    aPos.X() += nIconWidth;
-    aPos.Y() += (aSize.Height()/2 - rDev.GetTextHeight()) >> 1;
+    aPos.AdjustX(nIconWidth );
+    aPos.AdjustY((aSize.Height()/2 - rDev.GetTextHeight()) >> 1 );
 
     rRenderContext.DrawText(aPos, rRenderContext.GetEllipsisString(msEffectName, rDev.GetOutputSizePixel().Width() - aPos.X()));
 }
@@ -386,7 +386,7 @@ void CustomAnimationTriggerEntryItem::InitViewData( SvTreeListBox* pView, SvTree
 
     Size aSize(pView->GetTextWidth( msDescription ) + 2 * nIconWidth, pView->GetTextHeight() );
     if( aSize.Height() < nIconWidth )
-        aSize.Height() = nIconWidth;
+        aSize.setHeight( nIconWidth );
     pViewData->maSize = aSize;
 }
 
@@ -419,10 +419,10 @@ void CustomAnimationTriggerEntryItem::Paint(const Point& rPos, SvTreeListBox& rD
     int nVertBorder = ((aSize.Height() - rDev.GetTextHeight()) >> 1);
     int nHorzBorder = rRenderContext.LogicToPixel(Size(3, 3), MapMode(MapUnit::MapAppFont)).Width();
 
-    aOutRect.Left() += nHorzBorder;
-    aOutRect.Right() -= nHorzBorder;
-    aOutRect.Top() += nVertBorder;
-    aOutRect.Bottom() -= nVertBorder;
+    aOutRect.AdjustLeft(nHorzBorder );
+    aOutRect.AdjustRight( -nHorzBorder );
+    aOutRect.AdjustTop( nVertBorder );
+    aOutRect.AdjustBottom( -nVertBorder );
 
     rRenderContext.DrawText(aOutRect, rRenderContext.GetEllipsisString(msDescription, aOutRect.GetWidth()));
     rRenderContext.Pop();
@@ -950,10 +950,10 @@ void CustomAnimationList::Paint(vcl::RenderContext& rRenderContext, const ::tool
 
         ::tools::Rectangle aRect(Point(0,0), GetOutputSizePixel());
 
-        aRect.Left() += aOffset.X();
-        aRect.Top() += aOffset.Y();
-        aRect.Right() -= aOffset.X();
-        aRect.Bottom() -= aOffset.Y();
+        aRect.AdjustLeft(aOffset.X() );
+        aRect.AdjustTop(aOffset.Y() );
+        aRect.AdjustRight( -(aOffset.X()) );
+        aRect.AdjustBottom( -(aOffset.Y()) );
 
         rRenderContext.DrawText(aRect, SdResId(STR_CUSTOMANIMATION_LIST_HELPTEXT),
                                 DrawTextFlags::MultiLine | DrawTextFlags::WordBreak | DrawTextFlags::Center | DrawTextFlags::VCenter );

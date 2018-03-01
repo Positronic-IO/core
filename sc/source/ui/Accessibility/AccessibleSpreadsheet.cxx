@@ -994,14 +994,14 @@ void SAL_CALL ScAccessibleSpreadsheet::grabFocus(  )
 
 sal_Int32 SAL_CALL ScAccessibleSpreadsheet::getForeground(  )
 {
-    return COL_BLACK;
+    return sal_Int32(COL_BLACK);
 }
 
 sal_Int32 SAL_CALL ScAccessibleSpreadsheet::getBackground(  )
 {
     SolarMutexGuard aGuard;
     IsObjectValid();
-    return SC_MOD()->GetColorConfig().GetColorValue( ::svtools::DOCCOLOR ).nColor;
+    return sal_Int32(SC_MOD()->GetColorConfig().GetColorValue( ::svtools::DOCCOLOR ).nColor);
 }
 
     //=====  XAccessibleContext  ==============================================

@@ -106,6 +106,8 @@ namespace vcl {
 
 namespace svt { class PopupWindowControllerImpl; }
 
+namespace weld { class Window; }
+
 template<class T> class VclPtr;
 
 enum class TrackingEventFlags
@@ -550,6 +552,7 @@ public:
     SAL_DLLPRIVATE static void          ImplInitAppFontData( vcl::Window const * pWindow );
 
     SAL_DLLPRIVATE vcl::Window*         ImplGetFrameWindow() const;
+    weld::Window*                       GetFrameWeld() const;
     SalFrame*                           ImplGetFrame() const;
     SAL_DLLPRIVATE ImplFrameData*       ImplGetFrameData();
 
@@ -892,6 +895,7 @@ public:
 
     void                                SetInputContext( const InputContext& rInputContext );
     const InputContext&                 GetInputContext() const;
+    void                                PostExtTextInputEvent(VclEventId nType, const OUString& rText);
     void                                EndExtTextInput();
     void                                SetCursorRect( const tools::Rectangle* pRect = nullptr, long nExtTextInputWidth = 0 );
     const tools::Rectangle*                    GetCursorRect() const;
@@ -1224,6 +1228,13 @@ public:
 
     /// Dialog / window tunneling related methods.
     Size PaintActiveFloatingWindow(VirtualDevice& rDevice) const;
+
+    /// Same as MouseButtonDown(), but coordinates are in logic unit. used for LOK
+    virtual void LogicMouseButtonDown(const MouseEvent&) {};
+    /// Same as MouseButtonUp(), but coordinates are in logic unit. used for LOK
+    virtual void LogicMouseButtonUp(const MouseEvent&) {};
+    /// Same as MouseMove(), but coordinates are in logic unit. used for LOK
+    virtual void LogicMouseMove(const MouseEvent&) {};
 
     /** @name Accessibility
      */
@@ -1577,6 +1588,8 @@ public:
     virtual FactoryFunction GetUITestFactory() const;
 
     virtual bool IsChart() const { return false; }
+
+    void SetHelpHdl(const Link<vcl::Window&, bool>& rLink);
 };
 
 }

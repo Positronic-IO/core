@@ -69,7 +69,6 @@
 
 #include <sfx2/viewfrm.hxx>
 #include <svtools/soerr.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <svx/charthelper.hxx>
 #include <comphelper/lok.hxx>
 
@@ -390,8 +389,8 @@ void ViewShell::SetZoomRect(const ::tools::Rectangle& rZoomRect)
     if (mpContentWindow.get() != nullptr)
     {
         Point aNewPos = mpContentWindow->GetWinViewPos();
-        aNewPos.X() = aPos.X();
-        aNewPos.Y() = aPos.Y();
+        aNewPos.setX( aPos.X() );
+        aNewPos.setY( aPos.Y() );
         mpContentWindow->SetZoomIntegral(nZoom);
         mpContentWindow->SetWinViewPos(aNewPos);
         mpContentWindow->UpdateMapOrigin();
@@ -718,7 +717,8 @@ bool ViewShell::ActivateObject(SdrOle2Obj* pObj, long nVerb)
 {
     ErrCode aErrCode = ERRCODE_NONE;
 
-    SfxErrorContext aEC(ERRCTX_SO_DOVERB, GetActiveWindow(), RID_SO_ERRCTX);
+    vcl::Window* pWindow = GetActiveWindow();
+    SfxErrorContext aEC(ERRCTX_SO_DOVERB, pWindow ? pWindow->GetFrameWeld() : nullptr, RID_SO_ERRCTX);
     bool bAbort = false;
     GetDocSh()->SetWaitCursor( true );
     SfxViewShell* pViewShell = GetViewShell();

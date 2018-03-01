@@ -32,6 +32,7 @@
 OUString GetMetricText( long nVal, MapUnit eSrcUnit, MapUnit eDestUnit, const IntlWrapper* pIntl )
 {
     bool bNeg = false;
+    bool bShowAtLeastOneDecimalDigit = true;
     sal_Int32 nRet = 0;
 
     if ( nVal < 0 )
@@ -77,6 +78,11 @@ OUString GetMetricText( long nVal, MapUnit eSrcUnit, MapUnit eDestUnit, const In
         }
 
         case MapUnit::MapPoint:
+            // fractions of a point are used, e.g., for font size
+            nRet = OutputDevice::LogicToLogic(nVal, eSrcUnit, MapUnit::MapTwip) * 50;
+            bShowAtLeastOneDecimalDigit = false;
+            break;
+
         case MapUnit::MapTwip:
         case MapUnit::MapPixel:
             return OUString::number( OutputDevice::LogicToLogic(
@@ -110,7 +116,7 @@ OUString GetMetricText( long nVal, MapUnit eSrcUnit, MapUnit eDestUnit, const In
         else
             sRet.append(nRet / nDiff);
         nRet %= nDiff;
-        if( 4 == nDigits )
+        if( 4 == nDigits && (bShowAtLeastOneDecimalDigit || nRet) )
         {
             if(pIntl)
                 sRet.append(pIntl->getLocaleData()->getNumDecimalSep());
@@ -135,23 +141,18 @@ OUString GetSvxString(const char* pId)
 
 OUString GetColorString( const Color& rCol )
 {
-    if (rCol.GetColor() == COL_AUTO)
+    if (rCol == COL_AUTO)
         return EditResId(RID_SVXSTR_AUTOMATIC);
 
-    OUString sStr;
-
-    ColorData nColData =
-        RGB_COLORDATA( rCol.GetRed(), rCol.GetGreen(), rCol.GetBlue() );
-    sal_uInt16 nColor = 0;
-
-    static const ColorData aColAry[] = {
+    static const Color aColAry[] = {
         COL_BLACK, COL_BLUE, COL_GREEN, COL_CYAN,
         COL_RED, COL_MAGENTA, COL_BROWN, COL_GRAY,
         COL_LIGHTGRAY, COL_LIGHTBLUE, COL_LIGHTGREEN, COL_LIGHTCYAN,
         COL_LIGHTRED, COL_LIGHTMAGENTA, COL_YELLOW, COL_WHITE };
 
+    sal_uInt16 nColor = 0;
     while ( nColor < SAL_N_ELEMENTS(aColAry) &&
-            aColAry[nColor] != nColData )
+            aColAry[nColor] != rCol.GetRGBColor() )
     {
         nColor += 1;
     }
@@ -178,6 +179,7 @@ OUString GetColorString( const Color& rCol )
 
     static_assert(SAL_N_ELEMENTS(aColAry) == SAL_N_ELEMENTS(RID_SVXITEMS_COLORS), "must match");
 
+    OUString sStr;
     if ( nColor < SAL_N_ELEMENTS(aColAry) )
         sStr = EditResId(RID_SVXITEMS_COLORS[nColor]);
 

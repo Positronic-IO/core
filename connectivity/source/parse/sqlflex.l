@@ -28,7 +28,16 @@
 
 #include <string.h>
 
+#if defined _MSC_VER
+#pragma warning ( push )
+// Silence warnings about redefinition of INT8_MIN etc in stdint.h
+// The flex-generated workdir/LexTarget/idlc/source/scanner.cxx defines them prior to these includes
+#pragma warning ( disable : 4005 )
+#endif
 #include <connectivity/internalnode.hxx>
+#if defined _MSC_VER
+#pragma warning(pop)
+#endif
 
 #ifndef INCLUDED_CONNECTIVITY_SOURCE_PARSE_SQLFLEX_L
 #define INCLUDED_CONNECTIVITY_SOURCE_PARSE_SQLFLEX_L
@@ -47,7 +56,6 @@
 #include <connectivity/sqlscan.hxx>
 
 #if defined _MSC_VER
-#pragma warning(push, 1)
 /**/
 #ifdef yywrap
 #undef  yywrap
@@ -84,11 +92,17 @@ OSQLScanner* xxx_pGLOBAL_SQLSCAN = nullptr;
     result = (c == EOF) ? YY_NULL : (buf[0] = c, 1);\
 }
 
-#define YY_FATAL_ERROR(msg)                         \
-{                                                   \
-    xxx_pGLOBAL_SQLSCAN->SQLyyerror(msg);           \
-    /*hack to silence -Wunused-function*/           \
-    if (0) yy_fatal_error(msg);                     \
+// coverity[+kill]
+static void do_fatal_error(const char* msg)
+{
+    xxx_pGLOBAL_SQLSCAN->SQLyyerror(msg);
+    /*hack to silence -Wunused-function*/
+    if (0) yy_fatal_error(msg);
+}
+
+#define YY_FATAL_ERROR(msg) \
+{                           \
+    do_fatal_error(msg);    \
 }
 
 %}
@@ -787,7 +801,3 @@ sal_Int32 OSQLScanner::SQLlex()
 {
 	return SQLyylex();
 }
-
-#if defined _MSC_VER
-#pragma warning(pop)
-#endif

@@ -51,6 +51,7 @@
 #include <com/sun/star/lang/NoSupportException.hpp>
 #include <com/sun/star/sdb/ParametersRequest.hpp>
 #include <com/sun/star/sdb/RowChangeAction.hpp>
+#include <com/sun/star/sdb/SQLFilterOperator.hpp>
 #include <com/sun/star/sdb/XInteractionSupplyParameters.hpp>
 #include <com/sun/star/sdbc/ColumnValue.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
@@ -82,7 +83,6 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <osl/mutex.hxx>
@@ -3170,6 +3170,39 @@ void FormController::setFilter(::std::vector<FmFieldInfo>& rFieldInfos)
                             if ( pParseNode != nullptr )
                             {
                                 OUString sCriteria;
+                                switch (pRefValues[j].Handle)
+                                {
+                                    case css::sdb::SQLFilterOperator::EQUAL:
+                                        sCriteria += "=";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::NOT_EQUAL:
+                                        sCriteria += "!=";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::LESS:
+                                        sCriteria += "<";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::GREATER:
+                                        sCriteria += ">";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::LESS_EQUAL:
+                                        sCriteria += "<=";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::GREATER_EQUAL:
+                                        sCriteria += ">=";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::LIKE:
+                                        sCriteria += "LIKE ";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::NOT_LIKE:
+                                        sCriteria += "NOT LIKE ";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::SQLNULL:
+                                        sCriteria += "IS NULL";
+                                        break;
+                                    case css::sdb::SQLFilterOperator::NOT_SQLNULL:
+                                        sCriteria += "IS NOT NULL";
+                                        break;
+                                }
                                 pParseNode->parseNodeToPredicateStr( sCriteria
                                                                     ,xConnection
                                                                     ,xFormatter

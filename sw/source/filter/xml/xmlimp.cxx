@@ -80,6 +80,7 @@
 
 #include <vcl/svapp.hxx>
 #include <unotxdoc.hxx>
+#include <numrule.hxx>
 
 #include <xmloff/xmlmetai.hxx>
 #include <xmloff/xformsimport.hxx>
@@ -1221,14 +1222,14 @@ void SwXMLImport::SetViewSettings(const Sequence < PropertyValue > & aViewProps)
         {
             pValue->Value >>= nTmp;
             Size aSize( aRect.GetSize() );
-            aSize.Width() = static_cast< long >(bTwip ? sanitiseMm100ToTwip(nTmp) : nTmp);
+            aSize.setWidth( static_cast< long >(bTwip ? sanitiseMm100ToTwip(nTmp) : nTmp) );
             aRect.SetSize( aSize );
         }
         else if ( pValue->Name == "ViewAreaHeight" )
         {
             pValue->Value >>= nTmp;
             Size aSize( aRect.GetSize() );
-            aSize.Height() = static_cast< long >(bTwip ? sanitiseMm100ToTwip(nTmp) : nTmp);
+            aSize.setHeight( static_cast< long >(bTwip ? sanitiseMm100ToTwip(nTmp) : nTmp) );
             aRect.SetSize( aSize );
         }
         else if ( pValue->Name == "ShowRedlineChanges" )
@@ -1850,6 +1851,9 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportDOCX(SvStream &rStream)
     {
     }
     catch (const css::lang::WrappedTargetRuntimeException&)
+    {
+    }
+    catch (const std::exception&)
     {
     }
     xDocSh->SetLoading(SfxLoadedFlags::ALL);

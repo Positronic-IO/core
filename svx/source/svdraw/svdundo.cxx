@@ -262,14 +262,9 @@ void SdrUndoAttrObj::ensureStyleSheetInStyleSheetPool(SfxStyleSheetBasePool& rSt
 
 SdrUndoAttrObj::SdrUndoAttrObj(SdrObject& rNewObj, bool bStyleSheet1, bool bSaveText)
     : SdrUndoObj(rNewObj)
-    , pUndoSet(nullptr)
-    , pRedoSet(nullptr)
     , mxUndoStyleSheet()
     , mxRedoStyleSheet()
     , bHaveToTakeRedoSet(true)
-    , pTextUndo(nullptr)
-    , pTextRedo(nullptr)
-    , pUndoGroup(nullptr)
 {
     bStyleSheet = bStyleSheet1;
 
@@ -280,7 +275,7 @@ SdrUndoAttrObj::SdrUndoAttrObj(SdrObject& rNewObj, bool bStyleSheet1, bool bSave
     if(bIsGroup)
     {
         // it's a group object!
-        pUndoGroup = new SdrUndoGroup(*pObj->GetModel());
+        pUndoGroup.reset( new SdrUndoGroup(*pObj->GetModel()) );
         const size_t nObjCount(pOL->GetObjCount());
 
         for(size_t nObjNum = 0; nObjNum < nObjCount; ++nObjNum)
@@ -292,27 +287,27 @@ SdrUndoAttrObj::SdrUndoAttrObj(SdrObject& rNewObj, bool bStyleSheet1, bool bSave
 
     if(!bIsGroup || bIs3DScene)
     {
-        pUndoSet = new SfxItemSet(pObj->GetMergedItemSet());
+        pUndoSet.reset( new SfxItemSet(pObj->GetMergedItemSet()) );
 
         if(bStyleSheet)
             mxUndoStyleSheet = pObj->GetStyleSheet();
 
         if(bSaveText)
         {
-            pTextUndo = pObj->GetOutlinerParaObject();
-            if(pTextUndo)
-                pTextUndo = new OutlinerParaObject(*pTextUndo);
+            auto p = pObj->GetOutlinerParaObject();
+            if(p)
+                pTextUndo.reset( new OutlinerParaObject(*p) );
         }
     }
 }
 
 SdrUndoAttrObj::~SdrUndoAttrObj()
 {
-    delete pUndoSet;
-    delete pRedoSet;
-    delete pUndoGroup;
-    delete pTextUndo;
-    delete pTextRedo;
+    pUndoSet.reset();
+    pRedoSet.reset();
+    pUndoGroup.reset();
+    pTextUndo.reset();
+    pTextRedo.reset();
 }
 
 void SdrUndoAttrObj::Undo()
@@ -329,9 +324,7 @@ void SdrUndoAttrObj::Undo()
         {
             bHaveToTakeRedoSet = false;
 
-            delete pRedoSet;
-
-            pRedoSet = new SfxItemSet(pObj->GetMergedItemSet());
+            pRedoSet.reset( new SfxItemSet(pObj->GetMergedItemSet()) );
 
             if(bStyleSheet)
                 mxRedoStyleSheet = pObj->GetStyleSheet();
@@ -339,10 +332,9 @@ void SdrUndoAttrObj::Undo()
             if(pTextUndo)
             {
                 // #i8508#
-                pTextRedo = pObj->GetOutlinerParaObject();
-
-                if(pTextRedo)
-                    pTextRedo = new OutlinerParaObject(*pTextRedo);
+                auto p = pObj->GetOutlinerParaObject();
+                if(p)
+                    pTextRedo.reset( new OutlinerParaObject(*p) );
             }
         }
 
@@ -581,9 +573,6 @@ OUString SdrUndoMoveObj::GetSdrRepeatComment(SdrView& /*rView*/) const
 
 SdrUndoGeoObj::SdrUndoGeoObj(SdrObject& rNewObj)
      : SdrUndoObj(rNewObj)
-     , pUndoGeo(nullptr)
-     , pRedoGeo(nullptr)
-     , pUndoGroup(nullptr)
      , mbSkipChangeLayout(false)
 {
     SdrObjList* pOL=rNewObj.GetSubList();
@@ -592,7 +581,7 @@ SdrUndoGeoObj::SdrUndoGeoObj(SdrObject& rNewObj)
         // this is a group object!
         // If this were 3D scene, we'd only add an Undo for the scene itself
         // (which we do elsewhere).
-        pUndoGroup=new SdrUndoGroup(*pObj->GetModel());
+        pUndoGroup.reset(new SdrUndoGroup(*pObj->GetModel()));
         const size_t nObjCount = pOL->GetObjCount();
         for (size_t nObjNum = 0; nObjNum<nObjCount; ++nObjNum) {
             pUndoGroup->AddAction(new SdrUndoGeoObj(*pOL->GetObj(nObjNum)));
@@ -600,15 +589,15 @@ SdrUndoGeoObj::SdrUndoGeoObj(SdrObject& rNewObj)
     }
     else
     {
-        pUndoGeo=pObj->GetGeoData();
+        pUndoGeo.reset(pObj->GetGeoData());
     }
 }
 
 SdrUndoGeoObj::~SdrUndoGeoObj()
 {
-    delete pUndoGeo;
-    delete pRedoGeo;
-    delete pUndoGroup;
+    pUndoGeo.reset();
+    pRedoGeo.reset();
+    pUndoGroup.reset();
 }
 
 void SdrUndoGeoObj::Undo()
@@ -625,8 +614,7 @@ void SdrUndoGeoObj::Undo()
     }
     else
     {
-        delete pRedoGeo;
-        pRedoGeo=pObj->GetGeoData();
+        pRedoGeo.reset(pObj->GetGeoData());
 
         auto pTableObj = dynamic_cast<sdr::table::SdrTableObj*>(pObj);
         if (pTableObj && mbSkipChangeLayout)
@@ -648,8 +636,7 @@ void SdrUndoGeoObj::Redo()
     }
     else
     {
-        delete pUndoGeo;
-        pUndoGeo=pObj->GetGeoData();
+        pUndoGeo.reset(pObj->GetGeoData());
         pObj->SetGeoData(*pRedoGeo);
     }
 
@@ -1037,15 +1024,15 @@ SdrUndoObjSetText::SdrUndoObjSetText(SdrObject& rNewObj, sal_Int32 nText)
 {
     SdrText* pText = static_cast< SdrTextObj*>( &rNewObj )->getText(mnText);
     if( pText && pText->GetOutlinerParaObject() )
-        pOldText = new OutlinerParaObject(*pText->GetOutlinerParaObject());
+        pOldText.reset( new OutlinerParaObject(*pText->GetOutlinerParaObject()) );
 
     bEmptyPresObj = rNewObj.IsEmptyPresObj();
 }
 
 SdrUndoObjSetText::~SdrUndoObjSetText()
 {
-    delete pOldText;
-    delete pNewText;
+    pOldText.reset();
+    pNewText.reset();
 }
 
 void SdrUndoObjSetText::AfterSetText()
@@ -1054,7 +1041,7 @@ void SdrUndoObjSetText::AfterSetText()
     {
         SdrText* pText = static_cast< SdrTextObj*>( pObj )->getText(mnText);
         if( pText && pText->GetOutlinerParaObject() )
-            pNewText = new OutlinerParaObject(*pText->GetOutlinerParaObject());
+            pNewText.reset( new OutlinerParaObject(*pText->GetOutlinerParaObject()) );
         bNewTextAvailable=true;
     }
 }
@@ -1177,7 +1164,7 @@ void SdrUndoObjSetText::SdrRepeat(SdrView& rView)
                 if( bUndo )
                     rView.AddUndo(new SdrUndoObjSetText(*pTextObj,0));
 
-                OutlinerParaObject* pText1=pNewText;
+                OutlinerParaObject* pText1=pNewText.get();
                 if (pText1!=nullptr)
                     pText1 = new OutlinerParaObject(*pText1);
                 pTextObj->SetOutlinerParaObject(pText1);

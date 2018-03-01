@@ -142,7 +142,7 @@ const SvxItemPropertySet* ImplGetDrawPagePropertySet( bool bImpress, PageKind eP
         { OUString("TransitionSubtype"),            WID_TRANSITION_SUBTYPE, ::cppu::UnoType<sal_Int16>::get(),            0,  0},
         { OUString("TransitionDirection"),          WID_TRANSITION_DIRECTION, ::cppu::UnoType<sal_Bool>::get(),           0,  0},
         { OUString("TransitionFadeColor"),          WID_TRANSITION_FADE_COLOR, ::cppu::UnoType<sal_Int32>::get(),         0,  0},
-        { OUString("TransitionDuration"),           WID_TRANSITION_DURATION, ::cppu::UnoType<double>::get(),          0,  0},
+        { OUString(UNO_NAME_PAGE_TRANSITION_DURATION), WID_TRANSITION_DURATION, ::cppu::UnoType<double>::get(),          0,  0},
         { OUString("LoopSound"),                    WID_LOOP_SOUND, cppu::UnoType<bool>::get(),                    0, 0},
         { OUString("NavigationOrder"),              WID_NAVORDER, cppu::UnoType<css::container::XIndexAccess>::get(),0,  0},
         { OUString(), 0, css::uno::Type(), 0, 0 }
@@ -1118,10 +1118,9 @@ Any SAL_CALL SdGenericDrawPage::getPropertyValue( const OUString& PropertyName )
                     std::shared_ptr<GDIMetaFile> xMetaFile = pDocShell->GetPreviewMetaFile();
                     if (xMetaFile)
                     {
-                        Point   aPoint;
                         Size    aSize( GetPage()->GetSize() );
                         xMetaFile->AddAction( static_cast<MetaAction*>(new MetaFillColorAction( COL_WHITE, true )), 0 );
-                        xMetaFile->AddAction( static_cast<MetaAction*>(new MetaRectAction( ::tools::Rectangle( aPoint, aSize ) )), 1 );
+                        xMetaFile->AddAction( static_cast<MetaAction*>(new MetaRectAction( ::tools::Rectangle( Point(), aSize ) )), 1 );
                         xMetaFile->SetPrefMapMode(MapMode(MapUnit::Map100thMM));
                         xMetaFile->SetPrefSize( aSize );
 

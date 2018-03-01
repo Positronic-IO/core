@@ -57,7 +57,7 @@ BOOL TimeValueToFileTime(const TimeValue *cpTimeVal, FILETIME *pFTime)
     {
         __int64 timeValue;
 
-        __int64 localTime = cpTimeVal->Seconds*(__int64)10000000+cpTimeVal->Nanosec/100;
+        __int64 localTime = cpTimeVal->Seconds*__int64(10000000)+cpTimeVal->Nanosec/100;
         osl::detail::setFiletime(FTime, localTime);
         fSuccess = 0 <= (timeValue= osl::detail::getFiletime(BaseFileTime) + osl::detail::getFiletime(FTime));
         if (fSuccess)
@@ -89,8 +89,8 @@ BOOL FileTimeToTimeValue(const FILETIME *cpFTime, TimeValue *pTimeVal)
 
         if ( fSuccess )
         {
-            pTimeVal->Seconds  = (unsigned long) (Value / 10000000L);
-            pTimeVal->Nanosec  = (unsigned long)((Value % 10000000L) * 100);
+            pTimeVal->Seconds  = static_cast<unsigned long>(Value / 10000000L);
+            pTimeVal->Nanosec  = static_cast<unsigned long>((Value % 10000000L) * 100);
         }
     }
     return fSuccess;
@@ -1573,9 +1573,16 @@ oslFileError SAL_CALL osl_getFileStatus(
         break;
     }
 
+    OUString sFullPath(pItemImpl->m_pFullPath);
+
+    // Prefix long paths, windows API calls expect this prefix
+    // (only local paths starting with something like C: or D:)
+    if (sFullPath.getLength() >= MAX_PATH && isalpha(sFullPath[0]) && sFullPath[1] == ':')
+        sFullPath = "\\\\?\\" + sFullPath;
+
     if ( uFieldMask & osl_FileStatus_Mask_Validate )
     {
-        HANDLE  hFind = FindFirstFileW( o3tl::toW(rtl_uString_getStr( pItemImpl->m_pFullPath )), &pItemImpl->FindData );
+        HANDLE  hFind = FindFirstFileW( o3tl::toW(sFullPath.getStr() ), &pItemImpl->FindData );
 
         if ( hFind != INVALID_HANDLE_VALUE )
             FindClose( hFind );
@@ -1612,7 +1619,7 @@ oslFileError SAL_CALL osl_getFileStatus(
         FileTimeToTimeValue( &pItemImpl->FindData.ftCreationTime, &pStatus->aCreationTime ) )
         pStatus->uValidFields |= osl_FileStatus_Mask_CreationTime;
 
-    /* Most of the fields are already set, regardless of requiered fields */
+    /* Most of the fields are already set, regardless of required fields */
 
     rtl_uString_newFromStr( &pStatus->ustrFileName, o3tl::toU(pItemImpl->FindData.cFileName) );
     pStatus->uValidFields |= osl_FileStatus_Mask_FileName;
@@ -1630,12 +1637,12 @@ oslFileError SAL_CALL osl_getFileStatus(
     pStatus->uAttributes = pItemImpl->FindData.dwFileAttributes;
     pStatus->uValidFields |= osl_FileStatus_Mask_Attributes;
 
-    pStatus->uFileSize = (sal_uInt64)pItemImpl->FindData.nFileSizeLow + ((sal_uInt64)pItemImpl->FindData.nFileSizeHigh << 32);
+    pStatus->uFileSize = static_cast<sal_uInt64>(pItemImpl->FindData.nFileSizeLow) + (static_cast<sal_uInt64>(pItemImpl->FindData.nFileSizeHigh) << 32);
     pStatus->uValidFields |= osl_FileStatus_Mask_FileSize;
 
     if ( uFieldMask & osl_FileStatus_Mask_LinkTargetURL )
     {
-        oslFileError error = osl_getFileURLFromSystemPath( pItemImpl->m_pFullPath, &pStatus->ustrLinkTargetURL );
+        oslFileError error = osl_getFileURLFromSystemPath( sFullPath.pData, &pStatus->ustrLinkTargetURL );
         if (error != osl_File_E_None)
             return error;
 
@@ -1647,7 +1654,7 @@ oslFileError SAL_CALL osl_getFileStatus(
         if ( !pItemImpl->bFullPathNormalized )
         {
             ::osl::LongPathBuffer< sal_Unicode > aBuffer( MAX_LONG_PATH );
-            sal_uInt32 nNewLen = GetCaseCorrectPathName( o3tl::toW(rtl_uString_getStr( pItemImpl->m_pFullPath )),
+            sal_uInt32 nNewLen = GetCaseCorrectPathName( o3tl::toW( sFullPath.getStr() ),
                                                          o3tl::toW( aBuffer ),
                                                          aBuffer.getBufSizeInSymbols(),
                                                          true );
@@ -1655,11 +1662,12 @@ oslFileError SAL_CALL osl_getFileStatus(
             if ( nNewLen )
             {
                 rtl_uString_newFromStr( &pItemImpl->m_pFullPath, aBuffer );
+                sFullPath = OUString( pItemImpl->m_pFullPath );
                 pItemImpl->bFullPathNormalized = TRUE;
             }
         }
 
-        oslFileError error = osl_getFileURLFromSystemPath( pItemImpl->m_pFullPath, &pStatus->ustrFileURL );
+        oslFileError error = osl_getFileURLFromSystemPath( sFullPath.pData, &pStatus->ustrFileURL );
         if (error != osl_File_E_None)
             return error;
         pStatus->uValidFields |= osl_FileStatus_Mask_FileURL;
@@ -1685,7 +1693,7 @@ oslFileError SAL_CALL osl_setFileAttributes(
 
     dwFileAttributes = GetFileAttributesW( o3tl::toW(rtl_uString_getStr(ustrSysPath)) );
 
-    if ( (DWORD)-1 != dwFileAttributes )
+    if ( DWORD(-1) != dwFileAttributes )
     {
         dwFileAttributes &= ~(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
 

@@ -68,6 +68,12 @@ DECLARE_RTFEXPORT_TEST(testTdf104035, "tdf104035.rtf")
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(convertTwipToMm100(450)), aTabStops[0].Position);
 }
 
+DECLARE_RTFEXPORT_TEST(testGraphicObjectFliph, "graphic-object-fliph.rtf")
+{
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(1), "HoriMirroredOnEvenPages"));
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(1), "HoriMirroredOnOddPages"));
+}
+
 DECLARE_RTFEXPORT_TEST(testTdf114333, "tdf114333.rtf")
 {
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
@@ -78,6 +84,21 @@ DECLARE_RTFEXPORT_TEST(testTdf114333, "tdf114333.rtf")
     CPPUNIT_ASSERT_EQUAL(sal_Int32(8502), getProperty<sal_Int32>(xTable, "LeftMargin"));
     // This was 17000 = 8502 + 8498 on import, 15240 on export and following import
     CPPUNIT_ASSERT_EQUAL(sal_Int32(8498), getProperty<sal_Int32>(xTable, "Width"));
+}
+
+DECLARE_RTFEXPORT_TEST(testTdf115180, "tdf115180.docx")
+{
+    // On export to RTF, column separator positions were written without taking base width
+    // into account and then arrived huge, ~64000, which resulted in wrong table and cell widths
+
+    sal_Int32 rowWidth = parseDump("/root/page/body/tab/row/infos/bounds", "width").toInt32();
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Row width", sal_Int32(9360), rowWidth);
+    sal_Int32 cell1Width
+        = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds", "width").toInt32();
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("First cell width", sal_Int32(9142), cell1Width);
+    sal_Int32 cell2Width
+        = parseDump("/root/page/body/tab/row/cell[2]/infos/bounds", "width").toInt32();
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("First cell width", sal_Int32(218), cell2Width);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

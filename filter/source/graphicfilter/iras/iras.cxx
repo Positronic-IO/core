@@ -19,7 +19,7 @@
 
 
 #include <vcl/graph.hxx>
-#include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 
 class FilterConfigItem;
 
@@ -50,7 +50,7 @@ private:
     sal_Int32           mnColorMapType, mnColorMapSize;
     sal_uInt8           mnRepCount, mnRepVal;   // RLE Decoding
 
-    bool                ImplReadBody(BitmapWriteAccess * pAcc);
+    bool                ImplReadBody(vcl::bitmap::RawBitmap&, std::vector<Color> const & rvPalette);
     bool                ImplReadHeader();
     sal_uInt8           ImplGetByte();
 
@@ -97,7 +97,7 @@ bool RASReader::ReadRAS(Graphic & rGraphic)
         return false;
 
     bool bPalette(false);
-    BitmapPalette aPalette;
+    std::vector<Color> aPalette;
 
     bool bOk = true;
     if ( mnDstBitsPerPix <= 8 )     // pallets pictures
@@ -116,7 +116,7 @@ bool RASReader::ReadRAS(Graphic & rGraphic)
 
             if ( ( mnDstColors >= 2 ) && ( ( mnColorMapSize % 3 ) == 0 ) )
             {
-                aPalette.SetEntryCount(mnDstColors);
+                aPalette.resize(mnDstColors);
                 sal_uInt16  i;
                 sal_uInt8   nRed[256], nGreen[256], nBlue[256];
                 for ( i = 0; i < mnDstColors; i++ ) m_rRAS.ReadUChar( nRed[ i ] );
@@ -124,7 +124,7 @@ bool RASReader::ReadRAS(Graphic & rGraphic)
                 for ( i = 0; i < mnDstColors; i++ ) m_rRAS.ReadUChar( nBlue[ i ] );
                 for ( i = 0; i < mnDstColors; i++ )
                 {
-                    aPalette[i] = BitmapColor(nRed[ i ], nGreen[ i ], nBlue[ i ]);
+                    aPalette[i] = Color(nRed[ i ], nGreen[ i ], nBlue[ i ]);
                 }
                 bPalette = true;
             }
@@ -138,11 +138,11 @@ bool RASReader::ReadRAS(Graphic & rGraphic)
         if (!bPalette)
         {
             mnDstColors = 1 << mnDstBitsPerPix;
-            aPalette.SetEntryCount(mnDstColors);
+            aPalette.resize(mnDstColors);
             for ( sal_uInt16 i = 0; i < mnDstColors; i++ )
             {
                 sal_uLong nCount = 255 - ( 255 * i / ( mnDstColors - 1 ) );
-                aPalette[i] = BitmapColor(static_cast<sal_uInt8>(nCount), static_cast<sal_uInt8>(nCount), static_cast<sal_uInt8>(nCount));
+                aPalette[i] = Color(static_cast<sal_uInt8>(nCount), static_cast<sal_uInt8>(nCount), static_cast<sal_uInt8>(nCount));
             }
             bPalette = true;
         }
@@ -167,27 +167,19 @@ bool RASReader::ReadRAS(Graphic & rGraphic)
     //for the sake of simplicity we'll assume that RAS_TYPE_BYTE_ENCODED can
     //describe data 255 times larger than the data stored
     size_t nMaxCompression = mnType != RAS_TYPE_BYTE_ENCODED ? 1 : 255;
-    if (m_rRAS.remainingSize() * nMaxCompression < static_cast<sal_uInt64>(mnHeight) * mnWidth * mnDepth / 8)
-    {
+    sal_uInt32 nBitSize;
+    if (o3tl::checked_multiply<sal_uInt32>(mnWidth, mnHeight, nBitSize) || o3tl::checked_multiply<sal_uInt32>(nBitSize, mnDepth, nBitSize))
         return false;
-    }
-
-    Bitmap aBmp(Size(mnWidth, mnHeight), mnDstBitsPerPix);
-    Bitmap::ScopedWriteAccess pAcc(aBmp);
-    if (!pAcc)
+    if (m_rRAS.remainingSize() * nMaxCompression < nBitSize / 8)
         return false;
 
-    if (bPalette)
-    {
-        pAcc->SetPalette(aPalette);
-    }
-
+    vcl::bitmap::RawBitmap aBmp(Size(mnWidth, mnHeight), 24);
 
     // read in the bitmap data
-    mbStatus = ImplReadBody(pAcc.get());
+    mbStatus = ImplReadBody(aBmp, aPalette);
 
     if ( mbStatus )
-        rGraphic = aBmp;
+        rGraphic = vcl::bitmap::CreateFromData(std::move(aBmp));
 
     return mbStatus;
 }
@@ -228,7 +220,23 @@ bool RASReader::ImplReadHeader()
     return mbStatus;
 }
 
-bool RASReader::ImplReadBody(BitmapWriteAccess * pAcc)
+namespace
+{
+    const Color& SanitizePaletteIndex(std::vector<Color> const & rvPalette, sal_uInt8 nIndex)
+    {
+        if (nIndex >= rvPalette.size())
+        {
+            auto nSanitizedIndex = nIndex % rvPalette.size();
+            SAL_WARN_IF(nIndex != nSanitizedIndex, "filter.ras", "invalid colormap index: "
+                        << static_cast<unsigned int>(nIndex) << ", colormap len is: "
+                        << rvPalette.size());
+            nIndex = nSanitizedIndex;
+        }
+        return rvPalette[nIndex];
+    }
+}
+
+bool RASReader::ImplReadBody(vcl::bitmap::RawBitmap& rBitmap, std::vector<Color> const & rvPalette)
 {
     sal_Int32 x, y;
     sal_uInt8    nRed, nGreen, nBlue;
@@ -247,9 +255,9 @@ bool RASReader::ImplReadBody(BitmapWriteAccess * pAcc)
                         if (!m_rRAS.good())
                             mbStatus = false;
                     }
-                    pAcc->SetPixelIndex( y, x,
+                    rBitmap.SetPixel(y, x, SanitizePaletteIndex(rvPalette,
                         sal::static_int_cast< sal_uInt8 >(
-                            nDat >> ( ( x & 7 ) ^ 7 )) );
+                            nDat >> ( ( x & 7 ) ^ 7 ))));
                 }
                 if (!( ( x - 1 ) & 0x8 ) )
                 {
@@ -267,7 +275,7 @@ bool RASReader::ImplReadBody(BitmapWriteAccess * pAcc)
                 for (x = 0; x < mnWidth && mbStatus; ++x)
                 {
                     sal_uInt8 nDat = ImplGetByte();
-                    pAcc->SetPixelIndex( y, x, nDat );
+                    rBitmap.SetPixel(y, x, SanitizePaletteIndex(rvPalette, nDat));
                     if (!m_rRAS.good())
                         mbStatus = false;
                 }
@@ -301,7 +309,7 @@ bool RASReader::ImplReadBody(BitmapWriteAccess * pAcc)
                                 nGreen = ImplGetByte();
                                 nRed = ImplGetByte();
                             }
-                            pAcc->SetPixel ( y, x, BitmapColor( nRed, nGreen, nBlue ) );
+                            rBitmap.SetPixel(y, x, Color(nRed, nGreen, nBlue));
                             if (!m_rRAS.good())
                                 mbStatus = false;
                         }
@@ -332,7 +340,7 @@ bool RASReader::ImplReadBody(BitmapWriteAccess * pAcc)
                                 nGreen = ImplGetByte();
                                 nRed = ImplGetByte();
                             }
-                            pAcc->SetPixel ( y, x, BitmapColor( nRed, nGreen, nBlue ) );
+                            rBitmap.SetPixel(y, x, Color(nRed, nGreen, nBlue));
                             if (!m_rRAS.good())
                                 mbStatus = false;
                         }

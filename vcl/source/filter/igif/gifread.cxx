@@ -50,6 +50,8 @@ class SvStream;
 class GIFReader : public GraphicReader
 {
     Animation           aAnimation;
+    sal_uInt64          nAnimationByteSize;
+    sal_uInt64          nAnimationMinFileData;
     Bitmap              aBmp8;
     Bitmap              aBmp1;
     BitmapPalette       aGPalette;
@@ -109,7 +111,9 @@ public:
 };
 
 GIFReader::GIFReader( SvStream& rStm )
-    : aGPalette ( 256 )
+    : nAnimationByteSize(0)
+    , nAnimationMinFileData(0)
+    , aGPalette ( 256 )
     , aLPalette ( 256 )
     , rIStm ( rStm )
     , nYAcc ( 0 )
@@ -152,24 +156,14 @@ void GIFReader::ClearImageExtensions()
     nTimer = 0;
 }
 
-void GIFReader::CreateBitmaps( long nWidth, long nHeight, BitmapPalette* pPal,
-                               bool bWatchForBackgroundColor )
+void GIFReader::CreateBitmaps(long nWidth, long nHeight, BitmapPalette* pPal,
+                              bool bWatchForBackgroundColor)
 {
-    const Size aSize( nWidth, nHeight );
+    const Size aSize(nWidth, nHeight);
 
-#if SAL_TYPES_SIZEOFPOINTER == 8
-    // Don't bother allocating a bitmap of a size that would fail on a
-    // 32-bit system. We have at least one unit tests that is expected
-    // to fail (loading a 65535*65535 size GIF
-    // svtools/qa/cppunit/data/gif/fail/CVE-2008-5937-1.gif), but
-    // which doesn't fail on 64-bit Mac OS X at least. Why the loading
-    // fails on 64-bit Linux, no idea.
-    if (nWidth >= 64000 && nHeight >= 64000)
-    {
-        bStatus = false;
-        return;
-    }
-#endif
+    sal_uInt64 nCombinedPixSize = nWidth * nHeight;
+    if (bGCTransparent)
+        nCombinedPixSize += (nCombinedPixSize/8);
 
     // "Overall data compression asymptotically approaches 3839 × 8 / 12 = 2559 1/3"
     // so assume compression of 1:2560 is possible
@@ -177,11 +171,9 @@ void GIFReader::CreateBitmaps( long nWidth, long nHeight, BitmapPalette* pPal,
     // 1:1472.88 [184.11 x 8] is more realistic)
 
     sal_uInt64 nMinFileData = nWidth * nHeight / 2560;
-    for (size_t i = 0; i < aAnimation.Count(); ++i)
-    {
-        const Size& rSize = aAnimation.Get(i).aSizePix;
-        nMinFileData += rSize.Width() * rSize.Height() / 2560;
-    }
+
+    nMinFileData += nAnimationMinFileData;
+    nCombinedPixSize += nAnimationByteSize;
 
     if (nMaxStreamData < nMinFileData)
     {
@@ -192,34 +184,48 @@ void GIFReader::CreateBitmaps( long nWidth, long nHeight, BitmapPalette* pPal,
         return;
     }
 
-    if( bGCTransparent )
+    // Don't bother allocating a bitmap of a size that would fail on a
+    // 32-bit system. We have at least one unit tests that is expected
+    // to fail (loading a 65535*65535 size GIF
+    // svtools/qa/cppunit/data/gif/fail/CVE-2008-5937-1.gif), but
+    // which doesn't fail on 64-bit Mac OS X at least. Why the loading
+    // fails on 64-bit Linux, no idea.
+    if (nCombinedPixSize >= SAL_MAX_INT32/3*2)
     {
-        const Color aWhite( COL_WHITE );
+        bStatus = false;
+        return;
+    }
 
-        aBmp1 = Bitmap( aSize, 1 );
+    if (bGCTransparent)
+    {
+        const Color aWhite(COL_WHITE);
 
-        if( !aAnimation.Count() )
-            aBmp1.Erase( aWhite );
+        aBmp1 = Bitmap(aSize, 1);
+
+        if (!aAnimation.Count())
+            aBmp1.Erase(aWhite);
 
         pAcc1 = Bitmap::ScopedWriteAccess(aBmp1);
 
-        if( pAcc1 )
+        if (pAcc1)
         {
-            cTransIndex1 = static_cast<sal_uInt8>(pAcc1->GetBestPaletteIndex( aWhite ));
+            cTransIndex1 = static_cast<sal_uInt8>(pAcc1->GetBestPaletteIndex(aWhite));
             cNonTransIndex1 = cTransIndex1 ? 0 : 1;
         }
         else
+        {
             bStatus = false;
+        }
     }
 
-    if( bStatus )
+    if (bStatus)
     {
-        aBmp8 = Bitmap( aSize, 8, pPal );
+        aBmp8 = Bitmap(aSize, 8, pPal);
 
-        if( !!aBmp8 && bWatchForBackgroundColor && aAnimation.Count() )
-            aBmp8.Erase( (*pPal)[ nBackgroundColor ] );
+        if (!!aBmp8 && bWatchForBackgroundColor && aAnimation.Count())
+            aBmp8.Erase((*pPal)[nBackgroundColor].GetColor());
         else
-          aBmp8.Erase( Color( COL_WHITE ) );
+            aBmp8.Erase(COL_WHITE);
 
         pAcc8 = Bitmap::ScopedWriteAccess(aBmp8);
         bStatus = bool(pAcc8);
@@ -294,10 +300,10 @@ void GIFReader::ReadPaletteEntries( BitmapPalette* pPal, sal_uLong nCount )
         // if possible accommodate some standard colours
         if( nCount < 256 )
         {
-            (*pPal)[ 255UL ] = Color( COL_WHITE );
+            (*pPal)[ 255UL ] = COL_WHITE;
 
             if( nCount < 255 )
-                (*pPal)[ 254UL ] = Color( COL_BLACK );
+                (*pPal)[ 254UL ] = COL_BLACK;
         }
     }
 }
@@ -658,6 +664,8 @@ void GIFReader::CreateNewBitmaps()
     else
         aAnimBmp.eDisposal = Disposal::Not;
 
+    nAnimationByteSize += aAnimBmp.aBmpEx.GetSizeBytes();
+    nAnimationMinFileData += static_cast<sal_uInt64>(nImageWidth) * nImageHeight / 2560;
     aAnimation.Insert( aAnimBmp );
 
     if( aAnimation.Count() == 1 )
@@ -675,8 +683,6 @@ Graphic GIFReader::GetIntermediateGraphic()
     // but graphic still not completely read
     if ( bImGraphicReady && !aAnimation.Count() )
     {
-        Bitmap  aBmp;
-
         pAcc8.reset();
 
         if ( bGCTransparent )

@@ -197,13 +197,7 @@ osl_getAsciiFunctionSymbol( oslModule Module, const sal_Char *pSymbol )
 /* Implementation for Windows NT, 2K and XP (2K and XP could use the above method too) */
 /***************************************************************************************/
 
-#ifdef _MSC_VER
-#pragma warning(push,1) /* disable warnings within system headers */
-#endif
 #include <imagehlp.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
 typedef BOOL (WINAPI *SymInitialize_PROC)(
     HANDLE   hProcess,
@@ -230,7 +224,7 @@ static bool osl_addressGetModuleURL_NT4_( void *pv, rtl_uString **pustrURL )
 {
     bool    bSuccess    = false;    /* Assume failure */
 
-    /*  IMAGEHELP.DLL has a bug that it recursivly scans subdirectories of
+    /*  IMAGEHELP.DLL has a bug that it recursively scans subdirectories of
         the root when calling SymInitialize(), so we prefer DBGHELP.DLL
         which exports the same symbols and is shipped with OOo */
 

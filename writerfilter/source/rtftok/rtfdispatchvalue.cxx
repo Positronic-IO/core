@@ -213,7 +213,7 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
     }
     if (nSprm > 0)
     {
-        LanguageTag aTag((LanguageType(nParam)));
+        LanguageTag aTag((LanguageType(static_cast<sal_uInt16>(nParam))));
         auto pValue = std::make_shared<RTFValue>(aTag.getBcp47());
         putNestedAttribute(m_aStates.top().aCharacterSprms, NS_ooxml::LN_EG_RPrBase_lang, nSprm,
                            pValue);
@@ -371,13 +371,13 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
             }
             break;
         case RTF_RED:
-            m_aStates.top().aCurrentColor.nRed = nParam;
+            m_aStates.top().aCurrentColor.SetRed(nParam);
             break;
         case RTF_GREEN:
-            m_aStates.top().aCurrentColor.nGreen = nParam;
+            m_aStates.top().aCurrentColor.SetGreen(nParam);
             break;
         case RTF_BLUE:
-            m_aStates.top().aCurrentColor.nBlue = nParam;
+            m_aStates.top().aCurrentColor.SetBlue(nParam);
             break;
         case RTF_FCHARSET:
         {
@@ -417,7 +417,7 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         case RTF_CF:
         {
             RTFSprms aAttributes;
-            auto pValue = std::make_shared<RTFValue>(getColorTable(nParam));
+            auto pValue = std::make_shared<RTFValue>(sal_uInt32(getColorTable(nParam)));
             aAttributes.set(NS_ooxml::LN_CT_Color_val, pValue);
             m_aStates.top().aCharacterSprms.set(NS_ooxml::LN_EG_RPrBase_color,
                                                 std::make_shared<RTFValue>(aAttributes));
@@ -505,7 +505,8 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         break;
         case RTF_CHCBPAT:
         {
-            auto pValue = std::make_shared<RTFValue>(nParam ? getColorTable(nParam) : COL_AUTO);
+            auto pValue
+                = std::make_shared<RTFValue>(sal_uInt32(nParam ? getColorTable(nParam) : COL_AUTO));
             putNestedAttribute(m_aStates.top().aCharacterSprms, NS_ooxml::LN_EG_RPrBase_shd,
                                NS_ooxml::LN_CT_Shd_fill, pValue);
         }
@@ -513,7 +514,7 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         case RTF_CLCBPAT:
         case RTF_CLCBPATRAW:
         {
-            auto pValue = std::make_shared<RTFValue>(getColorTable(nParam));
+            auto pValue = std::make_shared<RTFValue>(sal_uInt32(getColorTable(nParam)));
             putNestedAttribute(m_aStates.top().aTableCellSprms, NS_ooxml::LN_CT_TcPrBase_shd,
                                NS_ooxml::LN_CT_Shd_fill, pValue);
         }
@@ -521,20 +522,21 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         case RTF_CBPAT:
             if (nParam)
             {
-                auto pValue = std::make_shared<RTFValue>(getColorTable(nParam));
+                auto pValue = std::make_shared<RTFValue>(sal_uInt32(getColorTable(nParam)));
                 putNestedAttribute(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PrBase_shd,
                                    NS_ooxml::LN_CT_Shd_fill, pValue);
             }
             break;
         case RTF_ULC:
         {
-            auto pValue = std::make_shared<RTFValue>(getColorTable(nParam));
+            auto pValue = std::make_shared<RTFValue>(sal_uInt32(getColorTable(nParam)));
             m_aStates.top().aCharacterSprms.set(0x6877, pValue);
         }
         break;
         case RTF_HIGHLIGHT:
         {
-            auto pValue = std::make_shared<RTFValue>(nParam ? getColorTable(nParam) : COL_AUTO);
+            auto pValue
+                = std::make_shared<RTFValue>(sal_uInt32(nParam ? getColorTable(nParam) : COL_AUTO));
             m_aStates.top().aCharacterSprms.set(NS_ooxml::LN_EG_RPrBase_highlight, pValue);
         }
         break;
@@ -557,7 +559,8 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         break;
         case RTF_EXPND:
         {
-            auto pValue = std::make_shared<RTFValue>(nParam / 5);
+            // Convert quarter-points to twentieths of a point
+            auto pValue = std::make_shared<RTFValue>(nParam * 5);
             m_aStates.top().aCharacterSprms.set(NS_ooxml::LN_EG_RPrBase_spacing, pValue);
         }
         break;
@@ -625,7 +628,7 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         break;
         case RTF_BRDRCF:
         {
-            auto pValue = std::make_shared<RTFValue>(getColorTable(nParam));
+            auto pValue = std::make_shared<RTFValue>(sal_uInt32(getColorTable(nParam)));
             putBorderProperty(m_aStates, NS_ooxml::LN_CT_Border_color, pValue);
         }
         break;
@@ -670,8 +673,14 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
             if (m_aStates.top().eDestination == Destination::LISTOVERRIDEENTRY)
                 m_aStates.top().aTableAttributes.set(NS_ooxml::LN_CT_AbstractNum_nsid, pIntValue);
             else
+            {
+                // Insert at the start, so properties inherited from the list
+                // can be overridden by direct formatting. But still allow the
+                // case when old-style paragraph numbering is already
+                // tokenized.
                 putNestedSprm(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PPrBase_numPr,
-                              NS_ooxml::LN_CT_NumPr_numId, pIntValue);
+                              NS_ooxml::LN_CT_NumPr_numId, pIntValue, RTFOverwrite::YES_PREPEND);
+            }
         }
         break;
         case RTF_UC:
@@ -1473,8 +1482,17 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
         }
         case RTF_LI:
         {
-            putNestedAttribute(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PPrBase_ind,
-                               NS_ooxml::LN_CT_Ind_left, pIntValue);
+            if (m_aStates.top().eDestination == Destination::LISTLEVEL)
+            {
+                if (m_aStates.top().bLevelNumbersValid)
+                    putNestedAttribute(m_aStates.top().aTableSprms, NS_ooxml::LN_CT_PPrBase_ind,
+                                       NS_ooxml::LN_CT_Ind_left, pIntValue);
+            }
+            else
+            {
+                putNestedAttribute(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PPrBase_ind,
+                                   NS_ooxml::LN_CT_Ind_left, pIntValue);
+            }
             // It turns out \li should reset the \fi inherited from the stylesheet.
             // So set the direct formatting to zero, if we don't have such direct formatting yet.
             putNestedAttribute(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PPrBase_ind,

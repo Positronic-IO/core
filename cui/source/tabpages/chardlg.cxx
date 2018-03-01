@@ -27,7 +27,6 @@
 #include <sfx2/viewsh.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/viewfrm.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/dialmgr.hxx>
 #include <svx/dialogs.hrc>
 #include <svtools/unitconv.hxx>
@@ -44,7 +43,6 @@
 #include <editeng/fhgtitem.hxx>
 #include <editeng/shdditem.hxx>
 #include <editeng/escapementitem.hxx>
-#include <editeng/prszitem.hxx>
 #include <editeng/wrlmitem.hxx>
 #include <editeng/cmapitem.hxx>
 #include <editeng/kernitem.hxx>
@@ -466,7 +464,7 @@ namespace
                     sal_uInt16 _nFontHeightWhich)
     {
         Size aSize = _rFont.GetFontSize();
-        aSize.Width() = 0;
+        aSize.setWidth( 0 );
         FontMetric aFontMetrics;
         OUString sFontName(_pFontNameLB->GetText());
         bool bFontAvailable = _pFontList->IsAvailable( sFontName );
@@ -499,13 +497,13 @@ namespace
                 nHeight = static_cast<long>(rOldItem.GetHeight() * _pFontSizeLB->GetValue() / 100);
 
             // conversion twips for the example-window
-            aSize.Height() =
-                ItemToControl( nHeight, _pPage->GetItemSet().GetPool()->GetMetric( _nFontHeightWhich ), FUNIT_TWIP );
+            aSize.setHeight(
+                ItemToControl( nHeight, _pPage->GetItemSet().GetPool()->GetMetric( _nFontHeightWhich ), FUNIT_TWIP ) );
         }
         else if ( !_pFontSizeLB->GetText().isEmpty() )
-            aSize.Height() = PointToTwips( static_cast<long>(_pFontSizeLB->GetValue() / 10) );
+            aSize.setHeight( PointToTwips( static_cast<long>(_pFontSizeLB->GetValue() / 10) ) );
         else
-            aSize.Height() = 200;   // default 10pt
+            aSize.setHeight( 200 );   // default 10pt
         aFontMetrics.SetFontSize( aSize );
 
         _rFont.SetLanguage(_pLanguageLB->GetSelectLanguage());
@@ -531,11 +529,11 @@ void SvxCharNamePage::UpdatePreview_Impl()
     SvxFont& rCTLFont = GetPreviewCTLFont();
     // Size
     Size aSize = rFont.GetFontSize();
-    aSize.Width() = 0;
+    aSize.setWidth( 0 );
     Size aCJKSize = rCJKFont.GetFontSize();
-    aCJKSize.Width() = 0;
+    aCJKSize.setWidth( 0 );
     Size aCTLSize = rCTLFont.GetFontSize();
-    aCTLSize.Width() = 0;
+    aCTLSize.setWidth( 0 );
     // Font
     const FontList* pFontList = GetFontList();
 
@@ -1041,14 +1039,8 @@ bool SvxCharNamePage::FillItemSet_Impl( SfxItemSet& rSet, LanguageGroup eLangGrp
 
     if ( pSizeBox->GetText().isEmpty() )   // GetValue() returns the min-value
         nSize = 0;
-    long nSavedSize = pSizeBox->GetSavedValue().toInt32();
-    bool bRel = true;
-
-    if ( !pSizeBox->IsRelative() )
-    {
-        nSavedSize *= 10;
-        bRel = false;
-    }
+    long nSavedSize = static_cast<long>(pSizeBox->GetSavedIntValue());
+    const bool bRel = pSizeBox->IsRelative();
 
     switch ( eLangGrp )
     {
@@ -1377,10 +1369,10 @@ void SvxCharEffectsPage::EnableNoneFontColor()
 
 Color SvxCharEffectsPage::GetPreviewFontColor(const Color& rColor) const
 {
-    if (rColor.GetColor() == COL_AUTO)
-        return Color(COL_BLACK);
-    if (m_bEnableNoneFontColor && rColor.GetColor() == COL_NONE_COLOR)
-        return Color(COL_BLACK);
+    if (rColor == COL_AUTO)
+        return COL_BLACK;
+    if (m_bEnableNoneFontColor && rColor == COL_NONE_COLOR)
+        return COL_BLACK;
     return rColor;
 }
 
@@ -1771,7 +1763,7 @@ void SvxCharEffectsPage::Reset( const SfxItemSet* rSet )
             }
             else
             {
-                m_pUnderlineColorLB->SelectEntry(Color(COL_AUTO));
+                m_pUnderlineColorLB->SelectEntry(COL_AUTO);
                 m_pUnderlineColorLB->Disable();
             }
         }
@@ -1815,7 +1807,7 @@ void SvxCharEffectsPage::Reset( const SfxItemSet* rSet )
             }
             else
             {
-                m_pOverlineColorLB->SelectEntry(Color(COL_AUTO));
+                m_pOverlineColorLB->SelectEntry(COL_AUTO);
                 m_pOverlineColorLB->Disable();
             }
         }

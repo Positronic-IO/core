@@ -56,6 +56,7 @@
 #include <i18nlangtag/lang.h>
 #include <rtl/ref.hxx>
 #include <LibreOfficeKit/LibreOfficeKitTypes.h>
+#include <o3tl/deleter.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
 #include <memory>
@@ -225,8 +226,8 @@ class ImpEditView : public vcl::unohelper::DragAndDropClient
 
 private:
     EditView*                 pEditView;
-    vcl::Cursor*              pCursor;
-    Color*                    pBackgroundColor;
+    std::unique_ptr<vcl::Cursor, o3tl::default_delete<vcl::Cursor>>  pCursor;
+    std::unique_ptr<Color>    pBackgroundColor;
     /// Containing view shell, if any.
     OutlinerViewShell*        mpViewShell;
     /// An other shell, just listening to our state, if any.
@@ -234,7 +235,7 @@ private:
     EditEngine*               pEditEngine;
     VclPtr<vcl::Window>       pOutWin;
     EditView::OutWindowSet    aOutWindowSet;
-    Pointer*                  pPointer;
+    std::unique_ptr<Pointer>  pPointer;
     std::unique_ptr<DragAndDropInfo>  pDragAndDropInfo;
 
     css::uno::Reference< css::datatransfer::dnd::XDragSourceListener > mxDnDListener;
@@ -436,7 +437,7 @@ private:
     EditEngine*         pEditEngine;
     ViewsType           aEditViews;
     EditView*           pActiveView;
-    TextRanger*         pTextRanger;
+    std::unique_ptr<TextRanger> pTextRanger;
 
     SfxStyleSheetPool*  pStylePool;
     SfxItemPool*        pTextObjectPool;
@@ -446,13 +447,13 @@ private:
     VclPtr<VirtualDevice> mpOwnDev;
 
     svtools::ColorConfig maColorConfig;
-    mutable SvtCTLOptions*  pCTLOptions;
+    mutable std::unique_ptr<SvtCTLOptions> pCTLOptions;
 
     std::unique_ptr<SfxItemSet> pEmptyItemSet;
     EditUndoManager*    pUndoManager;
     ESelection*         pUndoMarkSelection;
 
-    ImplIMEInfos*       mpIMEInfos;
+    std::unique_ptr<ImplIMEInfos> mpIMEInfos;
 
     std::vector<EENotify> aNotifyCache;
 
@@ -474,7 +475,7 @@ private:
     sal_Int32          nBigTextObjectStart;
     css::uno::Reference< css::linguistic2::XSpellChecker1 > xSpeller;
     css::uno::Reference< css::linguistic2::XHyphenator >    xHyphenator;
-    SpellInfo*          pSpellInfo;
+    std::unique_ptr<SpellInfo> pSpellInfo;
     mutable css::uno::Reference < css::i18n::XBreakIterator > xBI;
     mutable css::uno::Reference < css::i18n::XExtendedInputSequenceChecker > xISC;
 
@@ -535,6 +536,7 @@ private:
     bool            bFirstWordCapitalization:1;   // specifies if auto-correction should capitalize the first word or not
     bool            mbLastTryMerge:1;
     bool            mbReplaceLeadingSingleQuotationMark:1;
+    bool            mbHoriAlignIgnoreTrailingWhitespace:1;
 
     bool            mbNbspRunNext;  // can't be a bitfield as it is passed as bool&
 
@@ -708,7 +710,7 @@ private:
     void ImplUpdateOverflowingParaNum( sal_uInt32 );
     void ImplUpdateOverflowingLineNum( sal_uInt32, sal_uInt32, sal_uInt32 );
 
-    SpellInfo *     CreateSpellInfo( bool bMultipleDocs );
+    void CreateSpellInfo( bool bMultipleDocs );
     /// Obtains a view shell ID from the active EditView.
     ViewShellId CreateViewShellId();
 
@@ -758,8 +760,8 @@ public:
     sal_uInt8               GetRightToLeft( sal_Int32 nPara, sal_Int32 nChar, sal_Int32* pStart = nullptr, sal_Int32* pEnd = nullptr );
     bool                    HasDifferentRTLLevels( const ContentNode* pNode );
 
-    void                    SetTextRanger( TextRanger* pRanger );
-    TextRanger*             GetTextRanger() const { return pTextRanger; }
+    void                    SetTextRanger( std::unique_ptr<TextRanger> pRanger );
+    TextRanger*             GetTextRanger() const { return pTextRanger.get(); }
 
     const Size&             GetMinAutoPaperSize() const             { return aMinAutoPaperSize; }
     void                    SetMinAutoPaperSize( const Size& rSz )  { aMinAutoPaperSize = rSz; }
@@ -832,7 +834,7 @@ public:
     sal_uInt32      GetTextHeight() const;
     sal_uInt32      GetTextHeightNTP() const;
     sal_uInt32      CalcTextWidth( bool bIgnoreExtraSpace );
-    sal_uInt32      CalcLineWidth( ParaPortion* pPortion, EditLine* pLine, bool bIgnoreExtraSpace );
+    sal_uInt32      CalcLineWidth( ParaPortion* pPortion, EditLine* pLine, bool bIgnoreExtraSpace, bool bIgnoreTrailingWhiteSpaces = false );
     sal_Int32       GetLineCount( sal_Int32 nParagraph ) const;
     sal_Int32       GetLineLen( sal_Int32 nParagraph, sal_Int32 nLine ) const;
     void            GetLineBoundaries( /*out*/sal_Int32& rStart, /*out*/sal_Int32& rEnd, sal_Int32 nParagraph, sal_Int32 nLine ) const;
@@ -942,7 +944,7 @@ public:
     void GetAllMisspellRanges( std::vector<editeng::MisspellRanges>& rRanges ) const;
     void SetAllMisspellRanges( const std::vector<editeng::MisspellRanges>& rRanges );
 
-    SpellInfo*          GetSpellInfo() const { return pSpellInfo; }
+    SpellInfo*          GetSpellInfo() const { return pSpellInfo.get(); }
 
     void                SetDefaultLanguage( LanguageType eLang ) { eDefLanguage = eLang; }
     LanguageType        GetDefaultLanguage() const { return eDefLanguage; }
@@ -1063,6 +1065,10 @@ public:
     bool            IsNbspRunNext() const { return mbNbspRunNext; }
 
     void Dispose();
+
+    // tdf#115639 compatibility flag
+    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled) { mbHoriAlignIgnoreTrailingWhitespace = bEnabled; }
+    bool IsHoriAlignIgnoreTrailingWhitespace() const { return mbHoriAlignIgnoreTrailingWhitespace; }
 };
 
 inline EPaM ImpEditEngine::CreateEPaM( const EditPaM& rPaM )
@@ -1213,19 +1219,17 @@ inline const Pointer& ImpEditView::GetPointer()
 {
     if ( !pPointer )
     {
-        pPointer = new Pointer( IsVertical() ? PointerStyle::TextVertical : PointerStyle::Text );
+        pPointer.reset( new Pointer( IsVertical() ? PointerStyle::TextVertical : PointerStyle::Text ) );
         return *pPointer;
     }
 
     if(PointerStyle::Text == pPointer->GetStyle() && IsVertical())
     {
-        delete pPointer;
-        pPointer = new Pointer(PointerStyle::TextVertical);
+        pPointer.reset( new Pointer(PointerStyle::TextVertical) );
     }
     else if(PointerStyle::TextVertical == pPointer->GetStyle() && !IsVertical())
     {
-        delete pPointer;
-        pPointer = new Pointer(PointerStyle::Text);
+        pPointer.reset( new Pointer(PointerStyle::Text) );
     }
 
     return *pPointer;
@@ -1234,8 +1238,8 @@ inline const Pointer& ImpEditView::GetPointer()
 inline vcl::Cursor* ImpEditView::GetCursor()
 {
     if ( !pCursor )
-        pCursor = new vcl::Cursor;
-    return pCursor;
+        pCursor.reset( new vcl::Cursor );
+    return pCursor.get();
 }
 
 void ConvertItem( SfxPoolItem& rPoolItem, MapUnit eSourceUnit, MapUnit eDestUnit );

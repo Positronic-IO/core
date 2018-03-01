@@ -706,10 +706,7 @@ sal_uInt32 XclExpChEscherFormat::RegisterColor( sal_uInt16 nPropId )
     if( maData.mxEscherSet && maData.mxEscherSet->GetOpt( nPropId, nBGRValue ) )
     {
         // swap red and blue
-        Color aColor( RGB_COLORDATA(
-            COLORDATA_BLUE( nBGRValue ),
-            COLORDATA_GREEN( nBGRValue ),
-            COLORDATA_RED( nBGRValue ) ) );
+        Color aColor( nBGRValue & 0xff, (nBGRValue >> 8) & 0xff, (nBGRValue >> 16) & 0xff );
         return GetPalette().InsertColor( aColor, EXC_COLOR_CHARTAREA );
     }
     return XclExpPalette::GetColorIdFromIndex( EXC_COLOR_CHWINDOWBACK );
@@ -2374,8 +2371,7 @@ void XclExpChLegend::WriteBody( XclExpStream& rStrm )
 
 XclExpChDropBar::XclExpChDropBar( const XclExpChRoot& rRoot, XclChObjectType eObjType ) :
     XclExpChGroupBase( rRoot, EXC_CHFRBLOCK_TYPE_DROPBAR, EXC_ID_CHDROPBAR, 2 ),
-    meObjType( eObjType ),
-    mnBarDist( 100 )
+    meObjType( eObjType )
 {
 }
 
@@ -2394,7 +2390,7 @@ void XclExpChDropBar::WriteSubRecords( XclExpStream& rStrm )
 
 void XclExpChDropBar::WriteBody( XclExpStream& rStrm )
 {
-    rStrm << mnBarDist;
+    rStrm << sal_uInt16(100); // Distance between bars (CHDROPBAR record).
 }
 
 XclExpChTypeGroup::XclExpChTypeGroup( const XclExpChRoot& rRoot, sal_uInt16 nGroupIdx ) :
@@ -2748,14 +2744,19 @@ void XclExpChValueRange::Convert( const ScaleData& rScaleData )
 
     // major increment
     const IncrementData& rIncrementData = rScaleData.IncrementData;
-    bool bAutoMajor = lclIsAutoAnyOrGetValue( maData.mfMajorStep, rIncrementData.Distance ) || (maData.mfMajorStep <= 0.0);
+    const bool bAutoMajor = lclIsAutoAnyOrGetValue( maData.mfMajorStep, rIncrementData.Distance ) || (maData.mfMajorStep <= 0.0);
     ::set_flag( maData.mnFlags, EXC_CHVALUERANGE_AUTOMAJOR, bAutoMajor );
     // minor increment
     const Sequence< SubIncrement >& rSubIncrementSeq = rIncrementData.SubIncrements;
     sal_Int32 nCount = 0;
-    bool bAutoMinor = bLogScale || bAutoMajor || (rSubIncrementSeq.getLength() < 1) ||
-        lclIsAutoAnyOrGetValue( nCount, rSubIncrementSeq[ 0 ].IntervalCount ) || (nCount < 1);
-    if( !bAutoMinor )
+
+    // tdf#114168 If IntervalCount is 5, then enable automatic minor calculation.
+    // During import, if minorUnit is set and majorUnit not, then it is impossible
+    // to calculate IntervalCount.
+    const bool bAutoMinor = bLogScale || bAutoMajor || (rSubIncrementSeq.getLength() < 1) ||
+        lclIsAutoAnyOrGetValue( nCount, rSubIncrementSeq[ 0 ].IntervalCount ) || (nCount < 1) || (nCount == 5);
+
+    if( maData.mfMajorStep && !bAutoMinor )
         maData.mfMinorStep = maData.mfMajorStep / nCount;
     ::set_flag( maData.mnFlags, EXC_CHVALUERANGE_AUTOMINOR, bAutoMinor );
 

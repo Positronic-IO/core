@@ -1693,19 +1693,17 @@ bool SwNodes::TableToText( const SwNodeRange& rRange, sal_Unicode cCh,
 /**
  * Inserting Columns/Rows
  */
-bool SwDoc::InsertCol( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
+void SwDoc::InsertCol( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
 {
     if( !::CheckSplitCells( rCursor, nCnt + 1, SwTableSearchType::Col ) )
-        return false;
+        return;
 
     // Find the Boxes via the Layout
     SwSelBoxes aBoxes;
     ::GetTableSel( rCursor, aBoxes, SwTableSearchType::Col );
 
-    bool bRet = false;
     if( !aBoxes.empty() )
-        bRet = InsertCol( aBoxes, nCnt, bBehind );
-    return bRet;
+        InsertCol( aBoxes, nCnt, bBehind );
 }
 
 bool SwDoc::InsertCol( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
@@ -1758,16 +1756,14 @@ bool SwDoc::InsertCol( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
     return bRet;
 }
 
-bool SwDoc::InsertRow( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
+void SwDoc::InsertRow( const SwCursor& rCursor, sal_uInt16 nCnt, bool bBehind )
 {
     // Find the Boxes via the Layout
     SwSelBoxes aBoxes;
     GetTableSel( rCursor, aBoxes, SwTableSearchType::Row );
 
-    bool bRet = false;
     if( !aBoxes.empty() )
-        bRet = InsertRow( aBoxes, nCnt, bBehind );
-    return bRet;
+        InsertRow( aBoxes, nCnt, bBehind );
 }
 
 bool SwDoc::InsertRow( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
@@ -1824,13 +1820,13 @@ bool SwDoc::InsertRow( const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
 /**
  * Deleting Columns/Rows
  */
-bool SwDoc::DeleteRow( const SwCursor& rCursor )
+void SwDoc::DeleteRow( const SwCursor& rCursor )
 {
     // Find the Boxes via the Layout
     SwSelBoxes aBoxes;
     GetTableSel( rCursor, aBoxes, SwTableSearchType::Row );
     if( ::HasProtectedCells( aBoxes ))
-        return false;
+        return;
 
     // Remove the Cursor from the to-be-deleted Section.
     // The Cursor is placed after the table, except for
@@ -1840,7 +1836,7 @@ bool SwDoc::DeleteRow( const SwCursor& rCursor )
         SwTableNode* pTableNd = rCursor.GetNode().FindTableNode();
 
         if(dynamic_cast<const SwDDETable*>( & pTableNd->GetTable()) !=  nullptr)
-            return false;
+            return;
 
         // Find all Boxes/Lines
         FndBox_ aFndBox( nullptr, nullptr );
@@ -1850,7 +1846,7 @@ bool SwDoc::DeleteRow( const SwCursor& rCursor )
         }
 
         if( aFndBox.GetLines().empty() )
-            return false;
+            return;
 
         SwEditShell* pESh = GetEditShell();
         if( pESh )
@@ -1920,19 +1916,17 @@ bool SwDoc::DeleteRow( const SwCursor& rCursor )
 
     // Thus delete the Rows
     GetIDocumentUndoRedo().StartUndo(SwUndoId::ROW_DELETE, nullptr);
-    bool bResult = DeleteRowCol( aBoxes );
+    DeleteRowCol( aBoxes );
     GetIDocumentUndoRedo().EndUndo(SwUndoId::ROW_DELETE, nullptr);
-
-    return bResult;
 }
 
-bool SwDoc::DeleteCol( const SwCursor& rCursor )
+void SwDoc::DeleteCol( const SwCursor& rCursor )
 {
     // Find the Boxes via the Layout
     SwSelBoxes aBoxes;
     GetTableSel( rCursor, aBoxes, SwTableSearchType::Col );
     if( ::HasProtectedCells( aBoxes ))
-        return false;
+        return;
 
     // The Cursors need to be removed from the to-be-deleted range.
     // Always place them after/on top of the Table; they are always set
@@ -1946,10 +1940,8 @@ bool SwDoc::DeleteCol( const SwCursor& rCursor )
 
     // Thus delete the Columns
     GetIDocumentUndoRedo().StartUndo(SwUndoId::COL_DELETE, nullptr);
-    bool bResult = DeleteRowCol( aBoxes, true );
+    DeleteRowCol( aBoxes, true );
     GetIDocumentUndoRedo().EndUndo(SwUndoId::COL_DELETE, nullptr);
-
-    return bResult;
 }
 
 bool SwDoc::DeleteRowCol( const SwSelBoxes& rBoxes, bool bColumn )
@@ -3949,10 +3941,10 @@ SwTableFormat* SwDoc::FindTableFormatByName( const OUString& rName, bool bAll ) 
     return const_cast<SwTableFormat*>(static_cast<const SwTableFormat*>(pRet));
 }
 
-bool SwDoc::SetColRowWidthHeight( SwTableBox& rAktBox, TableChgWidthHeightType eType,
+bool SwDoc::SetColRowWidthHeight( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
                                     SwTwips nAbsDiff, SwTwips nRelDiff )
 {
-    SwTableNode* pTableNd = const_cast<SwTableNode*>(rAktBox.GetSttNd()->FindTableNode());
+    SwTableNode* pTableNd = const_cast<SwTableNode*>(rCurrentBox.GetSttNd()->FindTableNode());
     SwUndo* pUndo = nullptr;
 
     if( (TableChgWidthHeightType::InsertDeleteMode & eType) && dynamic_cast<const SwDDETable*>( &pTableNd->GetTable()) !=  nullptr)
@@ -3971,7 +3963,7 @@ bool SwDoc::SetColRowWidthHeight( SwTableBox& rAktBox, TableChgWidthHeightType e
     case TableChgWidthHeightType::CellLeft:
     case TableChgWidthHeightType::CellRight:
         {
-             bRet = pTableNd->GetTable().SetColWidth( rAktBox,
+             bRet = pTableNd->GetTable().SetColWidth( rCurrentBox,
                                 eType, nAbsDiff, nRelDiff,
                                 bUndo ? &pUndo : nullptr );
         }
@@ -3980,7 +3972,7 @@ bool SwDoc::SetColRowWidthHeight( SwTableBox& rAktBox, TableChgWidthHeightType e
     case TableChgWidthHeightType::RowBottom:
     case TableChgWidthHeightType::CellTop:
     case TableChgWidthHeightType::CellBottom:
-        bRet = pTableNd->GetTable().SetRowHeight( rAktBox,
+        bRet = pTableNd->GetTable().SetRowHeight( rCurrentBox,
                             eType, nAbsDiff, nRelDiff,
                             bUndo ? &pUndo : nullptr );
         break;
@@ -4450,7 +4442,7 @@ bool SwDoc::UnProtectTableCells( SwTable& rTable )
     return bChgd;
 }
 
-bool SwDoc::UnProtectCells( const OUString& rName )
+void SwDoc::UnProtectCells( const OUString& rName )
 {
     bool bChgd = false;
     SwTableFormat* pFormat = FindTableFormatByName( rName );
@@ -4460,8 +4452,6 @@ bool SwDoc::UnProtectCells( const OUString& rName )
         if( bChgd )
             getIDocumentState().SetModified();
     }
-
-    return bChgd;
 }
 
 bool SwDoc::UnProtectCells( const SwSelBoxes& rBoxes )
@@ -4508,7 +4498,7 @@ bool SwDoc::UnProtectCells( const SwSelBoxes& rBoxes )
     return bChgd;
 }
 
-bool SwDoc::UnProtectTables( const SwPaM& rPam )
+void SwDoc::UnProtectTables( const SwPaM& rPam )
 {
     GetIDocumentUndoRedo().StartUndo(SwUndoId::EMPTY, nullptr);
 
@@ -4547,8 +4537,6 @@ bool SwDoc::UnProtectTables( const SwPaM& rPam )
     GetIDocumentUndoRedo().EndUndo(SwUndoId::EMPTY, nullptr);
     if( bChgd )
         getIDocumentState().SetModified();
-
-    return bChgd;
 }
 
 bool SwDoc::HasTableAnyProtection( const SwPosition* pPos,

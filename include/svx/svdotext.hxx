@@ -28,11 +28,12 @@
 #include <svl/style.hxx>
 #include <svx/xtextit0.hxx>
 #include <svx/svdtext.hxx>
-#include <vector>
 #include <svx/svxdllapi.h>
 #include <drawinglayer/primitive2d/baseprimitive2d.hxx>
 #include <svx/svdpagv.hxx>
 #include <rtl/ref.hxx>
+#include <memory>
+#include <vector>
 
 
 //   forward declarations
@@ -185,7 +186,7 @@ protected:
     GeoStat                     aGeo;
 
     // this is the active text
-    SdrText*                    mpText;
+    std::unique_ptr<SdrText>    mpText;
 
     // This contains the dimensions of the text
     Size                        aTextSize;
@@ -211,6 +212,7 @@ protected:
     Point                       maTextEditOffset;
 
     virtual SdrObject* getFullDragClone() const override;
+
 
 public:
     const Point& GetTextEditOffset() const { return maTextEditOffset; }
@@ -263,7 +265,7 @@ private:
                                        tools::Rectangle&       rTextRect,
                                        tools::Rectangle&       rAnchorRect,
                                        tools::Rectangle&       rPaintRect,
-                                       Fraction&        aFitXKorreg ) const;
+                                       Fraction&        aFitXCorrection ) const;
     void ImpAutoFitText( SdrOutliner& rOutliner ) const;
     static void ImpAutoFitText( SdrOutliner& rOutliner, const Size& rShapeSize, bool bIsVerticalWriting );
     SVX_DLLPRIVATE SdrObject* ImpConvertContainedTextToSdrPathObjs(bool bToPoly) const;
@@ -283,7 +285,7 @@ protected:
     SdrObject* ImpConvertMakeObj(const basegfx::B2DPolyPolygon& rPolyPolygon, bool bClosed, bool bBezier) const;
     SdrObject* ImpConvertAddText(SdrObject* pObj, bool bBezier) const;
     void ImpSetTextStyleSheetListeners();
-    static void ImpSetCharStretching(SdrOutliner& rOutliner, const Size& rTextSize, const Size& rShapeSize, Fraction& rFitXKorreg);
+    static void ImpSetCharStretching(SdrOutliner& rOutliner, const Size& rTextSize, const Size& rShapeSize, Fraction& rFitXCorrection);
     static void ImpJustifyRect(tools::Rectangle& rRect);
     void ImpCheckShear();
     tools::Rectangle ImpDragCalcRect(const SdrDragStat& rDrag) const;
@@ -384,6 +386,7 @@ public:
     // FitToSize and Fontwork are not taken into account in GetTextSize()!
     virtual const Size& GetTextSize() const;
     void FitFrameToTextSize();
+    double GetFontScaleY() const;
 
     // Simultaneously sets the text into the Outliner (possibly
     // the one of the EditOutliner) and sets the PaperSize.

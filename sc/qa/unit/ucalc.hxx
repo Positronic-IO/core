@@ -216,6 +216,7 @@ public:
     void testFuncMDETERM();
     void testFuncSUMIFS();
     void testFuncRefListArraySUBTOTAL();
+    void testFuncJumpMatrixArrayIF();
     void testMatConcat();
     void testMatConcatReplication();
     void testRefR1C1WholeCol();
@@ -462,6 +463,7 @@ public:
     void testSortBroadcastBroadcaster();
     void testSortOutOfPlaceResult();
     void testSortPartialFormulaGroup();
+    void testSortImages();
 
     void testNoteBasic();
     void testNoteDeleteRow();
@@ -512,6 +514,8 @@ public:
     void testCondFormatEndsWithVal();
 
     void testCondFormatUndoList();
+    void testMultipleSingleCellCondFormatCopyPaste();
+    void testDeduplicateMultipleCondFormats();
 
     void testImportStream();
     void testDeleteContents();
@@ -634,6 +638,7 @@ public:
     CPPUNIT_TEST(testFuncMDETERM);
     CPPUNIT_TEST(testFuncSUMIFS);
     CPPUNIT_TEST(testFuncRefListArraySUBTOTAL);
+    CPPUNIT_TEST(testFuncJumpMatrixArrayIF);
     CPPUNIT_TEST(testMatConcat);
     CPPUNIT_TEST(testMatConcatReplication);
     CPPUNIT_TEST(testExternalRef);
@@ -764,6 +769,7 @@ public:
     CPPUNIT_TEST(testSortBroadcastBroadcaster);
     CPPUNIT_TEST(testSortOutOfPlaceResult);
     CPPUNIT_TEST(testSortPartialFormulaGroup);
+    CPPUNIT_TEST(testSortImages);
     CPPUNIT_TEST(testShiftCells);
     CPPUNIT_TEST(testNoteBasic);
     CPPUNIT_TEST(testNoteDeleteRow);
@@ -791,6 +797,8 @@ public:
     CPPUNIT_TEST(testCondFormatUpdateReferenceDelRow);
     CPPUNIT_TEST(testCondFormatUpdateReferenceInsRow);
     CPPUNIT_TEST(testCondFormatUndoList);
+    CPPUNIT_TEST(testMultipleSingleCellCondFormatCopyPaste);
+    CPPUNIT_TEST(testDeduplicateMultipleCondFormats);
     CPPUNIT_TEST(testIconSet);
     CPPUNIT_TEST(testDataBarLengthAutomaticAxis);
     CPPUNIT_TEST(testDataBarLengthMiddleAxis);

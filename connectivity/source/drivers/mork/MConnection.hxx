@@ -10,7 +10,6 @@
 #ifndef INCLUDED_CONNECTIVITY_SOURCE_DRIVERS_MORK_MCONNECTION_HXX
 #define INCLUDED_CONNECTIVITY_SOURCE_DRIVERS_MORK_MCONNECTION_HXX
 
-#include <connectivity/OSubComponent.hxx>
 #include <TConnection.hxx>
 #include "MColumnAlias.hxx"
 
@@ -28,20 +27,17 @@ namespace connectivity
 
         typedef connectivity::OMetaConnection OConnection_BASE; // implements basics and text encoding
 
-        class OConnection final : public OConnection_BASE,
-                            public connectivity::OSubComponent<OConnection, OConnection_BASE>
+        class OConnection final : public OConnection_BASE
         {
-            friend class connectivity::OSubComponent<OConnection, OConnection_BASE>;
-
             // Data attributes
 
             rtl::Reference<MorkDriver> m_xDriver;              //  Pointer to the owning
                                                                //  driver object
             OColumnAlias    m_aColumnAlias;
             // Mork Parser (abook)
-            MorkParser* m_pBook;
+            std::unique_ptr<MorkParser> m_pBook;
             // Mork Parser (history)
-            MorkParser* m_pHistory;
+            std::unique_ptr<MorkParser> m_pHistory;
             // Store Catalog
             css::uno::Reference< css::sdbcx::XTablesSupplier> m_xCatalog;
 
@@ -52,12 +48,10 @@ namespace connectivity
             virtual ~OConnection() override;
 
             const rtl::Reference<MorkDriver>& getDriver() {return m_xDriver;};
-            MorkParser* getMorkParser(const OString& t) {return t == "CollectedAddressBook" ? m_pHistory : m_pBook;};
+            MorkParser* getMorkParser(const OString& t) {return t == "CollectedAddressBook" ? m_pHistory.get() : m_pBook.get();};
 
             // OComponentHelper
             virtual void SAL_CALL disposing() override;
-            // XInterface
-            virtual void SAL_CALL release() throw() override;
 
             // XServiceInfo
             DECLARE_SERVICE_INFO();

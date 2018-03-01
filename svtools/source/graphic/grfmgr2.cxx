@@ -468,6 +468,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                         nSinY = pSinY[ y ];
                         nCosY = pCosY[ y ];
 
+                        Scanline pScanline = pWriteAccess->GetScanline( y );
                         for( x = 0; x < aTargetWidth; x++ )
                         {
                             nUnRotX = ( pCosX[ x ] - nSinY ) >> 8;
@@ -496,7 +497,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                                 aColRes.SetRed( MAP( cR0, cR1, nTmpFY ) );
                                 aColRes.SetGreen( MAP( cG0, cG1, nTmpFY ) );
                                 aColRes.SetBlue( MAP( cB0, cB1, nTmpFY ) );
-                                pWriteAccess->SetPixel( y, x, aColRes );
+                                pWriteAccess->SetPixelOnData( pScanline, x, aColRes );
                             }
                         }
                     }
@@ -510,6 +511,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                         nSinY = pSinY[ y ];
                         nCosY = pCosY[ y ];
 
+                        Scanline pScanline = pWriteAccess->GetScanline( y );
                         for( x = 0; x < aTargetWidth; x++ )
                         {
                             nUnRotX = ( pCosX[ x ] - nSinY ) >> 8;
@@ -538,7 +540,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                                 aColRes.SetRed( MAP( cR0, cR1, nTmpFY ) );
                                 aColRes.SetGreen( MAP( cG0, cG1, nTmpFY ) );
                                 aColRes.SetBlue( MAP( cB0, cB1, nTmpFY ) );
-                                pWriteAccess->SetPixel( y, x, aColRes );
+                                pWriteAccess->SetPixelOnData( pScanline, x, aColRes );
                             }
                         }
                     }
@@ -555,6 +557,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                     nSinY = pSinY[ y ];
                     nCosY = pCosY[ y ];
 
+                    Scanline pScanline = pWriteAccess->GetScanline( y );
                     for( x = 0; x < aTargetWidth; x++ )
                     {
                         double aUnrotatedX = ( pCosX[ x ] - nSinY ) / 256.0;
@@ -585,12 +588,13 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
 
                             for (int yIn = yStart; yIn <= yEnd; yIn++)
                             {
+                                Scanline pScanlineRead = pReadAccess->GetScanline( yIn );
                                 for (int xIn = xStart; xIn <= xEnd; xIn++)
                                 {
                                     if( pReadAccess->HasPalette() )
-                                        aColor = pReadAccess->GetPaletteColor( pReadAccess->GetPixelIndex( yIn, xIn ) );
+                                        aColor = pReadAccess->GetPaletteColor( pReadAccess->GetIndexFromData( pScanlineRead, xIn ) );
                                     else
-                                        aColor = pReadAccess->GetPixel( yIn, xIn );
+                                        aColor = pReadAccess->GetPixelFromData( pScanlineRead, xIn );
 
                                     aSumRed   += aColor.GetRed();
                                     aSumGreen += aColor.GetGreen();
@@ -604,7 +608,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                             aResultColor.SetGreen( MinMax( aSumGreen / aCount, 0, 255) );
                             aResultColor.SetBlue(  MinMax( aSumBlue  / aCount, 0, 255) );
 
-                            pWriteAccess->SetPixel( y, x, aResultColor );
+                            pWriteAccess->SetPixelOnData( pScanline, x, aResultColor );
                         }
                     }
                 }
@@ -681,7 +685,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                         }
                         else // scaleByAveraging
                         {
-                            const BitmapColor   aTrans( pWriteAccess->GetBestMatchingColor( Color( COL_WHITE ) ) );
+                            const BitmapColor   aTrans( pWriteAccess->GetBestMatchingColor( COL_WHITE ) );
                             BitmapColor         aResultColor( 0 );
                             double aSum, aCount;
 
@@ -689,6 +693,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                             {
                                 nSinY = pSinY[ y ];
                                 nCosY = pCosY[ y ];
+                                Scanline pScanline = pWriteAccess->GetScanline( y );
 
                                 for( x = 0; x < aTargetWidth; x++ )
                                 {
@@ -721,18 +726,19 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
 
                                         for (int yIn = yStart; yIn <= yEnd; yIn++)
                                         {
+                                            Scanline pScanlineRead = pReadAccess->GetScanline( yIn );
                                             for (int xIn = xStart; xIn <= xEnd; xIn++)
                                             {
-                                                aSum += pReadAccess->GetPixel( yIn, xIn ).GetIndex();
+                                                aSum += pReadAccess->GetPixelFromData( pScanlineRead, xIn ).GetIndex();
                                                 aCount++;
                                             }
                                         }
                                         aResultColor.SetIndex( MinMax( aSum  / aCount, 0, 255) );
-                                        pWriteAccess->SetPixel( y, x, aResultColor );
+                                        pWriteAccess->SetPixelOnData( pScanline, x, aResultColor );
                                     }
                                     else
                                     {
-                                        pWriteAccess->SetPixel( y, x, aTrans );
+                                        pWriteAccess->SetPixelOnData( pScanline, x, aTrans );
                                     }
                                 }
                             }
@@ -740,13 +746,14 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                     }
                     else
                     {
-                        const BitmapColor   aTrans( pWriteAccess->GetBestMatchingColor( Color( COL_WHITE ) ) );
+                        const BitmapColor   aTrans( pWriteAccess->GetBestMatchingColor( COL_WHITE ) );
                         BitmapColor         aAlphaVal( 0 );
 
                         for( long nY = 0; nY < aTargetHeight; nY++ )
                         {
                             nSinY = pSinY[ nY ];
                             nCosY = pCosY[ nY ];
+                            Scanline pScanline = pWriteAccess->GetScanline( nY );
 
                             for( long nX = 0; nX < aTargetWidth; nX++ )
                             {
@@ -769,10 +776,10 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                                     const long  n1 = MAP( nAlpha2, nAlpha3, nTmpFX );
 
                                     aAlphaVal.SetIndex( MAP( n0, n1, nTmpFY ) );
-                                    pWriteAccess->SetPixel( nY, nX, aAlphaVal );
+                                    pWriteAccess->SetPixelOnData( pScanline, nX, aAlphaVal );
                                 }
                                 else
-                                    pWriteAccess->SetPixel( nY, nX, aTrans );
+                                    pWriteAccess->SetPixelOnData( pScanline, nX, aTrans );
                             }
                         }
                     }
@@ -795,8 +802,8 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
             if( pWriteAccess )
             {
                 Bitmap              aMsk( rBmpEx.GetMask() );
-                const BitmapColor   aB( pWriteAccess->GetBestMatchingColor( Color( COL_BLACK ) ) );
-                const BitmapColor   aW( pWriteAccess->GetBestMatchingColor( Color( COL_WHITE ) ) );
+                const BitmapColor   aB( pWriteAccess->GetBestMatchingColor( COL_BLACK ) );
+                const BitmapColor   aW( pWriteAccess->GetBestMatchingColor( COL_WHITE ) );
                 BitmapReadAccess*   pMAcc = nullptr;
 
                 if( !aMsk || ( ( pMAcc = aMsk.AcquireReadAccess() ) != nullptr ) )
@@ -806,7 +813,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                     BitmapColor aTestB;
 
                     if( pMAcc )
-                        aTestB = pMAcc->GetBestMatchingColor( Color( COL_BLACK ) );
+                        aTestB = pMAcc->GetBestMatchingColor( COL_BLACK );
 
                     // create new horizontal mapping table
                     for( long nX = 0; nX < aUnrotatedWidth; nX++ )
@@ -821,6 +828,7 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                     {
                         nSinY = pSinY[ nY ];
                         nCosY = pCosY[ nY ];
+                        Scanline pScanline = pWriteAccess->GetScanline( nY );
 
                         for( long nX = 0; nX < aTargetWidth; nX++ )
                         {
@@ -833,15 +841,15 @@ bool ImplCreateRotatedScaled( const BitmapEx& rBmpEx, const GraphicAttr& rAttrib
                                 if( pMAcc )
                                 {
                                     if( pMAcc->GetPixel( pMapLY[ nUnRotY ], pMapLX[ nUnRotX ] ) == aTestB )
-                                        pWriteAccess->SetPixel( nY, nX, aB );
+                                        pWriteAccess->SetPixelOnData( pScanline, nX, aB );
                                     else
-                                        pWriteAccess->SetPixel( nY, nX, aW );
+                                        pWriteAccess->SetPixelOnData( pScanline, nX, aW );
                                 }
                                 else
-                                    pWriteAccess->SetPixel( nY, nX, aB );
+                                    pWriteAccess->SetPixelOnData( pScanline, nX, aB );
                             }
                             else
-                                pWriteAccess->SetPixel( nY, nX, aW );
+                                pWriteAccess->SetPixelOnData( pScanline, nX, aW );
                         }
                     }
 
@@ -913,8 +921,7 @@ bool GraphicManager::ImplCreateOutput( OutputDevice* pOutputDevice,
         // calculate output sizes
         if( !pBmpEx )
         {
-            Point       aPt;
-            tools::Rectangle   aOutRect( aPt, pOutputDevice->GetOutputSizePixel() );
+            tools::Rectangle   aOutRect( Point(), pOutputDevice->GetOutputSizePixel() );
             tools::Rectangle   aBmpRect( aOutputPointPix, aOutputSizePix );
 
             if( pOutputDevice->GetOutDevType() == OUTDEV_WINDOW )
@@ -1441,65 +1448,13 @@ void GraphicManager::ImplAdjust( BitmapEx& rBmpEx, const GraphicAttr& rAttr, Gra
 
     if( ( nAdjustmentFlags & GraphicAdjustmentFlags::ROTATE ) && aAttr.IsRotated() )
     {
-        rBmpEx.Rotate( aAttr.GetRotation(), Color( COL_TRANSPARENT ) );
+        rBmpEx.Rotate( aAttr.GetRotation(), COL_TRANSPARENT );
     }
 
-    if( !(( nAdjustmentFlags & GraphicAdjustmentFlags::TRANSPARENCY ) && aAttr.IsTransparent()) )
-        return;
-
-    AlphaMask   aAlpha;
-    sal_uInt8       cTrans = aAttr.GetTransparency();
-
-    if( !rBmpEx.IsTransparent() )
-        aAlpha = AlphaMask( rBmpEx.GetSizePixel(), &cTrans );
-    else if( !rBmpEx.IsAlpha() )
+    if( ( nAdjustmentFlags & GraphicAdjustmentFlags::TRANSPARENCY ) && aAttr.IsTransparent() )
     {
-        aAlpha = rBmpEx.GetMask();
-        aAlpha.Replace( 0, cTrans );
+        rBmpEx.AdjustTransparency(aAttr.GetTransparency());
     }
-    else
-    {
-        aAlpha = rBmpEx.GetAlpha();
-        BitmapWriteAccess* pA = aAlpha.AcquireWriteAccess();
-
-        if( pA )
-        {
-            sal_uLong       nTrans = cTrans, nNewTrans;
-            const long  nWidth = pA->Width(), nHeight = pA->Height();
-
-            if( pA->GetScanlineFormat() == ScanlineFormat::N8BitPal )
-            {
-                for( long nY = 0; nY < nHeight; nY++ )
-                {
-                    Scanline pAScan = pA->GetScanline( nY );
-
-                    for( long nX = 0; nX < nWidth; nX++ )
-                    {
-                        nNewTrans = nTrans + *pAScan;
-                        *pAScan++ = static_cast<sal_uInt8>( ( nNewTrans & 0xffffff00 ) ? 255 : nNewTrans );
-                    }
-                }
-            }
-            else
-            {
-                BitmapColor aAlphaValue( 0 );
-
-                for( long nY = 0; nY < nHeight; nY++ )
-                {
-                    for( long nX = 0; nX < nWidth; nX++ )
-                    {
-                        nNewTrans = nTrans + pA->GetPixel( nY, nX ).GetIndex();
-                        aAlphaValue.SetIndex( static_cast<sal_uInt8>( ( nNewTrans & 0xffffff00 ) ? 255 : nNewTrans ) );
-                        pA->SetPixel( nY, nX, aAlphaValue );
-                    }
-                }
-            }
-
-            aAlpha.ReleaseAccess( pA );
-        }
-    }
-
-    rBmpEx = BitmapEx( rBmpEx.GetBitmap(), aAlpha );
 }
 
 void GraphicManager::ImplAdjust( GDIMetaFile& rMtf, const GraphicAttr& rAttr, GraphicAdjustmentFlags nAdjustmentFlags )
@@ -1777,7 +1732,7 @@ bool GraphicObject::ImplRenderTileRecursive( VirtualDevice& rVDev, int nExponent
                 if (!pTileGraphic->Draw(&rVDev, aCurrPos, aTileInfo.aTileSizePixel, pAttr, nFlags))
                     return false;
 
-                aCurrPos.X() += aTileInfo.aTileSizePixel.Width();
+                aCurrPos.AdjustX(aTileInfo.aTileSizePixel.Width() );
             }
 
 #ifdef DBG_TEST
@@ -1791,14 +1746,14 @@ bool GraphicObject::ImplRenderTileRecursive( VirtualDevice& rVDev, int nExponent
 
             // now fill one column from aTileInfo.aNextTileTopLeft.Y() all
             // the way to the bottom
-            aCurrPos.X() = aTileInfo.aTileTopLeft.X();
-            aCurrPos.Y() = aTileInfo.aNextTileTopLeft.Y();
+            aCurrPos.setX( aTileInfo.aTileTopLeft.X() );
+            aCurrPos.setY( aTileInfo.aNextTileTopLeft.Y() );
             for (int nY=0; nY < aTileInfo.nTilesEmptyY; nY += nMSBFactor)
             {
                 if (!pTileGraphic->Draw(&rVDev, aCurrPos, aTileInfo.aTileSizePixel, pAttr, nFlags))
                     return false;
 
-                aCurrPos.Y() += aTileInfo.aTileSizePixel.Height();
+                aCurrPos.AdjustY(aTileInfo.aTileSizePixel.Height() );
             }
 
 #ifdef DBG_TEST
@@ -1849,7 +1804,7 @@ bool GraphicObject::ImplRenderTileRecursive( VirtualDevice& rVDev, int nExponent
     // we don't draw beyond the right or bottom border.
     for (int nY=0; nY < aTileInfo.nTilesEmptyY && nY < nExponent*nMSBFactor; nY += nMSBFactor)
     {
-        aCurrPos.X() = aTileInfo.aNextTileTopLeft.X();
+        aCurrPos.setX( aTileInfo.aNextTileTopLeft.X() );
 
         for (int nX=0; nX < aTileInfo.nTilesEmptyX && nX < nExponent*nMSBFactor; nX += nMSBFactor)
         {
@@ -1858,10 +1813,10 @@ bool GraphicObject::ImplRenderTileRecursive( VirtualDevice& rVDev, int nExponent
             else if (!pTileGraphic->Draw(&rVDev, aCurrPos, aTileInfo.aTileSizePixel, pAttr, nFlags))
                 return false;
 
-            aCurrPos.X() += aTileInfo.aTileSizePixel.Width();
+            aCurrPos.AdjustX(aTileInfo.aTileSizePixel.Width() );
         }
 
-        aCurrPos.Y() += aTileInfo.aTileSizePixel.Height();
+        aCurrPos.AdjustY(aTileInfo.aTileSizePixel.Height() );
     }
 
 #ifdef DBG_TEST
@@ -1926,7 +1881,7 @@ bool GraphicObject::ImplDrawTiled( OutputDevice* pOut, const tools::Rectangle& r
                                                 AlphaMask( aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ) ) );
                     else
                         aTileBitmap = BitmapEx( aTileBitmap.GetBitmap(),
-                                                aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ).CreateMask( Color(COL_WHITE) ) );
+                                                aVDev->GetBitmap( Point(0,0), aVDev->GetOutputSize() ).CreateMask( COL_WHITE ) );
                 }
             }
 
@@ -2003,7 +1958,7 @@ bool GraphicObject::ImplDrawTiled( OutputDevice& rOut, const Point& rPosPixel,
 
     for( nY=0; nY < nNumTilesY; ++nY )
     {
-        aCurrPos.X() = rPosPixel.X();
+        aCurrPos.setX( rPosPixel.X() );
 
         for( nX=0; nX < nNumTilesX; ++nX )
         {
@@ -2018,10 +1973,10 @@ bool GraphicObject::ImplDrawTiled( OutputDevice& rOut, const Point& rPosPixel,
                           bDrawInPixel ? rTileSizePixel : aTileSizeLogic,
                           pAttr, nFlags );
 
-            aCurrPos.X() += rTileSizePixel.Width();
+            aCurrPos.AdjustX(rTileSizePixel.Width() );
         }
 
-        aCurrPos.Y() += rTileSizePixel.Height();
+        aCurrPos.AdjustY(rTileSizePixel.Height() );
     }
 
     if( bDrawInPixel )

@@ -2435,9 +2435,9 @@ void XclImpChChart3d::Convert( ScfPropertySet& rPropSet, bool b3dWallChart ) con
         bool bParallel = bRightAngled || (nPerspective == 0);
         eProjMode = bParallel ? cssd::ProjectionMode_PARALLEL : cssd::ProjectionMode_PERSPECTIVE;
         // ambient color (Gray 20%)
-        aAmbientColor.SetColor( RGB_COLORDATA( 204, 204, 204 ) );
+        aAmbientColor = Color( 204, 204, 204 );
         // light color (Gray 60%)
-        aLightColor.SetColor( RGB_COLORDATA( 102, 102, 102 ) );
+        aLightColor = Color( 102, 102, 102 );
     }
     else
     {
@@ -2452,9 +2452,9 @@ void XclImpChChart3d::Convert( ScfPropertySet& rPropSet, bool b3dWallChart ) con
         bRightAngled = false;
         eProjMode = cssd::ProjectionMode_PARALLEL;
         // ambient color (Gray 30%)
-        aAmbientColor.SetColor( RGB_COLORDATA( 179, 179, 179 ) );
+        aAmbientColor = Color( 179, 179, 179 );
         // light color (Gray 70%)
-        aLightColor.SetColor( RGB_COLORDATA( 76, 76, 76 ) );
+        aLightColor = Color( 76, 76, 76 );
     }
 
     // properties
@@ -3066,7 +3066,7 @@ void XclImpChValueRange::ReadChValueRange( XclImpStream& rStrm )
 void XclImpChValueRange::Convert( ScaleData& rScaleData, bool bMirrorOrient ) const
 {
     // scaling algorithm
-    bool bLogScale = ::get_flag( maData.mnFlags, EXC_CHVALUERANGE_LOGSCALE );
+    const bool bLogScale = ::get_flag( maData.mnFlags, EXC_CHVALUERANGE_LOGSCALE );
     if( bLogScale )
         rScaleData.Scaling = css::chart2::LogarithmicScaling::create( comphelper::getProcessComponentContext() );
     else
@@ -3092,14 +3092,16 @@ void XclImpChValueRange::Convert( ScaleData& rScaleData, bool bMirrorOrient ) co
         if( !bAutoMinor )
             rIntervalCount <<= sal_Int32( 9 );
     }
-    else
+    else if( !bAutoMajor && !bAutoMinor && (0.0 < maData.mfMinorStep) && (maData.mfMinorStep <= maData.mfMajorStep) )
     {
-        if( !bAutoMajor && !bAutoMinor && (0.0 < maData.mfMinorStep) && (maData.mfMinorStep <= maData.mfMajorStep) )
-        {
-            double fCount = maData.mfMajorStep / maData.mfMinorStep + 0.5;
-            if( (1.0 <= fCount) && (fCount < 1001.0) )
-                rIntervalCount <<= static_cast< sal_Int32 >( fCount );
-        }
+        double fCount = maData.mfMajorStep / maData.mfMinorStep + 0.5;
+        if( (1.0 <= fCount) && (fCount < 1001.0) )
+            rIntervalCount <<= static_cast< sal_Int32 >( fCount );
+    }
+    else if( bAutoMinor )
+    {
+            // tdf#114168 If minor unit is not set then set interval to 5, as MS Excel do.
+            rIntervalCount <<= static_cast< sal_Int32 >( 5 );
     }
 
     // reverse order

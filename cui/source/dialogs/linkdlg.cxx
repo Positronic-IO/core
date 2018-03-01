@@ -19,7 +19,6 @@
 
 #include <linkdlg.hxx>
 #include <vcl/svapp.hxx>
-#include <helpids.h>
 
 #include <tools/urlobj.hxx>
 #include <svtools/svmedit.hxx>
@@ -28,7 +27,7 @@
 #include <vcl/fixed.hxx>
 #include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
 #include <svtools/svtabbx.hxx>
@@ -60,11 +59,10 @@ private:
 public:
     ~SvBaseLinkMemberList()
     {
-        for( std::vector<SvBaseLink*>::const_iterator it = mLinks.begin(); it != mLinks.end(); ++it )
+        for (auto const& link : mLinks)
         {
-            SvBaseLink* p = *it;
-            if( p )
-                p->ReleaseRef();
+            if( link )
+                link->ReleaseRef();
         }
     }
 
@@ -417,9 +415,12 @@ IMPL_LINK_NOARG( SvBaseLinksDlg, BreakLinkClickHdl, Button*, void )
         if( !xLink.is() )
             return;
 
-        ScopedVclPtrInstance< QueryBox > aBox( this, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aStrCloselinkmsg );
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       aStrCloselinkmsg));
+        xQueryBox->set_default_response(RET_YES);
 
-        if( RET_YES == aBox->Execute() )
+        if (RET_YES == xQueryBox->run())
         {
             m_pTbLinks->GetModel()->Remove( m_pTbLinks->GetEntry( nPos ) );
 
@@ -448,9 +449,12 @@ IMPL_LINK_NOARG( SvBaseLinksDlg, BreakLinkClickHdl, Button*, void )
     }
     else
     {
-        ScopedVclPtrInstance< QueryBox > aBox( this, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aStrCloselinkmsgMulti );
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       aStrCloselinkmsgMulti));
+        xQueryBox->set_default_response(RET_YES);
 
-        if( RET_YES == aBox->Execute() )
+        if (RET_YES == xQueryBox->run())
         {
 
             SvBaseLinkMemberList aLinkList;

@@ -27,6 +27,7 @@
 #include <sfx2/request.hxx>
 #include <sfx2/app.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/printer.hxx>
 #include <svx/svdorect.hxx>
 #include <svx/svdundo.hxx>
@@ -318,8 +319,9 @@ void FuInsertFile::DoExecute( SfxRequest& rReq )
 
     if( !bInserted )
     {
-        ScopedVclPtrInstance< MessageDialog > aErrorBox(mpWindow, SdResId( STR_READ_DATA_ERROR));
-        aErrorBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(mpWindow->GetFrameWeld(),
+                                                       VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_READ_DATA_ERROR)));
+        xErrorBox->run();
     }
 }
 
@@ -460,8 +462,9 @@ void FuInsertFile::InsTextOrRTFinDrMode(SfxMedium* pMedium)
 
         if (nErr || pOutliner->GetEditEngine().GetText().isEmpty())
         {
-            ScopedVclPtrInstance< MessageDialog > aErrorBox(mpWindow, SdResId(STR_READ_DATA_ERROR));
-            aErrorBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(mpWindow->GetFrameWeld(),
+                                                           VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_READ_DATA_ERROR)));
+            xErrorBox->run();
         }
         else
         {
@@ -516,15 +519,15 @@ void FuInsertFile::InsTextOrRTFinDrMode(SfxMedium* pMedium)
                    limit object size if necessary */
                 Size aSize(pOutliner->CalcTextSize());
                 Size aMaxSize = mpDoc->GetMaxObjSize();
-                aSize.Height() = std::min(aSize.Height(), aMaxSize.Height());
-                aSize.Width()  = std::min(aSize.Width(), aMaxSize.Width());
+                aSize.setHeight( std::min(aSize.Height(), aMaxSize.Height()) );
+                aSize.setWidth( std::min(aSize.Width(), aMaxSize.Width()) );
                 aSize = mpWindow->LogicToPixel(aSize);
 
                 // put it at the center of the window
                 Size aTemp(mpWindow->GetOutputSizePixel());
                 Point aPos(aTemp.Width() / 2, aTemp.Height() / 2);
-                aPos.X() -= aSize.Width() / 2;
-                aPos.Y() -= aSize.Height() / 2;
+                aPos.AdjustX( -(aSize.Width() / 2) );
+                aPos.AdjustY( -(aSize.Height() / 2) );
                 aSize = mpWindow->PixelToLogic(aSize);
                 aPos = mpWindow->PixelToLogic(aPos);
                 pTO->SetLogicRect(::tools::Rectangle(aPos, aSize));
@@ -604,8 +607,9 @@ void FuInsertFile::InsTextOrRTFinOlMode(SfxMedium* pMedium)
 
     if (nErr || pOutliner->GetEditEngine().GetText().isEmpty())
     {
-        ScopedVclPtrInstance< MessageDialog > aErrorBox(mpWindow, SdResId(STR_READ_DATA_ERROR));
-        aErrorBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(mpWindow->GetFrameWeld(),
+                                                       VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_READ_DATA_ERROR)));
+        xErrorBox->run();
     }
     else
     {

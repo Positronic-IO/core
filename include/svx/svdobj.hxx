@@ -268,7 +268,7 @@ public:
 /// Abstract DrawObject
 
 class SvxShape;
-class SVX_DLLPUBLIC SdrObject: public SfxListener, public tools::WeakBase< SdrObject >
+class SVX_DLLPUBLIC SdrObject: public SfxListener, public virtual tools::WeakBase
 {
     friend class                SdrObjListIter;
     friend class                SdrVirtObj;
@@ -849,7 +849,8 @@ protected:
     SdrPage*                    pPage;
     SdrModel*                   pModel;
     SdrObjUserCall*             pUserCall;
-    SdrObjPlusData*             pPlusData;    // Broadcaster, UserData, connectors, ... (this is the Bitsack)
+    std::unique_ptr<SdrObjPlusData>
+                                pPlusData;    // Broadcaster, UserData, connectors, ... (this is the Bitsack)
     // object is only pointing to another one
     bool                        bVirtObj : 1;
     bool                        bSnapRectDirty : 1;
@@ -904,6 +905,10 @@ protected:
     void SetObjectItem(const SfxPoolItem& rItem);
     void SetObjectItemSet(const SfxItemSet& rSet);
     const SfxPoolItem& GetObjectItem(const sal_uInt16 nWhich) const;
+    template<class T> const T& GetObjectItem( TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T&>(GetObjectItem(sal_uInt16(nWhich)));
+    }
 
     // get MapUnit the object is using
     MapUnit GetObjectMapUnit() const;
@@ -928,7 +933,7 @@ private:
     Point                             aGridOffset;  // hack (Calc)
     SdrObjList*                       pObjList;     // list that includes this object
     sal_uInt32                        nOrdNum;      // order number of the object in the list
-    SfxGrabBagItem*                   pGrabBagItem; // holds the GrabBagItem property
+    std::unique_ptr<SfxGrabBagItem>   pGrabBagItem; // holds the GrabBagItem property
     // Position in the navigation order. SAL_MAX_UINT32 when not used.
     sal_uInt32                        mnNavigationPosition;
     SdrLayerID                        mnLayerID;
@@ -939,8 +944,10 @@ private:
     // on import of OLE object from MS documents the BLIP size might be retrieved,
     // in this case the following member is initialized as nonempty rectangle
     tools::Rectangle                         maBLIPSizeRectangle;
-    sdr::properties::BaseProperties*  mpProperties;
-    sdr::contact::ViewContact*        mpViewContact;
+    std::unique_ptr<sdr::properties::BaseProperties>
+                                      mpProperties;
+    std::unique_ptr<sdr::contact::ViewContact>
+                                      mpViewContact;
     bool                              mbDelayBroadcastObjectChange : 1;
     mutable bool                      mbBroadcastObjectChangePending : 1;
 
@@ -1002,8 +1009,6 @@ private:
 
     SdrObjFactory() = delete;
 };
-
-typedef tools::WeakReference< SdrObject > SdrObjectWeakRef;
 
 template< typename T > T* SdrObject::CloneHelper() const
 {

@@ -43,6 +43,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <uno/environment.hxx>
+#include <uno/mapping.hxx>
 
 #include "loadsharedlibcomponentfactory.hxx"
 
@@ -1974,11 +1975,43 @@ void cppuhelper::ServiceManager::preloadImplementations() {
                 iterator->second->status = Data::Implementation::STATUS_LOADED;
 
             }
+
+            // Some libraries use other (non-UNO) libraries requiring preinit
+            oslGenericFunction fpPreload = aModule.getFunctionSymbol( "lok_preload_hook" );
+            if (fpPreload)
+            {
+                static std::vector<oslGenericFunction> aPreloaded;
+                if (std::find(aPreloaded.begin(), aPreloaded.end(), fpPreload) == aPreloaded.end())
+                {
+                    aPreloaded.push_back(fpPreload);
+                    fpPreload();
+                }
+            }
+
             // leak aModule
             aModule.release();
         }
     }
     std::cerr << std::endl;
+
+    // Various rather important uno mappings.
+    struct {
+        const char *mpFrom;
+        const char *mpTo;
+        const char *mpPurpose;
+    } const aMappingLoad[] = {
+        { "gcc3", "uno",  "" },
+        { "uno",  "gcc3", "" },
+    };
+
+    static std::vector<css::uno::Mapping> maMaps;
+    for (auto &it : aMappingLoad)
+    {
+        maMaps.push_back(css::uno::Mapping(
+                             OUString::createFromAscii(it.mpFrom),
+                             OUString::createFromAscii(it.mpTo),
+                             OUString::createFromAscii(it.mpPurpose)));
+    }
 #endif
 }
 

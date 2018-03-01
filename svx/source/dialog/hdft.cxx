@@ -21,7 +21,6 @@
 #include <sfx2/app.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/module.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/graph.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svx/svxids.hrc>
@@ -301,7 +300,7 @@ bool SvxHFPage::FillItemSet( SfxItemSet* rSet )
     long        nH    = GetCoreValue( *m_pHeightEdit, eUnit );
 
     nH += nDist; // add distance
-    aSize.Height() = nH;
+    aSize.setHeight( nH );
     aSizeItem.SetSize( aSize );
     aSet.Put( aSizeItem );
 
@@ -540,9 +539,15 @@ IMPL_LINK( SvxHFPage, TurnOnHdl, Button *, pButton, void )
         {
             short nResult;
             if (nId == SID_ATTR_PAGE_HEADERSET)
-                nResult = ScopedVclPtrInstance<DeleteHeaderDialog>(this)->Execute();
+            {
+                DeleteHeaderDialog aDlg(GetFrameWeld());
+                nResult = aDlg.run();
+            }
             else
-                nResult = ScopedVclPtrInstance<DeleteFooterDialog>(this)->Execute();
+            {
+                DeleteFooterDialog aDlg(GetFrameWeld());
+                nResult = aDlg.run();
+            }
             bDelete = nResult == RET_YES;
         }
 
@@ -1101,7 +1106,7 @@ void SvxHFPage::RangeHdl()
 static void lcl_Move(vcl::Window& rWin, sal_Int32 nDiff)
 {
     Point aPos(rWin.GetPosPixel());
-    aPos.Y() -= nDiff;
+    aPos.AdjustY( -nDiff );
     rWin.SetPosPixel(aPos);
 }
 

@@ -22,11 +22,10 @@
 
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
 
-class FloatingWindowAccessible : public VCLXAccessibleComponent
+class FloatingWindowAccessible final : public VCLXAccessibleComponent
 {
 public:
-    FloatingWindowAccessible( VCLXWindow* pWindow );
-    virtual ~FloatingWindowAccessible() override;
+    using VCLXAccessibleComponent::VCLXAccessibleComponent;
 
     virtual void FillAccessibleRelationSet( utl::AccessibleRelationSetHelper& rRelationSet ) override;
 };

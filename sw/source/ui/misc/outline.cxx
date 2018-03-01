@@ -43,7 +43,6 @@
 #include <docstyle.hxx>
 #include <viewopt.hxx>
 #include <svtools/ctrlbox.hxx>
-#include <helpids.h>
 #include <globals.hrc>
 #include <strings.hrc>
 #include <paratr.hxx>
@@ -893,9 +892,9 @@ static long lcl_DrawGraphic(vcl::RenderContext* pVDev, const SwNumFormat &rForma
         if (pGraphic)
         {
             Size aGSize( rFormat.GetGraphicSize());
-            aGSize.Width() /= nDivision;
+            aGSize.setWidth( aGSize.Width() / nDivision );
             nRet = aGSize.Width();
-            aGSize.Height() /= nDivision;
+            aGSize.setHeight( aGSize.Height() / nDivision );
             pGraphic->Draw(pVDev, Point(nXStart, nYStart), pVDev->PixelToLogic(aGSize));
         }
     }
@@ -1047,7 +1046,7 @@ void NumberingPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Re
                 }
 
                 tools::Rectangle aRect1(Point(nTextXPos, nYStart + nFontHeight / 2), Size(aSize.Width() / 2, 2));
-                pVDev->SetFillColor(rRenderContext.GetSettings().GetStyleSettings().GetWindowColor()); // Color( COL_BLACK ) );
+                pVDev->SetFillColor(rRenderContext.GetSettings().GetStyleSettings().GetWindowColor()); // COL_BLACK );
                 pVDev->DrawRect(aRect1);
 
                 tools::Rectangle aRect2(Point(nXStart, nYStart + nLineHeight + nFontHeight / 2), Size(aSize.Width() / 2, 2));

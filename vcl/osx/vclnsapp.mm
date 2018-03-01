@@ -75,6 +75,11 @@ SAL_WNODEPRECATED_DECLARATIONS_PUSH
 SAL_WNODEPRECATED_DECLARATIONS_POP
     assert( pEvent );
     [NSApp postEvent: pEvent atStart: NO];
+
+    if( [NSWindow respondsToSelector:@selector(allowsAutomaticWindowTabbing)] )
+    {
+        NSWindow.allowsAutomaticWindowTabbing = NO;
+    }
 }
 
 -(void)sendEvent:(NSEvent*)pEvent
@@ -98,7 +103,7 @@ SAL_WNODEPRECATED_DECLARATIONS_PUSH
         NSWindow* pKeyWin = [NSApp keyWindow];
         if( pKeyWin && [pKeyWin isKindOfClass: [SalFrameWindow class]] )
         {
-            AquaSalFrame* pFrame = [(SalFrameWindow*)pKeyWin getSalFrame];
+            AquaSalFrame* pFrame = [static_cast<SalFrameWindow*>(pKeyWin) getSalFrame];
             // handle Cmd-W
             // FIXME: the correct solution would be to handle this in framework
             // in the menu code
@@ -113,7 +118,7 @@ SAL_WNODEPRECATED_DECLARATIONS_PUSH
                 if( nModMask == NSCommandKeyMask
                     && [[pEvent charactersIgnoringModifiers] isEqualToString: @"w"] )
                 {
-                    [(SalFrameWindow*)pFrame->getNSWindow() windowShouldClose: nil];
+                    [static_cast<SalFrameWindow*>(pFrame->getNSWindow()) windowShouldClose: nil];
                     return;
                 }
             }
@@ -155,7 +160,8 @@ SAL_WNODEPRECATED_DECLARATIONS_PUSH
             // the main menu just beeps for an unknown or disabled key equivalent
             // and swallows the event wholesale
             NSMenu* pMainMenu = [NSApp mainMenu];
-            if( ! bHandled && (pMainMenu == nullptr || ! [pMainMenu performKeyEquivalent: pEvent]) )
+            if( ! bHandled &&
+                (pMainMenu == nullptr || ! [NSMenu menuBarVisible] || ! [pMainMenu performKeyEquivalent: pEvent]) )
             {
                 [[pKeyWin contentView] keyDown: pEvent];
                 bHandled = GetSalData()->maKeyEventAnswer[ pEvent ];

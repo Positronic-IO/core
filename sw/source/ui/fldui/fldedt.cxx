@@ -37,7 +37,6 @@
 #include <fldedt.hxx>
 
 #include <cmdid.h>
-#include <helpids.h>
 #include <globals.hrc>
 #include <swabstdlg.hxx>
 
@@ -147,7 +146,9 @@ void SwFieldEditDlg::Init()
         m_pPrevBT->Enable( bMove );
 
         if (pCurField->GetTypeId() == TYP_EXTUSERFLD)
-            m_pAddressBT->Show();
+            m_pAddressBT->Enable();
+        else
+            m_pAddressBT->Disable();
 
         pSh->DestroyCursor();
         pSh->EndAction();

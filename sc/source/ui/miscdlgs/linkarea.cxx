@@ -83,8 +83,7 @@ void ScLinkedAreaDlg::dispose()
 
 IMPL_LINK_NOARG(ScLinkedAreaDlg, BrowseHdl, Button*, void)
 {
-    if ( !pDocInserter )
-        pDocInserter = new sfx2::DocumentInserter(this, ScDocShell::Factory().GetFactoryName());
+    pDocInserter.reset( new sfx2::DocumentInserter(this, ScDocShell::Factory().GetFactoryName()) );
     pDocInserter->StartExecuteModal( LINK( this, ScLinkedAreaDlg, DialogClosedHdl ) );
 }
 
@@ -258,6 +257,13 @@ void ScLinkedAreaDlg::UpdateSourceRanges()
     m_pLbRanges->Clear();
     if ( pSourceShell )
     {
+        std::shared_ptr<const SfxFilter> pFilter = pSourceShell->GetMedium()->GetFilter();
+        if (pFilter && pFilter->GetFilterName() == SC_TEXT_CSV_FILTER_NAME)
+        {
+            // Insert dummy All range to have something selectable.
+            m_pLbRanges->InsertEntry("CSV_all");
+        }
+
         ScAreaNameIterator aIter( &pSourceShell->GetDocument() );
         ScRange aDummy;
         OUString aName;

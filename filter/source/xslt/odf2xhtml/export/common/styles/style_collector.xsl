@@ -630,7 +630,7 @@
     </xsl:template>
 
     <!-- REASON FOR TEMPLATE:
-       The OpenOffice style properities gathered in the variable 'globalData' have to be mapped to the CSS style format
+       The OpenOffice style properties gathered in the variable 'globalData' have to be mapped to the CSS style format
     -->
     <xsl:template name="map-odf-properties">
         <xsl:param name="globalData" />
@@ -807,7 +807,7 @@
         <xsl:text>padding</xsl:text>
         <xsl:value-of select="substring-after(name(), 'fo:margin')"/>
         <xsl:text>:</xsl:text>
-        <!-- Map once erroneusly used inch shortage 'inch' to CSS shortage 'in' -->
+        <!-- Map once erroneously used inch shortage 'inch' to CSS shortage 'in' -->
         <xsl:choose>
             <xsl:when test="contains(., 'inch')">
                 <xsl:value-of select="substring-before(.,'ch')"/>

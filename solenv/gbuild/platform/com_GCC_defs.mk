@@ -96,8 +96,20 @@ gb_CXXFLAGS_COMMON += \
     -Wunused-const-variable=1
 endif
 
+# GCC 8 -Wcast-function-type (included in -Wextra) unhelpfully even warns on reinterpret_cast
+# between incompatible function types:
+ifeq ($(shell expr '$(GCC_VERSION)' '>=' 800),1)
+gb_CXXFLAGS_COMMON += \
+    -Wno-cast-function-type
+endif
+
 ifeq ($(COM_IS_CLANG),TRUE)
 gb_CXXFLAGS_COMMON += -Wimplicit-fallthrough
+else
+# GCC 4.8, at least, is confused by boost 1.66 optional assignments
+ifeq ($(shell expr '$(GCC_VERSION)' '<' 490),1)
+gb_CXXFLAGS_COMMON += -Wno-maybe-uninitialized
+endif
 endif
 
 
@@ -240,6 +252,8 @@ else ifeq ($(OS_FOR_BUILD),WNT)
 # In theory possible if cross-compiling to some Unix from Windows,
 # in practice strongly discouraged to even try that
 gb_Helper_LIBRARY_PATH_VAR := PATH
+else ifeq ($(OS_FOR_BUILD),HAIKU)
+gb_Helper_LIBRARY_PATH_VAR := LIBRARY_PATH
 else
 gb_Helper_LIBRARY_PATH_VAR := LD_LIBRARY_PATH
 endif

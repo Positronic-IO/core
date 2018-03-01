@@ -2704,13 +2704,14 @@ void ScInterpreter::ScTTest()
     }
     else if (fTyp == 2.0)
     {
-        CalculateTest(false,nC1, nC2,nR1, nR2,pMat1,pMat2,fT,fF);
+        if (!CalculateTest(false,nC1, nC2,nR1, nR2,pMat1,pMat2,fT,fF))
+            return;     // error was pushed
     }
     else if (fTyp == 3.0)
     {
-        CalculateTest(true,nC1, nC2,nR1, nR2,pMat1,pMat2,fT,fF);
+        if (!CalculateTest(true,nC1, nC2,nR1, nR2,pMat1,pMat2,fT,fF))
+            return;     // error was pushed
     }
-
     else
     {
         PushIllegalArgument();
@@ -3694,7 +3695,7 @@ void ScInterpreter::ScTrimMean()
         if (nIndex % 2 != 0)
             nIndex--;
         nIndex /= 2;
-        OSL_ENSURE(nIndex < nSize, "ScTrimMean: falscher Index");
+        OSL_ENSURE(nIndex < nSize, "ScTrimMean: wrong index");
         double fSum = 0.0;
         for (SCSIZE i = nIndex; i < nSize-nIndex; i++)
             fSum += aSortArray[i];

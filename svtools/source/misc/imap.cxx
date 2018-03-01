@@ -36,8 +36,8 @@
 #include <memory>
 
 
-#define SCALEPOINT(aPT,aFracX,aFracY) (aPT).X()=long((aPT).X()*aFracX);  \
-                                      (aPT).Y()=long((aPT).Y()*aFracY);
+#define SCALEPOINT(aPT,aFracX,aFracY) (aPT).setX(long((aPT).X()*aFracX));  \
+                                      (aPT).setY(long((aPT).Y()*aFracY));
 
 
 /******************************************************************************/
@@ -776,10 +776,10 @@ IMapObject* ImageMap::GetHitIMapObject( const Size& rTotalSize,
     if ( nFlags )
     {
         if ( nFlags & IMAP_MIRROR_HORZ )
-            aRelPoint.X() = rTotalSize.Width() - aRelPoint.X();
+            aRelPoint.setX( rTotalSize.Width() - aRelPoint.X() );
 
         if ( nFlags & IMAP_MIRROR_VERT )
-            aRelPoint.Y() = rTotalSize.Height() - aRelPoint.Y();
+            aRelPoint.setY( rTotalSize.Height() - aRelPoint.Y() );
     }
 
     // walk over all objects and execute HitTest

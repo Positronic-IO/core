@@ -328,7 +328,8 @@ void Control::SetLayoutDataParent( const Control* pParent ) const
 
 void Control::ImplClearLayoutData() const
 {
-    mpControlData->mpLayoutData.reset();
+    if (mpControlData)
+        mpControlData->mpLayoutData.reset();
 }
 
 void Control::ImplDrawFrame( OutputDevice* pDev, tools::Rectangle& rRect )
@@ -403,8 +404,7 @@ void Control::ApplySettings(vcl::RenderContext& rRenderContext)
 {
     const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
 
-    vcl::Font rFont(GetCanonicalFont(rStyleSettings));
-    ApplyControlFont(rRenderContext, rFont);
+    ApplyControlFont(rRenderContext, GetCanonicalFont(rStyleSettings));
 
     ApplyControlForeground(rRenderContext, GetCanonicalTextColor(rStyleSettings));
     rRenderContext.SetTextFillColor();
@@ -413,24 +413,6 @@ void Control::ApplySettings(vcl::RenderContext& rRenderContext)
 void Control::ImplInitSettings()
 {
     ApplySettings(*this);
-}
-
-void Control::LogicInvalidate(const tools::Rectangle* /*pRectangle*/)
-{
-    // Several repaint, resize invalidations are emitted when we are painting,
-    // ignore all of those
-    if (comphelper::LibreOfficeKit::isActive() && !comphelper::LibreOfficeKit::isDialogPainting())
-    {
-        if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
-        {
-            // invalidate the complete floating window for now
-            if (pParent->ImplIsFloatingWindow())
-                return pParent->LogicInvalidate(nullptr);
-
-            const tools::Rectangle aRect(Point(GetOutOffXPixel(), GetOutOffYPixel()), Size(GetOutputWidthPixel(), GetOutputHeightPixel()));
-            pParent->LogicInvalidate(&aRect);
-        }
-    }
 }
 
 tools::Rectangle Control::DrawControlText( OutputDevice& _rTargetDevice, const tools::Rectangle& rRect, const OUString& _rStr,

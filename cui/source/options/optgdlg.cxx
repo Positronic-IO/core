@@ -535,12 +535,10 @@ bool CanvasSettings::IsHardwareAccelerationAvailable() const
 
         // check whether any of the service lists has an
         // implementation that presents the "HardwareAcceleration" property
-        ServiceVector::const_iterator       aCurr=maAvailableImplementations.begin();
-        const ServiceVector::const_iterator aEnd=maAvailableImplementations.end();
-        while( aCurr != aEnd )
+        for (auto const& availableImpl : maAvailableImplementations)
         {
-            const OUString* pCurrImpl = aCurr->second.getConstArray();
-            const OUString* const pEndImpl = pCurrImpl + aCurr->second.getLength();
+            const OUString* pCurrImpl = availableImpl.second.getConstArray();
+            const OUString* const pEndImpl = pCurrImpl + availableImpl.second.getLength();
 
             while( pCurrImpl != pEndImpl )
             {
@@ -563,8 +561,6 @@ bool CanvasSettings::IsHardwareAccelerationAvailable() const
 
                 ++pCurrImpl;
             }
-
-            ++aCurr;
         }
     }
 
@@ -679,8 +675,9 @@ OfaViewTabPage::OfaViewTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
                                 ")";
     m_pIconStyleLB->InsertEntry(entryForAuto);
 
-    for (std::vector<vcl::IconThemeInfo>::const_iterator aI = mInstalledIconThemes.begin(); aI != mInstalledIconThemes.end(); ++aI) {
-        m_pIconStyleLB->InsertEntry(aI->GetDisplayName());
+    for (auto const& installIconTheme : mInstalledIconThemes)
+    {
+        m_pIconStyleLB->InsertEntry(installIconTheme.GetDisplayName());
     }
 
     // separate auto and other icon themes
@@ -1706,15 +1703,6 @@ void OfaLanguagesTabPage::Reset( const SfxItemSet* rSet )
     m_pWesternLanguageFT->Enable( bEnable );
     m_pWesternLanguageLB->Enable( bEnable );
 
-
-    // #i15812# controls for CJK/CTL already enabled/disabled from LocaleSettingHdl
-#if 0
-    bEnable = ( !pLangConfig->aLinguConfig.IsReadOnly( "DefaultLocale_CJK" ) && m_pAsianSupportCB->IsChecked() );
-    m_pAsianLanguageLB->Enable( bEnable );
-
-    bEnable = ( !pLangConfig->aLinguConfig.IsReadOnly( "DefaultLocale_CTL" ) && m_pCTLSupportCB->IsChecked() );
-    m_pComplexLanguageLB->Enable( bEnable );
-#endif
     // check the box "For the current document only"
     // set the focus to the Western Language box
     const SfxPoolItem* pLang = nullptr;
@@ -1912,13 +1900,7 @@ IMPL_LINK( OfaLanguagesTabPage, DatePatternsHdl, Edit&, rEd, void )
     }
     else
     {
-#if 0
-        //! Gives white on white!?! instead of white on reddish.
-        rEd.SetControlBackground( ::Color( RGB_COLORDATA( 0xff, 0x65, 0x63)));
-        rEd.SetControlForeground( ::Color( COL_WHITE));
-#else
-        rEd.SetControlForeground( ::Color( RGB_COLORDATA( 0xf0, 0, 0)));
-#endif
+        rEd.SetControlForeground( ::Color( 0xf0, 0, 0 ) );
     }
     m_bDatePatternsValid = bValid;
 }

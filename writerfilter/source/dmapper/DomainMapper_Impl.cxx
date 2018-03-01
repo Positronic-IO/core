@@ -57,6 +57,7 @@
 #include <com/sun/star/text/XParagraphCursor.hpp>
 #include <com/sun/star/text/XRedline.hpp>
 #include <com/sun/star/text/XTextFieldsSupplier.hpp>
+#include <com/sun/star/text/RubyPosition.hpp>
 #include <com/sun/star/style/DropCapFormat.hpp>
 #include <com/sun/star/util/NumberFormatter.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
@@ -465,6 +466,10 @@ void DomainMapper_Impl::SetIsFirstParagraphInSection( bool bIsFirst )
     m_bIsFirstParaInSection = bIsFirst;
 }
 
+void DomainMapper_Impl::SetIsFirstParagraphInShape(bool bIsFirst)
+{
+    m_bIsFirstParaInShape = bIsFirst;
+}
 
 void DomainMapper_Impl::SetIsDummyParaAddedForTableInSection( bool bIsAdded )
 {
@@ -1056,6 +1061,30 @@ void DomainMapper_Impl::CheckUnregisteredFrameConversion( )
     }
 }
 
+/// Check if the style or its parent has a list id, recursively.
+static sal_Int32 lcl_getListId(const StyleSheetEntryPtr& rEntry, const StyleSheetTablePtr& rStyleTable)
+{
+    const StyleSheetPropertyMap* pEntryProperties = dynamic_cast<const StyleSheetPropertyMap*>(rEntry->pProperties.get());
+    if (!pEntryProperties)
+        return -1;
+
+    sal_Int32 nListId = pEntryProperties->GetListId();
+    // The style itself has a list id.
+    if (nListId >= 0)
+        return nListId;
+
+    // The style has no parent.
+    if (rEntry->sBaseStyleIdentifier.isEmpty())
+        return -1;
+
+    const StyleSheetEntryPtr pParent = rStyleTable->FindStyleSheetByISTD(rEntry->sBaseStyleIdentifier);
+    // No such parent style or loop in the style hierarchy.
+    if (!pParent || pParent == rEntry)
+        return -1;
+
+    return lcl_getListId(pParent, rStyleTable);
+}
+
 void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
 {
 #ifdef DEBUG_WRITERFILTER
@@ -1072,6 +1101,59 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
 #ifdef DEBUG_WRITERFILTER
     TagLogger::getInstance().attribute("isTextAppend", sal_uInt32(xTextAppend.is()));
 #endif
+
+    //apply numbering to paragraph if it was set at the style, but only if the paragraph itself
+    //does not specify the numbering
+    if( pParaContext && !pParaContext->isSet(PROP_NUMBERING_RULES) )
+    {
+        const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByISTD( GetCurrentParaStyleId() );
+        OSL_ENSURE( pEntry.get(), "no style sheet found" );
+        const StyleSheetPropertyMap* pStyleSheetProperties = dynamic_cast<const StyleSheetPropertyMap*>(pEntry ? pEntry->pProperties.get() : nullptr);
+
+        sal_Int32 nListId = pEntry ? lcl_getListId(pEntry, GetStyleSheetTable()) : -1;
+        if( pStyleSheetProperties && nListId >= 0 )
+        {
+            if ( !pEntry->bIsChapterNumbering )
+                pParaContext->Insert( PROP_NUMBERING_STYLE_NAME, uno::makeAny( ListDef::GetStyleName( nListId ) ), false);
+
+            // Indent properties from the paragraph style have priority
+            // over the ones from the numbering styles in Word
+            // but in Writer numbering styles have priority,
+            // so insert directly into the paragraph properties to compensate.
+            boost::optional<PropertyMap::Property> oProperty;
+            if ( (oProperty = pStyleSheetProperties->getProperty(PROP_PARA_FIRST_LINE_INDENT)) )
+                pParaContext->Insert(PROP_PARA_FIRST_LINE_INDENT, oProperty->second, /*bOverwrite=*/false);
+            if ( (oProperty = pStyleSheetProperties->getProperty(PROP_PARA_LEFT_MARGIN)) )
+                pParaContext->Insert(PROP_PARA_LEFT_MARGIN, oProperty->second, /*bOverwrite=*/false);
+
+            // We're inheriting properties from a numbering style. Make sure a possible right margin is inherited from the base style.
+            sal_Int32 nParaRightMargin = 0;
+            if (!pEntry->sBaseStyleIdentifier.isEmpty())
+            {
+                const StyleSheetEntryPtr pParent = GetStyleSheetTable()->FindStyleSheetByISTD(pEntry->sBaseStyleIdentifier);
+                const StyleSheetPropertyMap* pParentProperties = dynamic_cast<const StyleSheetPropertyMap*>(pParent ? pParent->pProperties.get() : nullptr);
+                boost::optional<PropertyMap::Property> pPropMargin;
+                if (pParentProperties && (pPropMargin = pParentProperties->getProperty(PROP_PARA_RIGHT_MARGIN)) )
+                    nParaRightMargin = pPropMargin->second.get<sal_Int32>();
+            }
+            if (nParaRightMargin != 0)
+            {
+                // If we're setting the right margin, we should set the first / left margin as well from the numbering style.
+                const sal_Int32 nFirstLineIndent = getNumberingProperty(nListId, pStyleSheetProperties->GetListLevel(), "FirstLineIndent");
+                const sal_Int32 nParaLeftMargin  = getNumberingProperty(nListId, pStyleSheetProperties->GetListLevel(), "IndentAt");
+                if (nFirstLineIndent != 0)
+                    pParaContext->Insert(PROP_PARA_FIRST_LINE_INDENT, uno::makeAny(nFirstLineIndent), /*bOverwrite=*/false);
+                if (nParaLeftMargin != 0)
+                    pParaContext->Insert(PROP_PARA_LEFT_MARGIN, uno::makeAny(nParaLeftMargin), /*bOverwrite=*/false);
+
+                pParaContext->Insert(PROP_PARA_RIGHT_MARGIN, uno::makeAny(nParaRightMargin), /*bOverwrite=*/false);
+            }
+        }
+
+        if( pStyleSheetProperties && pStyleSheetProperties->GetListLevel() >= 0 )
+            pParaContext->Insert( PROP_NUMBERING_LEVEL, uno::makeAny(pStyleSheetProperties->GetListLevel()), false);
+    }
+
 
     if (xTextAppend.is() && pParaContext && hasTableManager() && !getTableManager().isIgnore())
     {
@@ -1248,6 +1330,17 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
 
                     xTextRange = xTextAppend->finishParagraph( comphelper::containerToSequence(aProperties) );
                     m_xPreviousParagraph.set(xTextRange, uno::UNO_QUERY);
+
+                    if (!rAppendContext.m_aAnchoredObjects.empty())
+                    {
+                        // Remember what objects are anchored to this paragraph.
+                        AnchoredObjectInfo aInfo;
+                        aInfo.m_xParagraph = xTextRange;
+                        aInfo.m_aAnchoredObjects = rAppendContext.m_aAnchoredObjects;
+                        m_aAnchoredObjectAnchors.push_back(aInfo);
+                        rAppendContext.m_aAnchoredObjects.clear();
+                    }
+
                     // We're no longer right after a table conversion.
                     m_bConvertedTable = false;
 
@@ -1298,6 +1391,9 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
         SetIsFirstParagraphInSection(false);
         SetIsLastParagraphInSection(false);
     }
+
+    if (m_bIsFirstParaInShape)
+        m_bIsFirstParaInShape = false;
 
     if (pParaContext)
     {
@@ -1642,17 +1738,6 @@ void DomainMapper_Impl::PushPageHeaderFooter(bool bHeader, SectionPropertyMap::P
                 xPageStyle->setPropertyValue(
                         getPropertyName(ePropIsOn),
                         uno::makeAny(true));
-
-                if (bFirst)
-                {
-                    OUString aFollowStyle = xPageStyle->getPropertyValue("FollowStyle").get<OUString>();
-                    if (GetPageStyles()->hasByName(aFollowStyle))
-                    {
-                        // This is a first page and has a follow style, then enable the header/footer there as well to be consistent.
-                        uno::Reference<beans::XPropertySet> xFollowStyle(GetPageStyles()->getByName(aFollowStyle), uno::UNO_QUERY);
-                        xFollowStyle->setPropertyValue(getPropertyName(ePropIsOn), uno::makeAny(true));
-                    }
-                }
 
                 // If the 'Different Even & Odd Pages' flag is turned on - do not ignore it
                 // Even if the 'Even' header/footer is blank - the flag should be imported (so it would look in LO like in Word)
@@ -3184,6 +3269,8 @@ void  DomainMapper_Impl::handleRubyEQField( const FieldContextPtr& pContext)
     pCharContext->InsertProps(pContext->getProperties());
     pCharContext->Insert(PROP_RUBY_TEXT, uno::makeAny( aInfo.sRubyText ) );
     pCharContext->Insert(PROP_RUBY_ADJUST, uno::makeAny(static_cast<sal_Int16>(ConversionHelper::convertRubyAlign(aInfo.nRubyAlign))));
+    if ( aInfo.nRubyAlign == NS_ooxml::LN_Value_ST_RubyAlign_rightVertical )
+        pCharContext->Insert(PROP_RUBY_POSITION, uno::makeAny(css::text::RubyPosition::INTER_CHARACTER));
     pCharContext->Insert(PROP_RUBY_STYLE, uno::makeAny(aInfo.sRubyStyle));
     appendTextPortion(sPart2, pCharContext);
 
@@ -5135,7 +5222,13 @@ void  DomainMapper_Impl::ImportGraphic(const writerfilter::Reference< Properties
     //insert it into the document at the current cursor position
     OSL_ENSURE( xTextContent.is(), "DomainMapper_Impl::ImportGraphic");
     if( xTextContent.is())
+    {
         appendTextContent( xTextContent, uno::Sequence< beans::PropertyValue >() );
+
+        if (eGraphicImportType == IMPORT_AS_DETECTED_ANCHOR && !m_aTextAppendStack.empty())
+            // Remember this object is anchored to the current paragraph.
+            m_aTextAppendStack.top().m_aAnchoredObjects.push_back(xTextContent);
+    }
 
     // Clear the reference, so in case the embedded object is inside a
     // TextFrame, we won't try to resize it (to match the size of the
@@ -5533,6 +5626,48 @@ void DomainMapper_Impl::processDeferredCharacterProperties()
     }
 }
 
+sal_Int32 DomainMapper_Impl::getNumberingProperty(const sal_Int32 nListId, sal_Int32 nNumberingLevel, const OUString& aProp)
+{
+    sal_Int32 nRet = 0;
+    if ( nListId < 0 )
+        return nRet;
+
+    try
+    {
+        if (nNumberingLevel < 0) // It seems it's valid to omit numbering level, and in that case it means zero.
+            nNumberingLevel = 0;
+
+        const OUString aListName = ListDef::GetStyleName(nListId);
+        const uno::Reference< style::XStyleFamiliesSupplier > xStylesSupplier(GetTextDocument(), uno::UNO_QUERY_THROW);
+        const uno::Reference< container::XNameAccess > xStyleFamilies = xStylesSupplier->getStyleFamilies();
+        uno::Reference<container::XNameAccess> xNumberingStyles;
+        xStyleFamilies->getByName("NumberingStyles") >>= xNumberingStyles;
+        const uno::Reference<beans::XPropertySet> xStyle(xNumberingStyles->getByName(aListName), uno::UNO_QUERY);
+        const uno::Reference<container::XIndexAccess> xNumberingRules(xStyle->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+        if (xNumberingRules.is())
+        {
+            uno::Sequence<beans::PropertyValue> aProps;
+            xNumberingRules->getByIndex(nNumberingLevel) >>= aProps;
+            for (int i = 0; i < aProps.getLength(); ++i)
+            {
+                const beans::PropertyValue& rProp = aProps[i];
+
+                if (rProp.Name == aProp)
+                {
+                    rProp.Value >>= nRet;
+                    break;
+                }
+            }
+        }
+    }
+    catch( const uno::Exception& )
+    {
+        // This can happen when the doc contains some hand-crafted invalid list level.
+    }
+
+    return nRet;
+}
+
 sal_Int32 DomainMapper_Impl::getCurrentNumberingProperty(const OUString& aProp)
 {
     sal_Int32 nRet = 0;
@@ -5542,10 +5677,11 @@ sal_Int32 DomainMapper_Impl::getCurrentNumberingProperty(const OUString& aProp)
     if (pProp)
         xNumberingRules.set(pProp->second, uno::UNO_QUERY);
     pProp = m_pTopContext->getProperty(PROP_NUMBERING_LEVEL);
-    sal_Int32 nNumberingLevel = -1;
+    // Default numbering level is the first one.
+    sal_Int32 nNumberingLevel = 0;
     if (pProp)
         pProp->second >>= nNumberingLevel;
-    if (xNumberingRules.is() && nNumberingLevel != -1)
+    if (xNumberingRules.is())
     {
         uno::Sequence<beans::PropertyValue> aProps;
         xNumberingRules->getByIndex(nNumberingLevel) >>= aProps;

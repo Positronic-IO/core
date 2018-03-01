@@ -313,6 +313,8 @@ public:
     virtual void        SetParaAttribs( sal_Int32 nPara, const SfxItemSet& rSet );
     const SfxItemSet&   GetParaAttribs( sal_Int32 nPara ) const;
 
+    /// Set attributes from rSet an all characters of nPara.
+    void SetCharAttribs(sal_Int32 nPara, const SfxItemSet& rSet);
     void            GetCharAttribs( sal_Int32 nPara, std::vector<EECharAttrib>& rLst ) const;
 
     SfxItemSet      GetAttribs( sal_Int32 nPara, sal_Int32 nStart, sal_Int32 nEnd, GetAttribsFlags nFlags = GetAttribsFlags::ALL ) const;
@@ -618,6 +620,10 @@ public:
     sal_Int32 GetOverflowingLineNum() const;
     void ClearOverflowingParaNum();
     bool IsPageOverflow();
+
+    // tdf#115639 compatibility flag
+    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
+    bool IsHoriAlignIgnoreTrailingWhitespace() const;
 };
 
 #endif // INCLUDED_EDITENG_EDITENG_HXX

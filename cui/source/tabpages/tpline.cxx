@@ -42,7 +42,6 @@
 #include <svx/svdview.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/numvset.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/numitem.hxx>
 #include <editeng/svxenum.hxx>
 #include <sfx2/objsh.hxx>
@@ -283,19 +282,19 @@ void SvxLineTabPage::InitSymbols(MenuButton const * pButton)
         VclPtrInstance<PopupMenu> pPopup;
         sal_uInt32 i = 0;
         m_nNumMenuGalleryItems = m_aGrfNames.size();
-        for(std::vector<OUString>::iterator it = m_aGrfNames.begin(); it != m_aGrfNames.end(); ++it, ++i)
+        for (auto const& grfName : m_aGrfNames)
         {
-            const OUString *pUIName = &(*it);
+            const OUString *pUIName = &grfName;
 
             // Convert URL encodings to UI characters (e.g. %20 for spaces)
             OUString aPhysicalName;
-            if (osl::FileBase::getSystemPathFromFileURL(*it, aPhysicalName)
+            if (osl::FileBase::getSystemPathFromFileURL(grfName, aPhysicalName)
                 == osl::FileBase::E_None)
             {
                 pUIName = &aPhysicalName;
             }
 
-            SvxBrushItem* pBrushItem = new SvxBrushItem(*it, "", GPOS_AREA, SID_ATTR_BRUSH);
+            SvxBrushItem* pBrushItem = new SvxBrushItem(grfName, "", GPOS_AREA, SID_ATTR_BRUSH);
 
             SvxBmpItemInfo* pInfo = new SvxBmpItemInfo;
             pInfo->pBrushItem = pBrushItem;
@@ -330,6 +329,7 @@ void SvxLineTabPage::InitSymbols(MenuButton const * pButton)
                 Image aImage;
                 pPopup->InsertItem(pInfo->nItemId, *pUIName, aImage );
             }
+            ++i;
         }
         m_pSymbolMB->GetPopupMenu()->SetPopupMenu( MN_GALLERY, pPopup );
 
@@ -1719,22 +1719,22 @@ IMPL_LINK( SvxLineTabPage, SizeHdl_Impl, Edit&, rField, void)
     if(bWidth)
     {
         long nDelta = nWidthVal - m_aSymbolLastSize.Width();
-        m_aSymbolSize.Width() = nWidthVal;
+        m_aSymbolSize.setWidth( nWidthVal );
         if (bRatio)
         {
-            m_aSymbolSize.Height() = m_aSymbolLastSize.Height() + static_cast<long>(static_cast<double>(nDelta) / fSizeRatio);
-            m_aSymbolSize.Height() = OutputDevice::LogicToLogic( m_aSymbolSize.Height(), m_ePoolUnit, MapUnit::Map100thMM );
+            m_aSymbolSize.setHeight( m_aSymbolLastSize.Height() + static_cast<long>(static_cast<double>(nDelta) / fSizeRatio) );
+            m_aSymbolSize.setHeight( OutputDevice::LogicToLogic( m_aSymbolSize.Height(), m_ePoolUnit, MapUnit::Map100thMM ) );
             m_pSymbolHeightMF->SetUserValue(m_pSymbolHeightMF->Normalize(m_aSymbolSize.Height()), FUNIT_100TH_MM);
         }
     }
     else
     {
         long nDelta = nHeightVal - m_aSymbolLastSize.Height();
-        m_aSymbolSize.Height() = nHeightVal;
+        m_aSymbolSize.setHeight( nHeightVal );
         if (bRatio)
         {
-            m_aSymbolSize.Width() = m_aSymbolLastSize.Width() + static_cast<long>(static_cast<double>(nDelta) * fSizeRatio);
-            m_aSymbolSize.Width() = OutputDevice::LogicToLogic( m_aSymbolSize.Width(), m_ePoolUnit, MapUnit::Map100thMM );
+            m_aSymbolSize.setWidth( m_aSymbolLastSize.Width() + static_cast<long>(static_cast<double>(nDelta) * fSizeRatio) );
+            m_aSymbolSize.setWidth( OutputDevice::LogicToLogic( m_aSymbolSize.Width(), m_ePoolUnit, MapUnit::Map100thMM ) );
             m_pSymbolWidthMF->SetUserValue(m_pSymbolWidthMF->Normalize(m_aSymbolSize.Width()), FUNIT_100TH_MM);
         }
     }

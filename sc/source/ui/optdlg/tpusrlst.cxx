@@ -20,7 +20,7 @@
 #undef SC_DLLIMPLEMENTATION
 
 #include <comphelper/string.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <global.hxx>
 #include <document.hxx>
@@ -419,7 +419,10 @@ void ScTpUserLists::CopyListFromArea( const ScRefAddress& rStartPos,
 
         if ( bValueIgnored )
         {
-            ScopedVclPtrInstance<InfoBox>(this, aStrCopyErr)->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          aStrCopyErr));
+            xInfoBox->run();
         }
     }
 
@@ -613,10 +616,12 @@ IMPL_LINK( ScTpUserLists, BtnClickHdl, Button*, pBtn, void )
                           + mpLbLists->GetEntry( nRemovePos )
                           + aStrQueryRemove.getToken( 1, '#' );
 
-            if ( RET_YES == ScopedVclPtrInstance<QueryBox>( this,
-                                      MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                      aMsg
-                                     )->Execute() )
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           aMsg));
+            xQueryBox->set_default_response(RET_YES);
+
+            if (RET_YES == xQueryBox->run())
             {
                 RemoveList( nRemovePos );
                 UpdateUserListBox();
@@ -692,9 +697,11 @@ IMPL_LINK( ScTpUserLists, BtnClickHdl, Button*, pBtn, void )
         }
         else
         {
-            ScopedVclPtrInstance<MessageDialog>(this,
-                      ScGlobal::GetRscString( STR_INVALID_TABREF )
-                    )->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                        VclMessageType::Warning, VclButtonsType::Ok,
+                        ScGlobal::GetRscString(STR_INVALID_TABREF)));
+
+            xBox->run();
             mpEdCopyFrom->GrabFocus();
             mpEdCopyFrom->SetSelection( Selection( 0, SELECTION_MAX ) );
         }

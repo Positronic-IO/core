@@ -448,8 +448,8 @@ void Window::SetZoomedPointFont(vcl::RenderContext& rRenderContext, const vcl::F
     {
         vcl::Font aFont(rFont);
         Size aSize = aFont.GetFontSize();
-        aSize.Width() = WinFloatRound(double(aSize.Width() * rZoom));
-        aSize.Height() = WinFloatRound(double(aSize.Height() * rZoom));
+        aSize.setWidth( WinFloatRound(double(aSize.Width() * rZoom)) );
+        aSize.setHeight( WinFloatRound(double(aSize.Height() * rZoom)) );
         aFont.SetFontSize(aSize);
         SetPointFont(rRenderContext, aFont);
     }
@@ -523,7 +523,7 @@ void Window::SetControlForeground()
 {
     if (mpWindowImpl->mbControlForeground)
     {
-        mpWindowImpl->maControlForeground = Color(COL_TRANSPARENT);
+        mpWindowImpl->maControlForeground = COL_TRANSPARENT;
         mpWindowImpl->mbControlForeground = false;
         CompatStateChanged(StateChangedType::ControlForeground);
     }
@@ -535,7 +535,7 @@ void Window::SetControlForeground(const Color& rColor)
     {
         if (mpWindowImpl->mbControlForeground)
         {
-            mpWindowImpl->maControlForeground = Color(COL_TRANSPARENT);
+            mpWindowImpl->maControlForeground = COL_TRANSPARENT;
             mpWindowImpl->mbControlForeground = false;
             CompatStateChanged(StateChangedType::ControlForeground);
         }
@@ -563,7 +563,7 @@ void Window::SetControlBackground()
 {
     if (mpWindowImpl->mbControlBackground)
     {
-        mpWindowImpl->maControlBackground = Color(COL_TRANSPARENT);
+        mpWindowImpl->maControlBackground = COL_TRANSPARENT;
         mpWindowImpl->mbControlBackground = false;
         CompatStateChanged(StateChangedType::ControlBackground);
     }
@@ -575,7 +575,7 @@ void Window::SetControlBackground(const Color& rColor)
     {
         if (mpWindowImpl->mbControlBackground)
         {
-            mpWindowImpl->maControlBackground = Color(COL_TRANSPARENT);
+            mpWindowImpl->maControlBackground = COL_TRANSPARENT;
             mpWindowImpl->mbControlBackground = false;
             CompatStateChanged(StateChangedType::ControlBackground);
         }
@@ -602,16 +602,16 @@ void Window::ApplyControlBackground(vcl::RenderContext& rRenderContext, const Co
 Size Window::CalcWindowSize( const Size& rOutSz ) const
 {
     Size aSz = rOutSz;
-    aSz.Width()  += mpWindowImpl->mnLeftBorder+mpWindowImpl->mnRightBorder;
-    aSz.Height() += mpWindowImpl->mnTopBorder+mpWindowImpl->mnBottomBorder;
+    aSz.AdjustWidth(mpWindowImpl->mnLeftBorder+mpWindowImpl->mnRightBorder );
+    aSz.AdjustHeight(mpWindowImpl->mnTopBorder+mpWindowImpl->mnBottomBorder );
     return aSz;
 }
 
 Size Window::CalcOutputSize( const Size& rWinSz ) const
 {
     Size aSz = rWinSz;
-    aSz.Width()  -= mpWindowImpl->mnLeftBorder+mpWindowImpl->mnRightBorder;
-    aSz.Height() -= mpWindowImpl->mnTopBorder+mpWindowImpl->mnBottomBorder;
+    aSz.AdjustWidth( -(mpWindowImpl->mnLeftBorder+mpWindowImpl->mnRightBorder) );
+    aSz.AdjustHeight( -(mpWindowImpl->mnTopBorder+mpWindowImpl->mnBottomBorder) );
     return aSz;
 }
 
@@ -895,6 +895,12 @@ ImplFrameData* Window::ImplGetFrameData()
 SalFrame* Window::ImplGetFrame() const
 {
     return mpWindowImpl ? mpWindowImpl->mpFrame : nullptr;
+}
+
+weld::Window* Window::GetFrameWeld() const
+{
+    SalFrame* pFrame = ImplGetFrame();
+    return pFrame ? pFrame->GetFrameWeld() : nullptr;
 }
 
 vcl::Window* Window::ImplGetParent() const
@@ -1650,9 +1656,9 @@ Size Window::get_ungrouped_preferred_size() const
         }
 
         if (aRet.Width() == -1)
-            aRet.Width() = pWindowImpl->mnOptimalWidthCache;
+            aRet.setWidth( pWindowImpl->mnOptimalWidthCache );
         if (aRet.Height() == -1)
-            aRet.Height() = pWindowImpl->mnOptimalHeightCache;
+            aRet.setHeight( pWindowImpl->mnOptimalHeightCache );
     }
     return aRet;
 }
@@ -1669,18 +1675,18 @@ Size Window::get_preferred_size() const
         {
             const bool bIgnoreInHidden = pWindowImpl->m_xSizeGroup->get_ignore_hidden();
             const std::set<VclPtr<vcl::Window> > &rWindows = pWindowImpl->m_xSizeGroup->get_widgets();
-            for (auto aI = rWindows.begin(), aEnd = rWindows.end(); aI != aEnd; ++aI)
+            for (auto const& window : rWindows)
             {
-                const vcl::Window *pOther = *aI;
+                const vcl::Window *pOther = window;
                 if (pOther == this)
                     continue;
                 if (bIgnoreInHidden && !pOther->IsVisible())
                     continue;
                 Size aOtherSize = pOther->get_ungrouped_preferred_size();
                 if (eMode == VclSizeGroupMode::Both || eMode == VclSizeGroupMode::Horizontal)
-                    aRet.Width() = std::max(aRet.Width(), aOtherSize.Width());
+                    aRet.setWidth( std::max(aRet.Width(), aOtherSize.Width()) );
                 if (eMode == VclSizeGroupMode::Both || eMode == VclSizeGroupMode::Vertical)
-                    aRet.Height() = std::max(aRet.Height(), aOtherSize.Height());
+                    aRet.setHeight( std::max(aRet.Height(), aOtherSize.Height()) );
             }
         }
     }

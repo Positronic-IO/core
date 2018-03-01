@@ -91,6 +91,10 @@ public:
 
     explicit DffPropertyReader( const SvxMSDffManager& rManager );
     ~DffPropertyReader();
+
+    DffPropertyReader& operator=( DffPropertyReader const & ) = delete; // MSVC2015 workaround
+    DffPropertyReader( DffPropertyReader const & ) = delete; // MSVC2015 workaround
+
     static sal_Int32 Fix16ToAngle( sal_Int32 nAngle );
 
 #ifdef DBG_CUSTOMSHAPE
@@ -105,7 +109,7 @@ public:
     void ImportGradientColor( SfxItemSet& aSet, MSO_FillType eMSO_FillType, double dTrans, double dBackTrans ) const;
 };
 
-#define COL_DEFAULT RGB_COLORDATA( 0xFA, 0xFB, 0xFC )
+#define COL_DEFAULT ::Color( 0xFA, 0xFB, 0xFC )
 
 typedef ::std::map< sal_Int32, SdrObject* > SvxMSDffShapeIdContainer;
 
@@ -174,10 +178,13 @@ struct SvxMSDffConnectorRule
 
 struct MSFILTER_DLLPUBLIC SvxMSDffSolverContainer
 {
-    ::std::vector< SvxMSDffConnectorRule* > aCList;
+    ::std::vector< std::unique_ptr<SvxMSDffConnectorRule> > aCList;
 
     SvxMSDffSolverContainer();
     ~SvxMSDffSolverContainer();
+
+    SvxMSDffSolverContainer& operator=( SvxMSDffSolverContainer const & ) = delete; // MSVC2015 workaround
+    SvxMSDffSolverContainer( SvxMSDffSolverContainer const & ) = delete; // MSVC2015 workaround
 
     MSFILTER_DLLPUBLIC friend SvStream& ReadSvxMSDffSolverContainer( SvStream& rIn, SvxMSDffSolverContainer& rAtom );
 };
@@ -524,7 +531,7 @@ public:
     std::map<sal_uInt32,OString> aEscherBlipCache;
 
     DffRecordManager    maShapeRecords;
-    ColorData           mnDefaultColor;
+    Color               mnDefaultColor;
 
     bool                mbSkipImages;
 
@@ -581,7 +588,7 @@ public:
                      SvStream* pStData,
                      SdrModel* pSdrModel_,
                      long      nApplicationScale,
-                     ColorData mnDefaultColor_      =  COL_DEFAULT,
+                     Color     mnDefaultColor_      =  COL_DEFAULT,
                      SvStream* pStData2_            =  nullptr,
                      bool bSkipImages               =  false );
 

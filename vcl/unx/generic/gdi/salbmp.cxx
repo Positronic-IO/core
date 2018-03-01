@@ -355,8 +355,8 @@ BitmapBuffer* X11SalBitmap::ImplCreateDIB(
                 rPal.SetEntryCount( 2 );
                 pDstPal = &rPal;
 
-                rPal[ 0 ] = Color( COL_BLACK );
-                rPal[ 1 ] = Color( COL_WHITE );
+                rPal[ 0 ] = COL_BLACK;
+                rPal[ 1 ] = COL_WHITE;
             }
             else if( pImage->depth == 8 && bGrey )
             {
@@ -518,8 +518,8 @@ XImage* X11SalBitmap::ImplCreateXImage(
             if( pImage->depth == 1 )
             {
                 xPal.reset(new BitmapPalette( 2 ));
-                (*xPal)[ 0 ] = Color( COL_BLACK );
-                (*xPal)[ 1 ] = Color( COL_WHITE );
+                (*xPal)[ 0 ] = COL_BLACK;
+                (*xPal)[ 1 ] = COL_WHITE;
             }
             else if( pImage->depth == 8 && mbGrey )
             {
@@ -831,13 +831,13 @@ Size X11SalBitmap::GetSize() const
 
     if( mpDIB )
     {
-        aSize.Width() = mpDIB->mnWidth;
-        aSize.Height() = mpDIB->mnHeight;
+        aSize.setWidth( mpDIB->mnWidth );
+        aSize.setHeight( mpDIB->mnHeight );
     }
     else if( mpDDB )
     {
-        aSize.Width() = mpDDB->ImplGetWidth();
-        aSize.Height() = mpDDB->ImplGetHeight();
+        aSize.setWidth( mpDDB->ImplGetWidth() );
+        aSize.setHeight( mpDDB->ImplGetHeight() );
     }
 
     return aSize;

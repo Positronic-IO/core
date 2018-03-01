@@ -17,10 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/msgbox.hxx>
 #include <vcl/field.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/weld.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <unotools/lingucfg.hxx>
 #include <editeng/unolingu.hxx>
@@ -56,7 +56,6 @@
 #include <editeng/optitems.hxx>
 #include <optlingu.hxx>
 #include <dialmgr.hxx>
-#include <helpids.h>
 #include <strings.hrc>
 
 #include <ucbhelper/content.hxx>
@@ -245,10 +244,10 @@ void BrwStringDic_Impl::Paint(const Point& rPos, SvTreeListBox& /*rDev*/, vcl::R
         vcl::Font aFont(rRenderContext.GetFont());
         aFont.SetWeight(WEIGHT_BOLD);
         rRenderContext.SetFont(aFont);
-        aPos.X() = 0;
+        aPos.setX( 0 );
     }
     else
-        aPos.X() += 5;
+        aPos.AdjustX(5 );
     rRenderContext.DrawText(aPos, GetText());
     rRenderContext.Pop();
 }
@@ -407,12 +406,12 @@ void BrwString_Impl::Paint(const Point& rPos, SvTreeListBox& /*rDev*/, vcl::Rend
                            const SvViewDataEntry* /*pView*/, const SvTreeListEntry& rEntry)
 {
     Point aPos(rPos);
-    aPos.X() += 20;
+    aPos.AdjustX(20 );
     rRenderContext.DrawText(aPos, GetText());
     if (rEntry.GetUserData())
     {
         Point aNewPos(aPos);
-        aNewPos.X() += rRenderContext.GetTextWidth(GetText());
+        aNewPos.AdjustX(rRenderContext.GetTextWidth(GetText()) );
         rRenderContext.Push(PushFlags::FONT);
         vcl::Font aFont(rRenderContext.GetFont());
         aFont.SetWeight(WEIGHT_BOLD);
@@ -1077,14 +1076,12 @@ bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
         if (!pLinguData)
             pLinguData = new SvxLinguData_Impl;
 
-        LangImplNameTable::const_iterator aIt;
-
         // update spellchecker configuration entries
         const LangImplNameTable *pTable = &pLinguData->GetSpellTable();
-        for (aIt = pTable->begin();  aIt != pTable->end();  ++aIt)
+        for (auto const& elem : *pTable)
         {
-            LanguageType nLang = aIt->first;
-            const Sequence< OUString > aImplNames( aIt->second );
+            LanguageType nLang = elem.first;
+            const Sequence< OUString > aImplNames(elem.second);
             uno::Reference< XLinguServiceManager2 > xMgr( pLinguData->GetManager() );
             Locale aLocale( LanguageTag::convertToLocale(nLang) );
             if (xMgr.is())
@@ -1093,10 +1090,10 @@ bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
 
         // update grammar checker configuration entries
         pTable = &pLinguData->GetGrammarTable();
-        for (aIt = pTable->begin();  aIt != pTable->end();  ++aIt)
+        for (auto const& elem : *pTable)
         {
-            LanguageType nLang = aIt->first;
-            const Sequence< OUString > aImplNames( aIt->second );
+            LanguageType nLang = elem.first;
+            const Sequence< OUString > aImplNames(elem.second);
             uno::Reference< XLinguServiceManager2 > xMgr( pLinguData->GetManager() );
             Locale aLocale( LanguageTag::convertToLocale(nLang) );
             if (xMgr.is())
@@ -1105,10 +1102,10 @@ bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
 
         // update hyphenator configuration entries
         pTable = &pLinguData->GetHyphTable();
-        for (aIt = pTable->begin();  aIt != pTable->end();  ++aIt)
+        for (auto const& elem : *pTable)
         {
-            LanguageType nLang = aIt->first;
-            const Sequence< OUString > aImplNames( aIt->second );
+            LanguageType nLang = elem.first;
+            const Sequence< OUString > aImplNames(elem.second);
             uno::Reference< XLinguServiceManager2 > xMgr( pLinguData->GetManager() );
             Locale aLocale( LanguageTag::convertToLocale(nLang) );
             if (xMgr.is())
@@ -1117,10 +1114,10 @@ bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
 
         // update thesaurus configuration entries
         pTable = &pLinguData->GetThesTable();
-        for (aIt = pTable->begin();  aIt != pTable->end();  ++aIt)
+        for (auto const& elem : *pTable)
         {
-            LanguageType nLang = aIt->first;
-            const Sequence< OUString > aImplNames( aIt->second );
+            LanguageType nLang = elem.first;
+            const Sequence< OUString > aImplNames(elem.second);
             uno::Reference< XLinguServiceManager2 > xMgr( pLinguData->GetManager() );
             Locale aLocale( LanguageTag::convertToLocale(nLang) );
             if (xMgr.is())
@@ -1554,9 +1551,9 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
     }
     else if (m_pLinguDicsDelPB == pBtn)
     {
-        ScopedVclPtrInstance<MessageDialog> aQuery(this, "QueryDeleteDictionaryDialog",
-                                                   "cui/ui/querydeletedictionarydialog.ui");
-        if (RET_NO == aQuery->Execute())
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querydeletedictionarydialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryDeleteDictionaryDialog"));
+        if (RET_NO == xQuery->run())
             return;
 
         SvTreeListEntry *pEntry = m_pLinguDicsCLB->GetCurEntry();

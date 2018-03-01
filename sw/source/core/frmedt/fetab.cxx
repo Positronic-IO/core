@@ -167,18 +167,19 @@ void SwFEShell::ParkCursorInTab()
     }
 }
 
-bool SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
+void SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
 {
     // check if Point/Mark of current cursor are in a table
     SwFrame *pFrame = GetCurrFrame();
     if( !pFrame || !pFrame->IsInTab() )
-        return false;
+        return;
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
 
     SET_CURR_SHELL( this );
@@ -200,35 +201,35 @@ bool SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
 
     TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
-    bool bRet = false;
     if ( aBoxes.size() )
-        bRet = GetDoc()->InsertRow( aBoxes, nCnt, bBehind );
+        GetDoc()->InsertRow( aBoxes, nCnt, bBehind );
 
     EndAllActionAndCall();
-    return bRet;
 }
 
-bool SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
+void SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
 {
     // check if Point/Mark of current cursor are in a table
     SwFrame *pFrame = GetCurrFrame();
     if( !pFrame || !pFrame->IsInTab() )
-        return false;
+        return;
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
 
     SET_CURR_SHELL( this );
 
     if( !CheckSplitCells( *this, nCnt + 1, SwTableSearchType::Col ) )
     {
-        ErrorHandler::HandleError( ERR_TBLINSCOL_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLINSCOL_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
 
     StartAllAction();
@@ -238,12 +239,10 @@ bool SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
 
     TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
-    bool bRet = false;
     if( !aBoxes.empty() )
-        bRet = GetDoc()->InsertCol( aBoxes, nCnt, bBehind );
+        GetDoc()->InsertCol( aBoxes, nCnt, bBehind );
 
     EndAllActionAndCall();
-    return bRet;
 }
 
 //  Determines if the current cursor is in the last row of the table.
@@ -272,7 +271,8 @@ bool SwFEShell::DeleteCol()
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
         return false;
     }
@@ -309,9 +309,9 @@ bool SwFEShell::DeleteCol()
     return bRet;
 }
 
-bool SwFEShell::DeleteTable()
+void SwFEShell::DeleteTable()
 {
-    return DeleteRow(true);
+    DeleteRow(true);
 }
 
 bool SwFEShell::DeleteRow(bool bCompleteTable)
@@ -323,7 +323,8 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
         return false;
     }
@@ -442,7 +443,8 @@ TableMergeErr SwFEShell::MergeTab()
         const SwTableNode* pTableNd = pTableCursor->GetNode().FindTableNode();
         if( dynamic_cast< const SwDDETable* >(&pTableNd->GetTable()) != nullptr )
         {
-            ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+            vcl::Window* pWin = GetWin();
+            ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                             DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
         }
         else
@@ -464,31 +466,32 @@ TableMergeErr SwFEShell::MergeTab()
     return nRet;
 }
 
-bool SwFEShell::SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight )
+void SwFEShell::SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight )
 {
     // check if Point/Mark of current cursor are in a table
     SwFrame *pFrame = GetCurrFrame();
     if( !pFrame || !pFrame->IsInTab() )
-        return false;
+        return;
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr  )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
 
     SET_CURR_SHELL( this );
 
     if( bVert && !CheckSplitCells( *this, nCnt + 1, SwTableSearchType::NONE ) )
     {
-        ErrorHandler::HandleError( ERR_TBLSPLIT_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLSPLIT_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
     StartAllAction();
     // search boxes via the layout
-    bool bRet;
     SwSelBoxes aBoxes;
     GetTableSel( *this, aBoxes );
     if( !aBoxes.empty() )
@@ -496,14 +499,11 @@ bool SwFEShell::SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight )
         TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
         // now delete the columns
-        bRet = GetDoc()->SplitTable( aBoxes, bVert, nCnt, bSameHeight );
+        GetDoc()->SplitTable( aBoxes, bVert, nCnt, bSameHeight );
 
         ClearFEShellTabCols(*GetDoc(), nullptr);
     }
-    else
-        bRet = false;
     EndAllActionAndCall();
-    return bRet;
 }
 
 void SwFEShell::GetTabCols_(SwTabCols &rToFill, const SwFrame *pBox) const
@@ -1279,7 +1279,8 @@ bool SwFEShell::DeleteTableSel()
 
     if( dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
         return false;
     }
@@ -1454,8 +1455,8 @@ static const SwCellFrame *lcl_FindFrame( const SwLayoutFrame *pLay, const Point 
                                           aRectFnSet.GetLeft(aTabRect);
                     const SwTwips nTop  = aRectFnSet.GetTop(aTabRect);
 
-                    SwTwips& rPointX = aRectFnSet.IsVert() ? aPt.Y() : aPt.X();
-                    SwTwips& rPointY = aRectFnSet.IsVert() ? aPt.X() : aPt.Y();
+                    SwTwips const rPointX = aRectFnSet.IsVert() ? aPt.Y() : aPt.X();
+                    SwTwips const rPointY = aRectFnSet.IsVert() ? aPt.X() : aPt.Y();
 
                     const SwTwips nXDiff = aRectFnSet.XDiff( nLeft, rPointX ) * ( bRTL ? -1 : 1 );
                     const SwTwips nYDiff = aRectFnSet.YDiff( nTop, rPointY );
@@ -1484,9 +1485,9 @@ static const SwCellFrame *lcl_FindFrame( const SwLayoutFrame *pLay, const Point 
                     if ( bCloseToRow && bCloseToCol )
                         aPt = bRTL ? aTabRect.TopRight() : aRectFnSet.GetPos(aTabRect);
                     else if ( bCloseToRow )
-                        rPointX = nLeft;
+                        aRectFnSet.IsVert() ? aPt.setY(nLeft) : aPt.setX(nLeft);
                     else if ( bCloseToCol )
-                        rPointY = nTop;
+                        aRectFnSet.IsVert() ? aPt.setX(nTop) : aPt.setY(nTop);
 
                     if ( !bCloseToRow && !bCloseToCol )
                         bSearchForFrameInTab = false;
@@ -2162,18 +2163,19 @@ static bool lcl_GoTableRow( SwCursorShell* pShell, bool bUp )
 }
 
 // change a cell width/cell height/column width/row height
-bool SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 nDiff )
+void SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 nDiff )
 {
     SwFrame *pFrame = GetCurrFrame();
     if( !pFrame || !pFrame->IsInTab() )
-        return false;
+        return;
 
     if( (TableChgWidthHeightType::InsertDeleteMode & eType) &&
         dynamic_cast< const SwDDETable* >(pFrame->ImplFindTabFrame()->GetTable()) != nullptr )
     {
-        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, GetWin(),
+        vcl::Window* pWin = GetWin();
+        ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
                         DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
-        return false;
+        return;
     }
 
     SET_CURR_SHELL( this );
@@ -2264,8 +2266,6 @@ bool SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 
         default: break;
         }
     }
-
-    return bRet;
 }
 
 static bool lcl_IsFormulaSelBoxes( const SwTable& rTable, const SwTableBoxFormula& rFormula,
@@ -2290,12 +2290,12 @@ static bool lcl_IsFormulaSelBoxes( const SwTable& rTable, const SwTableBoxFormul
 }
 
     // ask formula for auto-sum
-bool SwFEShell::GetAutoSum( OUString& rFormula ) const
+void SwFEShell::GetAutoSum( OUString& rFormula ) const
 {
     SwFrame *pFrame = GetCurrFrame();
     SwTabFrame *pTab = pFrame ? pFrame->ImplFindTabFrame() : nullptr;
     if( !pTab )
-        return false;
+        return;
 
     SwCellFrames aCells;
     OUString sFields;
@@ -2384,8 +2384,6 @@ bool SwFEShell::GetAutoSum( OUString& rFormula ) const
     {
         rFormula += "(" + sFields + ")";
     }
-
-    return true;
 }
 
 bool SwFEShell::IsTableRightToLeft() const

@@ -41,6 +41,8 @@
 #include <viewopt.hxx>
 #include <flyfrm.hxx>
 #include <sortedobjs.hxx>
+#include <ndindex.hxx>
+#include <node.hxx>
 
 #include <limits>
 #include <set>
@@ -502,7 +504,7 @@ bool sanityCheckLayoutCache(SwLayCacheImpl const& rCache,
 /** helper class, which utilizes the layout cache information
  *  to distribute the document content to the right pages.
  * It's used by the InsertCnt_(..)-function.
- * If there's no layout cache, the distibution to the pages is more
+ * If there's no layout cache, the distribution to the pages is more
  * a guess, but a guess with statistical background.
  */
 SwLayHelper::SwLayHelper( SwDoc *pD, SwFrame* &rpF, SwFrame* &rpP, SwPageFrame* &rpPg,
@@ -809,7 +811,7 @@ bool SwLayHelper::CheckInsert( sal_uLong nNodeIndex )
                         {
                             SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*mrpFrame);
                             aFrm.Pos() = mrpLay->getFrameArea().Pos();
-                            aFrm.Pos().Y() += 1;
+                            aFrm.Pos().AdjustY(1 );
                         }
 
                         mrpPrv = mrpFrame;
@@ -919,7 +921,7 @@ bool SwLayHelper::CheckInsert( sal_uLong nNodeIndex )
                     {
                         SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pSct);
                         aFrm.Pos() = mrpLay->getFrameArea().Pos();
-                        aFrm.Pos().Y() += 1; //because of the notifications
+                        aFrm.Pos().AdjustY(1 ); //because of the notifications
                     }
 
                     mrpLay = pSct;
@@ -1020,8 +1022,8 @@ void SwLayHelper::CheckFlyCache_( SwPageFrame* pPage )
                 {
                     // we get the stored information
                     SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*pFly);
-                    aFrm.Pos().X() = pFlyCache->Left() + pPage->getFrameArea().Left();
-                    aFrm.Pos().Y() = pFlyCache->Top() + pPage->getFrameArea().Top();
+                    aFrm.Pos().setX( pFlyCache->Left() + pPage->getFrameArea().Left() );
+                    aFrm.Pos().setY( pFlyCache->Top() + pPage->getFrameArea().Top() );
 
                     if ( mpImpl->IsUseFlyCache() )
                     {
@@ -1054,9 +1056,8 @@ SwLayCacheIoImpl::SwLayCacheIoImpl( SvStream& rStrm, bool bWrtMd ) :
                 .ReadUInt16( nMinorVersion );
 }
 
-bool SwLayCacheIoImpl::OpenRec( sal_uInt8 cType )
+void SwLayCacheIoImpl::OpenRec( sal_uInt8 cType )
 {
-    bool bRes = true;
     sal_uInt32 nPos = pStream->Tell();
     if( bWriteMode )
     {
@@ -1073,7 +1074,6 @@ bool SwLayCacheIoImpl::OpenRec( sal_uInt8 cType )
             OSL_ENSURE( nVal, "OpenRec: Record-Header is 0" );
             OSL_ENSURE( cRecTyp == cType, "OpenRec: Wrong Record Type" );
             aRecords.emplace_back(0, pStream->Tell() );
-            bRes = false;
             bError = true;
         }
         else
@@ -1082,11 +1082,10 @@ bool SwLayCacheIoImpl::OpenRec( sal_uInt8 cType )
             aRecords.emplace_back(cRecTyp, nPos+nSize );
         }
     }
-    return bRes;
 }
 
 // Close record
-bool SwLayCacheIoImpl::CloseRec()
+void SwLayCacheIoImpl::CloseRec()
 {
     bool bRes = true;
     OSL_ENSURE( !aRecords.empty(), "CloseRec: no levels" );
@@ -1122,8 +1121,6 @@ bool SwLayCacheIoImpl::CloseRec()
 
     if( !bRes )
         bError = true;
-
-    return bRes;
 }
 
 sal_uInt32 SwLayCacheIoImpl::BytesLeft()

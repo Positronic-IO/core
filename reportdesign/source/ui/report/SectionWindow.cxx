@@ -26,7 +26,6 @@
 #include <DesignView.hxx>
 #include <strings.hxx>
 #include <core_resource.hxx>
-#include <helpids.h>
 #include <strings.hrc>
 #include <StartMarker.hxx>
 #include <EndMarker.hxx>
@@ -232,8 +231,8 @@ void OSectionWindow::Resize()
     long nEndWidth = long(REPORT_ENDMARKER_WIDTH * GetMapMode().GetScaleX());
 
     const Point aThumbPos = m_pParent->getView()->getThumbPos();
-    aOutputSize.Width() -= aThumbPos.X();
-    aOutputSize.Height() -=  m_aSplitter->GetSizePixel().Height();
+    aOutputSize.AdjustWidth( -(aThumbPos.X()) );
+    aOutputSize.AdjustHeight( -m_aSplitter->GetSizePixel().Height() );
 
     if ( m_aStartMarker->isCollapsed() )
     {
@@ -253,21 +252,21 @@ void OSectionWindow::Resize()
         const uno::Reference< report::XSection> xSection = m_aReportSection->getSection();
         Size aSectionSize = LogicToPixel( Size( 0,xSection->getHeight() ) );
         Point aReportPos(nStartWidth,0);
-        aSectionSize.Width() = aOutputSize.Width() - nStartWidth;
+        aSectionSize.setWidth( aOutputSize.Width() - nStartWidth );
         if ( bShowEndMarker )
-            aSectionSize.Width() -= nEndWidth;
+            aSectionSize.AdjustWidth( -nEndWidth );
 
         m_aReportSection->SetPosSizePixel(aReportPos,aSectionSize);
 
         // set splitter
-        aReportPos.Y() += aSectionSize.Height();
+        aReportPos.AdjustY(aSectionSize.Height() );
         m_aSplitter->SetPosSizePixel(aReportPos,Size(aSectionSize.Width(),m_aSplitter->GetSizePixel().Height()));
-        aSectionSize.Height() = static_cast<long>(1000 * static_cast<double>(GetMapMode().GetScaleY()));
+        aSectionSize.setHeight( static_cast<long>(1000 * static_cast<double>(GetMapMode().GetScaleY())) );
         m_aSplitter->SetDragRectPixel( tools::Rectangle(Point(nStartWidth,0),aSectionSize));
 
         // set end marker
-        aReportPos.X() += aSectionSize.Width();
-        aReportPos.Y() = 0;
+        aReportPos.AdjustX(aSectionSize.Width() );
+        aReportPos.setY( 0 );
         m_aEndMarker->Show(bShowEndMarker);
         m_aEndMarker->SetPosSizePixel(aReportPos,Size(nEndWidth,aOutputSize.Height()));
     }

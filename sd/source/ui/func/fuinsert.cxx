@@ -191,8 +191,8 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
                 // really store as link only?
                 if( SvtMiscOptions().ShowLinkWarningDialog() )
                 {
-                    ScopedVclPtrInstance< SvxLinkWarningDialog > aWarnDlg(mpWindow, aFileName);
-                    if( aWarnDlg->Execute() != RET_OK )
+                    SvxLinkWarningDialog aWarnDlg(mpWindow->GetFrameWeld(), aFileName);
+                    if (aWarnDlg.run() != RET_OK)
                         return; // don't store as link
                 }
 
@@ -368,8 +368,8 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                 if (aSize.Height() == 0 || aSize.Width() == 0)
                 {
                     // rectangle with balanced edge ratio
-                    aSize.Width()  = 14100;
-                    aSize.Height() = 10000;
+                    aSize.setWidth( 14100 );
+                    aSize.setHeight( 10000 );
                     Size aTmp = OutputDevice::LogicToLogic(aSize, MapMode(MapUnit::Map100thMM), MapMode(aUnit));
                     aSz.Width = aTmp.Width();
                     aSz.Height = aTmp.Height();
@@ -384,8 +384,8 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                 ::tools::Rectangle aWinRect(aPos, mpWindow->GetOutputSizePixel() );
                 aPos = aWinRect.Center();
                 aPos = mpWindow->PixelToLogic(aPos);
-                aPos.X() -= aSize.Width() / 2;
-                aPos.Y() -= aSize.Height() / 2;
+                aPos.AdjustX( -(aSize.Width() / 2) );
+                aPos.AdjustY( -(aSize.Height() / 2) );
                 aRect = ::tools::Rectangle(aPos, aSize);
             }
 
@@ -544,8 +544,8 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                     if (aSize.Height() == 0 || aSize.Width() == 0)
                     {
                         // rectangle with balanced edge ratio
-                        aSize.Width()  = 14100;
-                        aSize.Height() = 10000;
+                        aSize.setWidth( 14100 );
+                        aSize.setHeight( 10000 );
                         Size aTmp = OutputDevice::LogicToLogic(aSize, MapMode(MapUnit::Map100thMM), MapMode(aMapUnit));
                         aSz.Width = aTmp.Width();
                         aSz.Height = aTmp.Height();
@@ -726,7 +726,7 @@ void FuInsertAVMedia::DoExecute( SfxRequest& rReq )
                 mpWindow->LeaveWait();
 
             if( !bAPI )
-                ::avmedia::MediaWindow::executeFormatErrorBox( mpWindow );
+                ::avmedia::MediaWindow::executeFormatErrorBox(mpWindow->GetFrameWeld());
         }
         else
         {
@@ -747,8 +747,8 @@ void FuInsertAVMedia::DoExecute( SfxRequest& rReq )
             if( mpWindow )
             {
                 aPos = mpWindow->PixelToLogic( ::tools::Rectangle( aPos, mpWindow->GetOutputSizePixel() ).Center() );
-                aPos.X() -= aSize.Width() >> 1;
-                aPos.Y() -= aSize.Height() >> 1;
+                aPos.AdjustX( -(aSize.Width() >> 1) );
+                aPos.AdjustY( -(aSize.Height() >> 1) );
             }
 
             mpView->InsertMediaURL( aURL, nAction, aPos, aSize, bLink ) ;

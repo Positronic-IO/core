@@ -62,6 +62,8 @@
 #include <IDocumentLayoutAccess.hxx>
 #include <textboxhelper.hxx>
 #include <txtfly.hxx>
+#include <ndindex.hxx>
+#include <pam.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 
@@ -88,8 +90,7 @@ SwFlyFrame::SwFlyFrame( SwFlyFrameFormat *pFormat, SwFrame* pSib, SwFrame *pAnch
 
     // Size setting: Fixed size is always the width
     const SwFormatFrameSize &rFrameSize = pFormat->GetFrameSize();
-    const SvxFrameDirection nDir =
-        static_cast<const SvxFrameDirectionItem&>(pFormat->GetFormatAttr( RES_FRAMEDIR )).GetValue();
+    const SvxFrameDirection nDir = pFormat->GetFormatAttr( RES_FRAMEDIR ).GetValue();
     if( SvxFrameDirection::Environment == nDir )
     {
         mbDerivedVert = true;
@@ -764,10 +765,10 @@ void SwFlyFrame::UpdateAttr_( const SfxPoolItem *pOld, const SfxPoolItem *pNew,
                 SwRect aOld( getFrameArea() );
                 const SvxULSpaceItem &rUL = static_cast<const SwFormatChg*>(pOld)->pChangedFormat->GetULSpace();
                 aOld.Top( std::max( aOld.Top() - long(rUL.GetUpper()), 0L ) );
-                aOld.SSize().Height()+= rUL.GetLower();
+                aOld.SSize().AdjustHeight(rUL.GetLower() );
                 const SvxLRSpaceItem &rLR = static_cast<const SwFormatChg*>(pOld)->pChangedFormat->GetLRSpace();
                 aOld.Left  ( std::max( aOld.Left() - rLR.GetLeft(), 0L ) );
-                aOld.SSize().Width() += rLR.GetRight();
+                aOld.SSize().AdjustWidth(rLR.GetRight() );
                 aNew.Union( aOld );
                 NotifyBackground( FindPageFrame(), aNew, PREP_CLEAR );
 
@@ -866,13 +867,13 @@ void SwFlyFrame::UpdateAttr_( const SfxPoolItem *pOld, const SfxPoolItem *pNew,
                 {
                     const SvxULSpaceItem &rUL = *static_cast<const SvxULSpaceItem*>(pNew);
                     aOld.Top( std::max( aOld.Top() - long(rUL.GetUpper()), 0L ) );
-                    aOld.SSize().Height()+= rUL.GetLower();
+                    aOld.SSize().AdjustHeight(rUL.GetLower() );
                 }
                 else
                 {
                     const SvxLRSpaceItem &rLR = *static_cast<const SvxLRSpaceItem*>(pNew);
                     aOld.Left  ( std::max( aOld.Left() - rLR.GetLeft(), 0L ) );
-                    aOld.SSize().Width() += rLR.GetRight();
+                    aOld.SSize().AdjustWidth(rLR.GetRight() );
                 }
             }
             aNew.Union( aOld );
@@ -2343,21 +2344,23 @@ Size SwFlyFrame::CalcRel( const SwFormatFrameSize &rSz ) const
             nRelWidth  = pSh->GetBrowseWidth();
             nRelHeight = pSh->VisArea().Height();
             Size aBorder = pSh->GetOut()->PixelToLogic( pSh->GetBrowseBorder() );
-            long nDiff = nRelWidth - pRel->getFramePrintArea().Width();
-            if ( nDiff > 0 )
-                nRelWidth -= nDiff;
+            nRelWidth  = std::min( nRelWidth,  pRel->getFramePrintArea().Width() );
             nRelHeight -= 2*aBorder.Height();
-            nDiff = nRelHeight - pRel->getFramePrintArea().Height();
-            if ( nDiff > 0 )
-                nRelHeight -= nDiff;
+            nRelHeight = std::min( nRelHeight, pRel->getFramePrintArea().Height() );
         }
 
         // At the moment only the "== PAGE_FRAME" and "!= PAGE_FRAME" cases are handled.
         // When size is a relative to page size, ignore size of SwBodyFrame.
         if (rSz.GetWidthPercentRelation() != text::RelOrientation::PAGE_FRAME)
             nRelWidth  = std::min( nRelWidth,  pRel->getFramePrintArea().Width() );
+        else if ( pRel->IsPageFrame() )
+            nRelWidth  = std::min( nRelWidth,  pRel->getFrameArea().Width() );
+
         if (rSz.GetHeightPercentRelation() != text::RelOrientation::PAGE_FRAME)
             nRelHeight = std::min( nRelHeight, pRel->getFramePrintArea().Height() );
+        else if ( pRel->IsPageFrame() )
+            nRelHeight = std::min( nRelHeight, pRel->getFrameArea().Height() );
+
         if( !pRel->IsPageFrame() )
         {
             const SwPageFrame* pPage = FindPageFrame();
@@ -2377,19 +2380,19 @@ Size SwFlyFrame::CalcRel( const SwFormatFrameSize &rSz ) const
         }
 
         if ( rSz.GetWidthPercent() && rSz.GetWidthPercent() != SwFormatFrameSize::SYNCED )
-            aRet.Width() = nRelWidth * rSz.GetWidthPercent() / 100;
+            aRet.setWidth( nRelWidth * rSz.GetWidthPercent() / 100 );
         if ( rSz.GetHeightPercent() && rSz.GetHeightPercent() != SwFormatFrameSize::SYNCED )
-            aRet.Height() = nRelHeight * rSz.GetHeightPercent() / 100;
+            aRet.setHeight( nRelHeight * rSz.GetHeightPercent() / 100 );
 
         if ( rSz.GetWidthPercent() == SwFormatFrameSize::SYNCED )
         {
-            aRet.Width() *= aRet.Height();
-            aRet.Width() /= rSz.GetHeight();
+            aRet.setWidth( aRet.Width() * ( aRet.Height()) );
+            aRet.setWidth( aRet.Width() / ( rSz.GetHeight()) );
         }
         else if ( rSz.GetHeightPercent() == SwFormatFrameSize::SYNCED )
         {
-            aRet.Height() *= aRet.Width();
-            aRet.Height() /= rSz.GetWidth();
+            aRet.setHeight( aRet.Height() * ( aRet.Width()) );
+            aRet.setHeight( aRet.Height() / ( rSz.GetWidth()) );
         }
     }
     return aRet;

@@ -283,7 +283,7 @@ enum SvXMLStyleElemAttrTokens
 
 #define XML_NUMF_COLORCOUNT     10
 
-static const ColorData aNumFmtStdColors[XML_NUMF_COLORCOUNT] =
+static const Color aNumFmtStdColors[XML_NUMF_COLORCOUNT] =
 {
     COL_BLACK,
     COL_LIGHTBLUE,
@@ -884,8 +884,6 @@ static void lcl_EnquoteIfNecessary( OUStringBuffer& rContent, const SvXMLNumForm
 //  SvXMLNumFmtElementContext
 
 
-const sal_Int32 MAX_SECOND_DIGITS = 20; // fdo#58539 & gnome#627420: limit number of digits during import
-
 SvXMLNumFmtElementContext::SvXMLNumFmtElementContext( SvXMLImport& rImport,
                                     sal_uInt16 nPrfx, const OUString& rLName,
                                     SvXMLNumFormatContext& rParentContext, sal_uInt16 nNewType,
@@ -919,7 +917,10 @@ SvXMLNumFmtElementContext::SvXMLNumFmtElementContext( SvXMLImport& rImport,
         {
             case XML_TOK_ELEM_ATTR_DECIMAL_PLACES:
                 if (::sax::Converter::convertNumber( nAttrVal, sValue, 0 ))
-                    aNumInfo.nDecimals = std::min<sal_Int32>(nAttrVal, MAX_SECOND_DIGITS);
+                {
+                    // fdo#58539 & gnome#627420: limit number of digits during import
+                    aNumInfo.nDecimals = std::min<sal_Int32>(nAttrVal, NF_MAX_FORMAT_SYMBOLS);
+                }
                 break;
             case XML_TOK_ELEM_ATTR_MIN_DECIMAL_PLACES:
                 if (::sax::Converter::convertNumber( nAttrVal, sValue, 0 ))
@@ -951,7 +952,7 @@ SvXMLNumFmtElementContext::SvXMLNumFmtElementContext( SvXMLImport& rImport,
                 break;
             case XML_TOK_ELEM_ATTR_MIN_EXPONENT_DIGITS:
                 if (::sax::Converter::convertNumber( nAttrVal, sValue, 0 ))
-                    aNumInfo.nExpDigits = nAttrVal;
+                    aNumInfo.nExpDigits = std::min<sal_Int32>(nAttrVal, NF_MAX_FORMAT_SYMBOLS);
                 break;
             case XML_TOK_ELEM_ATTR_EXPONENT_INTERVAL:
                 if (::sax::Converter::convertNumber( nAttrVal, sValue, 0 ))
@@ -2215,7 +2216,7 @@ void SvXMLNumFormatContext::AddCondition( const OUString& rCondition, const OUSt
     aMyConditions.push_back(aCondition);
 }
 
-void SvXMLNumFormatContext::AddColor( sal_uInt32 const nColor )
+void SvXMLNumFormatContext::AddColor( Color const nColor )
 {
     SvNumberFormatter* pFormatter = pData->GetNumberFormatter();
     if (!pFormatter)

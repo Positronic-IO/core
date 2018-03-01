@@ -63,13 +63,13 @@
 #include <osl/conditn.hxx>
 #include <unotools/resmgr.hxx>
 #include <vcl/errinf.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <osl/thread.hxx>
 #include <tools/diagnose_ex.h>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <svtools/sfxecode.hxx>
-#include <vcl/msgbox.hxx>
-#include <vcl/svapp.hxx>
 #include <unotools/configmgr.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/processfactory.hxx>
@@ -172,7 +172,11 @@ UUIInteractionHelper::handleRequest(
         HandleData aHD(rRequest);
         Link<void*,void> aLink(&aHD,handlerequest);
         Application::PostUserEvent(aLink,this);
+        comphelper::SolarMutex& rSolarMutex = Application::GetSolarMutex();
+        sal_uInt32 nLockCount = (rSolarMutex.IsCurrentThread()) ? rSolarMutex.release(true) : 0;
         aHD.wait();
+        if (nLockCount)
+            rSolarMutex.acquire(nLockCount);
         return aHD.bHandled;
     }
     else
@@ -223,7 +227,11 @@ UUIInteractionHelper::getStringFromRequest(
         HandleData aHD(rRequest);
         Link<void*,void> aLink(&aHD,getstringfromrequest);
         Application::PostUserEvent(aLink,this);
+        comphelper::SolarMutex& rSolarMutex = Application::GetSolarMutex();
+        sal_uInt32 nLockCount = (rSolarMutex.IsCurrentThread()) ? rSolarMutex.release(true) : 0;
         aHD.wait();
+        if (nLockCount)
+            rSolarMutex.acquire(nLockCount);
         return aHD.m_aResult;
     }
     else
@@ -238,10 +246,11 @@ UUIInteractionHelper::replaceMessageWithArguments(
     OUString aMessage = _aMessage;
 
     SAL_WARN_IF(rArguments.size() == 0, "uui", "replaceMessageWithArguments: No arguments passed!");
-    if (rArguments.size() > 0)
-        aMessage = aMessage.replaceAll("$(ARG1)", rArguments[0]);
-    if (rArguments.size() > 1)
-        aMessage = aMessage.replaceAll("$(ARG2)", rArguments[1]);
+    for (size_t i = 0; i < rArguments.size(); ++i)
+    {
+        const OUString sReplaceTemplate = "$(ARG" + OUString::number(i+1) + ")";
+        aMessage = aMessage.replaceAll(sReplaceTemplate, rArguments[i]);
+    }
 
     return aMessage;
 }
@@ -956,36 +965,35 @@ namespace {
 
 DialogMask
 executeMessageBox(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     OUString const & rTitle,
     OUString const & rMessage,
-    MessBoxStyle nButtonMask)
+    VclMessageType eMessageType)
 {
     SolarMutexGuard aGuard;
-    WinBits nStyle(0);
 
-    ScopedVclPtrInstance< MessBox > xBox(pParent, nButtonMask, nStyle, rTitle, rMessage);
+    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent, eMessageType,
+        eMessageType == VclMessageType::Question ? VclButtonsType::YesNo : VclButtonsType::Ok, rMessage));
+    xBox->set_title(rTitle);
 
-    sal_uInt16 aMessResult = xBox->Execute();
+    short nMessResult = xBox->run();
     DialogMask aResult = DialogMask::NONE;
-    switch( aMessResult )
+    switch (nMessResult)
     {
-    case RET_OK:
-        aResult = DialogMask::ButtonsOk;
-        break;
-    case RET_CANCEL:
-        aResult = DialogMask::ButtonsCancel;
-        break;
-    case RET_YES:
-        aResult = DialogMask::ButtonsYes;
-        break;
-    case RET_NO:
-        aResult = DialogMask::ButtonsNo;
-        break;
-    case RET_RETRY:
-        aResult = DialogMask::ButtonsRetry;
-        break;
-    default: assert(false);
+        case RET_OK:
+            aResult = DialogMask::ButtonsOk;
+            break;
+        case RET_CANCEL:
+            aResult = DialogMask::ButtonsCancel;
+            break;
+        case RET_YES:
+            aResult = DialogMask::ButtonsYes;
+            break;
+        case RET_NO:
+            aResult = DialogMask::ButtonsNo;
+            break;
+        default:
+            assert(false);
     }
 
     return aResult;
@@ -1108,10 +1116,14 @@ UUIInteractionHelper::handleGenericErrorRequest(
                 aTitle += " - " ;
             aTitle += aErrTitle;
 
-            executeMessageBox(getParentProperty(), aTitle, aErrorString, MessBoxStyle::Ok);
+            vcl::Window* pWin = getParentProperty();
+            executeMessageBox(pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aErrorString, VclMessageType::Error);
         }
         else
-            ErrorHandler::HandleError(nErrorCode, getParentProperty());
+        {
+            vcl::Window* pParent = getParentProperty();
+            ErrorHandler::HandleError(nErrorCode, pParent ? pParent->GetFrameWeld() : nullptr);
+        }
 
         if (xApprove.is() && bWarning)
             xApprove->select();
@@ -1206,15 +1218,11 @@ UUIInteractionHelper::handleBrokenPackageRequest(
         return;
     }
 
-    MessBoxStyle nButtonMask;
+    VclMessageType eMessageType;
     if( xApprove.is() && xDisapprove.is() )
-    {
-        nButtonMask = MessBoxStyle::YesNo | MessBoxStyle::DefaultYes;
-    }
+        eMessageType = VclMessageType::Question;
     else if ( xAbort.is() )
-    {
-        nButtonMask = MessBoxStyle::Ok;
-    }
+        eMessageType = VclMessageType::Warning;
     else
         return;
 
@@ -1223,7 +1231,8 @@ UUIInteractionHelper::handleBrokenPackageRequest(
         " " +
         utl::ConfigManager::getProductVersion() );
 
-    switch (executeMessageBox(getParentProperty(), title, aMessage, nButtonMask))
+    vcl::Window* pWin = getParentProperty();
+    switch (executeMessageBox(pWin ? pWin->GetFrameWeld() : nullptr, title, aMessage, eMessageType))
     {
     case DialogMask::ButtonsOk:
         OSL_ENSURE( xAbort.is(), "unexpected situation" );

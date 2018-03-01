@@ -764,7 +764,8 @@ bool ScDocument::DeleteTab( SCTAB nTab )
                     SetAllFormulasDirty(aFormulaDirtyCxt);
                 }
                 // sheet names of references are not valid until sheet is deleted
-                pChartListenerCollection->UpdateScheduledSeriesRanges();
+                if (pChartListenerCollection)
+                    pChartListenerCollection->UpdateScheduledSeriesRanges();
 
                 if (comphelper::LibreOfficeKit::isActive())
                 {
@@ -864,7 +865,8 @@ bool ScDocument::DeleteTabs( SCTAB nTab, SCTAB nSheets )
                     SetAllFormulasDirty(aFormulaDirtyCxt);
                 }
                 // sheet names of references are not valid until sheet is deleted
-                pChartListenerCollection->UpdateScheduledSeriesRanges();
+                if (pChartListenerCollection)
+                    pChartListenerCollection->UpdateScheduledSeriesRanges();
 
                 if (comphelper::LibreOfficeKit::isActive())
                 {
@@ -1104,7 +1106,8 @@ bool ScDocument::ShrinkToDataArea(SCTAB nTab, SCCOL& rStartCol, SCROW& rStartRow
 
 bool ScDocument::ShrinkToUsedDataArea( bool& o_bShrunk, SCTAB nTab, SCCOL& rStartCol,
         SCROW& rStartRow, SCCOL& rEndCol, SCROW& rEndRow, bool bColumnsOnly,
-        bool bStickyTopRow, bool bStickyLeftCol, bool bConsiderCellNotes ) const
+        bool bStickyTopRow, bool bStickyLeftCol, bool bConsiderCellNotes,
+        bool bConsiderCellDrawObjects ) const
 {
     if (!ValidTab(nTab) || nTab >= static_cast<SCTAB> (maTabs.size()) || !maTabs[nTab])
     {
@@ -1112,7 +1115,7 @@ bool ScDocument::ShrinkToUsedDataArea( bool& o_bShrunk, SCTAB nTab, SCCOL& rStar
         return false;
     }
     return maTabs[nTab]->ShrinkToUsedDataArea( o_bShrunk, rStartCol, rStartRow, rEndCol, rEndRow,
-            bColumnsOnly, bStickyTopRow, bStickyLeftCol, bConsiderCellNotes );
+            bColumnsOnly, bStickyTopRow, bStickyLeftCol, bConsiderCellNotes, bConsiderCellDrawObjects );
 }
 
 SCROW ScDocument::GetLastDataRow( SCTAB nTab, SCCOL nCol1, SCCOL nCol2, SCROW nLastRow ) const
@@ -1366,7 +1369,7 @@ bool ScDocument::InsertRow( SCCOL nStartCol, SCTAB nStartTab,
         bRet = true;
     }
     SetAutoCalc( bOldAutoCalc );
-    if ( bRet )
+    if ( bRet && pChartListenerCollection )
         pChartListenerCollection->UpdateDirtyCharts();
     return bRet;
 }
@@ -1474,7 +1477,8 @@ void ScDocument::DeleteRow( SCCOL nStartCol, SCTAB nStartTab,
         std::for_each(maTabs.begin(), maTabs.end(), BroadcastRecalcOnRefMoveHandler( this));
     }
 
-    pChartListenerCollection->UpdateDirtyCharts();
+    if (pChartListenerCollection)
+        pChartListenerCollection->UpdateDirtyCharts();
 }
 
 void ScDocument::DeleteRow( const ScRange& rRange )
@@ -1675,7 +1679,8 @@ void ScDocument::DeleteCol(SCROW nStartRow, SCTAB nStartTab, SCROW nEndRow, SCTA
         std::for_each(maTabs.begin(), maTabs.end(), BroadcastRecalcOnRefMoveHandler( this));
     }
 
-    pChartListenerCollection->UpdateDirtyCharts();
+    if (pChartListenerCollection)
+        pChartListenerCollection->UpdateDirtyCharts();
 }
 
 void ScDocument::DeleteCol( const ScRange& rRange )
@@ -3359,7 +3364,7 @@ void ScDocument::FillTabMarked( SCTAB nSrcTab, const ScMarkData& rMark,
 }
 
 bool ScDocument::SetString( SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rString,
-                            ScSetStringParam* pParam )
+                            const ScSetStringParam* pParam )
 {
     ScTable* pTab = FetchTable(nTab);
     if (!pTab)
@@ -3398,7 +3403,7 @@ bool ScDocument::SetString( SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& 
 }
 
 bool ScDocument::SetString(
-    const ScAddress& rPos, const OUString& rString, ScSetStringParam* pParam )
+    const ScAddress& rPos, const OUString& rString, const ScSetStringParam* pParam )
 {
     return SetString(rPos.Col(), rPos.Row(), rPos.Tab(), rString, pParam);
 }
@@ -3809,7 +3814,7 @@ bool ScDocument::HasStringCells( const ScRange& rRange ) const
 
 bool ScDocument::HasSelectionData( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
 {
-    sal_uInt32 nValidation = static_cast< const SfxUInt32Item* >( GetAttr( nCol, nRow, nTab, ATTR_VALIDDATA ) )->GetValue();
+    sal_uInt32 nValidation = GetAttr( nCol, nRow, nTab, ATTR_VALIDDATA )->GetValue();
     if( nValidation )
     {
         const ScValidationData* pData = GetValidationEntry( nValidation );
@@ -3817,6 +3822,18 @@ bool ScDocument::HasSelectionData( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
             return true;
     }
     return HasStringCells( ScRange( nCol, 0, nTab, nCol, MAXROW, nTab ) );
+}
+
+bool ScDocument::HasValidationData( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
+{
+    sal_uInt32 nValidation = GetAttr( nCol, nRow, nTab, ATTR_VALIDDATA )->GetValue();
+    if( nValidation )
+    {
+        const ScValidationData* pData = GetValidationEntry( nValidation );
+        if( pData && pData->GetDataMode() != ScValidationMode::SC_VALID_ANY )
+            return true;
+    }
+    return false;
 }
 
 void ScDocument::CheckVectorizationState()
@@ -5205,7 +5222,7 @@ void ScDocument::GetBorderLines( SCCOL nCol, SCROW nRow, SCTAB nTab,
 {
     //TODO: consider page limits for printing !!!!!
 
-    const SvxBoxItem* pThisAttr = static_cast<const SvxBoxItem*>( GetEffItem( nCol, nRow, nTab, ATTR_BORDER ) );
+    const SvxBoxItem* pThisAttr = GetEffItem( nCol, nRow, nTab, ATTR_BORDER );
     OSL_ENSURE(pThisAttr,"where is the attribute?");
 
     const SvxBorderLine* pLeftLine   = pThisAttr->GetLeft();
@@ -5215,29 +5232,25 @@ void ScDocument::GetBorderLines( SCCOL nCol, SCROW nRow, SCTAB nTab,
 
     if ( nCol > 0 )
     {
-        const SvxBorderLine* pOther = static_cast<const SvxBoxItem*>(
-                                GetEffItem( nCol-1, nRow, nTab, ATTR_BORDER ))->GetRight();
+        const SvxBorderLine* pOther = GetEffItem( nCol-1, nRow, nTab, ATTR_BORDER )->GetRight();
         if ( ScHasPriority( pOther, pLeftLine ) )
             pLeftLine = pOther;
     }
     if ( nRow > 0 )
     {
-        const SvxBorderLine* pOther = static_cast<const SvxBoxItem*>(
-                                GetEffItem( nCol, nRow-1, nTab, ATTR_BORDER ))->GetBottom();
+        const SvxBorderLine* pOther = GetEffItem( nCol, nRow-1, nTab, ATTR_BORDER )->GetBottom();
         if ( ScHasPriority( pOther, pTopLine ) )
             pTopLine = pOther;
     }
     if ( nCol < MAXCOL )
     {
-        const SvxBorderLine* pOther = static_cast<const SvxBoxItem*>(
-                                GetEffItem( nCol+1, nRow, nTab, ATTR_BORDER ))->GetLeft();
+        const SvxBorderLine* pOther = GetEffItem( nCol+1, nRow, nTab, ATTR_BORDER )->GetLeft();
         if ( ScHasPriority( pOther, pRightLine ) )
             pRightLine = pOther;
     }
     if ( nRow < MAXROW )
     {
-        const SvxBorderLine* pOther = static_cast<const SvxBoxItem*>(
-                                GetEffItem( nCol, nRow+1, nTab, ATTR_BORDER ))->GetTop();
+        const SvxBorderLine* pOther = GetEffItem( nCol, nRow+1, nTab, ATTR_BORDER )->GetTop();
         if ( ScHasPriority( pOther, pBottomLine ) )
             pBottomLine = pOther;
     }
@@ -5433,8 +5446,7 @@ void ScDocument::ExtendOverlapped( SCCOL& rStartCol, SCROW& rStartRow,
             SCCOL nOldCol = rStartCol;
             SCROW nOldRow = rStartRow;
             for (nCol=nOldCol; nCol<=nEndCol; nCol++)
-                while (static_cast<const ScMergeFlagAttr*>(GetAttr(nCol,rStartRow,nTab,ATTR_MERGE_FLAG))->
-                            IsVerOverlapped())
+                while (GetAttr(nCol,rStartRow,nTab,ATTR_MERGE_FLAG)->IsVerOverlapped())
                     --rStartRow;
 
             //TODO: pass on ?
@@ -5464,8 +5476,7 @@ void ScDocument::ExtendOverlapped( SCCOL& rStartCol, SCROW& rStartRow,
                         SCCOL nTempCol = nOldCol;
                         do
                             --nTempCol;
-                        while (static_cast<const ScMergeFlagAttr*>(GetAttr(nTempCol,nAttrRow,nTab,ATTR_MERGE_FLAG))
-                                ->IsHorOverlapped());
+                        while (GetAttr(nTempCol,nAttrRow,nTab,ATTR_MERGE_FLAG)->IsHorOverlapped());
                         if (nTempCol < rStartCol)
                             rStartCol = nTempCol;
                     }
@@ -5677,8 +5688,7 @@ void ScDocument::SkipOverlapped( SCCOL& rCol, SCROW& rRow, SCTAB nTab ) const
 
 bool ScDocument::IsHorOverlapped( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
 {
-    const ScMergeFlagAttr* pAttr = static_cast<const ScMergeFlagAttr*>(
-                                        GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ));
+    const ScMergeFlagAttr* pAttr = GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG );
     if (pAttr)
         return pAttr->IsHorOverlapped();
     else
@@ -5690,8 +5700,7 @@ bool ScDocument::IsHorOverlapped( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
 
 bool ScDocument::IsVerOverlapped( SCCOL nCol, SCROW nRow, SCTAB nTab ) const
 {
-    const ScMergeFlagAttr* pAttr = static_cast<const ScMergeFlagAttr*>(
-                                        GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ));
+    const ScMergeFlagAttr* pAttr = GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG );
     if (pAttr)
         return pAttr->IsVerOverlapped();
     else

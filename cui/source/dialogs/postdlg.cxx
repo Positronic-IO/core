@@ -20,7 +20,6 @@
 #include <tools/date.hxx>
 #include <tools/time.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <svl/itempool.hxx>
 #include <svl/itemset.hxx>
@@ -32,8 +31,6 @@
 #include <svx/postattr.hxx>
 #include <postdlg.hxx>
 #include <dialmgr.hxx>
-
-#include <helpids.h>
 
 // class SvxPostItDialog -------------------------------------------------
 

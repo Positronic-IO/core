@@ -51,6 +51,7 @@
 #include <comphelper/types.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/help.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <osl/file.hxx>
@@ -257,6 +258,11 @@ OUString FileDialogHelper_Impl::handleHelpRequested( const FilePickerEvent& aEve
         case ExtendedFilePickerElementIds::LISTBOX_IMAGE_TEMPLATE_LABEL :
         case ExtendedFilePickerElementIds::LISTBOX_IMAGE_TEMPLATE :
             sHelpId = HID_FILEOPEN_IMAGE_TEMPLATE;
+            break;
+
+        case ExtendedFilePickerElementIds::LISTBOX_IMAGE_ANCHOR_LABEL :
+        case ExtendedFilePickerElementIds::LISTBOX_IMAGE_ANCHOR :
+            sHelpId = HID_FILEOPEN_IMAGE_ANCHOR;
             break;
 
         case ExtendedFilePickerElementIds::CHECKBOX_SELECTION :
@@ -820,6 +826,7 @@ static open_or_save_t lcl_OpenOrSave(sal_Int16 const nDialogType)
     {
         case FILEOPEN_SIMPLE:
         case FILEOPEN_LINK_PREVIEW_IMAGE_TEMPLATE:
+        case FILEOPEN_LINK_PREVIEW_IMAGE_ANCHOR:
         case FILEOPEN_PLAY:
         case FILEOPEN_LINK_PLAY:
         case FILEOPEN_READONLY_VERSION:
@@ -982,10 +989,11 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
             case FILEOPEN_LINK_PREVIEW_IMAGE_TEMPLATE:
                 nTemplateDescription = TemplateDescription::FILEOPEN_LINK_PREVIEW_IMAGE_TEMPLATE;
                 mbHasPreview = true;
+                break;
 
-                // aPreviewTimer
-                maPreviewIdle.SetPriority( TaskPriority::LOWEST );
-                maPreviewIdle.SetInvokeHandler( LINK( this, FileDialogHelper_Impl, TimeOutHdl_Impl ) );
+            case FILEOPEN_LINK_PREVIEW_IMAGE_ANCHOR:
+                nTemplateDescription = TemplateDescription::FILEOPEN_LINK_PREVIEW_IMAGE_ANCHOR;
+                mbHasPreview = true;
                 break;
 
             case FILEOPEN_PLAY:
@@ -1004,9 +1012,6 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
             case FILEOPEN_LINK_PREVIEW:
                 nTemplateDescription = TemplateDescription::FILEOPEN_LINK_PREVIEW;
                 mbHasPreview = true;
-                // aPreviewTimer
-                maPreviewIdle.SetPriority( TaskPriority::LOWEST );
-                maPreviewIdle.SetInvokeHandler( LINK( this, FileDialogHelper_Impl, TimeOutHdl_Impl ) );
                 break;
 
             case FILESAVE_AUTOEXTENSION:
@@ -1018,14 +1023,17 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
             case FILEOPEN_PREVIEW:
                 nTemplateDescription = TemplateDescription::FILEOPEN_PREVIEW;
                 mbHasPreview = true;
-                // aPreviewTimer
-                maPreviewIdle.SetPriority( TaskPriority::LOWEST );
-                maPreviewIdle.SetInvokeHandler( LINK( this, FileDialogHelper_Impl, TimeOutHdl_Impl ) );
                 break;
 
             default:
                 SAL_WARN( "sfx.dialog", "FileDialogHelper::ctor with unknown type" );
                 break;
+        }
+
+        if (mbHasPreview)
+        {
+            maPreviewIdle.SetPriority( TaskPriority::LOWEST );
+            maPreviewIdle.SetInvokeHandler( LINK( this, FileDialogHelper_Impl, TimeOutHdl_Impl ) );
         }
 
         Sequence < Any > aInitArguments( !mpPreferredParentWindow ? 3 : 4 );
@@ -1141,7 +1149,7 @@ FileDialogHelper_Impl::~FileDialogHelper_Impl()
         Application::RemoveUserEvent( mnPostUserEventId );
     mnPostUserEventId = nullptr;
 
-    delete mpGraphicFilter;
+    mpGraphicFilter.reset();
 
     if ( mbDeleteMatcher )
         delete mpMatcher;
@@ -1319,8 +1327,8 @@ void lcl_saveLastURLs(std::vector<OUString>& rpURLList,
                       ::std::vector< OUString >& lLastURLs )
 {
     lLastURLs.clear();
-    for(std::vector<OUString>::iterator i = rpURLList.begin(); i != rpURLList.end(); ++i)
-        lLastURLs.push_back(*i);
+    for (auto const& url : rpURLList)
+        lLastURLs.push_back(url);
 }
 
 void FileDialogHelper_Impl::implGetAndCacheFiles(const uno::Reference< XInterface >& xPicker, std::vector<OUString>& rpURLList, const std::shared_ptr<const SfxFilter>& pFilter)
@@ -1533,10 +1541,10 @@ ErrCode FileDialogHelper_Impl::execute( std::vector<OUString>& rpURLList,
                         }
                         catch( const IllegalArgumentException& )
                         {
-                            ScopedVclPtrInstance< MessageDialog > aBox(
-                                mpPreferredParentWindow,
-                                SfxResId(RID_SVXSTR_GPG_ENCRYPT_FAILURE));
-                            aBox->Execute();
+                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(mpPreferredParentWindow ? mpPreferredParentWindow->GetFrameWeld() : nullptr,
+                                                                                     VclMessageType::Warning, VclButtonsType::Ok,
+                                                                                     SfxResId(RID_SVXSTR_GPG_ENCRYPT_FAILURE)));
+                            xBox->run();
                         }
                     }
 
@@ -1841,7 +1849,7 @@ void FileDialogHelper_Impl::addGraphicFilter()
         return;
 
     // create the list of filters
-    mpGraphicFilter = new GraphicFilter;
+    mpGraphicFilter.reset( new GraphicFilter );
     sal_uInt16 i, j, nCount = mpGraphicFilter->GetImportFormatCount();
 
     // compute the extension string for all known import filters
@@ -2225,11 +2233,11 @@ void FileDialogHelper_Impl::addFilterPair( const OUString& rFilter,
 OUString FileDialogHelper_Impl::getFilterName( const OUString& rFilterWithExtension ) const
 {
     OUString sRet;
-    for( ::std::vector< css::beans::StringPair >::const_iterator pIter = maFilters.begin(); pIter != maFilters.end(); ++pIter )
+    for (auto const& filter : maFilters)
     {
-        if ( (*pIter).Second == rFilterWithExtension )
+        if (filter.Second == rFilterWithExtension)
         {
-            sRet = (*pIter).First;
+            sRet = filter.First;
             break;
         }
     }
@@ -2239,11 +2247,11 @@ OUString FileDialogHelper_Impl::getFilterName( const OUString& rFilterWithExtens
 OUString FileDialogHelper_Impl::getFilterWithExtension( const OUString& rFilter ) const
 {
     OUString sRet;
-    for( ::std::vector< css::beans::StringPair >::const_iterator pIter = maFilters.begin(); pIter != maFilters.end(); ++pIter )
+    for (auto const& filter : maFilters)
     {
-        if ( (*pIter).First == rFilter )
+        if ( filter.First == rFilter )
         {
-            sRet = (*pIter).Second;
+            sRet = filter.Second;
             break;
         }
     }
@@ -2684,10 +2692,11 @@ ErrCode RequestPassword(const std::shared_ptr<const SfxFilter>& pCurrentFilter, 
         {
             break;
         }
-        ScopedVclPtrInstance<MessBox>(Application::GetDefDialogParent(),
-            MessBoxStyle::Ok, 0, "Password length",
-            "The password you have entered causes interoperability issues. Please enter a password that is shorter than 52 bytes, or longer than 55 bytes."
-            )->Execute();
+        vcl::Window* pWin = Application::GetDefDialogParent();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr, VclMessageType::Warning,
+            VclButtonsType::Ok, SfxResId(STR_PASSWORD_LEN)));
+        xBox->set_secondary_text(SfxResId(STR_PASSWORD_WARNING));
+        xBox->run();
     }
     while (true);
     if ( pPasswordRequest->isPassword() )

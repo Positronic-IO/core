@@ -31,15 +31,9 @@
 #include <o3tl/char16_t2wchar_t.hxx>
 
 #define WIN32_LEAN_AND_MEAN
-#if defined _MSC_VER
-#pragma warning(push, 1)
-#endif
 #include <windows.h>
 #include <shellapi.h>
 #include <objbase.h>
-#if defined _MSC_VER
-#pragma warning(pop)
-#endif
 
 using com::sun::star::uno::Reference;
 using com::sun::star::uno::RuntimeException;
@@ -143,7 +137,7 @@ namespace
         for ( i = 0; i < ERRTABLESIZE; ++i )
         {
             if ( dwError == errtable[i].oscode )
-                return (oslFileError)errtable[i].errnocode;
+                return static_cast<oslFileError>(errtable[i].errnocode);
         }
 
         /* The error code wasn't in the table.  We check for a range of */

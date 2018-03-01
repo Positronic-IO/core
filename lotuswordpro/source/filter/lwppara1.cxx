@@ -102,6 +102,8 @@
 #include "lwpcelllayout.hxx"
 #include "lwpframelayout.hxx"
 
+#include <set>
+
 // boost::polymorphic_downcast checks and reports (using assert), if the
 // cast is incorrect (in debug builds).
 using boost::polymorphic_downcast;
@@ -166,12 +168,16 @@ LwpPara* LwpPara::GetParent()
     if (level != 1)
     {
         pPara = dynamic_cast<LwpPara*>(GetPrevious().obj().get());
+        std::set<LwpPara*> aSeen;
         while (pPara)
         {
+            aSeen.insert(pPara);
             otherlevel = pPara->GetLevel();
             if ((otherlevel < level) || (otherlevel && (level == 0)))
                 return pPara;
             pPara = dynamic_cast<LwpPara*>(pPara->GetPrevious().obj().get());
+            if (aSeen.find(pPara) != aSeen.end())
+                throw std::runtime_error("loop in conversion");
         }
     }
     return nullptr;
@@ -445,7 +451,7 @@ void LwpPara::OverrideParaBullet(LwpParaProperty* pProps)
 
     if (pProps)
     {
-        m_pBullOver = new LwpBulletOverride();
+        m_xBullOver.reset(new LwpBulletOverride);
         // get local bulletoverride
         LwpBulletOverride* pLocalBullet  = static_cast<LwpParaBulletProperty*>(pProps)->GetLocalParaBullet();
         if (!pLocalBullet)
@@ -463,18 +469,17 @@ void LwpPara::OverrideParaBullet(LwpParaProperty* pProps)
             m_bHasBullet = true;
 
             const LwpOverride* pBullet= pParaStyle->GetBulletOverride();
-            std::unique_ptr<LwpBulletOverride> pFinalBullet(
+            std::unique_ptr<LwpBulletOverride> xFinalBullet(
                 pBullet
                     ? polymorphic_downcast<LwpBulletOverride*>(pBullet->clone())
                     : new LwpBulletOverride)
                 ;
 
             std::unique_ptr<LwpBulletOverride> const pLocalBullet2(pLocalBullet->clone());
-            pLocalBullet2->Override(pFinalBullet.get());
+            pLocalBullet2->Override(xFinalBullet.get());
 
-            aSilverBulletID = pFinalBullet->GetSilverBullet();
-            delete m_pBullOver;
-            m_pBullOver = pFinalBullet.release();
+            aSilverBulletID = xFinalBullet->GetSilverBullet();
+            m_xBullOver = std::move(xFinalBullet);
             if (!aSilverBulletID.IsNull())
             {
                 m_pSilverBullet = dynamic_cast<LwpSilverBullet*>(aSilverBulletID.obj(VO_SILVERBULLET).get());
@@ -487,7 +492,6 @@ void LwpPara::OverrideParaBullet(LwpParaProperty* pProps)
     }
     else
     {
-//      m_pBullOver = pParaStyle->GetBulletOverride();
         const LwpBulletOverride* pBullOver = pParaStyle->GetBulletOverride();
         if (pBullOver)
         {
@@ -501,9 +505,7 @@ void LwpPara::OverrideParaBullet(LwpParaProperty* pProps)
                     m_pSilverBullet->SetFoundry(m_pFoundry);
             }
 
-            std::unique_ptr<LwpBulletOverride> pBulletOverride(pBullOver->clone());
-            delete m_pBullOver;
-            m_pBullOver = pBulletOverride.release();
+            m_xBullOver.reset(pBullOver->clone());
         }
     }
 }
@@ -544,7 +546,7 @@ void LwpPara::OverrideParaNumbering(LwpParaProperty const * pProps)
         pOver->OverrideLevel(m_nLevel);
     }
 
-    m_pParaNumbering = std::move(pOver);
+    m_xParaNumbering = std::move(pOver);
 }
 
 /**************************************************************************

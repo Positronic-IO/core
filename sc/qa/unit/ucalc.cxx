@@ -3611,9 +3611,7 @@ void Test::testCopyPasteSkipEmpty()
                     return false;
                 }
 
-                const SvxBrushItem* pBrush =
-                    dynamic_cast<const SvxBrushItem*>(mpDoc->GetAttr(aPos, ATTR_BACKGROUND));
-
+                const SvxBrushItem* pBrush = mpDoc->GetAttr(aPos, ATTR_BACKGROUND);
                 if (!pBrush)
                 {
                     cerr << aPosStr << ": failed to get brush item from the cell." << endl;
@@ -4403,13 +4401,13 @@ void Test::testSetBackgroundColor()
     Color aColor;
 
      //test yellow
-    aColor=Color(COL_YELLOW);
+    aColor=COL_YELLOW;
     getDocShell().GetDocFunc().SetTabBgColor(0,aColor,false, true);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("the correct color is not set",
                            aColor, m_pDoc->GetTabBgColor(0));
 
     Color aOldTabBgColor=m_pDoc->GetTabBgColor(0);
-    aColor.SetColor(COL_BLUE);//set BLUE
+    aColor = COL_BLUE;
     getDocShell().GetDocFunc().SetTabBgColor(0,aColor,false, true);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("the correct color is not set the second time",
                            aColor, m_pDoc->GetTabBgColor(0));
@@ -6030,7 +6028,7 @@ void Test::testFormulaToValue()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "1",  "2", "TRUE" },
             { "2",  "4", "TRUE" },
             { "3",  "6", "TRUE" },
@@ -6039,7 +6037,7 @@ void Test::testFormulaToValue()
             { "6", "12", "TRUE" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Initial value");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Initial value");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -6050,7 +6048,7 @@ void Test::testFormulaToValue()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "1",  "2",  "TRUE" },
             { "2",  "4",  "TRUE" },
             { "3",  "6", "FALSE" },
@@ -6059,7 +6057,7 @@ void Test::testFormulaToValue()
             { "6", "12",  "TRUE" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Converted");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Converted");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -6092,7 +6090,7 @@ void Test::testFormulaToValue()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "1",  "2", "TRUE" },
             { "2",  "4", "TRUE" },
             { "3",  "6", "TRUE" },
@@ -6101,7 +6099,7 @@ void Test::testFormulaToValue()
             { "6", "12", "TRUE" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "After undo");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "After undo");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -6123,7 +6121,7 @@ void Test::testFormulaToValue()
     pUndoMgr->Redo();
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "1",  "2",  "TRUE" },
             { "2",  "4",  "TRUE" },
             { "3",  "6", "FALSE" },
@@ -6132,7 +6130,7 @@ void Test::testFormulaToValue()
             { "6", "12",  "TRUE" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Converted");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Converted");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 

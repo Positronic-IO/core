@@ -27,7 +27,7 @@
 #include <gst/video/gstvideosink.h>
 
 #include <vcl/graph.hxx>
-#include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 
 #include <string>
 
@@ -173,24 +173,7 @@ uno::Reference< graphic::XGraphic > SAL_CALL FrameGrabber::grabFrame( double fMe
 #endif
 
         int nStride = GST_ROUND_UP_4( nWidth * 3 );
-        Bitmap aBmp( Size( nWidth, nHeight ), 24 );
-
-        BitmapWriteAccess *pWrite = aBmp.AcquireWriteAccess();
-        if( pWrite )
-        {
-            // yet another cheesy pixel copying loop
-            for( int y = 0; y < nHeight; ++y )
-            {
-                sal_uInt8 *p = pData + y * nStride;
-                for( int x = 0; x < nWidth; ++x )
-                {
-                    BitmapColor col( p[0], p[1], p[2] );
-                    pWrite->SetPixel( y, x, col );
-                    p += 3;
-                }
-            }
-        }
-        Bitmap::ReleaseAccess( pWrite );
+        BitmapEx aBmp = vcl::bitmap::CreateFromData(pData, nWidth, nHeight, nStride, 24 );
 
 #ifndef AVMEDIA_GST_0_10
         gst_buffer_unmap( pBuf, &aMapInfo );

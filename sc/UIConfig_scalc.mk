@@ -92,6 +92,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/cellprotectionpage \
 	sc/uiconfig/scalc/ui/changesourcedialog \
 	sc/uiconfig/scalc/ui/chardialog \
+	sc/uiconfig/scalc/ui/checkwarningdialog \
 	sc/uiconfig/scalc/ui/chisquaretestdialog \
 	sc/uiconfig/scalc/ui/colorrowdialog \
 	sc/uiconfig/scalc/ui/colwidthdialog \
@@ -116,6 +117,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/definedatabaserangedialog \
 	sc/uiconfig/scalc/ui/definename \
 	sc/uiconfig/scalc/ui/deletecells \
+	sc/uiconfig/scalc/ui/deletecolumnentry \
 	sc/uiconfig/scalc/ui/deletecontents \
 	sc/uiconfig/scalc/ui/descriptivestatisticsdialog \
 	sc/uiconfig/scalc/ui/dropmenu \
@@ -152,6 +154,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/notebookbar_groupedbar_compact \
 	sc/uiconfig/scalc/ui/managenamesdialog \
 	sc/uiconfig/scalc/ui/mergecellsdialog \
+	sc/uiconfig/scalc/ui/mergecolumnentry \
 	sc/uiconfig/scalc/ui/movecopysheet \
 	sc/uiconfig/scalc/ui/movingaveragedialog \
 	sc/uiconfig/scalc/ui/multipleoperationsdialog \
@@ -178,6 +181,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/protectsheetdlg \
 	sc/uiconfig/scalc/ui/queryrunstreamscriptdialog \
 	sc/uiconfig/scalc/ui/randomnumbergenerator \
+	sc/uiconfig/scalc/ui/recalcquerydialog \
 	sc/uiconfig/scalc/ui/regressiondialog \
 	sc/uiconfig/scalc/ui/retypepassdialog \
 	sc/uiconfig/scalc/ui/retypepassworddialog \
@@ -197,6 +201,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/sharedocumentdlg \
 	sc/uiconfig/scalc/ui/sharedfooterdialog \
 	sc/uiconfig/scalc/ui/sharedheaderdialog \
+	sc/uiconfig/scalc/ui/sharedwarningdialog \
 	sc/uiconfig/scalc/ui/showchangesdialog \
 	sc/uiconfig/scalc/ui/showdetaildialog \
 	sc/uiconfig/scalc/ui/showsheetdialog \

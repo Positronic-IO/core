@@ -1,19 +1,48 @@
 {
     "id": "org.libreoffice.LibreOffice",
     "runtime": "org.gnome.Platform",
-    "runtime-version": "3.24",
+    "runtime-version": "3.26",
     "sdk": "org.gnome.Sdk",
     "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.gcc7",
         "org.freedesktop.Sdk.Extension.openjdk9"
     ],
+    "build-options": {
+        "env": {
+            "CC": "/usr/lib/sdk/gcc7/bin/gcc",
+            "CXX": "/usr/lib/sdk/gcc7/bin/g++",
+            "LD_LIBRARY_PATH": "/usr/lib/sdk/gcc7/lib"
+        }
+    },
     "command": "/app/libreoffice/program/soffice",
     "separate-locales": false,
     "modules": [
+        {
+            "name": "gcc7",
+            "buildsystem": "simple",
+            "build-commands": [
+                "mkdir -p /app/lib",
+                "cp -d /usr/lib/sdk/gcc7/lib/lib{gcc_s.so.1,stdc++.so.6*} /app/lib"
+            ]
+        },
         {
             "name": "openjdk",
             "buildsystem": "simple",
             "build-commands": [
                 "/usr/lib/sdk/openjdk9/install.sh"
+            ]
+        },
+        {
+            "name": "gst-libav",
+            "buildsystem": "meson",
+            "builddir": true,
+            "config-opts": ["-Ddisable_gtkdoc=true"],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://gstreamer.freedesktop.org/src/gst-libav/gst-libav-1.12.4.tar.xz",
+                    "sha256": "2a56aa5d2d8cd912f2bce17f174713d2c417ca298f1f9c28ee66d4aa1e1d9e62"
+                }
             ]
         },
         {
@@ -27,8 +56,8 @@
                 },
                 {
                     "type": "archive",
-                    "url": "http://www-us.apache.org/dist/ant/binaries/apache-ant-1.10.1-bin.tar.xz",
-                    "sha512": "8732ecfd96bcfde626260939f17fdb7e85700092ef69932b250e3572810cd53eaac24e1c72921d89900170804d27cc3100bee7c8b5159d0e5b64c3d79e07bec6",
+                    "url": "https://archive.apache.org/dist/ant/binaries/apache-ant-1.10.2-bin.tar.xz",
+                    "sha256": "361c8ad2ed8341416e323e7c28af10a8297170a80fdffba294a5c2031527bb6c",
                     "dest": "ant"
                 },
                 {
@@ -38,10 +67,10 @@
                     "type": "shell"
                 },
                 {
-                    "url": "https://dev-www.libreoffice.org/src/pdfium-3235.tar.bz2",
-                    "sha256": "7dc0d33fc24b1612865f5e173d48800ba3f2db891c57e3f92b9d2ce56ffeb72f",
+                    "url": "https://dev-www.libreoffice.org/src/pdfium-3312.tar.bz2",
+                    "sha256": "baa103ab9b72cf3be5ae80106e7ca56110a150fc60a9a3d897e5b26631355b0f",
                     "type": "file",
-                    "dest-filename": "external/tarballs/pdfium-3235.tar.bz2"
+                    "dest-filename": "external/tarballs/pdfium-3312.tar.bz2"
                 },
                 {
                     "url": "https://dev-www.libreoffice.org/src/0168229624cfac409e766913506961a8-ucpp-1.3.2.tar.gz",
@@ -128,10 +157,10 @@
                     "dest-filename": "external/tarballs/EmojiOneColor-SVGinOT-1.3.tar.gz"
                 },
                 {
-                    "url": "https://dev-www.libreoffice.org/src/boost_1_65_1.tar.bz2",
-                    "sha256": "9807a5d16566c57fd74fb522764e0b134a8bbe6b6e8967b83afefd30dcd3be81",
+                    "url": "https://dev-www.libreoffice.org/src/boost_1_66_0.tar.bz2",
+                    "sha256": "5721818253e6a0989583192f96782c4a98eb6204965316df9f5ad75819225ca9",
                     "type": "file",
-                    "dest-filename": "external/tarballs/boost_1_65_1.tar.bz2"
+                    "dest-filename": "external/tarballs/boost_1_66_0.tar.bz2"
                 },
                 {
                     "url": "https://dev-www.libreoffice.org/src/48d647fbd8ef8889e5a7f422c1bfda94-clucene-core-2.3.3.4.tar.gz",
@@ -344,10 +373,10 @@
                     "dest-filename": "external/tarballs/openldap-2.4.45.tgz"
                 },
                 {
-                    "url": "https://dev-www.libreoffice.org/src/liborcus-0.13.1.tar.gz",
-                    "sha256": "d7041ef455bb78db66b4ba7876af1b3d0fa377b9444e3ef72ceaccd2e8400937",
+                    "url": "https://dev-www.libreoffice.org/src/liborcus-0.13.3.tar.gz",
+                    "sha256": "62e76de1fd3101e77118732b860354121b40a87bbb1ebfeb8203477fffac16e9",
                     "type": "file",
-                    "dest-filename": "external/tarballs/liborcus-0.13.1.tar.gz"
+                    "dest-filename": "external/tarballs/liborcus-0.13.3.tar.gz"
                 },
                 {
                     "url": "https://dev-www.libreoffice.org/src/poppler-0.59.0.tar.xz",
@@ -532,8 +561,8 @@
             ],
             "buildsystem": "simple",
             "build-commands": [
-                "./autogen.sh --prefix=/run/build/libreoffice/inst --with-distro=LibreOfficeFlatpak",
-                "make",
+                "./autogen.sh --prefix=/run/build/libreoffice/inst --with-distro=LibreOfficeFlatpak --disable-symbols",
+                "make $(if test \"$(uname -i)\" = i386; then printf build-nocheck; fi)",
                 "make distro-pack-install",
                 "make cmd cmd='$(SRCDIR)/solenv/bin/assemble-flatpak.sh'"
             ]
@@ -545,6 +574,7 @@
         "--socket=x11",
         "--socket=wayland",
         "--socket=pulseaudio",
+        "--device=dri",
         "--filesystem=host",
         "--env=DCONF_USER_CONFIG_DIR=.config/dconf",
         "--env=LIBO_FLATPAK=1",

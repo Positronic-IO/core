@@ -38,7 +38,6 @@
 #include <comphelper/sequence.hxx>
 #include <vcl/outdev.hxx>
 
-#include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/image.hxx>
@@ -502,8 +501,8 @@ void SAL_CALL UnoDialogControl::windowResized( const css::awt::WindowEvent& e )
     if ( xDialogDevice.is() && mbDesignMode )
     {
         DeviceInfo aDeviceInfo( xDialogDevice->getInfo() );
-        aAppFontSize.Width() -= aDeviceInfo.LeftInset + aDeviceInfo.RightInset;
-        aAppFontSize.Height() -= aDeviceInfo.TopInset + aDeviceInfo.BottomInset;
+        aAppFontSize.AdjustWidth( -(aDeviceInfo.LeftInset + aDeviceInfo.RightInset) );
+        aAppFontSize.AdjustHeight( -(aDeviceInfo.TopInset + aDeviceInfo.BottomInset) );
     }
 
     aAppFontSize = ImplMapPixelToAppFont( pOutDev, aAppFontSize );

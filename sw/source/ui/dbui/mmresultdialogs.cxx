@@ -40,6 +40,7 @@
 #include <svtools/sfxecode.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/dinfdlg.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/fcontnr.hxx>
@@ -66,7 +67,6 @@
 #include <swevent.hxx>
 #include <dbui.hxx>
 #include <dbui.hrc>
-#include <helpids.h>
 #include <doc.hxx>
 #include <sfx2/app.hxx>
 #include <strings.hrc>
@@ -179,7 +179,7 @@ SwSendQueryBox_Impl::SwSendQueryBox_Impl(vcl::Window* pParent, const OUString& r
     : SwMessageAndEditDialog(pParent, rID, rUIXMLDescription)
     , bIsEmptyAllowed(true)
 {
-    m_pImageIM->SetImage(QueryBox::GetStandardImage());
+    m_pImageIM->SetImage(GetStandardQueryBoxImage());
     m_pEdit->SetModifyHdl(LINK(this, SwSendQueryBox_Impl, ModifyHdl));
     ModifyHdl(*m_pEdit);
 }
@@ -909,8 +909,11 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     if (xConfigItem->GetMailServer().isEmpty() ||
             !SwMailMergeHelper::CheckMailAddress(xConfigItem->GetMailAddress()) )
     {
-        ScopedVclPtrInstance< QueryBox > aQuery(pButton, MessBoxStyle::YesNoCancel, m_sConfigureMail);
-        sal_uInt16 nRet = aQuery->Execute();
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pButton->GetFrameWeld(),
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       m_sConfigureMail));
+        xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+        sal_uInt16 nRet = xQueryBox->run();
         if (RET_YES == nRet )
         {
             SwView* pConfigView = pTargetView ? pTargetView : pView;
@@ -1081,12 +1084,15 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     xStore->storeToURL( sTargetTempURL, aValues   );
 
     //create the send dialog
-    VclPtr<SwSendMailDialog> pDlg = VclPtr<SwSendMailDialog>::Create(pButton, *xConfigItem);
-    pDlg->ShowDialog();
+    vcl::Window* pParent = Application::GetDefDialogParent();
+    VclPtr<SwSendMailDialog> pDlg = VclPtr<SwSendMailDialog>::Create(pParent, *xConfigItem);
+
+    pDlg->ShowDialog(nEnd - nBegin);
     //help to force painting the dialog
     //TODO/CLEANUP
     //predetermined breaking point
     Application::Reschedule( true );
+    endDialog(pButton);
     for(sal_uInt32 nDoc = nBegin; nDoc < nEnd; ++nDoc)
     {
         SwDocMergeInfo& rInfo = xConfigItem->GetDocumentMergeInfo(nDoc);
@@ -1238,7 +1244,6 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     pDlg->EnableDestruction();
     ::osl::File::remove( sTargetTempURL );
 
-    endDialog(pButton);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -282,10 +282,10 @@ sdr::contact::ViewContact* SdrGrafObj::CreateObjectSpecificViewContact()
 
 void SdrGrafObj::onGraphicChanged()
 {
-    if (!pGraphic || pGraphic->IsSwappedOut()) // don't force swap-in for this
+    if (!mpGraphicObject || mpGraphicObject->IsSwappedOut()) // don't force swap-in for this
         return;
 
-    const VectorGraphicDataPtr& rVectorGraphicDataPtr = pGraphic->GetGraphic().getVectorGraphicData();
+    const VectorGraphicDataPtr& rVectorGraphicDataPtr = mpGraphicObject->GetGraphic().getVectorGraphicData();
 
     if (!rVectorGraphicDataPtr.get())
         return;
@@ -328,15 +328,14 @@ void SdrGrafObj::onGraphicChanged()
 
 SdrGrafObj::SdrGrafObj()
     : SdrRectObj()
-    ,  pGraphicLink(nullptr)
-    ,  bMirrored(false)
-    ,  mbIsSignatureLine(false)
-    ,  mbIsSignatureLineShowSignDate(true)
-    ,  mbIsSignatureLineCanAddComment(false)
+    , mpGraphicObject(new GraphicObject)
+    , pGraphicLink(nullptr)
+    , bMirrored(false)
+    , mbIsSignatureLine(false)
+    , mbIsSignatureLineShowSignDate(true)
+    , mbIsSignatureLineCanAddComment(false)
 {
-    pGraphic = new GraphicObject;
-    mpReplacementGraphic = nullptr;
-    pGraphic->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
+    mpGraphicObject->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
     onGraphicChanged();
 
     // #i118485# Shear allowed and possible now
@@ -353,17 +352,16 @@ SdrGrafObj::SdrGrafObj()
     mbSupportTextIndentingOnLineWidthChange = false;
 }
 
-SdrGrafObj::SdrGrafObj(const Graphic& rGrf, const tools::Rectangle& rRect)
+SdrGrafObj::SdrGrafObj(const Graphic& rGraphic, const tools::Rectangle& rRect)
     : SdrRectObj(rRect)
+    , mpGraphicObject(new GraphicObject(rGraphic))
     , pGraphicLink(nullptr)
     , bMirrored(false)
     , mbIsSignatureLine(false)
     , mbIsSignatureLineShowSignDate(true)
     , mbIsSignatureLineCanAddComment(false)
 {
-    pGraphic = new GraphicObject( rGrf );
-    mpReplacementGraphic = nullptr;
-    pGraphic->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
+    mpGraphicObject->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
     onGraphicChanged();
 
     // #i118485# Shear allowed and possible now
@@ -380,17 +378,16 @@ SdrGrafObj::SdrGrafObj(const Graphic& rGrf, const tools::Rectangle& rRect)
     mbSupportTextIndentingOnLineWidthChange = false;
 }
 
-SdrGrafObj::SdrGrafObj( const Graphic& rGrf )
+SdrGrafObj::SdrGrafObj(const Graphic& rGraphic)
     : SdrRectObj()
+    , mpGraphicObject(new GraphicObject(rGraphic))
     , pGraphicLink(nullptr)
     , bMirrored(false)
     , mbIsSignatureLine(false)
     , mbIsSignatureLineShowSignDate(true)
     , mbIsSignatureLineCanAddComment(false)
 {
-    pGraphic = new GraphicObject( rGrf );
-    mpReplacementGraphic = nullptr;
-    pGraphic->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
+    mpGraphicObject->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
     onGraphicChanged();
 
     // #i118485# Shear allowed and possible now
@@ -409,18 +406,15 @@ SdrGrafObj::SdrGrafObj( const Graphic& rGrf )
 
 SdrGrafObj::~SdrGrafObj()
 {
-    delete pGraphic;
-    delete mpReplacementGraphic;
     ImpDeregisterLink();
 }
 
-void SdrGrafObj::SetGraphicObject( const GraphicObject& rGrfObj )
+void SdrGrafObj::SetGraphicObject(const GraphicObject& rGraphicObject)
 {
-    *pGraphic = rGrfObj;
-    delete mpReplacementGraphic;
-    mpReplacementGraphic = nullptr;
-    pGraphic->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
-    pGraphic->SetUserData();
+    mpGraphicObject.reset(new GraphicObject(rGraphicObject));
+    mpReplacementGraphicObject.reset();
+    mpGraphicObject->SetSwapStreamHdl( LINK(this, SdrGrafObj, ImpSwapHdl) );
+    mpGraphicObject->SetUserData();
     mbIsPreview = false;
     SetChanged();
     BroadcastObjectChange();
@@ -429,46 +423,43 @@ void SdrGrafObj::SetGraphicObject( const GraphicObject& rGrfObj )
 
 const GraphicObject& SdrGrafObj::GetGraphicObject(bool bForceSwapIn) const
 {
-    if(bForceSwapIn)
-    {
+    if (bForceSwapIn)
         ForceSwapIn();
-    }
 
-    return *pGraphic;
+    return *mpGraphicObject.get();
 }
 
 const GraphicObject* SdrGrafObj::GetReplacementGraphicObject() const
 {
-    if(!mpReplacementGraphic && pGraphic)
+    if (!mpReplacementGraphicObject && mpGraphicObject)
     {
-        const VectorGraphicDataPtr& rVectorGraphicDataPtr = pGraphic->GetGraphic().getVectorGraphicData();
+        const VectorGraphicDataPtr& rVectorGraphicDataPtr = mpGraphicObject->GetGraphic().getVectorGraphicData();
 
-        if(rVectorGraphicDataPtr.get())
+        if (rVectorGraphicDataPtr.get())
         {
-            const_cast< SdrGrafObj* >(this)->mpReplacementGraphic = new GraphicObject(rVectorGraphicDataPtr->getReplacement());
+            const_cast< SdrGrafObj* >(this)->mpReplacementGraphicObject.reset(new GraphicObject(rVectorGraphicDataPtr->getReplacement()));
         }
-        else if (pGraphic->GetGraphic().getPdfData().hasElements()
-                 || pGraphic->GetGraphic().GetType() == GraphicType::GdiMetafile)
+        else if (mpGraphicObject->GetGraphic().getPdfData().hasElements() ||
+                 mpGraphicObject->GetGraphic().GetType() == GraphicType::GdiMetafile)
         {
             // Replacement graphic for PDF and metafiles is just the bitmap.
-            const_cast<SdrGrafObj*>(this)->mpReplacementGraphic = new GraphicObject(pGraphic->GetGraphic().GetBitmapEx());
+            const_cast<SdrGrafObj*>(this)->mpReplacementGraphicObject.reset(new GraphicObject(mpGraphicObject->GetGraphic().GetBitmapEx()));
         }
-        if (mpReplacementGraphic)
+        if (mpReplacementGraphicObject)
         {
-            mpReplacementGraphic->SetSwapStreamHdl(
+            mpReplacementGraphicObject->SetSwapStreamHdl(
                 LINK(const_cast<SdrGrafObj*>(this), SdrGrafObj, ReplacementSwapHdl));
         }
     }
 
-    return mpReplacementGraphic;
+    return mpReplacementGraphicObject.get();
 }
 
-void SdrGrafObj::NbcSetGraphic( const Graphic& rGrf )
+void SdrGrafObj::NbcSetGraphic(const Graphic& rGraphic)
 {
-    pGraphic->SetGraphic( rGrf );
-    delete mpReplacementGraphic;
-    mpReplacementGraphic = nullptr;
-    pGraphic->SetUserData();
+    mpGraphicObject->SetGraphic(rGraphic);
+    mpReplacementGraphicObject.reset();
+    mpGraphicObject->SetUserData();
     mbIsPreview = false;
     onGraphicChanged();
 }
@@ -483,7 +474,7 @@ void SdrGrafObj::SetGraphic( const Graphic& rGrf )
 const Graphic& SdrGrafObj::GetGraphic() const
 {
     ForceSwapIn();
-    return pGraphic->GetGraphic();
+    return mpGraphicObject->GetGraphic();
 }
 
 Graphic SdrGrafObj::GetTransformedGraphic( SdrGrafObjTransformsAttrs nTransformFlags ) const
@@ -502,7 +493,7 @@ Graphic SdrGrafObj::GetTransformedGraphic( SdrGrafObjTransformsAttrs nTransformF
 
 GraphicType SdrGrafObj::GetGraphicType() const
 {
-    return pGraphic->GetType();
+    return mpGraphicObject->GetType();
 }
 
 GraphicAttr SdrGrafObj::GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlags ) const
@@ -542,27 +533,27 @@ GraphicAttr SdrGrafObj::GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlag
 
 bool SdrGrafObj::IsAnimated() const
 {
-    return pGraphic->IsAnimated();
+    return mpGraphicObject->IsAnimated();
 }
 
 bool SdrGrafObj::IsEPS() const
 {
-    return pGraphic->IsEPS();
+    return mpGraphicObject->IsEPS();
 }
 
 bool SdrGrafObj::IsSwappedOut() const
 {
-    return mbIsPreview || pGraphic->IsSwappedOut();
+    return mbIsPreview || mpGraphicObject->IsSwappedOut();
 }
 
 const MapMode& SdrGrafObj::GetGrafPrefMapMode() const
 {
-    return pGraphic->GetPrefMapMode();
+    return mpGraphicObject->GetPrefMapMode();
 }
 
 const Size& SdrGrafObj::GetGrafPrefSize() const
 {
-    return pGraphic->GetPrefSize();
+    return mpGraphicObject->GetPrefSize();
 }
 
 void SdrGrafObj::SetGrafStreamURL( const OUString& rGraphicStreamURL )
@@ -570,17 +561,17 @@ void SdrGrafObj::SetGrafStreamURL( const OUString& rGraphicStreamURL )
     mbIsPreview = false;
     if( rGraphicStreamURL.isEmpty() )
     {
-        pGraphic->SetUserData();
+        mpGraphicObject->SetUserData();
     }
     else if( pModel->IsSwapGraphics() )
     {
-        pGraphic->SetUserData( rGraphicStreamURL );
+        mpGraphicObject->SetUserData( rGraphicStreamURL );
     }
 }
 
 OUString const & SdrGrafObj::GetGrafStreamURL() const
 {
-    return pGraphic->GetUserData();
+    return mpGraphicObject->GetUserData();
 }
 
 Size SdrGrafObj::getOriginalSize() const
@@ -610,29 +601,29 @@ Size SdrGrafObj::getOriginalSize() const
 
 void SdrGrafObj::ForceSwapIn() const
 {
-    if( mbIsPreview && pGraphic->HasUserData() )
+    if( mbIsPreview && mpGraphicObject->HasUserData() )
     {
         // removing preview graphic
-        const OUString aUserData( pGraphic->GetUserData() );
+        const OUString aUserData( mpGraphicObject->GetUserData() );
 
         Graphic aEmpty;
-        pGraphic->SetGraphic( aEmpty );
-        pGraphic->SetUserData( aUserData );
+        mpGraphicObject->SetGraphic( aEmpty );
+        mpGraphicObject->SetUserData( aUserData );
 
         const_cast< SdrGrafObj* >( this )->mbIsPreview = false;
     }
-    if ( pGraphicLink && pGraphic->IsSwappedOut() )
+    if ( pGraphicLink && mpGraphicObject->IsSwappedOut() )
         ImpUpdateGraphicLink( false );
     else
-        pGraphic->FireSwapInRequest();
+        mpGraphicObject->FireSwapInRequest();
 
-    if( pGraphic->IsSwappedOut() ||
-        ( pGraphic->GetType() == GraphicType::NONE ) ||
-        ( pGraphic->GetType() == GraphicType::Default ) )
+    if( mpGraphicObject->IsSwappedOut() ||
+        ( mpGraphicObject->GetType() == GraphicType::NONE ) ||
+        ( mpGraphicObject->GetType() == GraphicType::Default ) )
     {
         Graphic aDefaultGraphic;
         aDefaultGraphic.SetDefaultType();
-        pGraphic->SetGraphic( aDefaultGraphic );
+        mpGraphicObject->SetGraphic( aDefaultGraphic );
     }
 }
 
@@ -671,8 +662,8 @@ void SdrGrafObj::SetGraphicLink(const OUString& rFileName, const OUString& rRefe
     aReferer = rReferer;
     aFilterName = rFilterName;
     ImpRegisterLink();
-    pGraphic->SetUserData();
-    pGraphic->SetSwapState();
+    mpGraphicObject->SetUserData();
+    mpGraphicObject->SetSwapState();
 }
 
 void SdrGrafObj::ReleaseGraphicLink()
@@ -685,13 +676,12 @@ void SdrGrafObj::ReleaseGraphicLink()
 
 bool SdrGrafObj::IsLinkedGraphic() const
 {
-    return !aFileName.isEmpty();
+    return !mpGraphicObject->GetGraphic().getOriginURL().isEmpty();
 }
-
 
 void SdrGrafObj::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
 {
-    bool bNoPresGrf = ( pGraphic->GetType() != GraphicType::NONE ) && !bEmptyPresObj;
+    bool bNoPresGrf = ( mpGraphicObject->GetType() != GraphicType::NONE ) && !bEmptyPresObj;
 
     rInfo.bResizeFreeAllowed = aGeo.nRotationAngle % 9000 == 0 ||
                                aGeo.nRotationAngle % 18000 == 0 ||
@@ -749,10 +739,10 @@ void SdrGrafObj::ImpSetLinkedGraphic( const Graphic& rGraphic )
 
 OUString SdrGrafObj::TakeObjNameSingul() const
 {
-    if (!pGraphic)
+    if (!mpGraphicObject)
         return OUString();
 
-    const VectorGraphicDataPtr& rVectorGraphicDataPtr = pGraphic->GetGraphic().getVectorGraphicData();
+    const VectorGraphicDataPtr& rVectorGraphicDataPtr = mpGraphicObject->GetGraphic().getVectorGraphicData();
 
     OUStringBuffer sName;
 
@@ -779,11 +769,11 @@ OUString SdrGrafObj::TakeObjNameSingul() const
     }
     else
     {
-        switch( pGraphic->GetType() )
+        switch( mpGraphicObject->GetType() )
         {
             case GraphicType::Bitmap:
             {
-                const char* pId = ( ( pGraphic->IsTransparent() || static_cast<const SdrGrafTransparenceItem&>( GetObjectItem( SDRATTR_GRAFTRANSPARENCE ) ).GetValue() ) ?
+                const char* pId = ( ( mpGraphicObject->IsTransparent() || GetObjectItem( SDRATTR_GRAFTRANSPARENCE ).GetValue() ) ?
                                      ( IsLinkedGraphic() ? STR_ObjNameSingulGRAFBMPTRANSLNK : STR_ObjNameSingulGRAFBMPTRANS ) :
                                      ( IsLinkedGraphic() ? STR_ObjNameSingulGRAFBMPLNK : STR_ObjNameSingulGRAFBMP ) );
 
@@ -819,10 +809,10 @@ OUString SdrGrafObj::TakeObjNameSingul() const
 
 OUString SdrGrafObj::TakeObjNamePlural() const
 {
-    if(!pGraphic)
+    if (!mpGraphicObject)
         return OUString();
 
-    const VectorGraphicDataPtr& rVectorGraphicDataPtr = pGraphic->GetGraphic().getVectorGraphicData();
+    const VectorGraphicDataPtr& rVectorGraphicDataPtr = mpGraphicObject->GetGraphic().getVectorGraphicData();
 
     OUStringBuffer sName;
 
@@ -849,11 +839,11 @@ OUString SdrGrafObj::TakeObjNamePlural() const
     }
     else
     {
-        switch( pGraphic->GetType() )
+        switch(mpGraphicObject->GetType())
         {
             case GraphicType::Bitmap:
             {
-                const char* pId = ( ( pGraphic->IsTransparent() || static_cast<const SdrGrafTransparenceItem&>( GetObjectItem( SDRATTR_GRAFTRANSPARENCE ) ).GetValue() ) ?
+                const char* pId = ( ( mpGraphicObject->IsTransparent() || GetObjectItem( SDRATTR_GRAFTRANSPARENCE ).GetValue() ) ?
                                      ( IsLinkedGraphic() ? STR_ObjNamePluralGRAFBMPTRANSLNK : STR_ObjNamePluralGRAFBMPTRANS ) :
                                      ( IsLinkedGraphic() ? STR_ObjNamePluralGRAFBMPLNK : STR_ObjNamePluralGRAFBMP ) );
 
@@ -915,7 +905,7 @@ SdrGrafObj& SdrGrafObj::operator=( const SdrGrafObj& rObj )
         return *this;
     SdrRectObj::operator=( rObj );
 
-    pGraphic->SetGraphic( rObj.GetGraphic(), &rObj.GetGraphicObject() );
+    mpGraphicObject->SetGraphic( rObj.GetGraphic(), &rObj.GetGraphicObject() );
     aFileName = rObj.aFileName;
     aFilterName = rObj.aFilterName;
     bMirrored = rObj.bMirrored;
@@ -1019,8 +1009,8 @@ void SdrGrafObj::SetPage( SdrPage* pNewPage )
     if( bRemove )
     {
         // No SwapIn necessary here, because if something's not loaded, it can't be animated either.
-        if( pGraphic->IsAnimated())
-            pGraphic->StopAnimation();
+        if( mpGraphicObject->IsAnimated())
+            mpGraphicObject->StopAnimation();
 
         if( pGraphicLink != nullptr )
             ImpDeregisterLink();
@@ -1058,7 +1048,7 @@ void SdrGrafObj::SetModel( SdrModel* pNewModel )
 
     if( bChg )
     {
-        if( pGraphic->HasUserData() )
+        if( mpGraphicObject->HasUserData() )
         {
             ForceSwapIn();
         }
@@ -1081,7 +1071,7 @@ void SdrGrafObj::StartAnimation()
 
 bool SdrGrafObj::HasGDIMetaFile() const
 {
-    return( pGraphic->GetType() == GraphicType::GdiMetafile );
+    return( mpGraphicObject->GetType() == GraphicType::GdiMetafile );
 }
 
 bool SdrGrafObj::isEmbeddedVectorGraphicData() const
@@ -1294,11 +1284,11 @@ void SdrGrafObj::AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrink
 {
     Size aSize;
     Size aMaxSize( rMaxRect.GetSize() );
-    if ( pGraphic->GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel )
-        aSize = Application::GetDefaultDevice()->PixelToLogic( pGraphic->GetPrefSize(), MapMode(MapUnit::Map100thMM));
+    if (mpGraphicObject->GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel)
+        aSize = Application::GetDefaultDevice()->PixelToLogic(mpGraphicObject->GetPrefSize(), MapMode(MapUnit::Map100thMM));
     else
-        aSize = OutputDevice::LogicToLogic( pGraphic->GetPrefSize(),
-                                            pGraphic->GetPrefMapMode(),
+        aSize = OutputDevice::LogicToLogic( mpGraphicObject->GetPrefSize(),
+                                            mpGraphicObject->GetPrefMapMode(),
                                             MapMode( MapUnit::Map100thMM ) );
 
     if( aSize.Height() != 0 && aSize.Width() != 0 )
@@ -1319,13 +1309,13 @@ void SdrGrafObj::AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrink
             // Scale graphic to page size
             if ( fGrfWH < fWinWH )
             {
-                aSize.Width() = static_cast<long>(aMaxSize.Height() * fGrfWH);
-                aSize.Height()= aMaxSize.Height();
+                aSize.setWidth( static_cast<long>(aMaxSize.Height() * fGrfWH) );
+                aSize.setHeight( aMaxSize.Height() );
             }
             else if ( fGrfWH > 0.F )
             {
-                aSize.Width() = aMaxSize.Width();
-                aSize.Height()= static_cast<long>(aMaxSize.Width() / fGrfWH);
+                aSize.setWidth( aMaxSize.Width() );
+                aSize.setHeight( static_cast<long>(aMaxSize.Width() / fGrfWH) );
             }
 
             aPos = rMaxRect.Center();
@@ -1334,8 +1324,8 @@ void SdrGrafObj::AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrink
         if( bShrinkOnly )
             aPos = maRect.TopLeft();
 
-        aPos.X() -= aSize.Width() / 2;
-        aPos.Y() -= aSize.Height() / 2;
+        aPos.AdjustX( -(aSize.Width() / 2) );
+        aPos.AdjustY( -(aSize.Height() / 2) );
         SetLogicRect( tools::Rectangle( aPos, aSize ) );
     }
 }
@@ -1369,7 +1359,7 @@ IMPL_LINK( SdrGrafObj, ImpSwapHdl, const GraphicObject*, pO, SvStream* )
 
     if( pO->IsInSwapOut() )
     {
-        if( pModel && !mbIsPreview && pModel->IsSwapGraphics() && pGraphic->GetSizeBytes() > 20480 )
+        if( pModel && !mbIsPreview && pModel->IsSwapGraphics() && mpGraphicObject->GetSizeBytes() > 20480 )
         {
             // test if this object is visualized from someone
             // ## test only if there are VOCs other than the preview renderer
@@ -1385,7 +1375,7 @@ IMPL_LINK( SdrGrafObj, ImpSwapHdl, const GraphicObject*, pO, SvStream* )
                 else if( nSwapMode & SdrSwapGraphicsMode::TEMP )
                 {
                     pRet = GRFMGR_AUTOSWAPSTREAM_TEMP;
-                    pGraphic->SetUserData();
+                    mpGraphicObject->SetUserData();
                 }
 
                 // #i102380#
@@ -1403,10 +1393,10 @@ IMPL_LINK( SdrGrafObj, ImpSwapHdl, const GraphicObject*, pO, SvStream* )
         // can be loaded from the original document stream later
         if( pModel != nullptr )
         {
-            if( pGraphic->HasUserData() )
+            if(mpGraphicObject->HasUserData())
             {
                 ::comphelper::LifecycleProxy proxy;
-                OUString aUserData = pGraphic->GetUserData();
+                OUString aUserData = mpGraphicObject->GetUserData();
                 uno::Reference<io::XInputStream> const xStream(
                     pModel->GetDocumentStream(aUserData, proxy));
 
@@ -1443,15 +1433,15 @@ IMPL_LINK( SdrGrafObj, ImpSwapHdl, const GraphicObject*, pO, SvStream* )
                         aGraphic, aUserData, *pStream,
                         GRFILTER_FORMAT_DONTKNOW, nullptr, GraphicFilterImportFlags::NONE, pFilterData.get()))
                     {
-                        const OUString aNewUserData( pGraphic->GetUserData() );
-                        pGraphic->SetGraphic( aGraphic );
+                        const OUString aNewUserData( mpGraphicObject->GetUserData() );
+                        mpGraphicObject->SetGraphic( aGraphic );
                         if( mbIsPreview )
                         {
-                            pGraphic->SetUserData(aNewUserData);
+                            mpGraphicObject->SetUserData(aNewUserData);
                         }
                         else
                         {
-                            pGraphic->SetUserData();
+                            mpGraphicObject->SetUserData();
                         }
 
                         // Graphic successfully swapped in.
@@ -1493,7 +1483,7 @@ Reference< XInputStream > SdrGrafObj::getInputStream()
 
     if( pModel )
     {
-        if( pGraphic && GetGraphic().IsLink() )
+        if (mpGraphicObject && GetGraphic().IsLink())
         {
             Graphic aGraphic( GetGraphic() );
             GfxLink aLink( aGraphic.GetLink() );

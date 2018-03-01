@@ -163,7 +163,6 @@ avmedia/source/avmediadummy.cxx
 avmedia/source/framework/MediaControlBase.cxx
 avmedia/source/framework/mediacontrol.cxx
 avmedia/source/framework/mediaitem.cxx
-avmedia/source/framework/mediamisc.cxx
 avmedia/source/framework/mediaplayer.cxx
 avmedia/source/framework/mediatoolbox.cxx
 avmedia/source/framework/soundhandler.cxx
@@ -1235,7 +1234,6 @@ chart2/source/inc/RegressionCurveHelper.hxx
 chart2/source/inc/RelativePositionHelper.hxx
 chart2/source/inc/RelativeSizeHelper.hxx
 chart2/source/inc/ResId.hxx
-chart2/source/inc/ResourceManager.hxx
 chart2/source/inc/Scaling.hxx
 chart2/source/inc/SceneProperties.hxx
 chart2/source/inc/StackMode.hxx
@@ -1413,7 +1411,6 @@ chart2/source/tools/RegressionEquation.hxx
 chart2/source/tools/RelativePositionHelper.cxx
 chart2/source/tools/RelativeSizeHelper.cxx
 chart2/source/tools/ResId.cxx
-chart2/source/tools/ResourceManager.cxx
 chart2/source/tools/Scaling.cxx
 chart2/source/tools/SceneProperties.cxx
 chart2/source/tools/StatisticsHelper.cxx
@@ -1723,7 +1720,6 @@ compilerplugins/clang/compat.hxx
 compilerplugins/clang/constantparam.cxx
 compilerplugins/clang/constparams.cxx
 compilerplugins/clang/conststringvar.cxx
-compilerplugins/clang/convertuintptr.cxx
 compilerplugins/clang/countusersofdefaultparams.cxx
 compilerplugins/clang/cppunitassertequals.cxx
 compilerplugins/clang/cstylecast.cxx
@@ -1731,7 +1727,6 @@ compilerplugins/clang/datamembershadow.cxx
 compilerplugins/clang/derefnullptr.cxx
 compilerplugins/clang/dllprivate.cxx
 compilerplugins/clang/dodgyswitch.cxx
-compilerplugins/clang/droplong.cxx
 compilerplugins/clang/dyncastvisibility.cxx
 compilerplugins/clang/dynexcspec.cxx
 compilerplugins/clang/expandablemethods.cxx
@@ -1769,7 +1764,6 @@ compilerplugins/clang/privatebase.cxx
 compilerplugins/clang/ptrvector.cxx
 compilerplugins/clang/rangedforcopy.cxx
 compilerplugins/clang/redundantcast.cxx
-compilerplugins/clang/redundantcopy.cxx
 compilerplugins/clang/redundantinline.cxx
 compilerplugins/clang/redundantpointerops.cxx
 compilerplugins/clang/refcounting.cxx
@@ -1860,7 +1854,6 @@ compilerplugins/clang/test/passparamsbyref.cxx
 compilerplugins/clang/test/passstuffbyref.cxx
 compilerplugins/clang/test/redundantcast.cxx
 compilerplugins/clang/test/redundantcast.hxx
-compilerplugins/clang/test/redundantcopy.cxx
 compilerplugins/clang/test/redundantinline.cxx
 compilerplugins/clang/test/redundantinline.hxx
 compilerplugins/clang/test/redundantpointerops.cxx
@@ -2322,8 +2315,6 @@ connectivity/source/drivers/mork/MorkParser.cxx
 connectivity/source/drivers/mork/MorkParser.hxx
 connectivity/source/drivers/mork/dllapi.h
 connectivity/source/drivers/mork/mork_helper.cxx
-connectivity/source/drivers/mork/post_include_windows.h
-connectivity/source/drivers/mork/pre_include_windows.h
 connectivity/source/drivers/mozab/bootstrap/MMozillaBootstrap.cxx
 connectivity/source/drivers/mozab/bootstrap/MMozillaBootstrap.hxx
 connectivity/source/drivers/mozab/bootstrap/MNSFolders.cxx
@@ -2476,8 +2467,6 @@ connectivity/source/inc/ado/WrapIndex.hxx
 connectivity/source/inc/ado/WrapKey.hxx
 connectivity/source/inc/ado/WrapTable.hxx
 connectivity/source/inc/ado/WrapTypeDefs.hxx
-connectivity/source/inc/ado/ado_post_sys_include.h
-connectivity/source/inc/ado/ado_pre_sys_include.h
 connectivity/source/inc/ado/adoimp.hxx
 connectivity/source/inc/calc/CCatalog.hxx
 connectivity/source/inc/calc/CConnection.hxx
@@ -6411,7 +6400,6 @@ include/editeng/memberids.h
 include/editeng/misspellrange.hxx
 include/editeng/mutxhelp.hxx
 include/editeng/nhypitem.hxx
-include/editeng/nlbkitem.hxx
 include/editeng/numdef.hxx
 include/editeng/numitem.hxx
 include/editeng/opaqitem.hxx
@@ -6429,7 +6417,6 @@ include/editeng/pmdlitem.hxx
 include/editeng/postitem.hxx
 include/editeng/prntitem.hxx
 include/editeng/protitem.hxx
-include/editeng/prszitem.hxx
 include/editeng/rsiditem.hxx
 include/editeng/scriptspaceitem.hxx
 include/editeng/scripttypeitem.hxx
@@ -6887,7 +6874,6 @@ include/sfx2/msgpool.hxx
 include/sfx2/navigat.hxx
 include/sfx2/new.hxx
 include/sfx2/newstyle.hxx
-include/sfx2/notebookbar/NotebookbarContextControl.hxx
 include/sfx2/notebookbar/NotebookbarTabControl.hxx
 include/sfx2/notebookbar/SfxNotebookBar.hxx
 include/sfx2/objface.hxx
@@ -7368,7 +7354,6 @@ include/svx/passwd.hxx
 include/svx/polygn3d.hxx
 include/svx/polypolygoneditor.hxx
 include/svx/postattr.hxx
-include/svx/prtqry.hxx
 include/svx/pszctrl.hxx
 include/svx/rectenum.hxx
 include/svx/relfld.hxx
@@ -7728,7 +7713,6 @@ include/test/util/xreplaceable.hxx
 include/test/util/xsearchable.hxx
 include/test/xmldiff.hxx
 include/test/xmltesttools.hxx
-include/test/xmlwriter.hxx
 include/toolkit/awt/animatedimagespeer.hxx
 include/toolkit/awt/scrollabledialog.hxx
 include/toolkit/awt/vclxaccessiblecomponent.hxx
@@ -7985,6 +7969,7 @@ include/vcl/IconThemeInfo.hxx
 include/vcl/IconThemeScanner.hxx
 include/vcl/IconThemeSelector.hxx
 include/vcl/ImageTree.hxx
+include/vcl/NotebookbarContextControl.hxx
 include/vcl/abstdlg.hxx
 include/vcl/accel.hxx
 include/vcl/alpha.hxx
@@ -8289,7 +8274,6 @@ io/test/stm/testfactreg.cxx
 io/test/stm/testfactreg.hxx
 io/test/testcomponent.cxx
 io/test/testconnection.cxx
-ios/LibreOfficeLight/LibreOfficeLight/dummyLOkit.c
 ios/LibreOfficeLight/LibreOfficeLight/lokit-Bridging-Header.h
 ios/source/LibreOfficeKit.c
 ios/source/LibreOfficeKit.h
@@ -8342,19 +8326,6 @@ l10ntools/inc/cfglex.hxx
 l10ntools/inc/cfgmerge.hxx
 l10ntools/inc/common.hxx
 l10ntools/inc/export.hxx
-l10ntools/inc/gConv.hxx
-l10ntools/inc/gConvPo.hxx
-l10ntools/inc/gConvProp.hxx
-l10ntools/inc/gConvSrc.hxx
-l10ntools/inc/gConvTree.hxx
-l10ntools/inc/gConvUi.hxx
-l10ntools/inc/gConvUlf.hxx
-l10ntools/inc/gConvXcs.hxx
-l10ntools/inc/gConvXcu.hxx
-l10ntools/inc/gConvXhp.hxx
-l10ntools/inc/gConvXml.hxx
-l10ntools/inc/gConvXrm.hxx
-l10ntools/inc/gL10nMem.hxx
 l10ntools/inc/helper.hxx
 l10ntools/inc/helpmerge.hxx
 l10ntools/inc/lngmerge.hxx
@@ -8369,20 +8340,6 @@ l10ntools/inc/xrmmerge.hxx
 l10ntools/source/cfg_yy_wrapper.c
 l10ntools/source/cfgmerge.cxx
 l10ntools/source/common.cxx
-l10ntools/source/gConv.cxx
-l10ntools/source/gConvPo.cxx
-l10ntools/source/gConvProp.cxx
-l10ntools/source/gConvSrc.cxx
-l10ntools/source/gConvTree.cxx
-l10ntools/source/gConvUi.cxx
-l10ntools/source/gConvUlf.cxx
-l10ntools/source/gConvXcs.cxx
-l10ntools/source/gConvXcu.cxx
-l10ntools/source/gConvXhp.cxx
-l10ntools/source/gConvXml.cxx
-l10ntools/source/gConvXrm.cxx
-l10ntools/source/gL10nMem.cxx
-l10ntools/source/gLang.cxx
 l10ntools/source/helper.cxx
 l10ntools/source/helpex.cxx
 l10ntools/source/helpmerge.cxx
@@ -10017,7 +9974,6 @@ sc/inc/chartuno.hxx
 sc/inc/chgtrack.hxx
 sc/inc/chgviset.hxx
 sc/inc/clipcontext.hxx
-sc/inc/clipdata.hxx
 sc/inc/clipoptions.hxx
 sc/inc/clipparam.hxx
 sc/inc/colcontainer.hxx
@@ -10298,6 +10254,7 @@ sc/qa/unit/helper/xpath.hxx
 sc/qa/unit/mark_test.cxx
 sc/qa/unit/opencl-test.cxx
 sc/qa/unit/parallelism.cxx
+sc/qa/unit/pivottable_filters_test.cxx
 sc/qa/unit/range.cxx
 sc/qa/unit/rangelst_test.cxx
 sc/qa/unit/screenshots/screenshots.cxx
@@ -12843,7 +12800,6 @@ sdext/source/presenter/PresenterViewFactory.cxx
 sdext/source/presenter/PresenterViewFactory.hxx
 sdext/source/presenter/PresenterWindowManager.cxx
 sdext/source/presenter/PresenterWindowManager.hxx
-setup_native/scripts/source/getuid.c
 setup_native/source/win32/customactions/indexingfilter/restartindexingservice.cxx
 setup_native/source/win32/customactions/quickstarter/quickstarter.cxx
 setup_native/source/win32/customactions/quickstarter/quickstarter.hxx
@@ -12867,7 +12823,6 @@ setup_native/source/win32/customactions/tools/seterror.hxx
 sfx2/inc/arrdecl.hxx
 sfx2/inc/bitset.hxx
 sfx2/inc/bluthsndapi.hxx
-sfx2/inc/configmgr.hxx
 sfx2/inc/fwkhelper.hxx
 sfx2/inc/guisaveas.hxx
 sfx2/inc/inettbc.hxx
@@ -13269,8 +13224,6 @@ shell/source/win32/shlxthandler/util/iso8601_converter.cxx
 shell/source/win32/shlxthandler/util/registry.cxx
 shell/source/win32/shlxthandler/util/utilities.cxx
 shell/source/win32/simplemail/senddoc.cxx
-shell/source/win32/simplemail/simplemapi.cxx
-shell/source/win32/simplemail/simplemapi.hxx
 shell/source/win32/simplemail/smplmailclient.cxx
 shell/source/win32/simplemail/smplmailclient.hxx
 shell/source/win32/simplemail/smplmailentry.cxx
@@ -15168,7 +15121,6 @@ sw/inc/tabcol.hxx
 sw/inc/tblafmt.hxx
 sw/inc/tblenum.hxx
 sw/inc/tblsel.hxx
-sw/inc/textboxhelper.hxx
 sw/inc/tgrditem.hxx
 sw/inc/tox.hxx
 sw/inc/toxe.hxx
@@ -15417,7 +15369,6 @@ sw/source/core/doc/swstylemanager.hxx
 sw/source/core/doc/tblafmt.cxx
 sw/source/core/doc/tblcpy.cxx
 sw/source/core/doc/tblrwcl.cxx
-sw/source/core/doc/textboxhelper.cxx
 sw/source/core/doc/visiturl.cxx
 sw/source/core/docnode/cancellablejob.cxx
 sw/source/core/docnode/cancellablejob.hxx
@@ -15761,7 +15712,6 @@ sw/source/core/text/txtfrm.cxx
 sw/source/core/text/txtftn.cxx
 sw/source/core/text/txthyph.cxx
 sw/source/core/text/txtinit.cxx
-sw/source/core/text/txtio.cxx
 sw/source/core/text/txtpaint.cxx
 sw/source/core/text/txtpaint.hxx
 sw/source/core/text/txttab.cxx
@@ -16789,7 +16739,6 @@ test/source/util/xreplaceable.cxx
 test/source/util/xsearchable.cxx
 test/source/vclbootstrapprotector.cxx
 test/source/xmltesttools.cxx
-test/source/xmlwriter.cxx
 testtools/source/bridgetest/bridgetest.cxx
 testtools/source/bridgetest/cli/cli_cpp_bridgetest.cxx
 testtools/source/bridgetest/constructors.cxx
@@ -18050,7 +17999,6 @@ vcl/osx/salsys.cxx
 vcl/osx/saltimer.cxx
 vcl/osx/service_entry.cxx
 vcl/qa/cppunit/BitmapProcessorTest.cxx
-vcl/qa/cppunit/BitmapTest.cxx
 vcl/qa/cppunit/app/test_IconThemeInfo.cxx
 vcl/qa/cppunit/app/test_IconThemeScanner.cxx
 vcl/qa/cppunit/app/test_IconThemeSelector.cxx
@@ -18078,7 +18026,6 @@ vcl/quartz/salgdicommon.cxx
 vcl/quartz/salgdiutils.cxx
 vcl/quartz/salvd.cxx
 vcl/quartz/utils.cxx
-vcl/source/app/IDialogRenderable.cxx
 vcl/source/app/ITiledRenderable.cxx
 vcl/source/app/IconThemeInfo.cxx
 vcl/source/app/IconThemeScanner.cxx
@@ -18913,7 +18860,6 @@ writerperfect/source/calc/StarOfficeCalcImportFilter.hxx
 writerperfect/source/common/DirectoryStream.cxx
 writerperfect/source/common/DocumentHandler.cxx
 writerperfect/source/common/WPFTEncodingDialog.cxx
-writerperfect/source/common/WPFTResMgr.cxx
 writerperfect/source/common/WPXSvInputStream.cxx
 writerperfect/source/draw/CDRImportFilter.cxx
 writerperfect/source/draw/CDRImportFilter.hxx
@@ -18967,6 +18913,8 @@ writerperfect/source/writer/WordPerfectImportFilter.cxx
 writerperfect/source/writer/WordPerfectImportFilter.hxx
 writerperfect/source/writer/exp/XMLBase64ImportContext.cxx
 writerperfect/source/writer/exp/XMLBase64ImportContext.hxx
+writerperfect/source/writer/exp/XMLFootnoteImportContext.cxx
+writerperfect/source/writer/exp/XMLFootnoteImportContext.hxx
 writerperfect/source/writer/exp/XMLSectionContext.cxx
 writerperfect/source/writer/exp/XMLSectionContext.hxx
 writerperfect/source/writer/exp/XMLTextFrameContext.cxx
@@ -19718,8 +19666,6 @@ xmlsecurity/inc/gpg/xmlsignature_gpgimpl.hxx
 xmlsecurity/inc/macrosecurity.hxx
 xmlsecurity/inc/pch/precompiled_xmlsecurity.cxx
 xmlsecurity/inc/pch/precompiled_xmlsecurity.hxx
-xmlsecurity/inc/pch/precompiled_xsec_fw.cxx
-xmlsecurity/inc/pch/precompiled_xsec_fw.hxx
 xmlsecurity/inc/pch/precompiled_xsec_gpg.cxx
 xmlsecurity/inc/pch/precompiled_xsec_gpg.hxx
 xmlsecurity/inc/pch/precompiled_xsec_xmlsec.cxx
@@ -19747,7 +19693,6 @@ xmlsecurity/qa/unit/xmlsecurity-dialogs-test.cxx
 xmlsecurity/source/component/certificatecontainer.cxx
 xmlsecurity/source/component/certificatecontainer.hxx
 xmlsecurity/source/component/documentdigitalsignatures.cxx
-xmlsecurity/source/component/documentdigitalsignatures.hxx
 xmlsecurity/source/component/registerservices.cxx
 xmlsecurity/source/dialogs/certificatechooser.cxx
 xmlsecurity/source/dialogs/certificateviewer.cxx
@@ -19839,8 +19784,6 @@ xmlsecurity/source/xmlsec/nss/xmlsignature_nssimpl.cxx
 xmlsecurity/source/xmlsec/nss/xmlsignature_nssimpl.hxx
 xmlsecurity/source/xmlsec/nss/xsec_nss.cxx
 xmlsecurity/source/xmlsec/saxhelper.cxx
-xmlsecurity/source/xmlsec/serialnumberadapter.cxx
-xmlsecurity/source/xmlsec/serialnumberadapter.hxx
 xmlsecurity/source/xmlsec/xmldocumentwrapper_xmlsecimpl.cxx
 xmlsecurity/source/xmlsec/xmlelementwrapper_xmlsecimpl.cxx
 xmlsecurity/source/xmlsec/xmlsec_init.cxx

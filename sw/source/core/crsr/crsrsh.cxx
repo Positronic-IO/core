@@ -142,21 +142,20 @@ SwPaM * SwCursorShell::CreateCursor()
  * Note, this function does not delete anything if there is no other cursor.
  * @return - returns true if there was another cursor and we deleted one.
  */
-bool SwCursorShell::DestroyCursor()
+void SwCursorShell::DestroyCursor()
 {
     // don't delete Cursor with active table Selection
     assert(!IsTableMode());
 
     // Is there a next one? Don't do anything if not.
     if(!m_pCurrentCursor->IsMultiSelection())
-        return false;
+        return;
 
     SwCallLink aLk( *this ); // watch Cursor-Moves
     SwCursor* pNextCursor = static_cast<SwCursor*>(m_pCurrentCursor->GetNext());
     delete m_pCurrentCursor;
     m_pCurrentCursor = dynamic_cast<SwShellCursor*>(pNextCursor);
     UpdateCursor();
-    return true;
 }
 
 /**
@@ -566,7 +565,7 @@ bool SwCursorShell::SttEndDoc( bool bStt )
     if( bRet )
     {
         if( bStt )
-            pTmpCursor->GetPtPos().Y() = 0; // set to 0 explicitly (table header)
+            pTmpCursor->GetPtPos().setY( 0 ); // set to 0 explicitly (table header)
         if( m_pBlockCursor )
         {
             m_pBlockCursor->clearPoints();
@@ -1084,10 +1083,10 @@ bool SwCursorShell::GotoPage( sal_uInt16 nPage )
     return bRet;
 }
 
-bool SwCursorShell::GetCharRectAt(SwRect& rRect, const SwPosition* pPos)
+void SwCursorShell::GetCharRectAt(SwRect& rRect, const SwPosition* pPos)
 {
     SwContentFrame* pFrame = GetCurrFrame();
-    return pFrame->GetCharRect( rRect, *pPos );
+    pFrame->GetCharRect( rRect, *pPos );
 }
 
 void SwCursorShell::GetPageNum( sal_uInt16 &rnPhyNum, sal_uInt16 &rnVirtNum,
@@ -2741,8 +2740,7 @@ SwCursorShell::~SwCursorShell()
 
     // #i54025# - do not give a HTML parser that might potentially hang as
     // a client at the cursor shell the chance to hang itself on a TextNode
-    if( GetRegisteredIn() )
-        GetRegisteredInNonConst()->Remove( this );
+    EndListeningAll();
 }
 
 SwShellCursor* SwCursorShell::getShellCursor( bool bBlock )
@@ -2797,8 +2795,8 @@ void SwCursorShell::MakeSelVisible()
         }
         if( !aTmp.HasArea() )
         {
-            aTmp.SSize().Height() += 1;
-            aTmp.SSize().Width() += 1;
+            aTmp.SSize().AdjustHeight(1 );
+            aTmp.SSize().AdjustWidth(1 );
         }
         MakeVisible( aTmp );
     }
@@ -2809,7 +2807,7 @@ void SwCursorShell::MakeSelVisible()
         else
         {
             SwRect aTmp( m_aCharRect );
-            aTmp.SSize().Height() += 1; aTmp.SSize().Width() += 1;
+            aTmp.SSize().AdjustHeight(1 ); aTmp.SSize().AdjustWidth(1 );
             MakeVisible( aTmp );
         }
     }

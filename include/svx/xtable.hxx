@@ -43,10 +43,6 @@
 #include <limits>
 #include <memory>
 
-// function to convert in real RGB_Colours;
-// it can't be compared with enum COL_NAME
-SVX_DLLPUBLIC Color RGB_Color( ColorData nColorName );
-
 class SVX_DLLPUBLIC XColorEntry : public XPropertyEntry
 {
 private:
@@ -164,7 +160,7 @@ class SVX_DLLPUBLIC XPropertyList : public cppu::OWeakObject
 private:
     SAL_DLLPRIVATE void* operator new(size_t);
 protected:
-    SAL_DLLPRIVATE void operator delete(void *);
+    void operator delete(void *);
 protected:
     XPropertyListType   meType;
     OUString            maName; // not persistent

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -65,7 +65,7 @@ CoreTextStyle::CoreTextStyle( const FontSelectPattern& rFSD )
     // handle font stretching if any
     if( (pReqFont->mnWidth != 0) && (pReqFont->mnWidth != pReqFont->mnHeight) )
     {
-        mfFontStretch = (float)pReqFont->mnWidth / pReqFont->mnHeight;
+        mfFontStretch = static_cast<float>(pReqFont->mnWidth) / pReqFont->mnHeight;
         aMatrix = CGAffineTransformConcat(aMatrix, CGAffineTransformMakeScale(mfFontStretch, 1.0F));
     }
 
@@ -294,7 +294,7 @@ int CoreTextFontFace::GetFontTable( const char pTagName[5], unsigned char* pResu
 
     CFRelease( pDataRef);
 
-    return (int)nByteLength;
+    return static_cast<int>(nByteLength);
 }
 
 FontAttributes DevFontFromCTFontDescriptor( CTFontDescriptorRef pFD, bool* bFontEnabled )
@@ -382,6 +382,29 @@ FontAttributes DevFontFromCTFontDescriptor( CTFontDescriptorRef pFD, bool* bFont
     CFNumberRef pWeightNum = static_cast<CFNumberRef>(CFDictionaryGetValue( pAttrDict, kCTFontWeightTrait ));
     CFNumberGetValue( pWeightNum, kCFNumberDoubleType, &fWeight );
     int nInt = WEIGHT_NORMAL;
+
+    // Special case fixes
+
+    // tdf#67744: Courier Std Medium is always bold. We get a kCTFontWeightTrait of 0.23 which
+    // surely must be wrong.
+    if (rDFA.GetFamilyName() == "Courier Std" &&
+        (rDFA.GetStyleName() == "Medium" || rDFA.GetStyleName() == "Medium Oblique") &&
+        fWeight > 0.2)
+    {
+        fWeight = 0;
+    }
+
+    // tdf#68889: Ditto for Gill Sans MT Pro. Here I can kinda understand it, maybe the
+    // kCTFontWeightTrait is intended to give a subjective "optical" impression of how the font
+    // looks, and Gill Sans MT Pro Medium is kinda heavy. But with the way LibreOffice uses fonts,
+    // we still should think of it as being "medium" weight.
+    if (rDFA.GetFamilyName() == "Gill Sans MT Pro" &&
+        (rDFA.GetStyleName() == "Medium" || rDFA.GetStyleName() == "Medium Italic") &&
+        fWeight > 0.2)
+    {
+        fWeight = 0;
+    }
+
     if( fWeight > 0 )
     {
         nInt = rint(WEIGHT_NORMAL + fWeight * ((WEIGHT_BLACK - WEIGHT_NORMAL)/0.68));
@@ -392,13 +415,13 @@ FontAttributes DevFontFromCTFontDescriptor( CTFontDescriptorRef pFD, bool* bFont
     }
     else if( fWeight < 0 )
     {
-        nInt = rint(WEIGHT_NORMAL + fWeight * ((WEIGHT_NORMAL - WEIGHT_THIN)/0.9));
+        nInt = rint(WEIGHT_NORMAL + fWeight * ((WEIGHT_NORMAL - WEIGHT_THIN)/0.8));
         if( nInt < WEIGHT_THIN )
         {
             nInt = WEIGHT_THIN;
         }
     }
-    rDFA.SetWeight( (FontWeight)nInt );
+    rDFA.SetWeight( static_cast<FontWeight>(nInt) );
 
     // get the font slant
     double fSlant = 0;
@@ -430,7 +453,7 @@ FontAttributes DevFontFromCTFontDescriptor( CTFontDescriptorRef pFD, bool* bFont
             nInt = WIDTH_ULTRA_CONDENSED;
         }
     }
-    rDFA.SetWidthType( (FontWidth)nInt );
+    rDFA.SetWidthType( static_cast<FontWidth>(nInt) );
 
     // release the attribute dict that we had copied
     CFRelease( pAttrDict );
@@ -441,7 +464,7 @@ FontAttributes DevFontFromCTFontDescriptor( CTFontDescriptorRef pFD, bool* bFont
     return rDFA;
 }
 
-static void CTFontEnumCallBack( const void* pValue, void* pContext )
+static void fontEnumCallBack( const void* pValue, void* pContext )
 {
     CTFontDescriptorRef pFD = static_cast<CTFontDescriptorRef>(pValue);
 
@@ -464,8 +487,8 @@ SystemFontList::SystemFontList()
 
 SystemFontList::~SystemFontList()
 {
-    CTFontContainer::const_iterator it = maFontContainer.begin();
-    for(; it != maFontContainer.end(); ++it )
+    auto it = maFontContainer.cbegin();
+    for(; it != maFontContainer.cend(); ++it )
     {
         delete (*it).second;
     }
@@ -489,8 +512,8 @@ void SystemFontList::AddFont( CoreTextFontFace* pFontData )
 
 void SystemFontList::AnnounceFonts( PhysicalFontCollection& rFontCollection ) const
 {
-    CTFontContainer::const_iterator it = maFontContainer.begin();
-    for(; it != maFontContainer.end(); ++it )
+    auto it = maFontContainer.cbegin();
+    for(; it != maFontContainer.cend(); ++it )
     {
         rFontCollection.Add( (*it).second->Clone() );
     }
@@ -498,7 +521,7 @@ void SystemFontList::AnnounceFonts( PhysicalFontCollection& rFontCollection ) co
 
 CoreTextFontFace* SystemFontList::GetFontDataFromId( sal_IntPtr nFontId ) const
 {
-    CTFontContainer::const_iterator it = maFontContainer.find( nFontId );
+    auto it = maFontContainer.find( nFontId );
     if( it == maFontContainer.end() )
     {
         return nullptr;
@@ -522,7 +545,7 @@ bool SystemFontList::Init()
 
     const int nFontCount = CFArrayGetCount( mpCTFontArray );
     const CFRange aFullRange = CFRangeMake( 0, nFontCount );
-    CFArrayApplyFunction( mpCTFontArray, aFullRange, CTFontEnumCallBack, this );
+    CFArrayApplyFunction( mpCTFontArray, aFullRange, fontEnumCallBack, this );
 
     return true;
 }

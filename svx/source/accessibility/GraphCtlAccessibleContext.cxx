@@ -26,7 +26,6 @@
 #include <unotools/accessiblestatesethelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <osl/mutex.hxx>
@@ -434,7 +433,7 @@ void SAL_CALL SvxGraphCtrlAccessibleContext::grabFocus()
 sal_Int32 SAL_CALL SvxGraphCtrlAccessibleContext::getForeground()
 {
     svtools::ColorConfig aColorConfig;
-    sal_uInt32 nColor = aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor;
+    Color nColor = aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor;
     return static_cast<sal_Int32>(nColor);
 }
 

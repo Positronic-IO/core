@@ -65,7 +65,7 @@
 
 #include <tools/stream.hxx>
 #include <vcl/dibtools.hxx>
-#include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 #include <svx/xbitmap.hxx>
 
 void LwpBackgroundStuff::Read(LwpObjectStream* pStrm)
@@ -76,7 +76,7 @@ void LwpBackgroundStuff::Read(LwpObjectStream* pStrm)
     pStrm->SkipExtra();
 }
 
-void LwpBackgroundStuff::GetPattern(sal_uInt16 btPttnIndex, sal_uInt8* pPttnArray)
+void LwpBackgroundStuff::GetPattern(sal_uInt16 btPttnIndex, sal_uInt8 (&pPttnArray)[8])
 {
     if (btPttnIndex > 71)
     {
@@ -85,9 +85,9 @@ void LwpBackgroundStuff::GetPattern(sal_uInt16 btPttnIndex, sal_uInt8* pPttnArra
     }
     assert((2 < btPttnIndex) && (btPttnIndex < 72));
     const sal_uInt8* pTempArray = s_pLwpPatternTab[btPttnIndex];
-    for(sal_uInt8 i = 0; i < 32; i++)
+    for(sal_uInt8 i = 0; i < 8; i++)
     {
-        pPttnArray[i] = (i%4 == 0) ? pTempArray[7-i/4] : 0;
+        pPttnArray[i] = pTempArray[7-i];
     }
 }
 
@@ -110,15 +110,11 @@ XFBGImage* LwpBackgroundStuff::GetFillPattern()
     }
 
     // get pattern array from pattern table
-    sal_uInt8 aPttnArray[32];
+    sal_uInt8 aPttnArray[8];
     GetPattern(m_nID, aPttnArray);
 
     // create bitmap object from the pattern array
-    Bitmap aBmp( Size(8, 8), 1 );
-    BitmapWriteAccess* pWA = aBmp.AcquireWriteAccess();
-    sal_uInt8* pBuf = pWA->GetBuffer();
-    memcpy(pBuf, aPttnArray, 32);
-    Bitmap::ReleaseAccess(pWA);
+    BitmapEx aBmp = vcl::bitmap::CreateFromData( aPttnArray, 8, 8, 1, 1 );
 
     // create XOBitmap object from bitmap object
     XOBitmap aXOBitmap( aBmp );

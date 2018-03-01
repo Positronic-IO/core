@@ -29,6 +29,7 @@
 #include <com/sun/star/task/XInteractionDisapprove.hpp>
 #include <com/sun/star/task/XInteractionAbort.hpp>
 #include <com/sun/star/task/XInteractionRequest.hpp>
+#include <com/sun/star/task/XInteractionRetry.hpp>
 
 #include <unotools/resmgr.hxx>
 #include <vcl/svapp.hxx>
@@ -56,7 +57,7 @@ namespace {
 
 void
 handleLockedDocumentRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     const OUString& aDocumentURL,
     const OUString& aInfo,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
@@ -66,7 +67,9 @@ handleLockedDocumentRequest_(
     uno::Reference< task::XInteractionApprove > xApprove;
     uno::Reference< task::XInteractionDisapprove > xDisapprove;
     uno::Reference< task::XInteractionAbort > xAbort;
-    getContinuations(rContinuations, &xApprove, &xDisapprove, &xAbort);
+    // In case an option to ignore lock and open the file is available
+    uno::Reference< task::XInteractionRetry > xRetry;
+    getContinuations(rContinuations, &xApprove, &xDisapprove, &xAbort, &xRetry);
 
     if ( !xApprove.is() || !xDisapprove.is() || !xAbort.is() )
         return;
@@ -86,12 +89,15 @@ handleLockedDocumentRequest_(
             aArguments.push_back( !aInfo.isEmpty()
                                   ? aInfo
                                   : Translate::get( STR_UNKNOWNUSER, aResLocale) );
+            aArguments.push_back( xRetry.is()
+                                  ? Translate::get( STR_OPENLOCKED_ALLOWIGNORE_MSG, aResLocale )
+                                  : "" );
             aMessage = Translate::get(STR_OPENLOCKED_MSG, aResLocale);
             aMessage = UUIInteractionHelper::replaceMessageWithArguments(
                 aMessage, aArguments );
 
-            ScopedVclPtrInstance< OpenLockedQueryBox > xDialog(pParent, aResLocale, aMessage);
-            nResult = xDialog->Execute();
+            OpenLockedQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
+            nResult = aDialog.run();
         }
         else if ( nMode == UUI_DOC_SAVE_LOCK )
         {
@@ -99,12 +105,13 @@ handleLockedDocumentRequest_(
                                   ? aInfo
                                   : Translate::get( STR_UNKNOWNUSER,
                                                aResLocale ) );
-            aMessage = Translate::get(STR_TRYLATER_MSG, aResLocale);
+            aMessage = Translate::get(xRetry.is() ? STR_OVERWRITE_IGNORELOCK_MSG : STR_TRYLATER_MSG,
+                aResLocale);
             aMessage = UUIInteractionHelper::replaceMessageWithArguments(
                 aMessage, aArguments );
 
-            ScopedVclPtrInstance< TryLaterQueryBox > xDialog(pParent, aResLocale, aMessage);
-            nResult = xDialog->Execute();
+            TryLaterQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
+            nResult = aDialog.run();
         }
         else if ( nMode == UUI_DOC_OWN_LOAD_LOCK ||
                   nMode == UUI_DOC_OWN_SAVE_LOCK )
@@ -117,17 +124,16 @@ handleLockedDocumentRequest_(
             aMessage = UUIInteractionHelper::replaceMessageWithArguments(
                 aMessage, aArguments );
 
-            ScopedVclPtrInstance< AlreadyOpenQueryBox > xDialog( pParent,
-                                         aResLocale,
-                                         aMessage,
-                                         nMode == UUI_DOC_OWN_SAVE_LOCK );
-            nResult = xDialog->Execute();
+            AlreadyOpenQueryBox aDialog(pParent, aResLocale, aMessage, nMode == UUI_DOC_OWN_SAVE_LOCK);
+            nResult = aDialog.run();
         }
 
         if ( nResult == RET_YES )
             xApprove->select();
         else if ( nResult == RET_NO )
             xDisapprove->select();
+        else if ( nResult == RET_IGNORE && xRetry.is() )
+            xRetry->select();
         else
             xAbort->select();
     }
@@ -139,7 +145,7 @@ handleLockedDocumentRequest_(
 
 void
 handleChangedByOthersRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
         rContinuations )
 {
@@ -154,8 +160,8 @@ handleChangedByOthersRequest_(
     {
         SolarMutexGuard aGuard;
         std::locale aResLocale = Translate::Create("uui");
-        ScopedVclPtrInstance< FileChangedQueryBox > xDialog(pParent, aResLocale);
-        sal_Int32 nResult = xDialog->Execute();
+        FileChangedQueryBox aDialog(pParent, aResLocale);
+        sal_Int32 nResult = aDialog.run();
 
         if ( nResult == RET_YES )
             xApprove->select();
@@ -175,7 +181,7 @@ const sal_uInt16  UUI_DOC_CorruptErrDlg = 1;
 
 void
 handleLockFileProblemRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
         rContinuations, sal_uInt16 nWhichDlg )
 {
@@ -195,13 +201,13 @@ handleLockFileProblemRequest_(
 
         if (nWhichDlg == UUI_DOC_CreateErrDlg)
         {
-            ScopedVclPtrInstance< LockFailedQueryBox > xDialog(pParent, aResLocale);
-            nResult = xDialog->Execute();
+            LockFailedQueryBox aDialog(pParent, aResLocale);
+            nResult = aDialog.run();
         }
         else
         {
-            ScopedVclPtrInstance< LockCorruptQueryBox > xDialog(pParent, aResLocale);
-            nResult = xDialog->Execute();
+            LockCorruptQueryBox aDialog(pParent, aResLocale);
+            nResult = aDialog.run();
         }
 
         if ( nResult == RET_OK )
@@ -226,7 +232,8 @@ UUIInteractionHelper::handleLockedDocumentRequest(
     document::LockedDocumentRequest aLockedDocumentRequest;
     if (aAnyRequest >>= aLockedDocumentRequest )
     {
-        handleLockedDocumentRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                       aLockedDocumentRequest.DocumentURL,
                                       aLockedDocumentRequest.UserInfo,
                                       rRequest->getContinuations(),
@@ -237,7 +244,8 @@ UUIInteractionHelper::handleLockedDocumentRequest(
     document::OwnLockOnDocumentRequest aOwnLockOnDocumentRequest;
     if (aAnyRequest >>= aOwnLockOnDocumentRequest )
     {
-        handleLockedDocumentRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                       aOwnLockOnDocumentRequest.DocumentURL,
                                       aOwnLockOnDocumentRequest.TimeInfo,
                                       rRequest->getContinuations(),
@@ -250,7 +258,8 @@ UUIInteractionHelper::handleLockedDocumentRequest(
     document::LockedOnSavingRequest aLockedOnSavingRequest;
     if (aAnyRequest >>= aLockedOnSavingRequest )
     {
-        handleLockedDocumentRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                       aLockedOnSavingRequest.DocumentURL,
                                       aLockedOnSavingRequest.UserInfo,
                                       rRequest->getContinuations(),
@@ -269,7 +278,8 @@ UUIInteractionHelper::handleChangedByOthersRequest(
     document::ChangedByOthersRequest aChangedByOthersRequest;
     if (aAnyRequest >>= aChangedByOthersRequest )
     {
-        handleChangedByOthersRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleChangedByOthersRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                        rRequest->getContinuations() );
         return true;
     }
@@ -286,7 +296,8 @@ UUIInteractionHelper::handleLockFileProblemRequest(
     document::LockFileIgnoreRequest aLockFileIgnoreRequest;
     if (aAnyRequest >>= aLockFileIgnoreRequest )
     {
-        handleLockFileProblemRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleLockFileProblemRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                       rRequest->getContinuations(), UUI_DOC_CreateErrDlg );
         return true;
     }
@@ -294,7 +305,8 @@ UUIInteractionHelper::handleLockFileProblemRequest(
     document::LockFileCorruptRequest aLockFileCorruptRequest;
     if (aAnyRequest >>= aLockFileCorruptRequest )
     {
-        handleLockFileProblemRequest_( getParentProperty(),
+        vcl::Window* pWin = getParentProperty();
+        handleLockFileProblemRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
                                       rRequest->getContinuations(), UUI_DOC_CorruptErrDlg );
         return true;
     }

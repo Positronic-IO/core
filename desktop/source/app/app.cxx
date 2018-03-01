@@ -103,7 +103,7 @@
 #include <svtools/menuoptions.hxx>
 #include <rtl/bootstrap.hxx>
 #include <vcl/help.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/app.hxx>
@@ -130,16 +130,9 @@
 #endif
 
 #ifdef _WIN32
-#ifdef _MSC_VER
-#pragma warning(push, 1) /* disable warnings within system headers */
-#pragma warning (disable: 4005)
-#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
 #endif
-#endif //WNT
 
 #if defined(_WIN32)
 #include <process.h>
@@ -473,11 +466,11 @@ void Desktop::Init()
     }
 
     // Check whether safe mode is enabled
-    CommandLineArgs& rCmdLine = GetCommandLineArgs();
+    const CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
     // Check if we are restarting from safe mode - in that case we don't want to enter it again
     if (sfx2::SafeMode::hasRestartFlag())
         sfx2::SafeMode::removeRestartFlag();
-    else if (rCmdLine.IsSafeMode() || sfx2::SafeMode::hasFlag())
+    else if (rCmdLineArgs.IsSafeMode() || sfx2::SafeMode::hasFlag())
         Application::EnableSafeMode();
 
     // When we are in SafeMode we need to do changes before the configuration
@@ -514,8 +507,6 @@ void Desktop::Init()
 
     if ( true )
     {
-        const CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
-
         // start ipc thread only for non-remote offices
         RequestHandler::Status aStatus = RequestHandler::Enable(true);
         if ( aStatus == RequestHandler::IPC_STATUS_PIPE_ERROR )
@@ -643,9 +634,10 @@ void Desktop::HandleBootstrapPathErrors( ::utl::Bootstrap::Status aBootstrapStat
 
         OUString const aMessage(aDiagnosticMessage + "\n");
 
-        ScopedVclPtrInstance< MessageDialog > aBootstrapFailedBox(nullptr, aMessage);
-        aBootstrapFailedBox->SetText( aProductKey );
-        aBootstrapFailedBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xBootstrapFailedBox(Application::CreateMessageDialog(nullptr,
+                                                                 VclMessageType::Warning, VclButtonsType::Ok, aMessage));
+        xBootstrapFailedBox->set_title(aProductKey);
+        xBootstrapFailedBox->run();
     }
 }
 
@@ -982,6 +974,15 @@ void impl_checkRecoveryState(bool& bCrashed           ,
     bSessionDataExists = elements && session;
 }
 
+Reference< css::frame::XSynchronousDispatch > g_xRecoveryUI;
+
+template <class Ref>
+struct RefClearGuard
+{
+    Ref& m_Ref;
+    RefClearGuard(Ref& ref) : m_Ref(ref) {}
+    ~RefClearGuard() { m_Ref.clear(); }
+};
 
 /*  @short  start the recovery wizard.
 
@@ -996,12 +997,13 @@ bool impl_callRecoveryUI(bool bEmergencySave     ,
 
     css::uno::Reference< css::uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
 
-    Reference< css::frame::XSynchronousDispatch > xRecoveryUI(
+    g_xRecoveryUI.set(
         xContext->getServiceManager()->createInstanceWithContext("com.sun.star.comp.svx.RecoveryUI", xContext),
         css::uno::UNO_QUERY_THROW);
+    RefClearGuard<Reference< css::frame::XSynchronousDispatch >> refClearGuard(g_xRecoveryUI);
 
     Reference< css::util::XURLTransformer > xURLParser =
-        css::util::URLTransformer::create(::comphelper::getProcessComponentContext());
+        css::util::URLTransformer::create(xContext);
 
     css::util::URL aURL;
     if (bEmergencySave)
@@ -1011,6 +1013,24 @@ bool impl_callRecoveryUI(bool bEmergencySave     ,
     else
         return false;
 
+    xURLParser->parseStrict(aURL);
+
+    css::uno::Any aRet = g_xRecoveryUI->dispatchWithReturnValue(aURL, css::uno::Sequence< css::beans::PropertyValue >());
+    bool bRet = false;
+    aRet >>= bRet;
+    return bRet;
+}
+
+bool impl_bringToFrontRecoveryUI()
+{
+    Reference< css::frame::XSynchronousDispatch > xRecoveryUI(g_xRecoveryUI);
+    if (!xRecoveryUI.is())
+        return false;
+
+    css::util::URL aURL;
+    aURL.Complete = "vnd.sun.star.autorecovery:/doBringToFront";
+    Reference< css::util::XURLTransformer > xURLParser =
+        css::util::URLTransformer::create(::comphelper::getProcessComponentContext());
     xURLParser->parseStrict(aURL);
 
     css::uno::Any aRet = xRecoveryUI->dispatchWithReturnValue(aURL, css::uno::Sequence< css::beans::PropertyValue >());
@@ -1030,8 +1050,9 @@ void restartOnMac(bool passArguments) {
     (void) passArguments; // avoid warnings
     OUString aMessage = DpResId(STR_LO_MUST_BE_RESTARTED);
 
-    MessageDialog aRestartBox(NULL, aMessage);
-    aRestartBox.Execute();
+    std::unique_ptr<weld::MessageDialog> xRestartBox(Application::CreateMessageDialog(nullptr,
+                                                     VclMessageType::Warning, VclButtonsType::Ok, aMessage));
+    xRestartBox->Execute();
 #else
     OUString execUrl;
     OSL_VERIFY(osl_getExecutableFile(&execUrl.pData) == osl_Process_E_None);
@@ -1976,7 +1997,7 @@ void Desktop::OpenClients()
 #elif defined WNT
             aHelpURL += "&System=WIN";
 #endif
-            Application::GetHelp()->Start(aHelpURL, nullptr);
+            Application::GetHelp()->Start(aHelpURL, static_cast<const vcl::Window*>(nullptr));
             return;
         }
     }
@@ -2025,7 +2046,9 @@ void Desktop::OpenClients()
         bool bCrashed            = false;
         bool bExistsRecoveryData = false;
         bool bExistsSessionData  = false;
-        bool const bDisableRecovery = getenv("OOO_DISABLE_RECOVERY") != nullptr;
+        bool const bDisableRecovery
+            = getenv("OOO_DISABLE_RECOVERY") != nullptr
+              || !officecfg::Office::Recovery::RecoveryInfo::Enabled::get();
 
         impl_checkRecoveryState(bCrashed, bExistsRecoveryData, bExistsSessionData);
 
@@ -2132,8 +2155,10 @@ void Desktop::OpenClients()
         {
             aRequest.aPrintList.clear();
             aRequest.aPrintToList.clear();
-            ScopedVclPtrInstance< MessageDialog > aBox(nullptr, DpResId(STR_ERR_PRINTDISABLED));
-            aBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Warning, VclButtonsType::Ok,
+                                                      DpResId(STR_ERR_PRINTDISABLED)));
+            xBox->run();
         }
 
         // Process request
@@ -2274,7 +2299,7 @@ void Desktop::HandleAppEvent( const ApplicationEvent& rAppEvent )
         createAcceptor(rAppEvent.GetStringData());
         break;
     case ApplicationEvent::Type::Appear:
-        if ( !GetCommandLineArgs().IsInvisible() )
+        if ( !GetCommandLineArgs().IsInvisible() && !impl_bringToFrontRecoveryUI() )
         {
             Reference< css::uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
 
@@ -2340,7 +2365,7 @@ void Desktop::HandleAppEvent( const ApplicationEvent& rAppEvent )
         break;
     case ApplicationEvent::Type::OpenHelpUrl:
         // start help for a specific URL
-        Application::GetHelp()->Start(rAppEvent.GetStringData(), nullptr);
+        Application::GetHelp()->Start(rAppEvent.GetStringData(), static_cast<vcl::Window*>(nullptr));
         break;
     case ApplicationEvent::Type::Print:
         {

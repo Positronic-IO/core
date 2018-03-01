@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <algorithm>
 #include <memory>
 #include <config_features.h>
 
@@ -114,6 +117,7 @@
 
 #include <strings.hrc>
 #include <swerror.h>
+#include <hints.hxx>
 #include "css1atr.hxx"
 
 #define FONTSIZE_MASK           7
@@ -155,8 +159,12 @@ HTMLReader::HTMLReader()
     bTmplBrowseMode = true;
 }
 
-OUString HTMLReader::GetTemplateName() const
+OUString HTMLReader::GetTemplateName(SwDoc& rDoc) const
 {
+    if (!rDoc.getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE))
+        // HTML import into Writer, avoid loading the Writer/Web template.
+        return OUString();
+
     const OUString sTemplateWithoutExt("internal/html");
     SvtPathOptions aPathOpt;
 
@@ -257,7 +265,6 @@ SwHTMLParser::SwHTMLParser( SwDoc* pD, SwPaM& rCursor, SvStream& rIn,
     m_pSttNdIdx( nullptr ),
     m_pFormImpl( nullptr ),
     m_pMarquee( nullptr ),
-    m_pField( nullptr ),
     m_pImageMap( nullptr ),
     m_pImageMaps(nullptr),
     m_pFootEndNoteImpl( nullptr ),
@@ -300,6 +307,7 @@ SwHTMLParser::SwHTMLParser( SwDoc* pD, SwPaM& rCursor, SvStream& rIn,
     m_bRemoveHidden( false ),
     m_bBodySeen( false ),
     m_bReadingHeaderOrFooter( false ),
+    m_isInTableStructure(false),
     m_nTableDepth( 0 ),
     m_pTempViewFrame(nullptr)
 {
@@ -410,6 +418,8 @@ SwHTMLParser::SwHTMLParser( SwDoc* pD, SwPaM& rCursor, SvStream& rIn,
             }
         }
     }
+
+    SetupFilterOptions();
 }
 
 SwHTMLParser::~SwHTMLParser()
@@ -673,14 +683,21 @@ void SwHTMLParser::Continue( HtmlTokenId nToken )
                 EndNumBulList();
 
             OSL_ENSURE( !m_nContextStMin, "There are protected contexts" );
-            m_nContextStMin = 0;
-            while( m_aContexts.size() )
+            // try this twice, first normally to let m_nContextStMin decrease
+            // naturally and get contexts popped in desired order, and if that
+            // fails force it
+            for (int i = 0; i < 2; ++i)
             {
-                std::unique_ptr<HTMLAttrContext> xCntxt(PopContext());
-                if (xCntxt)
+                while (m_aContexts.size() > m_nContextStMin)
                 {
-                    EndContext(xCntxt.get());
+                    std::unique_ptr<HTMLAttrContext> xCntxt(PopContext());
+                    if (xCntxt)
+                        EndContext(xCntxt.get());
                 }
+                if (!m_nContextStMin)
+                    break;
+                OSL_ENSURE(!m_nContextStMin, "There are still protected contexts");
+                m_nContextStMin = 0;
             }
 
             if( !m_aParaAttrs.empty() )
@@ -915,7 +932,7 @@ void SwHTMLParser::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
         if (pOld && static_cast<const SwPtrMsgPoolItem *>(pOld)->pObject == GetRegisteredIn())
         {
             // then we kill ourself
-            GetRegisteredInNonConst()->Remove( this );
+            EndListeningAll();
             ReleaseRef();                   // otherwise we're done!
         }
         break;
@@ -1557,26 +1574,32 @@ void SwHTMLParser::NextToken( HtmlTokenId nToken )
     // divisions
     case HtmlTokenId::DIVISION_ON:
     case HtmlTokenId::CENTER_ON:
-        if( m_nOpenParaToken != HtmlTokenId::NONE )
+        if (!m_isInTableStructure)
         {
-            if( IsReadPRE() )
-                m_nOpenParaToken = HtmlTokenId::NONE;
-            else
-                EndPara();
+            if (m_nOpenParaToken != HtmlTokenId::NONE)
+            {
+                if (IsReadPRE())
+                    m_nOpenParaToken = HtmlTokenId::NONE;
+                else
+                    EndPara();
+            }
+            NewDivision( nToken );
         }
-        NewDivision( nToken );
         break;
 
     case HtmlTokenId::DIVISION_OFF:
     case HtmlTokenId::CENTER_OFF:
-        if( m_nOpenParaToken != HtmlTokenId::NONE )
+        if (!m_isInTableStructure)
         {
-            if( IsReadPRE() )
-                m_nOpenParaToken = HtmlTokenId::NONE;
-            else
-                EndPara();
+            if (m_nOpenParaToken != HtmlTokenId::NONE)
+            {
+                if (IsReadPRE())
+                    m_nOpenParaToken = HtmlTokenId::NONE;
+                else
+                    EndPara();
+            }
+            EndDivision();
         }
-        EndDivision();
         break;
 
     case HtmlTokenId::MULTICOL_ON:
@@ -2954,13 +2977,11 @@ void SwHTMLParser::SetAttr_( bool bChkEnd, bool bBeforeTable,
             m_aMoveFlyCnts.erase( m_aMoveFlyCnts.begin() + n );
         }
     }
-    while( !aFields.empty() )
+    for (auto const& field : aFields)
     {
-        pAttr = aFields[0];
-
-        pCNd = pAttr->nSttPara.GetNode().GetContentNode();
-        pAttrPam->GetPoint()->nNode = pAttr->nSttPara;
-        pAttrPam->GetPoint()->nContent.Assign( pCNd, pAttr->nSttContent );
+        pCNd = field->nSttPara.GetNode().GetContentNode();
+        pAttrPam->GetPoint()->nNode = field->nSttPara;
+        pAttrPam->GetPoint()->nContent.Assign( pCNd, field->nSttContent );
 
         if( bBeforeTable &&
             pAttrPam->GetPoint()->nNode.GetIndex() == rEndIdx.GetIndex() )
@@ -2972,11 +2993,11 @@ void SwHTMLParser::SetAttr_( bool bChkEnd, bool bBeforeTable,
             pAttrPam->Move( fnMoveBackward );
         }
 
-        m_xDoc->getIDocumentContentOperations().InsertPoolItem( *pAttrPam, *pAttr->pItem );
+        m_xDoc->getIDocumentContentOperations().InsertPoolItem( *pAttrPam, *field->pItem );
 
-        aFields.pop_front();
-        delete pAttr;
+        delete field;
     }
+    aFields.clear();
 }
 
 void SwHTMLParser::NewAttr(const std::shared_ptr<HTMLAttrTable>& rAttrTable, HTMLAttr **ppAttr, const SfxPoolItem& rItem )
@@ -3217,7 +3238,7 @@ void SwHTMLParser::DeleteAttr( HTMLAttr* pAttr )
         *ppHead = pNext;
 }
 
-void SwHTMLParser::SaveAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab)
+void SwHTMLParser::SaveAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab)
 {
     // preliminary paragraph attributes are not allowed here, they could
     // be set here and then the pointers become invalid!
@@ -3244,7 +3265,7 @@ void SwHTMLParser::SaveAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab)
     }
 }
 
-void SwHTMLParser::SplitAttrTab( std::shared_ptr<HTMLAttrTable>& rNewAttrTab,
+void SwHTMLParser::SplitAttrTab( std::shared_ptr<HTMLAttrTable> const & rNewAttrTab,
                                  bool bMoveEndBack )
 {
     // preliminary paragraph attributes are not allowed here, they could
@@ -3345,7 +3366,7 @@ void SwHTMLParser::SplitAttrTab( std::shared_ptr<HTMLAttrTable>& rNewAttrTab,
     }
 }
 
-void SwHTMLParser::RestoreAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab)
+void SwHTMLParser::RestoreAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab)
 {
     // preliminary paragraph attributes are not allowed here, they could
     // be set here and then the pointers become invalid!
@@ -4832,12 +4853,12 @@ void SwHTMLParser::InsertSpacer()
         case HtmlOptionId::WIDTH:
             // First only save as pixel value!
             bPrcWidth = (rOption.GetString().indexOf('%') != -1);
-            aSize.Width() = static_cast<long>(rOption.GetNumber());
+            aSize.setWidth( static_cast<long>(rOption.GetNumber()) );
             break;
         case HtmlOptionId::HEIGHT:
             // First only save as pixel value!
             bPrcHeight = (rOption.GetString().indexOf('%') != -1);
-            aSize.Height() = static_cast<long>(rOption.GetNumber());
+            aSize.setHeight( static_cast<long>(rOption.GetNumber()) );
             break;
         case HtmlOptionId::SIZE:
             // First only save as pixel value!
@@ -4978,7 +4999,7 @@ sal_uInt16 SwHTMLParser::ToTwips( sal_uInt16 nPixel )
     {
         long nTwips = Application::GetDefaultDevice()->PixelToLogic(
                     Size( nPixel, nPixel ), MapMode( MapUnit::MapTwip ) ).Width();
-        return nTwips <= USHRT_MAX ? static_cast<sal_uInt16>(nTwips) : USHRT_MAX;
+        return static_cast<sal_uInt16>(std::min(nTwips, SwTwips(SAL_MAX_UINT16)));
     }
     else
         return nPixel;
@@ -4999,11 +5020,11 @@ SwTwips SwHTMLParser::GetCurrentBrowseWidth()
         const SvxULSpaceItem& rUL = rPgFormat.GetULSpace();
         const SwFormatCol& rCol = rPgFormat.GetCol();
 
-        m_aHTMLPageSize.Width() = rSz.GetWidth() - rLR.GetLeft() - rLR.GetRight();
-        m_aHTMLPageSize.Height() = rSz.GetHeight() - rUL.GetUpper() - rUL.GetLower();
+        m_aHTMLPageSize.setWidth( rSz.GetWidth() - rLR.GetLeft() - rLR.GetRight() );
+        m_aHTMLPageSize.setHeight( rSz.GetHeight() - rUL.GetUpper() - rUL.GetLower() );
 
         if( 1 < rCol.GetNumCols() )
-            m_aHTMLPageSize.Width() /= rCol.GetNumCols();
+            m_aHTMLPageSize.setWidth( m_aHTMLPageSize.Width() / ( rCol.GetNumCols()) );
     }
 
     return m_aHTMLPageSize.Width();
@@ -5253,7 +5274,7 @@ void SwHTMLParser::InsertHorzRule()
     {
         // set line colour and/or width
         if( !bColor )
-            aColor.SetColor( COL_GRAY );
+            aColor = COL_GRAY;
 
         SvxBorderLine aBorderLine( &aColor );
         if( nSize )
@@ -5520,6 +5541,25 @@ void SwHTMLParser::AddMetaUserDefined( OUString const & i_rMetaName )
     {
         (*pName) = i_rMetaName;
     }
+}
+
+void SwHTMLParser::SetupFilterOptions()
+{
+    if (!GetMedium())
+        return;
+
+    const SfxItemSet* pItemSet = GetMedium()->GetItemSet();
+    if (!pItemSet)
+        return;
+
+    auto pItem = pItemSet->GetItem<SfxStringItem>(SID_FILE_FILTEROPTIONS);
+    if (!pItem)
+        return;
+
+    OUString aFilterOptions = pItem->GetValue();
+    const OUString aXhtmlNsKey("xhtmlns=");
+    if (aFilterOptions.startsWith(aXhtmlNsKey))
+        SetNamespace(aFilterOptions.copy(aXhtmlNsKey.getLength()));
 }
 
 namespace

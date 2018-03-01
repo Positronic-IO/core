@@ -301,7 +301,6 @@ void ScCellShell::GetBlockState( SfxItemSet& rSet )
                     }
                 }
                 break;
-
             case SID_TRANSLITERATE_HALFWIDTH:
             case SID_TRANSLITERATE_FULLWIDTH:
             case SID_TRANSLITERATE_HIRAGANA:
@@ -836,6 +835,11 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                     rSet.DisableItem( nWhich );
                 break;
 
+            case FID_CURRENTVALIDATION:
+                if ( !pDoc->HasValidationData( nPosX, nPosY, nTab ))
+                    rSet.DisableItem( nWhich );
+                break;
+
             case SID_STATUS_SUM:
                 {
                     OUString aFuncStr;
@@ -1181,6 +1185,19 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                 }
                 break;
 
+            case FID_DEFINE_CURRENT_NAME:
+            {
+                ScAddress aCurrentAddress = ScAddress( nPosX, nPosY, nTab );
+
+                if ( pDoc &&
+                     !pDoc->IsAddressInRangeName( RangeNameScope::GLOBAL, aCurrentAddress ) &&
+                     !pDoc->IsAddressInRangeName( RangeNameScope::SHEET, aCurrentAddress ))
+                {
+                    rSet.DisableItem( nWhich );
+                }
+            }
+            break;
+
             case SID_SPELL_DIALOG:
                 {
                     if ( pDoc && pData && pDoc->IsTabProtected( pData->GetTabNo() ) )
@@ -1200,6 +1217,24 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                         {
                             rSet.DisableItem( nWhich );
                         }
+                    }
+                }
+                break;
+
+            case SID_OPENDLG_CURRENTCONDFRMT:
+            case SID_OPENDLG_CURRENTCONDFRMT_MANAGER:
+                {
+                    if ( pDoc )
+                    {
+                        const SfxPoolItem* pItem = pDoc->GetAttr( nPosX, nPosY, nTab, ATTR_CONDITIONAL );
+                        const ScCondFormatItem* pCondFormatItem = static_cast<const ScCondFormatItem*>(pItem);
+
+                        if ( !pCondFormatItem->GetCondFormatData().size() )
+                            rSet.DisableItem( nWhich );
+                        else if ( pCondFormatItem->GetCondFormatData().size() == 1 )
+                            rSet.DisableItem( SID_OPENDLG_CURRENTCONDFRMT_MANAGER );
+                        else if ( pCondFormatItem->GetCondFormatData().size() > 1 )
+                            rSet.DisableItem( SID_OPENDLG_CURRENTCONDFRMT );
                     }
                 }
                 break;

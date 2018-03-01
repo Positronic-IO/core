@@ -229,7 +229,9 @@ certain functionality.
 @li @c filter.os2met
 @li @c filter.pdf
 @li @c filter.pict
+@li @c filter.ras
 @li @c filter.svg
+@li @c filter.tga
 @li @c filter.tiff
 @li @c filter.xmlfa
 @li @c filter.xslt - xslt import/export
@@ -518,6 +520,7 @@ certain functionality.
 @li @c sw.tiled
 @li @c sw.ui
 @li @c sw.uno - Writer UNO interfaces
+@li @c sw.vba - Writer VBA
 @li @c sw.ww8 - .doc/.docx export filter, .doc import filter (not writerfilter)
 @li @c sw.ww8.level2 - further info for sw.ww8
 @li @c sw.xml - Writer .odt import/export

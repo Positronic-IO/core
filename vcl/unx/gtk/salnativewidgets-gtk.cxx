@@ -343,13 +343,13 @@ class NWPixmapCache
     int m_size;
     int m_idx;
     int m_screen;
-    NWPixmapCacheData* pData;
+    std::unique_ptr<NWPixmapCacheData[]> pData;
 public:
     explicit NWPixmapCache( SalX11Screen nScreen );
     ~NWPixmapCache();
 
     void SetSize( int n)
-        { delete [] pData; m_idx = 0; m_size = n; pData = new NWPixmapCacheData[m_size]; }
+        { m_idx = 0; m_size = n; pData.reset(new NWPixmapCacheData[m_size]); }
     int GetSize() const { return m_size; }
 
     bool Find( ControlType aType, ControlState aState, const tools::Rectangle& r_pixmapRect, GdkX11Pixmap** pPixmap, GdkX11Pixmap** pMask );
@@ -392,13 +392,11 @@ NWPixmapCache::~NWPixmapCache()
 {
     if( gWidgetData[m_screen].gNWPixmapCacheList )
         gWidgetData[m_screen].gNWPixmapCacheList->RemoveCache(this);
-    delete[] pData;
 }
 void NWPixmapCache::ThemeChanged()
 {
     // throw away cached pixmaps
-    int i;
-    for(i=0; i<m_size; i++)
+    for(int i=0; i<m_size; i++)
         pData[i].SetPixmap( nullptr, nullptr );
 }
 
@@ -448,12 +446,8 @@ void NWPixmapCacheList::RemoveCache( NWPixmapCache* pCache )
 }
 void NWPixmapCacheList::ThemeChanged( )
 {
-    ::std::vector< NWPixmapCache* >::iterator p = mCaches.begin();
-    while( p != mCaches.end() )
-    {
-        (*p)->ThemeChanged();
-        ++p;
-    }
+    for (auto const& cache : mCaches)
+        cache->ThemeChanged();
 }
 
 /*********************************************************
@@ -905,9 +899,9 @@ bool GtkSalGraphics::drawNativeControl(ControlType nType, ControlPart nPart,
         RectangleVector aRectangles;
         aClipRegion.GetRegionRectangles(aRectangles);
 
-        for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+        for (auto const& rectangle : aRectangles)
         {
-            tools::Rectangle aPaintRect = aCtrlRect.GetIntersection(*aRectIter);
+            tools::Rectangle aPaintRect = aCtrlRect.GetIntersection(rectangle);
             if( aPaintRect.IsEmpty() )
                 continue;
             aClip.push_back( aPaintRect );
@@ -1128,9 +1122,9 @@ bool GtkSalGraphics::getNativeControlRegion(  ControlType nType,
 
         //See fdo#33523, possibly makes sense to do this test for all return values
         if (!rNativeContentRegion.GetWidth())
-            rNativeContentRegion.Right() = rNativeContentRegion.Left() + 1;
+            rNativeContentRegion.SetRight( rNativeContentRegion.Left() + 1 );
         if (!rNativeContentRegion.GetHeight())
-            rNativeContentRegion.Bottom() = rNativeContentRegion.Top() + 1;
+            rNativeContentRegion.SetBottom( rNativeContentRegion.Top() + 1 );
         returnVal = true;
     }
     if( (nType == ControlType::Menubar) && (nPart == ControlPart::Entire) )
@@ -1257,13 +1251,13 @@ bool GtkSalGraphics::getNativeControlRegion(  ControlType nType,
         tools::Rectangle aRect( rControlRegion );
         if( nPart == ControlPart::ThumbHorz )
         {
-            aRect.Right() = aRect.Left() + slider_length - 1;
-            aRect.Bottom() = aRect.Top() + slider_width - 1;
+            aRect.SetRight( aRect.Left() + slider_length - 1 );
+            aRect.SetBottom( aRect.Top() + slider_width - 1 );
         }
         else
         {
-            aRect.Bottom() = aRect.Top() + slider_length - 1;
-            aRect.Right() = aRect.Left() + slider_width - 1;
+            aRect.SetBottom( aRect.Top() + slider_length - 1 );
+            aRect.SetRight( aRect.Left() + slider_width - 1 );
         }
         rNativeBoundingRegion = rNativeContentRegion = aRect;
         returnVal = true;
@@ -1367,12 +1361,12 @@ bool GtkSalGraphics::NWPaintGTKArrow(
     GtkStateType stateType(nState&ControlState::PRESSED?GTK_STATE_ACTIVE:GTK_STATE_NORMAL);
 
     GdkRectangle clipRect;
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_arrow(m_pWindow->style,gdkDrawable,stateType,GTK_SHADOW_NONE,&clipRect,
                 m_pWindow,"arrow",arrowType,true,
@@ -1406,12 +1400,12 @@ bool GtkSalGraphics::NWPaintGTKListHeader(
     NWSetWidgetState( button, nState, stateType );
 
     GdkRectangle clipRect;
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_box(button->style,gdkDrawable,stateType,shadowType,&clipRect,
                 button,"button",
@@ -1451,12 +1445,12 @@ bool GtkSalGraphics::NWPaintGTKFrame(
     if( nStyle == DrawFrameStyle::Out )
         shadowType=GTK_SHADOW_IN;
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         // Draw background first
 
@@ -1507,12 +1501,12 @@ bool GtkSalGraphics::NWPaintGTKWindowBackground(
             const std::vector< tools::Rectangle >& rClipList )
 {
     GdkRectangle clipRect;
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_flat_box(m_pWindow->style,gdkDrawable,GTK_STATE_NORMAL,GTK_SHADOW_NONE,&clipRect,
                            m_pWindow,"base",
@@ -1624,12 +1618,12 @@ bool GtkSalGraphics::NWPaintGTKButtonReal(
         wi -= 2 * (focusWidth + focusPad);
         hi -= 2 * (focusWidth + focusPad);
     }
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it)
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         // Buttons must paint opaque since some themes have alpha-channel enabled buttons
         if(button == gWidgetData[m_nXScreen].gToolbarButtonWidget)
@@ -1785,12 +1779,12 @@ bool GtkSalGraphics::NWPaintGTKRadio( GdkDrawable* gdkDrawable,
         GTK_TOGGLE_BUTTON(gWidgetData[m_nXScreen].gRadioWidgetSibling)->active = true;
     GTK_TOGGLE_BUTTON(gWidgetData[m_nXScreen].gRadioWidget)->active = isChecked;
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_option( gWidgetData[m_nXScreen].gRadioWidget->style, gdkDrawable, stateType, shadowType,
                           &clipRect, gWidgetData[m_nXScreen].gRadioWidget, "radiobutton",
@@ -1828,12 +1822,12 @@ bool GtkSalGraphics::NWPaintGTKCheck( GdkDrawable* gdkDrawable,
     NWSetWidgetState( gWidgetData[m_nXScreen].gCheckWidget, nState, stateType );
     GTK_TOGGLE_BUTTON(gWidgetData[m_nXScreen].gCheckWidget)->active = isChecked;
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_check( gWidgetData[m_nXScreen].gCheckWidget->style, gdkDrawable, stateType, shadowType,
                          &clipRect, gWidgetData[m_nXScreen].gCheckWidget, "checkbutton",
@@ -1964,11 +1958,11 @@ bool GtkSalGraphics::NWPaintGTKScrollbar( ControlPart nPart,
         button21BoundRect.SetSize( Size( stepper_size, slider_width ) );
         button22BoundRect.SetSize( Size( stepper_size, slider_width ) );
 
-        thumbRect.Bottom() = thumbRect.Top() + slider_width - 1;
+        thumbRect.SetBottom( thumbRect.Top() + slider_width - 1 );
         // Make sure the thumb is at least the default width (so we don't get tiny thumbs),
         // but if the VCL gives us a size smaller than the theme's default thumb size,
         // honor the VCL size
-        thumbRect.Right() += magic;
+        thumbRect.AdjustRight(magic );
         // Center vertically in the track
         thumbRect.Move( 0, (scrollbarRect.GetHeight() - slider_width) / 2 );
     }
@@ -2008,9 +2002,9 @@ bool GtkSalGraphics::NWPaintGTKScrollbar( ControlPart nPart,
         button21BoundRect.SetSize( Size( slider_width, stepper_size ) );
         button22BoundRect.SetSize( Size( slider_width, stepper_size ) );
 
-        thumbRect.Right() = thumbRect.Left() + slider_width - 1;
+        thumbRect.SetRight( thumbRect.Left() + slider_width - 1 );
 
-        thumbRect.Bottom() += magic;
+        thumbRect.AdjustBottom(magic );
         // Center horizontally in the track
         thumbRect.Move( (scrollbarRect.GetWidth() - slider_width) / 2, 0 );
     }
@@ -2266,12 +2260,12 @@ bool GtkSalGraphics::NWPaintGTKEditBox( GdkDrawable* gdkDrawable,
     // Find the overall bounding rect of the buttons's drawing area,
     // plus its actual draw rect excluding adornment
     pixmapRect = NWGetEditBoxPixmapRect( m_nXScreen, rControlRectangle );
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         NWPaintOneEditBox( m_nXScreen, gdkDrawable, &clipRect, nType, pixmapRect, nState );
     }
@@ -2479,24 +2473,24 @@ static tools::Rectangle NWGetSpinButtonRect( SalX11Screen     nScreen,
     if ( nPart == ControlPart::ButtonUp )
     {
         buttonRect.setY( aAreaRect.Top() );
-        buttonRect.Bottom() = buttonRect.Top() + (aAreaRect.GetHeight() / 2);
+        buttonRect.SetBottom( buttonRect.Top() + (aAreaRect.GetHeight() / 2) );
     }
     else if( nPart == ControlPart::ButtonDown )
     {
         buttonRect.setY( aAreaRect.Top() + (aAreaRect.GetHeight() / 2) );
-        buttonRect.Bottom() = aAreaRect.Bottom(); // cover area completely
+        buttonRect.SetBottom( aAreaRect.Bottom() ); // cover area completely
     }
     else
     {
         if( AllSettings::GetLayoutRTL() ) {
-            buttonRect.Left()   = buttonRect.Right()+1;
-            buttonRect.Right()  = aAreaRect.Right();
+            buttonRect.SetLeft( buttonRect.Right()+1 );
+            buttonRect.SetRight( aAreaRect.Right() );
         } else {
-            buttonRect.Right()  = buttonRect.Left()-1;
-            buttonRect.Left()   = aAreaRect.Left();
+            buttonRect.SetRight( buttonRect.Left()-1 );
+            buttonRect.SetLeft( aAreaRect.Left() );
         }
-        buttonRect.Top()    = aAreaRect.Top();
-        buttonRect.Bottom() = aAreaRect.Bottom();
+        buttonRect.SetTop( aAreaRect.Top() );
+        buttonRect.SetBottom( aAreaRect.Bottom() );
     }
 
     return buttonRect;
@@ -2571,7 +2565,7 @@ bool GtkSalGraphics::NWPaintGTKComboBox( GdkDrawable* gdkDrawable,
 
     buttonRect = NWGetComboBoxButtonRect( m_nXScreen, ControlPart::ButtonDown, pixmapRect );
     if( nPart == ControlPart::ButtonDown )
-        buttonRect.Left() += 1;
+        buttonRect.AdjustLeft(1 );
 
     tools::Rectangle        aEditBoxRect( pixmapRect );
     aEditBoxRect.SetSize( Size( pixmapRect.GetWidth() - buttonRect.GetWidth(), aEditBoxRect.GetHeight() ) );
@@ -2584,12 +2578,12 @@ bool GtkSalGraphics::NWPaintGTKComboBox( GdkDrawable* gdkDrawable,
     arrowRect.SetPos( Point( buttonRect.Left() + static_cast<gint>((buttonRect.GetWidth() - arrowRect.GetWidth()) / 2),
                              buttonRect.Top() + static_cast<gint>((buttonRect.GetHeight() - arrowRect.GetHeight()) / 2) ) );
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         if( nPart == ControlPart::Entire )
             NWPaintOneEditBox( m_nXScreen, gdkDrawable, &clipRect, nType, aEditBoxRect,
@@ -2658,10 +2652,10 @@ static tools::Rectangle NWGetComboBoxButtonRect( SalX11Screen nScreen,
         aButtonRect.SetSize( Size( aAreaRect.GetWidth() - nButtonWidth - 2 * adjust_x,
                                    aAreaRect.GetHeight() - 2 * adjust_y ) );
         Point aEditPos = aAreaRect.TopLeft();
-        aEditPos.X() += adjust_x;
-        aEditPos.Y() += adjust_y;
+        aEditPos.AdjustX(adjust_x );
+        aEditPos.AdjustY(adjust_y );
         if( AllSettings::GetLayoutRTL() )
-            aEditPos.X() += nButtonWidth;
+            aEditPos.AdjustX(nButtonWidth );
         aButtonRect.SetPos( aEditPos );
     }
 
@@ -2720,16 +2714,16 @@ bool GtkSalGraphics::NWPaintGTKTabItem( ControlType nType,
         {
             // In GTK+, the selected tab is 2px taller than all other tabs
             pixmapRect.Move( 0, -2 );
-            pixmapRect.Bottom() += 2;
+            pixmapRect.AdjustBottom(2 );
             tabRect = pixmapRect;
             // Only draw over 1 pixel of the tab pane that this tab is drawn on top of.
-            tabRect.Bottom() -= 1;
+            tabRect.AdjustBottom( -1 );
         }
         else
             tabRect = pixmapRect;
 
         // Allow the tab to draw a right border if needed
-        tabRect.Right() -= 1;
+        tabRect.AdjustRight( -1 );
 
         // avoid degenerate cases which might lead to crashes
         if( tabRect.GetWidth() <= 1 || tabRect.GetHeight() <= 1 )
@@ -2857,12 +2851,12 @@ bool GtkSalGraphics::NWPaintGTKListBox( GdkDrawable* gdkDrawable,
             nullptr);
     }
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         if ( nPart != ControlPart::ListboxWindow )
         {
@@ -2971,12 +2965,12 @@ bool GtkSalGraphics::NWPaintGTKToolbar(
 
     if( nPart != ControlPart::Button )
     {
-        for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+        for (auto const& clip : rClipList)
         {
-            clipRect.x = it->Left();
-            clipRect.y = it->Top();
-            clipRect.width = it->GetWidth();
-            clipRect.height = it->GetHeight();
+            clipRect.x = clip.Left();
+            clipRect.y = clip.Top();
+            clipRect.width = clip.GetWidth();
+            clipRect.height = clip.GetHeight();
 
             // draw toolbar
             if( nPart == ControlPart::DrawBackgroundHorz || nPart == ControlPart::DrawBackgroundVert )
@@ -3101,9 +3095,9 @@ bool GtkSalGraphics::NWPaintGTKMenubar(
         }
     }
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        lcl_rectangleToGdkRectangle(*it, clipRect);
+        lcl_rectangleToGdkRectangle(clip, clipRect);
 
         // handle Menubar
         if( nPart == ControlPart::Entire )
@@ -3125,7 +3119,7 @@ bool GtkSalGraphics::NWPaintGTKMenubar(
                                 x, y, w, h );
 
             // Do the conversion again, in case clipRect has been modified.
-            lcl_rectangleToGdkRectangle(*it, clipRect);
+            lcl_rectangleToGdkRectangle(clip, clipRect);
 
             gtk_paint_box( gWidgetData[m_nXScreen].gMenubarWidget->style,
                            gdkDrawable,
@@ -3197,12 +3191,12 @@ bool GtkSalGraphics::NWPaintGTKPopupMenu(
     if ( nState & ControlState::ENABLED )
         GTK_WIDGET_SET_FLAGS( gWidgetData[m_nXScreen].gMenuWidget, GTK_SENSITIVE );
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         if( nPart == ControlPart::Entire )
         {
@@ -3335,12 +3329,12 @@ bool GtkSalGraphics::NWPaintGTKTooltip(
     w = rControlRectangle.GetWidth();
     h = rControlRectangle.GetHeight();
 
-    for( std::vector< tools::Rectangle >::const_iterator it = rClipList.begin(); it != rClipList.end(); ++it )
+    for (auto const& clip : rClipList)
     {
-        clipRect.x = it->Left();
-        clipRect.y = it->Top();
-        clipRect.width = it->GetWidth();
-        clipRect.height = it->GetHeight();
+        clipRect.x = clip.Left();
+        clipRect.y = clip.Top();
+        clipRect.width = clip.GetWidth();
+        clipRect.height = clip.GetHeight();
 
         gtk_paint_flat_box( gWidgetData[m_nXScreen].gTooltipPopup->style,
                             gdkDrawable,
@@ -3362,10 +3356,10 @@ bool GtkSalGraphics::NWPaintGTKListNode(
     NWEnsureGTKTreeView( m_nXScreen );
 
     tools::Rectangle aRect( rControlRectangle );
-    aRect.Left() -= 2;
-    aRect.Right() += 2;
-    aRect.Top() -= 2;
-    aRect.Bottom() += 2;
+    aRect.AdjustLeft( -2 );
+    aRect.AdjustRight(2 );
+    aRect.AdjustTop( -2 );
+    aRect.AdjustBottom(2 );
     gint            w, h;
     w = aRect.GetWidth();
     h = aRect.GetHeight();
@@ -3580,21 +3574,21 @@ static tools::Rectangle NWGetListBoxButtonRect( SalX11Screen nScreen,
     switch( nPart )
     {
         case ControlPart::ButtonDown:
-            aPartSize.Width() = nButtonAreaWidth;
-            aPartPos.X() = aAreaRect.Left() + aAreaRect.GetWidth() - aPartSize.Width();
+            aPartSize.setWidth( nButtonAreaWidth );
+            aPartPos.setX( aAreaRect.Left() + aAreaRect.GetWidth() - aPartSize.Width() );
             break;
 
         case ControlPart::SubEdit:
-            aPartSize.Width() = aAreaRect.GetWidth() - nButtonAreaWidth - xthickness;
+            aPartSize.setWidth( aAreaRect.GetWidth() - nButtonAreaWidth - xthickness );
             if( AllSettings::GetLayoutRTL() )
-                aPartPos.X() = aAreaRect.Left() + nButtonAreaWidth;
+                aPartPos.setX( aAreaRect.Left() + nButtonAreaWidth );
             else
-                aPartPos.X() = aAreaRect.Left() + xthickness;
+                aPartPos.setX( aAreaRect.Left() + xthickness );
             break;
 
         default:
-            aPartSize.Width() = aAreaRect.GetWidth();
-            aPartPos.X() = aAreaRect.Left();
+            aPartSize.setWidth( aAreaRect.GetWidth() );
+            aPartPos.setX( aAreaRect.Left() );
             break;
     }
     aPartRect = tools::Rectangle( aPartPos, aPartSize );
@@ -3682,9 +3676,9 @@ static tools::Rectangle NWGetToolbarRect(  SalX11Screen nScreen,
 
         gtk_widget_ensure_style( gWidgetData[nScreen].gToolbarButtonWidget );
         if( aAreaRect.GetWidth() < nMinWidth )
-            aRet.Right() = aRet.Left() + nMinWidth;
+            aRet.SetRight( aRet.Left() + nMinWidth );
         if( aAreaRect.GetHeight() < nMinHeight  )
-            aRet.Bottom() = aRet.Top() + nMinHeight;
+            aRet.SetBottom( aRet.Top() + nMinHeight );
     }
 
     return aRet;

@@ -65,7 +65,6 @@
 #include <unotools/moduleoptions.hxx>
 #include <svtools/sfxecode.hxx>
 #include <svl/stritem.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <ucbhelper/simpleinteractionrequest.hxx>
 
@@ -305,28 +304,23 @@ OUString SfxFrameLoader_Impl::impl_askForFilter_nothrow( const Reference< XInter
     return sFilterName;
 }
 
-
-namespace
+bool lcl_getDispatchResult( const SfxPoolItem* _pResult )
 {
-    bool lcl_getDispatchResult( const SfxPoolItem* _pResult )
-    {
-        if ( !_pResult )
-            return false;
+    if ( !_pResult )
+        return false;
 
-        // default must be set to true, because some return values
-        // can't be checked, but nonetheless indicate "success"!
-        bool bSuccess = true;
+    // default must be set to true, because some return values
+    // can't be checked, but nonetheless indicate "success"!
+    bool bSuccess = true;
 
-        // On the other side some special slots return a boolean state,
-        // which can be set to FALSE.
-        const SfxBoolItem *pItem = dynamic_cast<const SfxBoolItem*>( _pResult  );
-        if ( pItem )
-            bSuccess = pItem->GetValue();
+    // On the other side some special slots return a boolean state,
+    // which can be set to FALSE.
+    const SfxBoolItem *pItem = dynamic_cast<const SfxBoolItem*>( _pResult  );
+    if ( pItem )
+        bSuccess = pItem->GetValue();
 
-        return bSuccess;
-    }
+    return bSuccess;
 }
-
 
 bool SfxFrameLoader_Impl::impl_createNewDocWithSlotParam( const sal_uInt16 _nSlotID, const Reference< XFrame >& i_rxFrame,
                                                               const bool i_bHidden )

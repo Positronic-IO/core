@@ -623,14 +623,14 @@ PrinterJob::StartPage (const JobData& rJobSetup)
     }
 }
 
-bool
+void
 PrinterJob::EndPage ()
 {
     osl::File* pPageHeader = maHeaderVector.back().get();
     osl::File* pPageBody   = maPageVector.back().get();
 
     if( ! (pPageBody && pPageHeader) )
-        return false;
+        return;
 
     // copy page to paper and write page trailer according to DSC
 
@@ -645,8 +645,6 @@ PrinterJob::EndPage ()
 
     pPageHeader->close();
     pPageBody->close();
-
-    return true;
 }
 
 struct less_ppd_key
@@ -827,12 +825,11 @@ void PrinterJob::writeJobPatch( osl::File* pFile, const JobData& rJobData )
     std::sort(patch_order.begin(), patch_order.end());
     patch_order.erase(std::unique(patch_order.begin(), patch_order.end()), patch_order.end());
 
-    while( !patch_order.empty() )
+    for (auto const& elem : patch_order)
     {
         // note: this discards patch files not adhering to the "int" scheme
         // as there won't be a value for them
-        writeFeature( pFile, pKey, pKey->getValue( OUString::number( patch_order.front() ) ), false );
-        patch_order.pop_front();
+        writeFeature( pFile, pKey, pKey->getValue( OUString::number(elem) ), false );
     }
 }
 

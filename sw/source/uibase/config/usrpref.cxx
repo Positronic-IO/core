@@ -50,7 +50,7 @@ SwMasterUsrPref::SwMasterUsrPref(bool bWeb) :
     m_nLinkUpdateMode(0),
     m_bIsHScrollMetricSet(false),
     m_bIsVScrollMetricSet(false),
-    m_nDefTab( MM50 * 4 ),
+    m_nDefTabInMm100( 2000 ), // 2 cm
     m_bIsSquaredPageMode(false),
     m_bIsAlignMathObjectsToBaseline(false),
     m_aContentConfig(bWeb, *this),
@@ -299,7 +299,7 @@ void SwLayoutViewConfig::ImplCommit()
             case 10: rVal <<= static_cast<sal_Int32>(rParent.GetZoomType()); break;              // "Zoom/Type",
             case 11: rVal <<= rParent.IsAlignMathObjectsToBaseline(); break;        // "Other/IsAlignMathObjectsToBaseline"
             case 12: rVal <<= static_cast<sal_Int32>(rParent.GetMetric()); break;                // "Other/MeasureUnit",
-            case 13: rVal <<= static_cast<sal_Int32>(convertTwipToMm100(rParent.GetDefTab())); break;// "Other/TabStop",
+            case 13: rVal <<= rParent.GetDefTabInMm100(); break;// "Other/TabStop",
             case 14: rVal <<= rParent.IsVRulerRight(); break;                       // "Window/IsVerticalRulerRight",
             case 15: rVal <<= static_cast<sal_Int32>(rParent.GetViewLayoutColumns()); break;     // "ViewLayout/Columns",
             case 16: rVal <<= rParent.IsViewLayoutBookMode(); break;                // "ViewLayout/BookMode",
@@ -351,14 +351,14 @@ void SwLayoutViewConfig::Load()
                     case  8: rParent.SetSmoothScroll(bSet); break;// "Window/SmoothScroll",
                     case  9: rParent.SetZoom( static_cast< sal_uInt16 >(nInt32Val) ); break;// "Zoom/Value",
                     case 10: rParent.SetZoomType( static_cast< SvxZoomType >(nInt32Val) ); break;// "Zoom/Type",
-                    case 11: rParent.SetAlignMathObjectsToBaseline(bSet); break;// "Other/IsAlignMathObjectsToBaseline"
+                    case 11: rParent.SetAlignMathObjectsToBaseline(bSet, true); break;// "Other/IsAlignMathObjectsToBaseline"
                     case 12: rParent.SetMetric(static_cast<FieldUnit>(nInt32Val), true); break;// "Other/MeasureUnit",
-                    case 13: rParent.SetDefTab(convertMm100ToTwip(nInt32Val), true); break;// "Other/TabStop",
+                    case 13: rParent.SetDefTabInMm100(nInt32Val, true); break;// "Other/TabStop",
                     case 14: rParent.SetVRulerRight(bSet); break;// "Window/IsVerticalRulerRight",
                     case 15: rParent.SetViewLayoutColumns( static_cast<sal_uInt16>(nInt32Val) ); break;// "ViewLayout/Columns",
                     case 16: rParent.SetViewLayoutBookMode(bSet); break;// "ViewLayout/BookMode",
                     case 17: rParent.SetDefaultPageMode(bSet,true); break;// "Other/IsSquaredPageMode",
-                    case 18: rParent.SetApplyCharUnit(bSet); break;// "Other/ApplyUserChar"
+                    case 18: rParent.SetApplyCharUnit(bSet, true); break;// "Other/ApplyUserChar"
                     case 19: rParent.SetShowScrollBarTips(bSet); break;// "Window/ShowScrollBarTips",
                 }
             }
@@ -446,8 +446,8 @@ void SwGridConfig::Load()
                     case  0: rParent.SetSnap(bSet); break;//        "Option/SnapToGrid",
                     case  1: rParent.SetGridVisible(bSet); break;//"Option/VisibleGrid",
                     case  2: rParent.SetSynchronize(bSet); break;//  "Option/Synchronize",
-                    case  3: aSnap.Width() = convertMm100ToTwip(nSet); break;//      "Resolution/XAxis",
-                    case  4: aSnap.Height() = convertMm100ToTwip(nSet); break;//      "Resolution/YAxis",
+                    case  3: aSnap.setWidth( convertMm100ToTwip(nSet) ); break;//      "Resolution/XAxis",
+                    case  4: aSnap.setHeight( convertMm100ToTwip(nSet) ); break;//      "Resolution/YAxis",
                     case  5: rParent.SetDivisionX(static_cast<short>(nSet)); break;//   "Subdivision/XAxis",
                     case  6: rParent.SetDivisionY(static_cast<short>(nSet)); break;//   "Subdivision/YAxis"
                 }

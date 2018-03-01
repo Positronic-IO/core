@@ -42,13 +42,13 @@
       <LongDateYearSeparator> </LongDateYearSeparator>
     </Separators>
     <Markers>
-      <QuotationStart>‘</QuotationStart>
-      <QuotationEnd>’</QuotationEnd>
-      <DoubleQuotationStart>“</DoubleQuotationStart>
-      <DoubleQuotationEnd>”</DoubleQuotationEnd>
+      <QuotationStart>‹</QuotationStart>
+      <QuotationEnd>›</QuotationEnd>
+      <DoubleQuotationStart>«</DoubleQuotationStart>
+      <DoubleQuotationEnd>»</DoubleQuotationEnd>
     </Markers>
-    <TimeAM>m.</TimeAM>
-    <TimePM>p.</TimePM>
+    <TimeAM>a.m.</TimeAM>
+    <TimePM>p.m.</TimePM>
     <MeasurementSystem>metric</MeasurementSystem>
   </LC_CTYPE>
   <LC_FORMAT>

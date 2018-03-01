@@ -22,6 +22,7 @@
 #include <oox/mathml/importutils.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <tools/color.hxx>
 
 #include <rtftok/RTFDocument.hxx>
 #include "rtfreferencetable.hxx"
@@ -127,10 +128,28 @@ struct TableRowBuffer
 class RTFColorTableEntry
 {
 public:
-    RTFColorTableEntry();
-    sal_uInt8 nRed = 0;
-    sal_uInt8 nGreen = 0;
-    sal_uInt8 nBlue = 0;
+    void SetRed(sal_uInt8 nRed)
+    {
+        m_bAuto = false;
+        m_nR = nRed;
+    }
+    void SetGreen(sal_uInt8 nGreen)
+    {
+        m_bAuto = false;
+        m_nG = nGreen;
+    }
+    void SetBlue(sal_uInt8 nBlue)
+    {
+        m_bAuto = false;
+        m_nB = nBlue;
+    }
+    Color GetColor() const { return m_bAuto ? COL_AUTO : Color(m_nR, m_nG, m_nB); }
+
+private:
+    bool m_bAuto = true;
+    sal_uInt8 m_nR = 0;
+    sal_uInt8 m_nG = 0;
+    sal_uInt8 m_nB = 0;
 };
 
 /// Stores the properties of a shape.
@@ -368,11 +387,16 @@ public:
 };
 
 void putBorderProperty(RTFStack& aStates, Id nId, const RTFValue::Pointer_t& pValue);
-void putNestedSprm(RTFSprms& rSprms, Id nParent, Id nId, const RTFValue::Pointer_t& pValue);
+void putNestedSprm(RTFSprms& rSprms, Id nParent, Id nId, const RTFValue::Pointer_t& pValue,
+                   RTFOverwrite eOverwrite = RTFOverwrite::NO_APPEND);
 Id getParagraphBorder(sal_uInt32 nIndex);
 void putNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId, const RTFValue::Pointer_t& pValue,
                         RTFOverwrite eOverwrite = RTFOverwrite::YES, bool bAttribute = true);
 bool eraseNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId);
+
+/// Looks up the nParent then the nested nId key in rSprms.
+RTFValue::Pointer_t getNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId);
+
 /// Checks if rName is contained at least once in rProperties as a key.
 bool findPropertyName(const std::vector<css::beans::PropertyValue>& rProperties,
                       const OUString& rName);
@@ -452,7 +476,7 @@ public:
 
 private:
     SvStream& Strm();
-    sal_uInt32 getColorTable(sal_uInt32 nIndex);
+    Color getColorTable(sal_uInt32 nIndex);
     writerfilter::Reference<Properties>::Pointer_t createStyleProperties();
     void resetSprms();
     void resetAttributes();
@@ -519,7 +543,7 @@ private:
     /// Maps style indexes to style types.
     std::map<int, Id> m_aStyleTypes;
     /// Color index <-> RGB color value map
-    std::vector<sal_uInt32> m_aColorTable;
+    std::vector<Color> m_aColorTable;
     bool m_bFirstRun;
     /// If paragraph properties should be emitted on next run.
     bool m_bNeedPap;

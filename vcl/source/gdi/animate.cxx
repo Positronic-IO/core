@@ -146,8 +146,7 @@ void Animation::Clear()
 
 bool Animation::IsTransparent() const
 {
-    Point       aPoint;
-    tools::Rectangle   aRect( aPoint, maGlobalSize );
+    tools::Rectangle   aRect( Point(), maGlobalSize );
     bool        bRet = false;
 
     // If some small bitmap needs to be replaced by the background,
@@ -446,8 +445,7 @@ bool Animation::Insert( const AnimationBitmap& rStepBmp )
 
     if( !IsInAnimation() )
     {
-        Point       aPoint;
-        tools::Rectangle   aGlobalRect( aPoint, maGlobalSize );
+        tools::Rectangle   aGlobalRect( Point(), maGlobalSize );
 
         maGlobalSize = aGlobalRect.Union( tools::Rectangle( rStepBmp.aPosPix, rStepBmp.aSizePix ) ).GetSize();
         maList.emplace_back( new AnimationBitmap( rStepBmp ) );
@@ -503,7 +501,7 @@ void Animation::ResetLoopCount()
     mbLoopTerminated = false;
 }
 
-bool Animation::Convert( BmpConversion eConversion )
+void Animation::Convert( BmpConversion eConversion )
 {
     SAL_WARN_IF( IsInAnimation(), "vcl", "Animation modified while it is animated" );
 
@@ -518,10 +516,6 @@ bool Animation::Convert( BmpConversion eConversion )
 
         maBitmapEx.Convert( eConversion );
     }
-    else
-        bRet = false;
-
-    return bRet;
 }
 
 bool Animation::ReduceColors( sal_uInt16 nNewColorCount )
@@ -566,7 +560,7 @@ bool Animation::Invert()
     return bRet;
 }
 
-bool Animation::Mirror( BmpMirrorFlags nMirrorFlags )
+void Animation::Mirror( BmpMirrorFlags nMirrorFlags )
 {
     SAL_WARN_IF( IsInAnimation(), "vcl", "Animation modified while it is animated" );
 
@@ -585,23 +579,19 @@ bool Animation::Mirror( BmpMirrorFlags nMirrorFlags )
                 if( bRet )
                 {
                     if( nMirrorFlags & BmpMirrorFlags::Horizontal )
-                        pStepBmp->aPosPix.X() = maGlobalSize.Width() - pStepBmp->aPosPix.X() - pStepBmp->aSizePix.Width();
+                        pStepBmp->aPosPix.setX( maGlobalSize.Width() - pStepBmp->aPosPix.X() - pStepBmp->aSizePix.Width() );
 
                     if( nMirrorFlags & BmpMirrorFlags::Vertical )
-                        pStepBmp->aPosPix.Y() = maGlobalSize.Height() - pStepBmp->aPosPix.Y() - pStepBmp->aSizePix.Height();
+                        pStepBmp->aPosPix.setY( maGlobalSize.Height() - pStepBmp->aPosPix.Y() - pStepBmp->aSizePix.Height() );
                 }
             }
 
             maBitmapEx.Mirror( nMirrorFlags );
         }
     }
-    else
-        bRet = false;
-
-    return bRet;
 }
 
-bool Animation::Adjust( short nLuminancePercent, short nContrastPercent,
+void Animation::Adjust( short nLuminancePercent, short nContrastPercent,
              short nChannelRPercent, short nChannelGPercent, short nChannelBPercent,
              double fGamma, bool bInvert )
 {
@@ -628,10 +618,6 @@ bool Animation::Adjust( short nLuminancePercent, short nContrastPercent,
                            nChannelRPercent, nChannelGPercent, nChannelBPercent,
                            fGamma, bInvert );
     }
-    else
-        bRet = false;
-
-    return bRet;
 }
 
 bool Animation::Filter( BmpFilter eFilter, const BmpFilterParam* pFilterParam )
@@ -700,7 +686,6 @@ SvStream& WriteAnimation( SvStream& rOStm, const Animation& rAnimation )
 
 SvStream& ReadAnimation( SvStream& rIStm, Animation& rAnimation )
 {
-    Bitmap      aBmp;
     sal_uLong   nStmPos;
     sal_uInt32  nAnimMagic1, nAnimMagic2;
     SvStreamEndian nOldFormat = rIStm.GetEndian();
@@ -734,7 +719,6 @@ SvStream& ReadAnimation( SvStream& rIStm, Animation& rAnimation )
     if( bReadAnimations )
     {
         AnimationBitmap aAnimBmp;
-        BitmapEx        aBmpEx;
         sal_uInt32          nTmp32;
         sal_uInt16          nTmp16;
         bool           cTmp;

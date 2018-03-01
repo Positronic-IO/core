@@ -84,6 +84,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/lstbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <unotools/closeveto.hxx>
 #include <unotools/pathoptions.hxx>
@@ -119,7 +120,6 @@
 #include <sqlmessage.hxx>
 #include <UITools.hxx>
 #include <dsntypes.hxx>
-#include <helpids.h>
 #include <dlgsave.hxx>
 #include <dbaccess_slotid.hrc>
 
@@ -523,7 +523,7 @@ sal_Bool SAL_CALL OApplicationController::suspend(sal_Bool bSuspend)
                 )
             )
         {
-            switch (ExecuteQuerySaveDocument(getView(),getStrippedDatabaseName()))
+            switch (ExecuteQuerySaveDocument(getFrameWeld(),getStrippedDatabaseName()))
             {
                 case RET_YES:
                     Execute(ID_BROWSER_SAVEDOC,Sequence<PropertyValue>());

@@ -198,7 +198,6 @@ SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
 
 SwTextNode::SwTextNode( const SwNodeIndex &rWhere, SwTextFormatColl *pTextColl, const SfxItemSet* pAutoAttr )
 :   SwContentNode( rWhere, SwNodeType::Text, pTextColl ),
-    m_pSwpHints( nullptr ),
     mpNodeNum( nullptr ),
     m_Text(),
     m_pParaIdleData_Impl(nullptr),
@@ -244,8 +243,7 @@ SwTextNode::~SwTextNode()
     if ( m_pSwpHints )
     {
         // do not delete attributes twice when those delete their content
-        SwpHints* pTmpHints = m_pSwpHints;
-        m_pSwpHints = nullptr;
+        std::unique_ptr<SwpHints> pTmpHints(std::move(m_pSwpHints));
 
         for( size_t j = pTmpHints->Count(); j; )
         {
@@ -253,8 +251,6 @@ SwTextNode::~SwTextNode()
             // if would delete itself
             DestroyAttr( pTmpHints->Get( --j ) );
         }
-
-        delete pTmpHints;
     }
 
     // must be removed from outline nodes by now
@@ -445,8 +441,7 @@ SwContentNode *SwTextNode::SplitContentNode( const SwPosition &rPos )
         {
             if ( pNode->m_pSwpHints->CanBeDeleted() )
             {
-                delete pNode->m_pSwpHints;
-                pNode->m_pSwpHints = nullptr;
+                pNode->m_pSwpHints.reset();
             }
             else
             {
@@ -1398,7 +1393,7 @@ SwTextNode::GetTextAttrsAt(sal_Int32 const nIndex, sal_uInt16 const nWhich) cons
 {
     assert(nWhich >= RES_TXTATR_BEGIN && nWhich < RES_TXTATR_END);
     std::vector<SwTextAttr *> ret;
-    lcl_GetTextAttrs(& ret, nullptr, m_pSwpHints, nIndex, nWhich, DEFAULT);
+    lcl_GetTextAttrs(&ret, nullptr, m_pSwpHints.get(), nIndex, nWhich, DEFAULT);
     return ret;
 }
 
@@ -1416,7 +1411,7 @@ SwTextNode::GetTextAttrAt(sal_Int32 const nIndex, sal_uInt16 const nWhich,
             // "GetTextAttrAt() will give wrong result for this hint!")
 
     SwTextAttr * pRet(nullptr);
-    lcl_GetTextAttrs(nullptr, & pRet, m_pSwpHints, nIndex, nWhich, eMode);
+    lcl_GetTextAttrs(nullptr, & pRet, m_pSwpHints.get(), nIndex, nWhich, eMode);
     return pRet;
 }
 
@@ -2034,10 +2029,10 @@ OUString SwTextNode::InsertText( const OUString & rStr, const SwIndex & rIdx,
                         && (*pEndIdx == pHt->GetStart()) )
                 {
                     pHt->GetStart() = pHt->GetStart() - nLen;
-                    const size_t nAktLen = m_pSwpHints->Count();
+                    const size_t nCurrentLen = m_pSwpHints->Count();
                     m_pSwpHints->DeleteAtPos(i);
                     InsertHint( pHt/* AUTOSTYLES:, SetAttrMode::NOHINTADJUST*/ );
-                    if ( nAktLen > m_pSwpHints->Count() && i )
+                    if ( nCurrentLen > m_pSwpHints->Count() && i )
                     {
                         --i;
                     }
@@ -3116,8 +3111,7 @@ bool SwTextNode::GetExpandText( SwTextNode& rDestNd, const SwIndex* pDestIdx,
                   RES_TXTATR_AUTOFMT == nWhich ))
             {
                 const SvxFontItem* const pFont =
-                    static_cast<const SvxFontItem*>(
-                        CharFormat::GetItem( *pHt, RES_CHRATR_FONT ));
+                    CharFormat::GetItem( *pHt, RES_CHRATR_FONT );
                 if ( pFont && RTL_TEXTENCODING_SYMBOL == pFont->GetCharSet() )
                 {
                     // attribute in area => copy

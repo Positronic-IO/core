@@ -20,6 +20,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/cstylecast \
     compilerplugins/clang/test/datamembershadow \
     compilerplugins/clang/test/dodgyswitch \
+    compilerplugins/clang/test/doubleconvert \
     compilerplugins/clang/test/emptyif \
     compilerplugins/clang/test/externvar \
     compilerplugins/clang/test/expressionalwayszero \
@@ -33,8 +34,9 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/oslendian-3 \
     compilerplugins/clang/test/passparamsbyref \
     compilerplugins/clang/test/passstuffbyref \
+    compilerplugins/clang/test/pointerbool \
     compilerplugins/clang/test/redundantcast \
-    compilerplugins/clang/test/redundantcopy \
+    compilerplugins/clang/test/redundantfcast \
     compilerplugins/clang/test/redundantinline \
     compilerplugins/clang/test/redundantpointerops \
     compilerplugins/clang/test/refcounting \

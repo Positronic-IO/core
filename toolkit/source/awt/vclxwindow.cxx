@@ -517,23 +517,43 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
         }
         break;
         case VclEventId::WindowActivate:
-        {
-            if ( mpImpl->getTopWindowListeners().getLength() )
-            {
-                css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
-                mpImpl->getTopWindowListeners().windowActivated( aEvent );
-            }
-        }
-        break;
         case VclEventId::WindowDeactivate:
         {
-            if ( mpImpl->getTopWindowListeners().getLength() )
+            if (!mpImpl->getTopWindowListeners().getLength())
+                return;
+
+            // Suppress events which are unlikely to be interesting to our listeners.
+            vcl::Window* pWin = static_cast<vcl::Window*>(rVclWindowEvent.GetData());
+            bool bSuppress = false;
+
+            while (pWin)
             {
-                css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
-                mpImpl->getTopWindowListeners().windowDeactivated( aEvent );
+                // Either the event came from the same window, from its
+                // child, or from a child of its border window (e.g.
+                // menubar or notebookbar).
+                if (pWin->GetWindow(GetWindowType::Client) == GetWindow())
+                    return;
+
+                if (pWin->IsMenuFloatingWindow())
+                    bSuppress = true;
+
+                if (pWin->GetType() == WindowType::FLOATINGWINDOW &&
+                    static_cast<FloatingWindow*>(pWin)->IsInPopupMode())
+                    bSuppress = true;
+
+                // Otherwise, don't suppress if the event came from a different frame.
+                if (!bSuppress && pWin->GetWindow(GetWindowType::Frame) == pWin)
+                    break;
+
+                pWin = pWin->GetWindow(GetWindowType::RealParent);
             }
+
+            css::lang::EventObject aEvent;
+            aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+            if (rVclWindowEvent.GetId() == VclEventId::WindowActivate)
+                mpImpl->getTopWindowListeners().windowActivated( aEvent );
+            else
+                mpImpl->getTopWindowListeners().windowDeactivated( aEvent );
         }
         break;
         case VclEventId::WindowClose:
@@ -875,8 +895,8 @@ Size VCLXWindow::ImplCalcWindowSize( const Size& rOutSz ) const
     {
         sal_Int32 nLeft, nTop, nRight, nBottom;
         pWindow->GetBorder( nLeft, nTop, nRight, nBottom );
-        aSz.Width() += nLeft+nRight;
-        aSz.Height() += nTop+nBottom;
+        aSz.AdjustWidth(nLeft+nRight );
+        aSz.AdjustHeight(nTop+nBottom );
     }
     return aSz;
 }
@@ -2146,8 +2166,8 @@ css::awt::Size VCLXWindow::getMinimumSize(  )
         switch ( nWinType )
         {
             case WindowType::CONTROL:
-                aSz.Width() = GetWindow()->GetTextWidth( GetWindow()->GetText() )+2*12;
-                aSz.Height() = GetWindow()->GetTextHeight()+2*6;
+                aSz.setWidth( GetWindow()->GetTextWidth( GetWindow()->GetText() )+2*12 );
+                aSz.setHeight( GetWindow()->GetTextHeight()+2*6 );
             break;
 
             case WindowType::PATTERNBOX:
@@ -2157,8 +2177,8 @@ css::awt::Size VCLXWindow::getMinimumSize(  )
             case WindowType::DATEBOX:
             case WindowType::TIMEBOX:
             case WindowType::LONGCURRENCYBOX:
-                aSz.Width() = GetWindow()->GetTextWidth( GetWindow()->GetText() )+2*2;
-                aSz.Height() = GetWindow()->GetTextHeight()+2*2;
+                aSz.setWidth( GetWindow()->GetTextWidth( GetWindow()->GetText() )+2*2 );
+                aSz.setHeight( GetWindow()->GetTextHeight()+2*2 );
             break;
             case WindowType::SCROLLBARBOX:
                 return VCLXScrollBar::implGetMinimumSize( GetWindow() );

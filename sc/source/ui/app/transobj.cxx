@@ -23,6 +23,7 @@
 
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/embed/XTransactedObject.hpp>
+#include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 
 #include <unotools/tempfile.hxx>
 #include <unotools/ucbstreamhelper.hxx>
@@ -101,8 +102,7 @@ void ScTransferObj::PaintToDev( OutputDevice* pDev, ScDocument* pDoc, double nPr
     if (!pDoc)
         return;
 
-    Point aPoint;
-    tools::Rectangle aBound( aPoint, pDev->GetOutputSize() );      //! use size from clip area?
+    tools::Rectangle aBound( Point(), pDev->GetOutputSize() );      //! use size from clip area?
 
     ScViewData aViewData(nullptr,nullptr);
     aViewData.InitData( pDoc );
@@ -201,13 +201,22 @@ ScTransferObj::~ScTransferObj()
 ScTransferObj* ScTransferObj::GetOwnClipboard( vcl::Window* pUIWin )
 {
     ScTransferObj* pObj = nullptr;
-    TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( pUIWin ) );
-    uno::Reference<XUnoTunnel> xTunnel( aDataHelper.GetTransferable(), uno::UNO_QUERY );
-    if ( xTunnel.is() )
+    uno::Reference<XTransferable> xTransferable;
+    uno::Reference<datatransfer::clipboard::XClipboard> xClipboard;
+
+    if( pUIWin )
+        xClipboard = pUIWin->GetClipboard();
+
+    if( xClipboard.is() )
     {
-        sal_Int64 nHandle = xTunnel->getSomething( getUnoTunnelId() );
-        if ( nHandle )
-            pObj = dynamic_cast<ScTransferObj*>(reinterpret_cast<TransferableHelper*>( static_cast<sal_IntPtr>(nHandle) ));
+        xTransferable = xClipboard->getContents();
+        uno::Reference<XUnoTunnel> xTunnel( xTransferable, uno::UNO_QUERY );
+        if ( xTunnel.is() )
+        {
+            sal_Int64 nHandle = xTunnel->getSomething( getUnoTunnelId() );
+            if ( nHandle )
+                pObj = dynamic_cast<ScTransferObj*>(reinterpret_cast<TransferableHelper*>( static_cast<sal_IntPtr>(nHandle) ));
+        }
     }
 
     return pObj;
@@ -730,8 +739,8 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
         nPosX = static_cast<long>( nPosX * HMM_PER_TWIPS );
         nPosY = static_cast<long>( nPosY * HMM_PER_TWIPS );
 
-        aPaperSize.Width()  *= 2;       // limit OLE object to double of page size
-        aPaperSize.Height() *= 2;
+        aPaperSize.setWidth( aPaperSize.Width() * 2 );       // limit OLE object to double of page size
+        aPaperSize.setHeight( aPaperSize.Height() * 2 );
 
         long nSizeX = 0;
         long nSizeY = 0;
@@ -836,8 +845,7 @@ void ScTransferObj::StripRefs( ScDocument* pDoc,
             ScAddress aPos(nCol, nRow, nDestTab);
             if (nErrCode != FormulaError::NONE)
             {
-                if ( static_cast<const SvxHorJustifyItem*>(pDestDoc->GetAttr(
-                        nCol,nRow,nDestTab, ATTR_HOR_JUSTIFY))->GetValue() ==
+                if ( pDestDoc->GetAttr( nCol,nRow,nDestTab, ATTR_HOR_JUSTIFY)->GetValue() ==
                         SvxCellHorJustify::Standard )
                     pDestDoc->ApplyAttr( nCol,nRow,nDestTab,
                             SvxHorJustifyItem(SvxCellHorJustify::Right, ATTR_HOR_JUSTIFY) );

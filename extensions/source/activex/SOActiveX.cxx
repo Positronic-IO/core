@@ -19,9 +19,6 @@
 
 // SOActiveX.cpp : Implementation of CSOActiveX
 
-#pragma warning (push,1)
-#pragma warning (disable:4265)
-
 #include "StdAfx2.h"
 #include "SOActiveX.h"
 #include "SOComWindowPeer.h"
@@ -36,8 +33,6 @@
 #if defined __clang__
 #pragma clang diagnostic pop
 #endif
-
-#pragma warning (pop)
 
 #define STAROFFICE_WINDOWCLASS L"SOParentWindow"
 
@@ -566,7 +561,7 @@ HRESULT CSOActiveX::CreateFrameOldWay( HWND hwnd, int width, int height )
     if( !SUCCEEDED( hr ) ) return hr;
 
     // initialize window
-    CComVariant aTransparent( (long)0xFFFFFFFF );
+    CComVariant aTransparent( long(0xFFFFFFFF) );
     hr = ExecuteFunc( mpDispWin, L"setBackground", &aTransparent, 1, &dummyResult );
     if( !SUCCEEDED( hr ) ) return hr;
 
@@ -671,7 +666,7 @@ HRESULT CSOActiveX::CallDispatchMethod( OLECHAR const * sUrl,
     CComVariant aArgs[3];
     aArgs[2] = CComVariant( pdispURL );
     aArgs[1] = CComVariant( L"" );
-    aArgs[0] = CComVariant( (int)0 );
+    aArgs[0] = CComVariant( int(0) );
     hr = GetIDispByFunc( mpDispFrame,
                          L"queryDispatch",
                          aArgs,
@@ -680,7 +675,7 @@ HRESULT CSOActiveX::CallDispatchMethod( OLECHAR const * sUrl,
     if( !SUCCEEDED( hr ) ) return hr;
 
     SAFEARRAY FAR* pPropVals = SafeArrayCreateVector( VT_DISPATCH, 0, count );
-    for( long ix = 0; ix < (long)count; ix ++ )
+    for( long ix = 0; ix < static_cast<long>(count); ix ++ )
     {
         CComPtr<IDispatch> pdispPropVal;
         hr = GetUnoStruct( L"com.sun.star.beans.PropertyValue", pdispPropVal );

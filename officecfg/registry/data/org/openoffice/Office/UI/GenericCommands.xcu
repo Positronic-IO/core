@@ -2638,10 +2638,10 @@
       </node>
       <node oor:name=".uno:ChangeCaseRotateCase" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">Cycle Case (Title Case, UPPERCASE, lowercase)</value>
-        </prop>
-        <prop oor:name="ContextLabel" oor:type="xs:string">
           <value xml:lang="en-US">Cycle Case</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Cycle Case (Title Case, UPPERCASE, lowercase)</value>
         </prop>
       </node>
       <node oor:name=".uno:ChangeCaseToHalfWidth" oor:op="replace">
@@ -4464,6 +4464,17 @@
       <node oor:name=".uno:AutoPilotMemo" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">AutoPilot: Memo</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:ProtectTraceChangeMode" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Protect...</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Protect Track Changes</value>
+        </prop>
+        <prop oor:name="Properties" oor:type="xs:int">
+          <value>1</value>
         </prop>
       </node>
       <node oor:name=".uno:CompareDocuments" oor:op="replace">

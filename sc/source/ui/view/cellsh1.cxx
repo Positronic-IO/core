@@ -34,7 +34,7 @@
 #include <svl/zformat.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svx/svxdlg.hxx>
 #include <sot/formats.hxx>
 #include <svx/postattr.hxx>
@@ -154,6 +154,26 @@ OUString FlagsToString( InsertDeleteFlags nFlags,
     }
     return aFlagsStr;
 }
+
+void SetTabNoAndCursor( const ScViewData* rViewData, const OUString& rCellId )
+{
+    ScTabViewShell* pTabViewShell = rViewData->GetViewShell();
+    assert(pTabViewShell);
+    const ScDocument& rDoc = rViewData->GetDocShell()->GetDocument();
+    std::vector<sc::NoteEntry> aNotes;
+    rDoc.GetAllNoteEntries(aNotes);
+
+    sal_uInt32 nId = rCellId.toUInt32();
+    auto lComp = [nId](const sc::NoteEntry& rNote) { return rNote.mpNote->GetId() == nId; };
+
+    const auto& aFoundNoteIt = std::find_if(aNotes.begin(), aNotes.end(), lComp);
+    if (aFoundNoteIt != aNotes.end())
+    {
+        ScAddress aFoundPos = aFoundNoteIt->maPos;
+        pTabViewShell->SetTabNo(aFoundPos.Tab());
+        pTabViewShell->SetCursor(aFoundPos.Col(), aFoundPos.Row());
+    }
+}
 }
 
 void ScCellShell::ExecuteEdit( SfxRequest& rReq )
@@ -178,6 +198,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             case SID_SPELL_DIALOG:
             case SID_HANGUL_HANJA_CONVERSION:
             case SID_OPENDLG_CONDFRMT:
+            case SID_OPENDLG_CURRENTCONDFRMT:
             case SID_OPENDLG_COLORSCALE:
             case SID_OPENDLG_DATABAR:
                 pScMod->InputEnterHandler();
@@ -1153,7 +1174,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                         bColumns = true;
                     else if ( !GetViewData()->SimpleColMarked() && GetViewData()->SimpleRowMarked() )
                         bColumns = false;
-                    else if ( !comphelper::LibreOfficeKit::isActive() ) // TODO: handle this case in LOK too
+                    else
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
                         OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
@@ -1863,6 +1884,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             break;
 
         case FID_DEFINE_NAME:
+        case FID_DEFINE_CURRENT_NAME:
             if ( pReqArgs )
             {
                 const SfxPoolItem* pItem;
@@ -1907,6 +1929,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             break;
 
         case SID_OPENDLG_CONDFRMT:
+        case SID_OPENDLG_CURRENTCONDFRMT:
         case SID_OPENDLG_COLORSCALE:
         case SID_OPENDLG_DATABAR:
         case SID_OPENDLG_ICONSET:
@@ -1991,9 +2014,12 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     // or should create a new overlapping conditional format
                     if(!bCondFormatDlg && bContainsExistingCondFormat)
                     {
-                        ScopedVclPtrInstance<QueryBox> aBox( pTabViewShell->GetDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                               ScGlobal::GetRscString(STR_EDIT_EXISTING_COND_FORMATS) );
-                        bool bEditExisting = aBox->Execute() == RET_YES;
+                        vcl::Window* pWin = pTabViewShell->GetDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_EDIT_EXISTING_COND_FORMATS)));
+                        xQueryBox->set_default_response(RET_YES);
+                        bool bEditExisting = xQueryBox->run() == RET_YES;
                         if(bEditExisting)
                         {
                             // differentiate between ranges where one conditional format is defined
@@ -2025,6 +2051,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 switch(nSlot)
                 {
                     case SID_OPENDLG_CONDFRMT:
+                    case SID_OPENDLG_CURRENTCONDFRMT:
                         eType = condformat::dialog::CONDITION;
                         break;
                     case SID_OPENDLG_COLORSCALE:
@@ -2190,21 +2217,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
 
                     if (!aCellId.isEmpty())
                     {
-
-                        ScDocument& rDoc = GetViewData()->GetDocShell()->GetDocument();
-                        std::vector<sc::NoteEntry> aNotes;
-                        rDoc.GetAllNoteEntries(aNotes);
-
-                        sal_uInt32 nId = aCellId.toUInt32();
-                        auto lComp = [nId](const sc::NoteEntry& rNote) { return rNote.mpNote->GetId() == nId; };
-
-                        const auto& aFoundNoteIt = std::find_if(aNotes.begin(), aNotes.end(), lComp);
-                        if (aFoundNoteIt != aNotes.end())
-                        {
-                            ScAddress aFoundPos = aFoundNoteIt->maPos;
-                            pTabViewShell->SetTabNo(aFoundPos.Tab());
-                            pTabViewShell->SetCursor(aFoundPos.Col(), aFoundPos.Row());
-                        }
+                        SetTabNoAndCursor( GetViewData(), aCellId );
                     }
 
                     ScAddress aPos( GetViewData()->GetCurX(), GetViewData()->GetCurY(), GetViewData()->GetTabNo() );
@@ -2385,20 +2398,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 OUString aCellId = pIdItem->GetValue();
                 if (!aCellId.isEmpty())
                 {
-                    ScDocument& rDoc = GetViewData()->GetDocShell()->GetDocument();
-                    std::vector<sc::NoteEntry> aNotes;
-                    rDoc.GetAllNoteEntries(aNotes);
-
-                    sal_uInt32 nId = aCellId.toUInt32();
-                    auto lComp = [nId](const sc::NoteEntry& rNote) { return rNote.mpNote->GetId() == nId; };
-
-                    const auto& aFoundNoteIt = std::find_if(aNotes.begin(), aNotes.end(), lComp);
-                    if (aFoundNoteIt != aNotes.end())
-                    {
-                        ScAddress aFoundPos = aFoundNoteIt->maPos;
-                        pTabViewShell->SetTabNo(aFoundPos.Tab());
-                        pTabViewShell->SetCursor(aFoundPos.Col(), aFoundPos.Row());
-                    }
+                    SetTabNoAndCursor( GetViewData(), aCellId );
                 }
             }
 
@@ -2536,6 +2536,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             break;
 
         case SID_OPENDLG_CONDFRMT_MANAGER:
+        case SID_OPENDLG_CURRENTCONDFRMT_MANAGER:
             {
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
                 assert(pFact);
@@ -2931,11 +2932,12 @@ void ScCellShell::ExecuteDataPilotDialog()
                     if ( pDoc->HasSubTotalCells( aRange ) )
                     {
                         //  confirm selection if it contains SubTotal cells
-
-                        ScopedVclPtrInstance<QueryBox> aBox( pTabViewShell->GetDialogParent(),
-                                        MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                        ScGlobal::GetRscString(STR_DATAPILOT_SUBTOTAL) );
-                        if (aBox->Execute() == RET_NO)
+                        vcl::Window* pWin = pTabViewShell->GetDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_DATAPILOT_SUBTOTAL)));
+                        xQueryBox->set_default_response(RET_YES);
+                        if (xQueryBox->run() == RET_NO)
                             bOK = false;
                     }
                     if (bOK)
@@ -2962,8 +2964,11 @@ void ScCellShell::ExecuteDataPilotDialog()
         if (pSrcErrorId)
         {
             // Error occurred during data creation.  Launch an error and bail out.
-            ScopedVclPtrInstance< InfoBox > aBox(pTabViewShell->GetDialogParent(), ScGlobal::GetRscString(pSrcErrorId));
-            aBox->Execute();
+            vcl::Window* pWin = pTabViewShell->GetDialogParent();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          ScGlobal::GetRscString(pSrcErrorId)));
+            xInfoBox->run();
             return;
         }
 

@@ -15,6 +15,7 @@
 #include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/messagedialog.hxx>
 #include <window.h>
 #include <boost/multi_array.hpp>
 #include <officecfg/Office/Common.hxx>
@@ -77,18 +78,18 @@ void VclContainer::setLayoutAllocation(vcl::Window &rChild, const Point &rAllocP
             break;
         case VclAlign::Start:
             if (aChildPreferredSize.Width() < rChildAlloc.Width())
-                aChildSize.Width() = aChildPreferredSize.Width();
+                aChildSize.setWidth( aChildPreferredSize.Width() );
             break;
         case VclAlign::End:
             if (aChildPreferredSize.Width() < rChildAlloc.Width())
-                aChildSize.Width() = aChildPreferredSize.Width();
-            aChildPos.X() += rChildAlloc.Width();
-            aChildPos.X() -= aChildSize.Width();
+                aChildSize.setWidth( aChildPreferredSize.Width() );
+            aChildPos.AdjustX(rChildAlloc.Width() );
+            aChildPos.AdjustX( -(aChildSize.Width()) );
             break;
         case VclAlign::Center:
             if (aChildPreferredSize.Width() < aChildSize.Width())
-                aChildSize.Width() = aChildPreferredSize.Width();
-            aChildPos.X() += (rChildAlloc.Width() - aChildSize.Width()) / 2;
+                aChildSize.setWidth( aChildPreferredSize.Width() );
+            aChildPos.AdjustX((rChildAlloc.Width() - aChildSize.Width()) / 2 );
             break;
     }
 
@@ -98,18 +99,18 @@ void VclContainer::setLayoutAllocation(vcl::Window &rChild, const Point &rAllocP
             break;
         case VclAlign::Start:
             if (aChildPreferredSize.Height() < rChildAlloc.Height())
-                aChildSize.Height() = aChildPreferredSize.Height();
+                aChildSize.setHeight( aChildPreferredSize.Height() );
             break;
         case VclAlign::End:
             if (aChildPreferredSize.Height() < rChildAlloc.Height())
-                aChildSize.Height() = aChildPreferredSize.Height();
-            aChildPos.Y() += rChildAlloc.Height();
-            aChildPos.Y() -= aChildSize.Height();
+                aChildSize.setHeight( aChildPreferredSize.Height() );
+            aChildPos.AdjustY(rChildAlloc.Height() );
+            aChildPos.AdjustY( -(aChildSize.Height()) );
             break;
         case VclAlign::Center:
             if (aChildPreferredSize.Height() < aChildSize.Height())
-                aChildSize.Height() = aChildPreferredSize.Height();
-            aChildPos.Y() += (rChildAlloc.Height() - aChildSize.Height()) / 2;
+                aChildSize.setHeight( aChildPreferredSize.Height() );
+            aChildPos.AdjustY((rChildAlloc.Height() - aChildSize.Height()) / 2 );
             break;
     }
 
@@ -150,8 +151,8 @@ void VclContainer::SetPosPixel(const Point& rAllocPos)
 {
     Point aAllocPos = rAllocPos;
     sal_Int32 nBorderWidth = get_border_width();
-    aAllocPos.X() += nBorderWidth + get_margin_left();
-    aAllocPos.Y() += nBorderWidth + get_margin_top();
+    aAllocPos.AdjustX(nBorderWidth + get_margin_left() );
+    aAllocPos.AdjustY(nBorderWidth + get_margin_top() );
 
     if (aAllocPos != GetPosPixel())
         Window::SetPosPixel(aAllocPos);
@@ -161,8 +162,8 @@ void VclContainer::SetSizePixel(const Size& rAllocation)
 {
     Size aAllocation = rAllocation;
     sal_Int32 nBorderWidth = get_border_width();
-    aAllocation.Width() -= nBorderWidth*2 + get_margin_left() + get_margin_right();
-    aAllocation.Height() -= nBorderWidth*2 + get_margin_top() + get_margin_bottom();
+    aAllocation.AdjustWidth( -(nBorderWidth*2 + get_margin_left() + get_margin_right()) );
+    aAllocation.AdjustHeight( -(nBorderWidth*2 + get_margin_top() + get_margin_bottom()) );
     bool bSizeChanged = aAllocation != GetSizePixel();
     if (bSizeChanged)
         Window::SetSizePixel(aAllocation);
@@ -430,9 +431,9 @@ void VclBox::setAllocation(const Size &rAllocation)
             setPrimaryCoordinate(aPos, nPrimaryCoordinate + nAllocPrimaryDimension);
         }
 
-        for (std::vector<vcl::Window*>::iterator aI = aWindows[ePackType].begin(), aEnd = aWindows[ePackType].end(); aI != aEnd; ++aI)
+        for (auto const& window : aWindows[ePackType])
         {
-            vcl::Window *pChild = *aI;
+            vcl::Window *pChild = window;
 
             long nPadding = pChild->get_padding();
 
@@ -546,10 +547,9 @@ Size VclButtonBox::addReqGroups(const VclButtonBox::Requisition &rReq) const
 static long getMaxNonOutlier(const std::vector<long> &rG, long nAvgDimension)
 {
     long nMaxDimensionNonOutlier = 0;
-    for (std::vector<long>::const_iterator aI = rG.begin(),
-        aEnd = rG.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rG)
     {
-        long nPrimaryChildDimension = *aI;
+        long nPrimaryChildDimension = elem;
         if (nPrimaryChildDimension < nAvgDimension * 1.5)
         {
             nMaxDimensionNonOutlier = std::max(nPrimaryChildDimension,
@@ -567,10 +567,9 @@ static std::vector<long> setButtonSizes(const std::vector<long> &rG,
     //set everything < 1.5 times the average to the same width, leave the
     //outliers un-touched
     std::vector<bool>::const_iterator aJ = rNonHomogeneous.begin();
-    for (std::vector<long>::const_iterator aI = rG.begin(), aEnd = rG.end();
-        aI != aEnd; ++aI, ++aJ)
+    for (auto const& elem : rG)
     {
-        long nPrimaryChildDimension = *aI;
+        long nPrimaryChildDimension = elem;
         bool bNonHomogeneous = *aJ;
         if (!bNonHomogeneous && nPrimaryChildDimension < nAvgDimension * 1.5)
         {
@@ -580,6 +579,7 @@ static std::vector<long> setButtonSizes(const std::vector<long> &rG,
         {
             aVec.push_back(std::max(nPrimaryChildDimension, nMinWidth));
         }
+        ++aJ;
     }
     return aVec;
 }
@@ -829,20 +829,22 @@ struct ButtonOrder
 
 static int getButtonPriority(const OString &rType)
 {
-    static const size_t N_TYPES = 5;
+    static const size_t N_TYPES = 6;
     static const ButtonOrder aDiscardCancelSave[N_TYPES] =
     {
         { "/discard", 0 },
         { "/no", 0 },
         { "/cancel", 1 },
         { "/save", 2 },
-        { "/yes", 2 }
+        { "/yes", 2 },
+        { "/ok", 2 }
     };
 
     static const ButtonOrder aSaveDiscardCancel[N_TYPES] =
     {
         { "/save", 0 },
         { "/yes", 0 },
+        { "/ok", 0 },
         { "/discard", 1 },
         { "/no", 1 },
         { "/cancel", 2 }
@@ -1044,10 +1046,9 @@ array_type assembleGrid(const VclGrid &rGrid)
                 GridEntry &rEntry = A[rSpan.x][rSpan.y];
                 candidates.insert(&rEntry);
             }
-            for (std::set<GridEntry*>::iterator aI = candidates.begin(), aEnd = candidates.end();
-                aI != aEnd; ++aI)
+            for (auto const& candidate : candidates)
             {
-                GridEntry *pEntry = *aI;
+                GridEntry *pEntry = candidate;
                 --pEntry->nSpanWidth;
             }
         }
@@ -1075,10 +1076,9 @@ array_type assembleGrid(const VclGrid &rGrid)
                 GridEntry &rEntry = A[rSpan.x][rSpan.y];
                 candidates.insert(&rEntry);
             }
-            for (std::set<GridEntry*>::iterator aI = candidates.begin(), aEnd = candidates.end();
-                aI != aEnd; ++aI)
+            for (auto const& candidate : candidates)
             {
-                GridEntry *pEntry = *aI;
+                GridEntry *pEntry = candidate;
                 --pEntry->nSpanHeight;
             }
         }
@@ -1411,20 +1411,20 @@ void VclGrid::setAllocation(const Size& rAllocation)
 
                 sal_Int32 nWidth = rEntry.nSpanWidth;
                 for (sal_Int32 nSpanX = 0; nSpanX < nWidth; ++nSpanX)
-                    aChildAlloc.Width() += aWidths[x+nSpanX].m_nValue;
-                aChildAlloc.Width() += nColSpacing*(nWidth-1);
+                    aChildAlloc.AdjustWidth(aWidths[x+nSpanX].m_nValue );
+                aChildAlloc.AdjustWidth(nColSpacing*(nWidth-1) );
 
                 sal_Int32 nHeight = rEntry.nSpanHeight;
                 for (sal_Int32 nSpanY = 0; nSpanY < nHeight; ++nSpanY)
-                    aChildAlloc.Height() += aHeights[y+nSpanY].m_nValue;
-                aChildAlloc.Height() += nRowSpacing*(nHeight-1);
+                    aChildAlloc.AdjustHeight(aHeights[y+nSpanY].m_nValue );
+                aChildAlloc.AdjustHeight(nRowSpacing*(nHeight-1) );
 
                 setLayoutAllocation(*pChild, aAllocPos, aChildAlloc);
             }
-            aAllocPos.Y() += aHeights[y].m_nValue + nRowSpacing;
+            aAllocPos.AdjustY(aHeights[y].m_nValue + nRowSpacing );
         }
-        aAllocPos.X() += aWidths[x].m_nValue + nColSpacing;
-        aAllocPos.Y() = 0;
+        aAllocPos.AdjustX(aWidths[x].m_nValue + nColSpacing );
+        aAllocPos.setY( 0 );
     }
 }
 
@@ -1503,14 +1503,14 @@ Size VclFrame::calculateRequisition() const
     if (pLabel && pLabel->IsVisible())
     {
         Size aLabelSize = getLayoutRequisition(*pLabel);
-        aRet.Height() += aLabelSize.Height();
-        aRet.Width() = std::max(aLabelSize.Width(), aRet.Width());
+        aRet.AdjustHeight(aLabelSize.Height() );
+        aRet.setWidth( std::max(aLabelSize.Width(), aRet.Width()) );
     }
 
     const FrameStyle &rFrameStyle =
         GetSettings().GetStyleSettings().GetFrameStyle();
-    aRet.Width() += rFrameStyle.left + rFrameStyle.right;
-    aRet.Height() += rFrameStyle.top + rFrameStyle.bottom;
+    aRet.AdjustWidth(rFrameStyle.left + rFrameStyle.right );
+    aRet.AdjustHeight(rFrameStyle.top + rFrameStyle.bottom );
 
     return aRet;
 }
@@ -1531,11 +1531,11 @@ void VclFrame::setAllocation(const Size &rAllocation)
     if (pLabel && pLabel->IsVisible())
     {
         Size aLabelSize = getLayoutRequisition(*pLabel);
-        aLabelSize.Height() = std::min(aLabelSize.Height(), aAllocation.Height());
-        aLabelSize.Width() = std::min(aLabelSize.Width(), aAllocation.Width());
+        aLabelSize.setHeight( std::min(aLabelSize.Height(), aAllocation.Height()) );
+        aLabelSize.setWidth( std::min(aLabelSize.Width(), aAllocation.Width()) );
         setLayoutAllocation(*pLabel, aChildPos, aLabelSize);
-        aAllocation.Height() -= aLabelSize.Height();
-        aChildPos.Y() += aLabelSize.Height();
+        aAllocation.AdjustHeight( -(aLabelSize.Height()) );
+        aChildPos.AdjustY(aLabelSize.Height() );
     }
 
     if (pChild && pChild->IsVisible())
@@ -1623,8 +1623,8 @@ Size VclAlignment::calculateRequisition() const
     if (pChild && pChild->IsVisible())
     {
         Size aChildSize = getLayoutRequisition(*pChild);
-        aRet.Width() += aChildSize.Width();
-        aRet.Height() += aChildSize.Height();
+        aRet.AdjustWidth(aChildSize.Width() );
+        aRet.AdjustHeight(aChildSize.Height() );
     }
 
     return aRet;
@@ -1639,8 +1639,8 @@ void VclAlignment::setAllocation(const Size &rAllocation)
     Point aChildPos(m_nLeftPadding, m_nTopPadding);
 
     Size aAllocation;
-    aAllocation.Width() = rAllocation.Width() - (m_nLeftPadding + m_nRightPadding);
-    aAllocation.Height() = rAllocation.Height() - (m_nTopPadding + m_nBottomPadding);
+    aAllocation.setWidth( rAllocation.Width() - (m_nLeftPadding + m_nRightPadding) );
+    aAllocation.setHeight( rAllocation.Height() - (m_nTopPadding + m_nBottomPadding) );
 
     setLayoutAllocation(*pChild, aChildPos, aAllocation);
 }
@@ -1697,17 +1697,17 @@ Size VclExpander::calculateRequisition() const
     if (pLabel && pLabel->IsVisible())
     {
         Size aLabelSize = getLayoutRequisition(*pLabel);
-        aExpanderSize.Height() = std::max(aExpanderSize.Height(), aLabelSize.Height());
-        aExpanderSize.Width() += aLabelSize.Width();
+        aExpanderSize.setHeight( std::max(aExpanderSize.Height(), aLabelSize.Height()) );
+        aExpanderSize.AdjustWidth(aLabelSize.Width() );
     }
 
-    aRet.Height() += aExpanderSize.Height();
-    aRet.Width() = std::max(aExpanderSize.Width(), aRet.Width());
+    aRet.AdjustHeight(aExpanderSize.Height() );
+    aRet.setWidth( std::max(aExpanderSize.Width(), aRet.Width()) );
 
     const FrameStyle &rFrameStyle =
         GetSettings().GetStyleSettings().GetFrameStyle();
-    aRet.Width() += rFrameStyle.left + rFrameStyle.right;
-    aRet.Height() += rFrameStyle.top + rFrameStyle.bottom;
+    aRet.AdjustWidth(rFrameStyle.left + rFrameStyle.right );
+    aRet.AdjustHeight(rFrameStyle.top + rFrameStyle.bottom );
 
     return aRet;
 }
@@ -1732,15 +1732,15 @@ void VclExpander::setAllocation(const Size &rAllocation)
     if (pLabel && pLabel->IsVisible())
     {
         aLabelSize = getLayoutRequisition(*pLabel);
-        aExpanderSize.Height() = std::max(aExpanderSize.Height(), aLabelSize.Height());
-        aExpanderSize.Width() += aLabelSize.Width();
+        aExpanderSize.setHeight( std::max(aExpanderSize.Height(), aLabelSize.Height()) );
+        aExpanderSize.AdjustWidth(aLabelSize.Width() );
     }
 
-    aExpanderSize.Height() = std::min(aExpanderSize.Height(), aAllocation.Height());
-    aExpanderSize.Width() = std::min(aExpanderSize.Width(), aAllocation.Width());
+    aExpanderSize.setHeight( std::min(aExpanderSize.Height(), aAllocation.Height()) );
+    aExpanderSize.setWidth( std::min(aExpanderSize.Width(), aAllocation.Width()) );
 
-    aButtonSize.Height() = std::min(aButtonSize.Height(), aExpanderSize.Height());
-    aButtonSize.Width() = std::min(aButtonSize.Width(), aExpanderSize.Width());
+    aButtonSize.setHeight( std::min(aButtonSize.Height(), aExpanderSize.Height()) );
+    aButtonSize.setWidth( std::min(aButtonSize.Width(), aExpanderSize.Width()) );
 
     long nExtraExpanderHeight = aExpanderSize.Height() - aButtonSize.Height();
     Point aButtonPos(aChildPos.X(), aChildPos.Y() + nExtraExpanderHeight/2);
@@ -1748,17 +1748,17 @@ void VclExpander::setAllocation(const Size &rAllocation)
 
     if (pLabel && pLabel->IsVisible())
     {
-        aLabelSize.Height() = std::min(aLabelSize.Height(), aExpanderSize.Height());
-        aLabelSize.Width() = std::min(aLabelSize.Width(),
-            aExpanderSize.Width() - aButtonSize.Width());
+        aLabelSize.setHeight( std::min(aLabelSize.Height(), aExpanderSize.Height()) );
+        aLabelSize.setWidth( std::min(aLabelSize.Width(),
+            aExpanderSize.Width() - aButtonSize.Width()) );
 
         long nExtraLabelHeight = aExpanderSize.Height() - aLabelSize.Height();
         Point aLabelPos(aChildPos.X() + aButtonSize.Width(), aChildPos.Y() + nExtraLabelHeight/2);
         setLayoutAllocation(*pLabel, aLabelPos, aLabelSize);
     }
 
-    aAllocation.Height() -= aExpanderSize.Height();
-    aChildPos.Y() += aExpanderSize.Height();
+    aAllocation.AdjustHeight( -(aExpanderSize.Height()) );
+    aChildPos.AdjustY(aExpanderSize.Height() );
 
     if (pChild && pChild->IsVisible())
     {
@@ -1844,12 +1844,12 @@ IMPL_LINK_NOARG(VclScrolledWindow, ScrollBarHdl, ScrollBar*, void)
 
     if (m_pHScroll->IsVisible())
     {
-        aWinPos.X() = -m_pHScroll->GetThumbPos();
+        aWinPos.setX( -m_pHScroll->GetThumbPos() );
     }
 
     if (m_pVScroll->IsVisible())
     {
-        aWinPos.Y() = -m_pVScroll->GetThumbPos();
+        aWinPos.setY( -m_pVScroll->GetThumbPos() );
     }
 
     pChild->SetPosPixel(aWinPos);
@@ -1876,10 +1876,10 @@ Size VclScrolledWindow::calculateRequisition() const
         aRet = getLayoutRequisition(*pChild);
 
     if (GetStyle() & WB_VSCROLL)
-        aRet.Width() += getLayoutRequisition(*m_pVScroll).Width();
+        aRet.AdjustWidth(getLayoutRequisition(*m_pVScroll).Width() );
 
     if (GetStyle() & WB_HSCROLL)
-        aRet.Height() += getLayoutRequisition(*m_pHScroll).Height();
+        aRet.AdjustHeight(getLayoutRequisition(*m_pHScroll).Height() );
 
     return aRet;
 }
@@ -1949,9 +1949,9 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
         Point aScrollPos(rAllocation.Width() - nScrollBarWidth, 0);
         Size aScrollSize(nScrollBarWidth, rAllocation.Height());
         setLayoutAllocation(*m_pVScroll, aScrollPos, aScrollSize);
-        aChildAllocation.Width() -= nScrollBarWidth;
-        aInnerSize.Width() -= nScrollBarWidth;
-        aChildAllocation.Height() = aChildReq.Height();
+        aChildAllocation.AdjustWidth( -nScrollBarWidth );
+        aInnerSize.AdjustWidth( -nScrollBarWidth );
+        aChildAllocation.setHeight( aChildReq.Height() );
     }
 
     if (m_pHScroll->IsVisible())
@@ -1960,9 +1960,9 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
         Point aScrollPos(0, rAllocation.Height() - nScrollBarHeight);
         Size aScrollSize(rAllocation.Width(), nScrollBarHeight);
         setLayoutAllocation(*m_pHScroll, aScrollPos, aScrollSize);
-        aChildAllocation.Height() -= nScrollBarHeight;
-        aInnerSize.Height() -= nScrollBarHeight;
-        aChildAllocation.Width() = aChildReq.Width();
+        aChildAllocation.AdjustHeight( -nScrollBarHeight );
+        aInnerSize.AdjustHeight( -nScrollBarHeight );
+        aChildAllocation.setWidth( aChildReq.Width() );
     }
 
     if (m_pVScroll->IsVisible() && m_pHScroll->IsVisible())
@@ -1990,9 +1990,9 @@ Size VclScrolledWindow::getVisibleChildSize() const
 {
     Size aRet(GetSizePixel());
     if (m_pVScroll->IsVisible())
-        aRet.Width() -= m_pVScroll->GetSizePixel().Width();
+        aRet.AdjustWidth( -(m_pVScroll->GetSizePixel().Width()) );
     if (m_pHScroll->IsVisible())
-        aRet.Height() -= m_pHScroll->GetSizePixel().Height();
+        aRet.AdjustHeight( -(m_pHScroll->GetSizePixel().Height()) );
     return aRet;
 }
 
@@ -2029,8 +2029,8 @@ void VclViewport::setAllocation(const Size &rAllocation)
     if (pChild && pChild->IsVisible())
     {
         Size aReq(getLayoutRequisition(*pChild));
-        aReq.Width() = std::max(aReq.Width(), rAllocation.Width());
-        aReq.Height() = std::max(aReq.Height(), rAllocation.Height());
+        aReq.setWidth( std::max(aReq.Width(), rAllocation.Width()) );
+        aReq.setHeight( std::max(aReq.Height(), rAllocation.Height()) );
         setLayoutAllocation(*pChild, Point(0, 0), aReq);
     }
 }
@@ -2070,8 +2070,8 @@ Size VclEventBox::calculateRequisition() const
         if (!pChild->IsVisible())
             continue;
         Size aChildSize = getLayoutRequisition(*pChild);
-        aRet.Width() = std::max(aRet.Width(), aChildSize.Width());
-        aRet.Height() = std::max(aRet.Height(), aChildSize.Height());
+        aRet.setWidth( std::max(aRet.Width(), aChildSize.Width()) );
+        aRet.setHeight( std::max(aRet.Height(), aChildSize.Height()) );
     }
 
     return aRet;
@@ -2121,7 +2121,7 @@ void VclSizeGroup::set_mode(VclSizeGroupMode eMode)
 
 }
 
-bool VclSizeGroup::set_property(const OString &rKey, const OUString &rValue)
+void VclSizeGroup::set_property(const OString &rKey, const OUString &rValue)
 {
     if (rKey == "ignore-hidden")
         set_ignore_hidden(toBool(rValue));
@@ -2145,9 +2145,132 @@ bool VclSizeGroup::set_property(const OString &rKey, const OUString &rValue)
     else
     {
         SAL_INFO("vcl.layout", "unhandled property: " << rKey);
-        return false;
     }
-    return true;
+}
+
+void MessageDialog::create_message_area()
+{
+    setDeferredProperties();
+
+    if (!m_pGrid)
+    {
+        VclContainer *pContainer = get_content_area();
+        assert(pContainer);
+
+        m_pGrid.set( VclPtr<VclGrid>::Create(pContainer) );
+        m_pGrid->reorderWithinParent(0);
+        m_pGrid->set_column_spacing(12);
+        m_pMessageBox.set(VclPtr<VclVBox>::Create(m_pGrid));
+        m_pMessageBox->set_grid_left_attach(1);
+        m_pMessageBox->set_grid_top_attach(0);
+        m_pMessageBox->set_spacing(GetTextHeight());
+
+        m_pImage = VclPtr<FixedImage>::Create(m_pGrid, WB_CENTER | WB_VCENTER | WB_3DLOOK);
+        switch (m_eMessageType)
+        {
+            case VclMessageType::Info:
+                m_pImage->SetImage(GetStandardInfoBoxImage());
+                break;
+            case VclMessageType::Warning:
+                m_pImage->SetImage(GetStandardWarningBoxImage());
+                break;
+            case VclMessageType::Question:
+                m_pImage->SetImage(GetStandardQueryBoxImage());
+                break;
+            case VclMessageType::Error:
+                m_pImage->SetImage(GetStandardErrorBoxImage());
+                break;
+        }
+        m_pImage->set_grid_left_attach(0);
+        m_pImage->set_grid_top_attach(0);
+        m_pImage->set_valign(VclAlign::Start);
+        m_pImage->Show();
+
+        WinBits nWinStyle = WB_CLIPCHILDREN | WB_LEFT | WB_VCENTER | WB_NOLABEL | WB_NOTABSTOP;
+
+        bool bHasSecondaryText = !m_sSecondaryString.isEmpty();
+
+        m_pPrimaryMessage = VclPtr<VclMultiLineEdit>::Create(m_pMessageBox, nWinStyle);
+        m_pPrimaryMessage->SetPaintTransparent(true);
+        m_pPrimaryMessage->EnableCursor(false);
+
+        m_pPrimaryMessage->set_hexpand(true);
+        m_pPrimaryMessage->SetText(m_sPrimaryString);
+        m_pPrimaryMessage->Show(!m_sPrimaryString.isEmpty());
+
+        m_pSecondaryMessage = VclPtr<VclMultiLineEdit>::Create(m_pMessageBox, nWinStyle);
+        m_pSecondaryMessage->SetPaintTransparent(true);
+        m_pSecondaryMessage->EnableCursor(false);
+        m_pSecondaryMessage->set_hexpand(true);
+        m_pSecondaryMessage->SetText(m_sSecondaryString);
+        m_pSecondaryMessage->Show(bHasSecondaryText);
+
+        MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, bHasSecondaryText ? m_pSecondaryMessage.get() : nullptr);
+
+        VclButtonBox *pButtonBox = get_action_area();
+        assert(pButtonBox);
+
+        VclPtr<PushButton> pBtn;
+        short nDefaultResponse = RET_CANCEL;
+        switch (m_eButtonsType)
+        {
+            case VclButtonsType::NONE:
+                break;
+            case VclButtonsType::Ok:
+                pBtn.set( VclPtr<OKButton>::Create(pButtonBox) );
+                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
+                pBtn->Show();
+                pBtn->set_id("ok");
+                add_button(pBtn, RET_OK, true);
+                nDefaultResponse = RET_OK;
+                break;
+            case VclButtonsType::Close:
+                pBtn.set( VclPtr<CloseButton>::Create(pButtonBox) );
+                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
+                pBtn->Show();
+                pBtn->set_id("close");
+                add_button(pBtn, RET_CLOSE, true);
+                nDefaultResponse = RET_CLOSE;
+                break;
+            case VclButtonsType::Cancel:
+                pBtn.set( VclPtr<CancelButton>::Create(pButtonBox) );
+                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
+                pBtn->set_id("cancel");
+                add_button(pBtn, RET_CANCEL, true);
+                nDefaultResponse = RET_CANCEL;
+                break;
+            case VclButtonsType::YesNo:
+                pBtn = VclPtr<PushButton>::Create(pButtonBox);
+                pBtn->SetText(Button::GetStandardText(StandardButtonType::Yes));
+                pBtn->Show();
+                pBtn->set_id("yes");
+                add_button(pBtn, RET_YES, true);
+
+                pBtn.set( VclPtr<PushButton>::Create(pButtonBox) );
+                pBtn->SetText(Button::GetStandardText(StandardButtonType::No));
+                pBtn->Show();
+                pBtn->set_id("no");
+                add_button(pBtn, RET_NO, true);
+                nDefaultResponse = RET_NO;
+                break;
+            case VclButtonsType::OkCancel:
+                pBtn.set( VclPtr<OKButton>::Create(pButtonBox) );
+                pBtn->Show();
+                pBtn->set_id("ok");
+                add_button(pBtn, RET_OK, true);
+
+                pBtn.set( VclPtr<CancelButton>::Create(pButtonBox) );
+                pBtn->Show();
+                pBtn->set_id("cancel");
+                add_button(pBtn, RET_CANCEL, true);
+                nDefaultResponse = RET_CANCEL;
+                break;
+        }
+        set_default_response(nDefaultResponse);
+        pButtonBox->sort_native_button_order();
+        m_pMessageBox->Show();
+        m_pGrid->Show();
+    }
 }
 
 void MessageDialog::create_owned_areas()
@@ -2168,28 +2291,12 @@ MessageDialog::MessageDialog(vcl::Window* pParent, WinBits nStyle)
     , m_pOwnedContentArea(nullptr)
     , m_pOwnedActionArea(nullptr)
     , m_pGrid(nullptr)
+    , m_pMessageBox(nullptr)
     , m_pImage(nullptr)
     , m_pPrimaryMessage(nullptr)
     , m_pSecondaryMessage(nullptr)
 {
     SetType(WindowType::MESSBOX);
-}
-
-MessageDialog::MessageDialog(vcl::Window* pParent,
-    const OUString &rMessage,
-    VclMessageType eMessageType,
-    VclButtonsType eButtonsType)
-    : Dialog(pParent, WB_MOVEABLE | WB_3DLOOK | WB_CLOSEABLE)
-    , m_eButtonsType(eButtonsType)
-    , m_eMessageType(eMessageType)
-    , m_pGrid(nullptr)
-    , m_pImage(nullptr)
-    , m_pPrimaryMessage(nullptr)
-    , m_pSecondaryMessage(nullptr)
-    , m_sPrimaryString(rMessage)
-{
-    SetType(WindowType::MESSBOX);
-    create_owned_areas();
 }
 
 MessageDialog::MessageDialog(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription)
@@ -2205,84 +2312,41 @@ MessageDialog::MessageDialog(vcl::Window* pParent, const OString& rID, const OUS
 {
 }
 
+MessageDialog::MessageDialog(vcl::Window* pParent,
+    const OUString &rMessage,
+    VclMessageType eMessageType,
+    VclButtonsType eButtonsType)
+    : Dialog(pParent, WB_MOVEABLE | WB_3DLOOK | WB_CLOSEABLE)
+    , m_eButtonsType(eButtonsType)
+    , m_eMessageType(eMessageType)
+    , m_pGrid(nullptr)
+    , m_pMessageBox(nullptr)
+    , m_pImage(nullptr)
+    , m_pPrimaryMessage(nullptr)
+    , m_pSecondaryMessage(nullptr)
+    , m_sPrimaryString(rMessage)
+{
+    SetType(WindowType::MESSBOX);
+    create_owned_areas();
+    create_message_area();
+}
+
 void MessageDialog::dispose()
 {
-    for (VclPtr<PushButton> & pOwnedButton : m_aOwnedButtons)
-        pOwnedButton.disposeAndClear();
-    m_aOwnedButtons.clear();
-
+    disposeOwnedButtons();
     m_pPrimaryMessage.disposeAndClear();
     m_pSecondaryMessage.disposeAndClear();
     m_pImage.disposeAndClear();
+    m_pMessageBox.disposeAndClear();
     m_pGrid.disposeAndClear();
     m_pOwnedActionArea.disposeAndClear();
     m_pOwnedContentArea.disposeAndClear();
-    m_aResponses.clear();
     Dialog::dispose();
 }
 
 MessageDialog::~MessageDialog()
 {
     disposeOnce();
-}
-
-void MessageDialog::response(short nResponseId)
-{
-    EndDialog(nResponseId);
-}
-
-IMPL_LINK(MessageDialog, ButtonHdl, Button *, pButton, void)
-{
-    response(get_response(pButton));
-}
-
-short MessageDialog::get_response(const vcl::Window *pWindow) const
-{
-    auto aFind = m_aResponses.find(pWindow);
-    if (aFind != m_aResponses.end())
-        return aFind->second;
-    if (!m_pUIBuilder)
-        return RET_CANCEL;
-    return m_pUIBuilder->get_response(pWindow);
-}
-
-void MessageDialog::setButtonHandlers(VclButtonBox const *pButtonBox)
-{
-    assert(pButtonBox);
-    for (vcl::Window* pChild = pButtonBox->GetWindow(GetWindowType::FirstChild); pChild;
-        pChild = pChild->GetWindow(GetWindowType::Next))
-    {
-        switch (pChild->GetType())
-        {
-            case WindowType::PUSHBUTTON:
-            {
-                PushButton* pButton = static_cast<PushButton*>(pChild);
-                pButton->SetClickHdl(LINK(this, MessageDialog, ButtonHdl));
-                break;
-            }
-            //insist that the response ids match the default actions for those
-            //widgets, and leave their default handlers in place
-            case WindowType::OKBUTTON:
-                assert(get_response(pChild) == RET_OK);
-                break;
-            case WindowType::CANCELBUTTON:
-                assert(get_response(pChild) == RET_CANCEL);
-                break;
-            case WindowType::HELPBUTTON:
-                assert(get_response(pChild) == RET_HELP);
-                break;
-            default:
-                SAL_WARN("vcl.layout", "The type of widget " <<
-                    pChild->GetHelpId() << " is currently not handled");
-                break;
-        }
-        //The default is to stick the focus into the first widget
-        //that accepts it, and if that happens and it's a button
-        //then that becomes the new default button, so explicitly
-        //put the focus into the default button
-        if (pChild->GetStyle() & WB_DEFBUTTON)
-            pChild->GrabFocus();
-    }
 }
 
 void MessageDialog::SetMessagesWidths(vcl::Window const *pParent,
@@ -2300,135 +2364,6 @@ void MessageDialog::SetMessagesWidths(vcl::Window const *pParent,
     }
     else
         pPrimaryMessage->SetMaxTextWidth(pPrimaryMessage->approximate_char_width() * 60);
-}
-
-short MessageDialog::Execute()
-{
-    setDeferredProperties();
-
-    if (!m_pGrid)
-    {
-        VclContainer *pContainer = get_content_area();
-        assert(pContainer);
-
-        m_pGrid.set( VclPtr<VclGrid>::Create(pContainer) );
-        m_pGrid->reorderWithinParent(0);
-        m_pGrid->set_column_spacing(12);
-        m_pGrid->set_row_spacing(GetTextHeight());
-
-        m_pImage = VclPtr<FixedImage>::Create(m_pGrid, WB_CENTER | WB_VCENTER | WB_3DLOOK);
-        switch (m_eMessageType)
-        {
-            case VclMessageType::Info:
-                m_pImage->SetImage(InfoBox::GetStandardImage());
-                break;
-            case VclMessageType::Warning:
-                m_pImage->SetImage(WarningBox::GetStandardImage());
-                break;
-            case VclMessageType::Question:
-                m_pImage->SetImage(QueryBox::GetStandardImage());
-                break;
-            case VclMessageType::Error:
-                m_pImage->SetImage(ErrorBox::GetStandardImage());
-                break;
-        }
-        m_pImage->set_grid_left_attach(0);
-        m_pImage->set_grid_top_attach(0);
-        m_pImage->set_valign(VclAlign::Start);
-        m_pImage->Show();
-
-        WinBits nWinStyle = WB_CLIPCHILDREN | WB_LEFT | WB_VCENTER | WB_NOLABEL | WB_NOTABSTOP;
-
-        bool bHasSecondaryText = !m_sSecondaryString.isEmpty();
-
-        m_pPrimaryMessage = VclPtr<VclMultiLineEdit>::Create(m_pGrid, nWinStyle);
-        m_pPrimaryMessage->SetPaintTransparent(true);
-        m_pPrimaryMessage->EnableCursor(false);
-
-        m_pPrimaryMessage->set_grid_left_attach(1);
-        m_pPrimaryMessage->set_grid_top_attach(0);
-        m_pPrimaryMessage->set_hexpand(true);
-        m_pPrimaryMessage->SetText(m_sPrimaryString);
-        m_pPrimaryMessage->Show(!m_sPrimaryString.isEmpty());
-
-        m_pSecondaryMessage = VclPtr<VclMultiLineEdit>::Create(m_pGrid, nWinStyle);
-        m_pSecondaryMessage->SetPaintTransparent(true);
-        m_pSecondaryMessage->EnableCursor(false);
-        m_pSecondaryMessage->set_grid_left_attach(1);
-        m_pSecondaryMessage->set_grid_top_attach(1);
-        m_pSecondaryMessage->set_hexpand(true);
-        m_pSecondaryMessage->SetText(m_sSecondaryString);
-        m_pSecondaryMessage->Show(bHasSecondaryText);
-
-        MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, bHasSecondaryText ? m_pSecondaryMessage.get() : nullptr);
-
-        VclButtonBox *pButtonBox = get_action_area();
-        assert(pButtonBox);
-
-        VclPtr<PushButton> pBtn;
-        switch (m_eButtonsType)
-        {
-            case VclButtonsType::NONE:
-                break;
-            case VclButtonsType::Ok:
-                pBtn.set( VclPtr<OKButton>::Create(pButtonBox) );
-                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
-                pBtn->Show();
-                pBtn->set_id("ok");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_OK;
-                break;
-            case VclButtonsType::Close:
-                pBtn.set( VclPtr<CloseButton>::Create(pButtonBox) );
-                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
-                pBtn->Show();
-                pBtn->set_id("close");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_CLOSE;
-                break;
-            case VclButtonsType::Cancel:
-                pBtn.set( VclPtr<CancelButton>::Create(pButtonBox) );
-                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
-                pBtn->set_id("cancel");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_CANCEL;
-                break;
-            case VclButtonsType::YesNo:
-                pBtn = VclPtr<PushButton>::Create(pButtonBox);
-                pBtn->SetText(Button::GetStandardText(StandardButtonType::Yes));
-                pBtn->Show();
-                pBtn->set_id("yes");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_YES;
-
-                pBtn.set( VclPtr<PushButton>::Create(pButtonBox) );
-                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
-                pBtn->SetText(Button::GetStandardText(StandardButtonType::No));
-                pBtn->Show();
-                pBtn->set_id("no");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_NO;
-                break;
-            case VclButtonsType::OkCancel:
-                pBtn.set( VclPtr<OKButton>::Create(pButtonBox) );
-                pBtn->Show();
-                pBtn->set_id("ok");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_OK;
-
-                pBtn.set( VclPtr<CancelButton>::Create(pButtonBox) );
-                pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
-                pBtn->Show();
-                pBtn->set_id("cancel");
-                m_aOwnedButtons.push_back(pBtn);
-                m_aResponses[pBtn] = RET_CANCEL;
-                break;
-        }
-        setButtonHandlers(pButtonBox);
-        pButtonBox->sort_native_button_order();
-        m_pGrid->Show();
-    }
-    return Dialog::Execute();
 }
 
 OUString const & MessageDialog::get_primary_text() const
@@ -2624,8 +2559,8 @@ Size VclVPaned::calculateRequisition() const
         if (!pChild->IsVisible())
             continue;
         Size aChildSize = getLayoutRequisition(*pChild);
-        aRet.Width() = std::max(aRet.Width(), aChildSize.Width());
-        aRet.Height() += aChildSize.Height();
+        aRet.setWidth( std::max(aRet.Width(), aChildSize.Width()) );
+        aRet.AdjustHeight(aChildSize.Height() );
     }
 
     return aRet;
@@ -2650,8 +2585,8 @@ Size getLegacyBestSizeForChildren(const vcl::Window &rWindow)
 
     Size aRet(aBounds.GetSize());
     Point aTopLeft(aBounds.TopLeft());
-    aRet.Width() += aTopLeft.X()*2;
-    aRet.Height() += aTopLeft.Y()*2;
+    aRet.AdjustWidth(aTopLeft.X()*2 );
+    aRet.AdjustHeight(aTopLeft.Y()*2 );
 
     return aRet;
 }

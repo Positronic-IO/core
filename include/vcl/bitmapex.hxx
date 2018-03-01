@@ -40,7 +40,7 @@ enum class TransparentType
     Bitmap
 };
 
-class VCL_DLLPUBLIC BitmapEx
+class SAL_WARN_UNUSED VCL_DLLPUBLIC BitmapEx
 {
 public:
 
@@ -147,12 +147,8 @@ public:
 
         @param bExpandTransparent
         Whether to expand the transparency color or not.
-
-        @return true, if padding was performed successfully. false is
-        not only returned when the operation failed, but also if
-        nothing had to be done, e.g. because nDX and nDY were zero.
      */
-    bool                Expand(
+    void                Expand(
                             sal_uLong nDX, sal_uLong nDY,
                             bool bExpandTransparent = false );
 
@@ -264,12 +260,28 @@ public:
 
         @param rReplaceColor
         Color to be placed in all changed pixel
-
-        @return true, if the operation was completed successfully.
      */
-    bool                Replace(
+    void                Replace(
                             const Color& rSearchColor,
                             const Color& rReplaceColor );
+
+    /** Replace all pixel having the search color with the specified color
+
+        @param rSearchColor
+        Color specifying which pixel should be replaced
+
+        @param rReplaceColor
+        Color to be placed in all changed pixel
+
+        @param nTolerance
+        Tolerance value. Specifies the maximal difference between
+        rSearchColor and the individual pixel values, such that the
+        corresponding pixel is still regarded a match.
+     */
+    void                Replace(
+                            const Color& rSearchColor,
+                            const Color& rReplaceColor,
+                            sal_uInt8 nTolerance );
 
     /** Replace all pixel having one the search colors with the corresponding replace color
 
@@ -286,10 +298,8 @@ public:
         Tolerance value. Specifies the maximal difference between
         pSearchColor colors and the individual pixel values, such that
         the corresponding pixel is still regarded a match.
-
-        @return true, if the operation was completed successfully.
      */
-    bool                Replace(
+    void                Replace(
                             const Color* pSearchColors,
                             const Color* pReplaceColors,
                             sal_uLong nColorCount,
@@ -379,6 +389,7 @@ public:
         @param bSmooth
         Defines if pixel interpolation is to be used to create the result
     */
+    SAL_WARN_UNUSED_RESULT
     BitmapEx            TransformBitmapEx(
                             double fWidth,
                             double fHeight,
@@ -406,6 +417,7 @@ public:
 
         @return The transformed bitmap
     */
+    SAL_WARN_UNUSED_RESULT
     BitmapEx            getTransformed(
                             const basegfx::B2DHomMatrix& rTransformation,
                             const basegfx::B2DRange& rVisibleRange,
@@ -417,14 +429,21 @@ public:
         @param rBColorModifierStack
         A ColrModifierStack which defines how each pixel has to be modified
     */
+    SAL_WARN_UNUSED_RESULT
     BitmapEx            ModifyBitmapEx( const basegfx::BColorModifierStack& rBColorModifierStack) const;
 
+    SAL_WARN_UNUSED_RESULT
     static BitmapEx     AutoScaleBitmap( BitmapEx const & aBitmap, const long aStandardSize );
 
     /// populate from a canvas implementation
     bool                Create(
                             const css::uno::Reference< css::rendering::XBitmapCanvas > &xBitmapCanvas,
                             const Size &rSize );
+
+    void                setAlphaFrom( sal_uInt8 cIndexFrom, sal_Int8 nAlphaTo );
+
+    void                AdjustTransparency( sal_uInt8 cTrans );
+
 public:
 
     SAL_DLLPRIVATE std::shared_ptr<ImpBitmap> const & ImplGetBitmapImpBitmap() const { return aBitmap.ImplGetImpBitmap(); }

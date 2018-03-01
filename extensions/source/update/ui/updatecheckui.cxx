@@ -40,7 +40,7 @@
 #include <vcl/idle.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/outdev.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/lineinfo.hxx>
 #include <vcl/button.hxx>
@@ -269,7 +269,7 @@ Image UpdateCheckUI::GetBubbleImage( OUString const &rURL )
     }
 
     if ( aImage.GetSizePixel().Width() == 0 )
-        aImage = InfoBox::GetStandardImage();
+        aImage = GetStandardInfoBoxImage();
 
     return aImage;
 }
@@ -544,7 +544,10 @@ IMPL_LINK_NOARG(UpdateCheckUI, ClickHdl, MenuBar::MenuBarButtonCallbackArg&, boo
             mrJob->execute( aEmpty );
         }
         catch(const uno::Exception&) {
-            ScopedVclPtrInstance<MessageDialog>(nullptr, Translate::get(STR_NO_WEBBROWSER_FOUND, maSfxLocale))->Execute();
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(nullptr,
+                                                           VclMessageType::Warning, VclButtonsType::Ok,
+                                                           Translate::get(STR_NO_WEBBROWSER_FOUND, maSfxLocale)));
+            xErrorBox->run();
         }
     }
 
@@ -774,7 +777,6 @@ void BubbleWindow::Paint(vcl::RenderContext& /*rRenderContext*/, const tools::Re
               aThickLine );
     SetLineColor( aOldLine );
 
-    //Image aImage = InfoBox::GetStandardImage();
     Size aImgSize = maBubbleImage.GetSizePixel();
 
     DrawImage( Point( BUBBLE_BORDER, BUBBLE_BORDER + TIP_HEIGHT ), maBubbleImage );
@@ -817,7 +819,6 @@ void BubbleWindow::Show( bool bVisible, ShowFlags nFlags )
 
     Size aWindowSize = GetSizePixel();
 
-    // Image aImage = InfoBox::GetStandardImage();
     Size aImgSize = maBubbleImage.GetSizePixel();
 
     RecalcTextRects();
@@ -836,13 +837,13 @@ void BubbleWindow::Show( bool bVisible, ShowFlags nFlags )
         aWindowSize.setHeight( aImgSize.Height() + TIP_HEIGHT + 2 * BUBBLE_BORDER );
 
     Point aPos;
-    aPos.X() = maTipPos.X() - aWindowSize.Width() + TIP_RIGHT_OFFSET;
-    aPos.Y() = maTipPos.Y();
+    aPos.setX( maTipPos.X() - aWindowSize.Width() + TIP_RIGHT_OFFSET );
+    aPos.setY( maTipPos.Y() );
     Point aScreenPos = GetParent()->OutputToAbsoluteScreenPixel( aPos );
     if ( aScreenPos.X() < 0 )
     {
         mnTipOffset = aScreenPos.X();
-        aPos.X() -= mnTipOffset;
+        aPos.AdjustX( -(mnTipOffset) );
     }
     SetPosSizePixel( aPos, aWindowSize );
 
@@ -881,8 +882,8 @@ void BubbleWindow::RecalcTextRects()
                               3 * BUBBLE_BORDER + TIP_HEIGHT );
         if ( aTotalSize.Height() > maMaxTextSize.Height() )
         {
-            maMaxTextSize.Width() = maMaxTextSize.Width() * 3 / 2;
-            maMaxTextSize.Height() = maMaxTextSize.Height() * 3 / 2;
+            maMaxTextSize.setWidth( maMaxTextSize.Width() * 3 / 2 );
+            maMaxTextSize.setHeight( maMaxTextSize.Height() * 3 / 2 );
         }
         else
             bFinished = true;

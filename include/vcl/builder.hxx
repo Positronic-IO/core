@@ -34,9 +34,13 @@
 #include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 
+class Button;
 class ListBox;
+class MessageDialog;
 class NumericFormatter;
 class PopupMenu;
+class SalInstanceBuilder;
+class ScreenshotTest;
 class ScrollBar;
 class Slider;
 class DateField;
@@ -59,7 +63,8 @@ public:
             const OUString& sUIRootDir,
             const OUString& sUIFile,
             const OString& sID = OString(),
-            const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>());
+            const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>(),
+            bool bLegacy = true);
     ~VclBuilder();
 
     ///releases references and disposes all children.
@@ -94,16 +99,12 @@ public:
         return m_sHelpRoot;
     }
 
+    /// Pre-loads all modules containing UI information
+    static void preload();
+
 private:
     VclBuilder(const VclBuilder&) = delete;
     VclBuilder& operator=(const VclBuilder&) = delete;
-
-    typedef std::map<OUString, std::unique_ptr<osl::Module>> ModuleMap;
-
-    //We store these until the builder is deleted, that way we can use the
-    //ui-previewer on custom widgets and guarantee the modules they are from
-    //exist for the duration of the dialog
-    ModuleMap       m_aModuleMap;
 
     //If the toplevel window has any properties which need to be set on it,
     //but the toplevel is the owner of the builder, then its ctor
@@ -127,12 +128,10 @@ private:
     {
         OString m_sID;
         VclPtr<vcl::Window> m_pWindow;
-        short m_nResponseId;
         PackingData m_aPackingData;
         WinAndId(const OString &rId, vcl::Window *pWindow, bool bVertical)
             : m_sID(rId)
             , m_pWindow(pWindow)
-            , m_nResponseId(RET_CANCEL)
             , m_aPackingData(bVertical)
         {
         }
@@ -279,6 +278,8 @@ private:
 
         std::vector< VclPtr<VclExpander> > m_aExpanderWidgets;
 
+        std::vector< VclPtr<MessageDialog> > m_aMessageDialogs;
+
         sal_uInt16 m_nLastToolbarId;
 
         sal_uInt16 m_nLastMenuItemId;
@@ -293,6 +294,7 @@ private:
     bool        m_bToplevelHasDeferredInit;
     bool        m_bToplevelHasDeferredProperties;
     bool        m_bToplevelParentFound;
+    bool        m_bLegacy;
     std::unique_ptr<ParserState> m_pParserState;
 
     vcl::Window *get_by_name(const OString& sID);
@@ -313,6 +315,7 @@ private:
     /// XFrame to be able to extract labels and other properties of the UNO commands (like of .uno:Bold).
     css::uno::Reference<css::frame::XFrame> m_xFrame;
 
+    DECL_LINK(ResponseHdl, ::Button*, void);
 private:
     VclPtr<vcl::Window> insertObject(vcl::Window *pParent,
                     const OString &rClass, const OString &rID,
@@ -327,12 +330,12 @@ private:
     void        connectTimeFormatterAdjustment(const OString &id, const OUString &rAdjustment);
     void        connectDateFormatterAdjustment(const OString &id, const OUString &rAdjustment);
 
-    bool        extractGroup(const OString &id, stringmap &rVec);
-    bool        extractModel(const OString &id, stringmap &rVec);
-    bool        extractBuffer(const OString &id, stringmap &rVec);
+    void        extractGroup(const OString &id, stringmap &rVec);
+    void        extractModel(const OString &id, stringmap &rVec);
+    void        extractBuffer(const OString &id, stringmap &rVec);
     static bool extractAdjustmentToMap(const OString &id, stringmap &rVec, std::vector<WidgetAdjustmentMap>& rAdjustmentMap);
-    bool        extractButtonImage(const OString &id, stringmap &rMap, bool bRadio);
-    bool        extractStock(const OString &id, stringmap &rMap);
+    void        extractButtonImage(const OString &id, stringmap &rMap, bool bRadio);
+    void        extractStock(const OString &id, stringmap &rMap);
     void        extractMnemonicWidget(const OString &id, stringmap &rMap);
 
     void        handleChild(vcl::Window *pParent, xmlreader::XmlReader &reader);
@@ -482,6 +485,9 @@ public:
 
 protected:
     std::unique_ptr<VclBuilder> m_pUIBuilder;
+
+    friend class ::SalInstanceBuilder;
+    friend class ::ScreenshotTest;
 };
 
 /*

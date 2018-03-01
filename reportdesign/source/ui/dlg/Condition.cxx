@@ -24,7 +24,6 @@
 #include <strings.hrc>
 #include <ReportController.hxx>
 #include <ColorChanger.hxx>
-#include <helpids.h>
 #include <reportformula.hxx>
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -240,8 +239,7 @@ IMPL_LINK(Condition, DropdownClick, ToolBox*, pToolBox, void)
 
 IMPL_LINK_NOARG( Condition, OnFormatAction, ToolBox*, void )
 {
-    Color aCol(COL_AUTO);
-    ApplyCommand(mapToolbarItemToSlotId(m_pActions->GetCurItemId()),aCol);
+    ApplyCommand(mapToolbarItemToSlotId(m_pActions->GetCurItemId()),COL_AUTO);
 }
 
 IMPL_LINK( Condition, OnConditionAction, Button*, _pClickedButton, void )

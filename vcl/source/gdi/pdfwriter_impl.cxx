@@ -174,14 +174,14 @@ void doTestCode()
     aWriter.SetAutoAdvanceTime( 3 );
     aWriter.SetMapMode( MapMode( MapUnit::Map100thMM ) );
 
-    aWriter.SetFillColor( Color( COL_LIGHTRED ) );
-    aWriter.SetLineColor( Color( COL_LIGHTGREEN ) );
+    aWriter.SetFillColor( COL_LIGHTRED );
+    aWriter.SetLineColor( COL_LIGHTGREEN );
     aWriter.DrawRect( Rectangle( Point( 2000, 200 ), Size( 8000, 3000 ) ), 5000, 2000 );
 
     aWriter.SetFont( Font( OUString( "Times" ), Size( 0, 500 ) ) );
-    aWriter.SetTextColor( Color( COL_BLACK ) );
-    aWriter.SetLineColor( Color( COL_BLACK ) );
-    aWriter.SetFillColor( Color( COL_LIGHTBLUE ) );
+    aWriter.SetTextColor( COL_BLACK );
+    aWriter.SetLineColor( COL_BLACK );
+    aWriter.SetFillColor( COL_LIGHTBLUE );
 
     Rectangle aRect( Point( 5000, 5000 ), Size( 6000, 3000 ) );
     aWriter.DrawRect( aRect );
@@ -193,7 +193,7 @@ void doTestCode()
     aWriter.CreateNote( Rectangle( Point( aRect.Right(), aRect.Top() ), Size( 6000, 3000 ) ), aNote );
 
     Rectangle aTargetRect( Point( 3000, 23000 ), Size( 12000, 6000 ) );
-    aWriter.SetFillColor( Color( COL_LIGHTGREEN ) );
+    aWriter.SetFillColor( COL_LIGHTGREEN );
     aWriter.DrawRect( aTargetRect );
     aWriter.DrawText( aTargetRect, "Dest second link" );
     sal_Int32 nSecondDest = aWriter.CreateDest( aTargetRect );
@@ -225,7 +225,7 @@ void doTestCode()
     // set transitional mode
     aWriter.SetPageTransition( PDFWriter::WipeRightToLeft, 1500 );
     aWriter.SetMapMode( MapMode( MapUnit::Map100thMM ) );
-    aWriter.SetTextColor( Color( COL_BLACK ) );
+    aWriter.SetTextColor( COL_BLACK );
     aWriter.SetFont( Font( OUString( "Times" ), Size( 0, 500 ) ) );
     aWriter.DrawText( Rectangle( Point( 4500, 1500 ), Size( 12000, 3000 ) ),
                       "Here's where all things come to an end ... well at least the paragraph from the last page.",
@@ -233,7 +233,7 @@ void doTestCode()
                       );
     aWriter.EndStructureElement();
 
-    aWriter.SetFillColor( Color( COL_LIGHTBLUE ) );
+    aWriter.SetFillColor( COL_LIGHTBLUE );
     // disable structure
     aWriter.BeginStructureElement( PDFWriter::NonStructElement );
     aWriter.DrawRect( aRect );
@@ -241,7 +241,7 @@ void doTestCode()
     aWriter.DrawText( aRect, "Link annot 2" );
     sal_Int32 nSecondLink = aWriter.CreateLink( aRect );
 
-    aWriter.SetFillColor( Color( COL_LIGHTGREEN ) );
+    aWriter.SetFillColor( COL_LIGHTGREEN );
     aWriter.BeginStructureElement( PDFWriter::ListItem );
     aWriter.DrawRect( aTargetRect );
     aWriter.DrawText( aTargetRect, "Dest first link" );
@@ -270,19 +270,19 @@ void doTestCode()
     aWriter.SetClipRegion( aClip );
     aWriter.DrawEllipse( Rectangle( Point( 4500, 9600 ), Size( 12000, 3000 ) ) );
     aWriter.MoveClipRegion( 1000, 500 );
-    aWriter.SetFillColor( Color( COL_RED ) );
+    aWriter.SetFillColor( COL_RED );
     aWriter.DrawEllipse( Rectangle( Point( 4500, 9600 ), Size( 12000, 3000 ) ) );
     aWriter.Pop();
     // test transparency
     // draw background
     Rectangle aTranspRect( Point( 7500, 13500 ), Size( 9000, 6000 ) );
-    aWriter.SetFillColor( Color( COL_LIGHTRED ) );
+    aWriter.SetFillColor( COL_LIGHTRED );
     aWriter.DrawRect( aTranspRect );
     aWriter.BeginTransparencyGroup();
 
-    aWriter.SetFillColor( Color( COL_LIGHTGREEN ) );
+    aWriter.SetFillColor( COL_LIGHTGREEN );
     aWriter.DrawEllipse( aTranspRect );
-    aWriter.SetTextColor( Color( COL_LIGHTBLUE ) );
+    aWriter.SetTextColor( COL_LIGHTBLUE );
     aWriter.DrawText( aTranspRect,
                       "Some transparent text",
                       DrawTextFlags::Center | DrawTextFlags::VCenter | DrawTextFlags::MultiLine | DrawTextFlags::WordBreak );
@@ -302,16 +302,16 @@ void doTestCode()
     aWriter.DrawBitmap( Point( 600, 13500 ), Size( 3000, 3000 ), aTransMask );
 
     aTranspRect = Rectangle( Point( 4200, 13500 ), Size( 3000, 3000 ) );
-    aWriter.SetFillColor( Color( COL_LIGHTRED ) );
+    aWriter.SetFillColor( COL_LIGHTRED );
     aWriter.DrawRect( aTranspRect );
-    aWriter.SetFillColor( Color( COL_LIGHTGREEN ) );
+    aWriter.SetFillColor( COL_LIGHTGREEN );
     aWriter.DrawEllipse( aTranspRect );
-    aWriter.SetTextColor( Color( COL_LIGHTBLUE ) );
+    aWriter.SetTextColor( COL_LIGHTBLUE );
     aWriter.DrawText( aTranspRect,
                       "Some transparent text",
                       DrawTextFlags::Center | DrawTextFlags::VCenter | DrawTextFlags::MultiLine | DrawTextFlags::WordBreak );
     aTranspRect = Rectangle( Point( 1500, 16500 ), Size( 4800, 3000 ) );
-    aWriter.SetFillColor( Color( COL_LIGHTRED ) );
+    aWriter.SetFillColor( COL_LIGHTRED );
     aWriter.DrawRect( aTranspRect );
 
     Bitmap aImageBmp( Size( 256, 256 ), 24 );
@@ -335,7 +335,7 @@ void doTestCode()
                           Point( 8000, 12000 ),
                           Point( 3000, 19000 ) };
     tools::Polygon aLIPoly( 3, aLIPoints );
-    aWriter.SetLineColor( Color( COL_BLUE ) );
+    aWriter.SetLineColor( COL_BLUE );
     aWriter.SetFillColor();
     aWriter.DrawPolyLine( aLIPoly, aLI );
 
@@ -352,7 +352,7 @@ void doTestCode()
     aWriter.NewPage( 595, 842 );
     aWriter.SetMapMode( MapMode( MapUnit::Map100thMM ) );
     aWriter.SetFont( Font( OUString( "Times" ), Size( 0, 500 ) ) );
-    aWriter.SetTextColor( Color( COL_BLACK ) );
+    aWriter.SetTextColor( COL_BLACK );
     aRect = Rectangle( Point( 4500, 6000 ), Size( 6000, 1500 ) );
     aWriter.DrawRect( aRect );
     aWriter.DrawText( aRect, "www.heise.de" );
@@ -419,9 +419,9 @@ void doTestCode()
     aRB1.RadioGroup = 1;
     aRB1.Border = aRB1.Background = true;
     aRB1.ButtonIsLeft = false;
-    aRB1.BorderColor = Color( COL_LIGHTGREEN );
-    aRB1.BackgroundColor = Color( COL_LIGHTBLUE );
-    aRB1.TextColor = Color( COL_LIGHTRED );
+    aRB1.BorderColor = COL_LIGHTGREEN;
+    aRB1.BackgroundColor = COL_LIGHTBLUE;
+    aRB1.TextColor = COL_LIGHTRED;
     aRB1.TextFont = Font( OUString( "Courier" ), Size( 0, 800 ) );
     aWriter.CreateControl( aRB1 );
 
@@ -451,7 +451,7 @@ void doTestCode()
     aEditBox.Location = Rectangle( Point( 10000, 18000 ), Size( 5000, 1500 ) );
     aEditBox.MaxLen = 100;
     aEditBox.Border = aEditBox.Background = true;
-    aEditBox.BorderColor = Color( COL_BLACK );
+    aEditBox.BorderColor = COL_BLACK;
     aWriter.CreateControl( aEditBox );
 
     // normal list box
@@ -463,7 +463,7 @@ void doTestCode()
     aLstBox.Sort = true;
     aLstBox.MultiSelect = true;
     aLstBox.Border = aLstBox.Background = true;
-    aLstBox.BorderColor = Color( COL_BLACK );
+    aLstBox.BorderColor = COL_BLACK;
     aLstBox.Entries.push_back( OUString( "One"  ) );
     aLstBox.Entries.push_back( OUString( "Two"  ) );
     aLstBox.Entries.push_back( OUString( "Three"  ) );
@@ -505,8 +505,8 @@ void doTestCode()
 }
 #endif
 
-static const sal_Int32 nLog10Divisor = 1;
-static const double fDivisor = 10.0;
+static const sal_Int32 nLog10Divisor = 3;
+static const double fDivisor = 1000.0;
 
 static inline double pixelToPoint( double px ) { return px/fDivisor; }
 static inline sal_Int32 pointToPixel( double pt ) { return sal_Int32(pt*fDivisor); }
@@ -837,14 +837,21 @@ static void appendFixedInt( sal_Int32 nValue, OStringBuffer& rBuffer )
         rBuffer.append( '-' );
         nValue = -nValue;
     }
-    const sal_Int32 nFactor = 10;
-    const sal_Int32 nInt = nValue / nFactor;
+    sal_Int32 nFactor = 1, nDiv = nLog10Divisor;
+    while( nDiv-- )
+        nFactor *= 10;
+
+    sal_Int32 nInt = nValue / nFactor;
     rBuffer.append( nInt );
-    sal_Int32 nDecimal  = nValue % nFactor;
-    if (nDecimal)
+    if (nFactor > 1 && nValue % nFactor)
     {
-        rBuffer.append('.');
-        rBuffer.append(nDecimal);
+        rBuffer.append( '.' );
+        do
+        {
+            nFactor /= 10;
+            rBuffer.append((nValue / nFactor) % 10);
+        }
+        while (nFactor > 1 && nValue % nFactor); // omit trailing zeros
     }
 }
 
@@ -893,7 +900,7 @@ static void appendDouble( double fValue, OStringBuffer& rBuffer, sal_Int32 nPrec
 static void appendColor( const Color& rColor, OStringBuffer& rBuffer, bool bConvertToGrey )
 {
 
-    if( rColor != Color( COL_TRANSPARENT ) )
+    if( rColor != COL_TRANSPARENT )
     {
         if( bConvertToGrey )
         {
@@ -913,7 +920,7 @@ static void appendColor( const Color& rColor, OStringBuffer& rBuffer, bool bConv
 
 void PDFWriterImpl::appendStrokingColor( const Color& rColor, OStringBuffer& rBuffer )
 {
-    if( rColor != Color( COL_TRANSPARENT ) )
+    if( rColor != COL_TRANSPARENT )
     {
         bool bGrey = m_aContext.ColorMode == PDFWriter::DrawGreyscale;
         appendColor( rColor, rBuffer, bGrey );
@@ -923,7 +930,7 @@ void PDFWriterImpl::appendStrokingColor( const Color& rColor, OStringBuffer& rBu
 
 void PDFWriterImpl::appendNonStrokingColor( const Color& rColor, OStringBuffer& rBuffer )
 {
-    if( rColor != Color( COL_TRANSPARENT ) )
+    if( rColor != COL_TRANSPARENT )
     {
         bool bGrey = m_aContext.ColorMode == PDFWriter::DrawGreyscale;
         appendColor( rColor, rBuffer, bGrey );
@@ -1404,10 +1411,10 @@ void PDFWriterImpl::PDFPage::convertRect( tools::Rectangle& rRect ) const
                               m_pWriter->m_aMapMode,
                               m_pWriter->getReferenceDevice(),
                               rRect.GetSize() );
-    rRect.Left()    = aLL.X();
-    rRect.Right()   = aLL.X() + aSize.Width();
-    rRect.Top()     = pointToPixel(getHeight()) - aLL.Y();
-    rRect.Bottom()  = rRect.Top() + aSize.Height();
+    rRect.SetLeft( aLL.X() );
+    rRect.SetRight( aLL.X() + aSize.Width() );
+    rRect.SetTop( pointToPixel(getHeight()) - aLL.Y() );
+    rRect.SetBottom( rRect.Top() + aSize.Height() );
 }
 
 void PDFWriterImpl::PDFPage::appendPolygon( const tools::Polygon& rPoly, OStringBuffer& rBuffer, bool bClose ) const
@@ -2765,9 +2772,9 @@ bool PDFWriterImpl::emitTilings()
         sal_Int32 nW = static_cast<sal_Int32>(tiling.m_aRectangle.GetWidth());
         sal_Int32 nH = static_cast<sal_Int32>(tiling.m_aRectangle.GetHeight());
         if( tiling.m_aCellSize.Width() == 0 )
-            tiling.m_aCellSize.Width() = nW;
+            tiling.m_aCellSize.setWidth( nW );
         if( tiling.m_aCellSize.Height() == 0 )
-            tiling.m_aCellSize.Height() = nH;
+            tiling.m_aCellSize.setHeight( nH );
 
         bool bDeflate = compressStream( tiling.m_pTilingStream );
         tiling.m_pTilingStream->Seek( STREAM_SEEK_TO_END );
@@ -3058,7 +3065,7 @@ sal_Int32 PDFWriterImpl::createToUnicodeCMap( sal_uInt8 const * pEncoding,
     }
     aContents.append( "endbfchar\n"
                       "endcmap\n"
-                      "CMapName currentdict /CMap define resource pop\n"
+                      "CMapName currentdict /CMap defineresource pop\n"
                       "end\n"
                       "end\n" );
     SvMemoryStream aStream;
@@ -4107,7 +4114,7 @@ sal_Int32 PDFWriterImpl::getBestBuiltinFont( const vcl::Font& rFont )
 
 static inline const Color& replaceColor( const Color& rCol1, const Color& rCol2 )
 {
-    return (rCol1 == Color( COL_TRANSPARENT )) ? rCol2 : rCol1;
+    return (rCol1 == COL_TRANSPARENT) ? rCol2 : rCol1;
 }
 
 void PDFWriterImpl::createDefaultPushButtonAppearance( PDFWidget& rButton, const PDFWriter::PushButtonWidget& rWidget )
@@ -4123,8 +4130,8 @@ void PDFWriterImpl::createDefaultPushButtonAppearance( PDFWidget& rButton, const
     // to default user space
     if( rWidget.Background || rWidget.Border )
     {
-        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetLightColor() ) : Color( COL_TRANSPARENT ) );
-        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetDialogColor() ) : Color( COL_TRANSPARENT ) );
+        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetLightColor() ) : COL_TRANSPARENT );
+        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetDialogColor() ) : COL_TRANSPARENT );
         drawRectangle( rWidget.Location );
     }
     // prepare font to use
@@ -4175,17 +4182,17 @@ Font PDFWriterImpl::drawFieldBorder( PDFWidget& rIntern,
 
     if( rWidget.Background || rWidget.Border )
     {
-        if( rWidget.Border && rWidget.BorderColor == Color( COL_TRANSPARENT ) )
+        if( rWidget.Border && rWidget.BorderColor == COL_TRANSPARENT )
         {
             sal_Int32 nDelta = getReferenceDevice()->GetDPIX() / 500;
             if( nDelta < 1 )
                 nDelta = 1;
-            setLineColor( Color( COL_TRANSPARENT ) );
+            setLineColor( COL_TRANSPARENT );
             tools::Rectangle aRect = rIntern.m_aRect;
             setFillColor( rSettings.GetLightBorderColor() );
             drawRectangle( aRect );
-            aRect.Left()  += nDelta; aRect.Top()     += nDelta;
-            aRect.Right() -= nDelta; aRect.Bottom()  -= nDelta;
+            aRect.AdjustLeft(nDelta ); aRect.AdjustTop(nDelta );
+            aRect.AdjustRight( -nDelta ); aRect.AdjustBottom( -nDelta );
             setFillColor( rSettings.GetFieldColor() );
             drawRectangle( aRect );
             setFillColor( rSettings.GetLightColor() );
@@ -4197,8 +4204,8 @@ Font PDFWriterImpl::drawFieldBorder( PDFWidget& rIntern,
         }
         else
         {
-            setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetShadowColor() ) : Color( COL_TRANSPARENT ) );
-            setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : Color( COL_TRANSPARENT ) );
+            setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetShadowColor() ) : COL_TRANSPARENT );
+            setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : COL_TRANSPARENT );
             drawRectangle( rIntern.m_aRect );
         }
 
@@ -4208,10 +4215,10 @@ Font PDFWriterImpl::drawFieldBorder( PDFWidget& rIntern,
             sal_Int32 nDelta = aFont.GetFontHeight()/4;
             if( nDelta < 1 )
                 nDelta = 1;
-            rIntern.m_aRect.Left()  += nDelta;
-            rIntern.m_aRect.Top()   += nDelta;
-            rIntern.m_aRect.Right() -= nDelta;
-            rIntern.m_aRect.Bottom()-= nDelta;
+            rIntern.m_aRect.AdjustLeft(nDelta );
+            rIntern.m_aRect.AdjustTop(nDelta );
+            rIntern.m_aRect.AdjustRight( -nDelta );
+            rIntern.m_aRect.AdjustBottom( -nDelta );
         }
     }
     return aFont;
@@ -4278,7 +4285,7 @@ void PDFWriterImpl::createDefaultListBoxAppearance( PDFWidget& rBox, const PDFWr
     beginRedirect( pListBoxStream, rBox.m_aRect );
     OStringBuffer aAppearance( 64 );
 
-    setLineColor( Color( COL_TRANSPARENT ) );
+    setLineColor( COL_TRANSPARENT );
     setFillColor( replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) );
     drawRectangle( rBox.m_aRect );
 
@@ -4319,8 +4326,8 @@ void PDFWriterImpl::createDefaultCheckBoxAppearance( PDFWidget& rBox, const PDFW
 
     if( rWidget.Background || rWidget.Border )
     {
-        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetCheckedColor() ) : Color( COL_TRANSPARENT ) );
-        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : Color( COL_TRANSPARENT ) );
+        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetCheckedColor() ) : COL_TRANSPARENT );
+        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : COL_TRANSPARENT );
         drawRectangle( rBox.m_aRect );
     }
 
@@ -4328,33 +4335,33 @@ void PDFWriterImpl::createDefaultCheckBoxAppearance( PDFWidget& rBox, const PDFW
     setFont( aFont );
     Size aFontSize = aFont.GetFontSize();
     if( aFontSize.Height() > rBox.m_aRect.GetHeight() )
-        aFontSize.Height() = rBox.m_aRect.GetHeight();
+        aFontSize.setHeight( rBox.m_aRect.GetHeight() );
     sal_Int32 nDelta = aFontSize.Height()/10;
     if( nDelta < 1 )
         nDelta = 1;
 
     tools::Rectangle aCheckRect, aTextRect;
     {
-        aCheckRect.Left()   = rBox.m_aRect.Left() + nDelta;
-        aCheckRect.Top()    = rBox.m_aRect.Top() + (rBox.m_aRect.GetHeight()-aFontSize.Height())/2;
-        aCheckRect.Right()  = aCheckRect.Left() + aFontSize.Height();
-        aCheckRect.Bottom() = aCheckRect.Top() + aFontSize.Height();
+        aCheckRect.SetLeft( rBox.m_aRect.Left() + nDelta );
+        aCheckRect.SetTop( rBox.m_aRect.Top() + (rBox.m_aRect.GetHeight()-aFontSize.Height())/2 );
+        aCheckRect.SetRight( aCheckRect.Left() + aFontSize.Height() );
+        aCheckRect.SetBottom( aCheckRect.Top() + aFontSize.Height() );
 
         // #i74206# handle small controls without text area
         while( aCheckRect.GetWidth() > rBox.m_aRect.GetWidth() && aCheckRect.GetWidth() > nDelta )
         {
-            aCheckRect.Right()  -= nDelta;
-            aCheckRect.Top()    += nDelta/2;
-            aCheckRect.Bottom() -= nDelta - (nDelta/2);
+            aCheckRect.AdjustRight( -nDelta );
+            aCheckRect.AdjustTop(nDelta/2 );
+            aCheckRect.AdjustBottom( -(nDelta - (nDelta/2)) );
         }
 
-        aTextRect.Left()    = rBox.m_aRect.Left() + aCheckRect.GetWidth()+5*nDelta;
-        aTextRect.Top()     = rBox.m_aRect.Top();
-        aTextRect.Right()   = aTextRect.Left() + rBox.m_aRect.GetWidth() - aCheckRect.GetWidth()-6*nDelta;
-        aTextRect.Bottom()  = rBox.m_aRect.Bottom();
+        aTextRect.SetLeft( rBox.m_aRect.Left() + aCheckRect.GetWidth()+5*nDelta );
+        aTextRect.SetTop( rBox.m_aRect.Top() );
+        aTextRect.SetRight( aTextRect.Left() + rBox.m_aRect.GetWidth() - aCheckRect.GetWidth()-6*nDelta );
+        aTextRect.SetBottom( rBox.m_aRect.Bottom() );
     }
-    setLineColor( Color( COL_BLACK ) );
-    setFillColor( Color( COL_TRANSPARENT ) );
+    setLineColor( COL_BLACK );
+    setFillColor( COL_TRANSPARENT );
     OStringBuffer aLW( 32 );
     aLW.append( "q " );
     m_aPages[m_nCurrentPage].appendMappedLength( nDelta, aLW );
@@ -4423,8 +4430,8 @@ void PDFWriterImpl::createDefaultRadioButtonAppearance( PDFWidget& rBox, const P
 
     if( rWidget.Background || rWidget.Border )
     {
-        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetCheckedColor() ) : Color( COL_TRANSPARENT ) );
-        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : Color( COL_TRANSPARENT ) );
+        setLineColor( rWidget.Border ? replaceColor( rWidget.BorderColor, rSettings.GetCheckedColor() ) : COL_TRANSPARENT );
+        setFillColor( rWidget.Background ? replaceColor( rWidget.BackgroundColor, rSettings.GetFieldColor() ) : COL_TRANSPARENT );
         drawRectangle( rBox.m_aRect );
     }
 
@@ -4432,33 +4439,33 @@ void PDFWriterImpl::createDefaultRadioButtonAppearance( PDFWidget& rBox, const P
     setFont( aFont );
     Size aFontSize = aFont.GetFontSize();
     if( aFontSize.Height() > rBox.m_aRect.GetHeight() )
-        aFontSize.Height() = rBox.m_aRect.GetHeight();
+        aFontSize.setHeight( rBox.m_aRect.GetHeight() );
     sal_Int32 nDelta = aFontSize.Height()/10;
     if( nDelta < 1 )
         nDelta = 1;
 
     tools::Rectangle aCheckRect, aTextRect;
     {
-        aCheckRect.Left()   = rBox.m_aRect.Left() + nDelta;
-        aCheckRect.Top()    = rBox.m_aRect.Top() + (rBox.m_aRect.GetHeight()-aFontSize.Height())/2;
-        aCheckRect.Right()  = aCheckRect.Left() + aFontSize.Height();
-        aCheckRect.Bottom() = aCheckRect.Top() + aFontSize.Height();
+        aCheckRect.SetLeft( rBox.m_aRect.Left() + nDelta );
+        aCheckRect.SetTop( rBox.m_aRect.Top() + (rBox.m_aRect.GetHeight()-aFontSize.Height())/2 );
+        aCheckRect.SetRight( aCheckRect.Left() + aFontSize.Height() );
+        aCheckRect.SetBottom( aCheckRect.Top() + aFontSize.Height() );
 
         // #i74206# handle small controls without text area
         while( aCheckRect.GetWidth() > rBox.m_aRect.GetWidth() && aCheckRect.GetWidth() > nDelta )
         {
-            aCheckRect.Right()  -= nDelta;
-            aCheckRect.Top()    += nDelta/2;
-            aCheckRect.Bottom() -= nDelta - (nDelta/2);
+            aCheckRect.AdjustRight( -nDelta );
+            aCheckRect.AdjustTop(nDelta/2 );
+            aCheckRect.AdjustBottom( -(nDelta - (nDelta/2)) );
         }
 
-        aTextRect.Left()    = rBox.m_aRect.Left() + aCheckRect.GetWidth()+5*nDelta;
-        aTextRect.Top()     = rBox.m_aRect.Top();
-        aTextRect.Right()   = aTextRect.Left() + rBox.m_aRect.GetWidth() - aCheckRect.GetWidth()-6*nDelta;
-        aTextRect.Bottom()  = rBox.m_aRect.Bottom();
+        aTextRect.SetLeft( rBox.m_aRect.Left() + aCheckRect.GetWidth()+5*nDelta );
+        aTextRect.SetTop( rBox.m_aRect.Top() );
+        aTextRect.SetRight( aTextRect.Left() + rBox.m_aRect.GetWidth() - aCheckRect.GetWidth()-6*nDelta );
+        aTextRect.SetBottom( rBox.m_aRect.Bottom() );
     }
-    setLineColor( Color( COL_BLACK ) );
-    setFillColor( Color( COL_TRANSPARENT ) );
+    setLineColor( COL_BLACK );
+    setFillColor( COL_TRANSPARENT );
     OStringBuffer aLW( 32 );
     aLW.append( "q " );
     m_aPages[ m_nCurrentPage ].appendMappedLength( nDelta, aLW );
@@ -4499,11 +4506,11 @@ void PDFWriterImpl::createDefaultRadioButtonAppearance( PDFWidget& rBox, const P
     aDA.append( " Tf\n0 0 Td\nET\nQ\n" );
     writeBuffer( aDA.getStr(), aDA.getLength() );
     setFillColor( replaceColor( rWidget.TextColor, rSettings.GetRadioCheckTextColor() ) );
-    setLineColor( Color( COL_TRANSPARENT ) );
-    aCheckRect.Left()   += 3*nDelta;
-    aCheckRect.Top()    += 3*nDelta;
-    aCheckRect.Bottom() -= 3*nDelta;
-    aCheckRect.Right()  -= 3*nDelta;
+    setLineColor( COL_TRANSPARENT );
+    aCheckRect.AdjustLeft(3*nDelta );
+    aCheckRect.AdjustTop(3*nDelta );
+    aCheckRect.AdjustBottom( -(3*nDelta) );
+    aCheckRect.AdjustRight( -(3*nDelta) );
     drawEllipse( aCheckRect );
     writeBuffer( "\nEMC\n", 5 );
     endRedirect();
@@ -6040,7 +6047,7 @@ void PDFWriterImpl::sortWidgets()
         {
             SAL_WARN( "vcl.pdfwriter", "wrong number of sorted annotations" );
             SAL_INFO("vcl.pdfwriter", "PDFWriterImpl::sortWidgets(): wrong number of sorted assertions "
-                     "on page nr " << static_cast<long int>(item.first) << ", " <<
+                     "on page nr " << item.first << ", " <<
                      static_cast<long int>(item.second.aSortedAnnots.size()) << " sorted and " <<
                      static_cast<long int>(nAnnots) << " unsorted");
         }
@@ -6304,13 +6311,13 @@ void PDFWriterImpl::drawRelief( SalLayout& rLayout, const OUString& rText, bool 
     Color aOverlineColor = m_aCurrentPDFState.m_aOverlineColor;
     Color aReliefColor( COL_LIGHTGRAY );
     if( aTextColor == COL_BLACK )
-        aTextColor = Color( COL_WHITE );
+        aTextColor = COL_WHITE;
     if( aTextLineColor == COL_BLACK )
-        aTextLineColor = Color( COL_WHITE );
+        aTextLineColor = COL_WHITE;
     if( aOverlineColor == COL_BLACK )
-        aOverlineColor = Color( COL_WHITE );
+        aOverlineColor = COL_WHITE;
     if( aTextColor == COL_WHITE )
-        aReliefColor = Color( COL_BLACK );
+        aReliefColor = COL_BLACK;
 
     Font aSetFont = m_aCurrentPDFState.m_aFont;
     aSetFont.SetRelief( FontRelief::NONE );
@@ -6347,10 +6354,10 @@ void PDFWriterImpl::drawShadow( SalLayout& rLayout, const OUString& rText, bool 
     Color aSaveOverlineColor = m_aCurrentPDFState.m_aOverlineColor;
 
     Font& rFont = m_aCurrentPDFState.m_aFont;
-    if( rFont.GetColor() == Color( COL_BLACK ) || rFont.GetColor().GetLuminance() < 8 )
-        rFont.SetColor( Color( COL_LIGHTGRAY ) );
+    if( rFont.GetColor() == COL_BLACK || rFont.GetColor().GetLuminance() < 8 )
+        rFont.SetColor( COL_LIGHTGRAY );
     else
-        rFont.SetColor( Color( COL_BLACK ) );
+        rFont.SetColor( COL_BLACK );
     rFont.SetShadow( false );
     rFont.SetOutline( false );
     setFont( rFont );
@@ -6398,8 +6405,8 @@ void PDFWriterImpl::drawVerticalGlyphs(
         if (rGlyphs[i].m_bVertical)
         {
             fDeltaAngle = M_PI/2.0;
-            aDeltaPos.X() = m_pReferenceDevice->GetFontMetric().GetAscent();
-            aDeltaPos.Y() = static_cast<int>(static_cast<double>(m_pReferenceDevice->GetFontMetric().GetDescent()) * fXScale);
+            aDeltaPos.setX( m_pReferenceDevice->GetFontMetric().GetAscent() );
+            aDeltaPos.setY( static_cast<int>(static_cast<double>(m_pReferenceDevice->GetFontMetric().GetDescent()) * fXScale) );
             fYScale = fXScale;
             fTempXScale = 1.0;
             fSkewA = -fSkewB;
@@ -6640,14 +6647,14 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     if( m_aCurrentPDFState.m_aFont.IsOutline() )
     {
         aStrokeColor = m_aCurrentPDFState.m_aFont.GetColor();
-        aNonStrokeColor = Color( COL_WHITE );
+        aNonStrokeColor = COL_WHITE;
     }
     else
         aNonStrokeColor = m_aCurrentPDFState.m_aFont.GetColor();
     if( bABold )
         aStrokeColor = m_aCurrentPDFState.m_aFont.GetColor();
 
-    if( aStrokeColor != Color( COL_TRANSPARENT ) && aStrokeColor != m_aCurrentPDFState.m_aLineColor )
+    if( aStrokeColor != COL_TRANSPARENT && aStrokeColor != m_aCurrentPDFState.m_aLineColor )
     {
         if( ! bPop )
             aLine.append( "q " );
@@ -6655,7 +6662,7 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
         appendStrokingColor( aStrokeColor, aLine );
         aLine.append( "\n" );
     }
-    if( aNonStrokeColor != Color( COL_TRANSPARENT ) && aNonStrokeColor != m_aCurrentPDFState.m_aFillColor )
+    if( aNonStrokeColor != COL_TRANSPARENT && aNonStrokeColor != m_aCurrentPDFState.m_aFillColor )
     {
         if( ! bPop )
             aLine.append( "q " );
@@ -6743,8 +6750,8 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
             if (i > 0)
             {
                 Point aPos = pGlyphs[i]->maLinearPos;
-                aPos.X() /= rLayout.GetUnitsPerPixel();
-                aPos.Y() /= rLayout.GetUnitsPerPixel();
+                aPos.setX( aPos.X() / ( rLayout.GetUnitsPerPixel()) );
+                aPos.setY( aPos.Y() / ( rLayout.GetUnitsPerPixel()) );
                 aGNGlyphPos = rLayout.GetDrawPosition(aPos);
             }
             aGlyphs.emplace_back( aGNGlyphPos,
@@ -6759,14 +6766,14 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     // Avoid fill color when map mode is in pixels, the below code assumes
     // logic map mode.
     bool bPixel = m_aCurrentPDFState.m_aMapMode.GetMapUnit() == MapUnit::MapPixel;
-    if (m_aCurrentPDFState.m_aFont.GetFillColor() != Color(COL_TRANSPARENT) && !bPixel)
+    if (m_aCurrentPDFState.m_aFont.GetFillColor() != COL_TRANSPARENT && !bPixel)
     {
         // PDF doesn't have a text fill color, so draw a rectangle before
         // drawing the actual text.
         push(PushFlags::FILLCOLOR | PushFlags::LINECOLOR);
         setFillColor(m_aCurrentPDFState.m_aFont.GetFillColor());
         // Avoid border around the rectangle for Writer shape text.
-        setLineColor(Color(COL_TRANSPARENT));
+        setLineColor(COL_TRANSPARENT);
 
         // The rectangle is the bounding box of the text, but also includes
         // ascent / descent to match the on-screen rendering.
@@ -6794,9 +6801,9 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
 
     Point aAlignOffset;
     if ( eAlign == ALIGN_BOTTOM )
-        aAlignOffset.Y() -= aRefDevFontMetric.GetDescent();
+        aAlignOffset.AdjustY( -(aRefDevFontMetric.GetDescent()) );
     else if ( eAlign == ALIGN_TOP )
-        aAlignOffset.Y() += aRefDevFontMetric.GetAscent();
+        aAlignOffset.AdjustY(aRefDevFontMetric.GetAscent() );
     if( aAlignOffset.X() || aAlignOffset.Y() )
         aAlignOffset = aRotScale.transform( aAlignOffset );
 
@@ -6906,30 +6913,30 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     if ( bEmphPolyLine )
     {
         setLineColor( m_aCurrentPDFState.m_aFont.GetColor() );
-        setFillColor( Color( COL_TRANSPARENT ) );
+        setFillColor( COL_TRANSPARENT );
     }
     else
     {
         setFillColor( m_aCurrentPDFState.m_aFont.GetColor() );
-        setLineColor( Color( COL_TRANSPARENT ) );
+        setLineColor( COL_TRANSPARENT );
     }
     writeBuffer( aLine.getStr(), aLine.getLength() );
 
     Point aOffset = Point(0,0);
 
     if ( nEmphMark & FontEmphasisMark::PosBelow )
-        aOffset.Y() += m_pReferenceDevice->mpFontInstance->mxFontMetric->GetDescent() + nEmphYOff;
+        aOffset.AdjustY(m_pReferenceDevice->mpFontInstance->mxFontMetric->GetDescent() + nEmphYOff );
     else
-        aOffset.Y() -= m_pReferenceDevice->mpFontInstance->mxFontMetric->GetAscent() + nEmphYOff;
+        aOffset.AdjustY( -(m_pReferenceDevice->mpFontInstance->mxFontMetric->GetAscent() + nEmphYOff) );
 
     long nEmphWidth2     = nEmphWidth / 2;
     long nEmphHeight2    = nEmphHeight / 2;
     aOffset += Point( nEmphWidth2, nEmphHeight2 );
 
     if ( eAlign == ALIGN_BOTTOM )
-        aOffset.Y() -= m_pReferenceDevice->mpFontInstance->mxFontMetric->GetDescent();
+        aOffset.AdjustY( -(m_pReferenceDevice->mpFontInstance->mxFontMetric->GetDescent()) );
     else if ( eAlign == ALIGN_TOP )
-        aOffset.Y() += m_pReferenceDevice->mpFontInstance->mxFontMetric->GetAscent();
+        aOffset.AdjustY(m_pReferenceDevice->mpFontInstance->mxFontMetric->GetAscent() );
 
     Point aPos;
     const GlyphItem* pGlyph;
@@ -6939,7 +6946,7 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
         if (pGlyph->IsSpacing())
         {
             Point aAdjOffset = aOffset;
-            aAdjOffset.X() += (pGlyph->mnNewWidth - nEmphWidth) / 2;
+            aAdjOffset.AdjustX((pGlyph->mnNewWidth - nEmphWidth) / 2 );
             aAdjOffset = aRotScale.transform( aAdjOffset );
 
             aAdjOffset -= Point( nEmphWidth2, nEmphHeight2 );
@@ -7108,25 +7115,25 @@ void PDFWriterImpl::drawText( const tools::Rectangle& rRect, const OUString& rOr
 
             // vertical alignment
             if ( nStyle & DrawTextFlags::Bottom )
-                aPos.Y() += nHeight-(nFormatLines*nTextHeight);
+                aPos.AdjustY(nHeight-(nFormatLines*nTextHeight) );
             else if ( nStyle & DrawTextFlags::VCenter )
-                aPos.Y() += (nHeight-(nFormatLines*nTextHeight))/2;
+                aPos.AdjustY((nHeight-(nFormatLines*nTextHeight))/2 );
 
             // draw all lines excluding the last
             for ( i = 0; i < nFormatLines; i++ )
             {
                 pLineInfo = aMultiLineInfo.GetLine( i );
                 if ( nStyle & DrawTextFlags::Right )
-                    aPos.X() += nWidth-pLineInfo->GetWidth();
+                    aPos.AdjustX(nWidth-pLineInfo->GetWidth() );
                 else if ( nStyle & DrawTextFlags::Center )
-                    aPos.X() += (nWidth-pLineInfo->GetWidth())/2;
+                    aPos.AdjustX((nWidth-pLineInfo->GetWidth())/2 );
                 sal_Int32 nIndex = pLineInfo->GetIndex();
                 sal_Int32 nLineLen = pLineInfo->GetLen();
                 drawText( aPos, aStr, nIndex, nLineLen );
                 // mnemonics should not appear in documents,
                 // if the need arises, put them in here
-                aPos.Y() += nTextHeight;
-                aPos.X() = rRect.Left();
+                aPos.AdjustY(nTextHeight );
+                aPos.setX( rRect.Left() );
             }
 
             // output last line left adjusted since it was shortened
@@ -7152,14 +7159,14 @@ void PDFWriterImpl::drawText( const tools::Rectangle& rRect, const OUString& rOr
 
         // vertical alignment
         if ( nStyle & DrawTextFlags::Right )
-            aPos.X() += nWidth-nTextWidth;
+            aPos.AdjustX(nWidth-nTextWidth );
         else if ( nStyle & DrawTextFlags::Center )
-            aPos.X() += (nWidth-nTextWidth)/2;
+            aPos.AdjustX((nWidth-nTextWidth)/2 );
 
         if ( nStyle & DrawTextFlags::Bottom )
-            aPos.Y() += nHeight-nTextHeight;
+            aPos.AdjustY(nHeight-nTextHeight );
         else if ( nStyle & DrawTextFlags::VCenter )
-            aPos.Y() += (nHeight-nTextHeight)/2;
+            aPos.AdjustY((nHeight-nTextHeight)/2 );
 
         // mnemonics should be inserted here if the need arises
 
@@ -7179,7 +7186,7 @@ void PDFWriterImpl::drawLine( const Point& rStart, const Point& rStop )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT )
         return;
 
     OStringBuffer aLine;
@@ -7196,7 +7203,7 @@ void PDFWriterImpl::drawLine( const Point& rStart, const Point& rStop, const Lin
     MARK( "drawLine with LineInfo" );
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT )
         return;
 
     if( rInfo.GetStyle() == LineStyle::Solid && rInfo.GetWidth() < 2 )
@@ -7565,10 +7572,10 @@ void PDFWriterImpl::drawStrikeoutChar( const Point& rPos, long nWidth, FontStrik
     push( PushFlags::CLIPREGION );
     FontMetric aRefDevFontMetric = m_pReferenceDevice->GetFontMetric();
     tools::Rectangle aRect;
-    aRect.Left() = rPos.X();
-    aRect.Right() = aRect.Left()+nWidth;
-    aRect.Bottom() = rPos.Y()+aRefDevFontMetric.GetDescent();
-    aRect.Top() = rPos.Y()-aRefDevFontMetric.GetAscent();
+    aRect.SetLeft( rPos.X() );
+    aRect.SetRight( aRect.Left()+nWidth );
+    aRect.SetBottom( rPos.Y()+aRefDevFontMetric.GetDescent() );
+    aRect.SetTop( rPos.Y()-aRefDevFontMetric.GetAscent() );
 
     LogicalFontInstance* pFontInstance = m_pReferenceDevice->mpFontInstance;
     if (pFontInstance->mnOrientation)
@@ -7622,9 +7629,9 @@ void PDFWriterImpl::drawTextLine( const Point& rPos, long nWidth, FontStrikeout 
     Point aPos( rPos );
     TextAlign eAlign = m_aCurrentPDFState.m_aFont.GetAlignment();
     if( eAlign == ALIGN_TOP )
-        aPos.Y() += HCONV( pFontInstance->mxFontMetric->GetAscent() );
+        aPos.AdjustY(HCONV( pFontInstance->mxFontMetric->GetAscent() ));
     else if( eAlign == ALIGN_BOTTOM )
-        aPos.Y() -= HCONV( pFontInstance->mxFontMetric->GetDescent() );
+        aPos.AdjustY( -HCONV( pFontInstance->mxFontMetric->GetDescent() ) );
 
     OStringBuffer aLine( 512 );
     // save GS
@@ -7684,17 +7691,17 @@ void PDFWriterImpl::drawPolygon( const tools::Polygon& rPoly )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     int nPoints = rPoly.GetSize();
     OStringBuffer aLine( 20 * nPoints );
     m_aPages.back().appendPolygon( rPoly, aLine );
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( "B*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "S\n" );
     else
         aLine.append( "f*\n" );
@@ -7708,18 +7715,18 @@ void PDFWriterImpl::drawPolyPolygon( const tools::PolyPolygon& rPolyPoly )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     int nPolygons = rPolyPoly.Count();
 
     OStringBuffer aLine( 40 * nPolygons );
     m_aPages.back().appendPolyPolygon( rPolyPoly, aLine );
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( "B*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "S\n" );
     else
         aLine.append( "f*\n" );
@@ -7736,8 +7743,8 @@ void PDFWriterImpl::drawTransparent( const tools::PolyPolygon& rPolyPoly, sal_uI
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     if( m_bIsPDF_A1 || m_aContext.Version < PDFWriter::PDFVersion::PDF_1_4 )
@@ -7763,10 +7770,10 @@ void PDFWriterImpl::drawTransparent( const tools::PolyPolygon& rPolyPoly, sal_uI
     // create XObject's content stream
     OStringBuffer aContent( 256 );
     m_aPages.back().appendPolyPolygon( rPolyPoly, aContent );
-    if( m_aCurrentPDFState.m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aCurrentPDFState.m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aCurrentPDFState.m_aLineColor != COL_TRANSPARENT &&
+        m_aCurrentPDFState.m_aFillColor != COL_TRANSPARENT )
         aContent.append( " B*\n" );
-    else if( m_aCurrentPDFState.m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aCurrentPDFState.m_aLineColor != COL_TRANSPARENT )
         aContent.append( " S\n" );
     else
         aContent.append( " f*\n" );
@@ -7848,15 +7855,15 @@ void PDFWriterImpl::beginRedirect( SvStream* pStream, const tools::Rectangle& rT
                          rTargetRect );
         Point aDelta = m_aOutputStreams.front().m_aTargetRect.BottomLeft();
         long nPageHeight = pointToPixel(m_aPages[m_nCurrentPage].getHeight());
-        aDelta.Y() = -(nPageHeight - m_aOutputStreams.front().m_aTargetRect.Bottom());
+        aDelta.setY( -(nPageHeight - m_aOutputStreams.front().m_aTargetRect.Bottom()) );
         m_aMapMode.SetOrigin( m_aMapMode.GetOrigin() + aDelta );
     }
 
     // setup graphics state for independent object stream
 
     // force reemitting colors
-    m_aCurrentPDFState.m_aLineColor = Color( COL_TRANSPARENT );
-    m_aCurrentPDFState.m_aFillColor = Color( COL_TRANSPARENT );
+    m_aCurrentPDFState.m_aLineColor = COL_TRANSPARENT;
+    m_aCurrentPDFState.m_aFillColor = COL_TRANSPARENT;
 }
 
 SvStream* PDFWriterImpl::endRedirect()
@@ -7871,8 +7878,8 @@ SvStream* PDFWriterImpl::endRedirect()
 
     pop();
 
-    m_aCurrentPDFState.m_aLineColor = Color( COL_TRANSPARENT );
-    m_aCurrentPDFState.m_aFillColor = Color( COL_TRANSPARENT );
+    m_aCurrentPDFState.m_aLineColor = COL_TRANSPARENT;
+    m_aCurrentPDFState.m_aFillColor = COL_TRANSPARENT;
 
     // needed after pop() to set m_aCurrentPDFState
     updateGraphicsState(NOWRITE);
@@ -7934,17 +7941,17 @@ void PDFWriterImpl::drawRectangle( const tools::Rectangle& rRect )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     OStringBuffer aLine( 40 );
     m_aPages.back().appendRect( rRect, aLine );
 
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( " B*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( " S\n" );
     else
         aLine.append( " f*\n" );
@@ -7961,8 +7968,8 @@ void PDFWriterImpl::drawRectangle( const tools::Rectangle& rRect, sal_uInt32 nHo
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     if( nHorzRound > static_cast<sal_uInt32>(rRect.GetWidth())/2 )
@@ -8031,10 +8038,10 @@ void PDFWriterImpl::drawRectangle( const tools::Rectangle& rRect, sal_uInt32 nHo
     m_aPages.back().appendPoint( aPoints[1], aLine );
     aLine.append( " c " );
 
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( "b*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "s\n" );
     else
         aLine.append( "f*\n" );
@@ -8048,8 +8055,8 @@ void PDFWriterImpl::drawEllipse( const tools::Rectangle& rRect )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     Point aPoints[12];
@@ -8101,10 +8108,10 @@ void PDFWriterImpl::drawEllipse( const tools::Rectangle& rRect )
     m_aPages.back().appendPoint( aPoints[1], aLine );
     aLine.append( " c " );
 
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( "b*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "s\n" );
     else
         aLine.append( "f*\n" );
@@ -8137,8 +8144,8 @@ void PDFWriterImpl::drawArc( const tools::Rectangle& rRect, const Point& rStart,
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor == COL_TRANSPARENT )
         return;
 
     // calculate start and stop angles
@@ -8197,10 +8204,10 @@ void PDFWriterImpl::drawArc( const tools::Rectangle& rRect, const Point& rStart,
     }
     if( ! bWithChord && ! bWithPie )
         aLine.append( "S\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) &&
-        m_aGraphicsStack.front().m_aFillColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT &&
+        m_aGraphicsStack.front().m_aFillColor != COL_TRANSPARENT )
         aLine.append( "B*\n" );
-    else if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    else if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "S\n" );
     else
         aLine.append( "f*\n" );
@@ -8218,7 +8225,7 @@ void PDFWriterImpl::drawPolyLine( const tools::Polygon& rPoly )
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT )
         return;
 
     OStringBuffer aLine( 20 * nPoints );
@@ -8234,7 +8241,7 @@ void PDFWriterImpl::drawPolyLine( const tools::Polygon& rPoly, const LineInfo& r
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT )
         return;
 
     OStringBuffer aLine;
@@ -8331,7 +8338,7 @@ void PDFWriterImpl::drawPolyLine( const tools::Polygon& rPoly, const PDFWriter::
 
     updateGraphicsState();
 
-    if( m_aGraphicsStack.front().m_aLineColor == Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor == COL_TRANSPARENT )
         return;
 
     if( rInfo.m_fTransparency >= 1.0 )
@@ -8444,10 +8451,10 @@ void PDFWriterImpl::drawPolyLine( const tools::Polygon& rPoly, const PDFWriter::
         if( rInfo.m_fLineWidth > 0.0 )
         {
             sal_Int32 nLW = sal_Int32(rInfo.m_fLineWidth);
-            aBoundRect.Top()    -= nLW;
-            aBoundRect.Left()   -= nLW;
-            aBoundRect.Right()  += nLW;
-            aBoundRect.Bottom() += nLW;
+            aBoundRect.AdjustTop( -nLW );
+            aBoundRect.AdjustLeft( -nLW );
+            aBoundRect.AdjustRight(nLW );
+            aBoundRect.AdjustBottom(nLW );
         }
         endTransparencyGroup( aBoundRect, static_cast<sal_uInt16>(100.0*rInfo.m_fTransparency) );
     }
@@ -8457,9 +8464,9 @@ void PDFWriterImpl::drawPixel( const Point& rPoint, const Color& rColor )
 {
     MARK( "drawPixel" );
 
-    Color aColor = ( rColor == Color( COL_TRANSPARENT ) ? m_aGraphicsStack.front().m_aLineColor : rColor );
+    Color aColor = ( rColor == COL_TRANSPARENT ? m_aGraphicsStack.front().m_aLineColor : rColor );
 
-    if( aColor == Color( COL_TRANSPARENT ) )
+    if( aColor == COL_TRANSPARENT )
         return;
 
     // pixels are drawn in line color, so have to set
@@ -8770,8 +8777,8 @@ bool PDFWriterImpl::writeGradientFunction( GradientEmit const & rObject )
     // See: OutputDevice::ImplDrawLinearGradient for reference
     tools::Rectangle aRect;
     aRect.Left() = aRect.Top() = 0;
-    aRect.Right() = aSize.Width();
-    aRect.Bottom() = aSize.Height();
+    aRect.SetRight( aSize.Width() );
+    aRect.SetBottom( aSize.Height() );
 
     tools::Rectangle aBoundRect;
     Point     aCenter;
@@ -8785,10 +8792,10 @@ bool PDFWriterImpl::writeGradientFunction( GradientEmit const & rObject )
         fBorder /= 2.0;
     }
 
-    aBoundRect.Bottom() -= fBorder;
+    aBoundRect.AdjustBottom( -fBorder );
     if (!bLinear)
     {
-        aBoundRect.Top() += fBorder;
+        aBoundRect.AdjustTop(fBorder );
     }
 
     switch (rObject.m_aGradient.GetStyle())
@@ -9491,11 +9498,11 @@ bool PDFWriterImpl::writeBitmapObject( BitmapEmit& rObject, bool bMask )
             if( aBitmap.GetBitCount() == 1 )
             {
                 // #i47395# 1 bit bitmaps occasionally have an inverted grey palette
-                sal_uInt16 nBlackIndex = pAccess->GetBestPaletteIndex( BitmapColor( Color( COL_BLACK ) ) );
+                sal_uInt16 nBlackIndex = pAccess->GetBestPaletteIndex( BitmapColor( COL_BLACK ) );
                 assert( nBlackIndex == 0 || nBlackIndex == 1);
-                sal_uInt16 nWhiteIndex = pAccess->GetBestPaletteIndex( BitmapColor( Color( COL_WHITE ) ) );
-                if( pAccess->GetPalette()[nBlackIndex] == BitmapColor( Color( COL_BLACK ) ) &&
-                    pAccess->GetPalette()[nWhiteIndex] == BitmapColor( Color( COL_WHITE ) ) )
+                sal_uInt16 nWhiteIndex = pAccess->GetBestPaletteIndex( BitmapColor( COL_WHITE ) );
+                if( pAccess->GetPalette()[nBlackIndex] == BitmapColor( COL_BLACK ) &&
+                    pAccess->GetPalette()[nWhiteIndex] == BitmapColor( COL_WHITE ) )
                 {
                     // It is black and white
                     if( nBlackIndex == 1 )
@@ -9566,7 +9573,7 @@ bool PDFWriterImpl::writeBitmapObject( BitmapEmit& rObject, bool bMask )
         if( aBitmap.GetBitCount() == 1 )
         {
             aLine.append( "/ImageMask true\n" );
-            sal_Int32 nBlackIndex = pAccess->GetBestPaletteIndex( BitmapColor( Color( COL_BLACK ) ) );
+            sal_Int32 nBlackIndex = pAccess->GetBestPaletteIndex( BitmapColor( COL_BLACK ) );
             SAL_WARN_IF( nBlackIndex != 0 && nBlackIndex != 1, "vcl.pdfwriter", "wrong black index" );
             if( nBlackIndex )
                 aLine.append( "/Decode[ 1 0 ]\n" );
@@ -9592,7 +9599,7 @@ bool PDFWriterImpl::writeBitmapObject( BitmapEmit& rObject, bool bMask )
             aLine.append( nMaskObject );
             aLine.append( " 0 R\n" );
         }
-        else if( aTransparentColor != Color( COL_TRANSPARENT ) )
+        else if( aTransparentColor != COL_TRANSPARENT )
         {
             aLine.append( "/Mask[ " );
             if( bTrueColor )
@@ -9617,7 +9624,7 @@ bool PDFWriterImpl::writeBitmapObject( BitmapEmit& rObject, bool bMask )
             aLine.append( " ]\n" );
         }
     }
-    else if( m_bIsPDF_A1 && (bWriteMask || aTransparentColor != Color( COL_TRANSPARENT )) )
+    else if( m_bIsPDF_A1 && (bWriteMask || aTransparentColor != COL_TRANSPARENT) )
         m_aErrors.insert( PDFWriter::Warning_Transparency_Omitted_PDFA );
 
     aLine.append( ">>\n"
@@ -9813,7 +9820,7 @@ void PDFWriterImpl::drawBitmap( const Point& rDestPoint, const Size& rDestSize, 
     updateGraphicsState();
 
     aLine.append( "q " );
-    if( rFillColor != Color( COL_TRANSPARENT ) )
+    if( rFillColor != COL_TRANSPARENT )
     {
         appendNonStrokingColor( rFillColor, aLine );
         aLine.append( ' ' );
@@ -9896,7 +9903,7 @@ void PDFWriterImpl::drawBitmap( const Point& rDestPoint, const Size& rDestSize, 
         return;
 
     const BitmapEmit& rEmit = createBitmapEmit( BitmapEx( rBitmap ), rGraphic );
-    drawBitmap( rDestPoint, rDestSize, rEmit, Color( COL_TRANSPARENT ) );
+    drawBitmap( rDestPoint, rDestSize, rEmit, COL_TRANSPARENT );
 }
 
 void PDFWriterImpl::drawBitmap( const Point& rDestPoint, const Size& rDestSize, const BitmapEx& rBitmap )
@@ -9908,7 +9915,7 @@ void PDFWriterImpl::drawBitmap( const Point& rDestPoint, const Size& rDestSize, 
         return;
 
     const BitmapEmit& rEmit = createBitmapEmit( rBitmap, Graphic() );
-    drawBitmap( rDestPoint, rDestSize, rEmit, Color( COL_TRANSPARENT ) );
+    drawBitmap( rDestPoint, rDestSize, rEmit, COL_TRANSPARENT );
 }
 
 sal_Int32 PDFWriterImpl::createGradient( const Gradient& rGradient, const Size& rSize )
@@ -9920,8 +9927,8 @@ sal_Int32 PDFWriterImpl::createGradient( const Gradient& rGradient, const Size& 
     // check if we already have this gradient
     // rounding to point will generally lose some pixels
     // round up to point boundary
-    aPtSize.Width()++;
-    aPtSize.Height()++;
+    aPtSize.AdjustWidth( 1 );
+    aPtSize.AdjustHeight( 1 );
     std::list< GradientEmit >::const_iterator it = std::find_if(m_aGradients.begin(), m_aGradients.end(),
                                              [&](const GradientEmit& arg) { return ((rGradient == arg.m_aGradient) && (aPtSize == arg.m_aSize) ); });
 
@@ -9964,7 +9971,7 @@ void PDFWriterImpl::drawGradient( const tools::Rectangle& rRect, const Gradient&
     m_aPages.back().appendPoint( aTranslate, aLine );
     aLine.append( " cm " );
     // if a stroke is appended reset the clip region before stroke
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
         aLine.append( "q " );
     aLine.append( "0 0 " );
     m_aPages.back().appendMappedLength( static_cast<sal_Int32>(rRect.GetWidth()), aLine, false );
@@ -9975,7 +9982,7 @@ void PDFWriterImpl::drawGradient( const tools::Rectangle& rRect, const Gradient&
     aLine.append( "/P" );
     aLine.append( nGradient );
     aLine.append( " sh " );
-    if( m_aGraphicsStack.front().m_aLineColor != Color( COL_TRANSPARENT ) )
+    if( m_aGraphicsStack.front().m_aLineColor != COL_TRANSPARENT )
     {
         aLine.append( "Q 0 0 " );
         m_aPages.back().appendMappedLength( static_cast<sal_Int32>(rRect.GetWidth()), aLine, false );
@@ -10044,32 +10051,32 @@ void PDFWriterImpl::drawWallpaper( const tools::Rectangle& rRect, const Wallpape
                     case WallpaperStyle::TopLeft:
                         break;
                     case WallpaperStyle::Top:
-                        aBmpPos.X() += (aRect.GetWidth()-aBmpSize.Width())/2;
+                        aBmpPos.AdjustX((aRect.GetWidth()-aBmpSize.Width())/2 );
                         break;
                     case WallpaperStyle::Left:
-                        aBmpPos.Y() += (aRect.GetHeight()-aBmpSize.Height())/2;
+                        aBmpPos.AdjustY((aRect.GetHeight()-aBmpSize.Height())/2 );
                         break;
                     case WallpaperStyle::TopRight:
-                        aBmpPos.X() += aRect.GetWidth()-aBmpSize.Width();
+                        aBmpPos.AdjustX(aRect.GetWidth()-aBmpSize.Width() );
                         break;
                     case WallpaperStyle::Center:
-                        aBmpPos.X() += (aRect.GetWidth()-aBmpSize.Width())/2;
-                        aBmpPos.Y() += (aRect.GetHeight()-aBmpSize.Height())/2;
+                        aBmpPos.AdjustX((aRect.GetWidth()-aBmpSize.Width())/2 );
+                        aBmpPos.AdjustY((aRect.GetHeight()-aBmpSize.Height())/2 );
                         break;
                     case WallpaperStyle::Right:
-                        aBmpPos.X() += aRect.GetWidth()-aBmpSize.Width();
-                        aBmpPos.Y() += (aRect.GetHeight()-aBmpSize.Height())/2;
+                        aBmpPos.AdjustX(aRect.GetWidth()-aBmpSize.Width() );
+                        aBmpPos.AdjustY((aRect.GetHeight()-aBmpSize.Height())/2 );
                         break;
                     case WallpaperStyle::BottomLeft:
-                        aBmpPos.Y() += aRect.GetHeight()-aBmpSize.Height();
+                        aBmpPos.AdjustY(aRect.GetHeight()-aBmpSize.Height() );
                         break;
                     case WallpaperStyle::Bottom:
-                        aBmpPos.X() += (aRect.GetWidth()-aBmpSize.Width())/2;
-                        aBmpPos.Y() += aRect.GetHeight()-aBmpSize.Height();
+                        aBmpPos.AdjustX((aRect.GetWidth()-aBmpSize.Width())/2 );
+                        aBmpPos.AdjustY(aRect.GetHeight()-aBmpSize.Height() );
                         break;
                     case WallpaperStyle::BottomRight:
-                        aBmpPos.X() += aRect.GetWidth()-aBmpSize.Width();
-                        aBmpPos.Y() += aRect.GetHeight()-aBmpSize.Height();
+                        aBmpPos.AdjustX(aRect.GetWidth()-aBmpSize.Width() );
+                        aBmpPos.AdjustY(aRect.GetHeight()-aBmpSize.Height() );
                         break;
                     default: ;
                 }
@@ -10157,7 +10164,7 @@ void PDFWriterImpl::drawWallpaper( const tools::Rectangle& rRect, const Wallpape
     {
         Color aOldLineColor = m_aGraphicsStack.front().m_aLineColor;
         Color aOldFillColor = m_aGraphicsStack.front().m_aFillColor;
-        setLineColor( Color( COL_TRANSPARENT ) );
+        setLineColor( COL_TRANSPARENT );
         setFillColor( rWall.GetColor() );
         drawRectangle( rRect );
         setLineColor( aOldLineColor );
@@ -10248,7 +10255,7 @@ void PDFWriterImpl::updateGraphicsState(Mode const mode)
     {
         rNewState.m_nUpdateFlags &= ~GraphicsStateUpdateFlags::LineColor;
         if( m_aCurrentPDFState.m_aLineColor != rNewState.m_aLineColor &&
-            rNewState.m_aLineColor != Color( COL_TRANSPARENT ) )
+            rNewState.m_aLineColor != COL_TRANSPARENT )
         {
             appendStrokingColor( rNewState.m_aLineColor, aLine );
             aLine.append( "\n" );
@@ -10259,7 +10266,7 @@ void PDFWriterImpl::updateGraphicsState(Mode const mode)
     {
         rNewState.m_nUpdateFlags &= ~GraphicsStateUpdateFlags::FillColor;
         if( m_aCurrentPDFState.m_aFillColor != rNewState.m_aFillColor &&
-            rNewState.m_aFillColor != Color( COL_TRANSPARENT ) )
+            rNewState.m_aFillColor != COL_TRANSPARENT )
         {
             appendNonStrokingColor( rNewState.m_aFillColor, aLine );
             aLine.append( "\n" );
@@ -10288,7 +10295,7 @@ void PDFWriterImpl::updateGraphicsState(Mode const mode)
 void PDFWriterImpl::setFont( const vcl::Font& rFont )
 {
     Color aColor = rFont.GetColor();
-    if( aColor == Color( COL_TRANSPARENT ) )
+    if( aColor == COL_TRANSPARENT )
         aColor = m_aGraphicsStack.front().m_aFont.GetColor();
     m_aGraphicsStack.front().m_aFont = rFont;
     m_aGraphicsStack.front().m_aFont.SetColor( aColor );
@@ -10389,7 +10396,7 @@ void PDFWriterImpl::intersectClipRegion( const tools::Rectangle& rRect )
     intersectClipRegion( aRect );
 }
 
-bool PDFWriterImpl::intersectClipRegion( const basegfx::B2DPolyPolygon& rRegion )
+void PDFWriterImpl::intersectClipRegion( const basegfx::B2DPolyPolygon& rRegion )
 {
     basegfx::B2DPolyPolygon aRegion( getReferenceDevice()->LogicToPixel( rRegion, m_aGraphicsStack.front().m_aMapMode ) );
     aRegion = getReferenceDevice()->PixelToLogic( aRegion, m_aMapMode );
@@ -10405,7 +10412,6 @@ bool PDFWriterImpl::intersectClipRegion( const basegfx::B2DPolyPolygon& rRegion 
         m_aGraphicsStack.front().m_aClipRegion = aRegion;
         m_aGraphicsStack.front().m_bClipRegion = true;
     }
-    return true;
 }
 
 void PDFWriterImpl::createNote( const tools::Rectangle& rRect, const PDFNote& rNote, sal_Int32 nPageNr )

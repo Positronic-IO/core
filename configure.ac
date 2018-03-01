@@ -168,7 +168,7 @@ if test "$enable_release_build" = "" -o "$enable_release_build" = "no"; then
 fi
 AC_MSG_RESULT([$PRODUCTNAME])
 AC_SUBST(PRODUCTNAME)
-PRODUCTNAME_WITHOUT_SPACES=${PRODUCTNAME// /}
+PRODUCTNAME_WITHOUT_SPACES=$(printf %s "$PRODUCTNAME" | sed 's/ //g')
 AC_SUBST(PRODUCTNAME_WITHOUT_SPACES)
 
 dnl ===================================================================
@@ -593,7 +593,9 @@ linux-gnu*|k*bsd*-gnu*)
     build_gstreamer_1_0=yes
     build_gstreamer_0_10=yes
     test_kde4=yes
+    test_kde5=yes
     test_qt5=yes
+    test_gtk3_kde5=yes
     if test "$enable_fuzzers" != yes; then
         test_freetype=yes
         test_fontconfig=yes
@@ -688,7 +690,9 @@ freebsd*)
     build_gstreamer_1_0=yes
     build_gstreamer_0_10=yes
     test_kde4=yes
+    test_kde5=yes
     test_qt5=yes
+    test_gtk3_kde5=yes
     test_freetype=yes
     AC_MSG_CHECKING([the FreeBSD operating system release])
     if test -n "$with_os_version"; then
@@ -717,7 +721,9 @@ freebsd*)
     build_gstreamer_1_0=yes
     build_gstreamer_0_10=yes
     test_kde4=yes
+    test_kde5=yes
     test_qt5=yes
+    test_gtk3_kde5=yes
     test_freetype=yes
     PTHREAD_LIBS="-pthread -lpthread"
     _os=NetBSD
@@ -743,7 +749,9 @@ dragonfly*)
     build_gstreamer_1_0=yes
     build_gstreamer_0_10=yes
     test_kde4=yes
+    test_kde5=yes
     test_qt5=yes
+    test_gtk3_kde5=yes
     test_freetype=yes
     PTHREAD_LIBS="-pthread"
     _os=DragonFly
@@ -767,13 +775,38 @@ linux-android*)
     test_freetype=no
     test_gtk=no
     test_kde4=no
+    test_kde5=no
     test_qt5=no
+    test_gtk3_kde5=no
     test_randr=no
     test_xrender=no
     _os=Android
 
     AC_DEFINE(HAVE_FT_FACE_GETCHARVARIANTINDEX)
     BUILD_TYPE="$BUILD_TYPE CAIRO FONTCONFIG FREETYPE"
+    ;;
+
+haiku*)
+    test_cups=no
+    test_dbus=no
+    test_randr=no
+    test_xrender=no
+    test_freetype=yes
+    test_cairo=yes
+    enable_java=no
+    enable_opengl=no
+    enable_odk=no
+    enable_gconf=no
+    enable_gnome_vfs=no
+    enable_gstreamer=no
+    enable_vlc=no
+    enable_gltf=no
+    enable_collada=no
+    enable_coinmp=no
+    enable_pdfimport=no
+    enable_postgresql_sdbc=no
+    enable_firebird_sdbc=no
+    _os=Haiku
     ;;
 
 *)
@@ -1146,7 +1179,7 @@ AC_ARG_ENABLE(lto,
 
 AC_ARG_ENABLE(python,
     AS_HELP_STRING([--enable-python=<no/auto/system/internal/fully-internal>],
-        [Enables or disables Python support at run-time and build-time.
+        [Enables or disables Python support at run-time.
          Also specifies what Python to use. 'auto' is the default.
          'fully-internal' even forces the internal version for uses of Python
          during the build.]))
@@ -1214,6 +1247,18 @@ AC_ARG_ENABLE(qt5,
     AS_HELP_STRING([--enable-qt5],
         [Determines whether to use Qt5 vclplug on platforms where Qt5 is
          available.]),
+,)
+
+AC_ARG_ENABLE(kde5,
+    AS_HELP_STRING([--enable-kde5],
+        [Determines whether to use Qt5/KF5 vclplug on platforms where Qt5 and
+         KF5 are available.]),
+,)
+
+AC_ARG_ENABLE(gtk3_kde5,
+    AS_HELP_STRING([--enable-gtk3-kde5],
+        [Determines whether to use Gtk3 vclplug with KDE file dialogs on
+         platforms where Gtk3, Qt5 and Plasma is available.]),
 ,)
 
 libo_FUZZ_ARG_ENABLE(gui,
@@ -3998,6 +4043,31 @@ freebsd*)
     esac
     ;;
 
+haiku*)
+    COM=GCC
+    USING_X11=
+    GUIBASE=haiku
+    RTL_OS=Haiku
+    OS=HAIKU
+    P_SEP=:
+
+    case "$host_cpu" in
+    i*86)
+        CPUNAME=INTEL
+        RTL_ARCH=x86
+        PLATFORMID=haiku_x86
+        ;;
+    x86_64|amd64)
+        CPUNAME=X86_64
+        RTL_ARCH=X86_64
+        PLATFORMID=haiku_x86_64
+        ;;
+    *)
+        AC_MSG_ERROR([Unsupported host_cpu $host_cpu for host_os $host_os])
+        ;;
+    esac
+    ;;
+
 kfreebsd*)
     COM=GCC
     USING_X11=TRUE
@@ -4337,6 +4407,15 @@ msi - Windows .msi
             ;;
         esac
     done
+    # fakeroot is needed to ensure correct file ownerships/permissions
+    # inside deb packages and tar archives created on Linux and Solaris.
+    if test "$OS" = "LINUX" || test "$OS" = "SOLARIS"; then
+        AC_PATH_PROG(FAKEROOT, fakeroot, no)
+        if test "$FAKEROOT" = "no"; then
+            AC_MSG_ERROR(
+                [--with-package-format='$with_package_format' requires fakeroot. Install fakeroot.])
+        fi
+    fi
     PKGFORMAT="$with_package_format"
     AC_MSG_RESULT([$PKGFORMAT])
 else
@@ -4529,7 +4608,9 @@ if test "$USING_X11" != TRUE; then
     build_gstreamer_1_0=no
     build_gstreamer_0_10=no
     test_kde4=no
+    test_kde5=no
     test_qt5=no
+    test_gtk3_kde5=no
     enable_cairo_canvas=no
 fi
 
@@ -5308,14 +5389,24 @@ the  Windows SDK are installed.])
     if test -z "$WINDOWS_SDK_WILANGID" -a -n "$WINDOWS_SDK_HOME"; then
         WINDOWS_SDK_WILANGID=$WINDOWS_SDK_HOME/Samples/sysmgmt/msi/scripts/WiLangId.vbs
         if ! test -e "$WINDOWS_SDK_WILANGID" ; then
+            WINDOWS_SDK_WILANGID="${WINDOWS_SDK_HOME}/bin/${WINDOWS_SDK_LIB_SUBDIR}/${WINDOWS_SDK_ARCH}/WiLangId.vbs"
+        fi
+        if ! test -e "$WINDOWS_SDK_WILANGID" ; then
             WINDOWS_SDK_WILANGID=$WINDOWS_SDK_HOME/bin/$WINDOWS_SDK_ARCH/WiLangId.vbs
         fi
         if ! test -e "$WINDOWS_SDK_WILANGID" ; then
             WINDOWS_SDK_WILANGID=$(cygpath -sm "C:/Program Files (x86)/Windows Kits/8.1/bin/$WINDOWS_SDK_ARCH/WiLangId.vbs")
         fi
-        if ! test -e "$WINDOWS_SDK_WILANGID" ; then
-            AC_MSG_WARN([WiLangId.vbs not found - building translated packages will fail])
-            add_warning "WiLangId.vbs not found - building translated packages will fail"
+    fi
+    if test -n "$with_lang" -a "$with_lang" != "en-US"; then
+        if test -n "$with_package_format" -a "$with_package_format" != no; then
+            for i in "$with_package_format"; do
+                if test "$i" = "msi"; then
+                    if ! test -e "$WINDOWS_SDK_WILANGID" ; then
+                        AC_MSG_ERROR([WiLangId.vbs not found - building translated packages will fail])
+                    fi
+                fi
+            done
         fi
     fi
 fi
@@ -6535,7 +6626,12 @@ if test $_os = "WINNT"; then
     MSVC_DLL_PATH="$msvcdllpath"
     MSVC_DLLS="$msvcdlls"
     MSM_PATH="$msmdir"
-    SCPDEFS="$SCPDEFS -DWITH_VC${VCVER}_REDIST"
+    # MSVC 15.3 changed it to VC141
+    if echo "$MSVC_DLL_PATH" | grep -q "VC141.CRT$"; then
+        SCPDEFS="$SCPDEFS -DWITH_VC141_REDIST"
+    else
+        SCPDEFS="$SCPDEFS -DWITH_VC${VCVER}_REDIST"
+    fi
     if test "$VCREDIST_DIR" = "no"; then
         dnl explicitly disabled
         VCREDIST_DIR=""
@@ -8051,6 +8147,32 @@ if test $enable_python = system; then
     PYTHON_FOR_BUILD=$PYTHON
 fi
 
+if -z "$PYTHON_FOR_BUILD"; then
+    case $build_os in
+        cygwin)
+            AC_MSG_WARN([No system-provided python lxml, gla11y will only report widget classes and ids])
+            ;;
+        *)
+            BUILD_TYPE="$BUILD_TYPE LXML"
+            ;;
+    esac
+else
+    AC_MSG_CHECKING([for python lxml])
+    if $PYTHON_FOR_BUILD -c "import lxml.etree as ET" 2> /dev/null ; then
+        AC_MSG_RESULT([yes])
+    else
+        case $build_os in
+            cygwin)
+                AC_MSG_RESULT([no, gla11y will only report widget classes and ids])
+                ;;
+            *)
+                BUILD_TYPE="$BUILD_TYPE LXML"
+                AC_MSG_RESULT([no, using internal lxml])
+                ;;
+        esac
+    fi
+fi
+
 dnl By now enable_python should be "system", "internal" or "no"
 case $enable_python in
 system)
@@ -8987,7 +9109,7 @@ AC_SUBST(ENABLE_FUZZERS)
 dnl ===================================================================
 dnl Orcus
 dnl ===================================================================
-libo_CHECK_SYSTEM_MODULE([orcus],[ORCUS],[liborcus-0.13 >= 0.13.0])
+libo_CHECK_SYSTEM_MODULE([orcus],[ORCUS],[liborcus-0.13 >= 0.13.3])
 if test "$with_system_orcus" != "yes"; then
     if test "$SYSTEM_BOOST" = "TRUE"; then
         # ===========================================================
@@ -9772,6 +9894,22 @@ if test "x$enable_qt5" = "xyes"; then
 fi
 AC_SUBST(ENABLE_QT5)
 
+ENABLE_KDE5=""
+if test "x$enable_kde5" = "xyes"; then
+    ENABLE_KDE5="TRUE"
+    AC_DEFINE(ENABLE_KDE5)
+    R="$R kde5"
+fi
+AC_SUBST(ENABLE_KDE5)
+
+ENABLE_GTK3_KDE5=""
+if test "x$enable_gtk3_kde5" = "xyes"; then
+    ENABLE_GTK3_KDE5="TRUE"
+    AC_DEFINE(ENABLE_GTK3_KDE5)
+    R="$R gtk3_kde5"
+fi
+AC_SUBST(ENABLE_GTK3_KDE5)
+
 build_vcl_plugins="$R"
 if test -z "$build_vcl_plugins"; then
     build_vcl_plugins="none"
@@ -10149,7 +10287,11 @@ AC_SUBST(ENABLE_PDFIUM)
 SYSTEM_GPGMEPP=
 
 if test "$build_for_ios" = "YES"; then
-    AC_MSG_CHECKING([gpgmepp disabled due to iOS])
+    AC_MSG_CHECKING([whether gpgmepp should be disabled due to iOS])
+    AC_MSG_RESULT([yes])
+elif test "$enable_mpl_subset" = "yes"; then
+    AC_MSG_CHECKING([whether gpgmepp should be disabled due to building just MPL])
+    AC_MSG_RESULT([yes])
 elif test "$_os" = "Linux" -o "$_os" = "Darwin" -o "$_os" = "WINNT" ; then
     dnl ===================================================================
     dnl Check for system gpgme
@@ -10779,7 +10921,8 @@ QT5_GLIB_CFLAGS=""
 QT5_GLIB_LIBS=""
 QT5_HAVE_GLIB=""
 if test \( "$test_kde5" = "yes" -a "$ENABLE_KDE5" = "TRUE" \) -o \
-        \( "$test_qt5" = "yes" -a "$ENABLE_QT5" = "TRUE" \)
+        \( "$test_qt5" = "yes" -a "$ENABLE_QT5" = "TRUE" \) -o \
+        \( "$test_gtk3_kde5" = "yes" -a "$ENABLE_GTK3_KDE5" = "TRUE" \)
 then
     qt5_incdirs="$QT5INC /usr/include/qt5 /usr/include $x_includes"
     qt5_libdirs="$QT5LIB /usr/lib/qt5 /usr/lib $x_libraries"
@@ -10867,15 +11010,16 @@ KF5_CFLAGS=""
 KF5_LIBS=""
 KF5_CONFIG="kf5-config"
 if test \( "$test_kde5" = "yes" -a "$ENABLE_KDE5" = "TRUE" \) -o \
-        \( "$test_kf5" = "yes" -a "$ENABLE_KF5" = "TRUE" \)
+        \( "$test_kf5" = "yes" -a "$ENABLE_KF5" = "TRUE" \) -o \
+        \( "$test_gtk3_kde5" = "yes" -a "$ENABLE_GTK3_KDE5" = "TRUE" \)
 then
-    kf5_incdirs="$KF5INC /usr/include /usr/include/KF5 $x_includes"
+    kf5_incdirs="$KF5INC /usr/include/ $x_includes"
     kf5_libdirs="$KF5LIB /usr/lib /usr/lib/kf5 /usr/lib/kf5/devel $x_libraries"
     if test -n "$supports_multilib"; then
         kf5_libdirs="$kf5_libdirs /usr/lib64 /usr/lib64/kf5 /usr/lib64/kf5/devel"
     fi
 
-    kf5_test_include="kcoreaddons_version.h"
+    kf5_test_include="KF5/kcoreaddons_version.h"
     kf5_test_library="libKF5CoreAddons.so"
     kf5_libdirs="$qt5_libdir $kf5_libdirs"
 
@@ -10891,7 +11035,7 @@ then
     kf5_incdir="no"
     for kf5_check in $kf5_incdirs; do
         if test -r "$kf5_check/$kf5_test_include"; then
-            kf5_incdir="$kf5_check"
+            kf5_incdir="$kf5_check/KF5"
             break
         fi
     done
@@ -10917,8 +11061,8 @@ then
 
     PKG_CHECK_MODULES(KF5_XCB,[xcb],,[AC_MSG_ERROR([XCB not installed])])
 
-    KF5_CFLAGS="-I$kf5_incdir -I$kf5_incdir/KCoreAddons -I$kf5_incdir/KI18n -I$kf5_incdir/KConfigCore -I$kf5_incdir/KWindowSystem -I$kf5_incdir/KIOCore -I$qt5_incdir -I$qt5_incdir/QtCore -I$qt5_incdir/QtGui -I$qt5_incdir/QtWidgets -I$qt5_incdir/QtNetwork -DQT_CLEAN_NAMESPACE -DQT_THREAD_SUPPORT $KF5_XCB_CFLAGS"
-    KF5_LIBS="-L$kf5_libdir -lKF5CoreAddons -lKF5I18n -lKF5ConfigCore -lKF5WindowSystem -lKF5KIOCore -L$qt5_libdir -lQt5Core -lQt5Gui -lQt5Widgets -lQt5Network -lQt5X11Extras $KF5_XCB_LIBS"
+    KF5_CFLAGS="-I$kf5_incdir -I$kf5_incdir/KCoreAddons -I$kf5_incdir/KI18n -I$kf5_incdir/KConfigCore -I$kf5_incdir/KWindowSystem -I$kf5_incdir/KIOCore -I$kf5_incdir/KIOWidgets -I$kf5_incdir/KIOFileWidgets -I$qt5_incdir -I$qt5_incdir/QtCore -I$qt5_incdir/QtGui -I$qt5_incdir/QtWidgets -I$qt5_incdir/QtNetwork -DQT_CLEAN_NAMESPACE -DQT_THREAD_SUPPORT $KF5_XCB_CFLAGS"
+    KF5_LIBS="-L$kf5_libdir -lKF5CoreAddons -lKF5I18n -lKF5ConfigCore -lKF5WindowSystem -lKF5KIOCore -lKF5KIOWidgets -lKF5KIOFileWidgets -L$qt5_libdir -lQt5Core -lQt5Gui -lQt5Widgets -lQt5Network -lQt5X11Extras $KF5_XCB_LIBS"
     KF5_CFLAGS=$(printf '%s' "$KF5_CFLAGS" | sed -e "s/-I/${ISYSTEM?}/g")
 
     AC_LANG_PUSH([C++])
@@ -12487,6 +12631,8 @@ AC_CONFIG_HEADERS([config_host/config_locales.h])
 AC_CONFIG_HEADERS([config_host/config_mpl.h])
 AC_CONFIG_HEADERS([config_host/config_kde4.h])
 AC_CONFIG_HEADERS([config_host/config_qt5.h])
+AC_CONFIG_HEADERS([config_host/config_kde5.h])
+AC_CONFIG_HEADERS([config_host/config_gtk3_kde5.h])
 AC_CONFIG_HEADERS([config_host/config_oox.h])
 AC_CONFIG_HEADERS([config_host/config_options.h])
 AC_CONFIG_HEADERS([config_host/config_options_calc.h])

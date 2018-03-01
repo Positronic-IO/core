@@ -179,8 +179,8 @@ static AquaSalFrame* getMouseContainerFrame()
     for(NSUInteger i = 0; i < [aWindows count] && ! pDispatchFrame; i++ )
     {
         NSWindow* pWin = [NSApp windowWithWindowNumber:[[aWindows objectAtIndex:i] integerValue]];
-        if( pWin && [pWin isMemberOfClass: [SalFrameWindow class]] && [(SalFrameWindow*)pWin containsMouse] )
-            pDispatchFrame = [(SalFrameWindow*)pWin getSalFrame];
+        if( pWin && [pWin isMemberOfClass: [SalFrameWindow class]] && [static_cast<SalFrameWindow*>(pWin) containsMouse] )
+            pDispatchFrame = [static_cast<SalFrameWindow*>(pWin) getSalFrame];
     }
     return pDispatchFrame;
 }
@@ -215,7 +215,7 @@ static AquaSalFrame* getMouseContainerFrame()
         [pNSWindow performSelector:setRestorable withObject:reinterpret_cast<id>(NO)];
     }
 
-    return (SalFrameWindow *)pNSWindow;
+    return static_cast<SalFrameWindow *>(pNSWindow);
 }
 
 -(AquaSalFrame*)getSalFrame
@@ -820,9 +820,10 @@ private:
         if( aEvent.mnDelta == 0 )
             aEvent.mnDelta = aEvent.mnNotchDelta;
         aEvent.mbHorz = FALSE;
-        aEvent.mnScrollLines = nDeltaZ;
-        if( aEvent.mnScrollLines == 0 )
-            aEvent.mnScrollLines = 1;
+        sal_uInt32 nScrollLines = nDeltaZ;
+        if (nScrollLines == 0)
+            nScrollLines = 1;
+        aEvent.mnScrollLines = nScrollLines;
         mpFrame->CallCallback( SalEvent::WheelMouse, &aEvent );
     }
 }
@@ -942,9 +943,10 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
             aEvent.mbHorz = TRUE;
-            aEvent.mnScrollLines = fabs(dX) / WHEEL_EVENT_FACTOR;
-            if( aEvent.mnScrollLines == 0 )
-                aEvent.mnScrollLines = 1;
+            sal_uInt32 nScrollLines = fabs(dX) / WHEEL_EVENT_FACTOR;
+            if (nScrollLines == 0)
+                nScrollLines = 1;
+            aEvent.mnScrollLines = nScrollLines;
 
             mpFrame->CallCallback( SalEvent::WheelMouse, &aEvent );
         }
@@ -955,9 +957,10 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
             aEvent.mbHorz = FALSE;
-            aEvent.mnScrollLines = fabs(dY) / WHEEL_EVENT_FACTOR;
-            if( aEvent.mnScrollLines == 0 )
-                aEvent.mnScrollLines = 1;
+            sal_uInt32 nScrollLines = fabs(dY) / WHEEL_EVENT_FACTOR;
+            if (nScrollLines == 0)
+                nScrollLines = 1;
+            aEvent.mnScrollLines = nScrollLines;
 
             mpFrame->CallCallback( SalEvent::WheelMouse, &aEvent );
         }

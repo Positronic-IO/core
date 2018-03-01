@@ -291,7 +291,7 @@ Public Sub Main()
         retULong = outULong
         objOleTest.testinout_methodULong(retLong)
         objOleTest.testinout_methodULong(retLong)
-        outHyper = CDec("9223372036854775807") 'highest positiv value of int64
+        outHyper = CDec("9223372036854775807") 'highest positive value of int64
         retHyper = outHyper
         objOleTest.testinout_methodHyper(retHyper)
         objOleTest.testinout_methodHyper(retHyper)
@@ -370,19 +370,19 @@ Public Sub Main()
 		Dim retAny As Object
 
 		retAny = emptyVar
-		inHyper = CDec("9223372036854775807") 'highest positiv value of int64
+		inHyper = CDec("9223372036854775807") 'highest positive value of int64
 		retAny = objOleTest.in_methodAny(inHyper)
 		sError = "hyper test failed"
 		If inHyper <> retAny Then
 			MsgBox(sError)
 		End If
-		inHyper = CDec("-9223372036854775808") 'lowest negativ value of int64
+		inHyper = CDec("-9223372036854775808") 'lowest negative value of int64
 		retAny = objOleTest.in_methodAny(inHyper)
 
 		If inHyper <> retAny Then
 			MsgBox(sError)
 		End If
-		inHyper = CDec("18446744073709551615") 'highest positiv value of unsigne int64
+		inHyper = CDec("18446744073709551615") 'highest positive value of unsigned int64
 		retAny = objOleTest.in_methodAny(inHyper)
 
 		If inHyper <> retAny Then

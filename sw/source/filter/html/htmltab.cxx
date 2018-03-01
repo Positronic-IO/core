@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <hintids.hxx>
+#include <comphelper/flagguard.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <editeng/boxitem.hxx>
@@ -29,6 +30,7 @@
 #include <editeng/lrspitem.hxx>
 #include <editeng/formatbreakitem.hxx>
 #include <editeng/spltitem.hxx>
+#include <unotools/configmgr.hxx>
 #include <svtools/htmltokn.h>
 #include <svtools/htmlkywd.hxx>
 #include <svl/urihelper.hxx>
@@ -59,6 +61,7 @@
 #include "swcss1.hxx"
 #include <numrule.hxx>
 #include <txtftn.hxx>
+#include <itabenum.hxx>
 
 #define NETSCAPE_DFLT_BORDER 1
 #define NETSCAPE_DFLT_CELLSPACING 2
@@ -398,7 +401,9 @@ class HTMLTable
 
     const SwStartNode *m_pPrevStartNode;   // the Table-Node or the Start-Node of the section before
     const SwTable *m_pSwTable;        // SW-Table (only on Top-Level)
+public:
     std::unique_ptr<SwTableBox> m_xBox1;    // TableBox, generated when the Top-Level-Table was build
+private:
     SwTableBoxFormat *m_pBoxFormat;         // frame::Frame-Format from SwTableBox
     SwTableLineFormat *m_pLineFormat;       // frame::Frame-Format from SwTableLine
     SwTableLineFormat *m_pLineFrameFormatNoHeight;
@@ -906,7 +911,6 @@ void HTMLTable::InitCtor(const HTMLTableOptions& rOptions)
     m_nRows = 0;
     m_nCurrentRow = 0; m_nCurrentColumn = 0;
 
-    m_xBox1.reset();
     m_pBoxFormat = nullptr; m_pLineFormat = nullptr;
     m_pLineFrameFormatNoHeight = nullptr;
     m_xInheritedBackgroundBrush.reset();
@@ -1042,6 +1046,13 @@ HTMLTable::HTMLTable(SwHTMLParser* pPars,
 {
     InitCtor(rOptions);
     m_pParser->RegisterHTMLTable(this);
+}
+
+void SwHTMLParser::DeregisterHTMLTable(HTMLTable* pOld)
+{
+    if (pOld->m_xBox1)
+        m_aOrphanedTableBoxes.emplace_back(std::move(pOld->m_xBox1));
+    m_aTables.erase(std::remove(m_aTables.begin(), m_aTables.end(), pOld));
 }
 
 HTMLTable::~HTMLTable()
@@ -1591,7 +1602,7 @@ SwTableLine *HTMLTable::MakeTableLine( SwTableBox *pUpper,
                                         nTopRow, nStartCol,
                                         nBottomRow, nSplitCol);
 
-                    if ( 1 != nBoxRowSpan )
+                    if (1 != nBoxRowSpan && pBox)
                         pBox->setRowSpan( nBoxRowSpan );
 
                     bSplitted = true;
@@ -2285,6 +2296,12 @@ void HTMLTable::MakeTable( SwTableBox *pBox, sal_uInt16 nAbsAvail,
         break;
     }
 
+    if (!m_pSwTable)
+    {
+        SAL_WARN("sw.html", "no table");
+        return;
+    }
+
     // get the table format and adapt it
     SwFrameFormat *pFrameFormat = m_pSwTable->GetFrameFormat();
     pFrameFormat->SetFormatAttr( SwFormatHoriOrient(0, eHoriOri) );
@@ -2855,9 +2872,19 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
                 break;
             case HtmlOptionId::COLSPAN:
                 m_nColSpan = static_cast<sal_uInt16>(rOption.GetNumber());
+                if (m_nColSpan > 256)
+                {
+                    SAL_INFO("sw.html", "ignoring huge COLSPAN " << m_nColSpan);
+                    m_nColSpan = 1;
+                }
                 break;
             case HtmlOptionId::ROWSPAN:
                 m_nRowSpan = static_cast<sal_uInt16>(rOption.GetNumber());
+                if (m_nRowSpan > 8192 || (m_nRowSpan > 256 && utl::ConfigManager::IsFuzzing()))
+                {
+                    SAL_INFO("sw.html", "ignoring huge ROWSPAN " << m_nRowSpan);
+                    m_nRowSpan = 1;
+                }
                 break;
             case HtmlOptionId::ALIGN:
                 m_eAdjust = rOption.GetEnum( aHTMLPAlignTable, m_eAdjust );
@@ -3133,6 +3160,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
     if( !IsParserWorking() && !m_pPendStack )
         return;
 
+    ::comphelper::FlagRestorationGuard g(m_isInTableStructure, false);
     std::unique_ptr<CellSaveStruct> xSaveStruct;
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
@@ -4262,6 +4290,11 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
                     break;
                 case HtmlOptionId::SPAN:
                     pSaveStruct->nColGrpSpan = static_cast<sal_uInt16>(rOption.GetNumber());
+                    if (pSaveStruct->nColGrpSpan > 256)
+                    {
+                        SAL_INFO("sw.html", "ignoring huge SPAN " << pSaveStruct->nColGrpSpan);
+                        pSaveStruct->nColGrpSpan = 1;
+                    }
                     break;
                 case HtmlOptionId::WIDTH:
                     pSaveStruct->nColGrpWidth = static_cast<sal_uInt16>(rOption.GetNumber());
@@ -4344,6 +4377,11 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
                         break;
                     case HtmlOptionId::SPAN:
                         nColSpan = static_cast<sal_uInt16>(rOption.GetNumber());
+                        if (nColSpan > 256)
+                        {
+                            SAL_INFO("sw.html", "ignoring huge SPAN " << nColSpan);
+                            nColSpan = 1;
+                        }
                         break;
                     case HtmlOptionId::WIDTH:
                         nColWidth = static_cast<sal_uInt16>(rOption.GetNumber());
@@ -4811,11 +4849,9 @@ namespace
     class FrameDeleteWatch : public SwClient
     {
         SwFrameFormat* m_pObjectFormat;
-        bool m_bDeleted;
     public:
         FrameDeleteWatch(SwFrameFormat* pObjectFormat)
             : m_pObjectFormat(pObjectFormat)
-            , m_bDeleted(false)
         {
             if (m_pObjectFormat)
                 m_pObjectFormat->Add(this);
@@ -4829,21 +4865,19 @@ namespace
             {
                 if (pDrawFrameFormatHint->m_eId == sw::DrawFrameFormatHintId::DYING)
                 {
-                    m_pObjectFormat->Remove(this);
-                    m_bDeleted = true;
+                    EndListeningAll();
                 }
             }
         }
 
         bool WasDeleted() const
         {
-            return m_bDeleted;
+            return !GetRegisteredIn();
         }
 
         virtual ~FrameDeleteWatch() override
         {
-            if (!m_bDeleted && m_pObjectFormat)
-                m_pObjectFormat->Remove(this);
+            EndListeningAll();
         }
     };
 
@@ -4946,6 +4980,7 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
     if (!IsParserWorking() && !m_pPendStack)
         return std::shared_ptr<HTMLTable>();
 
+    ::comphelper::FlagRestorationGuard g(m_isInTableStructure, true);
     HtmlTokenId nToken = HtmlTokenId::NONE;
     bool bPending = false;
     std::unique_ptr<TableSaveStruct> xSaveStruct;
@@ -5102,7 +5137,7 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
         m_nContextStMin = pTCntxt->GetContextStMin();
         m_nContextStAttrMin = pTCntxt->GetContextStAttrMin();
 
-        if (m_xTable == xCurTable && eState != SvParserState::Error)
+        if (m_xTable == xCurTable)
         {
             // Set table caption
             const SwStartNode *pCapStNd = m_xTable->GetCaptionStartNode();
@@ -5161,14 +5196,15 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
         pTCntxt->RestorePREListingXMP( *this );
         RestoreAttrTab(pTCntxt->xAttrTab);
 
-        if (m_xTable == xCurTable && eState != SvParserState::Error)
+        if (m_xTable == xCurTable)
         {
             // Set upper paragraph spacing
             m_bUpperSpace = true;
             SetTextCollAttrs();
 
-            m_nParaCnt = m_nParaCnt - std::min(m_nParaCnt,
-                pTCntxt->GetTableNode()->GetTable().GetTabSortBoxes().size());
+            SwTableNode* pTableNode = pTCntxt->GetTableNode();
+            size_t nTableBoxSize = pTableNode ? pTableNode->GetTable().GetTabSortBoxes().size() : 0;
+            m_nParaCnt = m_nParaCnt - std::min(m_nParaCnt, nTableBoxSize);
 
             // Jump to a table if needed
             if( JUMPTO_TABLE == m_eJumpTo && m_xTable->GetSwTable() &&

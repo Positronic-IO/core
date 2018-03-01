@@ -1211,29 +1211,29 @@ void SAL_CALL ScDataBarFormatObj::setPropertyValue(
         break;
         case DataBar_Color:
         {
-            sal_Int32 nColor = COL_AUTO;
+            Color nColor = COL_AUTO;
             if (aValue >>= nColor)
             {
-                getCoreObject()->GetDataBarData()->maPositiveColor.SetColor(nColor);
+                getCoreObject()->GetDataBarData()->maPositiveColor = nColor;
             }
         }
         break;
         case AxisColor:
         {
-            sal_Int32 nAxisColor = COL_AUTO;
+            Color nAxisColor = COL_AUTO;
             if (aValue >>= nAxisColor)
             {
-                getCoreObject()->GetDataBarData()->maAxisColor.SetColor(nAxisColor);
+                getCoreObject()->GetDataBarData()->maAxisColor = nAxisColor;
             }
         }
         break;
         case NegativeColor:
         {
-            sal_Int32 nNegativeColor = COL_AUTO;
+            Color nNegativeColor = COL_AUTO;
             if (!(aValue >>= nNegativeColor) || !getCoreObject()->GetDataBarData()->mbNeg)
                 throw lang::IllegalArgumentException();
 
-            getCoreObject()->GetDataBarData()->mpNegativeColor->SetColor(nNegativeColor);
+            (*getCoreObject()->GetDataBarData()->mpNegativeColor) = nNegativeColor;
 
         }
         break;

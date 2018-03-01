@@ -157,8 +157,8 @@ bool DXF2GDIMetaFile::SetLineAttribute(const DXFBasicEntity & rE)
         pVirDev->SetLineColor( aActLineColor = aColor );
     }
 
-    if (aActFillColor!=Color( COL_TRANSPARENT )) {
-        pVirDev->SetFillColor(aActFillColor = Color( COL_TRANSPARENT ));
+    if (aActFillColor!=COL_TRANSPARENT) {
+        pVirDev->SetFillColor(aActFillColor = COL_TRANSPARENT);
     }
     return true;
 }
@@ -177,7 +177,7 @@ bool DXF2GDIMetaFile::SetAreaAttribute(const DXFBasicEntity & rE)
         pVirDev->SetLineColor( aActLineColor = aColor );
     }
 
-    if ( aActFillColor == Color( COL_TRANSPARENT ) || aActFillColor != aColor) {
+    if ( aActFillColor == COL_TRANSPARENT || aActFillColor != aColor) {
         pVirDev->SetFillColor( aActFillColor = aColor );
     }
     return true;
@@ -834,8 +834,8 @@ bool DXF2GDIMetaFile::Convert(const DXFRepresentation & rDXF, GDIMetaFile & rMTF
                                                    pDXF->aBoundingBox.fMaxY*fScale,
                                                   -pDXF->aBoundingBox.fMinZ*fScale));
             }
-            aPrefSize.Width() =static_cast<long>(fWidth*fScale+1.5);
-            aPrefSize.Height()=static_cast<long>(fHeight*fScale+1.5);
+            aPrefSize.setWidth(static_cast<long>(fWidth*fScale+1.5) );
+            aPrefSize.setHeight(static_cast<long>(fHeight*fScale+1.5) );
         }
     }
     else {
@@ -856,8 +856,8 @@ bool DXF2GDIMetaFile::Convert(const DXFRepresentation & rDXF, GDIMetaFile & rMTF
                 )
             );
         }
-        aPrefSize.Width() =static_cast<long>(fWidth*fScale+1.5);
-        aPrefSize.Height()=static_cast<long>(fHeight*fScale+1.5);
+        aPrefSize.setWidth(static_cast<long>(fWidth*fScale+1.5) );
+        aPrefSize.setHeight(static_cast<long>(fHeight*fScale+1.5) );
     }
 
     if (bStatus)

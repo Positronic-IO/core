@@ -234,8 +234,7 @@ void BitmapWriteAccess::FillRect( const tools::Rectangle& rRect )
     if (mpFillColor)
     {
         const BitmapColor& rFillColor = *mpFillColor.get();
-        Point aPoint;
-        tools::Rectangle aRect(aPoint, maBitmap.GetSizePixel());
+        tools::Rectangle aRect(Point(), maBitmap.GetSizePixel());
 
         aRect.Intersection(rRect);
 
@@ -248,9 +247,10 @@ void BitmapWriteAccess::FillRect( const tools::Rectangle& rRect )
 
             for (long nY = nStartY; nY <= nEndY; nY++)
             {
+                Scanline pScanline = GetScanline( nY );
                 for (long nX = nStartX; nX <= nEndX; nX++)
                 {
-                    SetPixel(nY, nX, rFillColor);
+                    SetPixelOnData(pScanline, nX, rFillColor);
                 }
             }
         }

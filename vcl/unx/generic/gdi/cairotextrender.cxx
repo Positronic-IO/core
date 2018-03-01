@@ -82,7 +82,7 @@ CairoTextRender::CairoTextRender()
         rp = nullptr;
 }
 
-bool CairoTextRender::setFont( const FontSelectPattern *pEntry, int nFallbackLevel )
+void CairoTextRender::setFont( const FontSelectPattern *pEntry, int nFallbackLevel )
 {
     // release all no longer needed font resources
     for( int i = nFallbackLevel; i < MAX_FALLBACK; ++i )
@@ -97,11 +97,11 @@ bool CairoTextRender::setFont( const FontSelectPattern *pEntry, int nFallbackLev
 
     // return early if there is no new font
     if( !pEntry )
-        return false;
+        return;
 
     // return early if this is not a valid font for this graphics
     if( !pEntry->mpFontData )
-        return false;
+        return;
 
     // handle the request for a non-native X11-font => use the GlyphCache
     FreetypeFont* pFreetypeFont = GlyphCache::GetInstance().CacheFont( *pEntry );
@@ -111,16 +111,12 @@ bool CairoTextRender::setFont( const FontSelectPattern *pEntry, int nFallbackLev
         if( !pFreetypeFont->TestFont() )
         {
             GlyphCache::GetInstance().UncacheFont( *pFreetypeFont );
-            return false;
+            return;
         }
 
         // register to use the font
         mpFreetypeFont[ nFallbackLevel ] = pFreetypeFont;
-
-        return true;
     }
-
-    return false;
 }
 
 void CairoFontsCache::CacheFont(void *pFont, const CairoFontsCache::CacheId &rId)
@@ -430,11 +426,11 @@ bool CairoTextRender::GetGlyphBoundRect(const GlyphItem& rGlyph, tools::Rectangl
     {
         double nCos = pSF->mnCos / 65536.0;
         double nSin = pSF->mnSin / 65536.0;
-        rRect.Left() =  nCos*aRect.Left() + nSin*aRect.Top();
-        rRect.Top()  = -nSin*aRect.Left() - nCos*aRect.Top();
+        rRect.SetLeft(  nCos*aRect.Left() + nSin*aRect.Top() );
+        rRect.SetTop( -nSin*aRect.Left() - nCos*aRect.Top() );
 
-        rRect.Right()  =  nCos*aRect.Right() + nSin*aRect.Bottom();
-        rRect.Bottom() = -nSin*aRect.Right() - nCos*aRect.Bottom();
+        rRect.SetRight(  nCos*aRect.Right() + nSin*aRect.Bottom() );
+        rRect.SetBottom( -nSin*aRect.Right() - nCos*aRect.Bottom() );
     }
     else
         rRect = aRect;

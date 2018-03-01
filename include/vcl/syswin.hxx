@@ -24,15 +24,13 @@
 #include <vcl/dllapi.h>
 #include <vcl/builder.hxx>
 #include <vcl/idle.hxx>
-#include <vcl/notebookbar.hxx>
 #include <vcl/window.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <memory>
 
-class ModalDialog;
 class MenuBar;
+class NotebookBar;
 class TaskPaneList;
-class VclContainer;
 
 #define ICON_LO_DEFAULT                 1
 #define ICON_TEXT_DOCUMENT              2

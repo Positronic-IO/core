@@ -95,8 +95,8 @@ OutputDevice::OutputDevice() :
     mbOutput                        = true;
     mbDevOutput                     = false;
     mbOutputClipped                 = false;
-    maTextColor                     = Color( COL_BLACK );
-    maOverlineColor                 = Color( COL_TRANSPARENT );
+    maTextColor                     = COL_BLACK;
+    maOverlineColor                 = COL_TRANSPARENT;
     meRasterOp                      = RasterOp::OverPaint;
     mnAntialiasing                  = AntialiasingFlags::NONE;
     meTextLanguage                  = LANGUAGE_SYSTEM;  // TODO: get default from configuration?
@@ -690,7 +690,7 @@ bool OutputDevice::ImplIsAntiparallel() const
 
 void    OutputDevice::ReMirror( Point &rPoint ) const
 {
-    rPoint.X() = mnOutOffX + mnOutWidth - 1 - rPoint.X() + mnOutOffX;
+    rPoint.setX( mnOutOffX + mnOutWidth - 1 - rPoint.X() + mnOutOffX );
 }
 void    OutputDevice::ReMirror( tools::Rectangle &rRect ) const
 {
@@ -700,8 +700,8 @@ void    OutputDevice::ReMirror( tools::Rectangle &rRect ) const
     //lc_x = mnOutWidth - nWidth - 1 - lc_x;  // mirror
     //rRect.nLeft = lc_x + mnOutOffX;         // re-normalize
 
-    rRect.Left() = mnOutOffX + mnOutWidth - nWidth - 1 - rRect.Left() + mnOutOffX;
-    rRect.Right() = rRect.Left() + nWidth;
+    rRect.SetLeft( mnOutOffX + mnOutWidth - nWidth - 1 - rRect.Left() + mnOutOffX );
+    rRect.SetRight( rRect.Left() + nWidth );
 }
 
 void OutputDevice::ReMirror( vcl::Region &rRegion ) const
@@ -710,10 +710,10 @@ void OutputDevice::ReMirror( vcl::Region &rRegion ) const
     rRegion.GetRegionRectangles(aRectangles);
     vcl::Region aMirroredRegion;
 
-    for(RectangleVector::iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+    for (auto & rectangle : aRectangles)
     {
-        ReMirror(*aRectIter);
-        aMirroredRegion.Union(*aRectIter);
+        ReMirror(rectangle);
+        aMirroredRegion.Union(rectangle);
     }
 
     rRegion = aMirroredRegion;

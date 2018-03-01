@@ -460,10 +460,10 @@ void GDIMetaFile::Play( OutputDevice* pOut, const Point& rPos,
     Size aTmpPrefSize( pOut->LogicToPixel( GetPrefSize(), aDrawMap ) );
 
     if( !aTmpPrefSize.Width() )
-        aTmpPrefSize.Width() = aDestSize.Width();
+        aTmpPrefSize.setWidth( aDestSize.Width() );
 
     if( !aTmpPrefSize.Height() )
-        aTmpPrefSize.Height() = aDestSize.Height();
+        aTmpPrefSize.setHeight( aDestSize.Height() );
 
     Fraction aScaleX( aDestSize.Width(), aTmpPrefSize.Width() );
     Fraction aScaleY( aDestSize.Height(), aTmpPrefSize.Height() );
@@ -588,12 +588,11 @@ void GDIMetaFile::push_back( MetaAction* pAction )
     m_aList.push_back( pAction );
 }
 
-bool GDIMetaFile::Mirror( BmpMirrorFlags nMirrorFlags )
+void GDIMetaFile::Mirror( BmpMirrorFlags nMirrorFlags )
 {
     const Size  aOldPrefSize( GetPrefSize() );
     long        nMoveX, nMoveY;
     double      fScaleX, fScaleY;
-    bool        bRet;
 
     if( nMirrorFlags & BmpMirrorFlags::Horizontal )
     {
@@ -622,12 +621,7 @@ bool GDIMetaFile::Mirror( BmpMirrorFlags nMirrorFlags )
         Scale( fScaleX, fScaleY );
         Move( nMoveX, nMoveY );
         SetPrefSize( aOldPrefSize );
-        bRet = true;
     }
-    else
-        bRet = false;
-
-    return bRet;
 }
 
 void GDIMetaFile::Move( long nX, long nY )
@@ -696,8 +690,8 @@ void GDIMetaFile::Move( long nX, long nY, long nDPIX, long nDPIY )
             {
                 aOffset = aMapVDev->LogicToPixel( aBaseOffset, GetPrefMapMode() );
                 MapMode aMap( aMapVDev->GetMapMode() );
-                aOffset.Width() = static_cast<long>(aOffset.Width() * static_cast<double>(aMap.GetScaleX()));
-                aOffset.Height() = static_cast<long>(aOffset.Height() * static_cast<double>(aMap.GetScaleY()));
+                aOffset.setWidth( static_cast<long>(aOffset.Width() * static_cast<double>(aMap.GetScaleX())) );
+                aOffset.setHeight( static_cast<long>(aOffset.Height() * static_cast<double>(aMap.GetScaleY())) );
             }
             else
                 aOffset = OutputDevice::LogicToLogic( aBaseOffset, GetPrefMapMode(), aMapVDev->GetMapMode() );
@@ -724,8 +718,8 @@ void GDIMetaFile::Scale( double fScaleX, double fScaleY )
         pModAct->Scale( fScaleX, fScaleY );
     }
 
-    m_aPrefSize.Width() = FRound( m_aPrefSize.Width() * fScaleX );
-    m_aPrefSize.Height() = FRound( m_aPrefSize.Height() * fScaleY );
+    m_aPrefSize.setWidth( FRound( m_aPrefSize.Width() * fScaleX ) );
+    m_aPrefSize.setHeight( FRound( m_aPrefSize.Height() * fScaleY ) );
 }
 
 void GDIMetaFile::Scale( const Fraction& rScaleX, const Fraction& rScaleY )
@@ -991,7 +985,7 @@ void GDIMetaFile::Rotate( long nAngle10 )
                 tools::Rectangle           aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx            aBmpEx( pAct->GetBitmap() );
 
-                aBmpEx.Rotate( nAngle10, Color( COL_TRANSPARENT ) );
+                aBmpEx.Rotate( nAngle10, COL_TRANSPARENT );
                 aMtf.AddAction( new MetaBmpExScaleAction( aBmpRect.TopLeft(), aBmpRect.GetSize(),
                                                           aBmpEx ) );
             }
@@ -1005,7 +999,7 @@ void GDIMetaFile::Rotate( long nAngle10 )
                 BitmapEx                aBmpEx( pAct->GetBitmap() );
 
                 aBmpEx.Crop( tools::Rectangle( pAct->GetSrcPoint(), pAct->GetSrcSize() ) );
-                aBmpEx.Rotate( nAngle10, Color( COL_TRANSPARENT ) );
+                aBmpEx.Rotate( nAngle10, COL_TRANSPARENT );
 
                 aMtf.AddAction( new MetaBmpExScaleAction( aBmpRect.TopLeft(), aBmpRect.GetSize(), aBmpEx ) );
             }
@@ -1018,7 +1012,7 @@ void GDIMetaFile::Rotate( long nAngle10 )
                 tools::Rectangle               aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx                aBmpEx( pAct->GetBitmapEx() );
 
-                aBmpEx.Rotate( nAngle10, Color( COL_TRANSPARENT ) );
+                aBmpEx.Rotate( nAngle10, COL_TRANSPARENT );
 
                 aMtf.AddAction( new MetaBmpExScaleAction( aBmpRect.TopLeft(), aBmpRect.GetSize(), aBmpEx ) );
             }
@@ -1032,7 +1026,7 @@ void GDIMetaFile::Rotate( long nAngle10 )
                 BitmapEx                    aBmpEx( pAct->GetBitmapEx() );
 
                 aBmpEx.Crop( tools::Rectangle( pAct->GetSrcPoint(), pAct->GetSrcSize() ) );
-                aBmpEx.Rotate( nAngle10, Color( COL_TRANSPARENT ) );
+                aBmpEx.Rotate( nAngle10, COL_TRANSPARENT );
 
                 aMtf.AddAction( new MetaBmpExScaleAction( aBmpRect.TopLeft(), aBmpRect.GetSize(), aBmpEx ) );
             }
@@ -1504,7 +1498,7 @@ tools::Rectangle GDIMetaFile::GetBoundRect( OutputDevice& i_rReference, tools::R
             aMapVDev->GetTextBoundRect( aRect, aStr, 0, 0, aStr.getLength() );
             Point aPt( pAct->GetStartPoint() );
             aRect.Move( aPt.X(), aPt.Y() );
-            aRect.Right() = aRect.Left() + pAct->GetWidth();
+            aRect.SetRight( aRect.Left() + pAct->GetWidth() );
             ImplActionBounds( aBound, OutputDevice::LogicToLogic( aRect, aMapVDev->GetMapMode(), GetPrefMapMode() ), aClipStack, nullptr );
         }
         break;
@@ -1780,8 +1774,8 @@ BitmapEx GDIMetaFile::ImplBmpMonoFnc( const BitmapEx& rBmpEx, const void* pBmpPa
 {
     BitmapPalette aPal( 3 );
 
-    aPal[ 0 ] = Color( COL_BLACK );
-    aPal[ 1 ] = Color( COL_WHITE );
+    aPal[ 0 ] = COL_BLACK;
+    aPal[ 1 ] = COL_WHITE;
     aPal[ 2 ] = static_cast<const ImplBmpMonoParam*>(pBmpParam)->aColor;
 
     Bitmap aBmp( rBmpEx.GetSizePixel(), 4, &aPal );
@@ -2812,17 +2806,17 @@ bool GDIMetaFile::CreateThumbnail(BitmapEx& rBitmapEx, BmpConversion eColorConve
 
         if ( fWH <= 1.0 )
         {
-            aSizePix.Width() = FRound( nMaximumExtent * fWH );
-            aSizePix.Height() = nMaximumExtent;
+            aSizePix.setWidth( FRound( nMaximumExtent * fWH ) );
+            aSizePix.setHeight( nMaximumExtent );
         }
         else
         {
-            aSizePix.Width() = nMaximumExtent;
-            aSizePix.Height() = FRound(  nMaximumExtent / fWH );
+            aSizePix.setWidth( nMaximumExtent );
+            aSizePix.setHeight( FRound(  nMaximumExtent / fWH ) );
         }
 
-        aDrawSize.Width() = FRound( ( static_cast< double >( aDrawSize.Width() ) * aSizePix.Width() ) / aOldSizePix.Width() );
-        aDrawSize.Height() = FRound( ( static_cast< double >( aDrawSize.Height() ) * aSizePix.Height() ) / aOldSizePix.Height() );
+        aDrawSize.setWidth( FRound( ( static_cast< double >( aDrawSize.Width() ) * aSizePix.Width() ) / aOldSizePix.Width() ) );
+        aDrawSize.setHeight( FRound( ( static_cast< double >( aDrawSize.Height() ) * aSizePix.Height() ) / aOldSizePix.Height() ) );
     }
 
     // draw image(s) into VDev and get resulting image
@@ -2834,9 +2828,8 @@ bool GDIMetaFile::CreateThumbnail(BitmapEx& rBitmapEx, BmpConversion eColorConve
         Size aAntialias(aDrawSize.Width() * 4, aDrawSize.Height() * 4);
 
         // draw metafile into VDev
-        Point aBackPosPix;
         const_cast<GDIMetaFile *>(this)->WindStart();
-        const_cast<GDIMetaFile *>(this)->Play(aVDev.get(), aBackPosPix, aAntialias);
+        const_cast<GDIMetaFile *>(this)->Play(aVDev.get(), Point(), aAntialias);
 
         // get paint bitmap
         Bitmap aBitmap( aVDev->GetBitmap( aNullPt, aVDev->GetOutputSizePixel() ) );

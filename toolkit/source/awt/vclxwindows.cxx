@@ -60,6 +60,7 @@
 
 #include <helper/accessibilityclient.hxx>
 #include <helper/imagealign.hxx>
+#include <helper/msgbox.hxx>
 #include <helper/tkresmgr.hxx>
 #include "vclxwindows_internal.hxx"
 
@@ -128,7 +129,7 @@ namespace toolkit
             aStyleSettings.SetCheckedColor( aBackground );
 
             sal_Int32 nBackgroundLuminance = Color( nBackgroundColor ).GetLuminance();
-            sal_Int32 nWhiteLuminance = Color( COL_WHITE ).GetLuminance();
+            sal_Int32 nWhiteLuminance = COL_WHITE.GetLuminance();
 
             Color aLightShadow( nBackgroundColor );
             aLightShadow.IncreaseLuminance( static_cast<sal_uInt8>( ( nWhiteLuminance - nBackgroundLuminance ) * 2 / 3 ) );
@@ -469,14 +470,14 @@ css::awt::Size VCLXButton::calcAdjustedSize( const css::awt::Size& rNewSize )
         if ( pButton->GetText().isEmpty() )
         {
             if ( aSz.Width() < aMinSz.Width() )
-                aSz.Width() = aMinSz.Width();
+                aSz.setWidth( aMinSz.Width() );
             if ( aSz.Height() < aMinSz.Height() )
-                aSz.Height() = aMinSz.Height();
+                aSz.setHeight( aMinSz.Height() );
         }
         else
         {
             if ( ( aSz.Width() > aMinSz.Width() ) && ( aSz.Height() < aMinSz.Height() ) )
-                aSz.Height() = aMinSz.Height();
+                aSz.setHeight( aMinSz.Height() );
             else
                 aSz = aMinSz;
         }
@@ -937,7 +938,7 @@ css::awt::Size VCLXCheckBox::calcAdjustedSize( const css::awt::Size& rNewSize )
     {
         Size aMinSz = pCheckBox->CalcMinimumSize();
         if ( ( aSz.Width() > aMinSz.Width() ) && ( aSz.Height() < aMinSz.Height() ) )
-            aSz.Height() = aMinSz.Height();
+            aSz.setHeight( aMinSz.Height() );
         else
             aSz = aMinSz;
     }
@@ -1279,7 +1280,7 @@ css::awt::Size VCLXRadioButton::calcAdjustedSize( const css::awt::Size& rNewSize
     {
         Size aMinSz = pRadioButton->CalcMinimumSize();
         if ( ( aSz.Width() > aMinSz.Width() ) && ( aSz.Height() < aMinSz.Height() ) )
-            aSz.Height() = aMinSz.Height();
+            aSz.setHeight( aMinSz.Height() );
         else
             aSz = aMinSz;
     }
@@ -1979,7 +1980,7 @@ css::awt::Size VCLXListBox::getPreferredSize(  )
     {
         aSz = pListBox->CalcMinimumSize();
         if ( pListBox->GetStyle() & WB_DROPDOWN )
-            aSz.Height() += 4;
+            aSz.AdjustHeight(4 );
     }
     return AWTSize(aSz);
 }
@@ -4025,7 +4026,7 @@ css::awt::Size VCLXEdit::getPreferredSize(  )
     if ( pEdit )
     {
         aSz = pEdit->CalcMinimumSize();
-        aSz.Height() += 4;
+        aSz.AdjustHeight(4 );
     }
     return AWTSize(aSz);
 }
@@ -4451,7 +4452,7 @@ css::awt::Size VCLXComboBox::getPreferredSize(  )
     {
         aSz = pComboBox->CalcMinimumSize();
         if ( pComboBox->GetStyle() & WB_DROPDOWN )
-            aSz.Height() += 4;
+            aSz.AdjustHeight(4 );
     }
     return AWTSize(aSz);
 }

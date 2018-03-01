@@ -488,7 +488,8 @@ MouseSettings::~MouseSettings()
 void MouseSettings::CopyData()
 {
     // copy if other references exist
-    if ( ! mxData.unique() ) {
+    if (mxData.use_count() > 1)
+    {
         mxData = std::make_shared<ImplMouseData>(*mxData);
     }
 }
@@ -541,8 +542,8 @@ ImplStyleData::ImplStyleData() :
     meUseImagesInMenus          = TRISTATE_INDET;
     meContextMenuShortcuts      = TRISTATE_INDET;
     mnEdgeBlending = 35;
-    maEdgeBlendingTopLeftColor = RGB_COLORDATA(0xC0, 0xC0, 0xC0);
-    maEdgeBlendingBottomRightColor = RGB_COLORDATA(0x40, 0x40, 0x40);
+    maEdgeBlendingTopLeftColor = Color(0xC0, 0xC0, 0xC0);
+    maEdgeBlendingBottomRightColor = Color(0x40, 0x40, 0x40);
     mnListBoxMaximumLineCount = 25;
     mnColorValueSetColumnCount = 12;
     mnColorValueSetMaximumRowCount = 10;
@@ -694,57 +695,57 @@ void ImplStyleData::SetStandardStyles()
     maFloatTitleFont            = aStdFont;
     maTitleFont                 = aStdFont;
 
-    maFaceColor                 = Color( COL_LIGHTGRAY );
+    maFaceColor                 = COL_LIGHTGRAY;
     maCheckedColor              = Color( 0xCC, 0xCC, 0xCC );
-    maLightColor                = Color( COL_WHITE );
-    maLightBorderColor          = Color( COL_LIGHTGRAY );
-    maShadowColor               = Color( COL_GRAY );
-    maDarkShadowColor           = Color( COL_BLACK );
-    maButtonTextColor           = Color( COL_BLACK );
-    maButtonRolloverTextColor   = Color( COL_BLACK );
-    maRadioCheckTextColor       = Color( COL_BLACK );
-    maGroupTextColor            = Color( COL_BLACK );
-    maLabelTextColor            = Color( COL_BLACK );
-    maWindowColor               = Color( COL_WHITE );
-    maWindowTextColor           = Color( COL_BLACK );
-    maDialogColor               = Color( COL_LIGHTGRAY );
-    maDialogTextColor           = Color( COL_BLACK );
+    maLightColor                = COL_WHITE;
+    maLightBorderColor          = COL_LIGHTGRAY;
+    maShadowColor               = COL_GRAY;
+    maDarkShadowColor           = COL_BLACK;
+    maButtonTextColor           = COL_BLACK;
+    maButtonRolloverTextColor   = COL_BLACK;
+    maRadioCheckTextColor       = COL_BLACK;
+    maGroupTextColor            = COL_BLACK;
+    maLabelTextColor            = COL_BLACK;
+    maWindowColor               = COL_WHITE;
+    maWindowTextColor           = COL_BLACK;
+    maDialogColor               = COL_LIGHTGRAY;
+    maDialogTextColor           = COL_BLACK;
     maWorkspaceColor            = Color( 0xDF, 0xDF, 0xDE );
-    maMonoColor                 = Color( COL_BLACK );
-    maFieldColor                = Color( COL_WHITE );
-    maFieldTextColor            = Color( COL_BLACK );
-    maFieldRolloverTextColor    = Color( COL_BLACK );
-    maActiveColor               = Color( COL_BLUE );
-    maActiveTextColor           = Color( COL_WHITE );
-    maActiveBorderColor         = Color( COL_LIGHTGRAY );
-    maDeactiveColor             = Color( COL_GRAY );
-    maDeactiveTextColor         = Color( COL_LIGHTGRAY );
-    maDeactiveBorderColor       = Color( COL_LIGHTGRAY );
-    maMenuColor                 = Color( COL_LIGHTGRAY );
-    maMenuBarColor              = Color( COL_LIGHTGRAY );
-    maMenuBarRolloverColor      = Color( COL_BLUE );
-    maMenuBorderColor           = Color( COL_LIGHTGRAY );
-    maMenuTextColor             = Color( COL_BLACK );
-    maMenuBarTextColor          = Color( COL_BLACK );
-    maMenuBarRolloverTextColor  = Color( COL_WHITE );
-    maMenuBarHighlightTextColor = Color( COL_WHITE );
-    maMenuHighlightColor        = Color( COL_BLUE );
-    maMenuHighlightTextColor    = Color( COL_WHITE );
-    maHighlightColor            = Color( COL_BLUE );
-    maHighlightTextColor        = Color( COL_WHITE );
-    maActiveTabColor            = Color( COL_WHITE );
-    maInactiveTabColor          = Color( COL_LIGHTGRAY );
-    maTabTextColor              = Color( COL_BLACK );
-    maTabRolloverTextColor      = Color( COL_BLACK );
-    maTabHighlightTextColor     = Color( COL_BLACK );
-    maDisableColor              = Color( COL_GRAY );
+    maMonoColor                 = COL_BLACK;
+    maFieldColor                = COL_WHITE;
+    maFieldTextColor            = COL_BLACK;
+    maFieldRolloverTextColor    = COL_BLACK;
+    maActiveColor               = COL_BLUE;
+    maActiveTextColor           = COL_WHITE;
+    maActiveBorderColor         = COL_LIGHTGRAY;
+    maDeactiveColor             = COL_GRAY;
+    maDeactiveTextColor         = COL_LIGHTGRAY;
+    maDeactiveBorderColor       = COL_LIGHTGRAY;
+    maMenuColor                 = COL_LIGHTGRAY;
+    maMenuBarColor              = COL_LIGHTGRAY;
+    maMenuBarRolloverColor      = COL_BLUE;
+    maMenuBorderColor           = COL_LIGHTGRAY;
+    maMenuTextColor             = COL_BLACK;
+    maMenuBarTextColor          = COL_BLACK;
+    maMenuBarRolloverTextColor  = COL_WHITE;
+    maMenuBarHighlightTextColor = COL_WHITE;
+    maMenuHighlightColor        = COL_BLUE;
+    maMenuHighlightTextColor    = COL_WHITE;
+    maHighlightColor            = COL_BLUE;
+    maHighlightTextColor        = COL_WHITE;
+    maActiveTabColor            = COL_WHITE;
+    maInactiveTabColor          = COL_LIGHTGRAY;
+    maTabTextColor              = COL_BLACK;
+    maTabRolloverTextColor      = COL_BLACK;
+    maTabHighlightTextColor     = COL_BLACK;
+    maDisableColor              = COL_GRAY;
     maHelpColor                 = Color( 0xFF, 0xFF, 0xE0 );
-    maHelpTextColor             = Color( COL_BLACK );
-    maLinkColor                 = Color( COL_BLUE );
+    maHelpTextColor             = COL_BLACK;
+    maLinkColor                 = COL_BLUE;
     maVisitedLinkColor          = Color( 0x00, 0x00, 0xCC );
-    maToolTextColor             = Color( COL_BLACK );
-    maHighlightLinkColor        = Color( COL_LIGHTBLUE );
-    maFontColor                 = Color( COL_BLACK );
+    maToolTextColor             = COL_BLACK;
+    maHighlightLinkColor        = COL_LIGHTBLUE;
+    maFontColor                 = COL_BLACK;
     maAlternatingRowColor       = Color( 0xEE, 0xEE, 0xEE );
 
     mnBorderSize                = 1;
@@ -2053,8 +2054,8 @@ void StyleSettings::Set3DColors( const Color& rColor )
     mxData->maFaceColor         = rColor;
     mxData->maLightBorderColor  = rColor;
     mxData->maMenuBorderColor   = rColor;
-    mxData->maDarkShadowColor   = Color( COL_BLACK );
-    if ( rColor != Color( COL_LIGHTGRAY ) )
+    mxData->maDarkShadowColor   = COL_BLACK;
+    if ( rColor != COL_LIGHTGRAY )
     {
         mxData->maLightColor    = rColor;
         mxData->maShadowColor   = rColor;
@@ -2073,8 +2074,8 @@ void StyleSettings::Set3DColors( const Color& rColor )
     else
     {
         mxData->maCheckedColor  = Color( 0x99, 0x99, 0x99 );
-        mxData->maLightColor    = Color( COL_WHITE );
-        mxData->maShadowColor   = Color( COL_GRAY );
+        mxData->maLightColor    = COL_WHITE;
+        mxData->maShadowColor   = COL_GRAY;
     }
 }
 
@@ -2233,7 +2234,7 @@ Color StyleSettings::GetFaceGradientColor() const
     GetFaceColor().RGBtoHSB( h, s, b );
     if( s > 1) s=1;
     if( b < 98) b=98;
-    return Color( Color::HSBtoRGB( h, s, b ) );
+    return Color::HSBtoRGB( h, s, b );
 }
 
 Color StyleSettings::GetSeparatorColor() const
@@ -2243,13 +2244,14 @@ Color StyleSettings::GetSeparatorColor() const
     GetShadowColor().RGBtoHSB( h, s, b );
     b += b/4;
     s -= s/4;
-    return Color( Color::HSBtoRGB( h, s, b ) );
+    return Color::HSBtoRGB( h, s, b );
 }
 
 void StyleSettings::CopyData()
 {
     // copy if other references exist
-    if ( ! mxData.unique() ) {
+    if (mxData.use_count() > 1)
+    {
         mxData = std::make_shared<ImplStyleData>(*mxData);
     }
 }
@@ -2552,7 +2554,8 @@ void MiscSettings::SetEnableATToolSupport( bool bEnable )
 void MiscSettings::SetEnableLocalizedDecimalSep( bool bEnable )
 {
     // copy if other references exist
-    if ( ! mxData.unique() ) {
+    if (mxData.use_count() > 1)
+    {
         mxData = std::make_shared<ImplMiscData>(*mxData);
     }
     mxData->mbEnableLocalizedDecimalSep = bEnable;
@@ -2611,7 +2614,8 @@ void
 HelpSettings::SetTipTimeout( sal_uLong nTipTimeout )
 {
     // copy if other references exist
-    if ( ! mxData.unique() ) {
+    if (mxData.use_count() > 1)
+    {
         mxData = std::make_shared<ImplHelpData>(*mxData);
     }
     mxData->mnTipTimeout = nTipTimeout;
@@ -2638,14 +2642,10 @@ HelpSettings::operator !=( const HelpSettings& rSet ) const
 ImplAllSettingsData::ImplAllSettingsData()
     :
         maLocale( LANGUAGE_SYSTEM ),
+        mnWindowUpdate( AllSettingsFlags::MOUSE | AllSettingsFlags::STYLE |
+                        AllSettingsFlags::MISC | AllSettingsFlags::LOCALE ),
         maUILocale( LANGUAGE_SYSTEM )
 {
-    mnWindowUpdate              = AllSettingsFlags::MOUSE | AllSettingsFlags::STYLE |
-                                  AllSettingsFlags::MISC | AllSettingsFlags::LOCALE;
-    mpLocaleDataWrapper         = nullptr;
-    mpUILocaleDataWrapper       = nullptr;
-    mpI18nHelper                = nullptr;
-    mpUII18nHelper              = nullptr;
     if (!utl::ConfigManager::IsFuzzing())
         maMiscSettings.SetEnableLocalizedDecimalSep( maSysLocale.GetOptions().IsDecimalSeparatorAsLocale() );
 }
@@ -2656,16 +2656,10 @@ ImplAllSettingsData::ImplAllSettingsData( const ImplAllSettingsData& rData ) :
     maMiscSettings( rData.maMiscSettings ),
     maHelpSettings( rData.maHelpSettings ),
     maLocale( rData.maLocale ),
+    mnWindowUpdate( rData.mnWindowUpdate ),
     maUILocale( rData.maUILocale )
 {
-    mnWindowUpdate              = rData.mnWindowUpdate;
-    // Pointer couldn't shared and objects haven't a copy ctor
-    // So we create the cache objects new, if the GetFunction is
-    // called
-    mpLocaleDataWrapper         = nullptr;
-    mpUILocaleDataWrapper       = nullptr;
-    mpI18nHelper                = nullptr;
-    mpUII18nHelper              = nullptr;
+    // Create the cache objects new when their getter is called.
 }
 
 ImplAllSettingsData::~ImplAllSettingsData()
@@ -2693,7 +2687,8 @@ AllSettings::~AllSettings()
 void AllSettings::CopyData()
 {
     // copy if other references exist
-    if ( ! mxData.unique() ) {
+    if (mxData.use_count() > 1)
+    {
         mxData = std::make_shared<ImplAllSettingsData>(*mxData);
     }
 

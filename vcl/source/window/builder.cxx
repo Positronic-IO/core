@@ -11,7 +11,9 @@
 #include <com/sun/star/packages/zip/ZipFileAccess.hpp>
 
 #include <comphelper/processfactory.hxx>
+#include <i18nutil/unicode.hxx>
 #include <osl/module.hxx>
+#include <osl/file.hxx>
 #include <sal/log.hxx>
 #include <unotools/resmgr.hxx>
 #include <vcl/builder.hxx>
@@ -37,13 +39,17 @@
 #include <vcl/settings.hxx>
 #include <vcl/slider.hxx>
 #include <vcl/listctrl.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <svdata.hxx>
 #include <bitmaps.hlst>
+#include <vcl/messagedialog.hxx>
 #include <window.h>
 #include <xmlreader/xmlreader.hxx>
 #include <desktop/crashreport.hxx>
+#include <salinst.hxx>
 #include <strings.hrc>
+#include <tools/svlibrary.h>
 
 #ifdef DISABLE_DYNLOADING
 #include <dlfcn.h>
@@ -119,12 +125,122 @@ namespace
 }
 #endif
 
-VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUString& sUIFile, const OString& sID, const css::uno::Reference<css::frame::XFrame>& rFrame)
+weld::Builder* Application::CreateBuilder(weld::Widget* pParent, const OUString &rUIFile)
+{
+    return ImplGetSVData()->mpDefInst->CreateBuilder(pParent, VclBuilderContainer::getUIRootDir(), rUIFile);
+}
+
+weld::MessageDialog* Application::CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType,
+                                                      VclButtonsType eButtonType, const OUString& rPrimaryMessage)
+{
+    return ImplGetSVData()->mpDefInst->CreateMessageDialog(pParent, eMessageType, eButtonType, rPrimaryMessage);
+}
+
+namespace
+{
+    const OUString MetricToString(FieldUnit rUnit)
+    {
+        FieldUnitStringList* pList = ImplGetFieldUnits();
+        if (pList)
+        {
+            // return unit's default string (ie, the first one )
+            for (auto it = pList->begin(); it != pList->end(); ++it)
+            {
+                if (it->second == rUnit)
+                    return it->first;
+            }
+        }
+
+        return OUString();
+    }
+}
+
+namespace weld
+{
+    IMPL_LINK_NOARG(MetricSpinButton, spin_button_value_changed, SpinButton&, void)
+    {
+        signal_value_changed();
+    }
+
+    IMPL_LINK(MetricSpinButton, spin_button_output, SpinButton&, rSpinButton, void)
+    {
+        rSpinButton.set_text(format_number(rSpinButton.get_value()));
+    }
+
+    void MetricSpinButton::update_width_chars()
+    {
+        int min, max;
+        m_xSpinButton->get_range(min, max);
+        auto width = std::max(m_xSpinButton->get_pixel_size(format_number(min)).Width(),
+                              m_xSpinButton->get_pixel_size(format_number(max)).Width());
+        int chars = ceil(width / m_xSpinButton->get_approximate_char_width());
+        m_xSpinButton->set_width_chars(chars);
+    }
+
+    unsigned int SpinButton::Power10(unsigned int n)
+    {
+        unsigned int nValue = 1;
+        for (unsigned int i = 0; i < n; ++i)
+            nValue *= 10;
+        return nValue;
+    }
+
+    int SpinButton::denormalize(int nValue) const
+    {
+        const int nFactor = Power10(get_digits());
+
+        if ((nValue < (SAL_MIN_INT32 + nFactor)) || (nValue > (SAL_MAX_INT32 - nFactor)))
+        {
+            return nValue / nFactor;
+        }
+
+        const int nHalf = nFactor / 2;
+
+        if (nValue < 0)
+            return (nValue - nHalf) / nFactor;
+        return (nValue + nHalf) / nFactor;
+    }
+
+    OUString MetricSpinButton::format_number(int nValue) const
+    {
+        OUString aStr;
+
+        unsigned int nDecimalDigits = m_xSpinButton->get_digits();
+        //pawn percent off to icu to decide whether percent is separated from its number for this locale
+        if (m_eSrcUnit == FUNIT_PERCENT)
+        {
+            double fValue = nValue;
+            fValue /= SpinButton::Power10(nDecimalDigits);
+            aStr = unicode::formatPercent(fValue, Application::GetSettings().GetUILanguageTag());
+        }
+        else
+        {
+            const SvtSysLocale aSysLocale;
+            const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
+            aStr = rLocaleData.getNum(nValue, nDecimalDigits, true, true);
+            if (m_eSrcUnit != FUNIT_NONE && m_eSrcUnit != FUNIT_DEGREE)
+                aStr += " ";
+            assert(m_eSrcUnit != FUNIT_PERCENT);
+            aStr += MetricToString(m_eSrcUnit);
+        }
+
+        return aStr;
+    }
+
+    int MetricSpinButton::ConvertValue(int nValue, FieldUnit eInUnit, FieldUnit eOutUnit) const
+    {
+        return MetricField::ConvertValue(nValue, 0, m_xSpinButton->get_digits(), eInUnit, eOutUnit);
+    }
+}
+
+VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUString& sUIFile, const OString& sID,
+                       const css::uno::Reference<css::frame::XFrame>& rFrame, bool bLegacy)
     : m_sID(sID)
     , m_sHelpRoot(OUStringToOString(sUIFile, RTL_TEXTENCODING_UTF8))
     , m_pStringReplace(Translate::GetReadStringHook())
     , m_pParent(pParent)
     , m_bToplevelParentFound(false)
+    , m_bLegacy(bLegacy)
     , m_pParserState(new ParserState)
     , m_xFrame(rFrame)
 {
@@ -154,32 +270,30 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
     }
 
     //Set Mnemonic widgets when everything has been imported
-    for (std::vector<MnemonicWidgetMap>::iterator aI = m_pParserState->m_aMnemonicWidgetMaps.begin(),
-        aEnd = m_pParserState->m_aMnemonicWidgetMaps.end(); aI != aEnd; ++aI)
+    for (auto const& mnemonicWidget : m_pParserState->m_aMnemonicWidgetMaps)
     {
-        FixedText *pOne = get<FixedText>(aI->m_sID);
-        vcl::Window *pOther = get<vcl::Window>(aI->m_sValue.toUtf8());
-        SAL_WARN_IF(!pOne || !pOther, "vcl", "missing either source " << aI->m_sID << " or target " << aI->m_sValue << " member of Mnemonic Widget Mapping");
+        FixedText *pOne = get<FixedText>(mnemonicWidget.m_sID);
+        vcl::Window *pOther = get<vcl::Window>(mnemonicWidget.m_sValue.toUtf8());
+        SAL_WARN_IF(!pOne || !pOther, "vcl", "missing either source " << mnemonicWidget.m_sID
+            << " or target " << mnemonicWidget.m_sValue << " member of Mnemonic Widget Mapping");
         if (pOne && pOther)
             pOne->set_mnemonic_widget(pOther);
     }
 
     //Set a11y relations when everything has been imported
-    for (AtkMap::iterator aI = m_pParserState->m_aAtkInfo.begin(),
-         aEnd = m_pParserState->m_aAtkInfo.end(); aI != aEnd; ++aI)
+    for (auto const& elemAtk : m_pParserState->m_aAtkInfo)
     {
-        vcl::Window *pSource = aI->first;
-        const stringmap &rMap = aI->second;
+        vcl::Window *pSource = elemAtk.first;
+        const stringmap &rMap = elemAtk.second;
 
-        for (stringmap::const_iterator aP = rMap.begin(),
-            aEndP = rMap.end(); aP != aEndP; ++aP)
+        for (auto const& elemMap : rMap)
         {
-            const OUString &rTarget = aP->second;
+            const OUString &rTarget = elemMap.second;
             vcl::Window *pTarget = get<vcl::Window>(rTarget.toUtf8());
             SAL_WARN_IF(!pTarget, "vcl", "missing member of a11y relation: " << rTarget);
             if (!pTarget)
                 continue;
-            const OString &rType = aP->first;
+            const OString &rType = elemMap.first;
             if (rType == "labelled-by")
                 pSource->SetAccessibleRelationLabeledBy(pTarget);
             else if (rType == "label-for")
@@ -194,89 +308,80 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
     }
 
     //Set radiobutton groups when everything has been imported
-    for (std::vector<RadioButtonGroupMap>::iterator aI = m_pParserState->m_aGroupMaps.begin(),
-         aEnd = m_pParserState->m_aGroupMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aGroupMaps)
     {
-        RadioButton *pOne = get<RadioButton>(aI->m_sID);
-        RadioButton *pOther = get<RadioButton>(aI->m_sValue);
+        RadioButton *pOne = get<RadioButton>(elem.m_sID);
+        RadioButton *pOther = get<RadioButton>(elem.m_sValue);
         SAL_WARN_IF(!pOne || !pOther, "vcl", "missing member of radiobutton group");
         if (pOne && pOther)
             pOne->group(*pOther);
     }
 
     //Set ComboBox models when everything has been imported
-    for (std::vector<ComboBoxModelMap>::iterator aI = m_pParserState->m_aModelMaps.begin(),
-         aEnd = m_pParserState->m_aModelMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aModelMaps)
     {
-        ListBox *pTarget = get<ListBox>(aI->m_sID);
+        ListBox *pTarget = get<ListBox>(elem.m_sID);
         // pStore may be empty
-        const ListStore *pStore = get_model_by_name(aI->m_sValue.toUtf8());
+        const ListStore *pStore = get_model_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget, "vcl", "missing elements of combobox");
         if (pTarget && pStore)
-            mungeModel(*pTarget, *pStore, aI->m_nActiveId);
+            mungeModel(*pTarget, *pStore, elem.m_nActiveId);
     }
 
     //Set TextView buffers when everything has been imported
-    for (std::vector<TextBufferMap>::iterator aI = m_pParserState->m_aTextBufferMaps.begin(),
-         aEnd = m_pParserState->m_aTextBufferMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aTextBufferMaps)
     {
-        VclMultiLineEdit *pTarget = get<VclMultiLineEdit>(aI->m_sID);
-        const TextBuffer *pBuffer = get_buffer_by_name(aI->m_sValue.toUtf8());
+        VclMultiLineEdit *pTarget = get<VclMultiLineEdit>(elem.m_sID);
+        const TextBuffer *pBuffer = get_buffer_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pBuffer, "vcl", "missing elements of textview/textbuffer");
         if (pTarget && pBuffer)
             mungeTextBuffer(*pTarget, *pBuffer);
     }
 
     //Set SpinButton adjustments when everything has been imported
-    for (std::vector<WidgetAdjustmentMap>::iterator aI = m_pParserState->m_aNumericFormatterAdjustmentMaps.begin(),
-         aEnd = m_pParserState->m_aNumericFormatterAdjustmentMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aNumericFormatterAdjustmentMaps)
     {
-        NumericFormatter *pTarget = dynamic_cast<NumericFormatter*>(get<vcl::Window>(aI->m_sID));
-        const Adjustment *pAdjustment = get_adjustment_by_name(aI->m_sValue.toUtf8());
+        NumericFormatter *pTarget = dynamic_cast<NumericFormatter*>(get<vcl::Window>(elem.m_sID));
+        const Adjustment *pAdjustment = get_adjustment_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget, "vcl", "missing NumericFormatter element of spinbutton/adjustment");
         SAL_WARN_IF(!pAdjustment, "vcl", "missing Adjustment element of spinbutton/adjustment");
         if (pTarget && pAdjustment)
             mungeAdjustment(*pTarget, *pAdjustment);
     }
 
-    for (std::vector<WidgetAdjustmentMap>::iterator aI = m_pParserState->m_aTimeFormatterAdjustmentMaps.begin(),
-         aEnd = m_pParserState->m_aTimeFormatterAdjustmentMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aTimeFormatterAdjustmentMaps)
     {
-        TimeField *pTarget = dynamic_cast<TimeField*>(get<vcl::Window>(aI->m_sID));
-        const Adjustment *pAdjustment = get_adjustment_by_name(aI->m_sValue.toUtf8());
+        TimeField *pTarget = dynamic_cast<TimeField*>(get<vcl::Window>(elem.m_sID));
+        const Adjustment *pAdjustment = get_adjustment_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pAdjustment, "vcl", "missing elements of spinbutton/adjustment");
         if (pTarget && pAdjustment)
             mungeAdjustment(*pTarget, *pAdjustment);
     }
 
-    for (std::vector<WidgetAdjustmentMap>::iterator aI = m_pParserState->m_aDateFormatterAdjustmentMaps.begin(),
-         aEnd = m_pParserState->m_aDateFormatterAdjustmentMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aDateFormatterAdjustmentMaps)
     {
-        DateField *pTarget = dynamic_cast<DateField*>(get<vcl::Window>(aI->m_sID));
-        const Adjustment *pAdjustment = get_adjustment_by_name(aI->m_sValue.toUtf8());
+        DateField *pTarget = dynamic_cast<DateField*>(get<vcl::Window>(elem.m_sID));
+        const Adjustment *pAdjustment = get_adjustment_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pAdjustment, "vcl", "missing elements of spinbutton/adjustment");
         if (pTarget && pAdjustment)
             mungeAdjustment(*pTarget, *pAdjustment);
     }
 
     //Set ScrollBar adjustments when everything has been imported
-    for (std::vector<WidgetAdjustmentMap>::iterator aI = m_pParserState->m_aScrollAdjustmentMaps.begin(),
-         aEnd = m_pParserState->m_aScrollAdjustmentMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aScrollAdjustmentMaps)
     {
-        ScrollBar *pTarget = get<ScrollBar>(aI->m_sID);
-        const Adjustment *pAdjustment = get_adjustment_by_name(aI->m_sValue.toUtf8());
+        ScrollBar *pTarget = get<ScrollBar>(elem.m_sID);
+        const Adjustment *pAdjustment = get_adjustment_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pAdjustment, "vcl", "missing elements of scrollbar/adjustment");
         if (pTarget && pAdjustment)
             mungeAdjustment(*pTarget, *pAdjustment);
     }
 
     //Set Scale(Slider) adjustments
-    std::vector<WidgetAdjustmentMap>::iterator aIterator;
-    for (aIterator  = m_pParserState->m_aSliderAdjustmentMaps.begin();
-         aIterator != m_pParserState->m_aSliderAdjustmentMaps.end(); ++aIterator)
+    for (auto const& elem : m_pParserState->m_aSliderAdjustmentMaps)
     {
-        Slider* pTarget = dynamic_cast<Slider*>(get<vcl::Window>(aIterator->m_sID));
-        const Adjustment* pAdjustment = get_adjustment_by_name(aIterator->m_sValue.toUtf8());
+        Slider* pTarget = dynamic_cast<Slider*>(get<vcl::Window>(elem.m_sID));
+        const Adjustment* pAdjustment = get_adjustment_by_name(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pAdjustment, "vcl", "missing elements of scale(slider)/adjustment");
         if (pTarget && pAdjustment)
         {
@@ -285,58 +390,54 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
     }
 
     //Set size-groups when all widgets have been imported
-    for (std::vector<SizeGroup>::iterator aI = m_pParserState->m_aSizeGroups.begin(),
-        aEnd = m_pParserState->m_aSizeGroups.end(); aI != aEnd; ++aI)
+    for (auto const& sizeGroup : m_pParserState->m_aSizeGroups)
     {
         std::shared_ptr<VclSizeGroup> xGroup(std::make_shared<VclSizeGroup>());
 
-        for (stringmap::iterator aP = aI->m_aProperties.begin(),
-            aEndP = aI->m_aProperties.end(); aP != aEndP; ++aP)
+        for (auto const& elem : sizeGroup.m_aProperties)
         {
-            const OString &rKey = aP->first;
-            const OUString &rValue = aP->second;
+            const OString &rKey = elem.first;
+            const OUString &rValue = elem.second;
             xGroup->set_property(rKey, rValue);
         }
 
-        for (std::vector<OString>::iterator aW = aI->m_aWidgets.begin(),
-            aEndW = aI->m_aWidgets.end(); aW != aEndW; ++aW)
+        for (auto const& elem : sizeGroup.m_aWidgets)
         {
-            vcl::Window* pWindow = get<vcl::Window>(aW->getStr());
+            vcl::Window* pWindow = get<vcl::Window>(elem.getStr());
             pWindow->add_to_size_group(xGroup);
         }
     }
 
     //Set button images when everything has been imported
     std::set<OUString> aImagesToBeRemoved;
-    for (std::vector<ButtonImageWidgetMap>::iterator aI = m_pParserState->m_aButtonImageWidgetMaps.begin(),
-         aEnd = m_pParserState->m_aButtonImageWidgetMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aButtonImageWidgetMaps)
     {
         PushButton *pTargetButton = nullptr;
         RadioButton *pTargetRadio = nullptr;
         Button *pTarget = nullptr;
 
-        if (!aI->m_bRadio)
+        if (!elem.m_bRadio)
         {
-            pTargetButton = get<PushButton>(aI->m_sID);
+            pTargetButton = get<PushButton>(elem.m_sID);
             pTarget = pTargetButton;
         }
         else
         {
-            pTargetRadio = get<RadioButton>(aI->m_sID);
+            pTargetRadio = get<RadioButton>(elem.m_sID);
             pTarget = pTargetRadio;
         }
 
-        FixedImage *pImage = get<FixedImage>(aI->m_sValue.toUtf8());
+        FixedImage *pImage = get<FixedImage>(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pImage,
             "vcl", "missing elements of button/image/stock");
         if (!pTarget || !pImage)
             continue;
-        aImagesToBeRemoved.insert(aI->m_sValue);
+        aImagesToBeRemoved.insert(elem.m_sValue);
 
-        VclBuilder::StockMap::iterator aFind = m_pParserState->m_aStockMap.find(aI->m_sValue.toUtf8());
+        VclBuilder::StockMap::iterator aFind = m_pParserState->m_aStockMap.find(elem.m_sValue.toUtf8());
         if (aFind == m_pParserState->m_aStockMap.end())
         {
-            if (!aI->m_bRadio)
+            if (!elem.m_bRadio)
                 pTargetButton->SetModeImage(pImage->GetImage());
             else
                 pTargetRadio->SetModeRadioImage(pImage->GetImage());
@@ -348,7 +449,7 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
             SAL_WARN_IF(eType == SymbolType::DONTKNOW, "vcl", "missing stock image element for button");
             if (eType == SymbolType::DONTKNOW)
                 continue;
-            if (!aI->m_bRadio)
+            if (!elem.m_bRadio)
             {
                 pTargetButton->SetSymbol(eType);
                 //fdo#76457 keep symbol images small e.g. tools->customize->menu
@@ -364,7 +465,7 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
             {
                 BitmapEx aBitmap(mapStockToImageResource(rImageInfo.m_sStock));
                 Image const aImage(aBitmap);
-                if (!aI->m_bRadio)
+                if (!elem.m_bRadio)
                     pTargetButton->SetModeImage(aImage);
                 else
                     pTargetRadio->SetModeRadioImage(aImage);
@@ -385,18 +486,16 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
 
     //There may be duplicate use of an Image, so we used a set to collect and
     //now we can remove them from the tree after their final munge
-    for (std::set<OUString>::iterator aI = aImagesToBeRemoved.begin(),
-        aEnd = aImagesToBeRemoved.end(); aI != aEnd; ++aI)
+    for (auto const& elem : aImagesToBeRemoved)
     {
-        delete_by_name(aI->toUtf8());
+        delete_by_name(elem.toUtf8());
     }
 
     //Set button menus when everything has been imported
-    for (std::vector<ButtonMenuMap>::iterator aI = m_pParserState->m_aButtonMenuMaps.begin(),
-         aEnd = m_pParserState->m_aButtonMenuMaps.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aButtonMenuMaps)
     {
-        MenuButton *pTarget = get<MenuButton>(aI->m_sID);
-        PopupMenu *pMenu = get_menu(aI->m_sValue.toUtf8());
+        MenuButton *pTarget = get<MenuButton>(elem.m_sID);
+        PopupMenu *pMenu = get_menu(elem.m_sValue.toUtf8());
         SAL_WARN_IF(!pTarget || !pMenu,
             "vcl", "missing elements of button/menu");
         if (!pTarget || !pMenu)
@@ -406,24 +505,27 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
 
     //Remove ScrollWindow parent widgets whose children in vcl implement scrolling
     //internally.
-    for (auto aI = m_pParserState->m_aRedundantParentWidgets.begin(),
-        aEnd = m_pParserState->m_aRedundantParentWidgets.end(); aI != aEnd; ++aI)
+    for (auto const& elem : m_pParserState->m_aRedundantParentWidgets)
     {
-        delete_by_window(aI->first);
+        delete_by_window(elem.first);
     }
 
     //fdo#67378 merge the label into the disclosure button
-    for (VclPtr<VclExpander> const & pOne : m_pParserState->m_aExpanderWidgets)
+    for (auto const& elem : m_pParserState->m_aExpanderWidgets)
     {
-        vcl::Window *pChild = pOne->get_child();
-        vcl::Window* pLabel = pOne->GetWindow(GetWindowType::LastChild);
+        vcl::Window *pChild = elem->get_child();
+        vcl::Window* pLabel = elem->GetWindow(GetWindowType::LastChild);
         if (pLabel && pLabel != pChild && pLabel->GetType() == WindowType::FIXEDTEXT)
         {
             FixedText *pLabelWidget = static_cast<FixedText*>(pLabel);
-            pOne->set_label(pLabelWidget->GetText());
+            elem->set_label(pLabelWidget->GetText());
             delete_by_window(pLabel);
         }
     }
+
+    // create message dialog message area now
+    for (auto const& elem : m_pParserState->m_aMessageDialogs)
+        elem->create_message_area();
 
     //drop maps, etc. that we don't need again
     m_pParserState.reset();
@@ -436,13 +538,12 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
     {
         int nButtons = 0;
         bool bHasDefButton = false;
-        for (std::vector<WinAndId>::iterator aI = m_aChildren.begin(),
-             aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+        for (auto const& child : m_aChildren)
         {
-            if (isButtonType(aI->m_pWindow->GetType()))
+            if (isButtonType(child.m_pWindow->GetType()))
             {
                 ++nButtons;
-                if (aI->m_pWindow->GetStyle() & WB_DEFBUTTON)
+                if (child.m_pWindow->GetStyle() & WB_DEFBUTTON)
                 {
                     bHasDefButton = true;
                     break;
@@ -669,18 +770,6 @@ namespace
         return bIsStock;
     }
 
-    bool extractFocusOnClick(VclBuilder::stringmap &rMap)
-    {
-        bool bFocusOnClick = true;
-        VclBuilder::stringmap::iterator aFind = rMap.find(OString("focus-on-click"));
-        if (aFind != rMap.end())
-        {
-            bFocusOnClick = toBool(aFind->second);
-            rMap.erase(aFind);
-        }
-        return bFocusOnClick;
-    }
-
     WinBits extractRelief(VclBuilder::stringmap &rMap)
     {
         WinBits nBits = WB_3DLOOK;
@@ -787,28 +876,29 @@ namespace
         pButton->SetCommandHandler(aCommand);
     }
 
-    VclPtr<Button> extractStockAndBuildPushButton(vcl::Window *pParent, VclBuilder::stringmap &rMap)
+    VclPtr<Button> extractStockAndBuildPushButton(vcl::Window *pParent, VclBuilder::stringmap &rMap, bool bLegacy)
     {
         WinBits nBits = WB_CLIPCHILDREN|WB_CENTER|WB_VCENTER;
 
         nBits |= extractRelief(rMap);
-        if (!extractFocusOnClick(rMap))
-            nBits |= WB_NOPOINTERFOCUS;
 
         VclPtr<Button> xWindow;
 
         if (extractStock(rMap))
         {
             OUString sType = extractLabel(rMap);
-            if (sType == "gtk-ok")
-                xWindow = VclPtr<OKButton>::Create(pParent, nBits);
-            else if (sType == "gtk-cancel")
-                xWindow = VclPtr<CancelButton>::Create(pParent, nBits);
-            else if (sType == "gtk-close")
-                xWindow = VclPtr<CloseButton>::Create(pParent, nBits);
-            else if (sType == "gtk-help")
-                xWindow = VclPtr<HelpButton>::Create(pParent, nBits);
-            else
+            if (bLegacy)
+            {
+                if (sType == "gtk-ok")
+                    xWindow = VclPtr<OKButton>::Create(pParent, nBits);
+                else if (sType == "gtk-cancel")
+                    xWindow = VclPtr<CancelButton>::Create(pParent, nBits);
+                else if (sType == "gtk-close")
+                    xWindow = VclPtr<CloseButton>::Create(pParent, nBits);
+                else if (sType == "gtk-help")
+                    xWindow = VclPtr<HelpButton>::Create(pParent, nBits);
+            }
+            if (!xWindow)
             {
                 xWindow = VclPtr<PushButton>::Create(pParent, nBits);
                 xWindow->SetText(getStockText(sType));
@@ -825,8 +915,6 @@ namespace
         WinBits nBits = WB_CLIPCHILDREN|WB_CENTER|WB_VCENTER|WB_3DLOOK;
 
         nBits |= extractRelief(rMap);
-        if (!extractFocusOnClick(rMap))
-            nBits |= WB_NOPOINTERFOCUS;
 
         VclPtr<Button> xWindow = VclPtr<MenuButton>::Create(pParent, nBits);
 
@@ -843,8 +931,6 @@ namespace
         WinBits nBits = WB_CLIPCHILDREN|WB_CENTER|WB_VCENTER|WB_3DLOOK;
 
         nBits |= extractRelief(rMap);
-        if (!extractFocusOnClick(rMap))
-            nBits |= WB_NOPOINTERFOCUS;
 
         VclPtr<Button> xWindow = VclPtr<MenuToggleButton>::Create(pParent, nBits);
 
@@ -958,7 +1044,7 @@ namespace
     }
 }
 
-bool VclBuilder::extractGroup(const OString &id, stringmap &rMap)
+void VclBuilder::extractGroup(const OString &id, stringmap &rMap)
 {
     VclBuilder::stringmap::iterator aFind = rMap.find(OString("group"));
     if (aFind != rMap.end())
@@ -969,9 +1055,7 @@ bool VclBuilder::extractGroup(const OString &id, stringmap &rMap)
             sID = sID.copy(0, nDelim);
         m_pParserState->m_aGroupMaps.emplace_back(id, sID.toUtf8());
         rMap.erase(aFind);
-        return true;
     }
-    return false;
 }
 
 void VclBuilder::connectNumericFormatterAdjustment(const OString &id, const OUString &rAdjustment)
@@ -1044,7 +1128,7 @@ namespace
     }
 }
 
-bool VclBuilder::extractModel(const OString &id, stringmap &rMap)
+void VclBuilder::extractModel(const OString &id, stringmap &rMap)
 {
     VclBuilder::stringmap::iterator aFind = rMap.find(OString("model"));
     if (aFind != rMap.end())
@@ -1052,24 +1136,20 @@ bool VclBuilder::extractModel(const OString &id, stringmap &rMap)
         m_pParserState->m_aModelMaps.emplace_back(id, aFind->second,
             extractActive(rMap));
         rMap.erase(aFind);
-        return true;
     }
-    return false;
 }
 
-bool VclBuilder::extractBuffer(const OString &id, stringmap &rMap)
+void VclBuilder::extractBuffer(const OString &id, stringmap &rMap)
 {
     VclBuilder::stringmap::iterator aFind = rMap.find(OString("buffer"));
     if (aFind != rMap.end())
     {
         m_pParserState->m_aTextBufferMaps.emplace_back(id, aFind->second);
         rMap.erase(aFind);
-        return true;
     }
-    return false;
 }
 
-bool VclBuilder::extractStock(const OString &id, stringmap &rMap)
+void VclBuilder::extractStock(const OString &id, stringmap &rMap)
 {
     VclBuilder::stringmap::iterator aFind = rMap.find(OString("stock"));
     if (aFind != rMap.end())
@@ -1084,21 +1164,17 @@ bool VclBuilder::extractStock(const OString &id, stringmap &rMap)
             rMap.erase(aFind);
         }
         m_pParserState->m_aStockMap[id] = aInfo;
-        return true;
     }
-    return false;
 }
 
-bool VclBuilder::extractButtonImage(const OString &id, stringmap &rMap, bool bRadio)
+void VclBuilder::extractButtonImage(const OString &id, stringmap &rMap, bool bRadio)
 {
     VclBuilder::stringmap::iterator aFind = rMap.find(OString("image"));
     if (aFind != rMap.end())
     {
         m_pParserState->m_aButtonImageWidgetMaps.emplace_back(id, aFind->second, bRadio);
         rMap.erase(aFind);
-        return true;
     }
-    return false;
 }
 
 void VclBuilder::extractMnemonicWidget(const OString &rLabelID, stringmap &rMap)
@@ -1146,6 +1222,49 @@ void VclBuilder::cleanupWidgetOwnScrolling(vcl::Window *pScrollParent, vcl::Wind
 extern "C" { static void thisModule() {} }
 #endif
 
+// We store these forever, closing modules is non-ideal from a performance
+// perspective, code pages will be freed up by the OS anyway if unused for
+// a while in many cases, and this helps us pre-init.
+typedef std::map<OUString, std::unique_ptr<osl::Module>> ModuleMap;
+static ModuleMap g_aModuleMap;
+static osl::Module g_aMergedLib;
+
+#ifndef SAL_DLLPREFIX
+#  define SAL_DLLPREFIX ""
+#endif
+
+void VclBuilder::preload()
+{
+#ifndef DISABLE_DYNLOADING
+
+#if ENABLE_MERGELIBS
+    g_aMergedLib.loadRelative(&thisModule, SVLIBRARY("merged"));
+#endif
+// find -name '*ui*' | xargs grep 'class=".*lo-' |
+//     sed 's/.*class="//' | sed 's/-.*$//' | sort | uniq
+    static const char *aWidgetLibs[] = {
+        "sfxlo",  "svtlo",     "svxcorelo", "foruilo",
+        "vcllo",  "svxlo",     "cuilo",     "swlo",
+        "swuilo", "sclo",      "sdlo",      "chartcontrollerlo",
+        "smlo",   "scuilo",    "basctllo",  "sduilo",
+        "scnlo",  "xsltdlglo", "pcrlo" // "dbulo"
+    };
+    for (auto & lib : aWidgetLibs)
+    {
+        OUStringBuffer sModuleBuf;
+        sModuleBuf.append(SAL_DLLPREFIX);
+        sModuleBuf.append(OUString::createFromAscii(lib));
+        sModuleBuf.append(SAL_DLLEXTENSION);
+        osl::Module* pModule = new osl::Module;
+        OUString sModule = sModuleBuf.makeStringAndClear();
+        if (pModule->loadRelative(&thisModule, sModule))
+            g_aModuleMap.insert(std::make_pair(sModule, std::unique_ptr<osl::Module>(pModule)));
+        else
+            delete pModule;
+    }
+#endif // DISABLE_DYNLOADING
+}
+
 VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &name, const OString &id,
     stringmap &rMap)
 {
@@ -1192,14 +1311,17 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         WinBits nBits = WB_MOVEABLE|WB_3DLOOK|WB_CLOSEABLE;
         if (extractResizable(rMap))
             nBits |= WB_SIZEABLE;
-        xWindow = VclPtr<Dialog>::Create(pParent, nBits);
+        xWindow = VclPtr<Dialog>::Create(pParent, nBits, !pParent ? Dialog::InitFlag::NoParent : Dialog::InitFlag::Default);
     }
     else if (name == "GtkMessageDialog")
     {
-        WinBits nBits = WB_CLIPCHILDREN|WB_MOVEABLE|WB_3DLOOK|WB_CLOSEABLE;
+        WinBits nBits = WB_MOVEABLE|WB_3DLOOK|WB_CLOSEABLE;
         if (extractResizable(rMap))
             nBits |= WB_SIZEABLE;
-        xWindow = VclPtr<MessageDialog>::Create(pParent, nBits);
+        VclPtr<MessageDialog> xDialog(VclPtr<MessageDialog>::Create(pParent, nBits));
+        m_pParserState->m_aMessageDialogs.push_back(xDialog);
+        xWindow = xDialog;
+        xWindow->set_border_width(12);
     }
     else if (name == "GtkBox")
     {
@@ -1248,7 +1370,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         VclPtr<Button> xButton;
         OUString sMenu = BuilderUtils::extractCustomProperty(rMap);
         if (sMenu.isEmpty())
-            xButton = extractStockAndBuildPushButton(pParent, rMap);
+            xButton = extractStockAndBuildPushButton(pParent, rMap, m_bLegacy);
         else
         {
             xButton = extractStockAndBuildMenuButton(pParent, rMap);
@@ -1276,8 +1398,6 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         OUString sWrap = BuilderUtils::extractCustomProperty(rMap);
         if (!sWrap.isEmpty())
             nBits |= WB_WORDBREAK;
-        if (!extractFocusOnClick(rMap))
-            nBits |= WB_NOPOINTERFOCUS;
         VclPtr<RadioButton> xButton = VclPtr<RadioButton>::Create(pParent, nBits);
         xButton->SetImageAlign(ImageAlign::Left); //default to left
         xWindow = xButton;
@@ -1293,8 +1413,6 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         OUString sWrap = BuilderUtils::extractCustomProperty(rMap);
         if (!sWrap.isEmpty())
             nBits |= WB_WORDBREAK;
-        if (!extractFocusOnClick(rMap))
-            nBits |= WB_NOPOINTERFOCUS;
         //maybe always import as TriStateBox and enable/disable tristate
         bool bIsTriState = extractInconsistent(rMap);
         VclPtr<CheckBox> xCheckBox;
@@ -1522,7 +1640,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
     else if (name == "GtkDrawingArea")
     {
         OUString sBorder = BuilderUtils::extractCustomProperty(rMap);
-        xWindow = VclPtr<vcl::Window>::Create(pParent, sBorder.isEmpty() ? 0 : WB_BORDER);
+        xWindow = VclPtr<VclDrawingArea>::Create(pParent, sBorder.isEmpty() ? 0 : WB_BORDER);
     }
     else if (name == "GtkTextView")
     {
@@ -1632,40 +1750,32 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
     }
     else
     {
-#ifndef SAL_DLLPREFIX
-#define SAL_DLLPREFIX ""
-#endif
         sal_Int32 nDelim = name.indexOf('-');
         if (nDelim != -1)
         {
+            OUString sFunction(OStringToOUString(OString("make") + name.copy(nDelim+1), RTL_TEXTENCODING_UTF8));
+
 #ifndef DISABLE_DYNLOADING
             OUStringBuffer sModuleBuf;
             sModuleBuf.append(SAL_DLLPREFIX);
             sModuleBuf.append(OStringToOUString(name.copy(0, nDelim), RTL_TEXTENCODING_UTF8));
             sModuleBuf.append(SAL_DLLEXTENSION);
-#endif
-            OUString sFunction(OStringToOUString(OString("make") + name.copy(nDelim+1), RTL_TEXTENCODING_UTF8));
-#ifndef DISABLE_DYNLOADING
+
             OUString sModule = sModuleBuf.makeStringAndClear();
-            ModuleMap::iterator aI = m_aModuleMap.find(sModule);
-            if (aI == m_aModuleMap.end())
+            ModuleMap::iterator aI = g_aModuleMap.find(sModule);
+            if (aI == g_aModuleMap.end())
             {
                 osl::Module* pModule = new osl::Module;
+                bool ok = false;
 #if ENABLE_MERGELIBS
-                sModuleBuf.append(SAL_DLLPREFIX);
-                sModuleBuf.append("mergedlo");
-                sModuleBuf.append(SAL_DLLEXTENSION);
-                OUString sMergedModule = sModuleBuf.makeStringAndClear();
-                bool ok = pModule->loadRelative(&thisModule, sMergedModule);
-                if (!pModule->getFunctionSymbol(sFunction))
-                {
-                    ok = pModule->loadRelative(&thisModule, sModule);
-                }
-#else
-                bool ok = pModule->loadRelative(&thisModule, sModule);
+                if (!g_aMergedLib.is())
+                    g_aMergedLib.loadRelative(&thisModule, SVLIBRARY("merged"));
+                ok = g_aMergedLib.getFunctionSymbol(sFunction);
 #endif
-                assert(ok && "bad module name in .ui"); (void)ok;
-                aI = m_aModuleMap.insert(std::make_pair(sModule, std::unique_ptr<osl::Module>(pModule))).first;
+                if (!ok)
+                    ok = pModule->loadRelative(&thisModule, sModule);
+                assert(ok && "bad module name in .ui");
+                aI = g_aModuleMap.insert(std::make_pair(sModule, std::unique_ptr<osl::Module>(pModule))).first;
             }
             customMakeWidget pFunction = reinterpret_cast<customMakeWidget>(aI->second->getFunctionSymbol(sFunction));
 #else
@@ -1676,18 +1786,12 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
                 VclPtr<vcl::Window> xParent(pParent);
                 pFunction(xWindow, xParent, rMap);
                 if (xWindow->GetType() == WindowType::PUSHBUTTON)
-                {
-                    if (!extractFocusOnClick(rMap))
-                        xWindow->SetStyle(xWindow->GetStyle() | WB_NOPOINTERFOCUS);
                     setupFromActionName(static_cast<Button*>(xWindow.get()), rMap, m_xFrame);
-                }
                 else if (xWindow->GetType() == WindowType::MENUBUTTON)
                 {
                     OUString sMenu = BuilderUtils::extractCustomProperty(rMap);
                     if (!sMenu.isEmpty())
                         m_pParserState->m_aButtonMenuMaps.emplace_back(id, sMenu);
-                    if (!extractFocusOnClick(rMap))
-                        xWindow->SetStyle(xWindow->GetStyle() | WB_NOPOINTERFOCUS);
                     setupFromActionName(static_cast<Button*>(xWindow.get()), rMap, m_xFrame);
                 }
             }
@@ -1734,10 +1838,10 @@ namespace BuilderUtils
 {
     void set_properties(vcl::Window *pWindow, const VclBuilder::stringmap &rProps)
     {
-        for (VclBuilder::stringmap::const_iterator aI = rProps.begin(), aEnd = rProps.end(); aI != aEnd; ++aI)
+        for (auto const& prop : rProps)
         {
-            const OString &rKey = aI->first;
-            const OUString &rValue = aI->second;
+            const OString &rKey = prop.first;
+            const OUString &rValue = prop.second;
             pWindow->set_property(rKey, rValue);
         }
     }
@@ -1881,10 +1985,10 @@ VclPtr<vcl::Window> VclBuilder::insertObject(vcl::Window *pParent, const OString
         else
             BuilderUtils::set_properties(pCurrentChild, rProps);
 
-        for (stringmap::iterator aI = rPango.begin(), aEnd = rPango.end(); aI != aEnd; ++aI)
+        for (auto const& elem : rPango)
         {
-            const OString &rKey = aI->first;
-            const OUString &rValue = aI->second;
+            const OString &rKey = elem.first;
+            const OUString &rValue = elem.second;
             pCurrentChild->set_font_attribute(rKey, rValue);
         }
 
@@ -2379,10 +2483,10 @@ void VclBuilder::handleAtkObject(xmlreader::XmlReader &reader, vcl::Window *pWin
             break;
     }
 
-    for (stringmap::iterator aI = aProperties.begin(), aEnd = aProperties.end(); aI != aEnd; ++aI)
+    for (auto const& prop : aProperties)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = prop.first;
+        const OUString &rValue = prop.second;
 
         if (pWindow && rKey.match("AtkObject::"))
             pWindow->set_property(rKey.copy(RTL_CONSTASCII_LENGTH("AtkObject::")), rValue);
@@ -2739,10 +2843,10 @@ void VclBuilder::insertMenuObject(PopupMenu *pParent, PopupMenu *pSubMenu, const
     {
         pParent->SetHelpId(nNewId, m_sHelpRoot + rID);
 
-        for (stringmap::iterator aI = rProps.begin(), aEnd = rProps.end(); aI != aEnd; ++aI)
+        for (auto const& prop : rProps)
         {
-            const OString &rKey = aI->first;
-            const OUString &rValue = aI->second;
+            const OString &rKey = prop.first;
+            const OUString &rValue = prop.second;
 
             if (rKey == "tooltip-markup")
                 pParent->SetTipHelpText(nNewId, rValue);
@@ -2756,10 +2860,10 @@ void VclBuilder::insertMenuObject(PopupMenu *pParent, PopupMenu *pSubMenu, const
                 SAL_INFO("vcl.layout", "unhandled property: " << rKey);
         }
 
-        for (accelmap::iterator aI = rAccels.begin(), aEnd = rAccels.end(); aI != aEnd; ++aI)
+        for (auto const& accel : rAccels)
         {
-            const OString &rSignal = aI->first;
-            const auto &rValue = aI->second;
+            const OString &rSignal = accel.first;
+            const auto &rValue = accel.second;
 
             if (rSignal == "activate")
                 pParent->SetAccelKey(nNewId, makeKeyCode(rValue));
@@ -2780,8 +2884,8 @@ template<typename T> bool insertItems(vcl::Window *pWindow, VclBuilder::stringma
         return false;
 
     sal_uInt16 nActiveId = extractActive(rMap);
-    for (std::vector<OUString>::const_iterator aI = rItems.begin(), aEnd = rItems.end(); aI != aEnd; ++aI)
-        pContainer->InsertEntry(*aI);
+    for (auto const& item : rItems)
+        pContainer->InsertEntry(item);
     if (nActiveId < rItems.size())
         pContainer->SelectEntryPos(nActiveId);
 
@@ -3260,11 +3364,10 @@ vcl::Window *VclBuilder::get_widget_root()
 
 vcl::Window *VclBuilder::get_by_name(const OString& sID)
 {
-    for (std::vector<WinAndId>::iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+    for (auto const& child : m_aChildren)
     {
-        if (aI->m_sID == sID)
-            return aI->m_pWindow;
+        if (child.m_sID == sID)
+            return child.m_pWindow;
     }
 
     return nullptr;
@@ -3272,45 +3375,54 @@ vcl::Window *VclBuilder::get_by_name(const OString& sID)
 
 PopupMenu *VclBuilder::get_menu(const OString& sID)
 {
-    for (std::vector<MenuAndId>::iterator aI = m_aMenus.begin(),
-         aEnd = m_aMenus.end(); aI != aEnd; ++aI)
+    for (auto const& menu : m_aMenus)
     {
-        if (aI->m_sID == sID)
-            return aI->m_pMenu;
+        if (menu.m_sID == sID)
+            return menu.m_pMenu;
     }
 
     return nullptr;
 }
 
-short VclBuilder::get_response(const vcl::Window *pWindow) const
-{
-    for (std::vector<WinAndId>::const_iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
-    {
-        if (aI->m_pWindow == pWindow)
-        {
-            return aI->m_nResponseId;
-        }
-    }
-
-    //how did we not find sID ?
-    assert(false);
-    return RET_CANCEL;
-}
-
 void VclBuilder::set_response(const OString& sID, short nResponse)
 {
-    for (std::vector<WinAndId>::iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+    switch (nResponse)
     {
-        if (aI->m_sID == sID)
+        case -5:
+            nResponse = RET_OK;
+            break;
+        case -6:
+            nResponse = RET_CANCEL;
+            break;
+        case -7:
+            nResponse = RET_CLOSE;
+            break;
+        case -8:
+            nResponse = RET_YES;
+            break;
+        case -9:
+            nResponse = RET_NO;
+            break;
+        case -11:
+            nResponse = RET_HELP;
+            break;
+    };
+
+    assert(nResponse >= 0);
+
+    for (auto & child : m_aChildren)
+    {
+        if (child.m_sID == sID)
         {
-            aI->m_nResponseId = nResponse;
+            PushButton* pPushButton = dynamic_cast<PushButton*>(child.m_pWindow.get());
+            assert(pPushButton);
+            Dialog* pDialog = pPushButton->GetParentDialog();
+            assert(pDialog);
+            pDialog->add_button(pPushButton, nResponse, false);
             return;
         }
     }
 
-    //how did we not find sID ?
     assert(false);
 }
 
@@ -3349,11 +3461,10 @@ void VclBuilder::drop_ownership(const vcl::Window *pWindow)
 
 OString VclBuilder::get_by_window(const vcl::Window *pWindow) const
 {
-    for (std::vector<WinAndId>::const_iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+    for (auto const& child : m_aChildren)
     {
-        if (aI->m_pWindow == pWindow)
-            return aI->m_sID;
+        if (child.m_pWindow == pWindow)
+            return child.m_sID;
     }
 
     return OString();
@@ -3368,11 +3479,10 @@ VclBuilder::PackingData VclBuilder::get_window_packing_data(const vcl::Window *p
     const vcl::Window *pPropHolder = pWindow->ImplGetWindowImpl()->mpClientWindow ?
         pWindow->ImplGetWindowImpl()->mpClientWindow : pWindow;
 
-    for (std::vector<WinAndId>::const_iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+    for (auto const& child : m_aChildren)
     {
-        if (aI->m_pWindow == pPropHolder)
-            return aI->m_aPackingData;
+        if (child.m_pWindow == pPropHolder)
+            return child.m_aPackingData;
     }
 
     return PackingData();
@@ -3380,11 +3490,10 @@ VclBuilder::PackingData VclBuilder::get_window_packing_data(const vcl::Window *p
 
 void VclBuilder::set_window_packing_position(const vcl::Window *pWindow, sal_Int32 nPosition)
 {
-    for (std::vector<WinAndId>::iterator aI = m_aChildren.begin(),
-         aEnd = m_aChildren.end(); aI != aEnd; ++aI)
+    for (auto & child : m_aChildren)
     {
-        if (aI->m_pWindow == pWindow)
-            aI->m_aPackingData.m_nPosition = nPosition;
+        if (child.m_pWindow == pWindow)
+            child.m_aPackingData.m_nPosition = nPosition;
     }
 }
 
@@ -3414,10 +3523,9 @@ const VclBuilder::Adjustment *VclBuilder::get_adjustment_by_name(const OString& 
 
 void VclBuilder::mungeModel(ListBox &rTarget, const ListStore &rStore, sal_uInt16 nActiveId)
 {
-    for (std::vector<ListStore::row>::const_iterator aI = rStore.m_aEntries.begin(), aEnd = rStore.m_aEntries.end();
-        aI != aEnd; ++aI)
+    for (auto const& entry : rStore.m_aEntries)
     {
-        const ListStore::row &rRow = *aI;
+        const ListStore::row &rRow = entry;
         sal_uInt16 nEntry = rTarget.InsertEntry(rRow[0]);
         if (rRow.size() > 1)
         {
@@ -3433,10 +3541,10 @@ void VclBuilder::mungeAdjustment(NumericFormatter &rTarget, const Adjustment &rA
 {
     int nMul = rtl_math_pow10Exp(1, rTarget.GetDecimalDigits());
 
-    for (stringmap::const_iterator aI = rAdjustment.begin(), aEnd = rAdjustment.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rAdjustment)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "upper")
         {
@@ -3469,10 +3577,10 @@ void VclBuilder::mungeAdjustment(NumericFormatter &rTarget, const Adjustment &rA
 
 void VclBuilder::mungeAdjustment(TimeField &rTarget, const Adjustment &rAdjustment)
 {
-    for (stringmap::const_iterator aI = rAdjustment.begin(), aEnd = rAdjustment.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rAdjustment)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "upper")
         {
@@ -3500,10 +3608,10 @@ void VclBuilder::mungeAdjustment(TimeField &rTarget, const Adjustment &rAdjustme
 
 void VclBuilder::mungeAdjustment(DateField &rTarget, const Adjustment &rAdjustment)
 {
-    for (stringmap::const_iterator aI = rAdjustment.begin(), aEnd = rAdjustment.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rAdjustment)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "upper")
         {
@@ -3531,10 +3639,10 @@ void VclBuilder::mungeAdjustment(DateField &rTarget, const Adjustment &rAdjustme
 
 void VclBuilder::mungeAdjustment(ScrollBar &rTarget, const Adjustment &rAdjustment)
 {
-    for (stringmap::const_iterator aI = rAdjustment.begin(), aEnd = rAdjustment.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rAdjustment)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "upper")
             rTarget.SetRangeMax(rValue.toInt32());
@@ -3555,10 +3663,10 @@ void VclBuilder::mungeAdjustment(ScrollBar &rTarget, const Adjustment &rAdjustme
 
 void VclBuilder::mungeAdjustment(Slider& rTarget, const Adjustment& rAdjustment)
 {
-    for (stringmap::const_iterator aI = rAdjustment.begin(), aEnd = rAdjustment.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rAdjustment)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "upper")
             rTarget.SetRangeMax(rValue.toInt32());
@@ -3579,10 +3687,10 @@ void VclBuilder::mungeAdjustment(Slider& rTarget, const Adjustment& rAdjustment)
 
 void VclBuilder::mungeTextBuffer(VclMultiLineEdit &rTarget, const TextBuffer &rTextBuffer)
 {
-    for (stringmap::const_iterator aI = rTextBuffer.begin(), aEnd = rTextBuffer.end(); aI != aEnd; ++aI)
+    for (auto const& elem : rTextBuffer)
     {
-        const OString &rKey = aI->first;
-        const OUString &rValue = aI->second;
+        const OString &rKey = elem.first;
+        const OUString &rValue = elem.second;
 
         if (rKey == "text")
             rTarget.SetText(rValue);

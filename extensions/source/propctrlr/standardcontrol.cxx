@@ -368,7 +368,10 @@ namespace pcr
         if ( impl_textHitTest( rMEvt.GetPosPixel() ) )
             m_aMouseButtonDownPos = rMEvt.GetPosPixel();
         else
-            m_aMouseButtonDownPos.X() = m_aMouseButtonDownPos.Y() = -1;
+        {
+            m_aMouseButtonDownPos.setX(-1);
+            m_aMouseButtonDownPos.setY(-1);
+        }
     }
 
 
@@ -651,10 +654,10 @@ namespace pcr
 
     void SAL_CALL OColorControl::setValue( const Any& _rValue )
     {
-        css::util::Color nColor = COL_TRANSPARENT;
+        css::util::Color nColor = sal_uInt32(COL_TRANSPARENT);
         if (_rValue.hasValue())
             _rValue >>= nColor;
-        getTypedControlWindow()->SelectEntry(::Color(static_cast<ColorData>(nColor)));
+        getTypedControlWindow()->SelectEntry(::Color(sal_uInt32(nColor)));
     }
 
     Any SAL_CALL OColorControl::getValue()
@@ -1101,7 +1104,7 @@ namespace pcr
             aMePos = GetParent()->OutputToScreenPixel( aMePos );
             ::Size aSize=GetSizePixel();
             ::tools::Rectangle aRect(aMePos,aSize);
-            aSize.Height() = STD_HEIGHT;
+            aSize.setHeight( STD_HEIGHT );
             m_pFloatingEdit->SetOutputSizePixel(aSize);
             m_pFloatingEdit->StartPopupMode( aRect, FloatWinPopupFlags::Down );
 

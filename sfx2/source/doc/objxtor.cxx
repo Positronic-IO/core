@@ -35,6 +35,7 @@
 #include <osl/file.hxx>
 #include <rtl/instance.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/eitem.hxx>
@@ -90,7 +91,6 @@
 #include <basic/basmgr.hxx>
 #include <svtools/strings.hrc>
 #include <sfx2/QuerySaveDocument.hxx>
-#include <helpids.h>
 #include <sfx2/msg.hxx>
 #include <appbaslib.hxx>
 #include <sfx2/sfxbasemodel.hxx>
@@ -577,7 +577,7 @@ bool SfxObjectShell::PrepareClose
         {
             const Reference< XTitle > xTitle( *pImpl->pBaseModel.get(), UNO_QUERY_THROW );
             const OUString     sTitle = xTitle->getTitle ();
-            nRet = ExecuteQuerySaveDocument(&pFrame->GetWindow(),sTitle);
+            nRet = ExecuteQuerySaveDocument(pFrame->GetWindow().GetFrameWeld(), sTitle);
         }
         /*HACK for plugin::destroy()*/
 

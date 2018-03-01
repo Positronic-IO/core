@@ -57,6 +57,8 @@
 #include <unotools/charclass.hxx>
 #include <xmloff/odffields.hxx>
 #include <IDocumentSettingAccess.hxx>
+#include <IMark.hxx>
+#include <IDocumentMarkAccess.hxx>
 
 #include <vector>
 
@@ -1252,24 +1254,9 @@ SwLinePortion *SwTextFormatter::NewPortion( SwTextFormatInfo &rInf )
                     pTmp = new SwBidiPortion( nEnd, pCreate->nLevel );
                 else if ( SwMultiCreatorId::Ruby == pCreate->nId )
                 {
-                    Seek( rInf.GetIdx() );
-                    bool bRubyTop = false;
-                    bool* pRubyPos = nullptr;
-
-                    if ( rInf.SnapToGrid() )
-                    {
-                        SwTextGridItem const*const pGrid(
-                                GetGridItem(GetTextFrame()->FindPageFrame()));
-                        if ( pGrid )
-                        {
-                            bRubyTop = ! pGrid->GetRubyTextBelow();
-                            pRubyPos = &bRubyTop;
-                        }
-                    }
-
                     pTmp = new SwRubyPortion( *pCreate, *rInf.GetFont(),
                                               *GetTextFrame()->GetTextNode()->getIDocumentSettingAccess(),
-                                              nEnd, 0, pRubyPos );
+                                              nEnd, 0, rInf );
                 }
                 else if( SwMultiCreatorId::Rotate == pCreate->nId )
                     pTmp = new SwRotatedPortion( *pCreate, nEnd,
@@ -1849,27 +1836,9 @@ void SwTextFormatter::FeedInf( SwTextFormatInfo &rInf ) const
     rInf.SetRoot( m_pCurr );
     rInf.SetLineStart( m_nStart );
     rInf.SetIdx( m_nStart );
-
-    // Handle overflows:
-    // i#34348 Changed type from sal_uInt16 to SwTwips to enable
-    // the text formatting to cope with certain numbering indent values
-    SwTwips nTmpLeft = Left();
-    SwTwips nTmpRight = Right();
-    SwTwips nTmpFirst = FirstLeft();
-
-    if ( nTmpLeft > USHRT_MAX ||
-         nTmpRight > USHRT_MAX ||
-         nTmpFirst > USHRT_MAX )
-    {
-        SwRectFnSet aRectFnSet(rInf.GetTextFrame());
-        nTmpLeft = aRectFnSet.GetLeft(rInf.GetTextFrame()->getFrameArea());
-        nTmpRight = aRectFnSet.GetRight(rInf.GetTextFrame()->getFrameArea());
-        nTmpFirst = nTmpLeft;
-    }
-
-    rInf.Left(  nTmpLeft  );
-    rInf.Right( nTmpRight );
-    rInf.First( nTmpFirst );
+    rInf.Left( Left() );
+    rInf.Right( Right() );
+    rInf.First( FirstLeft() );
 
     rInf.RealWidth( sal_uInt16(rInf.Right() - GetLeftMargin()) );
     rInf.Width( rInf.RealWidth() );
@@ -2098,26 +2067,26 @@ void SwTextFormatter::UpdatePos( SwLineLayout *pCurrent, Point aStart,
             if ( GetMulti()->HasBrackets() )
             {
                 OSL_ENSURE( GetMulti()->IsDouble(), "Brackets only for doubles");
-                aSt.X() += static_cast<SwDoubleLinePortion*>(GetMulti())->PreWidth();
+                aSt.AdjustX(static_cast<SwDoubleLinePortion*>(GetMulti())->PreWidth() );
             }
             else if( GetMulti()->HasRotation() )
             {
-                aSt.Y() += pCurrent->GetAscent() - GetMulti()->GetAscent();
+                aSt.AdjustY(pCurrent->GetAscent() - GetMulti()->GetAscent() );
                 if( GetMulti()->IsRevers() )
-                    aSt.X() += GetMulti()->Width();
+                    aSt.AdjustX(GetMulti()->Width() );
                 else
-                    aSt.Y() += GetMulti()->Height();
+                    aSt.AdjustY(GetMulti()->Height() );
                }
             else if ( GetMulti()->IsBidi() )
                 // jump to end of the bidi portion
-                aSt.X() += pLay->Width();
+                aSt.AdjustX(pLay->Width() );
 
             sal_Int32 nStIdx = aTmpInf.GetIdx();
             do
             {
                 UpdatePos( pLay, aSt, nStIdx, bAlways );
                 nStIdx = nStIdx + pLay->GetLen();
-                aSt.Y() += pLay->Height();
+                aSt.AdjustY(pLay->Height() );
                 pLay = pLay->GetNext();
             } while ( pLay );
             const_cast<SwTextFormatter*>(this)->pMulti = nullptr;
@@ -2197,7 +2166,7 @@ bool SwTextFormatter::ChkFlyUnderflow( SwTextFormatInfo &rInf ) const
         // We now check every portion that could have lowered for overlapping
         // with the fly.
         const SwLinePortion *pPos = GetCurr()->GetFirstPortion();
-        aLine.Pos().Y() = Y() + GetCurr()->GetRealHeight() - GetCurr()->Height();
+        aLine.Pos().setY( Y() + GetCurr()->GetRealHeight() - GetCurr()->Height() );
         aLine.Height( GetCurr()->Height() );
 
         while( pPos )
@@ -2368,7 +2337,7 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
     }
 
     // aInter becomes frame-local
-    aInter.Pos().X() -= nLeftMar;
+    aInter.Pos().AdjustX( -nLeftMar );
     SwFlyPortion *pFly = new SwFlyPortion( aInter );
     if( bForced )
     {
@@ -2401,7 +2370,7 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
         if( nNextTop > aInter.Bottom() )
         {
             SwTwips nH = nNextTop - aInter.Top();
-            if( nH < USHRT_MAX )
+            if( nH < SAL_MAX_UINT16 )
                 pFly->Height( sal_uInt16( nH ) );
         }
         if( nAscent < pFly->Height() )
@@ -2544,7 +2513,7 @@ SwFlyCntPortion *SwTextFormatter::NewFlyCntPortion( SwTextFormatInfo &rInf,
         rInf.SelectFont();
         if( pRet->GetAscent() > nAscent )
         {
-            aBase.Y() = Y() + pRet->GetAscent();
+            aBase.setY( Y() + pRet->GetAscent() );
             nMode |= AsCharFlags::UlSpace;
             if( !rInf.IsTest() )
             {

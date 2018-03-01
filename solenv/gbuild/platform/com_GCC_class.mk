@@ -8,12 +8,22 @@
 #
 
 ifeq ($(gb_FULLDEPS),$(true))
+ifneq (,$(CCACHE_HARDLINK))
+# cannot move hardlink over itself, so create dep file directly, even if that
+# might leave a broken file behind in case the build is interrupted forcefully
+define gb_cxx_dep_generation_options
+-MMD -MT $(1) -MP -MF $(2)
+endef
+define gb_cxx_dep_copy
+endef
+else
 define gb_cxx_dep_generation_options
 -MMD -MT $(1) -MP -MF $(2)_
 endef
 define gb_cxx_dep_copy
 && mv $(1)_ $(1)
 endef
+endif
 else
 define gb_cxx_dep_generation_options
 endef
@@ -141,6 +151,15 @@ gb_ICU_PRECOMMAND := $(call gb_Helper_extend_ld_path,$(WORKDIR_FOR_BUILD)/Unpack
 define gb_UIConfig__command
 $(call gb_Helper_abbreviate_dirs,\
 	$(SORT) -u $(UI_IMAGELISTS) /dev/null > $@ \
+)
+
+endef
+
+define gb_UIConfig__gla11y_command
+$(call gb_Helper_abbreviate_dirs,\
+	$(gb_UIConfig_LXML_PATH) $(gb_Helper_set_ld_path) \
+	$(call gb_ExternalExecutable_get_command,python) \
+	$(gb_UIConfig_gla11y_SCRIPT) -s $(UI_A11YSUPPRS) $(GEN_A11Y_SUPPRS) -P $(SRCDIR)/ -o $@ $(UIFILES)
 )
 
 endef

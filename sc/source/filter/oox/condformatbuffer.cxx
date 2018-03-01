@@ -868,11 +868,13 @@ void CondFormatRule::finalizeImport()
         {
             pTokenArray2.reset(new ScTokenArray());
             ScTokenConversion::ConvertToTokenArray( rDoc, *pTokenArray2.get(), maModel.maFormulas[ 1 ] );
+            rDoc.CheckLinkFormulaNeedingCheck( *pTokenArray2.get());
         }
 
         ScTokenArray aTokenArray;
         OUString aStyleName = getStyles().createDxfStyle( maModel.mnDxfId );
         ScTokenConversion::ConvertToTokenArray( rDoc, aTokenArray, maModel.maFormulas[ 0 ] );
+        rDoc.CheckLinkFormulaNeedingCheck( aTokenArray);
         ScCondFormatEntry* pNewEntry = new ScCondFormatEntry(eOperator,
                                             &aTokenArray, pTokenArray2.get(), &rDoc, aPos, aStyleName);
         mpFormat->AddEntry(pNewEntry);
@@ -1053,12 +1055,12 @@ void CondFormat::finalizeImport()
     if ( !mbReadyForFinalize )
         return;
     ScDocument& rDoc = getScDocument();
+    mpFormat->SetRange(maModel.maRanges);
     maRules.forEachMem( &CondFormatRule::finalizeImport );
     SCTAB nTab = maModel.maRanges.GetTopLeftCorner().Tab();
     sal_Int32 nIndex = getScDocument().AddCondFormat(mpFormat, nTab);
 
     rDoc.AddCondFormatData( maModel.maRanges, nTab, nIndex );
-    mpFormat->SetRange(maModel.maRanges);
 }
 
 CondFormatRuleRef CondFormat::createRule()

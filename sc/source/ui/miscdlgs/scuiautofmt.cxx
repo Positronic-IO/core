@@ -32,7 +32,8 @@
 #include <editeng/udlnitem.hxx>
 #include <editeng/wghtitem.hxx>
 #include <svl/zforlist.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <comphelper/processfactory.hxx>
 #include <sfx2/strings.hrc>
 #include <sfx2/sfxresid.hxx>
@@ -219,15 +220,12 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, AddHdl, Button*, void)
 
         while ( !bOk )
         {
-            VclPtrInstance<ScStringInputDlg> pDlg( this,
-                                                   aStrTitle,
-                                                   aStrLabel,
-                                                   aFormatName,
-                                                   HID_SC_ADD_AUTOFMT, HID_SC_AUTOFMT_NAME );
+            ScStringInputDlg aDlg(GetFrameWeld(), aStrTitle, aStrLabel, aFormatName,
+                                  HID_SC_ADD_AUTOFMT, HID_SC_AUTOFMT_NAME);
 
-            if ( pDlg->Execute() == RET_OK )
+            if (aDlg.run() == RET_OK)
             {
-                aFormatName = pDlg->GetInputString();
+                aFormatName = aDlg.GetInputString();
 
                 if ( !aFormatName.isEmpty() && aFormatName != aStrStandard && pFormat->find(aFormatName) == pFormat->end() )
                 {
@@ -262,11 +260,11 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, AddHdl, Button*, void)
 
                 if ( !bFmtInserted )
                 {
-                    sal_uInt16 nRet = ScopedVclPtrInstance<MessageDialog>(this,
-                                            ScGlobal::GetRscString(STR_INVALID_AFNAME),
-                                            VclMessageType::Error,
-                                            VclButtonsType::OkCancel
-                                          )->Execute();
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                VclMessageType::Error, VclButtonsType::OkCancel,
+                                ScGlobal::GetRscString(STR_INVALID_AFNAME)));
+
+                    sal_uInt16 nRet = xBox->run();
 
                     bOk = ( nRet == RET_CANCEL );
                 }
@@ -285,8 +283,12 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, RemoveHdl, Button*, void)
                       + m_pLbFormat->GetSelectedEntry()
                       + aStrDelMsg.getToken( 1, '#' );
 
-        if ( RET_YES ==
-             ScopedVclPtrInstance<QueryBox>( this, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aMsg )->Execute() )
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       aMsg));
+        xQueryBox->set_default_response(RET_YES);
+
+        if (RET_YES == xQueryBox->run())
         {
             m_pLbFormat->RemoveEntry( nIndex );
             m_pLbFormat->SelectEntryPos( nIndex-1 );
@@ -321,15 +323,12 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, RenameHdl, Button*, void)
         OUString aFormatName = m_pLbFormat->GetSelectedEntry();
         OUString aEntry;
 
-        VclPtrInstance<ScStringInputDlg> pDlg( this,
-                                               aStrRename,
-                                               aStrLabel,
-                                               aFormatName,
-                                               HID_SC_REN_AFMT_DLG, HID_SC_REN_AFMT_NAME );
-        if( pDlg->Execute() == RET_OK )
+        ScStringInputDlg aDlg(GetFrameWeld(), aStrRename, aStrLabel, aFormatName,
+                              HID_SC_REN_AFMT_DLG, HID_SC_REN_AFMT_NAME);
+        if (aDlg.run() == RET_OK)
         {
             bool bFmtRenamed = false;
-            aFormatName = pDlg->GetInputString();
+            aFormatName = aDlg.GetInputString();
 
             if (!aFormatName.isEmpty())
             {
@@ -381,11 +380,11 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, RenameHdl, Button*, void)
             }
             if( !bFmtRenamed )
             {
-                bOk = RET_CANCEL == ScopedVclPtrInstance<MessageDialog>( this,
-                                      ScGlobal::GetRscString(STR_INVALID_AFNAME),
-                                      VclMessageType::Error,
-                                      VclButtonsType::OkCancel
-                                      )->Execute();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                            VclMessageType::Error, VclButtonsType::OkCancel,
+                            ScGlobal::GetRscString(STR_INVALID_AFNAME)));
+
+                bOk = RET_CANCEL == xBox->run();
             }
         }
         else

@@ -42,7 +42,6 @@
 #include <frmmgr.hxx>
 
 #include <globals.hrc>
-#include <helpids.h>
 #include <SwStyleNameMapper.hxx>
 #include <svx/svxids.hrc>
 #include <svx/dialogs.hrc>
@@ -98,7 +97,7 @@ SwNumPositionTabPage::SwNumPositionTabPage(vcl::Window* pParent,
     get(m_pPreviewWIN, "preview");
 
     SetExchangeSupport();
-    m_pPreviewWIN->SetBackground(Wallpaper(Color(COL_TRANSPARENT)));
+    m_pPreviewWIN->SetBackground(Wallpaper(COL_TRANSPARENT));
 
     m_pRelativeCB->Check();
     m_pAlignLB->SetSelectHdl(LINK(this, SwNumPositionTabPage, EditModifyHdl));

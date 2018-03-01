@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SVTOOLS_PARHTML_HXX
 #define INCLUDED_SVTOOLS_PARHTML_HXX
 
+#include <com/sun/star/uno/Reference.h>
 #include <svtools/svtdllapi.h>
 #include <svtools/svparser.hxx>
 
@@ -167,6 +168,9 @@ private:
 
     OUString aEndToken;
 
+    /// XML namespace, in case of XHTML.
+    OUString maNamespace;
+
 protected:
     OUString sSaveToken;             // the read tag as string
 
@@ -180,6 +184,8 @@ protected:
     virtual ~HTMLParser() override;
 
     void FinishHeader() { bIsInHeader = false; }
+
+    void SetNamespace(const OUString& rNamespace);
 
 public:
     HTMLParser( SvStream& rIn, bool bReadNewDoc = true );

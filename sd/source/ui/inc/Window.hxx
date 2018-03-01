@@ -91,7 +91,7 @@ public:
 
     /** Calculate the minimal zoom factor as the value at which the
         application area would completely fill the window.  All values set
-        manually or programatically are set to this value if they are
+        manually or programmatically are set to this value if they are
         smaller.  If the currently used zoom factor is smaller than the minimal zoom
         factor than set the minimal zoom factor as the new current zoom
         factor.
@@ -192,6 +192,12 @@ protected:
     Selection GetSurroundingTextSelection() const override;
     /// @see OutputDevice::LogicInvalidate().
     void LogicInvalidate(const ::tools::Rectangle* pRectangle) override;
+    /// Same as MouseButtonDown(), but coordinates are in logic unit.
+    virtual void LogicMouseButtonDown(const MouseEvent& rMouseEvent) override;
+    /// Same as MouseButtonUp(), but coordinates are in logic unit.
+    virtual void LogicMouseButtonUp(const MouseEvent& rMouseEvent) override;
+    /// Same as MouseMove(), but coordinates are in logic unit.
+    virtual void LogicMouseMove(const MouseEvent& rMouseEvent) override;
 
     FactoryFunction GetUITestFactory() const override;
 };

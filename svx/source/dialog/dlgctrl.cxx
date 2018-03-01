@@ -164,7 +164,7 @@ void SvxRectCtl::InitRectBitmap()
     aColorAry2[2] = rStyles.GetLightColor();
     aColorAry2[3] = rStyles.GetShadowColor();
     aColorAry2[4] = rStyles.GetDarkShadowColor();
-    aColorAry2[5] = Color( aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor );
+    aColorAry2[5] = aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor;
     aColorAry2[6] = rStyles.GetDialogColor();
 
 #ifdef DBG_UTIL
@@ -472,10 +472,10 @@ Point SvxRectCtl::SetActualRPWithoutInvalidate( RectPoint eNewRP )
     aPtNew = GetPointFromRP( eNewRP );
 
     if( m_nState & CTL_STATE::NOHORZ )
-        aPtNew.X() = aPtMM.X();
+        aPtNew.setX( aPtMM.X() );
 
     if( m_nState & CTL_STATE::NOVERT )
-        aPtNew.Y() = aPtMM.Y();
+        aPtNew.setY( aPtMM.Y() );
 
     // fdo#74751 this fix reverse base point on RTL UI.
     bool bRTL = AllSettings::GetLayoutRTL();
@@ -590,10 +590,10 @@ void SvxRectCtl::SetState( CTL_STATE nState )
     Point _aPtNew( aPtLast );
 
     if( m_nState & CTL_STATE::NOHORZ )
-        _aPtNew.X() = aPtMM.X();
+        _aPtNew.setX( aPtMM.X() );
 
     if( m_nState & CTL_STATE::NOVERT)
-        _aPtNew.Y() = aPtMM.Y();
+        _aPtNew.setY( aPtMM.Y() );
 
     eRP = GetRPFromPoint( _aPtNew );
     Invalidate();
@@ -688,8 +688,8 @@ Point SvxPixelCtl::IndexToPoint(long nIndex) const
     sal_Int32 nYIndex = nIndex / nLines;
 
     Point aPtTl;
-    aPtTl.Y() = aRectSize.Height() * nYIndex / nLines + 1;
-    aPtTl.X() = aRectSize.Width() * nXIndex / nLines + 1;
+    aPtTl.setY( aRectSize.Height() * nYIndex / nLines + 1 );
+    aPtTl.setX( aRectSize.Width() * nXIndex / nLines + 1 );
 
     return aPtTl;
 }
@@ -722,20 +722,15 @@ long SvxPixelCtl::ShowPosition( const Point &pt)
 
 }
 
-SvxPixelCtl::SvxPixelCtl(vcl::Window* pParent, sal_uInt16 nNumber)
+SvxPixelCtl::SvxPixelCtl(vcl::Window* pParent)
     : Control(pParent, WB_BORDER)
-    , nLines(nNumber)
     , bPaintable(true)
     , aFocusPosition(0,0)
 {
-    assert(nLines); // can't have no lines
-    SetPixelColor( Color( COL_BLACK ) );
-    SetBackgroundColor( Color( COL_WHITE ) );
-    SetLineColor( Color( COL_LIGHTGRAY ) );
-
-    nSquares = nLines * nLines;
-    pPixel = new sal_uInt16[ nSquares ];
-    memset(pPixel, 0, nSquares * sizeof(sal_uInt16));
+    SetPixelColor( COL_BLACK );
+    SetBackgroundColor( COL_WHITE );
+    SetLineColor( COL_LIGHTGRAY );
+    maPixelData.fill(0);
 }
 
 void SvxPixelCtl::Resize()
@@ -749,27 +744,21 @@ Size SvxPixelCtl::GetOptimalSize() const
     return LogicToPixel(Size(72, 72), MapMode(MapUnit::MapAppFont));
 }
 
-VCL_BUILDER_FACTORY_ARGS(SvxPixelCtl, 8)
+VCL_BUILDER_FACTORY(SvxPixelCtl)
 
 SvxPixelCtl::~SvxPixelCtl( )
 {
     disposeOnce();
 }
 
-void SvxPixelCtl::dispose()
-{
-    delete []pPixel;
-    Control::dispose();
-}
-
 // Changes the foreground or Background color
 
 void SvxPixelCtl::ChangePixel( sal_uInt16 nPixel )
 {
-    if( *( pPixel + nPixel) == 0 )
-        *( pPixel + nPixel) = 1; //  could be extended to more colors
+    if( maPixelData[nPixel] == 0 )
+        maPixelData[nPixel] = 1; //  could be extended to more colors
     else
-        *( pPixel + nPixel) = 0;
+        maPixelData[nPixel] = 0;
 }
 
 // The clicked rectangle is identified, to change its color
@@ -819,21 +808,21 @@ void SvxPixelCtl::Paint( vcl::RenderContext& rRenderContext, const tools::Rectan
 
         //Draw Rectangles (squares)
         rRenderContext.SetLineColor();
-        sal_uInt16 nLastPixel = *pPixel ? 0 : 1;
+        sal_uInt16 nLastPixel = maPixelData[0];
 
         for (i = 0; i < nLines; i++)
         {
-            aPtTl.Y() = aRectSize.Height() * i / nLines + 1;
-            aPtBr.Y() = aRectSize.Height() * (i + 1) / nLines - 1;
+            aPtTl.setY( aRectSize.Height() * i / nLines + 1 );
+            aPtBr.setY( aRectSize.Height() * (i + 1) / nLines - 1 );
 
             for (j = 0; j < nLines; j++)
             {
-                aPtTl.X() = aRectSize.Width() * j / nLines + 1;
-                aPtBr.X() = aRectSize.Width() * (j + 1) / nLines - 1;
+                aPtTl.setX( aRectSize.Width() * j / nLines + 1 );
+                aPtBr.setX( aRectSize.Width() * (j + 1) / nLines - 1 );
 
-                if (*(pPixel + i * nLines + j) != nLastPixel)
+                if (maPixelData[i * nLines + j] != nLastPixel)
                 {
-                    nLastPixel = *(pPixel + i * nLines + j);
+                    nLastPixel = maPixelData[i * nLines + j];
                     // Change color: 0 -> Background color
                     rRenderContext.SetFillColor(nLastPixel ? aPixelColor : aBackgroundColor);
                 }
@@ -848,8 +837,8 @@ void SvxPixelCtl::Paint( vcl::RenderContext& rRenderContext, const tools::Rectan
     }
     else
     {
-        rRenderContext.SetBackground(Wallpaper(Color(COL_LIGHTGRAY)));
-        rRenderContext.SetLineColor(Color(COL_LIGHTRED));
+        rRenderContext.SetBackground(Wallpaper(COL_LIGHTGRAY));
+        rRenderContext.SetLineColor(COL_LIGHTRED);
         rRenderContext.DrawLine(Point(0, 0), Point(aRectSize.Width(), aRectSize.Height()));
         rRenderContext.DrawLine(Point(0, aRectSize.Height()), Point(aRectSize.Width(), 0));
     }
@@ -978,40 +967,36 @@ void SvxPixelCtl::LoseFocus()
     Control::LoseFocus();
 }
 
-void SvxPixelCtl::SetXBitmap( const BitmapEx& rBitmapEx )
+void SvxPixelCtl::SetXBitmap(const BitmapEx& rBitmapEx)
 {
     BitmapColor aBack;
     BitmapColor aFront;
 
-    if(isHistorical8x8(rBitmapEx, aBack, aFront))
+    if (isHistorical8x8(rBitmapEx, aBack, aFront))
     {
         Bitmap aBitmap(rBitmapEx.GetBitmap());
         Bitmap::ScopedReadAccess pRead(aBitmap);
 
-        aBackgroundColor = aBack;
-        aPixelColor = aFront;
+        aBackgroundColor = aBack.GetColor();
+        aPixelColor = aFront.GetColor();
 
         for(sal_uInt16 i(0); i < nSquares; i++)
         {
             const BitmapColor aColor(pRead->GetColor(i/8, i%8));
 
-            if(aColor == aBack)
-            {
-                *( pPixel + i ) = 0;
-            }
+            if (aColor == aBack)
+                maPixelData[i] = 0;
             else
-            {
-                *( pPixel + i ) = 1;
-            }
+                maPixelData[i] = 1;
         }
     }
 }
 
 // Returns a specific pixel
 
-sal_uInt16 SvxPixelCtl::GetBitmapPixel( const sal_uInt16 nPixel )
+sal_uInt8 SvxPixelCtl::GetBitmapPixel( const sal_uInt16 nPixel ) const
 {
-    return *( pPixel + nPixel );
+    return maPixelData[nPixel];
 }
 
 // Resets to the original state of the control
@@ -1019,7 +1004,7 @@ sal_uInt16 SvxPixelCtl::GetBitmapPixel( const sal_uInt16 nPixel )
 void SvxPixelCtl::Reset()
 {
     // clear pixel area
-    memset(pPixel, 0, nSquares * sizeof(sal_uInt16));
+    maPixelData.fill(0);
     Invalidate();
 }
 
@@ -1569,8 +1554,8 @@ void SvxXLinePreview::Paint(vcl::RenderContext& rRenderContext, const tools::Rec
     {
         const Size aOutputSize(GetOutputSize());
         Point aPos = Point( aOutputSize.Width() / 3, aOutputSize.Height() / 2 );
-        aPos.X() -= maSymbolSize.Width() / 2;
-        aPos.Y() -= maSymbolSize.Height() / 2;
+        aPos.AdjustX( -(maSymbolSize.Width() / 2) );
+        aPos.AdjustY( -(maSymbolSize.Height() / 2) );
         mpGraphic->Draw(&getBufferDevice(), aPos, maSymbolSize);
     }
 
@@ -1647,8 +1632,8 @@ SvxXShadowPreview::SvxXShadowPreview( vcl::Window* pParent )
 
     // prepare size
     Size aSize = GetOutputSize();
-    aSize.Width() = aSize.Width() / 3;
-    aSize.Height() = aSize.Height() / 3;
+    aSize.setWidth( aSize.Width() / 3 );
+    aSize.setHeight( aSize.Height() / 3 );
 
     // create RectangleObject
     const tools::Rectangle aObjectSize( Point( aSize.Width(), aSize.Height() ), aSize );
@@ -1698,8 +1683,8 @@ void SvxXShadowPreview::Paint(vcl::RenderContext& rRenderContext, const tools::R
 
     // prepare size
     Size aSize = rRenderContext.GetOutputSize();
-    aSize.Width() = aSize.Width() / 3;
-    aSize.Height() = aSize.Height() / 3;
+    aSize.setWidth( aSize.Width() / 3 );
+    aSize.setHeight( aSize.Height() / 3 );
 
     tools::Rectangle aObjectRect(Point(aSize.Width(), aSize.Height()), aSize);
     mpRectangleObject->SetSnapRect(aObjectRect);

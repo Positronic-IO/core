@@ -48,8 +48,9 @@
 #include <svl/visitem.hxx>
 #include <svl/whiter.hxx>
 #include <svx/svxids.hrc>
-#include <vcl/xtextedt.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/weld.hxx>
+#include <vcl/xtextedt.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <cassert>
 
@@ -100,7 +101,7 @@ void lcl_PrintHeader( Printer* pPrinter, sal_uInt16 nPages, sal_uInt16 nCurPage,
     const Color aOldFillColor( pPrinter->GetFillColor() );
     const vcl::Font aOldFont( pPrinter->GetFont() );
 
-    pPrinter->SetLineColor( Color( COL_BLACK ) );
+    pPrinter->SetLineColor( COL_BLACK );
     pPrinter->SetFillColor();
 
     vcl::Font aFont( aOldFont );
@@ -131,7 +132,7 @@ void lcl_PrintHeader( Printer* pPrinter, sal_uInt16 nPages, sal_uInt16 nCurPage,
     {
         aFont.SetWeight( WEIGHT_NORMAL );
         pPrinter->SetFont( aFont );
-        aPos.X() += pPrinter->GetTextWidth( rTitle );
+        aPos.AdjustX(pPrinter->GetTextWidth( rTitle ) );
 
         if( bOutput )
         {
@@ -301,7 +302,9 @@ void ModulWindow::BasicExecute()
     {
         if ( !aDocument.allowMacros() )
         {
-            ScopedVclPtrInstance<MessageDialog>(this, IDEResId(RID_STR_CANNOTRUNMACRO), VclMessageType::Warning)->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_CANNOTRUNMACRO)));
+            xBox->run();
             return;
         }
     }
@@ -417,7 +420,7 @@ void ModulWindow::LoadBasic()
         if ( pStream )
         {
             AssertValidEditEngine();
-            sal_uLong nLines = CalcLineCount( *pStream );
+            sal_uInt32 nLines = CalcLineCount( *pStream );
             // nLines*4: ReadText/Formatting/Highlighting/Formatting
             GetEditorWindow().CreateProgress( IDEResId(RID_STR_GENERATESOURCE), nLines*4 );
             GetEditEngine()->SetUpdateMode( false );
@@ -431,7 +434,11 @@ void ModulWindow::LoadBasic()
                 ErrorHandler::HandleError( nError );
         }
         else
-            ScopedVclPtrInstance<MessageDialog>(this, IDEResId(RID_STR_COULDNTREAD))->Execute();
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_COULDNTREAD)));
+            xBox->run();
+        }
     }
 }
 
@@ -472,7 +479,11 @@ void ModulWindow::SaveBasicSource()
                 ErrorHandler::HandleError( nError );
         }
         else
-            ScopedVclPtrInstance<MessageDialog>(this, IDEResId(RID_STR_COULDNTWRITE))->Execute();
+        {
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_COULDNTWRITE)));
+            xErrorBox->run();
+        }
     }
 }
 
@@ -480,7 +491,7 @@ void ModulWindow::ImportDialog()
 {
     const ScriptDocument& rDocument = GetDocument();
     OUString aLibName = GetLibName();
-    implImportDialog( this, m_sCurPath, rDocument, aLibName );
+    implImportDialog(GetFrameWeld(), m_sCurPath, rDocument, aLibName);
 }
 
 void ModulWindow::ToggleBreakPoint( sal_uLong nLine )
@@ -810,8 +821,8 @@ sal_Int32 ModulWindow::FormatAndPrint( Printer* pPrinter, sal_Int32 nPrintPage )
     }
 
     Size aPaperSz = pPrinter->GetOutputSize();
-    aPaperSz.Width() -= (Print::nLeftMargin + Print::nRightMargin);
-    aPaperSz.Height() -= (Print::nTopMargin + Print::nBottomMargin);
+    aPaperSz.AdjustWidth( -(Print::nLeftMargin + Print::nRightMargin) );
+    aPaperSz.AdjustHeight( -(Print::nTopMargin + Print::nBottomMargin) );
 
     // nLinepPage is not correct if there's a line break
     sal_Int32 nLinespPage = aPaperSz.Height()/nLineHeight;
@@ -835,7 +846,7 @@ sal_Int32 ModulWindow::FormatAndPrint( Printer* pPrinter, sal_Int32 nPrintPage )
             sal_Int32 nBeginIndex = nLine*nCharspLine;
             sal_Int32 nCopyCount = std::min<sal_Int32>(nCharspLine, aLine.getLength()-nBeginIndex);
             OUString aTmpLine = aLine.copy(nBeginIndex, nCopyCount);
-            aPos.Y() += nLineHeight;
+            aPos.AdjustY(nLineHeight );
             if ( aPos.Y() > ( aPaperSz.Height() + Print::nTopMargin ) )
             {
                 nCurPage++;
@@ -845,7 +856,7 @@ sal_Int32 ModulWindow::FormatAndPrint( Printer* pPrinter, sal_Int32 nPrintPage )
             if( nCurPage-1 == nPrintPage )
                 pPrinter->DrawText( aPos, aTmpLine );
         }
-        aPos.Y() += 10; // nParaSpace
+        aPos.AdjustY(10 ); // nParaSpace
     }
 
     pPrinter->SetFont( aOldFont );
@@ -989,7 +1000,7 @@ void ModulWindow::ExecuteCommand (SfxRequest& rReq)
         break;
         case SID_BASICIDE_DELETECURRENT:
         {
-            if (QueryDelModule(m_aName, this))
+            if (QueryDelModule(m_aName, GetFrameWeld()))
                 if (m_aDocument.removeModule(m_aLibName, m_aName))
                     MarkDocumentModified(m_aDocument);
         }

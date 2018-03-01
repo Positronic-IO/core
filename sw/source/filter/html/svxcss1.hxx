@@ -32,6 +32,7 @@
 class SfxItemPool;
 class SvxBoxItem;
 class FontList;
+enum class SvxBoxItemLine;
 
 enum SvxCSS1Position
 {
@@ -100,6 +101,7 @@ class SvxCSS1PropertyInfo
     void DestroyBorderInfos();
 
 public:
+    static constexpr sal_uInt16 UNSET_BORDER_DISTANCE = SAL_MAX_UINT16;
 
     OUString m_aId;             // ID for bookmarks, frame, and so
 
@@ -199,7 +201,6 @@ class SvxCSS1Parser : public CSS1Parser
     sal_uInt16 nMinFixLineSpace;    // minimum spacing for fixed line spacing
 
     rtl_TextEncoding    eDfltEnc;
-    Css1ScriptFlags     nScriptFlags;
 
     bool bIgnoreFontFamily;
 
@@ -300,10 +301,6 @@ public:
 
     virtual void SetDfltEncoding( rtl_TextEncoding eEnc );
     rtl_TextEncoding GetDfltEncoding() const { return eDfltEnc; }
-
-    bool IsSetWesternProps() const { return bool(nScriptFlags & Css1ScriptFlags::Western); }
-    bool IsSetCJKProps() const { return bool(nScriptFlags & Css1ScriptFlags::CJK); }
-    bool IsSetCTLProps() const { return bool(nScriptFlags & Css1ScriptFlags::CTL); }
 
     const OUString& GetBaseURL() const { return sBaseURL;}
 

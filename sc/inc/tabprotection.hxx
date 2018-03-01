@@ -33,8 +33,29 @@ class ScTableProtectionImpl;
 enum ScPasswordHash
 {
     PASSHASH_SHA1 = 0,
+    PASSHASH_SHA1_UTF8, // tdf#115483 this is UTF8, previous one is wrong UTF16
+    PASSHASH_SHA256,
     PASSHASH_XL,
     PASSHASH_UNSPECIFIED
+};
+
+/// OOXML password definitions: algorithmName, hashValue, saltValue, spinCount
+struct ScOoxPasswordHash
+{
+    OUString    maAlgorithmName;    /// "SHA-512", ...
+    OUString    maHashValue;        /// base64 encoded hash value
+    OUString    maSaltValue;        /// base64 encoded salt value
+    sal_uInt32  mnSpinCount;        /// spin count, iteration runs
+
+    ScOoxPasswordHash() : mnSpinCount(0) {}
+    bool hasPassword() const { return !maHashValue.isEmpty(); }
+    void clear()
+    {
+        // Keep algorithm and spin count.
+        maHashValue.clear();
+        maSaltValue.clear();
+    }
+    bool verifyPassword( const OUString& aPassText ) const;
 };
 
 namespace ScPassHashHelper
@@ -64,9 +85,12 @@ public:
     virtual void setPassword(const OUString& aPassText) = 0;
     virtual css::uno::Sequence<sal_Int8> getPasswordHash(
         ScPasswordHash eHash, ScPasswordHash eHas2 = PASSHASH_UNSPECIFIED) const = 0;
+    virtual const ScOoxPasswordHash& getPasswordHash() const = 0;
     virtual void setPasswordHash(
         const css::uno::Sequence<sal_Int8>& aPassword,
         ScPasswordHash eHash, ScPasswordHash eHash2 = PASSHASH_UNSPECIFIED) = 0;
+    virtual void setPasswordHash( const OUString& rAlgorithmName, const OUString& rHashValue,
+            const OUString& rSaltValue, sal_uInt32 nSpinCount ) = 0;
     virtual bool verifyPassword(const OUString& aPassText) const = 0;
 };
 
@@ -93,9 +117,12 @@ public:
     virtual void setPassword(const OUString& aPassText) override;
     virtual css::uno::Sequence<sal_Int8> getPasswordHash(
         ScPasswordHash eHash, ScPasswordHash eHash2 = PASSHASH_UNSPECIFIED) const override;
+    virtual const ScOoxPasswordHash& getPasswordHash() const override;
     virtual void setPasswordHash(
         const css::uno::Sequence<sal_Int8>& aPassword,
         ScPasswordHash eHash, ScPasswordHash eHash2 = PASSHASH_UNSPECIFIED) override;
+    virtual void setPasswordHash( const OUString& rAlgorithmName, const OUString& rHashValue,
+            const OUString& rSaltValue, sal_uInt32 nSpinCount ) override;
     virtual bool verifyPassword(const OUString& aPassText) const override;
 
     bool isOptionEnabled(Option eOption) const;
@@ -115,13 +142,9 @@ struct ScEnhancedProtection
     OUString                    maTitle;
     ::std::vector< sal_uInt8 >  maSecurityDescriptor;       // imported as raw BIFF data
     OUString                    maSecurityDescriptorXML;    // imported from OOXML
-    // OOXML password definitions
-    OUString                    maAlgorithmName;
-    OUString                    maHashValue;
-    OUString                    maSaltValue;
-    sal_uInt32                  mnSpinCount;
+    ScOoxPasswordHash           maPasswordHash;
 
-    ScEnhancedProtection() : mnAreserved(0), mnPasswordVerifier(0), mnSpinCount(0) {}
+    ScEnhancedProtection() : mnAreserved(0), mnPasswordVerifier(0) {}
 
     bool hasSecurityDescriptor() const
     {
@@ -130,7 +153,7 @@ struct ScEnhancedProtection
 
     bool hasPassword() const
     {
-        return mnPasswordVerifier != 0 || !maHashValue.isEmpty();
+        return mnPasswordVerifier != 0 || maPasswordHash.hasPassword();
     }
 };
 
@@ -178,9 +201,12 @@ public:
     virtual void setPassword(const OUString& aPassText) override;
     virtual css::uno::Sequence<sal_Int8> getPasswordHash(
         ScPasswordHash eHash, ScPasswordHash eHash2 = PASSHASH_UNSPECIFIED) const override;
+    virtual const ScOoxPasswordHash& getPasswordHash() const override;
     virtual void setPasswordHash(
         const css::uno::Sequence<sal_Int8>& aPassword,
         ScPasswordHash eHash, ScPasswordHash eHash2 = PASSHASH_UNSPECIFIED) override;
+    virtual void setPasswordHash( const OUString& rAlgorithmName, const OUString& rHashValue,
+            const OUString& rSaltValue, sal_uInt32 nSpinCount ) override;
     virtual bool verifyPassword(const OUString& aPassText) const override;
 
     bool isOptionEnabled(Option eOption) const;

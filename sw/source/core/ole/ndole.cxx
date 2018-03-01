@@ -26,7 +26,6 @@
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <cppuhelper/implbase.hxx>
 
-#include <toolkit/helper/vclunohelper.hxx>
 #include <tools/globname.hxx>
 #include <hintids.hxx>
 #include <sfx2/docfile.hxx>
@@ -155,7 +154,7 @@ public:
     virtual ::sfx2::SvBaseLink::UpdateResult DataChanged(
         const OUString& rMimeType, const css::uno::Any & rValue ) override;
 
-    bool            Connect() { return GetRealObject() != nullptr; }
+    void            Connect() { GetRealObject(); }
 };
 
 SwEmbedObjectLink::SwEmbedObjectLink(SwOLENode* pNode):
@@ -1174,7 +1173,7 @@ void SwOLELRUCache::RemoveObj( SwOLEObj& rObj )
     }
     if (m_OleObjects.empty())
     {
-        if (g_pOLELRU_Cache.unique()) // test that we're not in InsertObj()
+        if (g_pOLELRU_Cache.use_count() == 1) // test that we're not in InsertObj()
         {
             g_pOLELRU_Cache.reset();
         }

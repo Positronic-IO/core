@@ -25,7 +25,7 @@
 #include <vcl/errinf.hxx>
 #include <ucbhelper/content.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <avmedia/mediawindow.hxx>
 #include <unotools/pathoptions.hxx>
 #include <sfx2/opengrf.hxx>
@@ -33,7 +33,6 @@
 #include <svx/gallery1.hxx>
 #include <svx/galtheme.hxx>
 #include <cuigaldlg.hxx>
-#include <helpids.h>
 #include <bitmaps.hlst>
 #include <unotools/syslocale.hxx>
 #include <com/sun/star/uno/Reference.hxx>
@@ -562,8 +561,10 @@ IMPL_LINK_NOARG(GalleryIdDialog, ClickOkHdl, Button*, void)
 
             aStr += " (" + pInfo->GetThemeName() + ")";
 
-            ScopedVclPtrInstance< InfoBox > aBox( this, aStr );
-            aBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          aStr));
+            xInfoBox->run();
             m_pLbResName->GrabFocus();
             bDifferentThemeExists = true;
         }
@@ -950,7 +951,6 @@ void TPGalleryThemeProperties::FillFilterList()
     m_pCbbFileType->SetText( pFilterEntry->aFilterName );
 }
 
-
 IMPL_LINK_NOARG(TPGalleryThemeProperties, SelectFileTypeHdl, ComboBox&, void)
 {
     OUString aText( m_pCbbFileType->GetText() );
@@ -959,11 +959,12 @@ IMPL_LINK_NOARG(TPGalleryThemeProperties, SelectFileTypeHdl, ComboBox&, void)
     {
         aLastFilterName = aText;
 
-        if( ScopedVclPtrInstance<MessageDialog>( this, "QueryUpdateFileListDialog","cui/ui/queryupdategalleryfilelistdialog.ui" )->Execute() == RET_YES )
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryupdategalleryfilelistdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryUpdateFileListDialog"));
+        if (xQuery->run() == RET_YES)
             SearchFiles();
     }
 }
-
 
 void TPGalleryThemeProperties::SearchFiles()
 {

@@ -218,8 +218,8 @@ protected:
     bool m_bHasBullet;
     LwpObjectID m_aSilverBulletID;
     LwpSilverBullet* m_pSilverBullet;
-    LwpBulletOverride* m_pBullOver;
-    std::unique_ptr<LwpNumberingOverride> m_pParaNumbering;
+    std::unique_ptr<LwpBulletOverride> m_xBullOver;
+    std::unique_ptr<LwpNumberingOverride> m_xParaNumbering;
     OUString m_aBulletStyleName;
     bool m_bBullContinue;
     //end add
@@ -274,7 +274,7 @@ private:
     rtl::Reference<XFContentContainer> AddBulletList(XFContentContainer* pCont);
     void AddBreakAfter(XFContentContainer* pCont);
     void AddBreakBefore(XFContentContainer* pCont);
-    XFSection* CreateXFSection();
+    rtl::Reference<XFSection> CreateXFSection();
 
     void ReadPropertyList(LwpObjectStream* pFile);
 };

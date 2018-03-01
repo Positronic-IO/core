@@ -20,7 +20,7 @@
 #include <scitems.hxx>
 #include <editeng/eeitem.hxx>
 #include <vcl/timer.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/bindings.hxx>
@@ -201,8 +201,7 @@ void moveCursorByMergedCell(
         bSelectUnlocked = pTabProtection->isOptionEnabled(ScTableProtection::SELECT_UNLOCKED_CELLS);
     }
 
-    const ScMergeAttr* pMergeAttr = static_cast<const ScMergeAttr*>(
-        pDoc->GetAttr(nOrigX, nOrigY, nTab, ATTR_MERGE));
+    const ScMergeAttr* pMergeAttr = pDoc->GetAttr(nOrigX, nOrigY, nTab, ATTR_MERGE);
 
     bool bOriginMerged = false;
     SCCOL nColSpan = 1;
@@ -512,8 +511,8 @@ void ScTabView::MarkCursor( SCCOL nCurX, SCROW nCurY, SCTAB nCurZ,
             // selection is moving in the upperleft direction, the anchor cell will
             // move to the lower-right corner of the merged anchor cell, and so on.
 
-            pMergeAttr = static_cast<const ScMergeAttr*>(
-                pDocument->GetAttr( nBlockStartXOrig, nBlockStartYOrig, nTab, ATTR_MERGE ) );
+            pMergeAttr =
+                pDocument->GetAttr( nBlockStartXOrig, nBlockStartYOrig, nTab, ATTR_MERGE );
             if ( pMergeAttr->IsMerged() )
             {
                 SCCOL nColSpan = pMergeAttr->GetColMerge();
@@ -538,8 +537,7 @@ void ScTabView::MarkCursor( SCCOL nCurX, SCROW nCurY, SCTAB nCurZ,
             // nCurXOffset/nCurYOffset may also be specified in the previous code
             // block, in which case whichever value is greater will take on.
 
-            pMergeAttr = static_cast<const ScMergeAttr*>(
-                pDocument->GetAttr( nCurX, nCurY, nTab, ATTR_MERGE ) );
+            pMergeAttr = pDocument->GetAttr( nCurX, nCurY, nTab, ATTR_MERGE );
             if ( pMergeAttr->IsMerged() )
             {
                 SCCOL nColSpan = pMergeAttr->GetColMerge();
@@ -731,7 +729,7 @@ void ScTabView::GetAreaMoveEndPosition(SCCOL nMovX, SCROW nMovY, ScFollowMode eM
     rMode = eMode;
 }
 
-void ScTabView::SkipCursorHorizontal(SCCOL& rCurX, SCROW& rCurY, SCCOL nOldX, SCROW nMovX)
+void ScTabView::SkipCursorHorizontal(SCCOL& rCurX, SCROW& rCurY, SCCOL nOldX, SCCOL nMovX)
 {
     ScDocument* pDoc = aViewData.GetDocument();
     SCTAB nTab = aViewData.GetTabNo();
@@ -1247,9 +1245,9 @@ sal_uInt16 ScTabView::CalcZoom( SvxZoomType eType, sal_uInt16 nOldZoom )
                         //  for frozen panes, use sum of both parts for calculation
 
                         if ( nFixPosX != 0 )
-                            aWinSize.Width() += GetGridWidth( SC_SPLIT_LEFT );
+                            aWinSize.AdjustWidth(GetGridWidth( SC_SPLIT_LEFT ) );
                         if ( nFixPosY != 0 )
-                            aWinSize.Height() += GetGridHeight( SC_SPLIT_TOP );
+                            aWinSize.AdjustHeight(GetGridHeight( SC_SPLIT_TOP ) );
 
                         ScDocShell* pDocSh = aViewData.GetDocShell();
                         double nPPTX = ScGlobal::nScreenPPTX / pDocSh->GetOutputFactor();
@@ -1323,13 +1321,13 @@ sal_uInt16 ScTabView::CalcZoom( SvxZoomType eType, sal_uInt16 nOldZoom )
                                                         GetOutputSizePixel().Width();
                             if ( eHMode == SC_SPLIT_FIX )
                             {
-                                aWinSize.Width() += nOtherWidth;
+                                aWinSize.AdjustWidth(nOtherWidth );
                                 for ( SCCOL nCol = aViewData.GetPosX(SC_SPLIT_LEFT);
                                         nCol < aViewData.GetFixPosX(); nCol++ )
-                                    aPageSize.Width() += pDoc->GetColWidth( nCol, nCurTab );
+                                    aPageSize.AdjustWidth(pDoc->GetColWidth( nCol, nCurTab ) );
                             }
                             else if ( nOtherWidth > aWinSize.Width() )
-                                aWinSize.Width() = nOtherWidth;
+                                aWinSize.setWidth( nOtherWidth );
                         }
                         ScSplitMode eVMode = aViewData.GetVSplitMode();
                         if ( eVMode != SC_SPLIT_NONE && pGridWin[SC_SPLIT_TOPLEFT] )
@@ -1338,13 +1336,13 @@ sal_uInt16 ScTabView::CalcZoom( SvxZoomType eType, sal_uInt16 nOldZoom )
                                                         GetOutputSizePixel().Height();
                             if ( eVMode == SC_SPLIT_FIX )
                             {
-                                aWinSize.Height() += nOtherHeight;
-                                aPageSize.Height() += pDoc->GetRowHeight(
+                                aWinSize.AdjustHeight(nOtherHeight );
+                                aPageSize.AdjustHeight(pDoc->GetRowHeight(
                                         aViewData.GetPosY(SC_SPLIT_TOP),
-                                        aViewData.GetFixPosY()-1, nCurTab);
+                                        aViewData.GetFixPosY()-1, nCurTab) );
                             }
                             else if ( nOtherHeight > aWinSize.Height() )
-                                aWinSize.Height() = nOtherHeight;
+                                aWinSize.setHeight( nOtherHeight );
                         }
 
                         double nPPTX = ScGlobal::nScreenPPTX / aViewData.GetDocShell()->GetOutputFactor();
@@ -1436,8 +1434,11 @@ void ScTabView::ErrorMessage(const char* pGlobStrId)
         }
     }
 
-    ScopedVclPtrInstance<InfoBox> aBox(pParent, ScGlobal::GetRscString(pGlobStrId));
-    aBox->Execute();
+    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                  ScGlobal::GetRscString(pGlobStrId)));
+    xInfoBox->run();
+
     if (bFocus)
         pParent->GrabFocus();
 }

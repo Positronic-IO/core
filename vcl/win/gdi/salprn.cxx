@@ -328,7 +328,7 @@ static bool ImplTestSalJobSetup( WinSalInfoPrinter const * pPrinter,
         if ( (pSetupData->GetSystem() == JOBSETUP_SYSTEM_WINDOWS) &&
              (pPrinter->maDriverName == pSetupData->GetDriver()) &&
              (pSetupData->GetDriverDataLen() > sizeof( SalDriverData )) &&
-             (long)(pSetupData->GetDriverDataLen() - pSetupDriverData->mnDriverOffset) == nSysJobSize &&
+             static_cast<long>(pSetupData->GetDriverDataLen() - pSetupDriverData->mnDriverOffset) == nSysJobSize &&
              pSetupDriverData->mnSysSignature == SAL_DRIVERDATA_SYSSIGN )
         {
             if( pDevModeW &&
@@ -474,7 +474,7 @@ static void ImplDevModeToJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
             {
                 if( pDevModeW->dmDefaultSource == pBins[ i ] )
                 {
-                    pSetupData->SetPaperBin( (sal_uInt16)i );
+                    pSetupData->SetPaperBin( static_cast<sal_uInt16>(i) );
                     break;
                 }
             }
@@ -775,18 +775,15 @@ static void ImplJobSetupToDevMode( WinSalInfoPrinter const * pPrinter, const Imp
             case PAPER_TABLOID:
                 pDevModeW->dmPaperSize = DMPAPER_TABLOID;
                 break;
-#if 0
-            //http://msdn.microsoft.com/en-us/library/ms776398(VS.85).aspx
-            //DMPAPER_ENV_B6 is documented as:
-            //"DMPAPER_ENV_B6   35  Envelope B6 176 x 125 mm"
-            //which is the wrong way around, it is surely 125 x 176, i.e.
-            //compare DMPAPER_ENV_B4 and DMPAPER_ENV_B4 as
-            //DMPAPER_ENV_B4    33  Envelope B4 250 x 353 mm
-            //DMPAPER_ENV_B5    34  Envelope B5 176 x 250 mm
-            case PAPER_B6_ISO:
-                pDevModeW->dmPaperSize = DMPAPER_ENV_B6;
-                break;
-#endif
+
+            // http://msdn.microsoft.com/en-us/library/ms776398(VS.85).aspx
+            // DMPAPER_ENV_B6 is documented as:
+            // "DMPAPER_ENV_B6   35  Envelope B6 176 x 125 mm"
+            // which is the wrong way around, it is surely 125 x 176, i.e.
+            // compare DMPAPER_ENV_B4 and DMPAPER_ENV_B4 as
+            // DMPAPER_ENV_B4    33  Envelope B4 250 x 353 mm
+            // DMPAPER_ENV_B5    34  Envelope B5 176 x 250 mm
+
             case PAPER_ENV_C4:
                 pDevModeW->dmPaperSize = DMPAPER_ENV_C4;
                 break;
@@ -960,8 +957,8 @@ static void ImplJobSetupToDevMode( WinSalInfoPrinter const * pPrinter, const Imp
                 {
                     pDevModeW->dmFields       |= DM_PAPERLENGTH | DM_PAPERWIDTH;
                     pDevModeW->dmPaperSize     = DMPAPER_USER;
-                    pDevModeW->dmPaperWidth    = (short)(pSetupData->GetPaperWidth()/10);
-                    pDevModeW->dmPaperLength   = (short)(pSetupData->GetPaperHeight()/10);
+                    pDevModeW->dmPaperWidth    = static_cast<short>(pSetupData->GetPaperWidth()/10);
+                    pDevModeW->dmPaperLength   = static_cast<short>(pSetupData->GetPaperHeight()/10);
                 }
 
                 if ( pPapers )
@@ -1332,7 +1329,7 @@ static DEVMODEW const * ImplSalSetCopies( DEVMODEW const * pDevMode, sal_uLong n
         LPDEVMODEW pNewDevMode = static_cast<LPDEVMODEW>(rtl_allocateMemory( nDevSize ));
         memcpy( pNewDevMode, pDevMode, nDevSize );
         pNewDevMode->dmFields |= DM_COPIES;
-        pNewDevMode->dmCopies  = (short)(sal_uInt16)nCopies;
+        pNewDevMode->dmCopies  = static_cast<short>(static_cast<sal_uInt16>(nCopies));
         pNewDevMode->dmFields |= DM_COLLATE;
         if ( bCollate )
             pNewDevMode->dmCollate = DMCOLLATE_TRUE;

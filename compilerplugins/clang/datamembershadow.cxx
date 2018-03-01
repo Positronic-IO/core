@@ -19,6 +19,7 @@
  * Check for data member being shadowed.
  *
  * @TODO check for any members in superclass hierarchy with duplicate names,
+ *       regardless of their visibility,
  *       more specific names will make the code easier to read
  */
 namespace
@@ -60,12 +61,6 @@ bool DataMemberShadow::VisitFieldDecl(FieldDecl const * fieldDecl)
         return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/filter/source/graphicfilter/idxf/dxfentrd.hxx"))
         return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/framework/source/uielement/popuptoolbarcontroller.cxx"))
-        return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/lotuswordpro/inc/xfilter/xfcellstyle.hxx"))
-        return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/lotuswordpro/inc/xfilter/xfdrawobj.hxx"))
-        return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/sc/source/ui/vba/vbastyles.hxx"))
         return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/sd/inc/Outliner.hxx"))
@@ -77,20 +72,10 @@ bool DataMemberShadow::VisitFieldDecl(FieldDecl const * fieldDecl)
         return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/sd/source/ui/inc/unopage.hxx"))
         return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/sd/source/ui/view/viewoverlaymanager.cxx"))
-        return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/sdext/source/presenter/PresenterSpritePane.hxx"))
-        return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/store/source/stortree.hxx")
         || loplugin::isSamePathname(aFileName, SRCDIR "/store/source/stordata.hxx"))
         return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/svx/source/inc/cell.hxx"))
-        return true;
     if (loplugin::isSamePathname(aFileName, SRCDIR "/sw/source/uibase/inc/dbtree.hxx"))
-        return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/vcl/unx/generic/print/genpspgraphics.cxx"))
-        return true;
-    if (loplugin::isSamePathname(aFileName, SRCDIR "/xmloff/source/draw/ximplink.hxx"))
         return true;
 
     const CXXRecordDecl* parentCXXRecordDecl = dyn_cast<CXXRecordDecl>(fieldDecl->getDeclContext());
@@ -111,6 +96,8 @@ bool DataMemberShadow::VisitFieldDecl(FieldDecl const * fieldDecl)
             return false;
         for (const FieldDecl* baseFieldDecl : baseCXXRecordDecl->fields())
         {
+            // TODO look for overlaps even with private fields
+
             if (baseFieldDecl->getAccess() == AS_private
                 || !baseFieldDecl->getDeclName().isIdentifier()
                 || fieldDecl->getName() != baseFieldDecl->getName()) {

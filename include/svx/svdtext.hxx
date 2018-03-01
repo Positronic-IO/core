@@ -23,6 +23,7 @@
 #include <sal/types.h>
 #include <svx/svxdllapi.h>
 #include <tools/weakbase.hxx>
+#include <memory>
 
 
 class OutlinerParaObject;
@@ -40,11 +41,11 @@ namespace sdr { namespace properties {
 */
 
 class SfxStyleSheet;
-class SVX_DLLPUBLIC SdrText : public tools::WeakBase< SdrText >
+class SVX_DLLPUBLIC SdrText : public virtual tools::WeakBase
 {
 public:
     SdrText( SdrTextObj& rObject, OutlinerParaObject* pOutlinerParaObject = nullptr );
-    virtual ~SdrText();
+    virtual ~SdrText() override;
 
     virtual void SetModel(SdrModel* pNewModel);
     void ForceOutlinerParaObject( OutlinerMode nOutlMode );
@@ -73,7 +74,7 @@ protected:
     virtual SfxStyleSheet* GetStyleSheet() const;
 
 private:
-    OutlinerParaObject* mpOutlinerParaObject;
+    std::unique_ptr<OutlinerParaObject> mpOutlinerParaObject;
     SdrTextObj& mrObject;
     SdrModel* mpModel;
     bool mbPortionInfoChecked;

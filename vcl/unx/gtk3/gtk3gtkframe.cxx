@@ -38,6 +38,7 @@
 #include <rtl/process.h>
 #include <vcl/floatwin.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/window.hxx>
 #include <vcl/settings.hxx>
 #include <cppuhelper/exc_hlp.hxx>
@@ -362,7 +363,9 @@ GetAlternateKeyCode( const sal_uInt16 nKeyCode )
     return aAlternate;
 }
 
+#if OSL_DEBUG_LEVEL > 0
 static bool dumpframes = false;
+#endif
 
 bool GtkSalFrame::doKeyCallback( guint state,
                                  guint keyval,
@@ -380,29 +383,37 @@ bool GtkSalFrame::doKeyCallback( guint state,
 
     vcl::DeletionListener aDel( this );
 
-#if 0
-    if (bDown)
+#if OSL_DEBUG_LEVEL > 0
+    char* pKeyDebug = nullptr;
+    pKeyDebug = getenv("VCL_GTK3_PAINTDEBUG");
+
+    if (pKeyDebug && *pKeyDebug == '1')
     {
-        // shift-zero forces a re-draw and event is swallowed
-        if (keyval == GDK_KEY_0)
+        if (bDown)
         {
-            fprintf( stderr, "force widget_queue_draw\n");
-            gtk_widget_queue_draw(GTK_WIDGET(m_pFixedContainer));
-            return false;
-        }
-        else if (keyval == GDK_KEY_1)
-        {
-            fprintf( stderr, "force repaint all\n");
-            TriggerPaintEvent();
-            return false;
-        }
-        else if (keyval == GDK_KEY_2)
-        {
-            dumpframes = !dumpframes;
-            fprintf(stderr, "toggle dump frames to %d\n", dumpframes);
-            return false;
+            // shift-zero forces a re-draw and event is swallowed
+            if (keyval == GDK_KEY_0)
+            {
+                fprintf( stderr, "force widget_queue_draw\n");
+                gtk_widget_queue_draw(GTK_WIDGET(m_pFixedContainer));
+                return false;
+            }
+            else if (keyval == GDK_KEY_1)
+            {
+                fprintf( stderr, "force repaint all\n");
+                TriggerPaintEvent();
+                return false;
+            }
+            else if (keyval == GDK_KEY_2)
+            {
+                dumpframes = !dumpframes;
+                fprintf(stderr, "toggle dump frames to %d\n", dumpframes);
+                return false;
+            }
         }
     }
+
+    free(pKeyDebug);
 #endif
 
     /*
@@ -823,7 +834,7 @@ GtkSalFrame::~GtkSalFrame()
         cairo_region_destroy( m_pRegion );
     }
 
-    delete m_pIMHandler;
+    m_pIMHandler.reset();
 
     //tdf#108705 remove grabs on event widget before
     //destroying event widget
@@ -870,8 +881,7 @@ GtkSalFrame::~GtkSalFrame()
     if( m_pForeignTopLevel )
         g_object_unref( G_OBJECT( m_pForeignTopLevel) );
 
-    delete m_pGraphics;
-    m_pGraphics = nullptr;
+    m_pGraphics.reset();
 
     if (m_pSurface)
         cairo_surface_destroy(m_pSurface);
@@ -1301,7 +1311,7 @@ SalGraphics* GtkSalFrame::AcquireGraphics()
 
     if( !m_pGraphics )
     {
-        m_pGraphics = new GtkSalGraphics( this, m_pWindow );
+        m_pGraphics.reset( new GtkSalGraphics( this, m_pWindow ) );
         if (!m_pSurface)
         {
             AllocateFrame();
@@ -1310,13 +1320,13 @@ SalGraphics* GtkSalFrame::AcquireGraphics()
         m_pGraphics->setSurface(m_pSurface, m_aFrameSize);
     }
     m_bGraphics = true;
-    return m_pGraphics;
+    return m_pGraphics.get();
 }
 
 void GtkSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
 {
     (void) pGraphics;
-    assert( pGraphics == m_pGraphics );
+    assert( pGraphics == m_pGraphics.get() );
     m_bGraphics = false;
 }
 
@@ -1386,8 +1396,8 @@ Size GtkSalFrame::calcDefaultSize()
 {
     Size aScreenSize(getDisplay()->GetScreenSize(GetDisplayScreen()));
     int scale = gtk_widget_get_scale_factor(m_pWindow);
-    aScreenSize.Width() /= scale;
-    aScreenSize.Height() /= scale;
+    aScreenSize.setWidth( aScreenSize.Width() / scale );
+    aScreenSize.setHeight( aScreenSize.Height() / scale );
     return bestmaxFrameSizeForScreenSize(aScreenSize);
 }
 
@@ -1869,8 +1879,8 @@ void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rect
 
         // #i110881# for the benefit of compiz set a max size here
         // else setting to fullscreen fails for unknown reasons
-        m_aMaxSize.Width() = aNewMonitor.width;
-        m_aMaxSize.Height() = aNewMonitor.height;
+        m_aMaxSize.setWidth( aNewMonitor.width );
+        m_aMaxSize.setHeight( aNewMonitor.height );
     }
 
     if( pSize && eType == SetType::UnFullscreen )
@@ -2300,7 +2310,7 @@ void GtkSalFrame::SetInputContext( SalInputContext* pContext )
 
     // create a new im context
     if( ! m_pIMHandler )
-        m_pIMHandler = new IMHandler( this );
+        m_pIMHandler.reset( new IMHandler( this ) );
 }
 
 void GtkSalFrame::EndExtTextInput( EndExtTextInputFlags nFlags )
@@ -2325,7 +2335,7 @@ void GtkSalFrame::UpdateSettings( AllSettings& rSettings )
     if( ! m_pWindow )
         return;
 
-    GtkSalGraphics* pGraphics = m_pGraphics;
+    GtkSalGraphics* pGraphics = m_pGraphics.get();
     bool bFreeGraphics = false;
     if( ! pGraphics )
     {
@@ -2885,6 +2895,7 @@ cairo_t* GtkSalFrame::getCairoContext() const
 void GtkSalFrame::damaged(sal_Int32 nExtentsX, sal_Int32 nExtentsY,
                           sal_Int32 nExtentsWidth, sal_Int32 nExtentsHeight) const
 {
+#if OSL_DEBUG_LEVEL > 0
     if (dumpframes)
     {
         static int frame;
@@ -2893,6 +2904,7 @@ void GtkSalFrame::damaged(sal_Int32 nExtentsX, sal_Int32 nExtentsY,
         cairo_surface_write_to_png(cairo_get_target(cr), tmp.getStr());
         cairo_destroy(cr);
     }
+#endif
 
     gtk_widget_queue_draw_area(GTK_WIDGET(m_pFixedContainer),
                                nExtentsX, nExtentsY,
@@ -3005,7 +3017,7 @@ gboolean GtkSalFrame::signalFocus( GtkWidget*, GdkEventFocus* pEvent, gpointer f
         pThis->m_nKeyModifiers = ModKeyFlags::NONE;
 
     if( pThis->m_pIMHandler )
-        pThis->m_pIMHandler->focusChanged( pEvent->in );
+        pThis->m_pIMHandler->focusChanged( pEvent->in != 0 );
 
     // ask for changed printers like generic implementation
     if( pEvent->in && pSalInstance->isPrinterInit() )
@@ -3556,12 +3568,6 @@ void GtkSalFrame::signalDragLeave(GtkWidget *pWidget, GdkDragContext * /*context
         return;
     pThis->m_bInDrag = false;
     gtk_drag_unhighlight(pWidget);
-
-#if 0
-    css::datatransfer::dnd::DropTargetEvent aEvent;
-    aEvent.Source = static_cast<css::datatransfer::dnd::XDropTarget*>(pThis->m_pDropTarget);
-    pThis->m_pDropTarget->fire_dragExit(aEvent);
-#endif
 }
 
 void GtkSalFrame::signalDestroy( GtkWidget* pObj, gpointer frame )
@@ -3573,6 +3579,7 @@ void GtkSalFrame::signalDestroy( GtkWidget* pObj, gpointer frame )
         pThis->m_pEventBox = nullptr;
         pThis->m_pTopLevelGrid = nullptr;
         pThis->m_pWindow = nullptr;
+        pThis->m_xFrameWeld.reset();
         pThis->InvalidateGraphics();
     }
 }

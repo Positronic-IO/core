@@ -104,12 +104,11 @@ void ImplWheelWindow::ImplSetRegion( const Bitmap& rRegionBmp )
 {
     Point           aPos( GetPointerPosPixel() );
     const Size      aSize( rRegionBmp.GetSizePixel() );
-    Point           aPoint;
-    const tools::Rectangle aRect( aPoint, aSize );
+    const tools::Rectangle aRect( Point(), aSize );
 
     maCenter = maLastMousePos = aPos;
-    aPos.X() -= aSize.Width() >> 1;
-    aPos.Y() -= aSize.Height() >> 1;
+    aPos.AdjustX( -(aSize.Width() >> 1) );
+    aPos.AdjustY( -(aSize.Height() >> 1) );
 
     SetPosSizePixel( aPos, aSize );
     SetWindowRegionPixel( rRegionBmp.CreateRegion( COL_BLACK, aRect ) );

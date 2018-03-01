@@ -115,7 +115,7 @@ lcl_CleanStr(const SwTextNode& rNd, sal_Int32 const nStart, sal_Int32& rEnd,
         else
             break;
 
-        const sal_Int32 nAkt = nStt - rArr.size();
+        const sal_Int32 nCurrent = nStt - rArr.size();
 
         if ( bNewHint )
         {
@@ -141,17 +141,17 @@ lcl_CleanStr(const SwTextNode& rNd, sal_Int32 const nStart, sal_Int32& rEnd,
                         // end (might be normal 0x7f).
                         const bool bEmpty = pHt->Which() != RES_TXTATR_FIELD
                             || (static_txtattr_cast<SwTextField const*>(pHt)->GetFormatField().GetField()->ExpandField(true).isEmpty());
-                        if ( bEmpty && nStart == nAkt )
+                        if ( bEmpty && nStart == nCurrent )
                         {
-                            rArr.push_back( nAkt );
+                            rArr.push_back( nCurrent );
                             --rEnd;
-                            buf.remove(nAkt, 1);
+                            buf.remove(nCurrent, 1);
                         }
                         else
                         {
                             if ( bEmpty )
-                                aReplaced.push_back( nAkt );
-                            buf[nAkt] = '\x7f';
+                                aReplaced.push_back( nCurrent );
+                            buf[nCurrent] = '\x7f';
                         }
                     }
                     break;
@@ -159,9 +159,9 @@ lcl_CleanStr(const SwTextNode& rNd, sal_Int32 const nStart, sal_Int32& rEnd,
                     {
                         if( bRemoveCommentAnchors )
                         {
-                            rArr.push_back( nAkt );
+                            rArr.push_back( nCurrent );
                             --rEnd;
-                            buf.remove( nAkt, 1 );
+                            buf.remove( nCurrent, 1 );
                         }
                     }
                     break;
@@ -175,9 +175,9 @@ lcl_CleanStr(const SwTextNode& rNd, sal_Int32 const nStart, sal_Int32& rEnd,
 
         if ( bNewSoftHyphen )
         {
-            rArr.push_back( nAkt );
+            rArr.push_back( nCurrent );
             --rEnd;
-            buf.remove(nAkt, 1);
+            buf.remove(nCurrent, 1);
             ++nSoftHyphen;
         }
     }
@@ -758,15 +758,25 @@ OUString *ReplaceBackReferences( const i18nutil::SearchOptions2& rSearchOpt, SwP
         SearchAlgorithms2::REGEXP == rSearchOpt.AlgorithmType2 )
     {
         const SwContentNode* pTextNode = pPam->GetContentNode();
-        if( pTextNode && pTextNode->IsTextNode() && pTextNode == pPam->GetContentNode( false ) )
+        const bool bParaEnd = rSearchOpt.searchString == "$" || rSearchOpt.searchString == "^$" || rSearchOpt.searchString == "$^";
+        if ( pTextNode && pTextNode->IsTextNode() && (bParaEnd || pTextNode == pPam->GetContentNode( false )) )
         {
             utl::TextSearch aSText( utl::TextSearch::UpgradeToSearchOptions2( rSearchOpt) );
-            const OUString& rStr = pTextNode->GetTextNode()->GetText();
+            OUString rStr = pTextNode->GetTextNode()->GetText();
             sal_Int32 nStart = pPam->Start()->nContent.GetIndex();
             sal_Int32 nEnd = pPam->End()->nContent.GetIndex();
             SearchResult aResult;
-            if( aSText.SearchForward( rStr, &nStart, &nEnd, &aResult ) )
+            if ( bParaEnd || aSText.SearchForward( rStr, &nStart, &nEnd, &aResult ) )
             {
+                if ( bParaEnd )
+                {
+                    rStr = "\\n";
+                    aResult.subRegExpressions = 1;
+                    aResult.startOffset.realloc(1);
+                    aResult.endOffset.realloc(1);
+                    aResult.startOffset[0] = 0;
+                    aResult.endOffset[0] = rStr.getLength();
+                }
                 OUString aReplaceStr( rSearchOpt.replaceString );
                 aSText.ReplaceBackReferences( aReplaceStr, rStr, aResult );
                 pRet = new OUString( aReplaceStr );

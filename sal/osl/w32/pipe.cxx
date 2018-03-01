@@ -229,6 +229,14 @@ oslPipe SAL_CALL osl_createPipe(rtl_uString *strPipeName, oslPipeOptions Options
                     rtl_uString_release(name);
                     rtl_uString_release(path);
 
+                    // We should try to transfer our privilege to become foreground process
+                    // to the other process, so that it may show popups (otherwise, they might
+                    // be blocked by SPI_GETFOREGROUNDLOCKTIMEOUT setting -
+                    // see SystemParametersInfo function at MSDN
+                    ULONG ServerProcessId = 0;
+                    if (GetNamedPipeServerProcessId(pPipe->m_File, &ServerProcessId))
+                        AllowSetForegroundWindow(ServerProcessId);
+
                     return pPipe;
                 }
                 else
@@ -386,7 +394,7 @@ sal_Int32 SAL_CALL osl_receivePipe(oslPipe pPipe,
             if (lastError == ERROR_PIPE_NOT_CONNECTED)
                 nBytes = 0;
             else
-                nBytes = (DWORD) -1;
+                nBytes = DWORD(-1);
 
             pPipe->m_Error = osl_Pipe_E_ConnectionAbort;
         }
@@ -415,7 +423,7 @@ sal_Int32 SAL_CALL osl_sendPipe(oslPipe pPipe,
         if (GetLastError() == ERROR_PIPE_NOT_CONNECTED)
             nBytes = 0;
         else
-            nBytes = (DWORD) -1;
+            nBytes = DWORD(-1);
 
          pPipe->m_Error = osl_Pipe_E_ConnectionAbort;
     }

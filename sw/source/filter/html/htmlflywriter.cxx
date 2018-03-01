@@ -425,7 +425,7 @@ void SwHTMLWriter::OutFrameFormat( AllHtmlFlags nMode, const SwFrameFormat& rFra
 {
     HtmlContainerFlags nCntnrMode = nMode.nContainer;
     HtmlOut nOutMode = nMode.nOut;
-    const sal_Char *pCntnrStr = nullptr;
+    OString aContainerStr;
     if( HtmlContainerFlags::NONE != nCntnrMode )
     {
 
@@ -433,10 +433,10 @@ void SwHTMLWriter::OutFrameFormat( AllHtmlFlags nMode, const SwFrameFormat& rFra
             OutNewLine();
 
         OStringBuffer sOut;
-        pCntnrStr = (HtmlContainerFlags::Div == nCntnrMode)
+        aContainerStr = (HtmlContainerFlags::Div == nCntnrMode)
                             ? OOO_STRING_SVTOOLS_HTML_division
                             : OOO_STRING_SVTOOLS_HTML_span;
-        sOut.append('<').append(pCntnrStr).append(' ')
+        sOut.append('<').append(GetNamespace() + aContainerStr).append(' ')
             .append(OOO_STRING_SVTOOLS_HTML_O_class).append("=\"")
             .append("sd-abs-pos").append('\"');
         Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
@@ -463,40 +463,40 @@ void SwHTMLWriter::OutFrameFormat( AllHtmlFlags nMode, const SwFrameFormat& rFra
     switch( nOutMode )
     {
     case HtmlOut::TableNode:      // OK
-        OSL_ENSURE( !pCntnrStr, "Table: Container is not supposed to be here" );
+        OSL_ENSURE( aContainerStr.isEmpty(), "Table: Container is not supposed to be here" );
         OutHTML_FrameFormatTableNode( *this, rFrameFormat );
         break;
     case HtmlOut::GraphicNode:      // OK
-        OutHTML_FrameFormatGrfNode( *this, rFrameFormat, pCntnrStr != nullptr );
+        OutHTML_FrameFormatGrfNode( *this, rFrameFormat, !aContainerStr.isEmpty() );
         break;
     case HtmlOut::OleNode:      // OK
-        OutHTML_FrameFormatOLENode( *this, rFrameFormat, pCntnrStr != nullptr );
+        OutHTML_FrameFormatOLENode( *this, rFrameFormat, !aContainerStr.isEmpty() );
         break;
     case HtmlOut::OleGraphic:       // OK
-        OutHTML_FrameFormatOLENodeGrf( *this, rFrameFormat, pCntnrStr != nullptr );
+        OutHTML_FrameFormatOLENodeGrf( *this, rFrameFormat, !aContainerStr.isEmpty() );
         break;
     case HtmlOut::Div:
     case HtmlOut::Span:
-        OSL_ENSURE( !pCntnrStr, "Div: Container is not supposed to be here" );
+        OSL_ENSURE( aContainerStr.isEmpty(), "Div: Container is not supposed to be here" );
         OutHTML_FrameFormatAsDivOrSpan( *this, rFrameFormat, HtmlOut::Span==nOutMode );
         break;
     case HtmlOut::MultiCol:     // OK
-        OutHTML_FrameFormatAsMulticol( *this, rFrameFormat, pCntnrStr != nullptr );
+        OutHTML_FrameFormatAsMulticol( *this, rFrameFormat, !aContainerStr.isEmpty() );
         break;
     case HtmlOut::Spacer:       // OK
-        OSL_ENSURE( !pCntnrStr, "Spacer: Container is not supposed to be here" );
+        OSL_ENSURE( aContainerStr.isEmpty(), "Spacer: Container is not supposed to be here" );
         OutHTML_FrameFormatAsSpacer( *this, rFrameFormat );
         break;
     case HtmlOut::Control:      // OK
         OutHTML_DrawFrameFormatAsControl( *this,
                                     static_cast<const SwDrawFrameFormat &>(rFrameFormat), dynamic_cast<const SdrUnoObj&>(*pSdrObject),
-                                    pCntnrStr != nullptr );
+                                    !aContainerStr.isEmpty() );
         break;
     case HtmlOut::AMarquee:
         OutHTML_FrameFormatAsMarquee( *this, rFrameFormat, *pSdrObject );
         break;
     case HtmlOut::Marquee:
-        OSL_ENSURE( !pCntnrStr, "Marquee: Container is not supposed to be here" );
+        OSL_ENSURE( aContainerStr.isEmpty(), "Marquee: Container is not supposed to be here" );
         OutHTML_DrawFrameFormatAsMarquee( *this,
                     static_cast<const SwDrawFrameFormat &>(rFrameFormat), *pSdrObject );
         break;
@@ -510,11 +510,11 @@ void SwHTMLWriter::OutFrameFormat( AllHtmlFlags nMode, const SwFrameFormat& rFra
         DecIndentLevel();
         if( m_bLFPossible )
             OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_division, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_division, false );
         m_bLFPossible = true;
     }
     else if( HtmlContainerFlags::Span == nCntnrMode )
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_span, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_span, false );
 }
 
 OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
@@ -606,17 +606,17 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
     if( (nFrameOpts & (HtmlFrmOpts::Space|HtmlFrmOpts::MarginSize)) &&
         SfxItemState::SET == rItemSet.GetItemState( RES_LR_SPACE, true, &pItem ))
     {
-        aTwipSpc.Width() =
+        aTwipSpc.setWidth(
             ( static_cast<const SvxLRSpaceItem*>(pItem)->GetLeft() +
-                static_cast<const SvxLRSpaceItem*>(pItem)->GetRight() ) / 2;
+                static_cast<const SvxLRSpaceItem*>(pItem)->GetRight() ) / 2 );
         m_nDfltLeftMargin = m_nDfltRightMargin = aTwipSpc.Width();
     }
     if( (nFrameOpts & (HtmlFrmOpts::Space|HtmlFrmOpts::MarginSize)) &&
         SfxItemState::SET == rItemSet.GetItemState( RES_UL_SPACE, true, &pItem ))
     {
-        aTwipSpc.Height()  =
+        aTwipSpc.setHeight(
             ( static_cast<const SvxULSpaceItem*>(pItem)->GetUpper() +
-                static_cast<const SvxULSpaceItem*>(pItem)->GetLower() ) / 2;
+                static_cast<const SvxULSpaceItem*>(pItem)->GetLower() ) / 2 );
         m_nDfltTopMargin = m_nDfltBottomMargin = static_cast<sal_uInt16>(aTwipSpc.Height());
     }
 
@@ -628,9 +628,9 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
             Application::GetDefaultDevice()->LogicToPixel( aTwipSpc,
                                                 MapMode(MapUnit::MapTwip) );
         if( !aPixelSpc.Width() && aTwipSpc.Width() )
-            aPixelSpc.Width() = 1;
+            aPixelSpc.setWidth( 1 );
         if( !aPixelSpc.Height() && aTwipSpc.Height() )
-            aPixelSpc.Height() = 1;
+            aPixelSpc.setHeight( 1 );
 
         if( aPixelSpc.Width() )
         {
@@ -649,13 +649,13 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
     // is set.
     if( nFrameOpts & HtmlFrmOpts::MarginSize )
     {
-        aTwipSpc.Width() *= -2;
-        aTwipSpc.Height() *= -2;
+        aTwipSpc.setWidth( aTwipSpc.Width() * -2 );
+        aTwipSpc.setHeight( aTwipSpc.Height() * -2 );
     }
     else
     {
-        aTwipSpc.Width() = 0;
-        aTwipSpc.Height() = 0;
+        aTwipSpc.setWidth( 0 );
+        aTwipSpc.setHeight( 0 );
     }
 
     if( !(nFrameOpts & HtmlFrmOpts::AbsSize) &&
@@ -663,10 +663,10 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
     {
         const SvxBoxItem* pBoxItem = static_cast<const SvxBoxItem*>(pItem);
 
-        aTwipSpc.Width() += pBoxItem->CalcLineSpace( SvxBoxItemLine::LEFT );
-        aTwipSpc.Width() += pBoxItem->CalcLineSpace( SvxBoxItemLine::RIGHT );
-        aTwipSpc.Height() += pBoxItem->CalcLineSpace( SvxBoxItemLine::TOP );
-        aTwipSpc.Height() += pBoxItem->CalcLineSpace( SvxBoxItemLine::BOTTOM );
+        aTwipSpc.AdjustWidth(pBoxItem->CalcLineSpace( SvxBoxItemLine::LEFT ) );
+        aTwipSpc.AdjustWidth(pBoxItem->CalcLineSpace( SvxBoxItemLine::RIGHT ) );
+        aTwipSpc.AdjustHeight(pBoxItem->CalcLineSpace( SvxBoxItemLine::TOP ) );
+        aTwipSpc.AdjustHeight(pBoxItem->CalcLineSpace( SvxBoxItemLine::BOTTOM ) );
     }
 
     // WIDTH and/or HEIGHT
@@ -689,9 +689,9 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
         OSL_ENSURE( aTwipSz.Width() >= 0 && aTwipSz.Height() >= 0,
                 "Frame size minus spacing  < 0!!!???" );
         if( aTwipSz.Width() < 0 )
-            aTwipSz.Width() = 0;
+            aTwipSz.setWidth( 0 );
         if( aTwipSz.Height() < 0 )
-            aTwipSz.Height() = 0;
+            aTwipSz.setHeight( 0 );
 
         Size aPixelSz( 0, 0 );
         if( (aTwipSz.Width() || aTwipSz.Height()) &&
@@ -701,9 +701,9 @@ OString SwHTMLWriter::OutFrameFormatOptions( const SwFrameFormat &rFrameFormat,
                 Application::GetDefaultDevice()->LogicToPixel( aTwipSz,
                                                     MapMode(MapUnit::MapTwip) );
             if( !aPixelSz.Width() && aTwipSz.Width() )
-                aPixelSz.Width() = 1;
+                aPixelSz.setWidth( 1 );
             if( !aPixelSz.Height() && aTwipSz.Height() )
-                aPixelSz.Height() = 1;
+                aPixelSz.setHeight( 1 );
         }
 
         if( (nFrameOpts & HtmlFrmOpts::Width) &&
@@ -873,17 +873,17 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
     if( (nFrameOptions & (HtmlFrmOpts::Space | HtmlFrmOpts::MarginSize)) &&
         SfxItemState::SET == rItemSet.GetItemState( RES_LR_SPACE, true, &pItem ))
     {
-        aTwipSpc.Width() =
+        aTwipSpc.setWidth(
             ( static_cast<const SvxLRSpaceItem*>(pItem)->GetLeft() +
-                static_cast<const SvxLRSpaceItem*>(pItem)->GetRight() ) / 2;
+                static_cast<const SvxLRSpaceItem*>(pItem)->GetRight() ) / 2 );
         m_nDfltLeftMargin = m_nDfltRightMargin = aTwipSpc.Width();
     }
     if( (nFrameOptions & (HtmlFrmOpts::Space|HtmlFrmOpts::MarginSize)) &&
         SfxItemState::SET == rItemSet.GetItemState( RES_UL_SPACE, true, &pItem ))
     {
-        aTwipSpc.Height()  =
+        aTwipSpc.setHeight(
             ( static_cast<const SvxULSpaceItem*>(pItem)->GetUpper() +
-                static_cast<const SvxULSpaceItem*>(pItem)->GetLower() ) / 2;
+                static_cast<const SvxULSpaceItem*>(pItem)->GetLower() ) / 2 );
         m_nDfltTopMargin = m_nDfltBottomMargin = static_cast<sal_uInt16>(aTwipSpc.Height());
     }
 
@@ -895,9 +895,9 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
             Application::GetDefaultDevice()->LogicToPixel( aTwipSpc,
                                                 MapMode(MapUnit::MapTwip) );
         if( !aPixelSpc.Width() && aTwipSpc.Width() )
-            aPixelSpc.Width() = 1;
+            aPixelSpc.setWidth( 1 );
         if( !aPixelSpc.Height() && aTwipSpc.Height() )
-            aPixelSpc.Height() = 1;
+            aPixelSpc.setHeight( 1 );
 
         if (aPixelSpc.Width())
         {
@@ -914,13 +914,13 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
     // is set.
     if( nFrameOptions & HtmlFrmOpts::MarginSize )
     {
-        aTwipSpc.Width() *= -2;
-        aTwipSpc.Height() *= -2;
+        aTwipSpc.setWidth( aTwipSpc.Width() * -2 );
+        aTwipSpc.setHeight( aTwipSpc.Height() * -2 );
     }
     else
     {
-        aTwipSpc.Width() = 0;
-        aTwipSpc.Height() = 0;
+        aTwipSpc.setWidth( 0 );
+        aTwipSpc.setHeight( 0 );
     }
 
     if( !(nFrameOptions & HtmlFrmOpts::AbsSize) &&
@@ -928,10 +928,10 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
     {
         const SvxBoxItem* pBoxItem = static_cast<const SvxBoxItem*>(pItem);
 
-        aTwipSpc.Width() += pBoxItem->CalcLineSpace( SvxBoxItemLine::LEFT );
-        aTwipSpc.Width() += pBoxItem->CalcLineSpace( SvxBoxItemLine::RIGHT );
-        aTwipSpc.Height() += pBoxItem->CalcLineSpace( SvxBoxItemLine::TOP );
-        aTwipSpc.Height() += pBoxItem->CalcLineSpace( SvxBoxItemLine::BOTTOM );
+        aTwipSpc.AdjustWidth(pBoxItem->CalcLineSpace( SvxBoxItemLine::LEFT ) );
+        aTwipSpc.AdjustWidth(pBoxItem->CalcLineSpace( SvxBoxItemLine::RIGHT ) );
+        aTwipSpc.AdjustHeight(pBoxItem->CalcLineSpace( SvxBoxItemLine::TOP ) );
+        aTwipSpc.AdjustHeight(pBoxItem->CalcLineSpace( SvxBoxItemLine::BOTTOM ) );
     }
 
     // "width" and/or "height"
@@ -954,9 +954,9 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
         OSL_ENSURE( aTwipSz.Width() >= 0 && aTwipSz.Height() >= 0,
                 "Frame size minus spacing < 0!!!???" );
         if( aTwipSz.Width() < 0 )
-            aTwipSz.Width() = 0;
+            aTwipSz.setWidth( 0 );
         if( aTwipSz.Height() < 0 )
-            aTwipSz.Height() = 0;
+            aTwipSz.setHeight( 0 );
 
         Size aPixelSz( 0, 0 );
         if( (aTwipSz.Width() || aTwipSz.Height()) &&
@@ -966,9 +966,9 @@ void SwHTMLWriter::writeFrameFormatOptions(HtmlWriter& aHtml, const SwFrameForma
                 Application::GetDefaultDevice()->LogicToPixel( aTwipSz,
                                                     MapMode(MapUnit::MapTwip) );
             if( !aPixelSz.Width() && aTwipSz.Width() )
-                aPixelSz.Width() = 1;
+                aPixelSz.setWidth( 1 );
             if( !aPixelSz.Height() && aTwipSz.Height() )
-                aPixelSz.Height() = 1;
+                aPixelSz.setHeight( 1 );
         }
 
         if( (nFrameOptions & HtmlFrmOpts::Width) &&
@@ -1230,7 +1230,7 @@ Writer& OutHTML_Image( Writer& rWrt, const SwFrameFormat &rFrameFormat,
     if( rHTMLWrt.m_bLFPossible )
         rHTMLWrt.OutNewLine( true );
 
-    HtmlWriter aHtml(rWrt.Strm());
+    HtmlWriter aHtml(rWrt.Strm(), rHTMLWrt.maNamespace);
 
     // <a name=...></a>...<img ...>
     if( pMarkType && !rFrameFormat.GetName().isEmpty() )
@@ -1304,32 +1304,32 @@ Writer& OutHTML_Image( Writer& rWrt, const SwFrameFormat &rFrameFormat,
         if( pBorderLine )
         {
             pColBorderLine = pBorderLine;
-            aTwipBorder.Width() += pBorderLine->GetOutWidth();
+            aTwipBorder.AdjustWidth(pBorderLine->GetOutWidth() );
         }
 
         pBorderLine = pBoxItem->GetRight();
         if( pBorderLine )
         {
             pColBorderLine = pBorderLine;
-            aTwipBorder.Width() += pBorderLine->GetOutWidth();
+            aTwipBorder.AdjustWidth(pBorderLine->GetOutWidth() );
         }
 
         pBorderLine = pBoxItem->GetTop();
         if( pBorderLine )
         {
             pColBorderLine = pBorderLine;
-            aTwipBorder.Height() += pBorderLine->GetOutWidth();
+            aTwipBorder.AdjustHeight(pBorderLine->GetOutWidth() );
         }
 
         pBorderLine = pBoxItem->GetBottom();
         if( pBorderLine )
         {
             pColBorderLine = pBorderLine;
-            aTwipBorder.Height() += pBorderLine->GetOutWidth();
+            aTwipBorder.AdjustHeight(pBorderLine->GetOutWidth() );
         }
 
-        aTwipBorder.Width() /= 2;
-        aTwipBorder.Height() /= 2;
+        aTwipBorder.setWidth( aTwipBorder.Width() / 2 );
+        aTwipBorder.setHeight( aTwipBorder.Height() / 2 );
 
         if( (aTwipBorder.Width() || aTwipBorder.Height()) &&
             Application::GetDefaultDevice() )
@@ -1338,12 +1338,12 @@ Writer& OutHTML_Image( Writer& rWrt, const SwFrameFormat &rFrameFormat,
                 Application::GetDefaultDevice()->LogicToPixel( aTwipBorder,
                                                     MapMode(MapUnit::MapTwip) );
             if( !aPixelBorder.Width() && aTwipBorder.Width() )
-                aPixelBorder.Width() = 1;
+                aPixelBorder.setWidth( 1 );
             if( !aPixelBorder.Height() && aTwipBorder.Height() )
-                aPixelBorder.Height() = 1;
+                aPixelBorder.setHeight( 1 );
 
             if( aPixelBorder.Width() )
-                aPixelBorder.Height() = 0;
+                aPixelBorder.setHeight( 0 );
 
             nBorderWidth =
                 static_cast<sal_uInt16>(aPixelBorder.Width() + aPixelBorder.Height());
@@ -1555,7 +1555,7 @@ static Writer & OutHTML_FrameFormatAsMulticol( Writer& rWrt,
         rHTMLWrt.OutNewLine();
 
     OStringBuffer sOut;
-    sOut.append('<').append(OOO_STRING_SVTOOLS_HTML_multicol);
+    sOut.append('<').append(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_multicol);
 
     const SwFormatCol& rFormatCol = rFrameFormat.GetCol();
 
@@ -1615,7 +1615,7 @@ static Writer & OutHTML_FrameFormatAsMulticol( Writer& rWrt,
     rHTMLWrt.DecIndentLevel();  // indent the content of Multicol;
     if( rHTMLWrt.m_bLFPossible )
         rHTMLWrt.OutNewLine();
-    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), OOO_STRING_SVTOOLS_HTML_multicol, false );
+    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_multicol, false );
     rHTMLWrt.m_bLFPossible = true;
 
     return rWrt;
@@ -1650,24 +1650,24 @@ static Writer& OutHTML_FrameFormatAsDivOrSpan( Writer& rWrt,
 {
     SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
 
-    const sal_Char *pStr = nullptr;
+    OString aTag;
     if( !bSpan )
     {
         rHTMLWrt.ChangeParaToken( HtmlTokenId::NONE );
 
         // Close the current <DL>!
         rHTMLWrt.OutAndSetDefList( 0 );
-        pStr = OOO_STRING_SVTOOLS_HTML_division;
+        aTag = OOO_STRING_SVTOOLS_HTML_division;
     }
     else
-        pStr = OOO_STRING_SVTOOLS_HTML_span;
+        aTag = OOO_STRING_SVTOOLS_HTML_span;
 
     // output as DIV
     if( rHTMLWrt.m_bLFPossible )
         rHTMLWrt.OutNewLine();
 
     OStringBuffer sOut;
-    sOut.append('<').append(pStr);
+    sOut.append('<').append(rHTMLWrt.GetNamespace() + aTag);
 
     rWrt.Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
     HtmlFrmOpts nFrameFlags = HTML_FRMOPTS_DIV;
@@ -1702,7 +1702,7 @@ static Writer& OutHTML_FrameFormatAsDivOrSpan( Writer& rWrt,
     rHTMLWrt.DecIndentLevel();  // indent the content of Multicol;
     if( rHTMLWrt.m_bLFPossible )
         rHTMLWrt.OutNewLine();
-    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), pStr, false );
+    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + aTag, false );
 
     if( !aEndTags.isEmpty() )
         rWrt.Strm().WriteCharPtr( aEndTags.getStr() );
@@ -1863,7 +1863,7 @@ Writer& OutHTML_HeaderFooter( Writer& rWrt, const SwFrameFormat& rFrameFormat,
     sOut.append(OOO_STRING_SVTOOLS_HTML_division).append(' ')
         .append(OOO_STRING_SVTOOLS_HTML_O_title).append("=\"")
         .append( bHeader ? "header" : "footer" ).append("\"");
-    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), sOut.makeStringAndClear().getStr() );
+    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + sOut.makeStringAndClear().getStr() );
 
     rHTMLWrt.IncIndentLevel();  // indent the content of Multicol;
 
@@ -1898,7 +1898,7 @@ Writer& OutHTML_HeaderFooter( Writer& rWrt, const SwFrameFormat& rFrameFormat,
     if( !bHeader && !aSpacer.isEmpty() )
     {
         rHTMLWrt.OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), aSpacer.getStr() );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + aSpacer.getStr() );
     }
 
     {
@@ -1919,12 +1919,12 @@ Writer& OutHTML_HeaderFooter( Writer& rWrt, const SwFrameFormat& rFrameFormat,
     if( bHeader && !aSpacer.isEmpty() )
     {
         rHTMLWrt.OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), aSpacer.getStr() );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + aSpacer.getStr() );
     }
 
     rHTMLWrt.DecIndentLevel();  // indent the content of Multicol;
     rHTMLWrt.OutNewLine();
-    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), OOO_STRING_SVTOOLS_HTML_division, false );
+    HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division, false );
 
     rHTMLWrt.m_nHeaderFooterSpace = 0;
 

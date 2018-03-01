@@ -129,6 +129,8 @@ public:
     bool            operator!=( const Graphic& rGraphic ) const;
     bool            operator!() const;
 
+    operator bool() const;
+
     void            Clear();
 
     GraphicType     GetType() const;
@@ -191,6 +193,14 @@ public:
 
     BitmapChecksum  GetChecksum() const;
 
+    SAL_DLLPRIVATE std::size_t getHash() const
+    {
+        return reinterpret_cast<std::size_t>(ImplGetImpGraphic());
+    }
+
+    OUString getOriginURL() const;
+    void setOriginURL(OUString const & rOriginURL);
+
 public:
 
     std::shared_ptr<GraphicReader>& GetContext();
@@ -226,6 +236,19 @@ public:
 
     static css::uno::Sequence<sal_Int8> getUnoTunnelId();
 };
+
+namespace std {
+
+template <>
+struct hash<Graphic>
+{
+    std::size_t operator()(Graphic const & rGraphic) const
+    {
+        return rGraphic.getHash();
+    }
+};
+
+} // end namespace std
 
 #endif // INCLUDED_VCL_GRAPH_HXX
 

@@ -24,7 +24,6 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <com/sun/star/form/FormButtonType.hpp>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/streamwrap.hxx>
 
 #include <svx/unomodel.hxx>
@@ -744,8 +743,7 @@ void ScDrawTransferObj::InitDocShell()
             }
         }
 
-        Point aTmpPoint;
-        tools::Rectangle aDestArea( aTmpPoint, aSrcSize );
+        tools::Rectangle aDestArea( Point(), aSrcSize );
         pDocSh->SetVisArea( aDestArea );
 
         ScViewOptions aViewOpt( rDestDoc.GetViewOptions() );

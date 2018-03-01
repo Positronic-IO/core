@@ -146,9 +146,9 @@ private:
     bool                bVisible;
 
     bool                IsVisible() const { return bVisible; }
-    void                SetText( const OUString& rText ) { aBulText = rText; aBulSize.Width() = -1; }
-    void                Invalidate() { aBulSize.Width() = -1; }
-    void                SetDepth( sal_Int16 nNewDepth ) { nDepth = nNewDepth; aBulSize.Width() = -1; }
+    void                SetText( const OUString& rText ) { aBulText = rText; aBulSize.setWidth(-1); }
+    void                Invalidate() { aBulSize.setWidth(-1); }
+    void                SetDepth( sal_Int16 nNewDepth ) { nDepth = nNewDepth; aBulSize.setWidth(-1); }
     const OUString&     GetText() const { return aBulText; }
 
                         Paragraph( sal_Int16 nDepth );
@@ -587,9 +587,9 @@ private:
 
     friend class TextChainingUtils;
 
-    OutlinerEditEng*    pEditEngine;
+    std::unique_ptr<OutlinerEditEng> pEditEngine;
 
-    ParagraphList*      pParaList;
+    std::unique_ptr<ParagraphList>   pParaList;
     ViewList            aViewList;
 
     sal_Int32           mnFirstSelPage;
@@ -892,6 +892,8 @@ public:
     // Only for EditEngine mode
     void            QuickInsertText( const OUString& rText, const ESelection& rSel );
     void            QuickDelete( const ESelection& rSel );
+    /// Set attributes from rSet an all characters of nPara.
+    void SetCharAttribs(sal_Int32 nPara, const SfxItemSet& rSet);
     void            RemoveCharAttribs( sal_Int32 nPara, sal_uInt16 nWhich = 0 );
     void            QuickFormatDoc();
 
@@ -991,6 +993,10 @@ public:
 
     // convenient method to determine the bullets/numbering status for all paragraphs
     sal_Int32 GetBulletsNumberingStatus() const;
+
+    // tdf#115639 compatibility flag
+    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
+    bool IsHoriAlignIgnoreTrailingWhitespace() const;
 };
 
 #endif

@@ -36,7 +36,7 @@
 #include <basic/sbxobj.hxx>
 #include <basic/sbxmeth.hxx>
 #include <basic/sbxcore.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <svl/eitem.hxx>
@@ -484,13 +484,20 @@ bool SfxFilterMatcher::IsFilterInstalled_Impl( const std::shared_ptr<const SfxFi
         // Here could a  re-installation be offered
         OUString aText( SfxResId(STR_FILTER_NOT_INSTALLED) );
         aText = aText.replaceFirst( "$(FILTER)", pFilter->GetUIName() );
-        ScopedVclPtrInstance< QueryBox > aQuery(nullptr, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aText);
-        short nRet = aQuery->Execute();
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       aText));
+        xQueryBox->set_default_response(RET_YES);
+
+        short nRet = xQueryBox->run();
         if ( nRet == RET_YES )
         {
 #ifdef DBG_UTIL
             // Start Setup
-            ScopedVclPtrInstance<InfoBox>( nullptr, "Here should the Setup now be starting!" )->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          "Here should the Setup now be starting!"));
+            xInfoBox->run();
 #endif
             // Installation must still give feedback if it worked or not,
             // then the  Filterflag be deleted
@@ -502,7 +509,10 @@ bool SfxFilterMatcher::IsFilterInstalled_Impl( const std::shared_ptr<const SfxFi
     {
         OUString aText( SfxResId(STR_FILTER_CONSULT_SERVICE) );
         aText = aText.replaceFirst( "$(FILTER)", pFilter->GetUIName() );
-        ScopedVclPtrInstance<InfoBox>( nullptr, aText )->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      aText));
+        xInfoBox->run();
         return false;
     }
     else

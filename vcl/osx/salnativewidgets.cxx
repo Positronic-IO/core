@@ -106,11 +106,11 @@ static ThemeButtonValue ImplGetButtonValue( ButtonValue aButtonValue )
             break;
 
         case ButtonValue::Off:
+        case ButtonValue::DontKnow:
             return kThemeButtonOff;
             break;
 
         case ButtonValue::Mixed:
-        case ButtonValue::DontKnow:
         default:
             return kThemeButtonMixed;
             break;
@@ -921,8 +921,8 @@ bool AquaSalGraphics::drawNativeControl(ControlType nType,
                 ControlState nUpperState = ControlState::ENABLED;//state of the upper button
                 ControlState nLowerState = ControlState::ENABLED;//and of the lower button
                 if(pSpinButtonVal) {//pSpinButtonVal is sometimes null
-                    nUpperState = (ControlState) pSpinButtonVal->mnUpperState;
-                    nLowerState = (ControlState) pSpinButtonVal->mnLowerState;
+                    nUpperState = pSpinButtonVal->mnUpperState;
+                    nLowerState = pSpinButtonVal->mnLowerState;
 
                     HIThemeButtonDrawInfo aSpinInfo;
                     aSpinInfo.kind = kThemeIncDecButton;

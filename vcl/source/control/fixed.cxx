@@ -145,7 +145,7 @@ void FixedText::ImplDraw(OutputDevice* pDev, DrawFlags nDrawFlags,
     Point aPos = rPos;
 
     if ( nWinStyle & WB_EXTRAOFFSET )
-        aPos.X() += 2;
+        aPos.AdjustX(2 );
 
     if ( nWinStyle & WB_PATHELLIPSIS )
     {
@@ -183,14 +183,8 @@ void FixedText::ApplySettings(vcl::RenderContext& rRenderContext)
     Control::ApplySettings(rRenderContext);
 
     vcl::Window* pParent = GetParent();
-    if (pParent->IsChildTransparentModeEnabled() && !IsControlBackground())
-    {
-        EnableChildTransparentMode();
-        SetParentClipMode(ParentClipMode::NoClip);
-        SetPaintTransparent(true);
-        rRenderContext.SetBackground();
-    }
-    else
+    bool bEnableTransparent = true;
+    if (!pParent->IsChildTransparentModeEnabled() || IsControlBackground())
     {
         EnableChildTransparentMode(false);
         SetParentClipMode();
@@ -200,6 +194,17 @@ void FixedText::ApplySettings(vcl::RenderContext& rRenderContext)
             rRenderContext.SetBackground(GetControlBackground());
         else
             rRenderContext.SetBackground(pParent->GetBackground());
+
+        if (rRenderContext.IsBackground())
+            bEnableTransparent = false;
+    }
+
+    if (bEnableTransparent)
+    {
+        EnableChildTransparentMode();
+        SetParentClipMode(ParentClipMode::NoClip);
+        SetPaintTransparent(true);
+        rRenderContext.SetBackground();
     }
 }
 
@@ -221,7 +226,7 @@ void FixedText::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
     pDev->SetMapMode();
     pDev->SetFont( aFont );
     if ( nFlags & DrawFlags::Mono )
-        pDev->SetTextColor( Color( COL_BLACK ) );
+        pDev->SetTextColor( COL_BLACK );
     else
         pDev->SetTextColor( GetTextColor() );
     pDev->SetTextFillColor();
@@ -320,13 +325,13 @@ Size FixedText::CalcMinimumTextSize( Control const *pControl, long nMaxWidth )
     Size aSize = getTextDimensions(pControl, pControl->GetText(), nMaxWidth);
 
     if ( pControl->GetStyle() & WB_EXTRAOFFSET )
-        aSize.Width() += 2;
+        aSize.AdjustWidth(2 );
 
     // GetTextRect cannot take an empty string
     if ( aSize.Width() < 0 )
-        aSize.Width() = 0;
+        aSize.setWidth( 0 );
     if ( aSize.Height() <= 0 )
-        aSize.Height() = pControl->GetTextHeight();
+        aSize.setHeight( pControl->GetTextHeight() );
 
     return aSize;
 }
@@ -520,9 +525,9 @@ void FixedLine::ImplDraw(vcl::RenderContext& rRenderContext)
         SetFont(aFont);
         Point aStartPt(aOutSize.Width() / 2, aOutSize.Height() - 1);
         if (nWinStyle & WB_VCENTER)
-            aStartPt.Y() -= (aOutSize.Height() - nWidth) / 2;
+            aStartPt.AdjustY( -((aOutSize.Height() - nWidth) / 2) );
         Point aTextPt(aStartPt);
-        aTextPt.X() -= GetTextHeight() / 2;
+        aTextPt.AdjustX( -(GetTextHeight() / 2) );
         rRenderContext.DrawText(aTextPt, aText, 0, aText.getLength());
         rRenderContext.Pop();
         if (aOutSize.Height() - aStartPt.Y() > FIXEDLINE_TEXT_BORDER)
@@ -954,10 +959,9 @@ void FixedImage::SetImage( const Image& rImage )
     }
 }
 
-bool FixedImage::SetModeImage( const Image& rImage )
+void FixedImage::SetModeImage( const Image& rImage )
 {
     SetImage( rImage );
-    return true;
 }
 
 Image FixedImage::loadThemeImage(const OUString &rFileName)

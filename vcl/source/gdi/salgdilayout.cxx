@@ -236,10 +236,10 @@ void SalGraphics::mirror( vcl::Region& rRgn, const OutputDevice *pOutDev ) const
         rRgn.GetRegionRectangles(aRectangles);
         rRgn.SetEmpty();
 
-        for(RectangleVector::iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+        for (auto & rectangle : aRectangles)
         {
-            mirror(*aRectIter, pOutDev);
-            rRgn.Union(*aRectIter);
+            mirror(rectangle, pOutDev);
+            rRgn.Union(rectangle);
         }
 
         //ImplRegionInfo        aInfo;
@@ -698,8 +698,7 @@ bool SalGraphics::DrawNativeControl( ControlType nType, ControlPart nPart, const
     if( (m_nLayout & SalLayoutFlags::BiDiRtl) || (pOutDev && pOutDev->IsRTLEnabled()) )
     {
         tools::Rectangle rgn( rControlRegion );
-        tools::Rectangle aNull;
-        if (rgn != aNull)
+        if (rgn != tools::Rectangle())
             mirror(rgn, pOutDev);
         std::unique_ptr< ImplControlValue > mirrorValue( aValue.clone());
         mirror( *mirrorValue, pOutDev );

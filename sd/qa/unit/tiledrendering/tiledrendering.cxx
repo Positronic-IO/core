@@ -48,7 +48,9 @@
 #include <svx/svxids.hrc>
 #include <DrawViewShell.hxx>
 #include <pres.hxx>
+#include <navigatr.hxx>
 #include <vcl/scheduler.hxx>
+#include <vcl/vclevent.hxx>
 
 #include <chrono>
 
@@ -107,6 +109,12 @@ public:
     void testDocumentRepair();
     void testLanguageStatus();
     void testDefaultView();
+    void testIMESupport();
+    void testTdf115783();
+    void testPasteTextOnSlide();
+    void testTdf115873();
+    void testTdf115873Group();
+    void testCutSelectionChange();
 
     CPPUNIT_TEST_SUITE(SdTiledRenderingTest);
     CPPUNIT_TEST(testRegisterCallback);
@@ -147,6 +155,12 @@ public:
     CPPUNIT_TEST(testDocumentRepair);
     CPPUNIT_TEST(testLanguageStatus);
     CPPUNIT_TEST(testDefaultView);
+    CPPUNIT_TEST(testIMESupport);
+    CPPUNIT_TEST(testTdf115783);
+    CPPUNIT_TEST(testPasteTextOnSlide);
+    CPPUNIT_TEST(testTdf115873);
+    CPPUNIT_TEST(testTdf115873Group);
+    CPPUNIT_TEST(testCutSelectionChange);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -344,6 +358,7 @@ void SdTiledRenderingTest::testRegisterCallback()
 
 void SdTiledRenderingTest::testPostKeyEvent()
 {
+    comphelper::LibreOfficeKit::setActive();
     SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
     sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
     SdPage* pActualPage = pViewShell->GetActualPage();
@@ -358,6 +373,7 @@ void SdTiledRenderingTest::testPostKeyEvent()
 
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
+    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT(pView->GetTextEditObject());
     EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
@@ -367,6 +383,7 @@ void SdTiledRenderingTest::testPostKeyEvent()
     rEditView.SetSelection(aWordSelection);
     // Did we enter the expected character?
     CPPUNIT_ASSERT_EQUAL(OUString("xx"), rEditView.GetSelected());
+    comphelper::LibreOfficeKit::setActive(false);
 }
 
 void SdTiledRenderingTest::testPostMouseEvent()
@@ -397,6 +414,7 @@ void SdTiledRenderingTest::testPostMouseEvent()
     pXImpressDocument->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONUP,
                                       convertMm100ToTwip(aPosition.getX()), convertMm100ToTwip(aPosition.getY()),
                                       1, MOUSE_LEFT, 0);
+    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT(pView->GetTextEditObject());
     // The new cursor position must be before the first word.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), rEditView.GetSelection().nStartPos);
@@ -1339,6 +1357,7 @@ void SdTiledRenderingTest::testTdf102223()
     pXImpressDocument->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONUP,
                                       convertMm100ToTwip(aRect.getX() + 2), convertMm100ToTwip(aRect.getY() + 2),
                                       1, MOUSE_LEFT, 0);
+    Scheduler::ProcessEventsToIdle();
     pView->SdrBeginTextEdit(pTableObject);
     CPPUNIT_ASSERT(pView->GetTextEditObject());
     EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
@@ -1433,6 +1452,7 @@ void SdTiledRenderingTest::testTdf103083()
     pXImpressDocument->postMouseEvent(LOK_MOUSEEVENT_MOUSEBUTTONUP,
                                       convertMm100ToTwip(aRect.getX() + 2), convertMm100ToTwip(aRect.getY() + 2),
                                       1, MOUSE_LEFT, 0);
+    Scheduler::ProcessEventsToIdle();
     pView->SdrBeginTextEdit(pTextObject);
     CPPUNIT_ASSERT(pView->GetTextEditObject());
     EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
@@ -1549,7 +1569,6 @@ void SdTiledRenderingTest::testTdf81754()
 
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
     pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-
     Scheduler::ProcessEventsToIdle();
 
     // now save, reload, and assert that we did not lose the edit
@@ -1937,6 +1956,271 @@ void SdTiledRenderingTest::testDefaultView()
         CPPUNIT_ASSERT_EQUAL(true, pImpressView->GetValue());
         CPPUNIT_ASSERT_EQUAL(false, pNotesView->GetValue());
     }
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void SdTiledRenderingTest::testIMESupport()
+{
+    // Load the document with notes view.
+    comphelper::LibreOfficeKit::setActive();
+
+    SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
+    VclPtr<vcl::Window> pDocWindow = pXImpressDocument->getDocWindow();
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    SdrObject* pObject = pViewShell->GetActualPage()->GetObj(0);
+    SdrTextObj* pTextObj = static_cast<SdrTextObj*>(pObject);
+    SdrView* pView = pViewShell->GetView();
+    pView->MarkObj(pTextObj, pView->GetSdrPageView());
+    SfxStringItem aInputString(SID_ATTR_CHAR, "x");
+    pViewShell->GetViewFrame()->GetDispatcher()->ExecuteList(SID_ATTR_CHAR,
+                                                             SfxCallMode::SYNCHRON, { &aInputString });
+
+    // sequence of chinese IME compositions when 'nihao' is typed in an IME
+    const std::vector<OString> aUtf8Inputs{ "年", "你", "你好", "你哈", "你好", "你好" };
+    std::vector<OUString> aInputs;
+    std::transform(aUtf8Inputs.begin(), aUtf8Inputs.end(),
+                   std::back_inserter(aInputs), [](OString aInput) {
+                       return OUString::fromUtf8(aInput);
+                   });
+    for (const auto& aInput: aInputs)
+    {
+        pDocWindow->PostExtTextInputEvent(VclEventId::ExtTextInput, aInput);
+    }
+    pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
+
+    // the cursor should be at position 3rd
+    EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(3), rEditView.GetSelection().nStartPos);
+
+    ESelection aWordSelection(0, 0, 0, 3); // start para, start char, end para, end char.
+    rEditView.SetSelection(aWordSelection);
+    // content contains only the last IME composition, not all
+    CPPUNIT_ASSERT_EQUAL(OUString("x").concat(aInputs[aInputs.size() - 1]), rEditView.GetSelected());
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void SdTiledRenderingTest::testTdf115783()
+{
+    // Load the document.
+    comphelper::LibreOfficeKit::setActive();
+    SdXImpressDocument* pXImpressDocument = createDoc("tdf115783.fodp");
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    SdPage* pActualPage = pViewShell->GetActualPage();
+    SdrObject* pObject = pActualPage->GetObj(0);
+    auto pTableObject = dynamic_cast<sdr::table::SdrTableObj*>(pObject);
+    CPPUNIT_ASSERT(pTableObject);
+    SdrView* pView = pViewShell->GetView();
+    pView->MarkObj(pTableObject, pView->GetSdrPageView());
+
+    // Create a cell selection and set font height.
+    // Go to the end of the B1 cell.
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT);
+    // Create a B1->C1 cell selection.
+    const int nShiftRight = KEY_SHIFT + KEY_RIGHT;
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, nShiftRight);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, nShiftRight);
+    uno::Sequence<beans::PropertyValue> aArgs = comphelper::InitPropertySequence({
+        { "FontHeight.Height", uno::makeAny(static_cast<float>(12)) },
+    });
+    comphelper::dispatchCommand(".uno:FontHeight", aArgs);
+    Scheduler::ProcessEventsToIdle();
+
+    // Create a text selection on the B1 cell.
+    pTableObject->setActiveCell(sdr::table::CellPos(1, 0));
+    pView->SdrBeginTextEdit(pTableObject);
+    EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
+    // Start para, start char, end para, end char.
+    rEditView.SetSelection(ESelection(0, 0, 0, 5));
+    CPPUNIT_ASSERT_EQUAL(OUString("hello"), rEditView.GetSelected());
+
+    // Copy selection, paste at the start of the cell.
+    aArgs = {};
+    comphelper::dispatchCommand(".uno:Copy", aArgs);
+    Scheduler::ProcessEventsToIdle();
+    rEditView.SetSelection(ESelection(0, 0, 0, 0));
+    aArgs = {};
+    comphelper::dispatchCommand(".uno:Paste", aArgs);
+    Scheduler::ProcessEventsToIdle();
+    pView->SdrEndTextEdit();
+
+    // And now verify that the cell has the correct font size.
+    uno::Reference<table::XCellRange> xTable(pTableObject->getTable(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xTable.is());
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByPosition(1, 0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xCell.is());
+    uno::Reference<container::XEnumerationAccess> xText(xCell->getText(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xText.is());
+    uno::Reference<container::XEnumerationAccess> xParagraph(
+        xText->createEnumeration()->nextElement(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xParagraph.is());
+    uno::Reference<text::XTextRange> xPortion(xParagraph->createEnumeration()->nextElement(),
+                                              uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xPortion.is());
+    // This failed, it was only "hello" as the paragraph had 2 portions: a
+    // "hello" with 12pt size and a "hello" with 18pt.
+    CPPUNIT_ASSERT_EQUAL(OUString("hellohello"), xPortion->getString());
+    uno::Reference<beans::XPropertySet> xPropertySet(xPortion, uno::UNO_QUERY);
+    int nHeight = xPropertySet->getPropertyValue("CharHeight").get<float>();
+    // Make sure that the single font size for the cell is the expected one.
+    CPPUNIT_ASSERT_EQUAL(12, nHeight);
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void SdTiledRenderingTest::testPasteTextOnSlide()
+{
+    // Load the document.
+    comphelper::LibreOfficeKit::setActive();
+    SdXImpressDocument* pXImpressDocument = createDoc("paste_text_onslide.odp");
+    CPPUNIT_ASSERT(pXImpressDocument);
+
+    // select second text object
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::TAB);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::TAB);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::TAB);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::TAB);
+    Scheduler::ProcessEventsToIdle();
+
+    // step into text editing
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, '1', 0);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, '1', 0);
+    Scheduler::ProcessEventsToIdle();
+
+    // select full text
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    Scheduler::ProcessEventsToIdle();
+
+    // Copy some text
+    comphelper::dispatchCommand(".uno:Copy", uno::Sequence<beans::PropertyValue>());
+    Scheduler::ProcessEventsToIdle();
+
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::ESCAPE);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::ESCAPE);
+    Scheduler::ProcessEventsToIdle();
+
+    // Paste onto the slide
+    comphelper::dispatchCommand(".uno:Paste", uno::Sequence<beans::PropertyValue>());
+    Scheduler::ProcessEventsToIdle();
+
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::ESCAPE);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::ESCAPE);
+    Scheduler::ProcessEventsToIdle();
+
+    // Check the position of the newly added text shape, created for pasted text
+    SdPage* pActualPage = pXImpressDocument->GetDocShell()->GetViewShell()->GetActualPage();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), pActualPage->GetObjCount());
+    SdrObject* pObject = pActualPage->GetObj(2);
+    CPPUNIT_ASSERT(pObject);
+    SdrTextObj* pTextObj = dynamic_cast<SdrTextObj*>(pObject);
+    CPPUNIT_ASSERT(pTextObj);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(OBJ_TEXT), pTextObj->GetObjIdentifier());
+    Point aPos = pTextObj->GetLastBoundRect().TopLeft();
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(static_cast<long>(12990), aPos.getX(), 100);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(static_cast<long>(7393), aPos.getY(), 100);
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void SdTiledRenderingTest::testTdf115873()
+{
+    // Initialize the navigator.
+    SdXImpressDocument* pXImpressDocument = createDoc("tdf115873.fodp");
+    SfxViewShell* pViewShell = SfxViewShell::Current();
+    CPPUNIT_ASSERT(pViewShell);
+    SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+    ScopedVclPtrInstance<SdNavigatorWin> pNavigator(nullptr, &rBindings);
+    pNavigator->InitTreeLB(pXImpressDocument->GetDoc());
+    pNavigator->Show();
+    VclPtr<SdPageObjsTLB> pObjects = pNavigator->GetObjects();
+    pObjects->Select(pObjects->GetEntry(0));
+    sd::ViewShell* pSdViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    SdrView* pSdrView = pSdViewShell->GetView();
+    pSdrView->UnmarkAllObj(pSdrView->GetSdrPageView());
+
+    // Make sure that no shapes are selected.
+    const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(0), rMarkList.GetMarkCount());
+
+    // Single-click with the mouse.
+    short nHeight = pObjects->GetEntryHeight();
+    // Position of the center of the 2nd entry (first is the slide, second is
+    // the shape).
+    Point aPoint(pObjects->GetOutputWidthPixel() / 2, nHeight * 1.5);
+    MouseEvent aMouseEvent(aPoint, /*nClicks=*/1, MouseEventModifiers::NONE, MOUSE_LEFT);
+    pObjects->MouseButtonDown(aMouseEvent);
+    pObjects->MouseButtonUp(aMouseEvent);
+    Scheduler::ProcessEventsToIdle();
+    // This failed, single-click did not result in a shape selection (only
+    // double-click did).
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rMarkList.GetMarkCount());
+}
+
+void SdTiledRenderingTest::testTdf115873Group()
+{
+    // Initialize the navigator.
+    SdXImpressDocument* pXImpressDocument = createDoc("tdf115873-group.fodp");
+    SfxViewShell* pViewShell = SfxViewShell::Current();
+    CPPUNIT_ASSERT(pViewShell);
+    SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+    ScopedVclPtrInstance<SdNavigatorWin> pNavigator(nullptr, &rBindings);
+    pNavigator->InitTreeLB(pXImpressDocument->GetDoc());
+    VclPtr<SdPageObjsTLB> pObjects = pNavigator->GetObjects();
+    // This failed, Fill() and IsEqualToDoc() were out of sync for group
+    // shapes.
+    CPPUNIT_ASSERT(pObjects->IsEqualToDoc(pXImpressDocument->GetDoc()));
+}
+
+void SdTiledRenderingTest::testCutSelectionChange()
+{
+    // Load the document.
+    comphelper::LibreOfficeKit::setActive();
+    SdXImpressDocument* pXImpressDocument = createDoc("cut_selection_change.odp");
+    CPPUNIT_ASSERT(pXImpressDocument);
+
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    pViewShell->GetViewShellBase().registerLibreOfficeKitViewCallback(&SdTiledRenderingTest::callback, this);
+    Scheduler::ProcessEventsToIdle();
+
+    // Select first text object
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::TAB);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::TAB);
+    Scheduler::ProcessEventsToIdle();
+
+    // step into text editing
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, '1', 0);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, '1', 0);
+    Scheduler::ProcessEventsToIdle();
+
+    // select some text
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_LEFT | KEY_SHIFT);
+    pXImpressDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_LEFT | KEY_SHIFT);
+    Scheduler::ProcessEventsToIdle();
+
+    // Check that we have a selection before cutting
+    CPPUNIT_ASSERT_EQUAL(static_cast<std::size_t>(1), m_aSelection.size());
+
+    // Cut the selected text
+    comphelper::dispatchCommand(".uno:Cut", uno::Sequence<beans::PropertyValue>());
+    Scheduler::ProcessEventsToIdle();
+
+    // Selection is removed
+    CPPUNIT_ASSERT_EQUAL(static_cast<std::size_t>(0), m_aSelection.size());
     comphelper::LibreOfficeKit::setActive(false);
 }
 

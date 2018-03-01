@@ -19,6 +19,7 @@
 
 #include <swcache.hxx>
 
+#include <o3tl/safeint.hxx>
 #include <rtl/strbuf.hxx>
 #include <osl/diagnose.h>
 
@@ -28,11 +29,14 @@
 void SwCache::Check()
 {
     if ( !m_pRealFirst )
+    {
+        assert(m_pFirst == nullptr && m_pLast == nullptr);
         return;
+    }
 
     // consistency check
-    SAL_WARN_IF( m_pLast->GetNext(), "sw.core", "Last but not last." );
-    SAL_WARN_IF( m_pRealFirst->GetPrev(), "sw.core", "First but not first." );
+    assert(m_pLast->GetNext() == nullptr);
+    assert(m_pRealFirst->GetPrev() == nullptr);
     sal_uInt16 nCnt = 0;
     bool bFirstFound = false;
     SwCacheObj *pObj = m_pRealFirst;
@@ -43,17 +47,19 @@ void SwCache::Check()
         SwCacheObj *pTmp = m_pLast;
         while ( pTmp && pTmp != pObj )
             pTmp = pTmp->GetPrev();
-        SAL_WARN_IF( !pTmp, "sw.core", "Object not found." );
+        assert(pTmp && "Object not found.");
 
         ++nCnt;
         if ( pObj == m_pFirst )
             bFirstFound = true;
         if ( !pObj->GetNext() )
-            SAL_WARN_IF( pObj != m_pLast, "sw.core", "Last not Found." );
+        {
+            assert(pObj == m_pLast);
+        }
         pObj = pObj->GetNext();
-        SAL_WARN_IF(pObj == pOldRealFirst, "sw.core", "Recursion in SwCache.");
+        assert(pObj != pOldRealFirst);
     }
-    SAL_WARN_IF( !bFirstFound, "sw.core", "First not Found." );
+    assert(bFirstFound);
     SAL_WARN_IF( nCnt + m_aFreePositions.size() != size(), "sw.core", "Lost Chain." );
     SAL_WARN_IF(
         size() == m_nCurMax && m_nCurMax != m_aFreePositions.size() + nCnt, "sw.core",
@@ -123,6 +129,26 @@ SwCache::~SwCache()
         delete *it;
 }
 
+void SwCache::IncreaseMax( const sal_uInt16 nAdd )
+{
+    if (o3tl::checked_add(m_nCurMax, nAdd, m_nCurMax))
+    {
+        std::abort();
+    }
+#ifdef DBG_UTIL
+    ++m_nIncreaseMax;
+#endif
+}
+
+void SwCache::DecreaseMax( const sal_uInt16 nSub )
+{
+    if ( m_nCurMax > nSub )
+        m_nCurMax = m_nCurMax - sal::static_int_cast< sal_uInt16 >(nSub);
+#ifdef DBG_UTIL
+    ++m_nDecreaseMax;
+#endif
+}
+
 void SwCache::Flush()
 {
     INCREMENT( m_nFlushCnt );
@@ -131,28 +157,7 @@ void SwCache::Flush()
     SwCacheObj *pTmp;
     while ( pObj )
     {
-#ifdef DBG_UTIL
-        if ( pObj->IsLocked() )
-        {
-            OSL_FAIL( "Flushing locked objects." );
-            if ( !m_pRealFirst )
-            {
-                m_pRealFirst = m_pFirst = m_pLast = pObj;
-                pTmp = pObj->GetNext();
-                pObj->SetNext( nullptr ); pObj->SetPrev( nullptr );
-                pObj = pTmp;
-            }
-            else
-            {   m_pLast->SetNext( pObj );
-                pObj->SetPrev( m_pLast );
-                m_pLast = pObj;
-                pTmp = pObj->GetNext();
-                pObj->SetNext( nullptr );
-                pObj = pTmp;
-            }
-        }
-        else
-#endif
+        assert(!pObj->IsLocked());
         {
             pTmp = pObj;
             pObj = pTmp->GetNext();
@@ -178,16 +183,18 @@ void SwCache::ToTop( SwCacheObj *pObj )
     if ( !m_pRealFirst )
     {
         // the first will be inserted
-        OSL_ENSURE( !m_pFirst && !m_pLast, "First not first." );
+        assert(!m_pFirst && !m_pLast);
         m_pRealFirst = m_pFirst = m_pLast = pObj;
         CHECK;
         return;
     }
 
+    assert(m_pFirst && m_pLast);
+
     // cut
     if ( pObj == m_pLast )
     {
-        OSL_ENSURE( pObj->GetPrev(), "Last but no Prev." );
+        assert(pObj->GetPrev());
         m_pLast = pObj->GetPrev();
         m_pLast->SetNext( nullptr );
     }
@@ -210,8 +217,6 @@ void SwCache::ToTop( SwCacheObj *pObj )
     }
     else
     {
-        OSL_ENSURE( m_pFirst, "ToTop, First is not RealFirst an Empty." );
-
         if ( m_pFirst->GetPrev() )
         {
             m_pFirst->GetPrev()->SetNext( pObj );
@@ -361,22 +366,41 @@ bool SwCache::Insert( SwCacheObj *pNew )
             pObj = pObj->GetPrev();
         if ( !pObj )
         {
-            OSL_FAIL( "Cache overflow." );
-            return false;
+            SAL_WARN("sw.core", "SwCache overflow.");
+            IncreaseMax(100); // embiggen & try again
+            return Insert(pNew);
         }
 
         nPos = pObj->GetCachePos();
         if ( pObj == m_pLast )
-        { OSL_ENSURE( pObj->GetPrev(), "Last but no Prev" );
-            m_pLast = pObj->GetPrev();
-            m_pLast->SetNext( nullptr );
-        }
-        else
         {
-            if ( pObj->GetPrev() )
-                pObj->GetPrev()->SetNext( pObj->GetNext() );
-            if ( pObj->GetNext() )
-                pObj->GetNext()->SetPrev( pObj->GetPrev() );
+            m_pLast = pObj->GetPrev();
+            assert(m_pLast); // must have capacity > 1
+        }
+        if (pObj == m_pFirst)
+        {
+            if (pObj->GetNext())
+            {
+                m_pFirst = pObj->GetNext();
+            }
+            else
+            {
+                m_pFirst = pObj->GetPrev();
+            }
+            assert(m_pFirst); // must have capacity > 1
+        }
+        if (pObj == m_pRealFirst)
+        {
+            m_pRealFirst = pObj->GetNext();
+            assert(m_pRealFirst); // must have capacity > 1
+        }
+        if (pObj->GetPrev())
+        {
+            pObj->GetPrev()->SetNext( pObj->GetNext() );
+        }
+        if (pObj->GetNext())
+        {
+            pObj->GetNext()->SetPrev( pObj->GetPrev() );
         }
         delete pObj;
         m_aCacheObjects[nPos] = pNew;
@@ -393,7 +417,8 @@ bool SwCache::Insert( SwCacheObj *pNew )
         pNew->SetNext( m_pFirst );
     }
     else
-    { OSL_ENSURE( !m_pLast, "Last but no First." );
+    {
+        assert(!m_pLast);
         m_pLast = pNew;
     }
     if ( m_pFirst == m_pRealFirst )

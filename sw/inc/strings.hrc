@@ -273,6 +273,7 @@
 #define STR_PAGEBREAK                           NC_("STR_PAGEBREAK", "Break before new page")
 #define STR_WESTERN_FONT                        NC_("STR_WESTERN_FONT", "Western text: ")
 #define STR_CJK_FONT                            NC_("STR_CJK_FONT", "Asian text: ")
+#define STR_CTL_FONT                            NC_("STR_CTL_FONT", "CTL text: ")
 #define STR_REDLINE_UNKNOWN_AUTHOR              NC_("STR_REDLINE_UNKNOWN_AUTHOR", "Unknown Author")
 #define STR_DELETE_NOTE_AUTHOR                  NC_("STR_DELETE_NOTE_AUTHOR", "Delete ~All Comments by $1")
 #define STR_HIDE_NOTE_AUTHOR                    NC_("STR_HIDE_NOTE_AUTHOR", "H~ide All Comments by $1")
@@ -977,6 +978,9 @@
 #define FMT_REF_NUMBER                          NC_("FMT_REF_NUMBER", "Number")
 #define FMT_REF_NUMBER_NO_CONTEXT               NC_("FMT_REF_NUMBER_NO_CONTEXT", "Number (no context)")
 #define FMT_REF_NUMBER_FULL_CONTEXT             NC_("FMT_REF_NUMBER_FULL_CONTEXT", "Number (full context)")
+
+#define FMT_REF_WITH_LOWERCASE_HU_ARTICLE       NC_("FMT_REF_WITH_LOWERCASE_HU_ARTICLE", "Article a/az + ")
+#define FMT_REF_WITH_UPPERCASE_HU_ARTICLE       NC_("FMT_REF_WITH_UPPERCASE_HU_ARTICLE", "Article A/Az + ")
 /*--------------------------------------------------------------------
     Description: placeholder
  --------------------------------------------------------------------*/
@@ -1202,11 +1206,6 @@
 #define STR_REDLINE_FORMATED                    NC_("STR_REDLINE_FORMATED", "Formats")
 #define STR_REDLINE_TABLECHG                    NC_("STR_REDLINE_TABLECHG", "Table Changes")
 #define STR_REDLINE_FMTCOLLSET                  NC_("STR_REDLINE_FMTCOLLSET", "Applied Paragraph Styles")
-#define STR_REDLINE_TITLE                       NC_("STR_REDLINE_TITLE", "AutoCorrect")
-#define STR_REDLINE_MSG                         NC_("STR_REDLINE_MSG", "AutoCorrect completed.\nYou can accept or reject all changes,\nor accept or reject particular changes.")
-#define STR_REDLINE_ACCEPT_ALL                  NC_("STR_REDLINE_ACCEPT_ALL", "Accept All")
-#define STR_REDLINE_REJECT_ALL                  NC_("STR_REDLINE_REJECT_ALL", "Reject All")
-#define STR_REDLINE_EDIT                        NC_("STR_REDLINE_EDIT", "Edit Changes")
 #define STR_PAGE                                NC_("STR_PAGE", "Page ")
 #define STR_PAGE_COUNT                          NC_("STR_PAGE_COUNT", "Page %1 of %2")
 #define STR_PAGE_COUNT_CUSTOM                   NC_("STR_PAGE_COUNT_CUSTOM", "Page %1 of %2 (Page %3)")

@@ -21,27 +21,16 @@
 
 #include "crsrsh.hxx"
 
-#include "IMark.hxx"
 #include "charfmt.hxx"
 #include "fldupde.hxx"
 #include "frmfmt.hxx"
-#include "itabenum.hxx"
-#include "swdbdata.hxx"
 #include "swdllapi.h"
 #include "swundo.hxx"
 #include "tblenum.hxx"
 #include "tox.hxx"
-#include <svtools/embedhlp.hxx>
 
-#include <editeng/swafopt.hxx>
-#include <svx/ClassificationField.hxx>
-
-#include <vcl/font.hxx>
-
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/linguistic2/ProofreadingResult.hpp>
 #include <com/sun/star/linguistic2/XSpellAlternatives.hpp>
-#include <com/sun/star/text/HoriOrientation.hpp>
 
 #include <memory>
 #include <vector>
@@ -102,10 +91,14 @@ class SwAuthEntry;
 class SwRewriter;
 class SwView;
 struct SwConversionArgs;
+struct SvxSwAutoFormatFlags;
+struct SwInsertTableOptions;
+struct SwDBData;
 enum class SvtScriptType;
 enum class SfxClassificationPolicyType;
 enum class RedlineFlags;
 enum class TransliterationFlags;
+enum class GraphicType;
 
 namespace com { namespace sun { namespace star { namespace uno {
     template < class > class Sequence;
@@ -114,6 +107,7 @@ namespace com { namespace sun { namespace star { namespace uno {
 namespace svx{
     struct SpellPortion;
     typedef std::vector<SpellPortion> SpellPortions;
+    class ClassificationResult;
 }
 
 namespace sfx2{
@@ -222,7 +216,7 @@ public:
 
     /** If cursor is in a INetAttribute it will be deleted completely
      including the descriptive text (needed at drag & drop). */
-    bool DelINetAttrWithText();
+    void DelINetAttrWithText();
 
     /** If Cursor is at the end of a character style in which the DontExpand-flag
      is not yet set, the latter will be set (==> return TRUE). */
@@ -258,11 +252,8 @@ public:
      * @param rSet
      * output parameter - the SfxItemSet where the automatic paragraph format attribute(s) will be store.
      * The attributes aren't invalidated or cleared if the function reach the getMaxLookup limit.
-     *
-     * @return true if the function inspect all the nodes point by the pPaM parameter,
-     * false if the function reach the limit of getMaxLookup number of nodes inspected.
      */
-    bool GetCurParAttr( SfxItemSet& rSet ) const;
+    void GetCurParAttr( SfxItemSet& rSet ) const;
     /**
      * Get the paragraph format attribute(s) of the selection(s) described by a SwPaM.
      *
@@ -283,6 +274,10 @@ public:
 
     /// Query default attribute of document.
     const SfxPoolItem& GetDefault( sal_uInt16 nFormatHint ) const;
+    template<class T> const T&  GetDefault( TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T&>(GetDefault(sal_uInt16(nWhich)));
+    }
 
     void ResetAttr( const std::set<sal_uInt16> &attrs = std::set<sal_uInt16>(), SwPaM* pCursor = nullptr );
     void GCAttr();
@@ -523,12 +518,12 @@ public:
                         const bool bResetIndentAttrs = false );
 
     /// Paragraphs without enumeration but with indents.
-    bool NoNum();
+    void NoNum();
 
     /// Delete, split enumeration list.
     void DelNumRules();
 
-    bool NumUpDown( bool bDown = true );
+    void NumUpDown( bool bDown = true );
 
     bool MoveParagraph( long nOffset = 1);
     bool MoveNumParas( bool bUpperLower, bool bUpperLeft );
@@ -575,7 +570,7 @@ public:
 
     sal_uInt16 GetNodeNumStart( SwPaM* pPaM ) const;
 
-    bool ReplaceNumRule( const OUString& rOldRule, const OUString& rNewRule );
+    void ReplaceNumRule( const OUString& rOldRule, const OUString& rNewRule );
 
     /** Searches for a text node with a numbering rule.
      in case a list style is found, <sListId> holds the list id, to which the
@@ -612,9 +607,9 @@ public:
     /// should only be called by sw::UndoManager!
     void HandleUndoRedoContext(::sw::UndoRedoContext & rContext);
 
-    bool Undo(sal_uInt16 const nCount = 1);
-    bool Redo(sal_uInt16 const nCount = 1);
-    bool Repeat(sal_uInt16 const nCount);
+    void Undo(sal_uInt16 const nCount = 1);
+    void Redo(sal_uInt16 const nCount = 1);
+    void Repeat(sal_uInt16 const nCount);
 
     /// For all views of this document.
     void StartAllAction();
@@ -750,7 +745,7 @@ public:
     void SetTableChgMode( TableChgMode eMode );
 
     /// Split table at cursor position.
-    bool SplitTable( SplitTable_HeadlineOption eMode );
+    void SplitTable( SplitTable_HeadlineOption eMode );
 
     /** Merge tables.
 
@@ -886,7 +881,7 @@ public:
      section/table. The purpose of the method is to allow users to inert text
      at certain 'impossible' position, e.g. before a table at the document
      start or between to sections. */
-    bool DoSpecialInsert();
+    void DoSpecialInsert();
     bool CanSpecialInsert() const;
 
     /// Optimizing UI.
@@ -911,17 +906,17 @@ public:
     void SetGlblDocSaveLinks( bool bFlag );
     bool IsGlblDocSaveLinks() const;
     void GetGlobalDocContent( SwGlblDocContents& rArr ) const;
-    bool InsertGlobalDocContent( const SwGlblDocContent& rPos,
+    void InsertGlobalDocContent( const SwGlblDocContent& rPos,
                                  SwSectionData & rNew );
     bool InsertGlobalDocContent( const SwGlblDocContent& rPos,
                                  const SwTOXBase& rTOX );
     bool InsertGlobalDocContent( const SwGlblDocContent& rPos );
-    bool DeleteGlobalDocContent( const SwGlblDocContents& rArr,
+    void DeleteGlobalDocContent( const SwGlblDocContents& rArr,
                                 size_t nPos );
     bool MoveGlobalDocContent( const SwGlblDocContents& rArr ,
                                 size_t nFromPos, size_t nToPos,
                                 size_t nNewPos );
-    bool GotoGlobalDocContent( const SwGlblDocContent& rPos );
+    void GotoGlobalDocContent( const SwGlblDocContent& rPos );
 
     /// For Redlining.
     RedlineFlags GetRedlineFlags() const;

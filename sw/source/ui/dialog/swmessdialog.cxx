@@ -11,7 +11,7 @@
 #include <vcl/button.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/messagedialog.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/vclmedit.hxx>
 
@@ -26,7 +26,7 @@ SwMessageAndEditDialog::SwMessageAndEditDialog(vcl::Window* pParent, const OUStr
     m_pSecondaryMessage->SetPaintTransparent(true);
     MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, m_pSecondaryMessage);
     get(m_pImageIM, "image");
-    m_pImageIM->SetImage(WarningBox::GetStandardImage());
+    m_pImageIM->SetImage(GetStandardWarningBoxImage());
     get(m_pEdit, "edit");
 }
 

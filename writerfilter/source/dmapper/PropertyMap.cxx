@@ -38,6 +38,7 @@
 #include <com/sun/star/table/ShadowFormat.hpp>
 #include <com/sun/star/text/RelOrientation.hpp>
 #include <com/sun/star/text/HoriOrientation.hpp>
+#include <com/sun/star/text/SizeType.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/WritingMode.hpp>
 #include <com/sun/star/text/XTextColumns.hpp>
@@ -633,7 +634,7 @@ table::ShadowFormat PropertyMap::getShadowFromBorder( const table::BorderLine2& 
     // property of the page style, with shadow location, distance and
     // color. See SwWW8ImplReader::SetShadow().
     table::ShadowFormat aFormat;
-    aFormat.Color       = COL_BLACK;
+    aFormat.Color       = sal_Int32(COL_BLACK);
     aFormat.Location    = table::ShadowLocation_BOTTOM_RIGHT;
     aFormat.ShadowWidth = rBorder.LineWidth;
     return aFormat;
@@ -901,6 +902,16 @@ void SectionPropertyMap::CopyLastHeaderFooter( bool bFirstPage, DomainMapper_Imp
 
 void SectionPropertyMap::PrepareHeaderFooterProperties( bool bFirstPage )
 {
+    if (bFirstPage && m_bTitlePage && m_aFollowPageStyle.is())
+    {
+        // This is a first page and has a follow style, then enable the
+        // header/footer there as well to be consistent.
+        if (HasHeader(/*bFirstPage=*/true))
+            m_aFollowPageStyle->setPropertyValue("HeaderIsOn", uno::makeAny(true));
+        if (HasFooter(/*bFirstPage=*/true))
+            m_aFollowPageStyle->setPropertyValue("FooterIsOn", uno::makeAny(true));
+    }
+
     sal_Int32 nTopMargin = m_nTopMargin;
     sal_Int32 nHeaderTop = m_nHeaderTop;
     if ( HasHeader( bFirstPage ) )
@@ -1031,6 +1042,10 @@ bool SectionPropertyMap::FloatingTableConversion( DomainMapper_Impl& rDM_Impl, F
     sal_Int32 nTextAreaWidth = nPageWidth - GetLeftMargin() - GetRightMargin();
     // Count the layout width of the table.
     sal_Int32 nTableWidth = rInfo.m_nTableWidth;
+    if (rInfo.m_nTableWidthType == text::SizeType::VARIABLE)
+    {
+        nTableWidth *= nTextAreaWidth / 100.0;
+    }
     sal_Int32 nLeftMargin = 0;
     if ( rInfo.getPropertyValue( "LeftMargin" ) >>= nLeftMargin )
         nTableWidth += nLeftMargin;
@@ -1122,6 +1137,72 @@ void SectionPropertyMap::InheritOrFinalizePageStyles( DomainMapper_Impl& rDM_Imp
     }
 }
 
+void SectionPropertyMap::HandleIncreasedAnchoredObjectSpacing(DomainMapper_Impl& rDM_Impl)
+{
+    // Ignore Word 2010 and older.
+    if (rDM_Impl.GetSettingsTable()->GetWordCompatibilityMode() < 15)
+        return;
+
+    sal_Int32 nPageWidth = GetPageWidth();
+    sal_Int32 nTextAreaWidth = nPageWidth - GetLeftMargin() - GetRightMargin();
+
+    std::vector<AnchoredObjectInfo>& rAnchoredObjectAnchors = rDM_Impl.m_aAnchoredObjectAnchors;
+    for (auto& rAnchor : rAnchoredObjectAnchors)
+    {
+        // Analyze the anchored objects of this paragraph, now that we know the
+        // page width.
+        sal_Int32 nShapesWidth = 0;
+        for (const auto& rAnchored : rAnchor.m_aAnchoredObjects)
+        {
+            uno::Reference<drawing::XShape> xShape(rAnchored, uno::UNO_QUERY);
+            if (!xShape.is())
+                continue;
+
+            uno::Reference<beans::XPropertySet> xPropertySet(rAnchored, uno::UNO_QUERY);
+            if (!xPropertySet.is())
+                continue;
+
+            // Ignore objects with no wrapping.
+            text::WrapTextMode eWrap = text::WrapTextMode_THROUGH;
+            xPropertySet->getPropertyValue("Surround") >>= eWrap;
+            if (eWrap == text::WrapTextMode_THROUGH)
+                continue;
+
+            sal_Int32 nLeftMargin = 0;
+            xPropertySet->getPropertyValue("LeftMargin") >>= nLeftMargin;
+            sal_Int32 nRightMargin = 0;
+            xPropertySet->getPropertyValue("RightMargin") >>= nRightMargin;
+            nShapesWidth += xShape->getSize().Width + nLeftMargin + nRightMargin;
+        }
+
+        // Ignore cases when we have enough horizontal space for the shapes.
+        if (nTextAreaWidth > nShapesWidth)
+            continue;
+
+        sal_Int32 nHeight = 0;
+        for (const auto& rAnchored : rAnchor.m_aAnchoredObjects)
+        {
+            uno::Reference<drawing::XShape> xShape(rAnchored, uno::UNO_QUERY);
+            if (!xShape.is())
+                continue;
+
+            nHeight += xShape->getSize().Height;
+        }
+
+        uno::Reference<beans::XPropertySet> xParagraph(rAnchor.m_xParagraph, uno::UNO_QUERY);
+        if (xParagraph.is())
+        {
+            sal_Int32 nTopMargin = 0;
+            xParagraph->getPropertyValue("ParaTopMargin") >>= nTopMargin;
+            // Increase top spacing of the paragraph to match Word layout
+            // behavior.
+            nTopMargin = std::max(nTopMargin, nHeight);
+            xParagraph->setPropertyValue("ParaTopMargin", uno::makeAny(nTopMargin));
+        }
+    }
+    rAnchoredObjectAnchors.clear();
+}
+
 void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
 {
     // The default section type is nextPage.
@@ -1138,6 +1219,15 @@ void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
             xBodyText->convertToTextFrame( rInfo.m_xStart, rInfo.m_xEnd, rInfo.m_aFrameProperties );
     }
     rPendingFloatingTables.clear();
+
+    try
+    {
+        HandleIncreasedAnchoredObjectSpacing(rDM_Impl);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("writerfilter", "HandleIncreasedAnchoredObjectSpacing() failed: " << rException);
+    }
 
     if ( m_nLnnMod )
     {

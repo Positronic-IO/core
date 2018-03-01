@@ -341,6 +341,7 @@ void ScEEImport::WriteToDocument( bool bSizeColsRows, double nOutputFactor, SvNu
                 aParam.mbDetectNumberFormat = true;
                 aParam.meSetTextNumFormat = ScSetStringParam::SpecialNumberOnly;
                 aParam.mbHandleApostrophe = false;
+                aParam.mbCheckLinkFormula = true;
 
                 if (!aValStr.isEmpty())
                     mpDoc->SetValue( nCol, nRow, nTab, fVal );
@@ -503,8 +504,8 @@ bool ScEEImport::GraphicSize( SCCOL nCol, SCROW nRow, ScEEParseEntry* pE )
         if ( pI->pGraphic )
             bHasGraphics = true;
         Size aSizePix = pI->aSize;
-        aSizePix.Width() += 2 * pI->aSpace.X();
-        aSizePix.Height() += 2 * pI->aSpace.Y();
+        aSizePix.AdjustWidth(2 * pI->aSpace.X() );
+        aSizePix.AdjustHeight(2 * pI->aSpace.Y() );
         Size aLogicSize = pDefaultDev->PixelToLogic( aSizePix, MapMode( MapUnit::MapTwip ) );
         if ( nDir & nHorizontal )
             nWidth += aLogicSize.Width();
@@ -578,15 +579,15 @@ void ScEEImport::InsertGraphic( SCCOL nCol, SCROW nRow, SCTAB nTab,
         ScHTMLImage* pI = pImage.get();
         if ( nDir & nHorizontal )
         {   // Horizontal
-            aInsertPos.X() += aLogicSize.Width();
-            aInsertPos.X() += aSpace.X();
-            aInsertPos.Y() = aCellInsertPos.Y();
+            aInsertPos.AdjustX(aLogicSize.Width() );
+            aInsertPos.AdjustX(aSpace.X() );
+            aInsertPos.setY( aCellInsertPos.Y() );
         }
         else
         {   // Vertical
-            aInsertPos.X() = aCellInsertPos.X();
-            aInsertPos.Y() += aLogicSize.Height();
-            aInsertPos.Y() += aSpace.Y();
+            aInsertPos.setX( aCellInsertPos.X() );
+            aInsertPos.AdjustY(aLogicSize.Height() );
+            aInsertPos.AdjustY(aSpace.Y() );
         }
         // Add offset of Spacing
         aSpace = pDefaultDev->PixelToLogic( pI->aSpace, MapMode( MapUnit::Map100thMM ) );

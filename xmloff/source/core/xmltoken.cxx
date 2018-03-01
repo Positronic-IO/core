@@ -777,6 +777,7 @@ namespace xmloff { namespace token {
         TOKEN( "fill-image-ref-point-x",          XML_FILL_IMAGE_REF_POINT_X ),
         TOKEN( "fill-image-ref-point-y",          XML_FILL_IMAGE_REF_POINT_Y ),
         TOKEN( "fill-image-width",                XML_FILL_IMAGE_WIDTH ),
+        TOKEN( "fill-rule",                       XML_FILL_RULE ),
         TOKEN( "filter",                          XML_FILTER ),
         TOKEN( "filter-and",                      XML_FILTER_AND ),
         TOKEN( "filter-condition",                XML_FILTER_CONDITION ),
@@ -3294,6 +3295,8 @@ namespace xmloff { namespace token {
         TOKEN( "zeros-denominator-digits",        XML_ZEROS_DENOMINATOR_DIGITS ),
         TOKEN( "integer-fraction-delimiter",      XML_INTEGER_FRACTION_DELIMITER ),
 
+        // for optional language-dependent reference formats
+        TOKEN( "reference-language",              XML_REFERENCE_LANGUAGE ),
 #if OSL_DEBUG_LEVEL > 0
         { 0, nullptr, nullptr,                       XML_TOKEN_END }
 #else

@@ -26,6 +26,7 @@
 #include <com/sun/star/linguistic2/XSpellChecker1.hpp>
 #include <i18nlangtag/languagetag.hxx>
 #include <tools/debug.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <osl/mutex.hxx>
 #include <unotools/pathoptions.hxx>
@@ -70,49 +71,15 @@ Thesaurus::Thesaurus() :
 {
     bDisposing = false;
     pPropHelper = nullptr;
-    aThes = nullptr;
-    aCharSetInfo = nullptr;
-    aTEncs = nullptr;
-    aTLocs = nullptr;
-    aTNames = nullptr;
-    numthes = 0;
     prevLocale = LANGUAGE_DONTKNOW;
 }
 
 Thesaurus::~Thesaurus()
 {
-    if (aThes)
-    {
-        for (int i = 0; i < numthes; i++)
-        {
-            if (aThes[i]) delete aThes[i];
-            aThes[i] = nullptr;
-        }
-        delete[] aThes;
-    }
-    aThes = nullptr;
-    if (aCharSetInfo)
-    {
-        for (int i = 0; i < numthes; i++)
-        {
-            if (aCharSetInfo[i]) delete aCharSetInfo[i];
-            aCharSetInfo[i] = nullptr;
-        }
-        delete[] aCharSetInfo;
-    }
-    aCharSetInfo = nullptr;
-    numthes = 0;
-    if (aTEncs) delete[] aTEncs;
-    aTEncs = nullptr;
-    if (aTLocs) delete[] aTLocs;
-    aTLocs = nullptr;
-    if (aTNames) delete[] aTNames;
-    aTNames = nullptr;
-
+    mvThesInfo.clear();
     if (pPropHelper)
     {
         pPropHelper->RemoveAsPropListener();
-        delete pPropHelper;
     }
 }
 
@@ -134,7 +101,7 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
 
     // this routine should return the locales supported by the installed
     // dictionaries.
-    if (!numthes)
+    if (!mvThesInfo.size())
     {
         SvtLinguConfig aLinguCfg;
 
@@ -162,7 +129,7 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
         // is not yet supported by the list od new style dictionaries
         MergeNewStyleDicsAndOldStyleDics( aDics, aOldStyleDics );
 
-        numthes = aDics.size();
+        sal_Int32 numthes = aDics.size();
         if (numthes)
         {
             // get supported locales from the dictionaries-to-use...
@@ -174,6 +141,9 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
                 sal_Int32 nLen2 = aLocaleNames.getLength();
                 for (k = 0;  k < nLen2;  ++k)
                 {
+                    if (!comphelper::LibreOfficeKit::isWhitelistedLanguage(aLocaleNames[k]))
+                        continue;
+
                     aLocaleNamesSet.insert( aLocaleNames[k] );
                 }
             }
@@ -197,11 +167,7 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
                 numthes = numthes + dict.aLocaleNames.getLength();
 
             // add dictionary information
-            aThes   = new MyThes* [numthes];
-            aTEncs  = new rtl_TextEncoding [numthes];
-            aTLocs  = new Locale [numthes];
-            aTNames = new OUString [numthes];
-            aCharSetInfo = new CharClass* [numthes];
+            mvThesInfo.resize(numthes);
 
             k = 0;
             for (auto const& dict : aDics)
@@ -218,17 +184,16 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
                     for (sal_Int32 i = 0;  i < nLocales;  ++i)
                     {
                         LanguageTag aLanguageTag(dict.aLocaleNames[i]);
-                        aThes[k]  = nullptr;
-                        aTEncs[k]  = RTL_TEXTENCODING_DONTKNOW;
-                        aTLocs[k]  = aLanguageTag.getLocale();
-                        aCharSetInfo[k] = new CharClass( aLanguageTag );
+                        mvThesInfo[k].aEncoding = RTL_TEXTENCODING_DONTKNOW;
+                        mvThesInfo[k].aLocale  = aLanguageTag.getLocale();
+                        mvThesInfo[k].aCharSetInfo.reset( new CharClass( aLanguageTag ) );
                         // also both files have to be in the same directory and the
                         // file names must only differ in the extension (.aff/.dic).
                         // Thus we use the first location only and strip the extension part.
                         OUString aLocation = dict.aLocations[0];
                         sal_Int32 nPos = aLocation.lastIndexOf( '.' );
                         aLocation = aLocation.copy( 0, nPos );
-                        aTNames[k] = aLocation;
+                        mvThesInfo[k].aName = aLocation;
 
                         ++k;
                     }
@@ -239,12 +204,7 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
         else
         {
             /* no dictionary found so register no dictionaries */
-            numthes = 0;
-            aThes  = nullptr;
-            aTEncs  = nullptr;
-            aTLocs  = nullptr;
-            aTNames = nullptr;
-            aCharSetInfo = nullptr;
+            mvThesInfo.clear();
             aSuppLocales.realloc(0);
         }
     }
@@ -315,15 +275,15 @@ Sequence < Reference < css::linguistic2::XMeaning > > SAL_CALL Thesaurus::queryM
     CharClass * pCC = nullptr;
 
     // find the first thesaurus that matches the locale
-    for (int i =0; i < numthes; i++)
+    for (size_t i =0; i < mvThesInfo.size(); i++)
     {
-        if (rLocale == aTLocs[i])
+        if (rLocale == mvThesInfo[i].aLocale)
         {
             // open up and initialize this thesaurus if need be
-            if (!aThes[i])
+            if (!mvThesInfo[i].aThes)
             {
-                OUString datpath = aTNames[i] + ".dat";
-                OUString idxpath = aTNames[i] + ".idx";
+                OUString datpath = mvThesInfo[i].aName + ".dat";
+                OUString idxpath = mvThesInfo[i].aName + ".idx";
                 OUString ndat;
                 OUString nidx;
                 osl::FileBase::getSystemPathFromFileURL(datpath,ndat);
@@ -338,13 +298,12 @@ Sequence < Reference < css::linguistic2::XMeaning > > SAL_CALL Thesaurus::queryM
                 OString aTmpdat(OU2ENC(ndat,osl_getThreadTextEncoding()));
 #endif
 
-                aThes[i] = new MyThes(aTmpidx.getStr(),aTmpdat.getStr());
-                if (aThes[i])
-                    aTEncs[i] = getTextEncodingFromCharset(aThes[i]->get_th_encoding());
+                mvThesInfo[i].aThes.reset( new MyThes(aTmpidx.getStr(),aTmpdat.getStr()) );
+                mvThesInfo[i].aEncoding = getTextEncodingFromCharset(mvThesInfo[i].aThes->get_th_encoding());
             }
-            pTH = aThes[i];
-            eEnc = aTEncs[i];
-            pCC = aCharSetInfo[i];
+            pTH = mvThesInfo[i].aThes.get();
+            eEnc = mvThesInfo[i].aEncoding;
+            pCC = mvThesInfo[i].aCharSetInfo.get();
 
             if (pTH)
                 break;

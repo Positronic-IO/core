@@ -45,8 +45,7 @@ using namespace com::sun::star::beans;
 using namespace com::sun::star::sdbc;
 
 OConnection::OConnection(const SQLHANDLE _pDriverHandle,ODBCDriver* _pDriver)
-                         : OSubComponent<OConnection, OConnection_BASE>(static_cast<cppu::OWeakObject*>(_pDriver), this)
-                         ,m_xDriver(_pDriver)
+                         :m_xDriver(_pDriver)
                          ,m_aConnectionHandle(nullptr)
                          ,m_pDriverHandleCopy(_pDriverHandle)
                          ,m_nStatementCount(0)
@@ -76,11 +75,6 @@ OConnection::~OConnection()
 
         m_aConnectionHandle = SQL_NULL_HANDLE;
     }
-}
-
-void SAL_CALL OConnection::release() throw()
-{
-    release_ChildImpl();
 }
 
 oslGenericFunction OConnection::getOdbcFunction(ODBC3SQLFunctionId _nIndex)  const
@@ -129,9 +123,9 @@ SQLRETURN OConnection::OpenConnection(const OUString& aConnectStr, sal_Int32 nTi
     nSQLRETURN = N3SQLDriverConnect(m_aConnectionHandle,
                       nullptr,
                       szConnStrIn,
-                      (SQLSMALLINT) std::min<sal_Int32>((sal_Int32)2048,aConStr.getLength()),
+                      static_cast<SQLSMALLINT>(std::min<sal_Int32>(sal_Int32(2048),aConStr.getLength())),
                       szConnStrOut,
-                      (SQLSMALLINT) sizeof szConnStrOut,
+                      SQLSMALLINT(sizeof szConnStrOut),
                       &cbConnStrOut,
                       nSilent);
     if (nSQLRETURN == SQL_ERROR || nSQLRETURN == SQL_NO_DATA)
@@ -472,16 +466,14 @@ void OConnection::disposing()
 
     OConnection_BASE::disposing();
 
-    for (auto aConIter = m_aConnections.begin(); aConIter != m_aConnections.end(); ++aConIter )
-        aConIter->second->dispose();
+    for (auto const& connection : m_aConnections)
+        connection.second->dispose();
 
     m_aConnections.clear();
 
     if(!m_bClosed)
         N3SQLDisconnect(m_aConnectionHandle);
     m_bClosed   = true;
-
-    dispose_ChildImpl();
 }
 
 SQLHANDLE OConnection::createStatementHandle()

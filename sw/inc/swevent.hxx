@@ -24,6 +24,7 @@
 #include <tools/solar.h>
 #include "calbck.hxx"
 #include "frmfmt.hxx"
+#include "hints.hxx"
 
 #define     STR_SW_EVENT_PAGE_COUNT           0
 #define     STR_SW_EVENT_MAIL_MERGE           1
@@ -111,7 +112,7 @@ struct SwCallMouseEvent
                 // note: pFormat is not necessarily the same as
                 // GetRegisteredIn() here; see ~SwFormat()
                 assert(PTR.pFormat);
-                GetRegisteredInNonConst()->Remove(this);
+                EndListeningAll();
             }
             eType = EVENT_OBJECT_NONE; PTR.pFormat = nullptr; PTR.IMAP.pIMapObj = nullptr;
         }

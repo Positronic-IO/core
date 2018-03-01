@@ -78,6 +78,7 @@
 #include <docsh.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <IDocumentMarkAccess.hxx>
 #include <IDocumentStylePoolAccess.hxx>
 #include <IDocumentExternalData.hxx>
 #include <docufld.hxx>
@@ -391,9 +392,6 @@ public:
     Sttb();
 
     bool Read(SvStream &rS) override;
-#if OSL_DEBUG_LEVEL > 1
-    virtual void Print( FILE* fp ) override;
-#endif
     OUString getStringAtIndex( sal_uInt32 );
 };
 
@@ -425,28 +423,6 @@ bool Sttb::Read( SvStream& rS )
     }
     return true;
 }
-
-#if OSL_DEBUG_LEVEL > 1
-void Sttb::Print( FILE* fp )
-{
-    fprintf( fp, "[ 0x%" SAL_PRIxUINT32 " ] Sttb - dump\n", nOffSet);
-    fprintf( fp, " fExtend 0x%x [expected 0xFFFF ]\n", fExtend );
-    fprintf( fp, " cData no. or string data items %d (0x%x)\n", cData, cData );
-
-    if ( cData )
-    {
-        for (sal_uInt16 index = 0; index < cData; ++index)
-        {
-            if (index >= dataItems.size())
-            {
-                fprintf(fp, "   Sttb truncated at entry %d(0x%x)\n", static_cast< int >( index ), static_cast< unsigned int >( index ));
-                break;
-            }
-            fprintf(fp,"   string dataItem[ %d(0x%x) ] has name %s\n", static_cast< int >( index ), static_cast< unsigned int >( index ), OUStringToOString( dataItems[ index ].data, RTL_TEXTENCODING_UTF8 ).getStr() );
-        }
-    }
-}
-#endif
 
 OUString
 Sttb::getStringAtIndex( sal_uInt32 index )
@@ -721,8 +697,8 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
                 if (nTextRotationAngle == 9000)
                 {
                     long nWidth = rTextRect.GetWidth();
-                    rTextRect.Right() = rTextRect.Left() + rTextRect.GetHeight();
-                    rTextRect.Bottom() = rTextRect.Top() + nWidth;
+                    rTextRect.SetRight( rTextRect.Left() + rTextRect.GetHeight() );
+                    rTextRect.SetBottom( rTextRect.Top() + nWidth );
 
                     sal_Int32 nOldTextLeft = nTextLeft;
                     sal_Int32 nOldTextRight = nTextRight;
@@ -737,8 +713,8 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
                 else if (nTextRotationAngle == 27000)
                 {
                     long nWidth = rTextRect.GetWidth();
-                    rTextRect.Right() = rTextRect.Left() + rTextRect.GetHeight();
-                    rTextRect.Bottom() = rTextRect.Top() + nWidth;
+                    rTextRect.SetRight( rTextRect.Left() + rTextRect.GetHeight() );
+                    rTextRect.SetBottom( rTextRect.Top() + nWidth );
 
                     sal_Int32 nOldTextLeft = nTextLeft;
                     sal_Int32 nOldTextRight = nTextRight;
@@ -761,8 +737,8 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
             // The vertical paragraph justification are contained within the
             // BoundRect so calculate it here
             tools::Rectangle aNewRect(rTextRect);
-            aNewRect.Bottom() -= nTextTop + nTextBottom;
-            aNewRect.Right() -= nTextLeft + nTextRight;
+            aNewRect.AdjustBottom( -(nTextTop + nTextBottom) );
+            aNewRect.AdjustRight( -(nTextLeft + nTextRight) );
 
             // Only if it's a simple Textbox, Writer can replace the Object
             // with a Frame, else
@@ -896,8 +872,8 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
                             rTextRect.GetWidth() : rTextRect.GetHeight();
                         nMinWH /= 2;
                         Point aPivot(rTextRect.TopLeft());
-                        aPivot.X() += nMinWH;
-                        aPivot.Y() += nMinWH;
+                        aPivot.AdjustX(nMinWH );
+                        aPivot.AdjustY(nMinWH );
                         double a = nTextRotationAngle * nPi180;
                         pObj->NbcRotate(aPivot, nTextRotationAngle, sin(a), cos(a));
                     }
@@ -954,8 +930,7 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
             SfxItemState eState = aSet.GetItemState( XATTR_FILLCOLOR,
                                                      false, &pPoolItem );
             if( SfxItemState::DEFAULT == eState )
-                aSet.Put( XFillColorItem( OUString(),
-                          Color( mnDefaultColor ) ) );
+                aSet.Put( XFillColorItem( OUString(), mnDefaultColor ) );
             pObj->SetMergedItemSet(aSet);
         }
 
@@ -1012,8 +987,8 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
                         nX = nSmallX;
                         nY = nSmallY;
                     }
-                    (*(pImpRec->pWrapPolygon))[i].X() = nX;
-                    (*(pImpRec->pWrapPolygon))[i].Y() = nY;
+                    (*(pImpRec->pWrapPolygon))[i].setX( nX );
+                    (*(pImpRec->pWrapPolygon))[i].setY( nY );
                 }
             }
         }
@@ -1465,8 +1440,8 @@ const SfxPoolItem* SwWW8FltControlStack::GetFormatAttr(const SwPosition& rPos,
                 SfxItemState eState = SfxItemState::DEFAULT;
                 if (const SfxItemSet *pSet = pNd->GetpSwAttrSet())
                     eState = pSet->GetItemState(RES_LR_SPACE, false);
-                if (eState != SfxItemState::SET && rReader.m_nAktColl < rReader.m_vColl.size())
-                    pItem = &(rReader.m_vColl[rReader.m_nAktColl].maWordLR);
+                if (eState != SfxItemState::SET && rReader.m_nCurrentColl < rReader.m_vColl.size())
+                    pItem = &(rReader.m_vColl[rReader.m_nCurrentColl].maWordLR);
             }
 
             /*
@@ -1643,17 +1618,17 @@ void SwWW8ImplReader::Read_Tab(sal_uInt16 , const sal_uInt8* pData, short nLen)
 
     const SwFormat * pSty = nullptr;
     sal_uInt16 nTabBase;
-    if (m_pAktColl && m_nAktColl < m_vColl.size()) // StyleDef
+    if (m_pCurrentColl && m_nCurrentColl < m_vColl.size()) // StyleDef
     {
-        nTabBase = m_vColl[m_nAktColl].m_nBase;
+        nTabBase = m_vColl[m_nCurrentColl].m_nBase;
         if (nTabBase < m_vColl.size())  // Based On
             pSty = m_vColl[nTabBase].m_pFormat;
     }
     else
     { // Text
-        nTabBase = m_nAktColl;
-        if (m_nAktColl < m_vColl.size())
-            pSty = m_vColl[m_nAktColl].m_pFormat;
+        nTabBase = m_nCurrentColl;
+        if (m_nCurrentColl < m_vColl.size())
+            pSty = m_vColl[m_nCurrentColl].m_pFormat;
         //TODO: figure out else here
     }
 
@@ -1759,7 +1734,7 @@ void SwWW8ImplReader::Read_Tab(sal_uInt16 , const sal_uInt8* pData, short nLen)
         // text SwWW8ImplReader::Read_Tab is called at the begin and end of
         // the range the attrib affects, and ignoring it would upset the
         // balance
-        if (!m_pAktColl) // not importing into a style
+        if (!m_pCurrentColl) // not importing into a style
         {
             SvxTabStopItem aOrig = pSty ?
             ItemGet<SvxTabStopItem>(*pSty, RES_PARATR_TABSTOP) :
@@ -1946,7 +1921,7 @@ void SwWW8ImplReader::ImportDopTypography(const WW8DopTypography &rTypo)
         m_rDoc.getIDocumentSettingAccess().setForbiddenCharacters(LANGUAGE_JAPANESE,aForbidden);
     }
 
-    m_rDoc.getIDocumentSettingAccess().set(DocumentSettingId::KERN_ASIAN_PUNCTUATION, rTypo.fKerningPunct);
+    m_rDoc.getIDocumentSettingAccess().set(DocumentSettingId::KERN_ASIAN_PUNCTUATION, bool(rTypo.fKerningPunct));
     m_rDoc.getIDocumentSettingAccess().setCharacterCompressionType(static_cast<CharCompressType>(rTypo.iJustification));
 }
 
@@ -1963,9 +1938,9 @@ WW8ReaderSave::WW8ReaderSave(SwWW8ImplReader* pRdr ,WW8_CP nStartCp) :
     mpSFlyPara(pRdr->m_xSFlyPara.release()),
     mpPreviousNumPaM(pRdr->m_pPreviousNumPaM),
     mpPrevNumRule(pRdr->m_pPrevNumRule),
-    mpTableDesc(pRdr->m_pTableDesc),
+    mxTableDesc(std::move(pRdr->m_xTableDesc)),
     mnInTable(pRdr->m_nInTable),
-    mnAktColl(pRdr->m_nAktColl),
+    mnCurrentColl(pRdr->m_nCurrentColl),
     mcSymbol(pRdr->m_cSymbol),
     mbIgnoreText(pRdr->m_bIgnoreText),
     mbSymbol(pRdr->m_bSymbol),
@@ -1986,8 +1961,7 @@ WW8ReaderSave::WW8ReaderSave(SwWW8ImplReader* pRdr ,WW8_CP nStartCp) :
     pRdr->m_nInTable = 0;
     pRdr->m_pPreviousNumPaM = nullptr;
     pRdr->m_pPrevNumRule = nullptr;
-    pRdr->m_pTableDesc = nullptr;
-    pRdr->m_nAktColl = 0;
+    pRdr->m_nCurrentColl = 0;
 
     pRdr->m_xCtrlStck.reset(new SwWW8FltControlStack(&pRdr->m_rDoc, pRdr->m_nFieldFlags,
         *pRdr));
@@ -2018,7 +1992,7 @@ void WW8ReaderSave::Restore( SwWW8ImplReader* pRdr )
     pRdr->m_xSFlyPara.reset(mpSFlyPara);
     pRdr->m_pPreviousNumPaM = mpPreviousNumPaM;
     pRdr->m_pPrevNumRule = mpPrevNumRule;
-    pRdr->m_pTableDesc = mpTableDesc;
+    pRdr->m_xTableDesc = std::move(mxTableDesc);
     pRdr->m_cSymbol = mcSymbol;
     pRdr->m_bSymbol = mbSymbol;
     pRdr->m_bIgnoreText = mbIgnoreText;
@@ -2029,7 +2003,7 @@ void WW8ReaderSave::Restore( SwWW8ImplReader* pRdr )
     pRdr->m_bInHyperlink = mbInHyperlink;
     pRdr->m_bWasParaEnd = mbWasParaEnd;
     pRdr->m_bPgSecBreak = mbPgSecBreak;
-    pRdr->m_nAktColl = mnAktColl;
+    pRdr->m_nCurrentColl = mnCurrentColl;
     pRdr->m_bHasBorder = mbHasBorder;
     pRdr->m_bFirstPara = mbFirstPara;
 
@@ -2442,7 +2416,7 @@ bool SwWW8ImplReader::SetSpacing(SwPaM &rMyPam, int nSpace, bool bIsUpper )
         bool bRet = false;
         const SwPosition* pSpacingPos = rMyPam.GetPoint();
 
-        const SvxULSpaceItem* pULSpaceItem = static_cast<const SvxULSpaceItem*>(m_xCtrlStck->GetFormatAttr(*pSpacingPos, RES_UL_SPACE));
+        const SvxULSpaceItem* pULSpaceItem = m_xCtrlStck->GetFormatAttr(*pSpacingPos, RES_UL_SPACE);
 
         if(pULSpaceItem != nullptr)
         {
@@ -2794,8 +2768,8 @@ rtl_TextEncoding SwWW8ImplReader::GetCurrentCharSet()
             eSrcCharSet = m_aFontSrcCharSets.top();
         if ((eSrcCharSet == RTL_TEXTENCODING_DONTKNOW) && m_nCharFormat >= 0 && static_cast<size_t>(m_nCharFormat) < m_vColl.size() )
             eSrcCharSet = m_vColl[m_nCharFormat].GetCharSet();
-        if ((eSrcCharSet == RTL_TEXTENCODING_DONTKNOW) && StyleExists(m_nAktColl) && m_nAktColl < m_vColl.size())
-            eSrcCharSet = m_vColl[m_nAktColl].GetCharSet();
+        if ((eSrcCharSet == RTL_TEXTENCODING_DONTKNOW) && StyleExists(m_nCurrentColl) && m_nCurrentColl < m_vColl.size())
+            eSrcCharSet = m_vColl[m_nCurrentColl].GetCharSet();
         if (eSrcCharSet == RTL_TEXTENCODING_DONTKNOW)
             eSrcCharSet = GetCharSetFromLanguage();
     }
@@ -2818,8 +2792,8 @@ rtl_TextEncoding SwWW8ImplReader::GetCurrentCJKCharSet()
             eSrcCharSet = m_aFontSrcCJKCharSets.top();
         if ((eSrcCharSet == RTL_TEXTENCODING_DONTKNOW) && m_nCharFormat >= 0 && static_cast<size_t>(m_nCharFormat) < m_vColl.size() )
             eSrcCharSet = m_vColl[m_nCharFormat].GetCJKCharSet();
-        if (eSrcCharSet == RTL_TEXTENCODING_DONTKNOW && StyleExists(m_nAktColl) && m_nAktColl < m_vColl.size())
-            eSrcCharSet = m_vColl[m_nAktColl].GetCJKCharSet();
+        if (eSrcCharSet == RTL_TEXTENCODING_DONTKNOW && StyleExists(m_nCurrentColl) && m_nCurrentColl < m_vColl.size())
+            eSrcCharSet = m_vColl[m_nCurrentColl].GetCJKCharSet();
         if (eSrcCharSet == RTL_TEXTENCODING_DONTKNOW)
             eSrcCharSet = GetCJKCharSetFromLanguage();
     }
@@ -3728,20 +3702,20 @@ bool SwWW8ImplReader::ReadChar(long nPosCp, long nCpOfs)
 void SwWW8ImplReader::ProcessAktCollChange(WW8PLCFManResult& rRes,
     bool* pStartAttr, bool bCallProcessSpecial)
 {
-    sal_uInt16 nOldColl = m_nAktColl;
-    m_nAktColl = m_xPlcxMan->GetColl();
+    sal_uInt16 nOldColl = m_nCurrentColl;
+    m_nCurrentColl = m_xPlcxMan->GetColl();
 
     // Invalid Style-Id
-    if (m_nAktColl >= m_vColl.size() || !m_vColl[m_nAktColl].m_pFormat || !m_vColl[m_nAktColl].m_bColl)
+    if (m_nCurrentColl >= m_vColl.size() || !m_vColl[m_nCurrentColl].m_pFormat || !m_vColl[m_nCurrentColl].m_bColl)
     {
-        m_nAktColl = 0;
+        m_nCurrentColl = 0;
         m_bParaAutoBefore = false;
         m_bParaAutoAfter = false;
     }
     else
     {
-        m_bParaAutoBefore = m_vColl[m_nAktColl].m_bParaAutoBefore;
-        m_bParaAutoAfter = m_vColl[m_nAktColl].m_bParaAutoAfter;
+        m_bParaAutoBefore = m_vColl[m_nCurrentColl].m_bParaAutoBefore;
+        m_bParaAutoAfter = m_vColl[m_nCurrentColl].m_bParaAutoAfter;
     }
 
     if (nOldColl >= m_vColl.size())
@@ -3752,17 +3726,17 @@ void SwWW8ImplReader::ProcessAktCollChange(WW8PLCFManResult& rRes,
     {
         bool bReSync;
         // Frame/Table/Autonumbering List Level
-        bTabRowEnd = ProcessSpecial(bReSync, rRes.nAktCp + m_xPlcxMan->GetCpOfs());
+        bTabRowEnd = ProcessSpecial(bReSync, rRes.nCurrentCp + m_xPlcxMan->GetCpOfs());
         if( bReSync )
             *pStartAttr = m_xPlcxMan->Get( &rRes ); // Get Attribut-Pos again
     }
 
-    if (!bTabRowEnd && StyleExists(m_nAktColl))
+    if (!bTabRowEnd && StyleExists(m_nCurrentColl))
     {
-        SetTextFormatCollAndListLevel( *m_pPaM, m_vColl[ m_nAktColl ]);
-        ChkToggleAttr(m_vColl[ nOldColl ].m_n81Flags, m_vColl[ m_nAktColl ].m_n81Flags);
+        SetTextFormatCollAndListLevel( *m_pPaM, m_vColl[ m_nCurrentColl ]);
+        ChkToggleAttr(m_vColl[ nOldColl ].m_n81Flags, m_vColl[ m_nCurrentColl ].m_n81Flags);
         ChkToggleBiDiAttr(m_vColl[nOldColl].m_n81BiDiFlags,
-            m_vColl[m_nAktColl].m_n81BiDiFlags);
+            m_vColl[m_nCurrentColl].m_n81BiDiFlags);
     }
 }
 
@@ -3773,7 +3747,7 @@ long SwWW8ImplReader::ReadTextAttr(WW8_CP& rTextPos, long nTextEnd, bool& rbStar
 
     OSL_ENSURE(m_pPaM->GetNode().GetTextNode(), "Missing txtnode");
     bool bStartAttr = m_xPlcxMan->Get(&aRes); // Get Attribute position again
-    aRes.nAktCp = rTextPos;                  // Current Cp position
+    aRes.nCurrentCp = rTextPos;                  // Current Cp position
 
     bool bNewSection = (aRes.nFlags & MAN_MASK_NEW_SEP) && !m_bIgnoreText;
     if ( bNewSection ) // New Section
@@ -3841,7 +3815,7 @@ long SwWW8ImplReader::ReadTextAttr(WW8_CP& rTextPos, long nTextEnd, bool& rbStar
         m_xCtrlStck->MarkAllAttrsOld();
     bool bOldIgnoreText = m_bIgnoreText;
     m_bIgnoreText = true;
-    sal_uInt16 nOldColl = m_nAktColl;
+    sal_uInt16 nOldColl = m_nCurrentColl;
     bool bDoPlcxManPlusPLus = true;
     long nNext;
     do
@@ -3932,8 +3906,8 @@ void SwWW8ImplReader::ReadAttrs(WW8_CP& rTextPos, WW8_CP& rNext, long nTextEnd, 
      * is false.
      * Due to this we need to set the template here as a kind of special treatment.
      */
-    if (!m_bCpxStyle && m_nAktColl < m_vColl.size())
-            SetTextFormatCollAndListLevel(*m_pPaM, m_vColl[m_nAktColl]);
+    if (!m_bCpxStyle && m_nCurrentColl < m_vColl.size())
+            SetTextFormatCollAndListLevel(*m_pPaM, m_vColl[m_nCurrentColl]);
         rbStartLine = false;
     }
 }
@@ -3970,8 +3944,8 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
     short nDistance = 0;
 
     m_bWasParaEnd = false;
-    m_nAktColl    =  0;
-    m_xAktItemSet.reset();
+    m_nCurrentColl    =  0;
+    m_xCurrentItemSet.reset();
     m_nCharFormat    = -1;
     m_bSpec = false;
     m_bPgSecBreak = false;
@@ -4092,21 +4066,21 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
 
             const SwFormatCharFormat *pSwFormatCharFormat = nullptr;
 
-            if (m_xAktItemSet)
-                pSwFormatCharFormat = &(ItemGet<SwFormatCharFormat>(*m_xAktItemSet, RES_TXTATR_CHARFMT));
+            if (m_xCurrentItemSet)
+                pSwFormatCharFormat = &(ItemGet<SwFormatCharFormat>(*m_xCurrentItemSet, RES_TXTATR_CHARFMT));
 
             if (pSwFormatCharFormat)
                 pFormat = pSwFormatCharFormat->GetCharFormat();
 
-            if (m_xAktItemSet && !pFormat)
+            if (m_xCurrentItemSet && !pFormat)
             {
                 OUString sPrefix = "WW8Dropcap" + OUString::number(m_nDropCap++);
                 pNewSwCharFormat = m_rDoc.MakeCharFormat(sPrefix, m_rDoc.GetDfltCharFormat());
-                m_xAktItemSet->ClearItem(RES_CHRATR_ESCAPEMENT);
-                pNewSwCharFormat->SetFormatAttr(*m_xAktItemSet);
+                m_xCurrentItemSet->ClearItem(RES_CHRATR_ESCAPEMENT);
+                pNewSwCharFormat->SetFormatAttr(*m_xCurrentItemSet);
             }
 
-            m_xAktItemSet.reset();
+            m_xCurrentItemSet.reset();
             m_bDropCap=false;
         }
 
@@ -4189,10 +4163,9 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     , m_pPostProcessAttrsInfo(nullptr)
     , m_aTextNodesHavingFirstLineOfstSet()
     , m_aTextNodesHavingLeftIndentSet()
-    , m_pAktColl(nullptr)
+    , m_pCurrentColl(nullptr)
     , m_pDfltTextFormatColl(nullptr)
     , m_pStandardFormatColl(nullptr)
-    , m_pTableDesc(nullptr)
     , m_pDrawModel(nullptr)
     , m_pDrawPg(nullptr)
     , m_pDrawEditEngine(nullptr)
@@ -4213,7 +4186,7 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     , m_eStructCharSet(RTL_TEXTENCODING_ASCII_US)
     , m_eHardCharSet(RTL_TEXTENCODING_DONTKNOW)
     , m_nProgress(0)
-    , m_nAktColl(0)
+    , m_nCurrentColl(0)
     , m_nFieldNum(0)
     , m_nLFOPosition(USHRT_MAX)
     , m_nCharFormat(0)
@@ -4256,7 +4229,7 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     , m_bVer7(false)
     , m_bVer8(false)
     , m_bEmbeddObj(false)
-    , m_bAktAND_fNumberAcross(false)
+    , m_bCurrentAND_fNumberAcross(false)
     , m_bNoLnNumYet(true)
     , m_bFirstPara(true)
     , m_bFirstParaOfPage(false)
@@ -4755,9 +4728,6 @@ void SwWW8ImplReader::ReadDocInfo()
                 if (!checkSeek(*m_pTableStream, m_xWwFib->m_fcSttbfAssoc) || !aSttb.Read(*m_pTableStream))
                     SAL_WARN("sw.ww8", "** Read of SttbAssoc data failed!!!! ");
                 m_pTableStream->Seek( nCur ); // return to previous position, is that necessary?
-#if OSL_DEBUG_LEVEL > 1
-                aSttb.Print( stderr );
-#endif
                 OUString sPath = aSttb.getStringAtIndex( 0x1 );
                 OUString aURL;
                 // attempt to convert to url (won't work for obvious reasons on linux)
@@ -4839,9 +4809,6 @@ void WW8Customizations::Import( SwDocShell* pShell )
             SAL_WARN("sw.ww8", "** Read of Customization data failed!!!! ");
             return;
         }
-#if OSL_DEBUG_LEVEL > 1
-        aTCG.Print( stderr );
-#endif
         aTCG.ImportCustomToolBar( *pShell );
     }
     catch(...)
@@ -5301,10 +5268,15 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
     m_pTableStream = nullptr;
 
     DeleteCtrlStack();
-    m_xRedlineStack->closeall(*m_pPaM->GetPoint());
-    m_xRedlineStack.reset();
     DeleteAnchorStack();
     DeleteRefStacks();
+    m_pLastAnchorPos.reset();//ensure this is deleted before UpdatePageDescs
+    // remove extra paragraphs after attribute ctrl
+    // stacks etc. are destroyed, and before fields
+    // are updated
+    m_aExtraneousParas.delete_all_from_doc();
+    m_xRedlineStack->closeall(*m_pPaM->GetPoint());
+    m_xRedlineStack.reset();
 
     // For i120928,achieve the graphics from the special bookmark with is for graphic bullet
     {
@@ -5388,16 +5360,8 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
         m_xLstManager.reset();
     }
 
-    SAL_WARN_IF(m_pTableEndPaM, "sw.ww8", "document ended without table ending");
-    m_pTableEndPaM.reset();  //ensure this is deleted before pPaM
     mpCursor.reset();
     m_pPaM = nullptr;
-    m_pLastAnchorPos.reset();//ensure this is deleted before UpdatePageDescs
-
-    // remove extra paragraphs after attribute ctrl
-    // stacks etc. are destroyed, and before fields
-    // are updated
-    m_aExtraneousParas.delete_all_from_doc();
 
     UpdateFields();
 
@@ -6406,7 +6370,6 @@ bool SwMSDffManager::GetOLEStorageName(sal_uInt32 nOLEId, OUString& rStorageName
                             static_cast<sal_uInt16>(nOLEId & 0xFFFF)) )
             {
                 WW8PLCFxSaveAll aSave;
-                memset( &aSave, 0, sizeof( aSave ) );
                 rReader.m_xPlcxMan->SaveAllPLCFx( aSave );
 
                 nStartCp += rReader.m_nDrawCpO;
@@ -6540,8 +6503,8 @@ SdrObjUserData* SwMacroInfo::Clone( SdrObject* /*pObj*/ ) const
 
 std::unique_ptr<SfxItemSet> SwWW8ImplReader::SetAktItemSet(SfxItemSet* pItemSet)
 {
-    std::unique_ptr<SfxItemSet> xRet(std::move(m_xAktItemSet));
-    m_xAktItemSet.reset(pItemSet);
+    std::unique_ptr<SfxItemSet> xRet(std::move(m_xCurrentItemSet));
+    m_xCurrentItemSet.reset(pItemSet);
     return xRet;
 }
 

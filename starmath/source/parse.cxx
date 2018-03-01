@@ -950,26 +950,26 @@ namespace
 
 // grammar
 
-SmTableNode *SmParser::DoTable()
+std::unique_ptr<SmTableNode> SmParser::DoTable()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
         throw std::range_error("parser depth limit");
 
     std::vector<std::unique_ptr<SmNode>> aLineArray;
-    aLineArray.emplace_back(std::unique_ptr<SmNode>(DoLine()));
+    aLineArray.push_back(DoLine());
     while (m_aCurToken.eType == TNEWLINE)
     {
         NextToken();
-        aLineArray.emplace_back(std::unique_ptr<SmNode>(DoLine()));
+        aLineArray.push_back(DoLine());
     }
     assert(m_aCurToken.eType == TEND);
     std::unique_ptr<SmTableNode> xSNode(new SmTableNode(m_aCurToken));
     xSNode->SetSubNodes(buildNodeArray(aLineArray));
-    return xSNode.release();
+    return xSNode;
 }
 
-SmNode *SmParser::DoAlign(bool bUseExtraSpaces)
+std::unique_ptr<SmNode> SmParser::DoAlign(bool bUseExtraSpaces)
     // parse alignment info (if any), then go on with rest of expression
 {
     DepthProtect aDepthGuard(m_nParseDepth);
@@ -986,7 +986,7 @@ SmNode *SmParser::DoAlign(bool bUseExtraSpaces)
 
         // allow for just one align statement in 5.0
         if (TokenInGroup(TG::Align))
-            return DoError(SmParseError::DoubleAlign);
+            return std::unique_ptr<SmNode>(DoError(SmParseError::DoubleAlign));
     }
 
     auto pNode = DoExpression(bUseExtraSpaces);
@@ -994,13 +994,13 @@ SmNode *SmParser::DoAlign(bool bUseExtraSpaces)
     if (xSNode)
     {
         xSNode->SetSubNode(0, pNode.release());
-        return xSNode.release();
+        return std::move(xSNode); // this explicit move can be omitted since C++14
     }
-    return pNode.release();
+    return pNode;
 }
 
 // Postcondition: m_aCurToken.eType == TEND || m_aCurToken.eType == TNEWLINE
-SmLineNode *SmParser::DoLine()
+std::unique_ptr<SmNode> SmParser::DoLine()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1012,7 +1012,7 @@ SmLineNode *SmParser::DoLine()
     // (and go on with expressions that must not have alignment
     // statements in 'while' loop below. See also 'Expression()'.)
     if (m_aCurToken.eType != TEND  &&  m_aCurToken.eType != TNEWLINE)
-        ExpressionArray.emplace_back(std::unique_ptr<SmNode>(DoAlign()));
+        ExpressionArray.push_back(DoAlign());
 
     while (m_aCurToken.eType != TEND  &&  m_aCurToken.eType != TNEWLINE)
         ExpressionArray.push_back(DoExpression());
@@ -1029,7 +1029,7 @@ SmLineNode *SmParser::DoLine()
 
     auto xSNode = o3tl::make_unique<SmLineNode>(m_aCurToken);
     xSNode->SetSubNodes(buildNodeArray(ExpressionArray));
-    return xSNode.release();
+    return std::move(xSNode); // this explicit move can be omitted since C++14
 }
 
 std::unique_ptr<SmNode> SmParser::DoExpression(bool bUseExtraSpaces)
@@ -1039,9 +1039,9 @@ std::unique_ptr<SmNode> SmParser::DoExpression(bool bUseExtraSpaces)
         throw std::range_error("parser depth limit");
 
     std::vector<std::unique_ptr<SmNode>> RelationArray;
-    RelationArray.emplace_back(std::unique_ptr<SmNode>(DoRelation()));
+    RelationArray.push_back(DoRelation());
     while (m_aCurToken.nLevel >= 4)
-        RelationArray.emplace_back(std::unique_ptr<SmNode>(DoRelation()));
+        RelationArray.push_back(DoRelation());
 
     if (RelationArray.size() > 1)
     {
@@ -1059,49 +1059,49 @@ std::unique_ptr<SmNode> SmParser::DoExpression(bool bUseExtraSpaces)
     }
 }
 
-SmNode *SmParser::DoRelation()
+std::unique_ptr<SmNode> SmParser::DoRelation()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
         throw std::range_error("parser depth limit");
 
-    std::unique_ptr<SmNode> xFirst(DoSum());
+    auto xFirst = DoSum();
     while (TokenInGroup(TG::Relation))
     {
         std::unique_ptr<SmStructureNode> xSNode(new SmBinHorNode(m_aCurToken));
-        std::unique_ptr<SmNode> xSecond(DoOpSubSup());
-        std::unique_ptr<SmNode> xThird(DoSum());
+        auto xSecond = DoOpSubSup();
+        auto xThird = DoSum();
         xSNode->SetSubNodes(xFirst.release(), xSecond.release(), xThird.release());
         xFirst = std::move(xSNode);
     }
-    return xFirst.release();
+    return xFirst;
 }
 
-SmNode *SmParser::DoSum()
+std::unique_ptr<SmNode> SmParser::DoSum()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
         throw std::range_error("parser depth limit");
 
-    std::unique_ptr<SmNode> xFirst(DoProduct());
+    auto xFirst = DoProduct();
     while (TokenInGroup(TG::Sum))
     {
         std::unique_ptr<SmStructureNode> xSNode(new SmBinHorNode(m_aCurToken));
-        std::unique_ptr<SmNode> xSecond(DoOpSubSup());
-        std::unique_ptr<SmNode> xThird(DoProduct());
+        auto xSecond = DoOpSubSup();
+        auto xThird = DoProduct();
         xSNode->SetSubNodes(xFirst.release(), xSecond.release(), xThird.release());
         xFirst = std::move(xSNode);
     }
-    return xFirst.release();
+    return xFirst;
 }
 
-SmNode *SmParser::DoProduct()
+std::unique_ptr<SmNode> SmParser::DoProduct()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
         throw std::range_error("parser depth limit");
 
-    std::unique_ptr<SmNode> xFirst(DoPower());
+    auto xFirst = DoPower();
 
     while (TokenInGroup(TG::Product))
     {
@@ -1154,10 +1154,10 @@ SmNode *SmParser::DoProduct()
             default:
                 xSNode.reset(new SmBinHorNode(m_aCurToken));
 
-                xOper.reset(DoOpSubSup());
+                xOper = DoOpSubSup();
         }
 
-        std::unique_ptr<SmNode> xArg(DoPower());
+        auto xArg = DoPower();
 
         if (bSwitchArgs)
         {
@@ -1170,10 +1170,10 @@ SmNode *SmParser::DoProduct()
         }
         xFirst = std::move(xSNode);
     }
-    return xFirst.release();
+    return xFirst;
 }
 
-SmNode *SmParser::DoSubSup(TG nActiveGroup, SmNode *pGivenNode)
+std::unique_ptr<SmNode> SmParser::DoSubSup(TG nActiveGroup, SmNode *pGivenNode)
 {
     std::unique_ptr<SmNode> xGivenNode(pGivenNode);
     DepthProtect aDepthGuard(m_nParseDepth);
@@ -1237,7 +1237,7 @@ SmNode *SmParser::DoSubSup(TG nActiveGroup, SmNode *pGivenNode)
         if (eType == TFROM  ||  eType == TTO)
         {
             // parse limits in old 4.0 and 5.0 style
-            xSNode.reset(DoRelation());
+            xSNode = DoRelation();
         }
         else
             xSNode.reset(DoTerm(true));
@@ -1246,10 +1246,10 @@ SmNode *SmParser::DoSubSup(TG nActiveGroup, SmNode *pGivenNode)
     }
 
     pNode->SetSubNodes(buildNodeArray(aSubNodes));
-    return pNode.release();
+    return std::move(pNode); // this explicit move can be omitted since C++14
 }
 
-SmNode *SmParser::DoOpSubSup()
+std::unique_ptr<SmNode> SmParser::DoOpSubSup()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1262,10 +1262,10 @@ SmNode *SmParser::DoOpSubSup()
     // get sub- supscripts if any
     if (m_aCurToken.nGroup == TG::Power)
         return DoSubSup(TG::Power, pNode.release());
-    return pNode.release();
+    return std::move(pNode); // this explicit move can be omitted since C++14
 }
 
-SmNode *SmParser::DoPower()
+std::unique_ptr<SmNode> SmParser::DoPower()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1276,7 +1276,7 @@ SmNode *SmParser::DoPower()
 
     if (m_aCurToken.nGroup == TG::Power)
         return DoSubSup(TG::Power, xNode.release());
-    return xNode.release();
+    return xNode;
 }
 
 SmBlankNode *SmParser::DoBlank()
@@ -1336,7 +1336,7 @@ SmNode *SmParser::DoTerm(bool bGroupNumberIdent)
                 return xSNode.release();
             }
 
-            std::unique_ptr<SmNode> pNode(DoAlign(!bNoSpace));
+            auto pNode = DoAlign(!bNoSpace);
             if (m_aCurToken.eType == TRGROUP) {
                 NextToken();
                 return pNode.release();
@@ -1500,9 +1500,9 @@ SmNode *SmParser::DoTerm(bool bGroupNumberIdent)
                 bool    bIsAttr;
                 while ( (bIsAttr = TokenInGroup(TG::Attribute))
                        ||  TokenInGroup(TG::FontAttr))
-                    aStack.push(std::unique_ptr<SmStructureNode>(bIsAttr ? DoAttribut() : DoFontAttribut()));
+                    aStack.push(bIsAttr ? DoAttribut() : DoFontAttribut());
 
-                std::unique_ptr<SmNode> xFirstNode(DoPower());
+                auto xFirstNode = DoPower();
                 while (!aStack.empty())
                 {
                     std::unique_ptr<SmStructureNode> xNode = std::move(aStack.top());
@@ -1569,19 +1569,19 @@ SmOperNode *SmParser::DoOperator()
     auto xSNode = o3tl::make_unique<SmOperNode>(m_aCurToken);
 
     // get operator
-    std::unique_ptr<SmNode> xOperator(DoOper());
+    auto xOperator = DoOper();
 
     if (m_aCurToken.nGroup == TG::Limit || m_aCurToken.nGroup == TG::Power)
-        xOperator.reset(DoSubSup(m_aCurToken.nGroup, xOperator.release()));
+        xOperator = DoSubSup(m_aCurToken.nGroup, xOperator.release());
 
     // get argument
-    std::unique_ptr<SmNode> xArg(DoPower());
+    auto xArg = DoPower();
 
     xSNode->SetSubNodes(xOperator.release(), xArg.release());
     return xSNode.release();
 }
 
-SmNode *SmParser::DoOper()
+std::unique_ptr<SmNode> SmParser::DoOper()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1636,7 +1636,7 @@ SmNode *SmParser::DoOper()
     }
 
     NextToken();
-    return pNode.release();
+    return pNode;
 }
 
 SmStructureNode *SmParser::DoUnOper()
@@ -1665,7 +1665,7 @@ SmStructureNode *SmParser::DoUnOper()
 
         case TNROOT :
             NextToken();
-            xExtra.reset(DoPower());
+            xExtra = DoPower();
             break;
 
         case TUOPER :
@@ -1682,7 +1682,7 @@ SmStructureNode *SmParser::DoUnOper()
         case TMINUSPLUS :
         case TNEG :
         case TFACT :
-            xOper.reset(DoOpSubSup());
+            xOper = DoOpSubSup();
             break;
 
         default :
@@ -1690,7 +1690,7 @@ SmStructureNode *SmParser::DoUnOper()
     }
 
     // get argument
-    xArg.reset(DoPower());
+    xArg = DoPower();
 
     if (eType == TABS)
     {
@@ -1730,7 +1730,7 @@ SmStructureNode *SmParser::DoUnOper()
     return xSNode.release();
 }
 
-SmAttributNode *SmParser::DoAttribut()
+std::unique_ptr<SmStructureNode> SmParser::DoAttribut()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1766,10 +1766,10 @@ SmAttributNode *SmParser::DoAttribut()
 
     xSNode->SetSubNodes(xAttr.release(), nullptr); // the body will be filled later
     xSNode->SetScaleMode(eScaleMode);
-    return xSNode.release();
+    return std::move(xSNode); // this explicit move can be omitted since C++14
 }
 
-SmStructureNode *SmParser::DoFontAttribut()
+std::unique_ptr<SmStructureNode> SmParser::DoFontAttribut()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1787,7 +1787,7 @@ SmStructureNode *SmParser::DoFontAttribut()
             {
                 auto pNode = o3tl::make_unique<SmFontNode>(m_aCurToken);
                 NextToken();
-                return pNode.release();
+                return std::move(pNode); // this explicit move can be omitted since C++14
             }
 
         case TSIZE :
@@ -1801,11 +1801,11 @@ SmStructureNode *SmParser::DoFontAttribut()
 
         default :
             assert(false);
-            return nullptr;
+            return {};
     }
 }
 
-SmStructureNode *SmParser::DoColor()
+std::unique_ptr<SmStructureNode> SmParser::DoColor()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1813,6 +1813,7 @@ SmStructureNode *SmParser::DoColor()
 
     assert(m_aCurToken.eType == TCOLOR);
 
+    std::unique_ptr<SmStructureNode> xNode;
     // last color rules, get that one
     SmToken  aToken;
     do
@@ -1823,13 +1824,17 @@ SmStructureNode *SmParser::DoColor()
             NextToken();
         }
         else
-            return DoError(SmParseError::ColorExpected);
+        {
+            xNode.reset(DoError(SmParseError::ColorExpected));
+            return xNode;
+        }
     } while (m_aCurToken.eType == TCOLOR);
 
-    return new SmFontNode(aToken);
+    xNode.reset(new SmFontNode(aToken));
+    return xNode;
 }
 
-SmStructureNode *SmParser::DoFont()
+std::unique_ptr<SmStructureNode> SmParser::DoFont()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1837,6 +1842,7 @@ SmStructureNode *SmParser::DoFont()
 
     assert(m_aCurToken.eType == TFONT);
 
+    std::unique_ptr<SmStructureNode> xNode;
     // last font rules, get that one
     SmToken  aToken;
     do
@@ -1847,10 +1853,14 @@ SmStructureNode *SmParser::DoFont()
             NextToken();
         }
         else
-            return DoError(SmParseError::FontExpected);
+        {
+            xNode.reset(DoError(SmParseError::FontExpected));
+            return xNode;
+        }
     } while (m_aCurToken.eType == TFONT);
 
-    return new SmFontNode(aToken);
+    xNode.reset(new SmFontNode(aToken));
+    return xNode;
 }
 
 
@@ -1876,7 +1886,7 @@ static bool lcl_IsNumber(const OUString& rText)
     return true;
 }
 
-SmStructureNode *SmParser::DoFontSize()
+std::unique_ptr<SmStructureNode> SmParser::DoFontSize()
 {
     DepthProtect aDepthGuard(m_nParseDepth);
     if (aDepthGuard.TooDeep())
@@ -1898,14 +1908,14 @@ SmStructureNode *SmParser::DoFontSize()
         case TDIVIDEBY: Type = FontSizeType::DIVIDE;   break;
 
         default:
-            return DoError(SmParseError::SizeExpected);
+            return std::unique_ptr<SmStructureNode>(DoError(SmParseError::SizeExpected));
     }
 
     if (Type != FontSizeType::ABSOLUT)
     {
         NextToken();
         if (m_aCurToken.eType != TNUMBER)
-            return DoError(SmParseError::SizeExpected);
+            return std::unique_ptr<SmStructureNode>(DoError(SmParseError::SizeExpected));
     }
 
     // get number argument
@@ -1939,7 +1949,7 @@ SmStructureNode *SmParser::DoFontSize()
     NextToken();
 
     pFontNode->SetSizeParameter(aValue, Type);
-    return pFontNode.release();
+    return std::move(pFontNode); // this explicit move can be omitted since C++14
 }
 
 SmStructureNode *SmParser::DoBrace()
@@ -2051,7 +2061,7 @@ SmBracebodyNode *SmParser::DoBracebody(bool bIsLeftRight)
             }
             else if (m_aCurToken.eType != TRIGHT)
             {
-                aNodes.emplace_back(std::unique_ptr<SmNode>(DoAlign()));
+                aNodes.push_back(DoAlign());
                 if (m_aCurToken.eType != TMLINE  &&  m_aCurToken.eType != TRIGHT)
                     aNodes.emplace_back(std::unique_ptr<SmNode>(DoError(SmParseError::RightExpected)));
             }
@@ -2068,7 +2078,7 @@ SmBracebodyNode *SmParser::DoBracebody(bool bIsLeftRight)
             }
             else if (!TokenInGroup(TG::RBrace))
             {
-                aNodes.emplace_back(std::unique_ptr<SmNode>(DoAlign()));
+                aNodes.push_back(DoAlign());
                 if (m_aCurToken.eType != TMLINE  &&  !TokenInGroup(TG::RBrace))
                     aNodes.emplace_back(std::unique_ptr<SmNode>(DoError(SmParseError::RbraceExpected)));
             }
@@ -2133,8 +2143,8 @@ SmTableNode *SmParser::DoBinom()
 
     NextToken();
 
-    std::unique_ptr<SmNode> xFirst(DoSum());
-    std::unique_ptr<SmNode> xSecond(DoSum());
+    auto xFirst = DoSum();
+    auto xSecond = DoSum();
     xSNode->SetSubNodes(xFirst.release(), xSecond.release());
     return xSNode.release();
 }
@@ -2153,7 +2163,7 @@ SmStructureNode *SmParser::DoStack()
     do
     {
         NextToken();
-        aExprArr.emplace_back(std::unique_ptr<SmNode>(DoAlign()));
+        aExprArr.push_back(DoAlign());
     }
     while (m_aCurToken.eType == TPOUND);
 
@@ -2181,7 +2191,7 @@ SmStructureNode *SmParser::DoMatrix()
     do
     {
         NextToken();
-        aExprArr.emplace_back(std::unique_ptr<SmNode>(DoAlign()));
+        aExprArr.push_back(DoAlign());
     }
     while (m_aCurToken.eType == TPOUND);
 
@@ -2192,7 +2202,7 @@ SmStructureNode *SmParser::DoMatrix()
         NextToken();
         for (size_t i = 0; i < nCol; i++)
         {
-            std::unique_ptr<SmNode> xNode(DoAlign());
+            auto xNode = DoAlign();
             if (i < (nCol - 1))
             {
                 if (m_aCurToken.eType == TPOUND)
@@ -2314,7 +2324,7 @@ SmParser::SmParser()
 {
 }
 
-SmTableNode *SmParser::Parse(const OUString &rBuffer)
+std::unique_ptr<SmTableNode> SmParser::Parse(const OUString &rBuffer)
 {
     m_aUsedSymbols.clear();
 
@@ -2408,14 +2418,10 @@ const SmErrorDesc *SmParser::PrevError()
 }
 
 
-const SmErrorDesc *SmParser::GetError(size_t i)
+const SmErrorDesc *SmParser::GetError()
 {
-    if ( i < m_aErrDescList.size() )
-        return m_aErrDescList[ i ].get();
-
-    if ( static_cast<size_t>(m_nCurError) < m_aErrDescList.size() )
-        return m_aErrDescList[ m_nCurError ].get();
-
+    if ( !m_aErrDescList.empty() )
+        return m_aErrDescList.front().get();
     return nullptr;
 }
 

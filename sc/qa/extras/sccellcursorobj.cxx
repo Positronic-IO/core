@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/sheet/sheetcellrange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
 #include <test/sheet/xcellseries.hxx>
@@ -29,9 +30,8 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-#define NUMBER_OF_TESTS 16
-
-class ScCellCursorObj : public CalcUnoApiTest, public apitest::XCellFormatRangesSupplier,
+class ScCellCursorObj : public CalcUnoApiTest, public apitest::SheetCellRange,
+                                               public apitest::XCellFormatRangesSupplier,
                                                public apitest::XCellRangeAddressable,
                                                public apitest::XCellSeries,
                                                public apitest::XMultipleOperation,
@@ -52,6 +52,9 @@ public:
     virtual uno::Reference< uno::XInterface > getXSpreadsheet() override;
 
     CPPUNIT_TEST_SUITE(ScCellCursorObj);
+
+    // SheetCellRange
+    CPPUNIT_TEST(testSheetCellRangeProperties);
 
     // XUsedAreaCursor
     CPPUNIT_TEST(testGotoStartOfUsedArea);
@@ -94,12 +97,8 @@ public:
     CPPUNIT_TEST_SUITE_END();
 
 private:
-    static sal_Int32 nTest;
-    static uno::Reference< lang::XComponent > mxComponent;
+    uno::Reference< lang::XComponent > mxComponent;
 };
-
-sal_Int32 ScCellCursorObj::nTest = 0;
-uno::Reference< lang::XComponent > ScCellCursorObj::mxComponent;
 
 ScCellCursorObj::ScCellCursorObj():
     CalcUnoApiTest("/sc/qa/extras/testdocuments"),
@@ -109,11 +108,6 @@ ScCellCursorObj::ScCellCursorObj():
 
 uno::Reference< uno::XInterface > ScCellCursorObj::init()
 {
-    OUString aFileURL;
-    createFileURL("ScCellCursorObj.ods", aFileURL);
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
-
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
@@ -129,13 +123,9 @@ uno::Reference< uno::XInterface > ScCellCursorObj::init()
 
 uno::Reference< uno::XInterface > ScCellCursorObj::getXSpreadsheet()
 {
-    OUString aFileURL;
-    createFileURL("ScCellCursorObj.ods", aFileURL);
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
-    CPPUNIT_ASSERT_MESSAGE("no calc document", mxComponent.is());
-
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
+
     uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet( xIndex->getByIndex(0), UNO_QUERY_THROW);
 
@@ -144,19 +134,16 @@ uno::Reference< uno::XInterface > ScCellCursorObj::getXSpreadsheet()
 
 void ScCellCursorObj::setUp()
 {
-    nTest++;
-    CPPUNIT_ASSERT(nTest <= NUMBER_OF_TESTS);
     CalcUnoApiTest::setUp();
+
+    OUString aFileURL;
+    createFileURL("ScCellCursorObj.ods", aFileURL);
+    mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
 }
 
 void ScCellCursorObj::tearDown()
 {
-    if (nTest == NUMBER_OF_TESTS)
-    {
-        closeDocument(mxComponent);
-        mxComponent.clear();
-    }
-
+    closeDocument(mxComponent);
     CalcUnoApiTest::tearDown();
 }
 

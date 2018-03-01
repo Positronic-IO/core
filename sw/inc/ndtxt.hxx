@@ -25,7 +25,6 @@
 #include "node.hxx"
 #include "hintids.hxx"
 #include "ndhints.hxx"
-#include "modeltoviewhelper.hxx"
 #include "SwNumberTreeTypes.hxx"
 #include "IDocumentContentOperations.hxx"
 
@@ -43,6 +42,10 @@ class SvxLRSpaceItem;
 
 namespace utl {
     class TransliterationWrapper;
+}
+namespace vcl
+{
+class Font;
 }
 
 class SwTextFormatColl;
@@ -82,7 +85,7 @@ class SW_DLLPUBLIC SwTextNode: public SwContentNode, public ::sfx2::Metadatable
 
     /** May be 0. It is only then not 0 if it contains hard attributes.
        Therefore: never access directly! */
-    SwpHints    *m_pSwpHints;
+    std::unique_ptr<SwpHints> m_pSwpHints;
 
     mutable SwNodeNum* mpNodeNum;  ///< Numbering for this paragraph.
 
@@ -193,7 +196,7 @@ public:
     SwGrammarMarkUp* GetGrammarCheck();
     void SetSmartTags( SwWrongList* pNew, bool bDelete = true );
     SwWrongList* GetSmartTags();
-    bool TryCharSetExpandToNum(const SfxItemSet& pCharSet);
+    void TryCharSetExpandToNum(const SfxItemSet& pCharSet);
 
     /// End: Data collected during idle time
 
@@ -213,8 +216,8 @@ public:
     /// getters for SwpHints
     inline       SwpHints &GetSwpHints();
     inline const SwpHints &GetSwpHints() const;
-    SwpHints *GetpSwpHints()       { return m_pSwpHints; }
-    const SwpHints *GetpSwpHints() const { return m_pSwpHints; }
+          SwpHints *GetpSwpHints()       { return m_pSwpHints.get(); }
+    const SwpHints *GetpSwpHints() const { return m_pSwpHints.get(); }
     bool   HasHints() const { return m_pSwpHints != nullptr; }
     inline       SwpHints &GetOrCreateSwpHints();
 
@@ -810,7 +813,7 @@ inline SwpHints& SwTextNode::GetOrCreateSwpHints()
 {
     if ( !m_pSwpHints )
     {
-        m_pSwpHints = new SwpHints;
+        m_pSwpHints.reset(new SwpHints);
     }
     return *m_pSwpHints;
 }
@@ -819,7 +822,7 @@ inline void SwTextNode::TryDeleteSwpHints()
 {
     if ( m_pSwpHints && m_pSwpHints->CanBeDeleted() )
     {
-        DELETEZ( m_pSwpHints );
+        m_pSwpHints.reset();
     }
 }
 

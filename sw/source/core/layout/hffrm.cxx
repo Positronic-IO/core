@@ -31,6 +31,7 @@
 #include <hfspacingitem.hxx>
 #include <sortedobjs.hxx>
 #include <objectformatter.hxx>
+#include <ndindex.hxx>
 #include <o3tl/make_unique.hxx>
 
 static SwTwips lcl_GetFrameMinHeight(const SwLayoutFrame & rFrame)
@@ -384,7 +385,7 @@ void SwHeadFootFrame::FormatSize(SwTwips nUL, const SwBorderAttrs * pAttrs)
                         aFrm.Bottom( nDeadLine );
 
                         SwFrameAreaDefinition::FramePrintAreaWriteAccess aPrt(*this);
-                        aPrt.SSize().Height() = getFrameArea().Height() - nBorder;
+                        aPrt.SSize().setHeight( getFrameArea().Height() - nBorder );
                     }
                 }
 

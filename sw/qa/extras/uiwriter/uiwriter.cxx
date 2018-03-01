@@ -156,6 +156,7 @@ public:
     void testChineseConversionSimplifiedToTraditional();
     void testFdo85554();
     void testAutoCorr();
+    void testTdf83260();
     void testMergeDoc();
     void testCreatePortions();
     void testBookmarkUndo();
@@ -264,6 +265,7 @@ public:
     void testTdf106736();
     void testTdf58604();
     void testTdf112025();
+    void testTdf72942();
     void testTdf113877();
     void testTdf113877NoMerge();
     void testMsWordCompTrailingBlanks();
@@ -294,10 +296,13 @@ public:
     void testTdf113790();
     void testTdf108048();
     void testTdf114306();
+    void testTdf114306_2();
     void testTdf113481();
     void testTdf115013();
     void testTdf114536();
     void testTdf115065();
+    void testTdf115132();
+    void testXDrawPagesSupplier();
 
     CPPUNIT_TEST_SUITE(SwUiWriterTest);
     CPPUNIT_TEST(testReplaceForward);
@@ -333,6 +338,7 @@ public:
     CPPUNIT_TEST(testChineseConversionSimplifiedToTraditional);
     CPPUNIT_TEST(testFdo85554);
     CPPUNIT_TEST(testAutoCorr);
+    CPPUNIT_TEST(testTdf83260);
     CPPUNIT_TEST(testMergeDoc);
     CPPUNIT_TEST(testCreatePortions);
     CPPUNIT_TEST(testBookmarkUndo);
@@ -441,6 +447,7 @@ public:
     CPPUNIT_TEST(testTdf106736);
     CPPUNIT_TEST(testTdf58604);
     CPPUNIT_TEST(testTdf112025);
+    CPPUNIT_TEST(testTdf72942);
     CPPUNIT_TEST(testTdf113877);
     CPPUNIT_TEST(testTdf113877NoMerge);
     CPPUNIT_TEST(testMsWordCompTrailingBlanks);
@@ -471,10 +478,13 @@ public:
     CPPUNIT_TEST(testTdf113790);
     CPPUNIT_TEST(testTdf108048);
     CPPUNIT_TEST(testTdf114306);
+    CPPUNIT_TEST(testTdf114306_2);
     CPPUNIT_TEST(testTdf113481);
     CPPUNIT_TEST(testTdf115013);
     CPPUNIT_TEST(testTdf114536);
     CPPUNIT_TEST(testTdf115065);
+    CPPUNIT_TEST(testTdf115132);
+    CPPUNIT_TEST(testXDrawPagesSupplier);
     CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -1414,6 +1424,39 @@ void SwUiWriterTest::testAutoCorr()
     const uno::Reference< text::XTextTable > xTable(getParagraphOrTable(2), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xTable->getRows()->getCount());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTable->getColumns()->getCount());
+}
+
+void SwUiWriterTest::testTdf83260()
+{
+    SwDoc* const pDoc(createDoc("tdf83260-1.odt"));
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    SwAutoCorrect corr(*SvxAutoCorrCfg::Get().GetAutoCorrect());
+
+    // enabled but not shown
+    CPPUNIT_ASSERT(IDocumentRedlineAccess::IsHideChanges(
+            pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+    CPPUNIT_ASSERT(IDocumentRedlineAccess::IsRedlineOn(
+            pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+    CPPUNIT_ASSERT(!pDoc->getIDocumentRedlineAccess().GetRedlineTable().empty());
+
+    // the document contains redlines that are combined with CompressRedlines()
+    // if that happens during AutoCorrect then indexes in Undo are off -> crash
+    pWrtShell->Insert("tset");
+    pWrtShell->AutoCorrect(corr, u' ');
+    sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
+    auto const nActions(rUndoManager.GetUndoActionCount());
+    for (auto i = nActions; 0 < i; --i)
+    {
+        rUndoManager.Undo();
+    }
+    for (auto i = nActions; 0 < i; --i)
+    {
+        rUndoManager.Redo();
+    }
+    for (auto i = nActions; 0 < i; --i)
+    {
+        rUndoManager.Undo();
+    }
 }
 
 void SwUiWriterTest::testMergeDoc()
@@ -2430,14 +2473,14 @@ void SwUiWriterTest::testTdf77342()
     //moving cursor to the starting of document
     pWrtShell->SttDoc();
     //inserting reference field 1
-    SwGetRefField aField1(pRefType, "", REF_FOOTNOTE, sal_uInt16(0), REF_CONTENT);
+    SwGetRefField aField1(pRefType, "", "", REF_FOOTNOTE, sal_uInt16(0), REF_CONTENT);
     pWrtShell->Insert(aField1);
     //inserting second footnote
     pWrtShell->InsertFootnote("");
     pWrtShell->SttDoc();
     pCursor->Move(fnMoveForward);
     //inserting reference field 2
-    SwGetRefField aField2(pRefType, "", REF_FOOTNOTE, sal_uInt16(1), REF_CONTENT);
+    SwGetRefField aField2(pRefType, "", "", REF_FOOTNOTE, sal_uInt16(1), REF_CONTENT);
     pWrtShell->Insert(aField2);
     //inserting third footnote
     pWrtShell->InsertFootnote("");
@@ -2445,7 +2488,7 @@ void SwUiWriterTest::testTdf77342()
     pCursor->Move(fnMoveForward);
     pCursor->Move(fnMoveForward);
     //inserting reference field 3
-    SwGetRefField aField3(pRefType, "", REF_FOOTNOTE, sal_uInt16(2), REF_CONTENT);
+    SwGetRefField aField3(pRefType, "", "", REF_FOOTNOTE, sal_uInt16(2), REF_CONTENT);
     pWrtShell->Insert(aField3);
     //updating the fields
     IDocumentFieldsAccess& rField(pDoc->getIDocumentFieldsAccess());
@@ -2672,7 +2715,7 @@ void SwUiWriterTest::testTdf63553()
     //moving cursor to the starting of document
     pWrtShell->SttDoc();
     //inserting reference field 1
-    SwGetRefField aGetField1(pRefType, "Illustration", REF_SEQUENCEFLD, sal_uInt16(0), REF_CONTENT);
+    SwGetRefField aGetField1(pRefType, "Illustration", "", REF_SEQUENCEFLD, sal_uInt16(0), REF_CONTENT);
     pWrtShell->Insert(aGetField1);
     //now we have ref1-seq1
     //moving the cursor
@@ -2684,7 +2727,7 @@ void SwUiWriterTest::testTdf63553()
     pWrtShell->SttDoc();
     pCursor->Move(fnMoveForward);
     //inserting reference field 2
-    SwGetRefField aGetField2(pRefType, "Illustration", REF_SEQUENCEFLD, sal_uInt16(1), REF_CONTENT);
+    SwGetRefField aGetField2(pRefType, "Illustration", "", REF_SEQUENCEFLD, sal_uInt16(1), REF_CONTENT);
     pWrtShell->Insert(aGetField2);
     //now we have ref1-ref2-seq1-seq2
     //moving the cursor
@@ -2697,7 +2740,7 @@ void SwUiWriterTest::testTdf63553()
     pCursor->Move(fnMoveForward);
     pCursor->Move(fnMoveForward);
     //inserting reference field 3
-    SwGetRefField aGetField3(pRefType, "Illustration", REF_SEQUENCEFLD, sal_uInt16(2), REF_CONTENT);
+    SwGetRefField aGetField3(pRefType, "Illustration", "", REF_SEQUENCEFLD, sal_uInt16(2), REF_CONTENT);
     pWrtShell->Insert(aGetField3);
     //now after insertion we have ref1-ref2-ref3-seq1-seq2-seq3
     //updating the fields
@@ -3979,6 +4022,7 @@ void SwUiWriterTest::testTdf89954()
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 's', 0);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 't', 0);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, '.', 0);
+    Scheduler::ProcessEventsToIdle();
 
     SwNodeIndex aNodeIndex(pDoc->GetNodes().GetEndOfContent(), -1);
     // Placeholder character for the comment anchor was ^A (CH_TXTATR_BREAKWORD), not <fff9> (CH_TXTATR_INWORD).
@@ -4036,12 +4080,12 @@ void SwUiWriterTest::testTdf87922()
 
     // If no color background color is found, assume white.
     Color* pColor = sw::GetActiveRetoucheColor();
-    *pColor = Color(COL_WHITE);
+    *pColor = COL_WHITE;
 
     // Make sure that automatic color on black background is white, not black.
     vcl::Font aFont;
     aDrawTextInfo.ApplyAutoColor(&aFont);
-    CPPUNIT_ASSERT_EQUAL(COL_WHITE, aFont.GetColor().GetColor());
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, aFont.GetColor());
 }
 
 #if HAVE_MORE_FONTS
@@ -4596,6 +4640,7 @@ void SwUiWriterTest::testTdf84695()
     CPPUNIT_ASSERT(pXTextDocument);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_RETURN);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
+    Scheduler::ProcessEventsToIdle();
 
     uno::Reference<text::XTextRange> xShape(getShape(1), uno::UNO_QUERY);
     // This was empty, Enter did not start the fly frame edit mode.
@@ -4619,6 +4664,7 @@ void SwUiWriterTest::testTdf84695NormalChar()
     SwXTextDocument* pXTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pXTextDocument);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
+    Scheduler::ProcessEventsToIdle();
 
     uno::Reference<text::XTextRange> xShape(getShape(1), uno::UNO_QUERY);
     // This was empty, pressing a normal character did not start the fly frame edit mode.
@@ -4643,6 +4689,7 @@ void SwUiWriterTest::testTdf84695Tab()
     CPPUNIT_ASSERT(pXTextDocument);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, KEY_TAB);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, KEY_TAB);
+    Scheduler::ProcessEventsToIdle();
 
     // And finally make sure the selection has changed.
     const SdrMarkList& rMarkList = pWrtShell->GetDrawView()->GetMarkedObjectList();
@@ -5277,6 +5324,39 @@ void SwUiWriterTest::testTdf112025()
     CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xStyle, "IsLandscape"));
 }
 
+void SwUiWriterTest::testTdf72942()
+{
+    load(DATA_DIRECTORY, "fdo72942.docx");
+
+    // get a page cursor
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XTextViewCursorSupplier> xTextViewCursorSupplier(xModel->getCurrentController(), uno::UNO_QUERY);
+    uno::Reference<text::XPageCursor> xCursor(xTextViewCursorSupplier->getViewCursor(), uno::UNO_QUERY);
+    xCursor->jumpToEndOfPage();
+
+    OUString insertFileid = m_directories.getURLFromSrc(DATA_DIRECTORY) + "fdo72942-insert.docx";
+    uno::Sequence<beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence({{ "Name", uno::makeAny(insertFileid) }}));
+    lcl_dispatchCommand(mxComponent, ".uno:InsertDoc", aPropertyValues);
+
+    // check styles of paragraphs added from [fdo72942.docx]
+    const uno::Reference< text::XTextRange > xRun1 = getRun(getParagraph(1), 1);
+    CPPUNIT_ASSERT_EQUAL(OUString("Default English (Liberation serif) text with "), xRun1->getString());
+    CPPUNIT_ASSERT_EQUAL(OUString("Liberation Serif"), getProperty<OUString>(xRun1, "CharFontName"));
+
+    const uno::Reference< text::XTextRange > xRun2 = getRun(getParagraph(2), 1);
+    CPPUNIT_ASSERT_EQUAL(OUString("Header 1 English text (Liberation sans) with "), xRun2->getString());
+    CPPUNIT_ASSERT_EQUAL(OUString("Liberation Sans"), getProperty<OUString>(xRun2, "CharFontName"));
+
+    // check styles of paragraphs added from [fdo72942-insert.docx]
+    const uno::Reference< text::XTextRange > xRun3 = getRun(getParagraph(4), 1);
+    CPPUNIT_ASSERT_EQUAL(OUString("Default German text (Calibri) with "), xRun3->getString());
+    CPPUNIT_ASSERT_EQUAL(OUString("Liberation Serif"), getProperty<OUString>(xRun3, "CharFontName"));
+
+    const uno::Reference< text::XTextRange > xRun4 = getRun(getParagraph(5), 1);
+    CPPUNIT_ASSERT_EQUAL(OUString("Header 1 German text (Calibri Light) with "), xRun4->getString());
+    CPPUNIT_ASSERT_EQUAL(OUString("Liberation Sans"), getProperty<OUString>(xRun4, "CharFontName"));
+}
+
 void SwUiWriterTest::testTdf114306()
 {
     load(DATA_DIRECTORY, "fdo114306.odt");
@@ -5289,6 +5369,17 @@ void SwUiWriterTest::testTdf114306()
     assertXPath(pXmlDoc, "/root/page[1]/body/tab[1]/row[1]/cell[1]/txt", 2);
     assertXPath(pXmlDoc, "/root/page[2]/body/tab[1]/row[1]/cell[1]/txt", 1);
 }
+
+void SwUiWriterTest::testTdf114306_2()
+{
+    // tdf#114306 fix unexpected page break in row-spanned table
+    // load regression document without writer crash
+    load(DATA_DIRECTORY, "fdo114306_2.odt");
+
+    // correct number of pages
+    CPPUNIT_ASSERT_EQUAL(4, getPages());
+}
+
 
 // During insert of the document with list inside into the main document inside the list
 // we should merge both lists into one, when they have the same list properties
@@ -5765,13 +5856,16 @@ void SwUiWriterTest::testTdf115013()
 {
    const OUString sColumnName("Name with spaces, \"quotes\" and \\backslashes");
 
+   utl::TempFile aTempDir(nullptr, true);
+   const OUString aWorkDir = aTempDir.GetURL();
+
    //create new writer document
     SwDoc* pDoc = createDoc();
 
     {
         // Load and register data source
         const OUString aDataSourceURI(m_directories.getURLFromSrc(DATA_DIRECTORY) + "datasource.ods");
-        OUString sDataSource = SwDBManager::LoadAndRegisterDataSource(aDataSourceURI, nullptr);
+        OUString sDataSource = SwDBManager::LoadAndRegisterDataSource(aDataSourceURI, &aWorkDir);
         CPPUNIT_ASSERT(!sDataSource.isEmpty());
 
         // Insert a new field type for the mailmerge field
@@ -5805,6 +5899,8 @@ void SwUiWriterTest::testTdf115013()
     OUString sColumn = static_cast<SwDBFieldType*>(pField->GetTyp())->GetColumnName();
     // The column name must come correct after round trip
     CPPUNIT_ASSERT_EQUAL(sColumnName, sColumn);
+
+    utl::removeTree(aWorkDir);
 }
 
 void SwUiWriterTest::testTdf115065()
@@ -5830,6 +5926,81 @@ void SwUiWriterTest::testTdf115065()
     pWrtShell->SelTableCol();
     // The copy operation (or closing document after that) segfaulted
     pWrtShell->Copy(pWrtShell, ptFrom, ptTo);
+}
+
+void SwUiWriterTest::testTdf115132()
+{
+    SwDoc* pDoc = createDoc();
+    CPPUNIT_ASSERT(pDoc);
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    CPPUNIT_ASSERT(pWrtShell);
+
+    std::vector<OUString> vTestTableNames;
+
+    // Create an empty paragraph that will separate first table from the rest
+    pWrtShell->SplitNode();
+    pWrtShell->SttDoc();
+    // Create a table at the start of document body
+    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    const SwTable* pTable = &pWrtShell->InsertTable(TableOpt, 2, 3);
+    const SwTableFormat* pFormat = pTable->GetFrameFormat();
+    CPPUNIT_ASSERT(pFormat);
+    vTestTableNames.push_back(pFormat->GetName());
+    pWrtShell->EndDoc();
+    // Create a table after a paragraph
+    pTable = &pWrtShell->InsertTable(TableOpt, 2, 3);
+    pFormat = pTable->GetFrameFormat();
+    CPPUNIT_ASSERT(pFormat);
+    vTestTableNames.push_back(pFormat->GetName());
+    // Create a table immediately after the previous
+    pTable = &pWrtShell->InsertTable(TableOpt, 2, 3);
+    pFormat = pTable->GetFrameFormat();
+    CPPUNIT_ASSERT(pFormat);
+    vTestTableNames.push_back(pFormat->GetName());
+    // Create a nested table in the middle of last row
+    pWrtShell->GotoTable(vTestTableNames.back());
+    for (int i = 0; i < 4; ++i)
+        pWrtShell->GoNextCell(false);
+    pTable = &pWrtShell->InsertTable(TableOpt, 2, 3);
+    pFormat = pTable->GetFrameFormat();
+    CPPUNIT_ASSERT(pFormat);
+    vTestTableNames.push_back(pFormat->GetName());
+
+    // Now check that in any cell in all tables we don't go out of a cell
+    // using Delete or Backspace. We test cases when a table is the first node;
+    // when we are in a first/middle/last cell in a row; when there's a paragraph
+    // before/after this cell; when there's another table before/after this cell;
+    // in nested table.
+    for (const auto& rTableName : vTestTableNames)
+    {
+        pWrtShell->GotoTable(rTableName);
+        do {
+            const SwStartNode* pNd = pWrtShell->GetSwCursor()->GetNode().FindTableBoxStartNode();
+            pWrtShell->DelRight();
+            CPPUNIT_ASSERT_EQUAL(pNd, pWrtShell->GetSwCursor()->GetNode().FindTableBoxStartNode());
+            pWrtShell->DelLeft();
+            CPPUNIT_ASSERT_EQUAL(pNd, pWrtShell->GetSwCursor()->GetNode().FindTableBoxStartNode());
+        } while (pWrtShell->GoNextCell(false));
+    }
+}
+
+void SwUiWriterTest::testXDrawPagesSupplier()
+{
+    createDoc();
+    uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
+    CPPUNIT_ASSERT_MESSAGE("XDrawPagesSupplier interface is unavailable", xDrawPagesSupplier.is());
+    uno::Reference<drawing::XDrawPages> xDrawPages = xDrawPagesSupplier->getDrawPages();
+    CPPUNIT_ASSERT(xDrawPages.is());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("There must be only a single DrawPage in Writer documents",
+        sal_Int32(1), xDrawPages->getCount());
+    uno::Any aDrawPage = xDrawPages->getByIndex(0);
+    uno::Reference<drawing::XDrawPage> xDrawPageFromXDrawPages(aDrawPage, uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xDrawPageFromXDrawPages.is());
+
+    uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<drawing::XDrawPage> xDrawPage = xDrawPageSupplier->getDrawPage();
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("The DrawPage accessed using XDrawPages must be the same as using XDrawPageSupplier",
+        xDrawPage.get(), xDrawPageFromXDrawPages.get());
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SwUiWriterTest);

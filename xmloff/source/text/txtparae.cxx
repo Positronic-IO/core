@@ -33,7 +33,6 @@
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
-#include <com/sun/star/graphic/XGraphicProvider.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <com/sun/star/text/XTextSectionsSupplier.hpp>
 #include <com/sun/star/text/XTextTablesSupplier.hpp>
@@ -992,7 +991,7 @@ void XMLTextParagraphExport::exportListChange(
                 GetExport().StartElement(aElem, false);
 
                 if(!pListElements)
-                    pListElements = new std::vector<OUString>;
+                    pListElements.reset( new std::vector<OUString> );
                 pListElements->push_back(aElem);
 
                 mpTextListsHelper->PushListOnStack( sListId,
@@ -1194,8 +1193,6 @@ XMLTextParagraphExport::XMLTextParagraphExport(
     sFrame("Frame"),
     sGraphicFilter("GraphicFilter"),
     sGraphicRotation("GraphicRotation"),
-    sGraphicURL("GraphicURL"),
-    sReplacementGraphicURL("ReplacementGraphicURL"),
     sHeight("Height"),
     sHoriOrient("HoriOrient"),
     sHoriOrientPosition("HoriOrientPosition"),
@@ -1298,12 +1295,12 @@ XMLTextParagraphExport::XMLTextParagraphExport(
     xFramePropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                               GetExport() );
 
-    pSectionExport = new XMLSectionExport( rExp, *this );
-    pIndexMarkExport = new XMLIndexMarkExport( rExp );
+    pSectionExport.reset( new XMLSectionExport( rExp, *this ) );
+    pIndexMarkExport.reset( new XMLIndexMarkExport( rExp ) );
 
     if( ! IsBlockMode() &&
         Reference<XRedlinesSupplier>( GetExport().GetModel(), UNO_QUERY ).is())
-        pRedlineExport = new XMLRedlineExport( rExp );
+        pRedlineExport.reset( new XMLRedlineExport( rExp ) );
 
     // The text field helper needs a pre-constructed XMLPropertyState
     // to export the combined characters field. We construct that
@@ -1313,17 +1310,17 @@ XMLTextParagraphExport::XMLTextParagraphExport(
     sal_Int32 nIndex = xTextPropMapper->getPropertySetMapper()->FindEntryIndex(
                                 "", XML_NAMESPACE_STYLE,
                                 GetXMLToken(XML_TEXT_COMBINE));
-    pFieldExport = new XMLTextFieldExport( rExp, new XMLPropertyState( nIndex, uno::makeAny(true) ) );
+    pFieldExport.reset( new XMLTextFieldExport( rExp, new XMLPropertyState( nIndex, uno::makeAny(true) ) ) );
     PushNewTextListsHelper();
 }
 
 XMLTextParagraphExport::~XMLTextParagraphExport()
 {
-    delete pRedlineExport;
-    delete pIndexMarkExport;
-    delete pSectionExport;
-    delete pFieldExport;
-    delete pListElements;
+    pRedlineExport.reset();
+    pIndexMarkExport.reset();
+    pSectionExport.reset();
+    pFieldExport.reset();
+    pListElements.reset();
 #ifdef DBG_UTIL
     txtparae_bContainsIllegalCharacters = false;
 #endif
@@ -1429,7 +1426,7 @@ static const enum XMLTokenEnum lcl_XmlBookmarkElements[] = {
 
 // This function replaces the text portion iteration during auto style
 // collection.
-bool XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
+void XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
 {
     GetExport().GetShapeExport(); // make sure the graphics styles family is added
 
@@ -1631,8 +1628,6 @@ bool XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
             }
         }
     }
-
-    return true;
 }
 
 void XMLTextParagraphExport::exportText(
@@ -3077,17 +3072,20 @@ void XMLTextParagraphExport::_exportTextGraphic(
         SdXMLImExTransform2D aSdXMLImExTransform2D;
 
         // Convert from 10th degree integer to deg.
-        // CAUTION: Internal rotation is classically mathematically 'wrong' defined by ignoring that
+        // CAUTION: internal rotation is classically mathematically 'wrong' defined by ignoring that
         // we have a right-handed coordinate system, so need to correct this by mirroring
         // the rotation to get the correct transformation. See also case XML_TOK_TEXT_FRAME_TRANSFORM
         // in XMLTextFrameContext_Impl::XMLTextFrameContext_Impl and #i78696#
-        const double fRotate(static_cast< double >(-nRotation) * (M_PI/1800.0));
+        // CAUTION-II: due to tdf#115782 it is better for current ODF to indeed write it with the wrong
+        // orientation as in all other cases - ARGH! We will need to correct this in future ODF ASAP!
+        const double fRotate(static_cast< double >(nRotation) * (F_PI/1800.0));
 
         // transform to rotation center which is the object's center
         aSdXMLImExTransform2D.AddTranslate(-aCenter);
 
         // add rotation itself
-        aSdXMLImExTransform2D.AddRotate(fRotate);
+        // tdf#115529 but correct value modulo 2PI to have it positive and in the range of [0.0 .. 2PI[
+        aSdXMLImExTransform2D.AddRotate(basegfx::normalizeToRange(fRotate, F_2PI));
 
         // back-transform after rotation
         aSdXMLImExTransform2D.AddTranslate(aCenter);
@@ -3107,12 +3105,12 @@ void XMLTextParagraphExport::_exportTextGraphic(
 
     // replacement graphic for backwards compatibility, but
     // only for SVG and metafiles currently
-    OUString sReplacementOrigURL;
-    rPropSet->getPropertyValue( sReplacementGraphicURL ) >>= sReplacementOrigURL;
+    uno::Reference<graphic::XGraphic> xReplacementGraphic;
+    rPropSet->getPropertyValue("ReplacementGraphic") >>= xReplacementGraphic;
 
     // xlink:href
     OUString sOrigURL;
-    rPropSet->getPropertyValue( sGraphicURL ) >>= sOrigURL;
+    rPropSet->getPropertyValue("GraphicURL") >>= sOrigURL;
     OUString sURL(GetExport().AddEmbeddedGraphicObject( sOrigURL ));
 
     // If there still is no url, then graphic is empty
@@ -3143,7 +3141,11 @@ void XMLTextParagraphExport::_exportTextGraphic(
         const OString aExt( OUStringToOString( aSourceMimeType, RTL_TEXTENCODING_ASCII_US ) );
         aSourceMimeType = comphelper::GraphicMimeTypeHelper::GetMimeTypeForExtension( aExt );
     }
+
+    if (GetExport().getDefaultVersion() > SvtSaveOptions::ODFVER_012)
+    {
         GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, "mime-type", aSourceMimeType);
+    }
 
     {
         SvXMLElementExport aElement( GetExport(), XML_NAMESPACE_DRAW,
@@ -3155,30 +3157,30 @@ void XMLTextParagraphExport::_exportTextGraphic(
 
     //Resolves: fdo#62461 put preferred image first above, followed by
     //fallback here
-    if (!sReplacementOrigURL.isEmpty())
+    if (xReplacementGraphic.is())
     {
-        const OUString sReplacementURL(GetExport().AddEmbeddedGraphicObject( sReplacementOrigURL ));
+        OUString aMimeType;
+        const OUString sHref = GetExport().AddEmbeddedXGraphic(xReplacementGraphic, aMimeType);
+
+        if (aMimeType.isEmpty())
+            GetExport().GetGraphicMimeTypeFromStream(xReplacementGraphic, aMimeType);
 
         // If there is no url, then graphic is empty
-        if(!sReplacementURL.isEmpty())
+        if (!sHref.isEmpty())
         {
-            GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, sReplacementURL);
+            GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, sHref);
             GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, XML_SIMPLE);
             GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_SHOW, XML_EMBED);
             GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD);
         }
 
-        uno::Reference<io::XInputStream> xInputStream(
-            GetExport().GetEmbeddedGraphicObjectStream(sReplacementOrigURL));
-        OUString aMimeType(
-            comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageStream(xInputStream));
         if (!aMimeType.isEmpty())
             GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, "mime-type", aMimeType);
 
         SvXMLElementExport aElement(GetExport(), XML_NAMESPACE_DRAW, XML_IMAGE, true, true);
 
         // optional office:binary-data
-        GetExport().AddEmbeddedGraphicObjectAsBase64(sReplacementOrigURL);
+        GetExport().AddEmbeddedXGraphicAsBase64(xReplacementGraphic);
     }
 
     // script:events

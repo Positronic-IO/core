@@ -38,7 +38,7 @@ void SfxListenerGuard::startListening(::SfxBroadcaster & rNotifier)
 {
     assert(m_pNotifier == nullptr && "called more than once");
     m_pNotifier = &rNotifier;
-    m_rListener.StartListening(*m_pNotifier, true);
+    m_rListener.StartListening(*m_pNotifier, DuplicateHandling::Prevent);
 }
 
 void SfxListenerGuard::endListening()
@@ -799,7 +799,7 @@ Document::retrieveParagraphText(Paragraph const * pParagraph)
 {
     SolarMutexGuard aGuard;
     ::osl::MutexGuard aInternalGuard(GetMutex());
-    return m_rEngine.GetText(static_cast< ::sal_uLong >(pParagraph->getNumber()));
+    return m_rEngine.GetText(static_cast< ::sal_uInt32 >(pParagraph->getNumber()));
         // numeric overflow cannot happen here
 }
 
@@ -2340,11 +2340,10 @@ void Document::handleSelectionChangeNotification()
 
 void Document::disposeParagraphs()
 {
-    for (Paragraphs::iterator aIt(m_xParagraphs->begin());
-         aIt != m_xParagraphs->end(); ++aIt)
+    for (auto const& paragraph : *m_xParagraphs)
     {
         css::uno::Reference< css::lang::XComponent > xComponent(
-            aIt->getParagraph().get(), css::uno::UNO_QUERY);
+            paragraph.getParagraph().get(), css::uno::UNO_QUERY);
         if (xComponent.is())
             xComponent->dispose();
     }
@@ -2353,17 +2352,16 @@ void Document::disposeParagraphs()
 // static
 css::uno::Any Document::mapFontColor(::Color const & rColor)
 {
-    return css::uno::Any(
-        static_cast< ::sal_Int32 >(COLORDATA_RGB(rColor.GetColor())));
+    return css::uno::makeAny(rColor.GetRGBColor());
         // FIXME  keep transparency?
 }
 
 // static
 ::Color Document::mapFontColor(css::uno::Any const & rColor)
 {
-    ::sal_Int32 nColor = 0;
+    ::Color nColor;
     rColor >>= nColor;
-    return ::Color(static_cast< ::ColorData >(nColor));
+    return nColor;
 }
 
 // static

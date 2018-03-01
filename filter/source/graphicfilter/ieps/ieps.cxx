@@ -29,7 +29,7 @@
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/cvtgrf.hxx>
-#include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/tempfile.hxx>
 #include <osl/process.h>
@@ -457,7 +457,7 @@ void MakePreview(sal_uInt8* pBuf, sal_uInt32 nBytesRead,
 
     pVDev->EnableOutput( false );
     aMtf.Record( pVDev );
-    pVDev->SetLineColor( Color( COL_RED ) );
+    pVDev->SetLineColor( COL_RED );
     pVDev->SetFillColor();
 
     aFont.SetColor( COL_LIGHTRED );
@@ -652,13 +652,17 @@ ipsGraphicImport( SvStream & rStream, Graphic & rGraphic, FilterConfigItem* )
                     long nBitDepth = ImplGetNumber(pDest, nSecurityCount);
                     long nScanLines = ImplGetNumber(pDest, nSecurityCount);
                     pDest = ImplSearchEntry(pDest, reinterpret_cast<sal_uInt8 const *>("%"), nSecurityCount, 1);       // go to the first Scanline
-                    if (pDest && nWidth > 0 && nHeight > 0 && ( ( nBitDepth == 1 ) || ( nBitDepth == 8 ) ) && nScanLines)
+                    bOk = pDest && nWidth > 0 && nHeight > 0 && ( ( nBitDepth == 1 ) || ( nBitDepth == 8 ) ) && nScanLines;
+                    if (bOk)
+                    {
+                        long nResult;
+                        bOk = !o3tl::checked_multiply(nWidth, nHeight, nResult) && nResult <= SAL_MAX_INT32/2/3;
+                    }
+                    if (bOk)
                     {
                         rStream.Seek( nBufStartPos + ( pDest - pBuf.get() ) );
 
-                        Bitmap aBitmap( Size( nWidth, nHeight ), 1 );
-                        BitmapWriteAccess* pAcc = aBitmap.AcquireWriteAccess();
-                        if ( pAcc )
+                        vcl::bitmap::RawBitmap aBitmap( Size( nWidth, nHeight ), 24 );
                         {
                             bool bIsValid = true;
                             sal_uInt8 nDat = 0;
@@ -714,10 +718,10 @@ ipsGraphicImport( SvStream & rStream, Graphic & rGraphic, FilterConfigItem* )
                                     if (!bIsValid)
                                         break;
                                     if ( nBitDepth == 1 )
-                                        pAcc->SetPixelIndex( y, x, static_cast<sal_uInt8>(nDat >> nBitsLeft) & 1 );
+                                        aBitmap.SetPixel( y, x, Color(static_cast<sal_uInt8>(nDat >> nBitsLeft) & 1) );
                                     else
                                     {
-                                        pAcc->SetPixelIndex( y, x, nDat ? 1 : 0 );  // nBitDepth == 8
+                                        aBitmap.SetPixel( y, x, nDat ? COL_WHITE : COL_BLACK );  // nBitDepth == 8
                                         nBitsLeft = 0;
                                     }
                                 }
@@ -726,15 +730,11 @@ ipsGraphicImport( SvStream & rStream, Graphic & rGraphic, FilterConfigItem* )
                             {
                                 ScopedVclPtrInstance<VirtualDevice> pVDev;
                                 GDIMetaFile     aMtf;
-                                Size            aSize;
+                                Size            aSize( nWidth, nHeight );
                                 pVDev->EnableOutput( false );
                                 aMtf.Record( pVDev );
-                                aSize = aBitmap.GetPrefSize();
-                                if( !aSize.Width() || !aSize.Height() )
-                                    aSize = Application::GetDefaultDevice()->PixelToLogic(aBitmap.GetSizePixel(), MapMode(MapUnit::Map100thMM));
-                                else
-                                    aSize = OutputDevice::LogicToLogic(aSize, aBitmap.GetPrefMapMode(), MapMode(MapUnit::Map100thMM));
-                                pVDev->DrawBitmap( Point(), aSize, aBitmap );
+                                aSize = OutputDevice::LogicToLogic(aSize, MapMode(), MapMode(MapUnit::Map100thMM));
+                                pVDev->DrawBitmapEx( Point(), aSize, vcl::bitmap::CreateFromData(std::move(aBitmap)) );
                                 aMtf.Stop();
                                 aMtf.WindStart();
                                 aMtf.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
@@ -742,7 +742,6 @@ ipsGraphicImport( SvStream & rStream, Graphic & rGraphic, FilterConfigItem* )
                                 aGraphic = aMtf;
                                 bHasPreview = bRetValue = true;
                             }
-                            Bitmap::ReleaseAccess( pAcc );
                         }
                     }
                 }

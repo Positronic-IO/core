@@ -54,6 +54,13 @@
 #include <editeng/paravertalignitem.hxx>
 #include <editeng/blinkitem.hxx>
 #include <editeng/charhiddenitem.hxx>
+#include <editeng/boxitem.hxx>
+#include <editeng/brushitem.hxx>
+#include <editeng/ulspitem.hxx>
+#include <editeng/shaditem.hxx>
+#include <editeng/keepitem.hxx>
+#include <editeng/frmdiritem.hxx>
+#include <editeng/opaqitem.hxx>
 #include <svx/svdouno.hxx>
 #include <filter/msfilter/rtfutil.hxx>
 #include <sfx2/sfxbasemodel.hxx>
@@ -63,7 +70,6 @@
 #include <fmtclds.hxx>
 #include <fmtrowsplt.hxx>
 #include <fmtline.hxx>
-#include <breakit.hxx>
 #include <fmtanchr.hxx>
 #include <ftninfo.hxx>
 #include <htmltbl.hxx>
@@ -83,6 +89,7 @@
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <o3tl/make_unique.hxx>
 #include <svl/grabbagitem.hxx>
+#include <frmatr.hxx>
 #include "rtfexport.hxx"
 
 using namespace ::com::sun::star;
@@ -450,100 +457,23 @@ void RtfAttributeOutput::RawText(const OUString& rText, rtl_TextEncoding eCharSe
 void RtfAttributeOutput::StartRuby(const SwTextNode& rNode, sal_Int32 nPos,
                                    const SwFormatRuby& rRuby)
 {
+    WW8Ruby aWW8Ruby(rNode, rRuby, GetExport());
     OUString aStr(FieldString(ww::eEQ));
     aStr += "\\* jc";
-    sal_Int32 nJC = 0;
-    sal_Char cDirective = 0;
-    switch (rRuby.GetAdjustment())
-    {
-        case css::text::RubyAdjust_LEFT:
-            nJC = 3;
-            cDirective = 'l';
-            break;
-        case css::text::RubyAdjust_CENTER:
-            //defaults to 0
-            break;
-        case css::text::RubyAdjust_RIGHT:
-            nJC = 4;
-            cDirective = 'r';
-            break;
-        case css::text::RubyAdjust_BLOCK:
-            nJC = 1;
-            cDirective = 'd';
-            break;
-        case css::text::RubyAdjust_INDENT_BLOCK:
-            nJC = 2;
-            cDirective = 'd';
-            break;
-        default:
-            OSL_ENSURE(false, "Unhandled Ruby justication code");
-            break;
-    }
-    aStr += OUString::number(nJC);
-
-    /*
-     MS needs to know the name and size of the font used in the ruby item,
-     but we could have written it in a mixture of asian and western
-     scripts, and each of these can be a different font and size than the
-     other, so we make a guess based upon the first character of the text,
-     defaulting to asian.
-     */
-    assert(g_pBreakIt && g_pBreakIt->GetBreakIter().is());
-    sal_uInt16 nRubyScript = g_pBreakIt->GetBreakIter()->getScriptType(rRuby.GetText(), 0);
-
-    const SwTextRuby* pRubyText = rRuby.GetTextRuby();
-    const SwCharFormat* pFormat = pRubyText ? pRubyText->GetCharFormat() : nullptr;
-    OUString sFamilyName;
-    long nHeight;
-    if (pFormat)
-    {
-        const auto& rFont
-            = ItemGet<SvxFontItem>(*pFormat, GetWhichOfScript(RES_CHRATR_FONT, nRubyScript));
-        sFamilyName = rFont.GetFamilyName();
-
-        const auto& rHeight = ItemGet<SvxFontHeightItem>(
-            *pFormat, GetWhichOfScript(RES_CHRATR_FONTSIZE, nRubyScript));
-        nHeight = rHeight.GetHeight();
-    }
-    else
-    {
-        /*Get defaults if no formatting on ruby text*/
-
-        const SfxItemPool* pPool = rNode.GetSwAttrSet().GetPool();
-        pPool = pPool ? pPool : &m_rExport.m_pDoc->GetAttrPool();
-
-        const auto& rFont
-            = DefaultItemGet<SvxFontItem>(*pPool, GetWhichOfScript(RES_CHRATR_FONT, nRubyScript));
-        sFamilyName = rFont.GetFamilyName();
-
-        const auto& rHeight = DefaultItemGet<SvxFontHeightItem>(
-            *pPool, GetWhichOfScript(RES_CHRATR_FONTSIZE, nRubyScript));
-        nHeight = rHeight.GetHeight();
-    }
-    nHeight = (nHeight + 5) / 10;
+    aStr += OUString::number(aWW8Ruby.GetJC());
 
     aStr += " \\* \"Font:";
-    aStr += sFamilyName;
+    aStr += aWW8Ruby.GetFontFamily();
     aStr += "\" \\* hps";
-    aStr += OUString::number(nHeight);
+    aStr += OUString::number((aWW8Ruby.GetRubyHeight() + 5) / 10);
     aStr += " \\o";
-    if (cDirective)
+    if (aWW8Ruby.GetDirective())
     {
-        aStr += "\\a" + OUString(cDirective);
+        aStr += "\\a" + OUString(aWW8Ruby.GetDirective());
     }
     aStr += "(\\s\\up ";
 
-    if (pRubyText)
-        nRubyScript
-            = g_pBreakIt->GetBreakIter()->getScriptType(rNode.GetText(), pRubyText->GetStart());
-    else
-        nRubyScript = i18n::ScriptType::ASIAN;
-
-    const SwAttrSet& rSet = rNode.GetSwAttrSet();
-    auto& rHeightItem = static_cast<const SvxFontHeightItem&>(
-        rSet.Get(GetWhichOfScript(RES_CHRATR_FONTSIZE, nRubyScript)));
-    nHeight = (rHeightItem.GetHeight() + 10) / 20 - 1;
-    aStr += OUString::number(nHeight);
+    aStr += OUString::number((aWW8Ruby.GetBaseHeight() + 10) / 20 - 1);
     aStr += "(";
     EndRun(&rNode, nPos);
     m_rExport.OutputField(nullptr, ww::eEQ, aStr, FieldFlags::Start | FieldFlags::CmdStart);
@@ -721,6 +651,7 @@ void RtfAttributeOutput::TableDefinition(
     }
 
     // The cell-dependent properties
+    const double fWidthRatio = m_pTableWrt->GetAbsWidthRatio();
     const SwWriteTableRows& aRows = m_pTableWrt->GetRows();
     SwWriteTableRow* pRow = aRows[pTableTextNodeInfoInner->getRow()];
     SwTwips nSz = 0;
@@ -740,7 +671,8 @@ void RtfAttributeOutput::TableDefinition(
         // value of nSz is needed.
         nSz += pCellFormat->GetFrameSize().GetWidth();
         m_aRowDefs.append(OOO_STRING_SVTOOLS_RTF_CELLX);
-        m_aRowDefs.append(static_cast<sal_Int32>(pFormat->GetLRSpace().GetLeft() + nSz));
+        m_aRowDefs.append(static_cast<sal_Int32>(pFormat->GetLRSpace().GetLeft()
+                                                 + rtl::math::round(nSz * fWidthRatio)));
     }
 }
 
@@ -2304,8 +2236,7 @@ void RtfAttributeOutput::CharEscapement(const SvxEscapementItem& rEscapement)
 
     const char* pUpDn;
 
-    SwTwips nH
-        = static_cast<const SvxFontHeightItem&>(m_rExport.GetItem(RES_CHRATR_FONTSIZE)).GetHeight();
+    SwTwips nH = m_rExport.GetItem(RES_CHRATR_FONTSIZE).GetHeight();
 
     if (0 < rEscapement.GetEsc())
         pUpDn = OOO_STRING_SVTOOLS_RTF_UP;
@@ -2827,7 +2758,7 @@ void RtfAttributeOutput::ParaTabStop(const SvxTabStopItem& rTabStop)
     // Tabs are absolute by default.
     if (m_rExport.m_pDoc->getIDocumentSettingAccess().get(
             DocumentSettingId::TABS_RELATIVE_TO_INDENT))
-        nOffset = static_cast<const SvxLRSpaceItem&>(m_rExport.GetItem(RES_LR_SPACE)).GetTextLeft();
+        nOffset = m_rExport.GetItem(RES_LR_SPACE).GetTextLeft();
 
     for (sal_uInt16 n = 0; n < rTabStop.Count(); n++)
     {
@@ -3842,7 +3773,7 @@ static OString ExportPICT(const SwFlyFrameFormat* pFlyFrameFormat, const Size& r
                           const Size& rRendered, const Size& rMapped, const SwCropGrf& rCr,
                           const char* pBLIPType, const sal_uInt8* pGraphicAry, unsigned long nSize,
                           const RtfExport& rExport, SvStream* pStream = nullptr,
-                          bool bWritePicProp = true)
+                          bool bWritePicProp = true, const SwAttrSet* pAttrSet = nullptr)
 {
     OStringBuffer aRet;
     if (pBLIPType && nSize && pGraphicAry)
@@ -3861,6 +3792,15 @@ static OString ExportPICT(const SwFlyFrameFormat* pFlyFrameFormat, const Size& r
             lcl_AppendSP(aRet, "wzDescription", sDescription, rExport);
             OUString sName = pFlyFrameFormat->GetObjTitle();
             lcl_AppendSP(aRet, "wzName", sName, rExport);
+
+            if (pAttrSet)
+            {
+                MirrorGraph eMirror = pAttrSet->Get(RES_GRFATR_MIRRORGRF).GetValue();
+                if (eMirror == MirrorGraph::Vertical || eMirror == MirrorGraph::Both)
+                    // Mirror on the vertical axis is a horizontal flip.
+                    lcl_AppendSP(aRet, "fFlipH", "1", rExport);
+            }
+
             aRet.append("}"); //"}"
         }
 
@@ -3925,8 +3865,8 @@ void RtfAttributeOutput::FlyFrameOLEReplacement(const SwFlyFrameFormat* pFlyFram
     m_aRunText->append("{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_SHPPICT);
     Size aSize(rOLENode.GetTwipSize());
     Size aRendered(aSize);
-    aRendered.Width() = rSize.Width();
-    aRendered.Height() = rSize.Height();
+    aRendered.setWidth(rSize.Width());
+    aRendered.setHeight(rSize.Height());
     const Graphic* pGraphic = rOLENode.GetGraphic();
     Size aMapped(pGraphic->GetPrefSize());
     auto& rCr = static_cast<const SwCropGrf&>(rOLENode.GetAttr(RES_GRFATR_CROPGRF));
@@ -4082,8 +4022,8 @@ void RtfAttributeOutput::FlyFrameGraphic(const SwFlyFrameFormat* pFlyFrameFormat
     Size aRendered(aSize);
 
     const SwFormatFrameSize& rS = pFlyFrameFormat->GetFrameSize();
-    aRendered.Width() = rS.GetWidth();
-    aRendered.Height() = rS.GetHeight();
+    aRendered.setWidth(rS.GetWidth());
+    aRendered.setHeight(rS.GetHeight());
 
     ww8::Frame* pFrame = nullptr;
     for (auto& rFrame : m_rExport.m_aFrames)
@@ -4175,9 +4115,10 @@ void RtfAttributeOutput::FlyFrameGraphic(const SwFlyFrameFormat* pFlyFrameFormat
     }
 
     bool bWritePicProp = !pFrame || pFrame->IsInline();
+    const SwAttrSet* pAttrSet = pGrfNode->GetpSwAttrSet();
     if (pBLIPType)
         ExportPICT(pFlyFrameFormat, aSize, aRendered, aMapped, rCr, pBLIPType, pGraphicAry, nSize,
-                   m_rExport, &m_rExport.Strm(), bWritePicProp);
+                   m_rExport, &m_rExport.Strm(), bWritePicProp, pAttrSet);
     else
     {
         aStream.Seek(0);
@@ -4189,7 +4130,7 @@ void RtfAttributeOutput::FlyFrameGraphic(const SwFlyFrameFormat* pFlyFrameFormat
         pGraphicAry = static_cast<sal_uInt8 const*>(aStream.GetData());
 
         ExportPICT(pFlyFrameFormat, aSize, aRendered, aMapped, rCr, pBLIPType, pGraphicAry, nSize,
-                   m_rExport, &m_rExport.Strm(), bWritePicProp);
+                   m_rExport, &m_rExport.Strm(), bWritePicProp, pAttrSet);
     }
 
     if (!pFrame || pFrame->IsInline())

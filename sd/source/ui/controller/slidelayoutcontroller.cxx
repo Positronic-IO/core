@@ -34,7 +34,6 @@
 #include <svtools/toolbarmenu.hxx>
 #include <svtools/valueset.hxx>
 
-#include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <xmloff/autolayout.hxx>
@@ -140,8 +139,8 @@ static void fillLayoutValueSet( ValueSet* pValue, const snewfoil_value_info_layo
         pValue->InsertItem(static_cast<sal_uInt16>(pInfo->maAutoLayout)+1,
                 Image(aBmp), aText);
 
-        aLayoutItemSize.Width()  = std::max( aLayoutItemSize.Width(),  aBmp.GetSizePixel().Width()  );
-        aLayoutItemSize.Height() = std::max( aLayoutItemSize.Height(), aBmp.GetSizePixel().Height() );
+        aLayoutItemSize.setWidth( std::max( aLayoutItemSize.Width(),  aBmp.GetSizePixel().Width()  ) );
+        aLayoutItemSize.setHeight( std::max( aLayoutItemSize.Height(), aBmp.GetSizePixel().Height() ) );
     }
 
     aLayoutItemSize = pValue->CalcItemSizePixel( aLayoutItemSize );
@@ -197,8 +196,8 @@ LayoutToolbarMenu::LayoutToolbarMenu( SlideLayoutController& rController, vcl::W
     fillLayoutValueSet( mpLayoutSet1, pInfo );
 
     Size aSize( mpLayoutSet1->GetOutputSizePixel() );
-    aSize.Width() += (mpLayoutSet1->GetColCount() + 1) * LAYOUT_BORDER_PIX;
-    aSize.Height() += (mpLayoutSet1->GetLineCount() +1) * LAYOUT_BORDER_PIX;
+    aSize.AdjustWidth((mpLayoutSet1->GetColCount() + 1) * LAYOUT_BORDER_PIX );
+    aSize.AdjustHeight((mpLayoutSet1->GetLineCount() +1) * LAYOUT_BORDER_PIX );
     mpLayoutSet1->SetOutputSizePixel( aSize );
 
     if( bVerticalEnabled && (eMode == DrawViewMode_DRAW) )
@@ -217,8 +216,8 @@ LayoutToolbarMenu::LayoutToolbarMenu( SlideLayoutController& rController, vcl::W
         fillLayoutValueSet( mpLayoutSet2, &v_standard[0] );
 
         aSize = mpLayoutSet2->GetOutputSizePixel();
-        aSize.Width() += (mpLayoutSet2->GetColCount() + 1) * LAYOUT_BORDER_PIX;
-        aSize.Height() += (mpLayoutSet2->GetLineCount() + 1) * LAYOUT_BORDER_PIX;
+        aSize.AdjustWidth((mpLayoutSet2->GetColCount() + 1) * LAYOUT_BORDER_PIX );
+        aSize.AdjustHeight((mpLayoutSet2->GetLineCount() + 1) * LAYOUT_BORDER_PIX );
         mpLayoutSet2->SetOutputSizePixel( aSize );
 
         appendEntry( -1, aTitle2 );

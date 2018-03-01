@@ -23,6 +23,7 @@
 #include <deque>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/text/XTextRange.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
@@ -111,6 +112,7 @@ private:
     std::unique_ptr< css::uno::Any > m_pRubyStyle;
     std::unique_ptr< css::uno::Any > m_pRubyAdjust;
     std::unique_ptr< css::uno::Any > m_pRubyIsAbove;
+    std::unique_ptr< css::uno::Any > m_pRubyPosition;
     sw::UnoCursorPointer m_pUnoCursor;
 
     const SwDepend              m_FrameDepend;

@@ -590,7 +590,7 @@ ErrCode call(
         //TODO
         break;
     case SbxBOOL:
-        result.PutBool(iRetVal);
+        result.PutBool(bool(iRetVal));
         break;
     case SbxBYTE:
         result.PutByte(static_cast< sal_uInt8 >(iRetVal));
@@ -603,15 +603,13 @@ ErrCode call(
         arguments->Get(i)->ResetFlag(SbxFlagBits::Reference);
             //TODO: skipped for errors?!?
     }
-    for (std::vector< UnmarshalData >::iterator i(data.unmarshal.begin());
-         i != data.unmarshal.end(); ++i)
+    for (auto const& elem : data.unmarshal)
     {
-        unmarshal(i->variable, i->buffer);
+        unmarshal(elem.variable, elem.buffer);
     }
-    for (std::vector< StringData >::iterator i(data.unmarshalStrings.begin());
-         i != data.unmarshalStrings.end(); ++i)
+    for (auto const& elem : data.unmarshalStrings)
     {
-        ErrCode e = unmarshalString(*i, result);
+        ErrCode e = unmarshalString(elem, result);
         if (e != ERRCODE_NONE) {
             return e;
         }

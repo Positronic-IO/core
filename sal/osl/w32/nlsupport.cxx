@@ -18,13 +18,8 @@
  */
 
 #define WIN32_LEAN_AND_MEAN
-#ifdef _MSC_VER
-#pragma warning(push,1) /* disable warnings within system headers */
-#endif
 #include <windows.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+
 #include <wchar.h>
 
 #include "nlsupport.hxx"
@@ -56,7 +51,7 @@ struct EnumLocalesParams
     LCID  Locale;
 };
 
-static DWORD g_dwTLSLocaleEncId = (DWORD) -1;
+static DWORD g_dwTLSLocaleEncId = DWORD(-1);
 
 /*****************************************************************************
  * callback function test
@@ -148,14 +143,14 @@ rtl_TextEncoding SAL_CALL osl_getTextEncodingFromLocale( rtl_Locale * pLocale )
     struct EnumLocalesParams params = { L"", L"", 0 };
 
     /* initialise global TLS id */
-    if( (DWORD) -1 == g_dwTLSLocaleEncId )
+    if( DWORD(-1) == g_dwTLSLocaleEncId )
     {
         oslMutex globalMutex = * osl_getGlobalMutex();
 
         /* initializing must be thread save */
         osl_acquireMutex( globalMutex );
 
-        if( (DWORD) -1 == g_dwTLSLocaleEncId )
+        if( DWORD(-1) == g_dwTLSLocaleEncId )
             g_dwTLSLocaleEncId = TlsAlloc();
 
         osl_releaseMutex( globalMutex );

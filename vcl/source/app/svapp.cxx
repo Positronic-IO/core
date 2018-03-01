@@ -292,6 +292,9 @@ void Application::Abort( const OUString& rErrorText )
             break;
         }
     }
+#if OSL_DEBUG_LEVEL > 0
+    dumpCore = true;
+#endif
 
     SalAbort( rErrorText, dumpCore );
 }
@@ -883,8 +886,8 @@ ImplSVEvent * Application::PostMouseEvent( VclEventId nEvent, vcl::Window *pWin,
     {
         Point aTransformedPos( pMouseEvent->GetPosPixel() );
 
-        aTransformedPos.X() += pWin->GetOutOffXPixel();
-        aTransformedPos.Y() += pWin->GetOutOffYPixel();
+        aTransformedPos.AdjustX(pWin->GetOutOffXPixel() );
+        aTransformedPos.AdjustY(pWin->GetOutOffYPixel() );
 
         const MouseEvent aTransformedEvent( aTransformedPos, pMouseEvent->GetClicks(), pMouseEvent->GetMode(),
                                             pMouseEvent->GetButtons(), pMouseEvent->GetModifier() );
@@ -1308,6 +1311,13 @@ void Application::RemoveAccel( Accelerator const * pAccel )
 void Application::SetHelp( Help* pHelp )
 {
     ImplGetSVData()->maAppData.mpHelp = pHelp;
+}
+
+void Application::UpdateMainThread()
+{
+    ImplSVData* pSVData = ImplGetSVData();
+    if (pSVData && pSVData->mpDefInst)
+        pSVData->mpDefInst->updateMainThread();
 }
 
 Help* Application::GetHelp()

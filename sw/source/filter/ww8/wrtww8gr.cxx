@@ -131,17 +131,15 @@ bool WW8Export::TestOleNeedsGraphic(const SwAttrSet& rSet,
     {
         // bGraphicNeeded set to true is right / fixes #i51670#.
         bGraphicNeeded = true;
-        Point aTmpPoint;
-        tools::Rectangle aRect( aTmpPoint, Size( nX, nY ) );
+        tools::Rectangle aRect( Point(), Size( nX, nY ) );
         Graphic aGraph(aWMF);
 
         ErrCode nErr = ERRCODE_NONE;
-        tools::Rectangle aVisArea;
         sal_Int64 nAspect = embed::Aspects::MSOLE_CONTENT;
         if ( pOLENd )
             nAspect = pOLENd->GetAspect();
         SdrOle2Obj *pRet = SvxMSDffManager::CreateSdrOLEFromStorage(
-            rStorageName,xObjStg,m_pDoc->GetDocStorage(),aGraph,aRect,aVisArea,nullptr,nErr,0,nAspect, m_pWriter->GetBaseURL());
+            rStorageName,xObjStg,m_pDoc->GetDocStorage(),aGraph,aRect,tools::Rectangle(),nullptr,nErr,0,nAspect, m_pWriter->GetBaseURL());
 
         if (pRet)
         {
@@ -420,8 +418,7 @@ void WW8Export::OutGrf(const ww8::Frame &rFrame)
                 SwTwips nHeight = rFlyFormat.GetFrameSize().GetHeight();
                 nHeight/=20; //nHeight was in twips, want it in half points, but
                              //then half of total height.
-                long nFontHeight = static_cast<const SvxFontHeightItem&>(
-                    GetItem(RES_CHRATR_FONTSIZE)).GetHeight();
+                long nFontHeight = GetItem(RES_CHRATR_FONTSIZE).GetHeight();
                 nHeight-=nFontHeight/20;
 
                 Set_UInt16( pArr, NS_sprm::sprmCHpsPos );
@@ -582,8 +579,8 @@ void SwWW8WrGrf::WritePICFHeader(SvStream& rStrm, const ww8::Frame &rFly,
                                     (aGrTwipSz.Width() < 0 ) || (aGrTwipSz.Height() < 0);
     if ( bIsSubstitutedSize )
     {
-        aGrTwipSz.Width() = nWidth;
-        aGrTwipSz.Height() = nHeight;
+        aGrTwipSz.setWidth( nWidth );
+        aGrTwipSz.setHeight( nHeight );
     }
     using namespace sw::types;
     // set xExt & yExt
@@ -715,8 +712,8 @@ void SwWW8WrGrf::WritePICBulletFHeader(SvStream& rStrm, const Graphic &rGrf,
     if ( (convertTwipToMm100(aGrTwipSz.Width()) > USHRT_MAX ) || ( convertTwipToMm100(aGrTwipSz.Height()) > USHRT_MAX )
         || (aGrTwipSz.Width() < 0 ) || (aGrTwipSz.Height() < 0) )
     {
-        aGrTwipSz.Width() = nWidth;
-        aGrTwipSz.Height() = nHeight;
+        aGrTwipSz.setWidth( nWidth );
+        aGrTwipSz.setHeight( nHeight );
     }
     using namespace sw::types;
     // set xExt & yExt

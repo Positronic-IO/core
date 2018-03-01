@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <algorithm>
 #include <memory>
 #include <hintids.hxx>
 
@@ -365,7 +368,7 @@ sal_uInt16 SwHTMLTableLayout::GetBrowseWidthByTabFrame(
     rTabFrame.CalcFlyOffsets( nUpperDummy, nLeftOffset, nRightOffset );
     nWidth -= (nLeftOffset + nRightOffset);
 
-    return nWidth < USHRT_MAX ? static_cast<sal_uInt16>(nWidth) : USHRT_MAX;
+    return static_cast<sal_uInt16>(std::min(nWidth, SwTwips(SAL_MAX_UINT16)));
 }
 
 sal_uInt16 SwHTMLTableLayout::GetBrowseWidthByTable( const SwDoc& rDoc ) const
@@ -1537,13 +1540,13 @@ void SwHTMLTableLayout::AutoLayoutPass2( sal_uInt16 nAbsAvail, sal_uInt16 nRelAv
     }
 }
 
-static void lcl_ResizeLine( const SwTableLine* pLine, sal_uInt16 *pWidth );
+static void lcl_ResizeLine( const SwTableLine* pLine, SwTwips *pWidth );
 
-static void lcl_ResizeBox( const SwTableBox* pBox, sal_uInt16* pWidth )
+static void lcl_ResizeBox( const SwTableBox* pBox, SwTwips* pWidth )
 {
     if( !pBox->GetSttNd() )
     {
-        sal_uInt16 nWidth = 0;
+        SwTwips nWidth = 0;
         for( const SwTableLine *pLine : pBox->GetTabLines() )
             lcl_ResizeLine( pLine, &nWidth );
         pBox->GetFrameFormat()->SetFormatAttr( SwFormatFrameSize( ATT_VAR_SIZE, nWidth, 0 ));
@@ -1551,13 +1554,13 @@ static void lcl_ResizeBox( const SwTableBox* pBox, sal_uInt16* pWidth )
     }
     else
     {
-        *pWidth = *pWidth + static_cast<sal_uInt16>(pBox->GetFrameFormat()->GetFrameSize().GetSize().Width());
+        *pWidth = *pWidth + pBox->GetFrameFormat()->GetFrameSize().GetSize().Width();
     }
 }
 
-static void lcl_ResizeLine( const SwTableLine* pLine, sal_uInt16 *pWidth )
+static void lcl_ResizeLine( const SwTableLine* pLine, SwTwips *pWidth )
 {
-    sal_uInt16 nOldWidth = *pWidth;
+    SwTwips nOldWidth = *pWidth;
     *pWidth = 0;
     for( const SwTableBox* pBox : pLine->GetTabBoxes() )
         lcl_ResizeBox(pBox, pWidth );
@@ -1629,7 +1632,7 @@ void SwHTMLTableLayout::SetWidths( bool bCallPass2, sal_uInt16 nAbsAvail,
     // filler cell's width instead.
     if( IsTopTable() )
     {
-        sal_uInt16 nCalcTabWidth = 0;
+        SwTwips nCalcTabWidth = 0;
         for( const SwTableLine *pLine : m_pSwTable->GetTabLines() )
             lcl_ResizeLine( pLine, &nCalcTabWidth );
         SAL_WARN_IF( std::abs( m_nRelTabWidth-nCalcTabWidth ) >= COLFUZZY, "sw.core",

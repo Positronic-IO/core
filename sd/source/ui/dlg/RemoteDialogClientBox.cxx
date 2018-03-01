@@ -150,9 +150,9 @@ void ClientBox::CalcActiveHeight()
     // Text entry height
     Size aSize = GetOutputSizePixel();
     if ( m_bHasScrollBar )
-        aSize.Width() -= m_aScrollBar->GetSizePixel().Width();
+        aSize.AdjustWidth( -(m_aScrollBar->GetSizePixel().Width()) );
 
-    aSize.Width() -= ICON_OFFSET;
+    aSize.AdjustWidth( -ICON_OFFSET );
 
     aSize = LogicToPixel( Size( RSC_CD_PUSHBUTTON_WIDTH, RSC_CD_PUSHBUTTON_HEIGHT ),
                                MapMode( MapUnit::MapAppFont ) );
@@ -171,16 +171,16 @@ void ClientBox::CalcActiveHeight()
     Size aSize( GetOutputSizePixel() );
 
     if ( m_bHasScrollBar )
-        aSize.Width() -= m_aScrollBar->GetSizePixel().Width();
+        aSize.AdjustWidth( -(m_aScrollBar->GetSizePixel().Width()) );
 
     if ( m_vEntries[ nPos ]->m_bActive )
-        aSize.Height() = m_nActiveHeight;
+        aSize.setHeight( m_nActiveHeight );
     else
-        aSize.Height() = m_nStdHeight;
+        aSize.setHeight( m_nStdHeight );
 
     Point aPos( 0, -m_nTopIndex + nPos * m_nStdHeight );
     if ( m_bHasActive && ( nPos < m_nActive ) )
-        aPos.Y() += m_nActiveHeight - m_nStdHeight;
+        aPos.AdjustY(m_nActiveHeight - m_nStdHeight );
 
     return ::tools::Rectangle( aPos, aSize );
 }
@@ -321,14 +321,14 @@ void ClientBox::DrawRow(vcl::RenderContext& rRenderContext, const ::tools::Recta
 
     SetFont(aStdFont);
 
-    aPos.Y() += aTextHeight;
+    aPos.AdjustY(aTextHeight );
     if (rEntry->m_bActive)
     {
       OUString sPinText(SdResId(STR_ENTER_PIN));
       DrawText(m_sPinTextRect, sPinText);
     }
 
-    rRenderContext.SetLineColor(Color(COL_LIGHTGRAY));
+    rRenderContext.SetLineColor(COL_LIGHTGRAY);
     rRenderContext.DrawLine(rRect.BottomLeft(), rRect.BottomRight());
 }
 
@@ -479,17 +479,17 @@ void ClientBox::Paint(vcl::RenderContext& rRenderContext, const ::tools::Rectang
     Size aSize(GetOutputSizePixel());
 
     if (m_bHasScrollBar)
-        aSize.Width() -= m_aScrollBar->GetSizePixel().Width();
+        aSize.AdjustWidth( -(m_aScrollBar->GetSizePixel().Width()) );
 
     const ::osl::MutexGuard aGuard(m_entriesMutex);
 
     typedef std::vector< TClientBoxEntry >::iterator ITER;
     for (ITER iIndex = m_vEntries.begin(); iIndex < m_vEntries.end(); ++iIndex)
     {
-        aSize.Height() = (*iIndex)->m_bActive ? m_nActiveHeight : m_nStdHeight;
+        aSize.setHeight( (*iIndex)->m_bActive ? m_nActiveHeight : m_nStdHeight );
         ::tools::Rectangle aEntryRect(aStart, aSize);
         DrawRow(rRenderContext, aEntryRect, *iIndex);
-        aStart.Y() += aSize.Height();
+        aStart.AdjustY(aSize.Height() );
     }
 }
 
@@ -688,7 +688,7 @@ void ClientBox::DoScroll( long nDelta )
     Point aNewSBPt( m_aScrollBar->GetPosPixel() );
 
     ::tools::Rectangle aScrRect( Point(), GetOutputSizePixel() );
-    aScrRect.Right() -= m_aScrollBar->GetSizePixel().Width();
+    aScrRect.AdjustRight( -(m_aScrollBar->GetSizePixel().Width()) );
     Scroll( 0, -nDelta, aScrRect );
 
     m_aScrollBar->SetPosPixel( aNewSBPt );

@@ -60,6 +60,7 @@
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <com/sun/star/text/XFootnote.hpp>
 #include <com/sun/star/text/XTextColumns.hpp>
+#include <com/sun/star/text/RubyPosition.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/text/FontEmphasis.hpp>
 #include <com/sun/star/awt/CharSet.hpp>
@@ -510,12 +511,19 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
                 // Word inherits FirstLineIndent property of the numbering, even if ParaLeftMargin is set, Writer does not.
                 // So copy it explicitly, if necessary.
                 sal_Int32 nFirstLineIndent = m_pImpl->getCurrentNumberingProperty("FirstLineIndent");
+                sal_Int32 nIndentAt = m_pImpl->getCurrentNumberingProperty("IndentAt");
+
+                sal_Int32 nParaLeftMargin = ConversionHelper::convertTwipToMM100(nIntValue);
+                if (nParaLeftMargin != 0 && nIndentAt == nParaLeftMargin)
+                    // Avoid direct left margin when it's the same as from the
+                    // numbering.
+                    break;
 
                 if (nFirstLineIndent != 0)
                     m_pImpl->GetTopContext()->Insert(PROP_PARA_FIRST_LINE_INDENT, uno::makeAny(nFirstLineIndent), /*bOverwrite=*/false);
 
-                m_pImpl->GetTopContext()->Insert(
-                    PROP_PARA_LEFT_MARGIN, uno::makeAny( ConversionHelper::convertTwipToMM100(nIntValue ) ));
+                m_pImpl->GetTopContext()->Insert(PROP_PARA_LEFT_MARGIN,
+                                                 uno::makeAny(nParaLeftMargin));
             }
             break;
         case NS_ooxml::LN_CT_Ind_end:
@@ -552,8 +560,17 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
             break;
         case NS_ooxml::LN_CT_Ind_firstLine:
             if (m_pImpl->GetTopContext())
-                m_pImpl->GetTopContext()->Insert(
-                    PROP_PARA_FIRST_LINE_INDENT, uno::makeAny( ConversionHelper::convertTwipToMM100(nIntValue ) ));
+            {
+                sal_Int32 nFirstLineIndent
+                    = m_pImpl->getCurrentNumberingProperty("FirstLineIndent");
+                sal_Int32 nParaFirstLineIndent = ConversionHelper::convertTwipToMM100(nIntValue);
+                if (nParaFirstLineIndent != 0 && nFirstLineIndent == nParaFirstLineIndent)
+                    // Avoid direct first margin when it's the same as from the
+                    // numbering.
+                    break;
+                m_pImpl->GetTopContext()->Insert(PROP_PARA_FIRST_LINE_INDENT,
+                                                 uno::makeAny(nParaFirstLineIndent));
+            }
             break;
         case NS_ooxml::LN_CT_Ind_rightChars:
             m_pImpl->appendGrabBag(m_pImpl->m_aSubInteropGrabBag, "rightChars", OUString::number(nIntValue));
@@ -1165,40 +1182,6 @@ void DomainMapper::lcl_sprm(Sprm & rSprm)
         sprmWithProps(rSprm, m_pImpl->GetTopContext());
 }
 
-sal_Int32 lcl_getCurrentNumberingProperty(
-        uno::Reference<container::XIndexAccess> const& xNumberingRules,
-        sal_Int32 nNumberingLevel, const OUString& aProp)
-{
-    sal_Int32 nRet = 0;
-
-    try
-    {
-        if (nNumberingLevel < 0) // It seems it's valid to omit numbering level, and in that case it means zero.
-            nNumberingLevel = 0;
-        if (xNumberingRules.is())
-        {
-            uno::Sequence<beans::PropertyValue> aProps;
-            xNumberingRules->getByIndex(nNumberingLevel) >>= aProps;
-            for (int i = 0; i < aProps.getLength(); ++i)
-            {
-                const beans::PropertyValue& rProp = aProps[i];
-
-                if (rProp.Name == aProp)
-                {
-                    rProp.Value >>= nRet;
-                    break;
-                }
-            }
-        }
-    }
-    catch( const uno::Exception& )
-    {
-        // This can happen when the doc contains some hand-crafted invalid list level.
-    }
-
-    return nRet;
-}
-
 // In rtl-paragraphs the meaning of left/right are to be exchanged
 static bool ExchangeLeftRight(const PropertyMapPtr& rContext, DomainMapper_Impl& rImpl)
 {
@@ -1226,30 +1209,6 @@ static bool ExchangeLeftRight(const PropertyMapPtr& rContext, DomainMapper_Impl&
         }
     }
     return bExchangeLeftRight;
-}
-
-/// Check if the style or its parent has a list id, recursively.
-static sal_Int32 lcl_getListId(const StyleSheetEntryPtr& rEntry, const StyleSheetTablePtr& rStyleTable)
-{
-    const StyleSheetPropertyMap* pEntryProperties = dynamic_cast<const StyleSheetPropertyMap*>(rEntry->pProperties.get());
-    if (!pEntryProperties)
-        return -1;
-
-    sal_Int32 nListId = pEntryProperties->GetListId();
-    // The style itself has a list id.
-    if (nListId >= 0)
-        return nListId;
-
-    // The style has no parent.
-    if (rEntry->sBaseStyleIdentifier.isEmpty())
-        return -1;
-
-    const StyleSheetEntryPtr pParent = rStyleTable->FindStyleSheetByISTD(rEntry->sBaseStyleIdentifier);
-    // No such parent style or loop in the style hierarchy.
-    if (!pParent || pParent == rEntry)
-        return -1;
-
-    return lcl_getListId(pParent, rStyleTable);
 }
 
 void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
@@ -1335,6 +1294,7 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
                     // So no situation where keeping indentation at this point would make sense -> erase.
                     rContext->Erase(PROP_PARA_FIRST_LINE_INDENT);
                     rContext->Erase(PROP_PARA_LEFT_MARGIN);
+                    rContext->Erase(PROP_PARA_RIGHT_MARGIN);
                 }
             }
             else
@@ -2154,54 +2114,26 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
         StyleSheetTablePtr pStyleTable = m_pImpl->GetStyleSheetTable();
         const OUString sConvertedStyleName = pStyleTable->ConvertStyleName( sStringValue, true );
         if (m_pImpl->GetTopContext() && m_pImpl->GetTopContextType() != CONTEXT_SECTION)
-            m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( sConvertedStyleName ));
-        //apply numbering to paragraph if it was set at the style, but only if the paragraph itself
-        //does not specify the numbering
-        if( !rContext->isSet(PROP_NUMBERING_RULES) ) // !contains
         {
-            const StyleSheetEntryPtr pEntry = pStyleTable->FindStyleSheetByISTD(sStringValue);
-            OSL_ENSURE( pEntry.get(), "no style sheet found" );
-            const StyleSheetPropertyMap* pStyleSheetProperties = dynamic_cast<const StyleSheetPropertyMap*>(pEntry ? pEntry->pProperties.get() : nullptr);
+            m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( sConvertedStyleName ));
 
-            sal_Int32 nListId = pEntry ? lcl_getListId(pEntry, pStyleTable) : -1;
-            if( pStyleSheetProperties && nListId >= 0 )
+            if (m_pImpl->GetIsFirstParagraphInShape())
             {
-                if ( !pEntry->bIsChapterNumbering )
-                    rContext->Insert( PROP_NUMBERING_STYLE_NAME, uno::makeAny( ListDef::GetStyleName( nListId ) ), false);
-
-                // We're inheriting properties from a numbering style. Make sure a possible right margin is inherited from the base style.
-                sal_Int32 nParaRightMargin = 0;
-                if (!pEntry->sBaseStyleIdentifier.isEmpty())
+                // First paragraph in shape: see if we need to disable
+                // paragraph top margin from style.
+                StyleSheetEntryPtr pEntry
+                    = m_pImpl->GetStyleSheetTable()->FindStyleSheetByConvertedStyleName(
+                        sConvertedStyleName);
+                if (pEntry)
                 {
-                    const StyleSheetEntryPtr pParent = pStyleTable->FindStyleSheetByISTD(pEntry->sBaseStyleIdentifier);
-                    const StyleSheetPropertyMap* pParentProperties = dynamic_cast<const StyleSheetPropertyMap*>(pParent ? pParent->pProperties.get() : nullptr);
-                    boost::optional<PropertyMap::Property> pPropMargin;
-                    if (pParentProperties && (pPropMargin = pParentProperties->getProperty(PROP_PARA_RIGHT_MARGIN)) )
-                        nParaRightMargin = pPropMargin->second.get<sal_Int32>();
+                    boost::optional<PropertyMap::Property> pParaAutoBefore
+                        = pEntry->pProperties->getProperty(
+                            PROP_PARA_TOP_MARGIN_BEFORE_AUTO_SPACING);
+                    if (pParaAutoBefore)
+                        m_pImpl->GetTopContext()->Insert(PROP_PARA_TOP_MARGIN,
+                                                         uno::makeAny(static_cast<sal_Int32>(0)));
                 }
-                if (nParaRightMargin != 0)
-                {
-                    // If we're setting the right margin, we should set the first / left margin as well from the numbering style.
-                    sal_Int32 nFirstLineIndent = lcl_getCurrentNumberingProperty(m_pImpl->GetCurrentNumberingRules(), pStyleSheetProperties->GetListLevel(), "FirstLineIndent");
-                    sal_Int32 nParaLeftMargin = lcl_getCurrentNumberingProperty(m_pImpl->GetCurrentNumberingRules(), pStyleSheetProperties->GetListLevel(), "IndentAt");
-                    if (nFirstLineIndent != 0)
-                        rContext->Insert(PROP_PARA_FIRST_LINE_INDENT, uno::makeAny(nFirstLineIndent));
-                    if (nParaLeftMargin != 0)
-                        rContext->Insert(PROP_PARA_LEFT_MARGIN, uno::makeAny(nParaLeftMargin));
-
-                    rContext->Insert(PROP_PARA_RIGHT_MARGIN, uno::makeAny(nParaRightMargin));
-                }
-
-                // Indent properties from the paragraph style have priority
-                // over the ones from the numbering styles in Word, not in
-                // Writer.
-                boost::optional<PropertyMap::Property> oProperty;
-                if (pStyleSheetProperties && (oProperty = pStyleSheetProperties->getProperty(PROP_PARA_FIRST_LINE_INDENT)))
-                    rContext->Insert(PROP_PARA_FIRST_LINE_INDENT, oProperty->second);
             }
-
-            if( pStyleSheetProperties && pStyleSheetProperties->GetListLevel() >= 0 )
-                rContext->Insert( PROP_NUMBERING_LEVEL, uno::makeAny(pStyleSheetProperties->GetListLevel()), false);
         }
     }
     break;
@@ -2652,7 +2584,7 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
                 OUString sStyleName;
                 pParagraphProps->getProperty(PROP_PARA_STYLE_NAME)->second >>= sStyleName;
                 if( !sStyleName.isEmpty() && GetStyleSheetTable() )
-                    pStyle = GetStyleSheetTable()->FindStyleSheetByStyleName( sStyleName );
+                    pStyle = GetStyleSheetTable()->FindStyleSheetByConvertedStyleName( sStyleName );
 
                 if( pStyle && pStyle->pProperties
                     && pStyle->pProperties->isSet(PROP_BREAK_TYPE)
@@ -2797,6 +2729,9 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
             rContext->Insert(PROP_RUBY_TEXT, uno::makeAny(aInfo.sRubyText));
             rContext->Insert(PROP_RUBY_STYLE, uno::makeAny(aInfo.sRubyStyle));
             rContext->Insert(PROP_RUBY_ADJUST, uno::makeAny(static_cast<sal_Int16>(ConversionHelper::convertRubyAlign(aInfo.nRubyAlign))));
+            if ( aInfo.nRubyAlign == NS_ooxml::LN_Value_ST_RubyAlign_rightVertical )
+                rContext->Insert(PROP_RUBY_POSITION, uno::makeAny(css::text::RubyPosition::INTER_CHARACTER));
+
             m_pImpl->SetRubySprmId(0);
         }
     }
@@ -2998,13 +2933,12 @@ void DomainMapper::lcl_startParagraphGroup()
     if (!(m_pImpl->GetTopContextOfType(CONTEXT_PARAGRAPH) == m_pImpl->GetTopContext()))
         m_pImpl->PushProperties(CONTEXT_PARAGRAPH);
 
-    static const char sDefault[] = "Standard";
     if (m_pImpl->GetTopContext())
     {
         if (!m_pImpl->IsInShape())
         {
-            m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( OUString(sDefault) ) );
-            m_pImpl->SetCurrentParaStyleId(sDefault);
+            m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( OUString("Standard") ) ); //ConvertedStyleName
+            m_pImpl->SetCurrentParaStyleId("Normal"); //WW8 name
         }
         if (m_pImpl->isBreakDeferred(PAGE_BREAK))
             m_pImpl->GetTopContext()->Insert(PROP_BREAK_TYPE, uno::makeAny(style::BreakType_PAGE_BEFORE));
@@ -3064,6 +2998,8 @@ void DomainMapper::lcl_startShape(uno::Reference<drawing::XShape> const& xShape)
         // No context? Then this image should not appear directly inside the
         // document, just save it for later usage.
         m_pImpl->PushPendingShape(xShape);
+
+    m_pImpl->SetIsFirstParagraphInShape(true);
 }
 
 void DomainMapper::lcl_endShape( )

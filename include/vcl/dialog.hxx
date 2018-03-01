@@ -29,6 +29,7 @@
 #include <vcl/abstdlg.hxx>
 
 struct DialogImpl;
+class PushButton;
 class VclBox;
 class VclButtonBox;
 
@@ -48,6 +49,7 @@ private:
     std::unique_ptr<DialogImpl> mpDialogImpl;
     long            mnMousePositioned;
     bool            mbInExecute;
+    bool            mbInSyncExecute;
     bool            mbInClose;
     bool            mbModalMode;
     bool            mbPaintComplete;
@@ -60,7 +62,6 @@ private:
     SAL_DLLPRIVATE void    RemoveFromDlgList();
     SAL_DLLPRIVATE void    ImplInitDialogData();
     SAL_DLLPRIVATE void    ImplInitSettings();
-    SAL_DLLPRIVATE inline  void ImplLOKNotifier(vcl::Window* pParent);
     SAL_DLLPRIVATE VclPtr<vcl::Window> AddBorderWindow(vcl::Window* pParent, WinBits nBits);
 
     virtual void ApplySettings(vcl::RenderContext& rRenderContext) override;
@@ -68,15 +69,20 @@ private:
     SAL_DLLPRIVATE         Dialog (const Dialog &) = delete;
     SAL_DLLPRIVATE         Dialog & operator= (const Dialog &) = delete;
 
-    DECL_DLLPRIVATE_LINK( ImplAsyncCloseHdl, void*, void );
+    DECL_DLLPRIVATE_LINK(ImplAsyncCloseHdl, void*, void);
+    DECL_DLLPRIVATE_LINK(ResponseHdl, Button*, void);
 
 protected:
     using Window::ImplInit;
-    SAL_DLLPRIVATE void    ImplInit( vcl::Window* pParent, WinBits nStyle, InitFlag eFlag = InitFlag::Default );
+    void    ImplInit( vcl::Window* pParent, WinBits nStyle, InitFlag eFlag = InitFlag::Default );
+
+    /// Find and set the LOK notifier according to the pParent.
+    void ImplLOKNotifier(vcl::Window* pParent);
 
 public:
     SAL_DLLPRIVATE bool    IsInClose() const { return mbInClose; }
     virtual        void    doDeferredInit(WinBits nBits) override;
+    SAL_DLLPRIVATE void    disposeOwnedButtons();
 
 protected:
     explicit        Dialog( WindowType nType );
@@ -127,6 +133,8 @@ public:
 
     virtual short   Execute();
     bool            IsInExecute() const { return mbInExecute; }
+    // Return true when dialog is synchronously executed (calling ::Execute())
+    bool            IsInSyncExecute() const { return mbInSyncExecute; };
 
     virtual FactoryFunction GetUITestFactory() const override;
 
@@ -142,11 +150,10 @@ public:
 
     // FIXME: Need to remove old StartExecuteModal in favour of this one.
     /// Returns true of the dialog successfully starts
-    bool StartExecuteAsync(const std::function<void(sal_Int32)> &rEndDialogFn,
-                           VclPtr<VclReferenceBase> xOwner = VclPtr<VclReferenceBase>())
+    bool StartExecuteAsync(const std::function<void(sal_Int32)> &rEndDialogFn)
     {
         VclAbstractDialog::AsyncContext aCtx;
-        aCtx.mxOwner = xOwner;
+        aCtx.mxOwner = this;
         aCtx.maEndDialogFn = rEndDialogFn;
         return StartExecuteAsync(aCtx);
     }
@@ -168,6 +175,9 @@ public:
 
     void            GrabFocusToFirstControl();
     virtual void    Resize() override;
+
+    void            add_button(PushButton* pButton, int nResponse, bool bTransferOwnership);
+    void            set_default_response(int nResponse);
 };
 
 class VCL_DLLPUBLIC ModelessDialog : public Dialog
@@ -177,6 +187,8 @@ class VCL_DLLPUBLIC ModelessDialog : public Dialog
 
 public:
     explicit        ModelessDialog( vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, Dialog::InitFlag eFlag = Dialog::InitFlag::Default );
+
+    void            Activate() override;
 };
 
 class VCL_DLLPUBLIC ModalDialog : public Dialog

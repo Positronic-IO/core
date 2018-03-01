@@ -49,8 +49,7 @@
 #include <svx/svxids.hrc>
 #include <tools/diagnose_ex.h>
 #include <tools/urlobj.hxx>
-#include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include <xmlscript/xmldlg_imexp.hxx>
 
@@ -534,7 +533,7 @@ void DialogWindow::ExecuteCommand( SfxRequest& rReq )
             break;
 
         case SID_BASICIDE_DELETECURRENT:
-            if (QueryDelDialog(m_aName, this))
+            if (QueryDelDialog(m_aName, GetFrameWeld()))
             {
                 if (RemoveDialog(m_aDocument, m_aLibName, m_aName))
                 {
@@ -571,7 +570,7 @@ Reference< container::XNameContainer > const & DialogWindow::GetDialog() const
 
 bool DialogWindow::RenameDialog( const OUString& rNewName )
 {
-    if ( !basctl::RenameDialog( this, GetDocument(), GetLibName(), GetName(), rNewName ) )
+    if (!basctl::RenameDialog(GetFrameWeld(), GetDocument(), GetLibName(), GetName(), rNewName))
         return false;
 
     if (SfxBindings* pBindings = GetBindingsPtr())
@@ -739,7 +738,11 @@ void DialogWindow::SaveDialog()
             }
         }
         else
-            ScopedVclPtrInstance<MessageDialog>(this, IDEResId(RID_STR_COULDNTWRITE))->Execute();
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_COULDNTWRITE)));
+            xBox->run();
+        }
     }
 }
 
@@ -778,57 +781,44 @@ std::vector< lang::Locale > implGetLanguagesOnlyContainedInFirstSeq
 }
 
 
-class NameClashQueryBox : public MessBox
+class NameClashQueryBox
 {
+private:
+    std::unique_ptr<weld::MessageDialog> m_xQueryBox;
 public:
-    NameClashQueryBox( vcl::Window* pParent,
-        const OUString& rTitle, const OUString& rMessage );
+    NameClashQueryBox(weld::Window* pParent, const OUString& rTitle, const OUString& rMessage)
+        : m_xQueryBox(Application::CreateMessageDialog(pParent, VclMessageType::Question, VclButtonsType::NONE, rMessage))
+    {
+        if (!rTitle.isEmpty())
+            m_xQueryBox->set_title(rTitle);
+        m_xQueryBox->add_button(IDEResId(RID_STR_DLGIMP_CLASH_RENAME), RET_YES);
+        m_xQueryBox->add_button(IDEResId(RID_STR_DLGIMP_CLASH_REPLACE), RET_NO);
+        m_xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+        m_xQueryBox->set_default_response(RET_YES);
+    }
+    short run() { return m_xQueryBox->run(); }
 };
 
-NameClashQueryBox::NameClashQueryBox( vcl::Window* pParent,
-    const OUString& rTitle, const OUString& rMessage )
-        : MessBox( pParent, MessBoxStyle::NONE, 0, rTitle, rMessage )
+class LanguageMismatchQueryBox
 {
-    if ( !rTitle.isEmpty() )
-        SetText( rTitle );
-
-    maMessText = rMessage;
-
-    AddButton( IDEResId(RID_STR_DLGIMP_CLASH_RENAME), RET_YES,
-        ButtonDialogFlags::Default | ButtonDialogFlags::OK | ButtonDialogFlags::Focus );
-    AddButton( IDEResId(RID_STR_DLGIMP_CLASH_REPLACE), RET_NO );
-    AddButton( StandardButtonType::Cancel, RET_CANCEL, ButtonDialogFlags::Cancel );
-
-    SetImage( QueryBox::GetStandardImage() );
-}
-
-
-class LanguageMismatchQueryBox : public MessBox
-{
+private:
+    std::unique_ptr<weld::MessageDialog> m_xQueryBox;
 public:
-    LanguageMismatchQueryBox( vcl::Window* pParent,
-        const OUString& rTitle, const OUString& rMessage );
+    LanguageMismatchQueryBox(weld::Window* pParent, const OUString& rTitle, const OUString& rMessage)
+        : m_xQueryBox(Application::CreateMessageDialog(pParent, VclMessageType::Question, VclButtonsType::NONE, rMessage))
+    {
+        if (!rTitle.isEmpty())
+            m_xQueryBox->set_title(rTitle);
+        m_xQueryBox->add_button(IDEResId(RID_STR_DLGIMP_MISMATCH_ADD), RET_YES);
+        m_xQueryBox->add_button(IDEResId(RID_STR_DLGIMP_MISMATCH_OMIT), RET_NO);
+        m_xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+        m_xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Help), RET_HELP);
+        m_xQueryBox->set_default_response(RET_YES);
+    }
+    short run() { return m_xQueryBox->run(); }
 };
 
-LanguageMismatchQueryBox::LanguageMismatchQueryBox( vcl::Window* pParent,
-    const OUString& rTitle, const OUString& rMessage )
-        : MessBox( pParent, MessBoxStyle::NONE, 0, rTitle, rMessage )
-{
-    if ( !rTitle.isEmpty() )
-        SetText( rTitle );
-
-    maMessText = rMessage;
-    AddButton( IDEResId(RID_STR_DLGIMP_MISMATCH_ADD), RET_YES,
-        ButtonDialogFlags::Default | ButtonDialogFlags::OK | ButtonDialogFlags::Focus );
-    AddButton( IDEResId(RID_STR_DLGIMP_MISMATCH_OMIT), RET_NO );
-    AddButton( StandardButtonType::Cancel, RET_CANCEL, ButtonDialogFlags::Cancel );
-    AddButton( StandardButtonType::Help, RET_HELP, ButtonDialogFlags::Help, 4 );
-
-    SetImage( QueryBox::GetStandardImage() );
-}
-
-
-bool implImportDialog( vcl::Window* pWin, const OUString& rCurPath, const ScriptDocument& rDocument, const OUString& aLibName )
+bool implImportDialog(weld::Window* pWin, const OUString& rCurPath, const ScriptDocument& rDocument, const OUString& aLibName)
 {
     bool bDone = false;
 
@@ -911,8 +901,8 @@ bool implImportDialog( vcl::Window* pWin, const OUString& rCurPath, const Script
                 OUString aQueryBoxText(IDEResId(RID_STR_DLGIMP_CLASH_TEXT));
                 aQueryBoxText = aQueryBoxText.replaceAll("$(ARG1)", aXmlDlgName);
 
-                ScopedVclPtrInstance< NameClashQueryBox > aQueryBox( pWin, aQueryBoxTitle, aQueryBoxText );
-                sal_uInt16 nRet = aQueryBox->Execute();
+                NameClashQueryBox aQueryBox(pWin, aQueryBoxTitle, aQueryBoxText);
+                sal_uInt16 nRet = aQueryBox.run();
                 if( nRet == RET_YES )
                 {
                     // RET_YES == Rename, see NameClashQueryBox::NameClashQueryBox
@@ -972,8 +962,8 @@ bool implImportDialog( vcl::Window* pWin, const OUString& rCurPath, const Script
             {
                 OUString aQueryBoxTitle(IDEResId(RID_STR_DLGIMP_MISMATCH_TITLE));
                 OUString aQueryBoxText(IDEResId(RID_STR_DLGIMP_MISMATCH_TEXT));
-                ScopedVclPtrInstance< LanguageMismatchQueryBox > aQueryBox( pWin, aQueryBoxTitle, aQueryBoxText );
-                sal_uInt16 nRet = aQueryBox->Execute();
+                LanguageMismatchQueryBox aQueryBox(pWin, aQueryBoxTitle, aQueryBoxText);
+                sal_uInt16 nRet = aQueryBox.run();
                 if( nRet == RET_YES )
                 {
                     // RET_YES == Add, see LanguageMismatchQueryBox::LanguageMismatchQueryBox
@@ -1114,12 +1104,11 @@ bool implImportDialog( vcl::Window* pWin, const OUString& rCurPath, const Script
     return bDone;
 }
 
-
 void DialogWindow::ImportDialog()
 {
     const ScriptDocument& rDocument = GetDocument();
     OUString aLibName = GetLibName();
-    implImportDialog( this, m_sCurPath, rDocument, aLibName );
+    implImportDialog(GetFrameWeld(), m_sCurPath, rDocument, aLibName);
 }
 
 DlgEdModel& DialogWindow::GetModel() const

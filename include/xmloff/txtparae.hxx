@@ -90,14 +90,14 @@ class XMLOFF_DLLPUBLIC XMLTextParagraphExport : public XMLStyleExport
     rtl::Reference < SvXMLExportPropertyMapper > xRubyPropMapper;
 
     const ::std::unique_ptr< ::xmloff::BoundFrameSets > pBoundFrameSets;
-    XMLTextFieldExport          *pFieldExport;
-    std::vector<OUString>  *pListElements;
-    XMLTextListAutoStylePool    maListAutoPool;
-    XMLSectionExport            *pSectionExport;
-    XMLIndexMarkExport          *pIndexMarkExport;
+    std::unique_ptr<XMLTextFieldExport>          pFieldExport;
+    std::unique_ptr<std::vector<OUString>>       pListElements;
+    XMLTextListAutoStylePool                     maListAutoPool;
+    std::unique_ptr<XMLSectionExport>            pSectionExport;
+    std::unique_ptr<XMLIndexMarkExport>          pIndexMarkExport;
 
     /// may be NULL (if no redlines should be exported; e.g. in block mode)
-    XMLRedlineExport            *pRedlineExport;
+    std::unique_ptr<XMLRedlineExport> pRedlineExport;
 
     bool                        bProgress;
 
@@ -149,8 +149,6 @@ private:
     const OUString sFrame;
     const OUString sGraphicFilter;
     const OUString sGraphicRotation;
-    const OUString sGraphicURL;
-    const OUString sReplacementGraphicURL;
     const OUString sHeight;
     const OUString sHoriOrient;
     const OUString sHoriOrientPosition;
@@ -517,7 +515,7 @@ public:
 
     // It the model implements the xAutoStylesSupplier interface, the automatic
     // styles can exported without iterating over the text portions
-    bool collectTextAutoStylesOptimized( bool bIsProgress );
+    void collectTextAutoStylesOptimized( bool bIsProgress );
 
     // This method exports all automatic styles that have been collected.
     void exportTextAutoStyles();

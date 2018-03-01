@@ -47,7 +47,7 @@ class DLLEXPORT HIODev
 
         virtual bool open() = 0;
         virtual void flush() = 0;
-        virtual int  state() const = 0;
+        virtual bool state() const = 0;
 /* gzip routine wrapper */
         virtual bool setCompressed( bool ) = 0;
 
@@ -59,7 +59,6 @@ class DLLEXPORT HIODev
         virtual size_t readBlock( void *ptr, size_t size ) = 0;
         virtual size_t skipBlock( size_t size ) = 0;
 
-        size_t read1b( void *ptr, size_t nmemb );
         size_t read2b( void *ptr, size_t nmemb );
         size_t read4b( void *ptr, size_t nmemb );
 };
@@ -92,7 +91,7 @@ class HStreamIODev final: public HIODev
 /**
  * Not implemented.
  */
-        virtual int  state() const override;
+        virtual bool state() const override;
 /**
  * Set whether the stream is compressed or not
  */
@@ -100,7 +99,6 @@ class HStreamIODev final: public HIODev
 /**
  * Read one byte from stream
  */
-        using HIODev::read1b;
         virtual bool read1b(unsigned char &out) override;
         virtual bool read1b(char &out) override;
 /**
@@ -144,10 +142,9 @@ class HMemIODev final: public HIODev
 
         virtual bool open() override;
         virtual void flush() override;
-        virtual int  state() const override;
+        virtual bool state() const override;
 /* gzip routine wrapper */
         virtual bool setCompressed( bool ) override;
-        using HIODev::read1b;
         virtual bool read1b(unsigned char &out) override;
         virtual bool read1b(char &out) override;
         using HIODev::read2b;

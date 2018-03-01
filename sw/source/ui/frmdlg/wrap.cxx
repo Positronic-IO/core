@@ -390,7 +390,7 @@ void SwWrapTabPage::ActivatePage(const SfxItemSet& rSet)
     if (!m_bDrawMode)
     {
         SwWrtShell* pSh = m_bFormat ? ::GetActiveWrtShell() : m_pWrtSh;
-        SwFlyFrameAttrMgr aMgr( m_bNew, pSh, static_cast<const SwAttrSet&>(GetItemSet()) );
+        SwFlyFrameAttrMgr aMgr( m_bNew, pSh, GetItemSet() );
         SvxSwFrameValidation aVal;
 
         // size
@@ -416,10 +416,10 @@ void SwWrapTabPage::ActivatePage(const SfxItemSet& rSet)
         aVal.nVRelOrient = rVert.GetRelationOrient();
 
         if (rFrameSize.GetWidthPercent() && rFrameSize.GetWidthPercent() != SwFormatFrameSize::SYNCED)
-            aSize.Width() = aSize.Width() * rFrameSize.GetWidthPercent() / 100;
+            aSize.setWidth( aSize.Width() * rFrameSize.GetWidthPercent() / 100 );
 
         if (rFrameSize.GetHeightPercent() && rFrameSize.GetHeightPercent() != SwFormatFrameSize::SYNCED)
-            aSize.Height() = aSize.Height() * rFrameSize.GetHeightPercent() / 100;
+            aSize.setHeight( aSize.Height() * rFrameSize.GetHeightPercent() / 100 );
 
         aVal.nWidth  = aSize.Width();
         aVal.nHeight = aSize.Height();

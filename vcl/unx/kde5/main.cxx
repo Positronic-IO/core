@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <QtGui/QApplication>
+#include <QtWidgets/QApplication>
 
 #include "KDE5Data.hxx"
 #include "KDE5SalInstance.hxx"
@@ -72,7 +72,7 @@ extern "C" {
         }
 #endif
 
-        KDE5SalInstance* pInstance = new KDE5SalInstance( new SalYieldMutex() );
+        KDE5SalInstance* pInstance = new KDE5SalInstance( new SvpSalYieldMutex() );
         SAL_INFO( "vcl.kde5", "created KDE5SalInstance " << &pInstance );
 
         // initialize SalData

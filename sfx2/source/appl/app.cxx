@@ -45,7 +45,6 @@
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
 #include <com/sun/star/uri/XVndSunStarScriptUrl.hpp>
 #include <basic/basmgr.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/svapp.hxx>
 #include <sfx2/sfxhelp.hxx>
 #include <sfx2/request.hxx>
@@ -417,7 +416,7 @@ void SfxApplication::Invalidate( sal_uInt16 nId )
 
 #ifndef DISABLE_DYNLOADING
 
-typedef long (*basicide_handle_basic_error)(void*);
+typedef long (*basicide_handle_basic_error)(void const *);
 typedef void (*basicide_macro_organizer)(sal_Int16);
 
 extern "C" { static void thisModule() {} }

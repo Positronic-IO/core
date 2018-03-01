@@ -180,8 +180,8 @@ public:
     static std::vector<tools::Rectangle> partition(const tools::Rectangle &rRect, int nX, int nY)
     {
         std::vector<tools::Rectangle> aRegions = partition(rRect.GetSize(), nX, nY);
-        for (auto it = aRegions.begin(); it != aRegions.end(); ++it)
-            it->Move(rRect.Left(), rRect.Top());
+        for (auto & region : aRegions)
+            region.Move(rRect.Left(), rRect.Top());
 
         return aRegions;
     }
@@ -292,7 +292,7 @@ public:
                     } aPoints[] = {
                         { 0.2, 0.2 }, { 0.8, 0.3 }, { 0.7, 0.8 }
                     };
-                    rDev.SetLineColor(Color(COL_BLACK));
+                    rDev.SetLineColor(COL_BLACK);
                     basegfx::B2DPolygon aPoly;
                     tools::Rectangle aSub(aRegions[i]);
                     for (size_t j = 0; j < SAL_N_ELEMENTS(aPoints); j++)
@@ -305,8 +305,8 @@ public:
             }
             else
             {
-                rDev.SetFillColor(Color(COL_LIGHTRED));
-                rDev.SetLineColor(Color(COL_BLACK));
+                rDev.SetFillColor(COL_LIGHTRED);
+                rDev.SetLineColor(COL_BLACK);
                 rDev.DrawRect(r);
 
                 for(long i=0; i<r.GetHeight(); i+=15)
@@ -409,7 +409,7 @@ public:
 
             std::vector<OUString> aFontNames;
 
-            sal_uInt32 const nCols[] = {
+            Color const nCols[] = {
                 COL_BLACK, COL_BLUE, COL_GREEN, COL_CYAN, COL_RED, COL_MAGENTA,
                 COL_BROWN, COL_GRAY, COL_LIGHTGRAY, COL_LIGHTBLUE, COL_LIGHTGREEN,
                 COL_LIGHTCYAN, COL_LIGHTRED, COL_LIGHTMAGENTA, COL_YELLOW, COL_WHITE
@@ -450,7 +450,7 @@ public:
                     nFontColorIndex=(i % aFontNames.size());
                 }
 
-                rDev.SetTextColor(Color(nCols[nFontColorIndex]));
+                rDev.SetTextColor(nCols[nFontColorIndex]);
                 vcl::Font aFont( aFontNames[nFontIndex], Size(0, nFontHeight ));
 
                 if (bRotate)
@@ -460,8 +460,8 @@ public:
                     int nHeight = r.GetHeight();
 
                     // move the text to the bottom of the bounding rect before rotating
-                    aFontRect.Top() += nHeight/2;
-                    aFontRect.Bottom() += nHeight;
+                    aFontRect.AdjustTop(nHeight/2 );
+                    aFontRect.AdjustBottom(nHeight );
 
                     aFont.SetOrientation(45 * 10); // 45 degrees
 
@@ -582,7 +582,7 @@ public:
                     long nNewX = drawStringBox(rDev, aPos, aString,
                                                nMaxTextHeight);
 
-                    aPos.X() = nNewX;
+                    aPos.setX( nNewX );
 
                     if (aPos.X() >= r.Right())
                     {
@@ -730,8 +730,8 @@ public:
                                  r.GetHeight()-nDy*2));
             tools::Polygon aPoly(aShrunk);
             tools::PolyPolygon aPPoly(aPoly);
-            rDev.SetLineColor(Color(COL_RED));
-            rDev.SetFillColor(Color(COL_RED));
+            rDev.SetLineColor(COL_RED);
+            rDev.SetFillColor(COL_RED);
             // This hits the optional 'drawPolyPolygon' code-path
             rDev.DrawTransparent(aPPoly, 64);
         }
@@ -753,8 +753,8 @@ public:
         virtual void RenderRegion(OutputDevice &rDev, tools::Rectangle r,
                                   const RenderContext &rCtx) override
         {
-            rDev.SetLineColor(Color(COL_RED));
-            rDev.SetFillColor(Color(COL_GREEN));
+            rDev.SetLineColor(COL_RED);
+            rDev.SetFillColor(COL_GREEN);
             rDev.DrawEllipse(r);
 
             if (rCtx.meStyle == RENDER_EXPANDED)
@@ -777,13 +777,13 @@ public:
             if (rCtx.meStyle == RENDER_EXPANDED)
             {
                 std::vector<tools::Rectangle> aRegions(DemoRenderer::partition(rCtx,5, 4));
-                sal_uInt32 nStartCols[] = {
+                Color nStartCols[] = {
                     COL_RED, COL_RED, COL_RED, COL_GREEN, COL_GREEN,
                     COL_BLUE, COL_BLUE, COL_BLUE, COL_CYAN, COL_CYAN,
                     COL_BLACK, COL_LIGHTGRAY, COL_WHITE, COL_BLUE, COL_CYAN,
                     COL_WHITE, COL_WHITE, COL_WHITE, COL_BLACK, COL_BLACK
                 };
-                sal_uInt32 nEndCols[] = {
+                Color nEndCols[] = {
                     COL_WHITE, COL_WHITE, COL_WHITE, COL_BLACK, COL_BLACK,
                     COL_RED, COL_RED, COL_RED, COL_GREEN, COL_GREEN,
                     COL_GRAY, COL_GRAY, COL_LIGHTGRAY, COL_LIGHTBLUE, COL_LIGHTCYAN,
@@ -818,8 +818,8 @@ public:
                 {
                     tools::Rectangle aSub = aRegions[i];
                     Gradient aGradient;
-                    aGradient.SetStartColor(Color(nStartCols[i]));
-                    aGradient.SetEndColor(Color(nEndCols[i]));
+                    aGradient.SetStartColor(nStartCols[i]);
+                    aGradient.SetEndColor(nEndCols[i]);
                     aGradient.SetStyle(eStyles[i]);
                     aGradient.SetAngle(nAngles[i]);
                     aGradient.SetBorder(nBorders[i]);
@@ -952,8 +952,8 @@ public:
                                              aSubRect.GetHeight() * aPoints[v].nY),
                                        v);
                     }
-                    rDev.SetLineColor(Color(COL_YELLOW));
-                    rDev.SetFillColor(Color(COL_BLACK));
+                    rDev.SetLineColor(COL_YELLOW);
+                    rDev.SetFillColor(COL_BLACK);
                     rDev.DrawPolygon(aPoly);
 
                     // now move and add to the polypolygon
@@ -961,8 +961,8 @@ public:
                     aPolyPoly.Insert(aPoly);
                 }
             }
-            rDev.SetLineColor(Color(COL_LIGHTRED));
-            rDev.SetFillColor(Color(COL_GREEN));
+            rDev.SetLineColor(COL_LIGHTRED);
+            rDev.SetFillColor(COL_GREEN);
             rDev.DrawTransparent(aPolyPoly, 50);
         }
     };
@@ -1309,10 +1309,14 @@ public:
                 int nSizeY = aSrc.GetSizePixel().Height();
                 for (int y = 0; y < nSizeY; y++)
                 {
+                    Scanline pScanlineMask = pMaskAcc->GetScanline( y );
+                    Scanline pScanlineRec = pRecAcc->GetScanline( y );
+                    Scanline pScanlineW = pAccW->GetScanline( y );
+                    Scanline pScanlineB = pAccB->GetScanline( y );
                     for (int x = 0; x < nSizeX; x++)
                     {
-                        BitmapColor aColW = pAccW->GetPixel(y,x);
-                        BitmapColor aColB = pAccB->GetPixel(y,x);
+                        BitmapColor aColW = pAccW->GetPixelFromData(pScanlineW,x);
+                        BitmapColor aColB = pAccB->GetPixelFromData(pScanlineB,x);
                         long nAR = static_cast<long>(aColW.GetRed() - aColB.GetRed()); // (1-a)
                         long nAG = static_cast<long>(aColW.GetGreen() - aColB.GetGreen()); // (1-a)
                         long nAB = static_cast<long>(aColW.GetBlue() - aColB.GetBlue()); // (1-a)
@@ -1324,7 +1328,7 @@ public:
                         nInverseAlpha = CLAMP(nInverseAlpha, 0, 255);
                         long nAlpha = 255 - nInverseAlpha;
 
-                        pMaskAcc->SetPixel(y,x,BitmapColor(static_cast<sal_Int8>(CLAMP(nInverseAlpha,0,255))));
+                        pMaskAcc->SetPixelOnData(pScanlineMask,x,BitmapColor(static_cast<sal_Int8>(CLAMP(nInverseAlpha,0,255))));
                         // now recover the pixels
                         long nR = (aColW.GetRed() + aColB.GetRed() - nInverseAlpha) * 128;
                         long nG = (aColW.GetGreen() + aColB.GetGreen() - nInverseAlpha) * 128;
@@ -1337,7 +1341,7 @@ public:
                         {
                             nR /= nAlpha; nG /= nAlpha; nB /= nAlpha;
                         }
-                        pRecAcc->SetPixel(y,x,BitmapColor(
+                        pRecAcc->SetPixelOnData(pScanlineRec,x,BitmapColor(
                                                 static_cast<sal_uInt8>(CLAMP(nR,0,255)),
                                                 static_cast<sal_uInt8>(CLAMP(nG,0,255)),
                                                 static_cast<sal_uInt8>(CLAMP(nB,0,255))));
@@ -1506,8 +1510,8 @@ public:
     }
     void Invalidate()
     {
-        for (size_t i = 0; i < maInvalidates.size(); ++i)
-            maInvalidates[i]->Invalidate();
+        for (auto const& invalidate : maInvalidates)
+            invalidate->Invalidate();
     }
 };
 
@@ -1983,8 +1987,8 @@ class DemoPopup : public FloatingWindow
         SetLineColor(COL_BLACK);
         SetFillColor();
         DrawRect( tools::Rectangle( Point(), aSize ) );
-        aSize.Width() -= 2;
-        aSize.Height() -= 2;
+        aSize.AdjustWidth( -2 );
+        aSize.AdjustHeight( -2 );
         Color aColor( GetLineColor() );
         SetLineColor( COL_GRAY );
         DrawRect( tools::Rectangle( Point( 1, 1 ), aSize ) );

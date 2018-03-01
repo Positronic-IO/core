@@ -33,6 +33,7 @@
 #include <svx/svxdlg.hxx>
 #include <svx/svxids.hrc>
 #include <bitmaps.hlst>
+#include <sdbdatacolumn.hxx>
 
 #include <com/sun/star/form/XConfirmDeleteListener.hpp>
 #include <com/sun/star/form/XFormComponent.hpp>
@@ -161,11 +162,11 @@ void FmGridHeader::RequestHelp( const HelpEvent& rHEvt )
         {
             tools::Rectangle aItemRect = GetItemRect( nItemId );
             Point aPt = OutputToScreenPixel( aItemRect.TopLeft() );
-            aItemRect.Left()   = aPt.X();
-            aItemRect.Top()    = aPt.Y();
+            aItemRect.SetLeft( aPt.X() );
+            aItemRect.SetTop( aPt.Y() );
             aPt = OutputToScreenPixel( aItemRect.BottomRight() );
-            aItemRect.Right()  = aPt.X();
-            aItemRect.Bottom() = aPt.Y();
+            aItemRect.SetRight( aPt.X() );
+            aItemRect.SetBottom( aPt.Y() );
 
             sal_uInt16 nPos = GetModelColumnPos(nItemId);
             Reference< css::container::XIndexContainer >  xColumns(static_cast<FmGridControl*>(GetParent())->GetPeer()->getColumns());
@@ -1566,7 +1567,7 @@ void FmGridControl::ColumnMoved(sal_uInt16 nId)
             }
         }
 
-        DBG_ASSERT(i < xColumns->getCount(), "Falscher css::sdbcx::Index");
+        DBG_ASSERT(i < xColumns->getCount(), "Wrong css::sdbcx::Index");
         xColumns->removeByIndex(i);
         Any aElement;
         aElement <<= xCol;

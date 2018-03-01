@@ -133,7 +133,7 @@ OString ConvertColor( const Color &rColor, bool bAutoColor )
     if (bAutoColor && rColor.GetColor() == OOXML_COLOR_AUTO)
         return color;
 
-    if ( rColor.GetColor() != COL_AUTO )
+    if ( rColor != COL_AUTO )
     {
         const char pHexDigits[] = "0123456789ABCDEF";
         char pBuffer[] = "000000";
@@ -1299,26 +1299,26 @@ sal_uInt8 TransColToIco( const Color& rCol )
     sal_uInt8 nCol = 0;      // ->Auto
     switch( rCol.GetColor() )
     {
-    case COL_BLACK:         nCol = 1;   break;
-    case COL_BLUE:          nCol = 9;   break;
-    case COL_GREEN:         nCol = 11;  break;
-    case COL_CYAN:          nCol = 10;  break;
-    case COL_RED:           nCol = 13;  break;
-    case COL_MAGENTA:       nCol = 12;  break;
-    case COL_BROWN:         nCol = 14;  break;
-    case COL_GRAY:          nCol = 15;  break;
-    case COL_LIGHTGRAY:     nCol = 16;  break;
-    case COL_LIGHTBLUE:     nCol = 2;   break;
-    case COL_LIGHTGREEN:    nCol = 4;   break;
-    case COL_LIGHTCYAN:     nCol = 3;   break;
-    case COL_LIGHTRED:      nCol = 6;   break;
-    case COL_LIGHTMAGENTA:  nCol = 5;   break;
-    case COL_YELLOW:        nCol = 7;   break;
-    case COL_WHITE:         nCol = 8;   break;
-    case COL_AUTO:          nCol = 0;   break;
+    case sal_uInt32(COL_BLACK):         nCol = 1;   break;
+    case sal_uInt32(COL_BLUE):          nCol = 9;   break;
+    case sal_uInt32(COL_GREEN):         nCol = 11;  break;
+    case sal_uInt32(COL_CYAN):          nCol = 10;  break;
+    case sal_uInt32(COL_RED):           nCol = 13;  break;
+    case sal_uInt32(COL_MAGENTA):       nCol = 12;  break;
+    case sal_uInt32(COL_BROWN):         nCol = 14;  break;
+    case sal_uInt32(COL_GRAY):          nCol = 15;  break;
+    case sal_uInt32(COL_LIGHTGRAY):     nCol = 16;  break;
+    case sal_uInt32(COL_LIGHTBLUE):     nCol = 2;   break;
+    case sal_uInt32(COL_LIGHTGREEN):    nCol = 4;   break;
+    case sal_uInt32(COL_LIGHTCYAN):     nCol = 3;   break;
+    case sal_uInt32(COL_LIGHTRED):      nCol = 6;   break;
+    case sal_uInt32(COL_LIGHTMAGENTA):  nCol = 5;   break;
+    case sal_uInt32(COL_YELLOW):        nCol = 7;   break;
+    case sal_uInt32(COL_WHITE):         nCol = 8;   break;
+    case sal_uInt32(COL_AUTO):          nCol = 0;   break;
 
     default:
-        static const ColorData aColArr[ 16 ] = {
+        static const Color aColArr[ 16 ] = {
             COL_BLACK,      COL_LIGHTBLUE,  COL_LIGHTCYAN,  COL_LIGHTGREEN,
             COL_LIGHTMAGENTA,COL_LIGHTRED,  COL_YELLOW,     COL_WHITE,
             COL_BLUE,       COL_CYAN,       COL_GREEN,      COL_MAGENTA,
@@ -1326,7 +1326,7 @@ sal_uInt8 TransColToIco( const Color& rCol )
         };
         BitmapPalette aBmpPal(16);
         for( sal_uInt16 i = 0; i < 16; ++i )
-            aBmpPal[i] = Color( aColArr[ i ] );
+            aBmpPal[i] = aColArr[ i ];
 
         nCol = static_cast< sal_uInt8 >(GetBestIndex(aBmpPal, rCol) + 1);
         break;

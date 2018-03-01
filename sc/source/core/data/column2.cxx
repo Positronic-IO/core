@@ -282,8 +282,8 @@ long ScColumn::GetNeededSize(
             if ( eOrient != SvxCellOrientation::Standard )
             {
                 long nTemp = aSize.Width();
-                aSize.Width() = aSize.Height();
-                aSize.Height() = nTemp;
+                aSize.setWidth( aSize.Height() );
+                aSize.setHeight( nTemp );
             }
             else if ( nRotate )
             {
@@ -398,7 +398,7 @@ long ScColumn::GetNeededSize(
 
         Size aPaper = Size( 1000000, 1000000 );
         if ( eOrient==SvxCellOrientation::Stacked && !bAsianVertical )
-            aPaper.Width() = 1;
+            aPaper.setWidth( 1 );
         else if (bBreak)
         {
             double fWidthFactor = nPPTX;
@@ -427,7 +427,7 @@ long ScColumn::GetNeededSize(
             if ( pFlag->HasAutoFilter() && !bTextWysiwyg )
                 nDocWidth -= long(rZoomX*20);
 
-            aPaper.Width() = nDocWidth;
+            aPaper.setWidth( nDocWidth );
 
             if ( !bTextWysiwyg )
                 aPaper = pDev->PixelToLogic( aPaper, aHMMMode );
@@ -1303,9 +1303,17 @@ SCROW ScColumn::GetLastDataPos() const
     return MAXROW - static_cast<SCROW>(it->size);
 }
 
-SCROW ScColumn::GetLastDataPos( SCROW nLastRow ) const
+SCROW ScColumn::GetLastDataPos( SCROW nLastRow, bool bConsiderCellNotes,
+                                bool bConsiderCellDrawObjects ) const
 {
     sc::CellStoreType::const_position_type aPos = maCells.position(nLastRow);
+
+    if (bConsiderCellNotes && !IsNotesEmptyBlock(nLastRow, nLastRow))
+        return nLastRow;
+
+    if (bConsiderCellDrawObjects && !IsDrawObjectsEmptyBlock(nLastRow, nLastRow))
+        return nLastRow;
+
     if (aPos.first->type != sc::element_type_empty)
         return nLastRow;
 
@@ -3015,8 +3023,14 @@ void ScColumn::FindDataAreaPos(SCROW& rRow, bool bDown) const
     rRow = nLastRow;
 }
 
-bool ScColumn::HasDataAt(SCROW nRow) const
+bool ScColumn::HasDataAt(SCROW nRow, bool bConsiderCellNotes, bool bConsiderCellDrawObjects) const
 {
+    if (bConsiderCellNotes && !IsNotesEmptyBlock(nRow, nRow))
+        return true;
+
+    if (bConsiderCellDrawObjects && !IsDrawObjectsEmptyBlock(nRow, nRow))
+        return true;
+
     return maCells.get_type(nRow) != sc::element_type_empty;
 }
 

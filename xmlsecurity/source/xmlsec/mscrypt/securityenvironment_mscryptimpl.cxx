@@ -22,17 +22,11 @@
 #include <cstddef>
 #include <string.h>
 
-#ifdef _MSC_VER
-#pragma warning(push,1)
-#endif
 #if !defined WIN32_LEAN_AND_MEAN
 # define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
 #include <WinCrypt.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 #include <sal/macros.h>
 #include <osl/thread.h>
 #include "securityenvironment_mscryptimpl.hxx"
@@ -756,7 +750,7 @@ Reference< XCertificate > SecurityEnvironment_MSCryptImpl::createCertificateFrom
 
     OString oscert = OUStringToOString( asciiCertificate , RTL_TEXTENCODING_ASCII_US ) ;
 
-    chCert = xmlStrndup( reinterpret_cast<const xmlChar*>(oscert.getStr()), ( int )oscert.getLength() ) ;
+    chCert = xmlStrndup( reinterpret_cast<const xmlChar*>(oscert.getStr()), static_cast<int>(oscert.getLength()) ) ;
 
     certSize = xmlSecBase64Decode( chCert, chCert, xmlStrlen( chCert ) ) ;
 

@@ -134,7 +134,7 @@ void BrowserColumn::Draw( BrowseBox const & rBox, OutputDevice& rDev, const Poin
         ButtonFrame( rPos, Size( Width()-1, rBox.GetDataRowHeight()-1 ),
                      "", false ).Draw( rDev );
         Color aOldLineColor = rDev.GetLineColor();
-        rDev.SetLineColor( Color( COL_BLACK ) );
+        rDev.SetLineColor( COL_BLACK );
         rDev.DrawLine(
             Point( rPos.X(), rPos.Y()+rBox.GetDataRowHeight()-1 ),
             Point( rPos.X() + Width() - 1, rPos.Y()+rBox.GetDataRowHeight()-1 ) );
@@ -362,7 +362,7 @@ void BrowserDataWin::StartDrag( sal_Int8 _nAction, const Point& _rPosPixel )
     if ( !GetParent()->bRowDividerDrag )
     {
         Point aEventPos( _rPosPixel );
-        aEventPos.Y() += GetParent()->GetTitleHeight();
+        aEventPos.AdjustY(GetParent()->GetTitleHeight() );
         GetParent()->StartDrag( _nAction, aEventPos );
     }
 }
@@ -394,7 +394,7 @@ void BrowserDataWin::Command( const CommandEvent& rEvt )
         bInCommand = false;
     }
 
-    aEventPos.Y() += GetParent()->GetTitleHeight();
+    aEventPos.AdjustY(GetParent()->GetTitleHeight() );
     CommandEvent aEvt( aEventPos, rEvt.GetCommand(),
                         rEvt.IsMouseEvent(), rEvt.GetEventData() );
     bInCommand = true;
@@ -528,7 +528,7 @@ void BrowserDataWin::Tracking( const TrackingEvent& rTEvt )
     Point aMousePos = rTEvt.GetMouseEvent().GetPosPixel();
     // stop resizing at our bottom line
     if ( aMousePos.Y() > GetOutputSizePixel().Height() )
-        aMousePos.Y() = GetOutputSizePixel().Height();
+        aMousePos.setY( GetOutputSizePixel().Height() );
 
     if ( rTEvt.IsTrackingEnded() )
     {

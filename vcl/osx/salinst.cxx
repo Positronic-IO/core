@@ -157,7 +157,10 @@ static void initNSApp()
 
     // activate our delegate methods
     [NSApp setDelegate: NSApp];
+}
 
+void postInitVCLinitNSApp()
+{
     [[NSNotificationCenter defaultCenter] addObserver: NSApp
                                           selector: @selector(systemColorsChanged:)
                                           name: NSSystemColorsDidChangeNotification
@@ -565,7 +568,7 @@ static bool isWakeupEvent( NSEvent *pEvent )
 {
 SAL_WNODEPRECATED_DECLARATIONS_PUSH
     return NSApplicationDefined == [pEvent type]
-        && AquaSalInstance::YieldWakeupEvent == (int) [pEvent subtype];
+        && AquaSalInstance::YieldWakeupEvent == static_cast<int>([pEvent subtype]);
 SAL_WNODEPRECATED_DECLARATIONS_POP
 }
 

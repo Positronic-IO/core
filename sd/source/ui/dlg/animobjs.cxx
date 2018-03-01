@@ -25,7 +25,8 @@
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/progress.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 #include <anminfo.hxx>
 #include <animobjs.hxx>
@@ -59,7 +60,7 @@ SdDisplay::SdDisplay(vcl::Window* pWin)
 {
     SetMapMode(MapMode(MapUnit::MapPixel));
     const StyleSettings& rStyles = Application::GetSettings().GetStyleSettings();
-    SetBackground( Wallpaper( Color( rStyles.GetFieldColor() ) ) );
+    SetBackground( Wallpaper( rStyles.GetFieldColor() ) );
 }
 
 SdDisplay::~SdDisplay()
@@ -85,13 +86,13 @@ void SdDisplay::Paint( vcl::RenderContext& /*rRenderContext*/, const ::tools::Re
     Point aPt;
     Size aSize = GetOutputSize();
     Size aBmpSize = aBitmapEx.GetBitmap().GetSizePixel();
-    aBmpSize.Width() = static_cast<long>( static_cast<double>(aBmpSize.Width()) * static_cast<double>(aScale) );
-    aBmpSize.Height() = static_cast<long>( static_cast<double>(aBmpSize.Height()) * static_cast<double>(aScale) );
+    aBmpSize.setWidth( static_cast<long>( static_cast<double>(aBmpSize.Width()) * static_cast<double>(aScale) ) );
+    aBmpSize.setHeight( static_cast<long>( static_cast<double>(aBmpSize.Height()) * static_cast<double>(aScale) ) );
 
     if( aBmpSize.Width() < aSize.Width() )
-        aPt.X() = ( aSize.Width() - aBmpSize.Width() ) / 2;
+        aPt.setX( ( aSize.Width() - aBmpSize.Width() ) / 2 );
     if( aBmpSize.Height() < aSize.Height() )
-        aPt.Y() = ( aSize.Height() - aBmpSize.Height() ) / 2;
+        aPt.setY( ( aSize.Height() - aBmpSize.Height() ) / 2 );
 
     aBitmapEx.Draw( this, aPt, aBmpSize );
 }
@@ -113,7 +114,7 @@ void SdDisplay::DataChanged( const DataChangedEvent& rDCEvt )
     if ( (rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE) )
     {
         const StyleSettings& rStyles = Application::GetSettings().GetStyleSettings();
-        SetBackground( Wallpaper( Color( rStyles.GetFieldColor() ) ) );
+        SetBackground( Wallpaper( rStyles.GetFieldColor() ) );
         SetDrawMode( GetSettings().GetStyleSettings().GetHighContrastMode()
             ? sd::OUTPUT_DRAWMODE_CONTRAST
             : sd::OUTPUT_DRAWMODE_COLOR );
@@ -439,8 +440,10 @@ IMPL_LINK( AnimationWindow, ClickRemoveBitmapHdl, Button*, pBtn, void )
     }
     else // delete everything
     {
-        ScopedVclPtrInstance< WarningBox > aWarnBox( this, MessBoxStyle::YesNo, SdResId( STR_ASK_DELETE_ALL_PICTURES ) );
-        short nReturn = aWarnBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                   SdResId(STR_ASK_DELETE_ALL_PICTURES)));
+        short nReturn = xWarn->run();
 
         if( nReturn == RET_YES )
         {
@@ -653,12 +656,12 @@ Fraction AnimationWindow::GetScale()
         {
             BitmapEx *const pBitmap = m_FrameList[i].first;
             Size aTempSize( pBitmap->GetBitmap().GetSizePixel() );
-            aBmpSize.Width() = std::max( aBmpSize.Width(), aTempSize.Width() );
-            aBmpSize.Height() = std::max( aBmpSize.Height(), aTempSize.Height() );
+            aBmpSize.setWidth( std::max( aBmpSize.Width(), aTempSize.Width() ) );
+            aBmpSize.setHeight( std::max( aBmpSize.Height(), aTempSize.Height() ) );
         }
 
-        aBmpSize.Width() += 10;
-        aBmpSize.Height() += 10;
+        aBmpSize.AdjustWidth(10 );
+        aBmpSize.AdjustHeight(10 );
 
         Size aDisplaySize(m_pCtlDisplay->GetOutputSize());
 
@@ -909,11 +912,11 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
         else
             aTmpSizeLog = OutputDevice::LogicToLogic( aGraphic.GetPrefSize(), aGraphic.GetPrefMapMode(), aMap100 );
 
-        aMaxSizeLog.Width() = std::max( aMaxSizeLog.Width(), aTmpSizeLog.Width() );
-        aMaxSizeLog.Height() = std::max( aMaxSizeLog.Height(), aTmpSizeLog.Height() );
+        aMaxSizeLog.setWidth( std::max( aMaxSizeLog.Width(), aTmpSizeLog.Width() ) );
+        aMaxSizeLog.setHeight( std::max( aMaxSizeLog.Height(), aTmpSizeLog.Height() ) );
 
-        aMaxSizePix.Width() = std::max( aMaxSizePix.Width(), aTmpSizePix.Width() );
-        aMaxSizePix.Height() = std::max( aMaxSizePix.Height(), aTmpSizePix.Height() );
+        aMaxSizePix.setWidth( std::max( aMaxSizePix.Width(), aTmpSizePix.Width() ) );
+        aMaxSizePix.setHeight( std::max( aMaxSizePix.Height(), aTmpSizePix.Height() ) );
     }
 
     SdrPageView* pPV = rView.GetSdrPageView();
@@ -941,39 +944,39 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
                 break;
 
                 case BA_LEFT:
-                    aPt.Y() = (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1;
+                    aPt.setY( (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1 );
                 break;
 
                 case BA_LEFT_DOWN:
-                    aPt.Y() = aMaxSizePix.Height() - aBitmapSize.Height();
+                    aPt.setY( aMaxSizePix.Height() - aBitmapSize.Height() );
                 break;
 
                 case BA_UP:
-                    aPt.X() = (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1;
+                    aPt.setX( (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1 );
                 break;
 
                 case BA_CENTER:
-                    aPt.X()  = (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1;
-                    aPt.Y() = (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1;
+                    aPt.setX( (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1 );
+                    aPt.setY( (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1 );
                 break;
 
                 case BA_DOWN:
-                    aPt.X()  = (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1;
-                    aPt.Y() = aMaxSizePix.Height() - aBitmapSize.Height();
+                    aPt.setX( (aMaxSizePix.Width() - aBitmapSize.Width()) >> 1 );
+                    aPt.setY( aMaxSizePix.Height() - aBitmapSize.Height() );
                 break;
 
                 case BA_RIGHT_UP:
-                    aPt.X() = aMaxSizePix.Width() - aBitmapSize.Width();
+                    aPt.setX( aMaxSizePix.Width() - aBitmapSize.Width() );
                 break;
 
                 case BA_RIGHT:
-                    aPt.X()  = aMaxSizePix.Width() - aBitmapSize.Width();
-                    aPt.Y() = (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1;
+                    aPt.setX( aMaxSizePix.Width() - aBitmapSize.Width() );
+                    aPt.setY( (aMaxSizePix.Height() - aBitmapSize.Height()) >> 1 );
                 break;
 
                 case BA_RIGHT_DOWN:
-                    aPt.X()  = aMaxSizePix.Width() - aBitmapSize.Width();
-                    aPt.Y() = aMaxSizePix.Height() - aBitmapSize.Height();
+                    aPt.setX( aMaxSizePix.Width() - aBitmapSize.Width() );
+                    aPt.setY( aMaxSizePix.Height() - aBitmapSize.Height() );
                 break;
 
             }
@@ -1022,39 +1025,39 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
                 break;
 
                 case BA_LEFT:
-                    aOffset.Height() = (aMaxSizeLog.Height() - aRect.GetHeight()) / 2;
+                    aOffset.setHeight( (aMaxSizeLog.Height() - aRect.GetHeight()) / 2 );
                 break;
 
                 case BA_LEFT_DOWN:
-                    aOffset.Height() = aMaxSizeLog.Height() - aRect.GetHeight();
+                    aOffset.setHeight( aMaxSizeLog.Height() - aRect.GetHeight() );
                 break;
 
                 case BA_UP:
-                    aOffset.Width() = (aMaxSizeLog.Width() - aRect.GetWidth()) / 2;
+                    aOffset.setWidth( (aMaxSizeLog.Width() - aRect.GetWidth()) / 2 );
                 break;
 
                 case BA_CENTER:
-                    aOffset.Width()  = (aMaxSizeLog.Width() - aRect.GetWidth()) / 2;
-                    aOffset.Height() = (aMaxSizeLog.Height() - aRect.GetHeight()) / 2;
+                    aOffset.setWidth( (aMaxSizeLog.Width() - aRect.GetWidth()) / 2 );
+                    aOffset.setHeight( (aMaxSizeLog.Height() - aRect.GetHeight()) / 2 );
                 break;
 
                 case BA_DOWN:
-                    aOffset.Width()  = (aMaxSizeLog.Width() - aRect.GetWidth()) / 2;
-                    aOffset.Height() = aMaxSizeLog.Height() - aRect.GetHeight();
+                    aOffset.setWidth( (aMaxSizeLog.Width() - aRect.GetWidth()) / 2 );
+                    aOffset.setHeight( aMaxSizeLog.Height() - aRect.GetHeight() );
                 break;
 
                 case BA_RIGHT_UP:
-                    aOffset.Width() = aMaxSizeLog.Width() - aRect.GetWidth();
+                    aOffset.setWidth( aMaxSizeLog.Width() - aRect.GetWidth() );
                 break;
 
                 case BA_RIGHT:
-                    aOffset.Width()  = aMaxSizeLog.Width() - aRect.GetWidth();
-                    aOffset.Height() = (aMaxSizeLog.Height() - aRect.GetHeight()) / 2;
+                    aOffset.setWidth( aMaxSizeLog.Width() - aRect.GetWidth() );
+                    aOffset.setHeight( (aMaxSizeLog.Height() - aRect.GetHeight()) / 2 );
                 break;
 
                 case BA_RIGHT_DOWN:
-                    aOffset.Width()  = aMaxSizeLog.Width() - aRect.GetWidth();
-                    aOffset.Height() = aMaxSizeLog.Height() - aRect.GetHeight();
+                    aOffset.setWidth( aMaxSizeLog.Width() - aRect.GetWidth() );
+                    aOffset.setHeight( aMaxSizeLog.Height() - aRect.GetHeight() );
                 break;
 
             }
@@ -1087,8 +1090,8 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
             // until now the top left corner of the group is in the window center;
             // correct the position by half of the size of the group
             aTemp = aMaxSizeLog;
-            aTemp.Height() = - aTemp.Height() / 2;
-            aTemp.Width()  = - aTemp.Width() / 2;
+            aTemp.setHeight( - aTemp.Height() / 2 );
+            aTemp.setWidth( - aTemp.Width() / 2 );
             pGroup->NbcMove(aTemp);
 
             // #i42894# create needed SMIL stuff and move child objects to page directly (see

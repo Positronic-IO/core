@@ -25,7 +25,9 @@
 #include <AnnotationWin.hxx>
 #include <o3tl/any.hxx>
 #include <osl/mutex.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/image.hxx>
+#include <vcl/vclevent.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/sysdata.hxx>
 #include <vcl/svapp.hxx>
@@ -91,6 +93,8 @@
 #include <unotools/printwarningoptions.hxx>
 #include <com/sun/star/lang/ServiceNotRegisteredException.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
+#include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <com/sun/star/lang/NoSupportException.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/beans/XFastPropertySet.hpp>
@@ -134,6 +138,7 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/saveopt.hxx>
 #include <swruler.hxx>
+#include <docufld.hxx>
 
 
 #include <EnhancedPDFExportHelper.hxx>
@@ -1375,6 +1380,68 @@ Reference< drawing::XDrawPage >  SwXTextDocument::getDrawPage()
         uno::Reference<lang::XComponent> xComp( mxXDrawPage, uno::UNO_QUERY );
     }
     return mxXDrawPage;
+}
+
+class SwDrawPagesObj : public cppu::WeakImplHelper<
+    css::drawing::XDrawPages,
+    css::lang::XServiceInfo>
+{
+private:
+    css::uno::Reference< css::drawing::XDrawPageSupplier > m_xDoc;
+public:
+    SwDrawPagesObj(const css::uno::Reference< css::drawing::XDrawPageSupplier >& rxDoc) : m_xDoc(rxDoc) {}
+
+    // XDrawPages
+    virtual css::uno::Reference< css::drawing::XDrawPage > SAL_CALL
+        insertNewByIndex(sal_Int32 /*nIndex*/) override { throw css::lang::NoSupportException(); }
+
+    virtual void SAL_CALL remove(const css::uno::Reference< css::drawing::XDrawPage >& /*xPage*/) override
+    {
+        throw css::lang::NoSupportException();
+    }
+
+    // XIndexAccess
+    virtual sal_Int32 SAL_CALL getCount() override { return 1; }
+
+    virtual css::uno::Any SAL_CALL getByIndex(sal_Int32 Index) override
+    {
+        if (Index != 0)
+            throw css::lang::IndexOutOfBoundsException("Writer documents have only one DrawPage!");
+        return css::uno::Any(m_xDoc->getDrawPage());
+    }
+
+    // XElementAccess
+    virtual css::uno::Type SAL_CALL getElementType() override
+    {
+        SolarMutexGuard aGuard;
+        return cppu::UnoType<drawing::XDrawPage>::get();
+    }
+
+    virtual sal_Bool SAL_CALL hasElements() override { return true; }
+
+    // XServiceInfo
+    virtual OUString SAL_CALL getImplementationName() override
+    {
+        return OUString("SwDrawPagesObj");
+    }
+
+    virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override
+    {
+        return cppu::supportsService(this, ServiceName);
+    }
+
+    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override
+    {
+        return { "com.sun.star.drawing.DrawPages" };
+    }
+};
+
+// XDrawPagesSupplier
+
+uno::Reference<drawing::XDrawPages> SAL_CALL SwXTextDocument::getDrawPages()
+{
+    SolarMutexGuard aGuard;
+    return new SwDrawPagesObj(this);
 }
 
 void SwXTextDocument::Invalidate()
@@ -2893,7 +2960,8 @@ void SAL_CALL SwXTextDocument::render(
     if (0 > nRenderer)
         throw IllegalArgumentException();
 
-    const bool bIsPDFExport = !lcl_SeqHasProperty( rxOptions, "IsPrinter" );
+    const bool bHasPDFExtOutDevData = lcl_SeqHasProperty( rxOptions, "HasPDFExtOutDevData" );
+    const bool bIsPDFExport = !lcl_SeqHasProperty( rxOptions, "IsPrinter" ) || bHasPDFExtOutDevData;
     bool bIsSwSrcView = false;
     SfxViewShell *pView = GetRenderView( bIsSwSrcView, rxOptions, bIsPDFExport );
 
@@ -2976,7 +3044,7 @@ void SAL_CALL SwXTextDocument::render(
                     SwPrintData const& rSwPrtOptions =
                         *m_pRenderData->GetSwPrtOptions();
 
-                    if (bIsPDFExport && bFirstPage && pWrtShell)
+                    if (bIsPDFExport && (bFirstPage || bHasPDFExtOutDevData) && pWrtShell)
                     {
                         SwEnhancedPDFExportHelper aHelper( *pWrtShell, *pOut, aPageRange, bIsSkipEmptyPages, false, rSwPrtOptions );
                     }
@@ -3331,6 +3399,22 @@ OUString SwXTextDocument::getPartHash(int nPart)
     return OUString::number(sPart.hashCode());
 }
 
+VclPtr<vcl::Window> SwXTextDocument::getDocWindow()
+{
+    SolarMutexGuard aGuard;
+    VclPtr<vcl::Window> pWindow;
+    SwView* pView = pDocShell->GetView();
+    if (pView)
+        pWindow = &(pView->GetEditWin());
+
+    LokChartHelper aChartHelper(pView);
+    VclPtr<vcl::Window> pChartWindow = aChartHelper.GetWindow();
+    if (pChartWindow)
+        pWindow = pChartWindow;
+
+    return pWindow;
+}
+
 void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::beans::PropertyValue>& rArguments)
 {
     SolarMutexGuard aGuard;
@@ -3401,30 +3485,26 @@ void SwXTextDocument::postKeyEvent(int nType, int nCharCode, int nKeyCode)
 {
     SolarMutexGuard aGuard;
 
-    vcl::Window* pWindow = &(pDocShell->GetView()->GetEditWin());
+    VclPtr<vcl::Window> pWindow = getDocWindow();
+    if (!pWindow)
+        return;
 
-    SfxViewShell* pViewShell = pDocShell->GetView();
-    LokChartHelper aChartHelper(pViewShell);
-    vcl::Window* pChartWindow = aChartHelper.GetWindow();
-    if (pChartWindow)
-    {
-        pWindow = pChartWindow;
-    }
-
-    KeyEvent aEvent(nCharCode, nKeyCode, 0);
-
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = pWindow;
     switch (nType)
     {
     case LOK_KEYEVENT_KEYINPUT:
-        pWindow->KeyInput(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyInput;
         break;
     case LOK_KEYEVENT_KEYUP:
-        pWindow->KeyUp(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyUp;
         break;
     default:
         assert(false);
-        break;
     }
+
+    pLOKEv->maKeyEvent = KeyEvent(nCharCode, nKeyCode, 0);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void SwXTextDocument::postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier)
@@ -3452,30 +3532,29 @@ void SwXTextDocument::postMouseEvent(int nType, int nX, int nY, int nCount, int 
     }
 
     SwEditWin& rEditWin = pDocShell->GetView()->GetEditWin();
-    Point aPos(nX , nY);
-    MouseEvent aEvent(aPos, nCount, MouseEventModifiers::SIMPLECLICK, nButtons, nModifier);
 
+
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = &rEditWin;
     switch (nType)
     {
     case LOK_MOUSEEVENT_MOUSEBUTTONDOWN:
-        rEditWin.LogicMouseButtonDown(aEvent);
-
-        if (nButtons & MOUSE_RIGHT)
-        {
-            const CommandEvent aCEvt(aPos, CommandEventId::ContextMenu, true, nullptr);
-            rEditWin.Command(aCEvt);
-        }
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonDown;
         break;
     case LOK_MOUSEEVENT_MOUSEBUTTONUP:
-        rEditWin.LogicMouseButtonUp(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonUp;
         break;
     case LOK_MOUSEEVENT_MOUSEMOVE:
-        rEditWin.LogicMouseMove(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowMouseMove;
         break;
     default:
         assert(false);
-        break;
     }
+
+    pLOKEv->maMouseEvent = MouseEvent(Point(nX, nY), nCount,
+                                      MouseEventModifiers::SIMPLECLICK,
+                                      nButtons, nModifier);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void SwXTextDocument::setTextSelection(int nType, int nX, int nY)

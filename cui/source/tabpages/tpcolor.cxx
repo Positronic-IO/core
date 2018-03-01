@@ -27,13 +27,12 @@
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svtools/colrdlg.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <svx/ofaitem.hxx>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 
 #include <strings.hrc>
-#include <helpids.h>
 #include <svx/xattr.hxx>
 #include <svx/xpool.hxx>
 #include <svx/xtable.hxx>
@@ -60,7 +59,7 @@ SvxColorTabPage::SvxColorTabPage(vcl::Window* pParent, const SfxItemSet& rInAttr
     , rOutAttrs           ( rInAttrs )
     // All the horrific pointers we store and should not
     , pnColorListState( nullptr )
-    , aXFillColorItem( OUString(), Color( COL_BLACK ) )
+    , aXFillColorItem( OUString(), COL_BLACK )
     , aXFillAttr( rInAttrs.GetPool() )
     , rXFSet( aXFillAttr.GetItemSet() )
     , eCM( ColorModel::RGB )
@@ -213,9 +212,9 @@ void SvxColorTabPage::FillPaletteLB()
 {
     m_pSelectPalette->Clear();
     std::vector<OUString> aPaletteList = maPaletteManager.GetPaletteList();
-    for( std::vector<OUString>::iterator it = aPaletteList.begin(); it != aPaletteList.end(); ++it )
+    for (auto const& palette : aPaletteList)
     {
-        m_pSelectPalette->InsertEntry( *it );
+        m_pSelectPalette->InsertEntry(palette);
     }
     OUString aPaletteName( officecfg::Office::Common::UserColors::PaletteName::get() );
     m_pSelectPalette->SelectEntry(aPaletteName);
@@ -325,9 +324,9 @@ IMPL_LINK(SvxColorTabPage, ModifiedHdl_Impl, Edit&, rEdit, void)
             aCurrentColor = Color(m_pHexcustom->GetColor());
         else
         {
-            aCurrentColor.SetColor ( Color( static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pRcustom->GetValue()) )),
+            aCurrentColor = Color( static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pRcustom->GetValue()) )),
                                             static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pGcustom->GetValue()) )),
-                                            static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pBcustom->GetValue()) )) ).GetColor() );
+                                            static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pBcustom->GetValue()) )) );
 
         }
         UpdateColorValues();
@@ -335,10 +334,10 @@ IMPL_LINK(SvxColorTabPage, ModifiedHdl_Impl, Edit&, rEdit, void)
     else
     {
         // read current MtrFields, if cmyk, then k-value as transparency
-        aCurrentColor.SetColor ( Color( static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pKcustom->GetValue()) )),
+        aCurrentColor = Color( static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pKcustom->GetValue()) )),
                                         static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pCcustom->GetValue()) )),
                                         static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pYcustom->GetValue()) )),
-                                        static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pMcustom->GetValue()) )) ).GetColor() );
+                                        static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pMcustom->GetValue()) )) );
         ConvertColorValues (aCurrentColor, ColorModel::RGB);
     }
 
@@ -366,7 +365,6 @@ IMPL_LINK_NOARG(SvxColorTabPage, ClickAddHdl_Impl, Button*, void)
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
-    ScopedVclPtr<MessageDialog> pWarnBox;
     sal_uInt16 nError = 1;
 
     while (pDlg->Execute() == RET_OK)
@@ -380,19 +378,13 @@ IMPL_LINK_NOARG(SvxColorTabPage, ClickAddHdl_Impl, Button*, void)
             break;
         }
 
-        if( !pWarnBox )
-        {
-            pWarnBox.disposeAndReset(VclPtr<MessageDialog>::Create( GetParentDialog()
-                                        ,"DuplicateNameDialog"
-                                        ,"cui/ui/queryduplicatedialog.ui"));
-        }
-
-        if( pWarnBox->Execute() != RET_OK )
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xWarnBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+        if (xWarnBox->run() != RET_OK)
             break;
     }
 
     pDlg.disposeAndClear();
-    pWarnBox.disposeAndClear();
 
     if (!nError)
     {

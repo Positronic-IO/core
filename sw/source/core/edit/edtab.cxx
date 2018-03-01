@@ -48,6 +48,7 @@
 #include <swddetbl.hxx>
 #include <mdiexp.hxx>
 #include <unochart.hxx>
+#include <itabenum.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -424,22 +425,20 @@ OUString SwEditShell::GetTableBoxText() const
     return sRet;
 }
 
-bool SwEditShell::SplitTable( SplitTable_HeadlineOption eMode )
+void SwEditShell::SplitTable( SplitTable_HeadlineOption eMode )
 {
-    bool bRet = false;
     SwPaM *pCursor = GetCursor();
     if( pCursor->GetNode().FindTableNode() )
     {
         StartAllAction();
         GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::EMPTY, nullptr);
 
-        bRet = GetDoc()->SplitTable( *pCursor->GetPoint(), eMode, true );
+        GetDoc()->SplitTable( *pCursor->GetPoint(), eMode, true );
 
         GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::EMPTY, nullptr);
         ClearFEShellTabCols(*GetDoc(), nullptr);
         EndAllAction();
     }
-    return bRet;
 }
 
 bool SwEditShell::MergeTable( bool bWithPrev )

@@ -21,10 +21,11 @@
 
 #include <tools/toolsdllapi.h>
 #include <tools/colordata.hxx>
+#include <com/sun/star/uno/Any.hxx>
+#include <basegfx/color/bcolor.hxx>
 
 class SvStream;
 
-#include <basegfx/color/bcolor.hxx>
 
 // Color
 
@@ -33,16 +34,16 @@ class SAL_WARN_UNUSED TOOLS_DLLPUBLIC Color final
     ColorData mnColor;
 
 public:
-    Color()
-        : mnColor(COL_BLACK)
+    constexpr Color()
+        : mnColor(0) // black
     {}
-    Color(ColorData nColor)
+    constexpr Color(ColorData nColor)
         : mnColor(nColor)
     {}
-    Color(sal_uInt8 nRed, sal_uInt8 nGreen, sal_uInt8 nBlue)
+    constexpr Color(sal_uInt8 nRed, sal_uInt8 nGreen, sal_uInt8 nBlue)
         : mnColor(RGB_COLORDATA(nRed, nGreen, nBlue))
     {}
-    Color(sal_uInt8 nTransparency, sal_uInt8 nRed, sal_uInt8 nGreen, sal_uInt8 nBlue)
+    constexpr Color(sal_uInt8 nTransparency, sal_uInt8 nRed, sal_uInt8 nGreen, sal_uInt8 nBlue)
         : mnColor(TRGB_COLORDATA(nTransparency, nRed, nGreen, nBlue))
     {}
 
@@ -52,6 +53,17 @@ public:
                                 sal_uInt8((rBColor.getGreen() * 255.0) + 0.5),
                                 sal_uInt8((rBColor.getBlue() * 255.0) + 0.5)))
     {}
+
+    /** Primarily used when passing Color objects to UNO API */
+    constexpr explicit operator sal_uInt32() const
+    {
+        return mnColor;
+    }
+
+    constexpr explicit operator sal_Int32() const
+    {
+        return sal_Int32(mnColor);
+    }
 
     bool operator<(const Color& b) const
     {
@@ -79,15 +91,11 @@ public:
         return COLORDATA_TRANSPARENCY(mnColor);
     }
 
-    void SetColor(ColorData nColor)
-    {
-        mnColor = nColor;
-    }
     ColorData GetColor() const
     {
         return mnColor;
     }
-    ColorData GetRGBColor() const
+    Color GetRGBColor() const
     {
         return COLORDATA_RGB(mnColor);
     }
@@ -125,7 +133,7 @@ public:
     // Hue: 0-360 degree
     // Saturation: 0-100%
     // Brightness: 0-100%
-    static ColorData HSBtoRGB(sal_uInt16 nHue, sal_uInt16 nSaturation, sal_uInt16 nBrightness);
+    static Color HSBtoRGB(sal_uInt16 nHue, sal_uInt16 nSaturation, sal_uInt16 nBrightness);
     void RGBtoHSB(sal_uInt16& nHue, sal_uInt16& nSaturation, sal_uInt16& nBrightness) const;
 
     bool operator==(const Color& rColor) const
@@ -196,6 +204,80 @@ inline void Color::Merge( const Color& rMergeColor, sal_uInt8 cTransparency )
     SetGreen(ColorChannelMerge(COLORDATA_GREEN(mnColor), COLORDATA_GREEN(rMergeColor.mnColor), cTransparency));
     SetBlue(ColorChannelMerge(COLORDATA_BLUE(mnColor), COLORDATA_BLUE(rMergeColor.mnColor), cTransparency));
 }
+
+// to reduce the noise when moving these into and out of Any
+inline bool operator >>=( const css::uno::Any & rAny, Color & value )
+{
+  sal_Int32 nTmp;
+  if (!(rAny >>= nTmp))
+      return false;
+  value = Color(nTmp);
+  return true;
+}
+inline void operator <<=( css::uno::Any & rAny, Color value )
+{
+    rAny <<= sal_Int32(value);
+}
+namespace com { namespace sun { namespace star { namespace uno {
+    template<>
+    inline Any makeAny( Color const & value )
+    {
+        return Any(sal_Int32(value));
+    }
+} } } }
+
+// Color types
+
+constexpr ::Color COL_BLACK                   ( 0x00, 0x00, 0x00 );
+constexpr ::Color COL_BLUE                    ( 0x00, 0x00, 0x80 );
+constexpr ::Color COL_GREEN                   ( 0x00, 0x80, 0x00 );
+constexpr ::Color COL_CYAN                    ( 0x00, 0x80, 0x80 );
+constexpr ::Color COL_RED                     ( 0x80, 0x00, 0x00 );
+constexpr ::Color COL_RED_FONTCOLOR           ( 0xCE, 0x18, 0x1E );
+constexpr ::Color COL_MAGENTA                 ( 0x80, 0x00, 0x80 );
+constexpr ::Color COL_BROWN                   ( 0x80, 0x80, 0x00 );
+constexpr ::Color COL_GRAY                    ( 0x80, 0x80, 0x80 );
+constexpr ::Color COL_GRAY3                   ( 0xCC, 0xCC, 0xCC );
+constexpr ::Color COL_GRAY7                   ( 0x66, 0x66, 0x66 );
+constexpr ::Color COL_LIGHTGRAY               ( 0xC0, 0xC0, 0xC0 );
+constexpr ::Color COL_LIGHTBLUE               ( 0x00, 0x00, 0xFF );
+constexpr ::Color COL_LIGHTGREEN              ( 0x00, 0xFF, 0x00 );
+constexpr ::Color COL_LIGHTCYAN               ( 0x00, 0xFF, 0xFF );
+constexpr ::Color COL_LIGHTRED                ( 0xFF, 0x00, 0x00 );
+constexpr ::Color COL_LIGHTMAGENTA            ( 0xFF, 0x00, 0xFF );
+constexpr ::Color COL_LIGHTGRAYBLUE           ( 0xE0, 0xE0, 0xFF );
+constexpr ::Color COL_YELLOW                  ( 0xFF, 0xFF, 0x00 );
+constexpr ::Color COL_YELLOW_HIGHLIGHT        ( 0xFF, 0xF2, 0x00 );
+constexpr ::Color COL_WHITE                   ( 0xFF, 0xFF, 0xFF );
+constexpr ::Color COL_TRANSPARENT             ( 0xFF, 0xFF, 0xFF, 0xFF );
+constexpr ::Color COL_AUTO                    ( 0xFF, 0xFF, 0xFF, 0xFF );
+constexpr ::Color COL_AUTHOR1_DARK            ( 198,  146,   0 );
+constexpr ::Color COL_AUTHOR1_NORMAL          ( 255,  255, 158 );
+constexpr ::Color COL_AUTHOR1_LIGHT           ( 255,  255, 195 );
+constexpr ::Color COL_AUTHOR2_DARK            (   6,   70, 162 );
+constexpr ::Color COL_AUTHOR2_NORMAL          ( 216,  232, 255 );
+constexpr ::Color COL_AUTHOR2_LIGHT           ( 233,  242, 255 );
+constexpr ::Color COL_AUTHOR3_DARK            (  87,  157,  28 );
+constexpr ::Color COL_AUTHOR3_NORMAL          ( 218,  248, 193 );
+constexpr ::Color COL_AUTHOR3_LIGHT           ( 226,  250, 207 );
+constexpr ::Color COL_AUTHOR4_DARK            ( 105,   43, 157 );
+constexpr ::Color COL_AUTHOR4_NORMAL          ( 228,  210, 245 );
+constexpr ::Color COL_AUTHOR4_LIGHT           ( 239,  228, 248 );
+constexpr ::Color COL_AUTHOR5_DARK            ( 197,    0,  11 );
+constexpr ::Color COL_AUTHOR5_NORMAL          ( 254,  205, 208 );
+constexpr ::Color COL_AUTHOR5_LIGHT           ( 255,  227, 229 );
+constexpr ::Color COL_AUTHOR6_DARK            (   0,  128, 128 );
+constexpr ::Color COL_AUTHOR6_NORMAL          ( 210,  246, 246 );
+constexpr ::Color COL_AUTHOR6_LIGHT           ( 230,  250, 250 );
+constexpr ::Color COL_AUTHOR7_DARK            ( 140,  132,   0 );
+constexpr ::Color COL_AUTHOR7_NORMAL          ( 237,  252, 163 );
+constexpr ::Color COL_AUTHOR7_LIGHT           ( 242,  254, 181 );
+constexpr ::Color COL_AUTHOR8_DARK            (  53,   85, 107 );
+constexpr ::Color COL_AUTHOR8_NORMAL          ( 211,  222, 232 );
+constexpr ::Color COL_AUTHOR8_LIGHT           ( 226,  234, 241 );
+constexpr ::Color COL_AUTHOR9_DARK            ( 209,  118,   0 );
+constexpr ::Color COL_AUTHOR9_NORMAL          ( 255,  226, 185 );
+constexpr ::Color COL_AUTHOR9_LIGHT           ( 255,  231, 199 );
 
 #endif
 

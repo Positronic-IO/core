@@ -111,6 +111,8 @@ public:
     virtual void SetRedlinePassword(
         /*[in]*/const css::uno::Sequence <sal_Int8>& rNewPassword) override;
 
+    virtual bool IsHideInlineTooltips() override;
+    virtual void SetHideInlineTooltips(bool bSet) override;
 
     //Non Interface methods;
 
@@ -140,6 +142,7 @@ private:
     sal_uInt16 mnAutoFormatRedlnCommentNo;  /**< SeqNo for conjoining of AutoFormat-Redlines.
                                          by the UI. Managed by SwAutoFormat! */
     css::uno::Sequence <sal_Int8 > maRedlinePasswd;
+    bool m_bHideInlineTooltips : 1;
 };
 
 }

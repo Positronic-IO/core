@@ -79,6 +79,7 @@
 #include <vcl/graphicfilter.hxx>
 #include <vcl/pdfextoutdevdata.hxx>
 #include <drawinglayer/primitive2d/maskprimitive2d.hxx>
+#include <basegfx/polygon/b2dpolygontools.hxx>
 
 using namespace com::sun::star;
 
@@ -334,13 +335,13 @@ static void lcl_CalcRect( Point& rPt, Size& rDim, MirrorGraph nMirror )
     if( nMirror == MirrorGraph::Vertical || nMirror == MirrorGraph::Both )
     {
         rPt.setX(rPt.getX() + rDim.Width() -1);
-        rDim.Width() = -rDim.Width();
+        rDim.setWidth( -rDim.Width() );
     }
 
     if( nMirror == MirrorGraph::Horizontal || nMirror == MirrorGraph::Both )
     {
         rPt.setY(rPt.getY() + rDim.Height() -1);
-        rDim.Height() = -rDim.Height();
+        rDim.setHeight( -rDim.Height() );
     }
 }
 
@@ -382,7 +383,7 @@ void SwNoTextFrame::GetGrfArea( SwRect &rRect, SwRect* pOrigRect ) const
     Size aOrigSz( static_cast<const SwNoTextNode*>(GetNode())->GetTwipSize() );
     if ( !aOrigSz.Width() )
     {
-        aOrigSz.Width() = aFramePrintArea.Width();
+        aOrigSz.setWidth( aFramePrintArea.Width() );
         nLeftCrop  = -rCrop.GetLeft();
         nRightCrop = -rCrop.GetRight();
     }
@@ -405,7 +406,7 @@ void SwNoTextFrame::GetGrfArea( SwRect &rRect, SwRect* pOrigRect ) const
 
     if( !aOrigSz.Height() )
     {
-        aOrigSz.Height() = aFramePrintArea.Height();
+        aOrigSz.setHeight( aFramePrintArea.Height() );
         nTopCrop   = -rCrop.GetTop();
         nBottomCrop= -rCrop.GetBottom();
     }
@@ -434,17 +435,17 @@ void SwNoTextFrame::GetGrfArea( SwRect &rRect, SwRect* pOrigRect ) const
     if ( nLeftCrop > 0 )
     {
         aVisPt.setX(aVisPt.getX() + nLeftCrop);
-        aVisSz.Width() -= nLeftCrop;
+        aVisSz.AdjustWidth( -nLeftCrop );
     }
     if ( nTopCrop > 0 )
     {
         aVisPt.setY(aVisPt.getY() + nTopCrop);
-        aVisSz.Height() -= nTopCrop;
+        aVisSz.AdjustHeight( -nTopCrop );
     }
     if ( nRightCrop > 0 )
-        aVisSz.Width() -= nRightCrop;
+        aVisSz.AdjustWidth( -nRightCrop );
     if ( nBottomCrop > 0 )
-        aVisSz.Height() -= nBottomCrop;
+        aVisSz.AdjustHeight( -nBottomCrop );
 
     rRect.Pos  ( aVisPt );
     rRect.SSize( aVisSz );
@@ -454,9 +455,9 @@ void SwNoTextFrame::GetGrfArea( SwRect &rRect, SwRect* pOrigRect ) const
     {
         Size aTmpSz( aGrfSz );
         aGrfPt.setX(aGrfPt.getX() + nLeftCrop);
-        aTmpSz.Width() -= nLeftCrop + nRightCrop;
+        aTmpSz.AdjustWidth( -(nLeftCrop + nRightCrop) );
         aGrfPt.setY(aGrfPt.getY() + nTopCrop);
-        aTmpSz.Height()-= nTopCrop + nBottomCrop;
+        aTmpSz.AdjustHeight( -(nTopCrop + nBottomCrop) );
 
         if( MirrorGraph::Dont != nMirror )
             lcl_CalcRect( aGrfPt, aTmpSz, nMirror );
@@ -1022,8 +1023,33 @@ void paintGraphicUsingPrimitivesHelper(
 
             if(0 != aClip.count())
             {
+                // tdf#114076: Expand ClipRange to next PixelBound
+                // Do this by going to basegfx::B2DRange, adding a
+                // single pixel size and using floor/ceil to go to
+                // full integer (as needed for pixels). Also need
+                // to go back to basegfx::B2DPolyPolygon for the
+                // creation of the needed MaskPrimitive2D.
+                // The general problem is that Writer is scrolling
+                // using blitting the unchanged parts, this forces
+                // this part of the scroll to pixel coordinate steps,
+                // while the ViewTransformation for paint nowadays has
+                // a sub-pixel precision. This results in an offset
+                // up to one pixel in radius. To solve this for now,
+                // we need to expand to the next outer pixel bound.
+                // Hopefully in the future we will someday be able to
+                // stay on the full available precision, but this
+                // will need a change in the repaint/scroll paradigm.
+                const basegfx::B2DRange aClipRange(aClip.getB2DRange());
+                const basegfx::B2DVector aSinglePixelXY(rOutputDevice.GetInverseViewTransformation() * basegfx::B2DVector(1.0, 1.0));
+                const basegfx::B2DRange aExpandedClipRange(
+                    floor(aClipRange.getMinX() - aSinglePixelXY.getX()),
+                    floor(aClipRange.getMinY() - aSinglePixelXY.getY()),
+                    ceil(aClipRange.getMaxX() + aSinglePixelXY.getX()),
+                    ceil(aClipRange.getMaxY() + aSinglePixelXY.getY()));
+
                 aContent[0] = new drawinglayer::primitive2d::MaskPrimitive2D(
-                    aClip,
+                    basegfx::B2DPolyPolygon(
+                        basegfx::utils::createPolygonFromRect(aExpandedClipRange)),
                     aContent);
             }
         }

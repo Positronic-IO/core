@@ -31,9 +31,9 @@
 #include <svx/xtable.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <unotools/pathoptions.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
+#include <vcl/weld.hxx>
 #include <svx/svxdlg.hxx>
 #include <helpids.h>
 #include <dialmgr.hxx>
@@ -412,7 +412,7 @@ void ColorConfigWindow_Impl::Entry::Update (
 ) {
     Color aColor(rValue.getColor());
     if (rValue.getColor() == rValue.getDefaultColor())
-        m_pColorList->SelectEntry(Color(COL_AUTO));
+        m_pColorList->SelectEntry(COL_AUTO);
     else
         m_pColorList->SelectEntry(aColor);
 }
@@ -431,7 +431,7 @@ void ColorConfigWindow_Impl::Entry::ColorChanged (
 ) {
     Color aColor = m_pColorList->GetSelectEntryColor();
     rValue.setColor(aColor.GetColor());
-    if (aColor.GetColor() == COL_AUTO)
+    if (aColor == COL_AUTO)
     {
         rValue.setColor(rValue.getDefaultColor());
     }
@@ -455,10 +455,10 @@ void ColorConfigWindow_Impl::dispose()
     m_pGrid.clear();
     m_pVScroll.clear();
     m_pHeaderHB.clear();
-    for (auto i = vChapters.begin(); i != vChapters.end(); ++i)
-        (*i)->dispose();
-    for (auto i = vEntries.begin(); i != vEntries.end(); ++i)
-        (*i)->dispose();
+    for (auto const& chapter : vChapters)
+        chapter->dispose();
+    for (auto const& entry : vEntries)
+        entry->dispose();
     disposeBuilder();
     VclContainer::dispose();
 }
@@ -472,7 +472,7 @@ void ColorConfigWindow_Impl::setAllocation(const Size &rAllocation)
 {
     Point aChildPos(0, 0);
     Size aChildSize(getLayoutRequisition(*m_pGrid));
-    aChildSize.Width() = rAllocation.Width();
+    aChildSize.setWidth( rAllocation.Width() );
     setLayoutPosSize(*m_pGrid, aChildPos, aChildSize);
     AdjustScrollBar();
     AdjustHeaderBar();
@@ -546,11 +546,10 @@ void ColorConfigWindow_Impl::CreateEntries()
 
 void ColorConfigWindow_Impl::SetAppearance ()
 {
-    Color TempColor(COL_TRANSPARENT);
-    Wallpaper const aTransparentWall(TempColor);
+    Wallpaper const aTransparentWall(COL_TRANSPARENT);
     StyleSettings const& rStyleSettings = GetSettings().GetStyleSettings();
     Color const aBackColor = rStyleSettings.GetHighContrastMode() ?
-        rStyleSettings.GetShadowColor() : Color(COL_LIGHTGRAY);
+        rStyleSettings.GetShadowColor() : COL_LIGHTGRAY;
     Wallpaper const aBackWall(aBackColor);
     for (size_t i = 0; i != vChapters.size(); ++i)
         vChapters[i]->Show(aBackWall);
@@ -566,7 +565,7 @@ void ColorConfigWindow_Impl::SetAppearance ()
         aRCheckCol.Invert();
         // if inversion didn't work (gray) then it's set to black
         if (aRCheckCol == aWinCol)
-            aRCheckCol = Color(COL_BLACK);
+            aRCheckCol = COL_BLACK;
         // setting new text color for each entry
         for (size_t i = 0; i != vEntries.size(); ++i)
             vEntries[i]->SetTextColor(aRCheckCol);
@@ -746,7 +745,7 @@ void ColorConfigWindow_Impl::DataChanged (DataChangedEvent const& rDCEvt)
     {
         StyleSettings const& rStyleSettings = GetSettings().GetStyleSettings();
         bool const bHighContrast = rStyleSettings.GetHighContrastMode();
-        Wallpaper const aBackWall(Color(bHighContrast ? COL_TRANSPARENT : COL_LIGHTGRAY));
+        Wallpaper const aBackWall(bHighContrast ? COL_TRANSPARENT : COL_LIGHTGRAY);
         for (auto const & i: vChapters)
             i->SetBackground(aBackWall);
         SetBackground(Wallpaper(rStyleSettings.GetWindowColor()));
@@ -1130,9 +1129,11 @@ IMPL_LINK(SvxColorOptionsTabPage, SaveDeleteHdl_Impl, Button*, pButton, void )
     else
     {
         DBG_ASSERT(m_pColorSchemeLB->GetEntryCount() > 1, "don't delete the last scheme");
-        ScopedVclPtrInstance< MessageDialog > aQuery(pButton, CuiResId(RID_SVXSTR_COLOR_CONFIG_DELETE), VclMessageType::Question, VclButtonsType::YesNo);
-        aQuery->SetText(CuiResId(RID_SVXSTR_COLOR_CONFIG_DELETE_TITLE));
-        if(RET_YES == aQuery->Execute())
+        std::unique_ptr<weld::MessageDialog> xQuery(Application::CreateMessageDialog(pButton->GetFrameWeld(),
+                                                    VclMessageType::Question, VclButtonsType::YesNo,
+                                                    CuiResId(RID_SVXSTR_COLOR_CONFIG_DELETE)));
+        xQuery->set_title(CuiResId(RID_SVXSTR_COLOR_CONFIG_DELETE_TITLE));
+        if (RET_YES == xQuery->run())
         {
             OUString sDeleteScheme(m_pColorSchemeLB->GetSelectedEntry());
             m_pColorSchemeLB->RemoveEntry(m_pColorSchemeLB->GetSelectedEntryPos());

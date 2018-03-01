@@ -55,7 +55,7 @@
 #include <editeng/lrspitem.hxx>
 #include <unotools/textsearch.hxx>
 #include <editeng/unolingu.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/msgbox.hxx>
 #include <editeng/tstpitem.hxx>
 #include <sfx2/event.hxx>
@@ -111,7 +111,6 @@
 #include <globals.hrc>
 #include <app.hrc>
 #include <fmtclds.hxx>
-#include <helpids.h>
 #include <sfx2/templatedlg.hxx>
 #include <dbconfig.hxx>
 #include <dbmgr.hxx>
@@ -229,8 +228,10 @@ ErrCode SwView::InsertGraphic( const OUString &rPath, const OUString &rFilter,
             const sal_uInt16 aRotation = aMetadata.getRotation();
             if (aRotation != 0)
             {
-                ScopedVclPtrInstance< MessageDialog > aQueryBox( GetWindow(),"QueryRotateIntoStandardOrientationDialog","modules/swriter/ui/queryrotateintostandarddialog.ui");
-                if (aQueryBox->Execute() == RET_YES)
+                vcl::Window* pWin = GetWindow();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr, "modules/swriter/ui/queryrotateintostandarddialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("QueryRotateIntoStandardOrientationDialog"));
+                if (xQueryBox->run() == RET_YES)
                 {
                     GraphicNativeTransform aTransform( aGraphic );
                     aTransform.rotate( aRotation );
@@ -427,8 +428,9 @@ bool SwView::InsertGraphicDlg( SfxRequest& rReq )
             // really store as link only?
             if( bAsLink && SvtMiscOptions().ShowLinkWarningDialog() )
             {
-                ScopedVclPtrInstance< SvxLinkWarningDialog > aWarnDlg(GetWindow(),pFileDlg->GetPath());
-                if( aWarnDlg->Execute() != RET_OK )
+                vcl::Window* pWin = GetWindow();
+                SvxLinkWarningDialog aWarnDlg(pWin ? pWin->GetFrameWeld() : nullptr, pFileDlg->GetPath());
+                if(aWarnDlg.run() != RET_OK)
                     bAsLink=false; // don't store as link
             }
         }
@@ -483,8 +485,11 @@ bool SwView::InsertGraphicDlg( SfxRequest& rReq )
         {
             if( bShowError )
             {
-                ScopedVclPtrInstance< MessageDialog > aInfoBox( GetWindow(), SwResId(pResId), VclMessageType::Info);
-                aInfoBox->Execute();
+                vcl::Window* pWin = GetWindow();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SwResId(pResId)));
+                xInfoBox->run();
             }
             rReq.Ignore();
         }
@@ -1386,9 +1391,9 @@ void SwView::StateStatusLine(SfxItemSet &rSet)
                         const SwRect aPageRect( m_pWrtShell->GetAnyCurRect( CurRectType::PageCalc ) );
                         const SwRect aRootRect( m_pWrtShell->GetAnyCurRect( CurRectType::PagesArea ) ); // width of columns
                         Size aPageSize( aPageRect.SSize() );
-                        aPageSize.Width() += pMgr->HasNotes() && pMgr->ShowNotes() ?
+                        aPageSize.AdjustWidth(pMgr->HasNotes() && pMgr->ShowNotes() ?
                                              pMgr->GetSidebarWidth() + pMgr->GetSidebarBorderWidth() :
-                                             0;
+                                             0 );
 
                         Size aRootSize( aRootRect.SSize() );
 
@@ -1399,7 +1404,7 @@ void SwView::StateStatusLine(SfxItemSet &rSet)
                         const long nOf = pVOpt->GetDocumentBorder() * 2;
                         long nTmpWidth = bAutomaticViewLayout ? aPageSize.Width() : aRootSize.Width();
                         nTmpWidth += nOf;
-                        aPageSize.Height() += nOf;
+                        aPageSize.AdjustHeight(nOf );
                         long nFac = aWindowSize.Width() * 100 / nTmpWidth;
 
                         long nVisPercent = aWindowSize.Height() * 100 / aPageSize.Height();
@@ -2225,8 +2230,10 @@ long SwView::InsertMedium( sal_uInt16 nSlotId, SfxMedium* pMedium, sal_Int16 nVe
 
             if (!bCompare && !nFound)
             {
-                vcl::Window* pWin = &GetEditWin();
-                ScopedVclPtrInstance<MessageDialog>(pWin, SwResId(STR_NO_MERGE_ENTRY), VclMessageType::Info)->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetEditWin().GetFrameWeld(),
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SwResId(STR_NO_MERGE_ENTRY)));
+                xInfoBox->run();
             }
             if( nRet==2 && xDocSh.is() )
                 xDocSh->DoClose();
@@ -2279,11 +2286,10 @@ void SwView::GenerateFormLetter(bool bUseCurrentDocument)
             if ( lcl_NeedAdditionalDataSource( xDBContext ) )
             {
                 // no data sources are available - create a new one
-                ScopedVclPtrInstance<MessageDialog> aQuery(&GetViewFrame()->GetWindow(),
-                    "DataSourcesUnavailableDialog",
-                    "modules/swriter/ui/datasourcesunavailabledialog.ui");
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetViewFrame()->GetWindow().GetFrameWeld(), "modules/swriter/ui/datasourcesunavailabledialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("DataSourcesUnavailableDialog"));
                 // no cancel allowed
-                if (RET_OK != aQuery->Execute())
+                if (RET_OK != xQuery->run())
                     return;
                 bCallAddressPilot = true;
             }
@@ -2328,12 +2334,11 @@ void SwView::GenerateFormLetter(bool bUseCurrentDocument)
             OUString sSource;
             if(!GetWrtShell().IsFieldDataSourceAvailable(sSource))
             {
-                ScopedVclPtrInstance<MessageDialog> aWarning(&GetViewFrame()->GetWindow(),
-                    "WarnDataSourceDialog",
-                    "modules/swriter/ui/warndatasourcedialog.ui");
-                OUString sTmp(aWarning->get_primary_text());
-                aWarning->set_primary_text(sTmp.replaceFirst("%1", sSource));
-                if (RET_OK == aWarning->Execute())
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetViewFrame()->GetWindow().GetFrameWeld(), "modules/swriter/ui/warndatasourcedialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xWarning(xBuilder->weld_message_dialog("WarnDataSourceDialog"));
+                OUString sTmp(xWarning->get_primary_text());
+                xWarning->set_primary_text(sTmp.replaceFirst("%1", sSource));
+                if (RET_OK == xWarning->run())
                 {
                     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
                     if ( pFact )

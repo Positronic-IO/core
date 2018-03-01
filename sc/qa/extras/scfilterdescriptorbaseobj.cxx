@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/sheet/sheetfilterdescriptor.hxx>
 #include <test/sheet/xsheetfilterdescriptor.hxx>
 
 #include <com/sun/star/container/XIndexAccess.hpp>
@@ -22,9 +23,9 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-#define NUMBER_OF_TESTS 1
-
-class ScFilterDescriptorBaseObj : public CalcUnoApiTest, public apitest::XSheetFilterDescriptor
+class ScFilterDescriptorBaseObj : public CalcUnoApiTest,
+                                  public apitest::SheetFilterDescriptor,
+                                  public apitest::XSheetFilterDescriptor
 {
 public:
     ScFilterDescriptorBaseObj();
@@ -36,18 +37,17 @@ public:
 
     CPPUNIT_TEST_SUITE(ScFilterDescriptorBaseObj);
 
+    // SheetFilterDescriptor
+    CPPUNIT_TEST(testSheetFilterDescriptorProperties);
+
     // XSheetFilterDescriptor
     CPPUNIT_TEST(testGetSetFilterFields);
 
     CPPUNIT_TEST_SUITE_END();
 
 private:
-    static sal_Int32 nTest;
-    static uno::Reference< lang::XComponent > mxComponent;
+    uno::Reference< lang::XComponent > mxComponent;
 };
-
-sal_Int32 ScFilterDescriptorBaseObj::nTest = 0;
-uno::Reference< lang::XComponent > ScFilterDescriptorBaseObj::mxComponent;
 
 ScFilterDescriptorBaseObj::ScFilterDescriptorBaseObj():
     CalcUnoApiTest("/sc/qa/extras/testdocuments")
@@ -56,10 +56,6 @@ ScFilterDescriptorBaseObj::ScFilterDescriptorBaseObj():
 
 uno::Reference< uno::XInterface > ScFilterDescriptorBaseObj::init()
 {
-    // create a calc document
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop("private:factory/scalc");
-
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
@@ -77,19 +73,14 @@ uno::Reference< uno::XInterface > ScFilterDescriptorBaseObj::init()
 
 void ScFilterDescriptorBaseObj::setUp()
 {
-    nTest++;
-    CPPUNIT_ASSERT(nTest <= NUMBER_OF_TESTS);
     CalcUnoApiTest::setUp();
+    // create a calc document
+    mxComponent = loadFromDesktop("private:factory/scalc");
 }
 
 void ScFilterDescriptorBaseObj::tearDown()
 {
-    if (nTest == NUMBER_OF_TESTS)
-    {
-        closeDocument(mxComponent);
-        mxComponent.clear();
-    }
-
+    closeDocument(mxComponent);
     CalcUnoApiTest::tearDown();
 }
 

@@ -22,11 +22,6 @@
 
 #include <sal/macros.h>
 
-// necessary to include system headers without warnings
-#ifdef _MSC_VER
-#pragma warning(disable:4668 4917)
-#endif
-
 #include <unotools/moduleoptions.hxx>
 #include <unotools/dynamicmenuoptions.hxx>
 
@@ -640,7 +635,7 @@ void OnDrawItem(HWND /*hwnd*/, LPDRAWITEMSTRUCT lpdis)
 
     HBRUSH hbrIcon = CreateSolidBrush( GetSysColor( COLOR_GRAYTEXT ) );
 
-    DrawStateW( lpdis->hDC, hbrIcon, nullptr, reinterpret_cast<LPARAM>(hIcon), (WPARAM)0, x, y+(height-cy)/2, 0, 0, DST_ICON | (fDisabled ? (fSelected ? DSS_MONO : DSS_DISABLED) : DSS_NORMAL) );
+    DrawStateW( lpdis->hDC, hbrIcon, nullptr, reinterpret_cast<LPARAM>(hIcon), WPARAM(0), x, y+(height-cy)/2, 0, 0, DST_ICON | (fDisabled ? (fSelected ? DSS_MONO : DSS_DISABLED) : DSS_NORMAL) );
 
     DeleteObject( hbrIcon );
 
@@ -663,7 +658,7 @@ void OnDrawItem(HWND /*hwnd*/, LPDRAWITEMSTRUCT lpdis)
     SIZE    size;
     GetTextExtentPointW( lpdis->hDC, o3tl::toW(pMyItem->text.getStr()), pMyItem->text.getLength(), &size );
 
-    DrawStateW( lpdis->hDC, nullptr, nullptr, reinterpret_cast<LPARAM>(pMyItem->text.getStr()), (WPARAM)0, aRect.left, aRect.top + (height - size.cy)/2, 0, 0, DST_TEXT | (fDisabled && !fSelected ? DSS_DISABLED : DSS_NORMAL) );
+    DrawStateW( lpdis->hDC, nullptr, nullptr, reinterpret_cast<LPARAM>(pMyItem->text.getStr()), WPARAM(0), aRect.left, aRect.top + (height - size.cy)/2, 0, 0, DST_TEXT | (fDisabled && !fSelected ? DSS_DISABLED : DSS_NORMAL) );
 
     // Restore the original font and colors.
     DeleteObject( SelectObject( lpdis->hDC, hbrOld ) );

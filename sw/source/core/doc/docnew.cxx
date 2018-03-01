@@ -38,6 +38,8 @@
 #include <svx/svdogrp.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <editeng/forbiddencharacterstable.hxx>
+#include <editeng/ulspitem.hxx>
+#include <editeng/lrspitem.hxx>
 #include <svl/zforlist.hxx>
 #include <unotools/lingucfg.hxx>
 #include <svx/svdpage.hxx>
@@ -252,7 +254,6 @@ SwDoc::SwDoc()
     mpURLStateChgd( nullptr ),
     mpNumberFormatter( nullptr ),
     mpNumRuleTable( new SwNumRuleTable ),
-    mpPgPViewPrtData( nullptr ),
     mpExtInputRing( nullptr ),
     mpStyleAccess( nullptr ),
     mpLayoutCache( nullptr ),
@@ -346,7 +347,8 @@ SwDoc::SwDoc()
 
 #if HAVE_FEATURE_DBCONNECTIVITY
     // Create DBManager
-    mpDBManager = new SwDBManager(this);
+    m_pOwnDBManager.reset(new SwDBManager(this));
+    m_pDBManager = m_pOwnDBManager.get();
 #endif
 
     // create TOXTypes
@@ -405,7 +407,7 @@ SwDoc::~SwDoc()
         ClrContourCache();
     }
 
-    delete mpPgPViewPrtData;
+    m_pPgPViewPrtData.reset();
 
     mbDtor = true;
 
@@ -497,8 +499,8 @@ SwDoc::~SwDoc()
 
     // Delete for Collections
     // So that we get rid of the dependencies
-    mpFootnoteInfo->ReleaseCollection();
-    mpEndNoteInfo->ReleaseCollection();
+    mpFootnoteInfo->EndListeningAll();
+    mpEndNoteInfo->EndListeningAll();
 
     assert(mpDfltTextFormatColl == (*mpTextFormatCollTable)[0]
             && "Default-Text-Collection must always be at the start");
@@ -534,22 +536,22 @@ SwDoc::~SwDoc()
 #if HAVE_FEATURE_DBCONNECTIVITY
     // On load, SwDBManager::setEmbeddedName() may register a data source.
     // If we have an embedded one, then sDataSource points to the registered name, so revoke it here.
-    if (!mpDBManager->getEmbeddedName().isEmpty() && !maDBData.sDataSource.isEmpty())
+    if (!m_pOwnDBManager->getEmbeddedName().isEmpty() && !maDBData.sDataSource.isEmpty())
     {
         // Remove the revoke listener here first, so that we don't remove the data source from the document.
-        mpDBManager->releaseRevokeListener();
+        m_pOwnDBManager->releaseRevokeListener();
         SwDBManager::RevokeDataSource(maDBData.sDataSource);
-        SwDBManager::RevokeDataSource(mpDBManager->getEmbeddedName());
+        SwDBManager::RevokeDataSource(m_pOwnDBManager->getEmbeddedName());
     }
-    else if (!mpDBManager->getEmbeddedName().isEmpty())
+    else if (!m_pOwnDBManager->getEmbeddedName().isEmpty())
     {
         // Remove the revoke listener here first, so that we don't remove the data source from the document.
-        mpDBManager->releaseRevokeListener();
+        m_pOwnDBManager->releaseRevokeListener();
         // Remove connections which was committed but not used.
-        mpDBManager->RevokeNotUsedConnections();
+        m_pOwnDBManager->RevokeNotUsedConnections();
     }
 
-    DELETEZ( mpDBManager );
+    m_pOwnDBManager.reset();
 #endif
 
     // All Flys need to be destroyed before the Drawing Model,
@@ -710,8 +712,8 @@ void SwDoc::ClearDoc()
 
     // Delete for Collections
     // So that we get rid of the dependencies
-    mpFootnoteInfo->ReleaseCollection();
-    mpEndNoteInfo->ReleaseCollection();
+    mpFootnoteInfo->EndListeningAll();
+    mpEndNoteInfo->EndListeningAll();
 
     // Optimization: Based on the fact that Standard is always 2nd in the
     // array, we should delete it as the last. With this we avoid
@@ -751,13 +753,19 @@ void SwDoc::SetPreviewPrtData( const SwPagePreviewPrtData* pNew )
 {
     if( pNew )
     {
-        if( mpPgPViewPrtData )
-            *mpPgPViewPrtData = *pNew;
+        if (m_pPgPViewPrtData)
+        {
+            *m_pPgPViewPrtData = *pNew;
+        }
         else
-            mpPgPViewPrtData = new SwPagePreviewPrtData( *pNew );
+        {
+            m_pPgPViewPrtData.reset(new SwPagePreviewPrtData(*pNew));
+        }
     }
-    else if( mpPgPViewPrtData )
-        DELETEZ( mpPgPViewPrtData );
+    else if (m_pPgPViewPrtData)
+    {
+        m_pPgPViewPrtData.reset();
+    }
     getIDocumentState().SetModified();
 }
 

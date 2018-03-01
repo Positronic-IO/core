@@ -21,7 +21,6 @@
 #include <extended/AccessibleGridControlTableCell.hxx>
 #include <svtools/accessibletable.hxx>
 #include <tools/gen.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 
 namespace accessibility
@@ -68,12 +67,6 @@ namespace accessibility
             aAccName = _rTable.GetAccessibleObjectName( TCTYPE_COLUMNHEADERCELL, 0, _nRowPos );
         implSetName( aAccName );
     }
-
-
-    AccessibleGridControlCell::~AccessibleGridControlCell()
-    {
-    }
-
 
     void SAL_CALL AccessibleGridControlCell::grabFocus()
     {

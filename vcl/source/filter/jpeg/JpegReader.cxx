@@ -221,10 +221,9 @@ bool JPEGReader::CreateBitmap(JPEGCreateBitmapParam const & rParam)
 
         if (((1 == nUnit) || (2 == nUnit)) && rParam.X_density && rParam.Y_density )
         {
-            Point       aEmptyPoint;
             Fraction    aFractX( 1, rParam.X_density );
             Fraction    aFractY( 1, rParam.Y_density );
-            MapMode     aMapMode( nUnit == 1 ? MapUnit::MapInch : MapUnit::MapCM, aEmptyPoint, aFractX, aFractY );
+            MapMode     aMapMode( nUnit == 1 ? MapUnit::MapInch : MapUnit::MapCM, Point(), aFractX, aFractY );
             Size        aPrefSize = OutputDevice::LogicToLogic(aSize, aMapMode, MapMode(MapUnit::Map100thMM));
 
             mpBitmap->SetPrefSize(aPrefSize);
@@ -243,7 +242,7 @@ Graphic JPEGReader::CreateIntermediateGraphic(long nLines)
     if (!mnLastLines)
     {
         mpIncompleteAlpha.reset(new Bitmap(aSizePixel, 1));
-        mpIncompleteAlpha->Erase(Color(COL_WHITE));
+        mpIncompleteAlpha->Erase(COL_WHITE);
     }
 
     if (nLines && (nLines < aSizePixel.Height()))
@@ -254,7 +253,7 @@ Graphic JPEGReader::CreateIntermediateGraphic(long nLines)
         {
             {
                 Bitmap::ScopedWriteAccess pAccess(*mpIncompleteAlpha);
-                pAccess->SetFillColor(Color(COL_BLACK));
+                pAccess->SetFillColor(COL_BLACK);
                 pAccess->FillRect(tools::Rectangle(Point(0, mnLastLines), Size(pAccess->Width(), nNewLines)));
             }
 

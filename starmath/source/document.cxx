@@ -213,7 +213,7 @@ OUString const & SmDocShell::GetAccessibleText()
 
 void SmDocShell::Parse()
 {
-    delete mpTree;
+    mpTree.reset();
     ReplaceBadChars();
     mpTree = maParser.Parse(maText);
     mnModifyCount++;     //! see comment for SID_GAPHIC_SM in SmDocShell::GetState
@@ -248,7 +248,7 @@ void SmDocShell::ArrangeFormula()
         }
     }
     OSL_ENSURE(pOutDev->GetMapMode().GetMapUnit() == MapUnit::Map100thMM,
-               "Sm : falscher MapMode");
+               "Sm : wrong MapMode");
 
     const SmFormat &rFormat = GetFormat();
     mpTree->Prepare(rFormat, *this, 0);
@@ -385,8 +385,8 @@ void SmDocShell::DrawFormula(OutputDevice &rDev, Point &rPosition, bool bDrawSel
     // VisArea (i.e. the size within the client) and the current size.
     // Idea: The difference could be adapted with SmNod::SetSize (no long-term solution)
 
-    rPosition.X() += maFormat.GetDistance( DIS_LEFTSPACE );
-    rPosition.Y() += maFormat.GetDistance( DIS_TOPSPACE  );
+    rPosition.AdjustX(maFormat.GetDistance( DIS_LEFTSPACE ) );
+    rPosition.AdjustY(maFormat.GetDistance( DIS_TOPSPACE  ) );
 
     //! in case of high contrast-mode (accessibility option!)
     //! the draw mode needs to be set to default, because when imbedding
@@ -412,11 +412,11 @@ void SmDocShell::DrawFormula(OutputDevice &rDev, Point &rPosition, bool bDrawSel
     //Set selection if any
     if(mpCursor && bDrawSelection){
         mpCursor->AnnotateSelection();
-        SmSelectionDrawingVisitor(rDev, mpTree, rPosition);
+        SmSelectionDrawingVisitor(rDev, mpTree.get(), rPosition);
     }
 
     //Drawing using visitor
-    SmDrawingVisitor(rDev, rPosition, mpTree);
+    SmDrawingVisitor(rDev, rPosition, mpTree.get());
 
 
     rDev.SetLayoutMode( nLayoutMode );
@@ -439,15 +439,15 @@ Size SmDocShell::GetSize()
         aRet = mpTree->GetSize();
 
         if ( !aRet.Width() )
-            aRet.Width() = 2000;
+            aRet.setWidth( 2000 );
         else
-            aRet.Width()  += maFormat.GetDistance( DIS_LEFTSPACE ) +
-                             maFormat.GetDistance( DIS_RIGHTSPACE );
+            aRet.AdjustWidth(maFormat.GetDistance( DIS_LEFTSPACE ) +
+                             maFormat.GetDistance( DIS_RIGHTSPACE ) );
         if ( !aRet.Height() )
-            aRet.Height() = 1000;
+            aRet.setHeight( 1000 );
         else
-            aRet.Height() += maFormat.GetDistance( DIS_TOPSPACE ) +
-                             maFormat.GetDistance( DIS_BOTTOMSPACE );
+            aRet.AdjustHeight(maFormat.GetDistance( DIS_TOPSPACE ) +
+                             maFormat.GetDistance( DIS_BOTTOMSPACE ) );
     }
 
     return aRet;
@@ -459,7 +459,7 @@ void SmDocShell::InvalidateCursor(){
 
 SmCursor& SmDocShell::GetCursor(){
     if(!mpCursor)
-        mpCursor.reset(new SmCursor(mpTree, this));
+        mpCursor.reset(new SmCursor(mpTree.get(), this));
     return *mpCursor;
 }
 
@@ -489,8 +489,8 @@ SmPrinterAccess::SmPrinterAccess( SmDocShell &rDocShell )
                 MapMode aMap( pPrinter->GetMapMode() );
                 aMap.SetMapUnit( MapUnit::Map100thMM );
                 Point aTmp( aMap.GetOrigin() );
-                aTmp.X() = OutputDevice::LogicToLogic( aTmp.X(), eOld, MapUnit::Map100thMM );
-                aTmp.Y() = OutputDevice::LogicToLogic( aTmp.Y(), eOld, MapUnit::Map100thMM );
+                aTmp.setX( OutputDevice::LogicToLogic( aTmp.X(), eOld, MapUnit::Map100thMM ) );
+                aTmp.setY( OutputDevice::LogicToLogic( aTmp.Y(), eOld, MapUnit::Map100thMM ) );
                 aMap.SetOrigin( aTmp );
                 pPrinter->SetMapMode( aMap );
             }
@@ -514,8 +514,8 @@ SmPrinterAccess::SmPrinterAccess( SmDocShell &rDocShell )
                 MapMode aMap( pRefDev->GetMapMode() );
                 aMap.SetMapUnit( MapUnit::Map100thMM );
                 Point aTmp( aMap.GetOrigin() );
-                aTmp.X() = OutputDevice::LogicToLogic( aTmp.X(), eOld, MapUnit::Map100thMM );
-                aTmp.Y() = OutputDevice::LogicToLogic( aTmp.Y(), eOld, MapUnit::Map100thMM );
+                aTmp.setX( OutputDevice::LogicToLogic( aTmp.X(), eOld, MapUnit::Map100thMM ) );
+                aTmp.setY( OutputDevice::LogicToLogic( aTmp.Y(), eOld, MapUnit::Map100thMM ) );
                 aMap.SetOrigin( aTmp );
                 pRefDev->SetMapMode( aMap );
             }
@@ -611,7 +611,6 @@ void SmDocShell::Repaint()
 
 SmDocShell::SmDocShell( SfxModelFlags i_nSfxCreationFlags )
     : SfxObjectShell(i_nSfxCreationFlags)
-    , mpTree(nullptr)
     , mpEditEngineItemPool(nullptr)
     , mpEditEngine(nullptr)
     , mpPrinter(nullptr)
@@ -642,7 +641,6 @@ SmDocShell::~SmDocShell()
     mpCursor.reset();
     delete mpEditEngine;
     SfxItemPool::Free(mpEditEngineItemPool);
-    delete mpTree;
     mpPrinter.disposeAndClear();
 }
 
@@ -657,8 +655,7 @@ bool SmDocShell::ConvertFrom(SfxMedium &rMedium)
     {
         if (mpTree)
         {
-            delete mpTree;
-            mpTree = nullptr;
+            mpTree.reset();
             InvalidateCursor();
         }
         Reference<css::frame::XModel> xModel(GetModel());
@@ -867,7 +864,7 @@ void SmDocShell::writeFormulaOoxml(
         Parse();
     if( mpTree )
         ArrangeFormula();
-    SmOoxmlExport aEquation(mpTree, version, documentType);
+    SmOoxmlExport aEquation(mpTree.get(), version, documentType);
     aEquation.ConvertFromStarMath( pSerializer );
 }
 
@@ -877,7 +874,7 @@ void SmDocShell::writeFormulaRtf(OStringBuffer& rBuffer, rtl_TextEncoding nEncod
         Parse();
     if (mpTree)
         ArrangeFormula();
-    SmRtfExport aEquation(mpTree);
+    SmRtfExport aEquation(mpTree.get());
     aEquation.ConvertFromStarMath(rBuffer, nEncoding);
 }
 
@@ -1223,8 +1220,8 @@ void SmDocShell::SetVisArea(const tools::Rectangle & rVisArea)
 
     aNewRect.SetPos(Point());
 
-    if (! aNewRect.Right()) aNewRect.Right() = 2000;
-    if (! aNewRect.Bottom()) aNewRect.Bottom() = 1000;
+    if (! aNewRect.Right()) aNewRect.SetRight( 2000 );
+    if (! aNewRect.Bottom()) aNewRect.SetBottom( 1000 );
 
     bool bIsEnabled = IsEnableSetModified();
     if ( bIsEnabled )
@@ -1287,7 +1284,7 @@ void SmDocShell::SetModified(bool bModified)
 
 bool SmDocShell::WriteAsMathType3( SfxMedium& rMedium )
 {
-    MathType aEquation( maText, mpTree );
+    MathType aEquation( maText, mpTree.get() );
     return aEquation.ConvertFromStarMath( rMedium );
 }
 

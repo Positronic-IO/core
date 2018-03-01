@@ -65,11 +65,6 @@ VCLXAccessibleEdit::VCLXAccessibleEdit( VCLXWindow* pVCLWindow )
 }
 
 
-VCLXAccessibleEdit::~VCLXAccessibleEdit()
-{
-}
-
-
 void VCLXAccessibleEdit::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
 {
     switch ( rVclWindowEvent.GetId() )
@@ -223,6 +218,8 @@ sal_Int16 VCLXAccessibleEdit::getAccessibleRole(  )
     VclPtr< Edit > pEdit = GetAs< Edit >();
     if ( pEdit && ( ( pEdit->GetStyle() & WB_PASSWORD ) || pEdit->GetEchoChar() ) )
         nRole = AccessibleRole::PASSWORD_TEXT;
+    else if ( pEdit && ( pEdit->GetStyle() & WB_READONLY ) )
+        nRole = AccessibleRole::LABEL;
     else
         nRole = AccessibleRole::TEXT;
 
@@ -322,7 +319,7 @@ Sequence< PropertyValue > VCLXAccessibleEdit::getCharacterAttributes( sal_Int32 
             {
                 if (aValue.Name == "CharColor")
                 {
-                    aValue.Value <<= static_cast< sal_Int32 >(COLORDATA_RGB(pFontColor->GetColor().GetColor()));
+                    aValue.Value <<= pFontColor->GetColor().GetRGBColor();
                     break;
                 }
             }

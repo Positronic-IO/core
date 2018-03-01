@@ -1041,11 +1041,10 @@ FmXGridPeer::FmXGridPeer(const Reference< XComponentContext >& _rxContext)
             ,m_bInterceptingDispatch(false)
             ,m_pStateCache(nullptr)
             ,m_pDispatchers(nullptr)
-            ,m_pGridListener(nullptr)
             ,m_xContext(_rxContext)
 {
     // Create must be called after this constructor
-    m_pGridListener = new GridListenerDelegator( this );
+    m_pGridListener.reset( new GridListenerDelegator( this ) );
 }
 
 
@@ -1064,7 +1063,7 @@ void FmXGridPeer::Create(vcl::Window* pParent, WinBits nStyle)
     pWin->SetSlotExecutor(LINK(this, FmXGridPeer, OnExecuteGridSlot));
 
     // want to hear about row selections
-    pWin->setGridListener( m_pGridListener );
+    pWin->setGridListener( m_pGridListener.get() );
 
     // Init must always be called
     pWin->Init();
@@ -1078,8 +1077,6 @@ FmXGridPeer::~FmXGridPeer()
 {
     setRowSet(Reference< XRowSet > ());
     setColumns(Reference< XIndexContainer > ());
-
-    delete m_pGridListener;
 }
 
 namespace
@@ -1460,8 +1457,8 @@ void FmXGridPeer::propertyChange(const PropertyChangeEvent& evt)
                 pGrid->DeactivateCell();
 
             ::tools::Rectangle aColRect = pGrid->GetFieldRect(nId);
-            aColRect.Top() = 0;
-            aColRect.Bottom() = pGrid->GetSizePixel().Height();
+            aColRect.SetTop( 0 );
+            aColRect.SetBottom( pGrid->GetSizePixel().Height() );
             pGrid->Invalidate(aColRect);
 
             if (bWasEditing)

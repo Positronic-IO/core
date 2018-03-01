@@ -811,7 +811,7 @@ tools::Rectangle SvHeaderTabListBox::GetFieldRectPixelAbs( sal_Int32 _nRow, sal_
         Point aTopLeft = aRect.TopLeft();
         DBG_ASSERT( m_pImpl->m_pHeaderBar->GetItemCount() > _nColumn, "invalid column" );
         tools::Rectangle aItemRect = m_pImpl->m_pHeaderBar->GetItemRect( m_pImpl->m_pHeaderBar->GetItemId( _nColumn ) );
-        aTopLeft.X() = aItemRect.Left();
+        aTopLeft.setX( aItemRect.Left() );
         Size aSize = aItemRect.GetSize();
         aRect = tools::Rectangle( aTopLeft, aSize );
         vcl::Window* pParent = nullptr;
@@ -1143,8 +1143,7 @@ Reference< XAccessible > SvHeaderTabListBox::CreateAccessible()
 
 tools::Rectangle SvHeaderTabListBox::GetFieldCharacterBounds(sal_Int32,sal_Int32,sal_Int32)
 {
-    tools::Rectangle aRect;
-    return aRect;
+    return tools::Rectangle();
 }
 
 sal_Int32 SvHeaderTabListBox::GetFieldIndexAtPoint(sal_Int32 _nRow,sal_Int32 _nColumnPos,const Point& _rPoint)
@@ -1153,10 +1152,12 @@ sal_Int32 SvHeaderTabListBox::GetFieldIndexAtPoint(sal_Int32 _nRow,sal_Int32 _nC
     MetricVector aRects;
     if ( GetGlyphBoundRects(Point(0,0), sText, 0, sText.getLength(), aRects) )
     {
-        for (MetricVector::iterator aIter = aRects.begin(); aIter != aRects.end(); ++aIter)
+        sal_Int32 nPos = 0;
+        for (auto const& rectangle : aRects)
         {
-            if( aIter->IsInside(_rPoint) )
-                return aIter - aRects.begin();
+            if( rectangle.IsInside(_rPoint) )
+                return nPos;
+            ++nPos;
         }
     }
 

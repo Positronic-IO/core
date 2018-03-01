@@ -26,7 +26,7 @@
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/builderfactory.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <svtools/ctrltool.hxx>
 #include <vcl/waitobj.hxx>
 #include <vcl/settings.hxx>
@@ -394,19 +394,24 @@ void SmFontDialog::DataChanged( const DataChangedEvent& rDCEvt )
     ModalDialog::DataChanged( rDCEvt );
 }
 
-class SaveDefaultsQuery : public MessageDialog
+class SaveDefaultsQuery
 {
+private:
+    std::unique_ptr<weld::Builder> m_xBuilder;
+    std::unique_ptr<weld::MessageDialog> m_xBox;
 public:
-    explicit SaveDefaultsQuery(vcl::Window *pParent)
-        : MessageDialog(pParent, "SaveDefaultsDialog",
-            "modules/smath/ui/savedefaultsdialog.ui")
+    explicit SaveDefaultsQuery(weld::Widget* pParent)
+        : m_xBuilder(Application::CreateBuilder(pParent, "modules/smath/ui/savedefaultsdialog.ui"))
+        , m_xBox(m_xBuilder->weld_message_dialog("SaveDefaultsDialog"))
     {
     }
+    short run() { return m_xBox->run(); }
 };
 
 IMPL_LINK_NOARG( SmFontSizeDialog, DefaultButtonClickHdl, Button *, void )
 {
-    if (ScopedVclPtrInstance<SaveDefaultsQuery>(this)->Execute() == RET_YES)
+    SaveDefaultsQuery aQuery(GetFrameWeld());
+    if (aQuery.run() == RET_YES)
     {
         SmModule *pp = SM_MOD();
         SmFormat aFmt( pp->GetConfig()->GetStandardFormat() );
@@ -508,7 +513,8 @@ IMPL_LINK( SmFontTypeDialog, MenuSelectHdl, Menu *, pMenu, bool )
 
 IMPL_LINK_NOARG( SmFontTypeDialog, DefaultButtonClickHdl, Button *, void )
 {
-    if (ScopedVclPtrInstance<SaveDefaultsQuery>(this)->Execute() == RET_YES)
+    SaveDefaultsQuery aQuery(GetFrameWeld());
+    if (aQuery.run() == RET_YES)
     {
         SmModule *pp = SM_MOD();
         SmFormat aFmt( pp->GetConfig()->GetStandardFormat() );
@@ -704,7 +710,8 @@ IMPL_LINK( SmDistanceDialog, MenuSelectHdl, Menu *, pMenu, bool )
 
 IMPL_LINK_NOARG( SmDistanceDialog, DefaultButtonClickHdl, Button *, void )
 {
-    if (ScopedVclPtrInstance<SaveDefaultsQuery>(this)->Execute() == RET_YES)
+    SaveDefaultsQuery aQuery(GetFrameWeld());
+    if (aQuery.run() == RET_YES)
     {
         SmModule *pp = SM_MOD();
         SmFormat aFmt( pp->GetConfig()->GetStandardFormat() );
@@ -996,7 +1003,8 @@ void SmDistanceDialog::WriteTo(SmFormat &rFormat) /*const*/
 
 IMPL_LINK_NOARG( SmAlignDialog, DefaultButtonClickHdl, Button *, void )
 {
-    if (ScopedVclPtrInstance<SaveDefaultsQuery>(this)->Execute() == RET_YES)
+    SaveDefaultsQuery aQuery(GetFrameWeld());
+    if (aQuery.run() == RET_YES)
     {
         SmModule *pp = SM_MOD();
         SmFormat aFmt( pp->GetConfig()->GetStandardFormat() );
@@ -1156,11 +1164,11 @@ void SmShowSymbolSetWindow::MouseButtonDown(const MouseEvent& rMEvt)
     GrabFocus();
 
     Size aOutputSize(nColumns * nLen, nRows * nLen);
-    aOutputSize.Width() += nXOffset;
-    aOutputSize.Height() += nYOffset;
+    aOutputSize.AdjustWidth(nXOffset );
+    aOutputSize.AdjustHeight(nYOffset );
     Point aPoint(rMEvt.GetPosPixel());
-    aPoint.X() -= nXOffset;
-    aPoint.Y() -= nYOffset;
+    aPoint.AdjustX( -(nXOffset) );
+    aPoint.AdjustY( -(nYOffset) );
 
     if (rMEvt.IsLeft() && tools::Rectangle(Point(0, 0), aOutputSize).IsInside(rMEvt.GetPosPixel()))
     {
@@ -1674,7 +1682,7 @@ void SmSymDefineDialog::FillSymbols(ComboBox &rComboBox, bool bDeleteText)
 
 void SmSymDefineDialog::FillSymbolSets(ComboBox &rComboBox, bool bDeleteText)
 {
-    assert((&rComboBox == pOldSymbolSets || &rComboBox == pSymbolSets) && "Sm : falsche ComboBox");
+    assert((&rComboBox == pOldSymbolSets || &rComboBox == pSymbolSets) && "Sm : wrong ComboBox");
 
     rComboBox.Clear();
     if (bDeleteText)
@@ -1799,7 +1807,7 @@ IMPL_LINK_NOARG( SmSymDefineDialog, SubsetChangeHdl, ListBox&, void )
 IMPL_LINK( SmSymDefineDialog, StyleChangeHdl, ComboBox&, rComboBox, void )
 {
     (void) rComboBox;
-    assert(&rComboBox == pStyles && "Sm : falsches Argument");
+    assert(&rComboBox == pStyles && "Sm : wrong argument");
 
     SelectStyle(pStyles->GetText());
 }

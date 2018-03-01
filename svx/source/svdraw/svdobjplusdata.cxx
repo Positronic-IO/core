@@ -9,9 +9,8 @@
 
 #include <svdobjplusdata.hxx>
 #include <svdobjuserdatalist.hxx>
-
+#include <o3tl/deleter.hxx>
 #include <svx/svdglue.hxx>
-
 #include <svl/SfxBroadcaster.hxx>
 #include <vcl/outdev.hxx>
 
@@ -24,9 +23,9 @@ SdrObjPlusData::SdrObjPlusData():
 
 SdrObjPlusData::~SdrObjPlusData()
 {
-    delete pBroadcast;
-    delete pUserDataList;
-    delete pGluePoints;
+    o3tl::reset_preserve_ptr_during(pBroadcast);
+    pUserDataList.reset();
+    pGluePoints.reset();
 }
 
 SdrObjPlusData* SdrObjPlusData::Clone(SdrObject* pObj1) const
@@ -35,7 +34,7 @@ SdrObjPlusData* SdrObjPlusData::Clone(SdrObject* pObj1) const
     if (pUserDataList!=nullptr) {
         sal_uInt16 nCount=pUserDataList->GetUserDataCount();
         if (nCount!=0) {
-            pNeuPlusData->pUserDataList=new SdrObjUserDataList;
+            pNeuPlusData->pUserDataList.reset(new SdrObjUserDataList);
             for (sal_uInt16 i=0; i<nCount; i++) {
                 SdrObjUserData* pNeuUserData=pUserDataList->GetUserData(i).Clone(pObj1);
                 if (pNeuUserData!=nullptr) {
@@ -46,7 +45,7 @@ SdrObjPlusData* SdrObjPlusData::Clone(SdrObject* pObj1) const
             }
         }
     }
-    if (pGluePoints!=nullptr) pNeuPlusData->pGluePoints=new SdrGluePointList(*pGluePoints);
+    if (pGluePoints!=nullptr) pNeuPlusData->pGluePoints.reset(new SdrGluePointList(*pGluePoints));
     // MtfAnimator isn't copied either
 
     // #i68101#

@@ -20,7 +20,7 @@
 #include <scitems.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/bindings.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <com/sun/star/sdbc/XResultSet.hpp>
 
@@ -290,8 +290,7 @@ void ScDBFunc::ToggleAutoFilter()
 
     for (nCol=aParam.nCol1; nCol<=aParam.nCol2 && bHasAuto; nCol++)
     {
-        nFlag = static_cast<const ScMergeFlagAttr*>( pDoc->
-                GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ))->GetValue();
+        nFlag = pDoc->GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG )->GetValue();
 
         if ( !(nFlag & ScMF::Auto) )
             bHasAuto = false;
@@ -303,8 +302,7 @@ void ScDBFunc::ToggleAutoFilter()
 
         for (nCol=aParam.nCol1; nCol<=aParam.nCol2; nCol++)
         {
-            nFlag = static_cast<const ScMergeFlagAttr*>( pDoc->
-                    GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ))->GetValue();
+            nFlag = pDoc->GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG )->GetValue();
             pDoc->ApplyAttr( nCol, nRow, nTab, ScMergeFlagAttr( nFlag & ~ScMF::Auto ) );
         }
 
@@ -340,10 +338,13 @@ void ScDBFunc::ToggleAutoFilter()
         {
             if (!bHeader)
             {
-                if ( ScopedVclPtrInstance<MessBox>( GetViewData().GetDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, 0,
-                        ScGlobal::GetRscString( STR_MSSG_DOSUBTOTALS_0 ),       // "StarCalc"
-                        ScGlobal::GetRscString( STR_MSSG_MAKEAUTOFILTER_0 )     // header from first row?
-                    )->Execute() == RET_YES )
+                vcl::Window* pWin = GetViewData().GetDialogParent();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                          VclMessageType::Question,
+                                                          VclButtonsType::YesNo, ScGlobal::GetRscString(STR_MSSG_MAKEAUTOFILTER_0))); // header from first row?
+                xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
+                xBox->set_default_response(RET_YES);
+                if (xBox->run() == RET_YES)
                 {
                     pDBData->SetHeader( true );     //! Undo ??
                 }
@@ -358,8 +359,7 @@ void ScDBFunc::ToggleAutoFilter()
 
             for (nCol=aParam.nCol1; nCol<=aParam.nCol2; nCol++)
             {
-                nFlag = static_cast<const ScMergeFlagAttr*>( pDoc->
-                        GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ))->GetValue();
+                nFlag = pDoc->GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG )->GetValue();
                 pDoc->ApplyAttr( nCol, nRow, nTab, ScMergeFlagAttr( nFlag | ScMF::Auto ) );
             }
             pDocSh->PostPaint(ScRange(aParam.nCol1, nRow, nTab, aParam.nCol2, nRow, nTab),
@@ -368,9 +368,11 @@ void ScDBFunc::ToggleAutoFilter()
         }
         else
         {
-            ScopedVclPtrInstance<MessageDialog> aErrorBox(GetViewData().GetDialogParent(),
-                                ScGlobal::GetRscString(STR_ERR_AUTOFILTER));
-            aErrorBox->Execute();
+            vcl::Window* pWin = GetViewData().GetDialogParent();
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Warning, VclButtonsType::Ok,
+                                                           ScGlobal::GetRscString(STR_ERR_AUTOFILTER)));
+            xErrorBox->run();
         }
     }
 
@@ -403,8 +405,7 @@ void ScDBFunc::HideAutoFilter()
 
     for (SCCOL nCol=nCol1; nCol<=nCol2; nCol++)
     {
-        ScMF nFlag = static_cast<const ScMergeFlagAttr*>( rDoc.
-                                GetAttr( nCol, nRow1, nTab, ATTR_MERGE_FLAG ))->GetValue();
+        ScMF nFlag = rDoc.GetAttr( nCol, nRow1, nTab, ATTR_MERGE_FLAG )->GetValue();
         rDoc.ApplyAttr( nCol, nRow1, nTab, ScMergeFlagAttr( nFlag & ~ScMF::Auto ) );
     }
 

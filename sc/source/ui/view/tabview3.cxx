@@ -606,11 +606,11 @@ Point calcHintWindowPosition(
         {
             // The frame has enough height.  Take it.
             Point aPos = rCellPos;
-            aPos.X() += rCellSize.Width() + nMargin;
+            aPos.AdjustX(rCellSize.Width() + nMargin );
             if (aPos.Y() + rHintWndSize.Height() > rFrameWndSize.Height())
             {
                 // Push the hint window up a bit to make it fit.
-                aPos.Y() = rFrameWndSize.Height() - rHintWndSize.Height();
+                aPos.setY( rFrameWndSize.Height() - rHintWndSize.Height() );
             }
             return aPos;
         }
@@ -623,11 +623,11 @@ Point calcHintWindowPosition(
         {
             // The frame has enough width.  Take it.
             Point aPos = rCellPos;
-            aPos.Y() += rCellSize.Height() + nMargin;
+            aPos.AdjustY(rCellSize.Height() + nMargin );
             if (aPos.X() + rHintWndSize.Width() > rFrameWndSize.Width())
             {
                 // Move the hint window to the left to make it fit.
-                aPos.X() = rFrameWndSize.Width() - rHintWndSize.Width();
+                aPos.setX( rFrameWndSize.Width() - rHintWndSize.Width() );
             }
             return aPos;
         }
@@ -640,11 +640,11 @@ Point calcHintWindowPosition(
         {
             // The frame is high enough.  Take it.
             Point aPos = rCellPos;
-            aPos.X() -= rHintWndSize.Width() + nMargin;
+            aPos.AdjustX( -(rHintWndSize.Width() + nMargin) );
             if (aPos.Y() + rHintWndSize.Height() > rFrameWndSize.Height())
             {
                 // Push the hint window up a bit to make it fit.
-                aPos.Y() = rFrameWndSize.Height() - rHintWndSize.Height();
+                aPos.setY( rFrameWndSize.Height() - rHintWndSize.Height() );
             }
             return aPos;
         }
@@ -657,11 +657,11 @@ Point calcHintWindowPosition(
         {
             // The frame is wide enough.  Take it.
             Point aPos = rCellPos;
-            aPos.Y() -= rHintWndSize.Height() + nMargin;
+            aPos.AdjustY( -(rHintWndSize.Height() + nMargin) );
             if (aPos.X() + rHintWndSize.Width() > rFrameWndSize.Width())
             {
                 // Move the hint window to the left to make it fit.
-                aPos.X() = rFrameWndSize.Width() - rHintWndSize.Width();
+                aPos.setX( rFrameWndSize.Width() - rHintWndSize.Width() );
             }
             return aPos;
         }
@@ -673,8 +673,8 @@ Point calcHintWindowPosition(
     {
         // Right margin is good enough.
         Point aPos = rCellPos;
-        aPos.X() += nMargin + rCellSize.Width();
-        aPos.Y() = 0;
+        aPos.AdjustX(nMargin + rCellSize.Width() );
+        aPos.setY( 0 );
         return aPos;
     }
 
@@ -682,8 +682,8 @@ Point calcHintWindowPosition(
     {
         // Bottom margin is good enough.
         Point aPos = rCellPos;
-        aPos.Y() += nMargin + rCellSize.Height();
-        aPos.X() = 0;
+        aPos.AdjustY(nMargin + rCellSize.Height() );
+        aPos.setX( 0 );
         return aPos;
     }
 
@@ -691,8 +691,8 @@ Point calcHintWindowPosition(
     {
         // Left margin is good enough.
         Point aPos = rCellPos;
-        aPos.X() -= rHintWndSize.Width() + nMargin;
-        aPos.Y() = 0;
+        aPos.AdjustX( -(rHintWndSize.Width() + nMargin) );
+        aPos.setY( 0 );
         return aPos;
     }
 
@@ -700,15 +700,15 @@ Point calcHintWindowPosition(
     {
         // Top margin is good enough.
         Point aPos = rCellPos;
-        aPos.Y() -= rHintWndSize.Height() + nMargin;
-        aPos.X() = 0;
+        aPos.AdjustY( -(rHintWndSize.Height() + nMargin) );
+        aPos.setX( 0 );
         return aPos;
     }
 
     // None of the above.  Hopeless.  At least try not to cover the current
     // cell.
     Point aPos = rCellPos;
-    aPos.X() += rCellSize.Width();
+    aPos.AdjustX(rCellSize.Width() );
     return aPos;
 }
 
@@ -724,11 +724,10 @@ void ScTabView::TestHintWindow()
     ScAddress aListValPos;
 
     ScDocument* pDoc = aViewData.GetDocument();
-    const SfxUInt32Item* pItem = static_cast<const SfxUInt32Item*>(
-                                        pDoc->GetAttr( aViewData.GetCurX(),
-                                                       aViewData.GetCurY(),
-                                                       aViewData.GetTabNo(),
-                                                       ATTR_VALIDDATA ));
+    const SfxUInt32Item* pItem = pDoc->GetAttr( aViewData.GetCurX(),
+                                                aViewData.GetCurY(),
+                                                aViewData.GetTabNo(),
+                                                ATTR_VALIDDATA );
     if ( pItem->GetValue() )
     {
         const ScValidationData* pData = pDoc->GetValidationEntry( pItem->GetValue() );
@@ -1369,21 +1368,21 @@ void ScTabView::MoveCursorEnter( bool bShift )          // bShift -> up/down
             break;
     }
 
+    SCCOL nCurX;
+    SCROW nCurY;
+    aViewData.GetMoveCursor( nCurX,nCurY );
+    SCCOL nNewX = nCurX;
+    SCROW nNewY = nCurY;
+    SCTAB nTab  = aViewData.GetTabNo();
+
     ScMarkData& rMark = aViewData.GetMarkData();
+    ScDocument* pDoc  = aViewData.GetDocument();
+
     if (rMark.IsMarked() || rMark.IsMultiMarked())
     {
-        SCCOL nCurX;
-        SCROW nCurY;
-        aViewData.GetMoveCursor( nCurX,nCurY );
-        SCCOL nNewX = nCurX;
-        SCROW nNewY = nCurY;
-        SCTAB nTab = aViewData.GetTabNo();
+        pDoc->GetNextPos( nNewX, nNewY, nTab, nMoveX, nMoveY, true, false, rMark );
 
-        ScDocument* pDoc = aViewData.GetDocument();
-        pDoc->GetNextPos( nNewX,nNewY, nTab, nMoveX,nMoveY, true, false, rMark );
-
-        MoveCursorRel( nNewX-nCurX, nNewY-nCurY,
-                            SC_FOLLOW_LINE, false, true );
+        MoveCursorRel( nNewX - nCurX, nNewY - nCurY, SC_FOLLOW_LINE, false, true );
 
         //  update input line even if cursor was not moved
         if ( nNewX == nCurX && nNewY == nCurY )
@@ -1393,18 +1392,17 @@ void ScTabView::MoveCursorEnter( bool bShift )          // bShift -> up/down
     {
         if ( nMoveY != 0 && !nMoveX )
         {
+            pDoc->GetNextPos( nNewX, nNewY, nTab, nMoveX, nMoveY, true, false, rMark );
+
             // after Tab and Enter back to the starting column again
             SCCOL nTabCol = aViewData.GetTabStartCol();
             if (nTabCol != SC_TABSTART_NONE)
             {
-                SCCOL nCurX;
-                SCROW nCurY;
-                aViewData.GetMoveCursor( nCurX,nCurY );
-                nMoveX = nTabCol-nCurX;
+                nNewX = nTabCol;
             }
         }
 
-        MoveCursorRel( nMoveX,nMoveY, SC_FOLLOW_LINE, false );
+        MoveCursorRel( nNewX - nCurX, nNewY - nCurY, SC_FOLLOW_LINE, false, true );
     }
 }
 
@@ -2319,22 +2317,22 @@ void ScTabView::PaintArea( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCRO
                 // Remember that wsd expects int and that aEnd.X() is
                 // in pixels and will be converted in twips, before performing
                 // the lok callback, so we need to avoid that an overflow occurs.
-                aEnd.X() = bLayoutRTL ? 0 : std::numeric_limits<int>::max() / 1000;
+                aEnd.setX( bLayoutRTL ? 0 : std::numeric_limits<int>::max() / 1000 );
             }
             else
             {
-                aEnd.X() = bLayoutRTL ? 0 : pGridWin[i]->GetOutputSizePixel().Width();
+                aEnd.setX( bLayoutRTL ? 0 : pGridWin[i]->GetOutputSizePixel().Width() );
             }
         }
-        aEnd.X() -= nLayoutSign;
-        aEnd.Y() -= 1;
+        aEnd.AdjustX( -nLayoutSign );
+        aEnd.AdjustY( -1 );
 
         // #i85232# include area below cells (could be done in GetScrPos?)
         if ( eMode == ScUpdateMode::All && nRow2 >= MAXROW && !bIsTiledRendering )
-            aEnd.Y() = pGridWin[i]->GetOutputSizePixel().Height();
+            aEnd.setY( pGridWin[i]->GetOutputSizePixel().Height() );
 
-        aStart.X() -= nLayoutSign;      // include change marks
-        aStart.Y() -= 1;
+        aStart.AdjustX( -nLayoutSign );      // include change marks
+        aStart.AdjustY( -1 );
 
         bool bMarkClipped = aViewData.GetOptions().GetOption( VOPT_CLIPMARKS );
         if (bMarkClipped)
@@ -2345,7 +2343,7 @@ void ScTabView::PaintArea( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCRO
             //!                     aViewData.GetTabNo(),
             //!                     0, nRow1, nCol1-1, nRow2 ) )
             long nMarkPixel = static_cast<long>( SC_CLIPMARK_SIZE * aViewData.GetPPTX() );
-            aStart.X() -= nMarkPixel * nLayoutSign;
+            aStart.AdjustX( -(nMarkPixel * nLayoutSign) );
         }
 
         pGridWin[i]->Invalidate( pGridWin[i]->PixelToLogic( tools::Rectangle( aStart,aEnd ) ) );

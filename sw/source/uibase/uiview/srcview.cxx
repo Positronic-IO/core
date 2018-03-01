@@ -23,7 +23,7 @@
 #include <unotools/tempfile.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/errinf.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/print.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/wrkwin.hxx>
@@ -71,7 +71,6 @@
 #include <shellio.hxx>
 
 #include <cmdid.h>
-#include <helpids.h>
 #include <globals.hrc>
 #include <strings.hrc>
 #include <com/sun/star/ui/dialogs/XFilePicker3.hpp>
@@ -131,7 +130,7 @@ static void lcl_PrintHeader( vcl::RenderContext &rOutDev, sal_Int32 nPages, sal_
     Color aOldFillColor( rOutDev.GetFillColor() );
     vcl::Font aOldFont( rOutDev.GetFont() );
 
-    rOutDev.SetFillColor( Color(COL_TRANSPARENT) );
+    rOutDev.SetFillColor( COL_TRANSPARENT );
 
     vcl::Font aFont( aOldFont );
     aFont.SetWeight( WEIGHT_BOLD );
@@ -162,7 +161,7 @@ static void lcl_PrintHeader( vcl::RenderContext &rOutDev, sal_Int32 nPages, sal_
         aPageStr += " ";
         aPageStr += OUString::number( nCurPage );
         aPageStr += "]";
-        aPos.X() += rOutDev.GetTextWidth( rTitle );
+        aPos.AdjustX(rOutDev.GetTextWidth( rTitle ) );
         rOutDev.DrawText( aPos, aPageStr );
     }
 
@@ -263,7 +262,7 @@ void SwSrcView::Init()
     }
 
     SetNewWindowAllowed( false );
-    StartListening(*pDocShell,true);
+    StartListening(*pDocShell, DuplicateHandling::Prevent);
 }
 
 SwDocShell*     SwSrcView::GetDocShell()
@@ -613,8 +612,9 @@ void SwSrcView::StartSearchAndReplace(const SvxSearchItem& rSearchItem,
         {
             if(bNotFoundMessage)
             {
-                ScopedVclPtrInstance<MessageDialog>(nullptr, "InfoNotFoundDialog",
-                    "modules/swriter/ui/infonotfounddialog.ui")->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(nullptr, "modules/swriter/ui/infonotfounddialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xInfoBox(xBuilder->weld_message_dialog("InfoNotFoundDialog"));
+                xInfoBox->run();
             }
             else if(!bRecursive)
             {
@@ -622,13 +622,15 @@ void SwSrcView::StartSearchAndReplace(const SvxSearchItem& rSearchItem,
 
                 if (!bForward)
                 {
-                    nRet = ScopedVclPtrInstance<MessageDialog>(nullptr, "QueryContinueEndDialog",
-                        "modules/swriter/ui/querycontinueenddialog.ui")->Execute();
+                    std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(nullptr, "modules/swriter/ui/querycontinueenddialog.ui"));
+                    std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("QueryContinueEndDialog"));
+                    nRet = xQueryBox->run();
                 }
                 else
                 {
-                    nRet = ScopedVclPtrInstance<MessageDialog>(nullptr, "QueryContinueBeginDialog",
-                        "modules/swriter/ui/querycontinuebegindialog.ui")->Execute();
+                    std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(nullptr, "modules/swriter/ui/querycontinuebegindialog.ui"));
+                    std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("QueryContinueBeginDialog"));
+                    nRet = xQueryBox->run();
                 }
 
                 if (nRet == RET_YES)
@@ -697,8 +699,8 @@ sal_Int32 SwSrcView::PrintSource(
     const long nParaSpace = 10;
 
     Size aPaperSz = pOutDev->GetOutputSize();
-    aPaperSz.Width() -= (LMARGPRN + RMARGPRN);
-    aPaperSz.Height() -= (TMARGPRN + BMARGPRN);
+    aPaperSz.AdjustWidth( -(LMARGPRN + RMARGPRN) );
+    aPaperSz.AdjustHeight( -(TMARGPRN + BMARGPRN) );
 
     // nLinepPage is not true, if lines have to be wrapped...
     const long nLinespPage = nLineHeight ? aPaperSz.Height() / nLineHeight : 1;
@@ -721,7 +723,7 @@ sal_Int32 SwSrcView::PrintSource(
         const sal_Int32 nLines = (nLineLen+nCharspLine-1) / nCharspLine;
         for ( sal_Int32 nLine = 0; nLine < nLines; ++nLine )
         {
-            aPos.Y() += nLineHeight;
+            aPos.AdjustY(nLineHeight );
             if ( aPos.Y() > ( aPaperSz.Height() + TMARGPRN - nLineHeight/2 ) )
             {
                 ++nCurPage;
@@ -736,7 +738,7 @@ sal_Int32 SwSrcView::PrintSource(
                 pOutDev->DrawText( aPos, aLine.copy(nStart, nLen) );
             }
         }
-        aPos.Y() += nParaSpace;
+        aPos.AdjustY(nParaSpace );
     }
 
     pOutDev->Pop();
@@ -805,8 +807,11 @@ void SwSrcView::Load(SwDocShell* pDocShell)
         }
         else
         {
-            vcl::Window *pTmpWindow = &GetViewFrame()->GetWindow();
-            ScopedVclPtrInstance<MessageDialog>(pTmpWindow, SwResId(STR_ERR_SRCSTREAM), VclMessageType::Info)->Execute();
+            vcl::Window& rTmpWindow = GetViewFrame()->GetWindow();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(rTmpWindow.GetFrameWeld(),
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      SwResId(STR_ERR_SRCSTREAM)));
+            xBox->run();
         }
     }
     else

@@ -186,7 +186,7 @@ class GtkSalFrame : public SalFrame
     std::list< GtkSalFrame* >       m_aChildren;
     GdkWindowState                  m_nState;
     SystemEnvData                   m_aSystemData;
-    GtkSalGraphics                 *m_pGraphics;
+    std::unique_ptr<GtkSalGraphics> m_pGraphics;
     bool                            m_bGraphics;
     ModKeyFlags                     m_nKeyModifiers;
     GdkCursor                      *m_pCurrentCursor;
@@ -201,7 +201,7 @@ class GtkSalFrame : public SalFrame
     OUString                        m_aTitle;
     OUString                        m_sWMClass;
 
-    IMHandler*                      m_pIMHandler;
+    std::unique_ptr<IMHandler>      m_pIMHandler;
 
     Size                            m_aMaxSize;
     Size                            m_aMinSize;
@@ -536,6 +536,7 @@ public:
     virtual void*               ShowPopover(const OUString& rHelpText, const tools::Rectangle& rHelpArea, QuickHelpFlags nFlags) override;
     virtual bool                UpdatePopover(void* nId, const OUString& rHelpText, const tools::Rectangle& rHelpArea) override;
     virtual bool                HidePopover(void* nId) override;
+    virtual weld::Window*       GetFrameWeld() const override;
 #endif
 
     static GtkSalFrame         *getFromWindow( GtkWindow *pWindow );

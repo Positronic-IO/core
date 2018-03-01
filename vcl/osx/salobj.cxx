@@ -67,8 +67,8 @@ AquaSalObject::AquaSalObject( AquaSalFrame* pFrame, SystemWindowData const * pWi
                 NSOpenGLPFAColorSize, 24,
                 NSOpenGLPFADepthSize, 24,
                 NSOpenGLPFAMultisample,
-                NSOpenGLPFASampleBuffers, (NSOpenGLPixelFormatAttribute)1,
-                NSOpenGLPFASamples, (NSOpenGLPixelFormatAttribute)4,
+                NSOpenGLPFASampleBuffers, NSOpenGLPixelFormatAttribute(1),
+                NSOpenGLPFASamples, NSOpenGLPixelFormatAttribute(4),
                 0
             };
             pixFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:aAttributes];
@@ -83,8 +83,8 @@ AquaSalObject::AquaSalObject( AquaSalFrame* pFrame, SystemWindowData const * pWi
                 NSOpenGLPFAColorSize, 24,
                 NSOpenGLPFADepthSize, 24,
                 NSOpenGLPFAMultisample,
-                NSOpenGLPFASampleBuffers, (NSOpenGLPixelFormatAttribute)1,
-                NSOpenGLPFASamples, (NSOpenGLPixelFormatAttribute)4,
+                NSOpenGLPFASampleBuffers, NSOpenGLPixelFormatAttribute(1),
+                NSOpenGLPFASamples, NSOpenGLPixelFormatAttribute(4),
                 0
             };
             pixFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:aAttributes];
@@ -243,7 +243,7 @@ const SystemEnvData* AquaSalObject::GetSystemData() const
 class AquaOpenGLContext : public OpenGLContext
 {
 public:
-    virtual bool initWindow() override;
+    virtual void initWindow() override;
 
 private:
     GLWindow m_aGLWin;
@@ -314,9 +314,9 @@ void AquaOpenGLContext::destroyCurrentContext()
     [NSOpenGLContext clearCurrentContext];
 }
 
-bool AquaOpenGLContext::initWindow()
+void AquaOpenGLContext::initWindow()
 {
-    OSX_SALDATA_RUNINMAIN_UNION( initWindow(), boolean )
+    OSX_SALDATA_RUNINMAIN( initWindow() )
 
     if( !m_pChildWindow )
     {
@@ -328,8 +328,6 @@ bool AquaOpenGLContext::initWindow()
     {
         InitChildWindow(m_pChildWindow.get());
     }
-
-    return true;
 }
 
 bool AquaOpenGLContext::ImplInit()

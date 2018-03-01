@@ -78,27 +78,27 @@ class SmParser
     inline bool     TokenInGroup( TG nGroup );
 
     // grammar
-    SmTableNode *DoTable();
-    SmLineNode *DoLine();
+    std::unique_ptr<SmTableNode> DoTable();
+    std::unique_ptr<SmNode> DoLine();
     std::unique_ptr<SmNode> DoExpression(bool bUseExtraSpaces = true);
-    SmNode *DoRelation();
-    SmNode *DoSum();
-    SmNode *DoProduct();
-    SmNode *DoSubSup(TG nActiveGroup, SmNode *pGivenNode);
-    SmNode *DoOpSubSup();
-    SmNode *DoPower();
+    std::unique_ptr<SmNode> DoRelation();
+    std::unique_ptr<SmNode> DoSum();
+    std::unique_ptr<SmNode> DoProduct();
+    std::unique_ptr<SmNode> DoSubSup(TG nActiveGroup, SmNode *pGivenNode);
+    std::unique_ptr<SmNode> DoOpSubSup();
+    std::unique_ptr<SmNode> DoPower();
     SmBlankNode *DoBlank();
     SmNode *DoTerm(bool bGroupNumberIdent);
     SmNode *DoEscape();
     SmOperNode *DoOperator();
-    SmNode *DoOper();
+    std::unique_ptr<SmNode> DoOper();
     SmStructureNode *DoUnOper();
-    SmNode *DoAlign(bool bUseExtraSpaces = true);
-    SmStructureNode *DoFontAttribut();
-    SmAttributNode *DoAttribut();
-    SmStructureNode *DoFont();
-    SmStructureNode *DoFontSize();
-    SmStructureNode *DoColor();
+    std::unique_ptr<SmNode> DoAlign(bool bUseExtraSpaces = true);
+    std::unique_ptr<SmStructureNode> DoFontAttribut();
+    std::unique_ptr<SmStructureNode> DoAttribut();
+    std::unique_ptr<SmStructureNode> DoFont();
+    std::unique_ptr<SmStructureNode> DoFontSize();
+    std::unique_ptr<SmStructureNode> DoColor();
     SmStructureNode *DoBrace();
     SmBracebodyNode *DoBracebody(bool bIsLeftRight);
     SmTextNode *DoFunction();
@@ -114,7 +114,7 @@ public:
                  SmParser();
 
     /** Parse rBuffer to formula tree */
-    SmTableNode *Parse(const OUString &rBuffer);
+    std::unique_ptr<SmTableNode> Parse(const OUString &rBuffer);
     /** Parse rBuffer to formula subtree that constitutes an expression */
     std::unique_ptr<SmNode> ParseExpression(const OUString &rBuffer);
 
@@ -128,7 +128,7 @@ public:
     void        AddError(SmParseError Type, SmNode *pNode);
     const SmErrorDesc*  NextError();
     const SmErrorDesc*  PrevError();
-    const SmErrorDesc*  GetError(size_t i);
+    const SmErrorDesc*  GetError();
     static const SmTokenTableEntry* GetTokenTableEntry( const OUString &rName );
     const std::set< OUString >&   GetUsedSymbols() const      { return m_aUsedSymbols; }
 };

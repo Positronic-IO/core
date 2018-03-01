@@ -239,7 +239,10 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
         }
         final String value = parts[1];
         boolean pressed = Boolean.parseBoolean(value);
-
+        if (!mContext.getTileProvider().isReady()) {
+            Log.w(LOGTAG, "tile provider not ready, ignoring payload "+payload);
+            return;
+        }
         if (parts[0].equals(".uno:Bold")) {
             mContext.getFormattingController().onToggleStateChanged(Document.BOLD, pressed);
         } else if (parts[0].equals(".uno:Italic")) {
@@ -266,6 +269,8 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
             mContext.getFormattingController().onToggleStateChanged(Document.NUMBERED_LIST, pressed);
         } else if (parts[0].equals(".uno:Color")) {
             mContext.getFontController().colorPaletteListener.updateColorPickerPosition(Integer.parseInt(value));
+        } else if (parts[0].equals(".uno:BackColor")) {
+            mContext.getFontController().backColorPaletteListener.updateColorPickerPosition(Integer.parseInt(value));
         } else if (parts[0].equals(".uno:StatePageNumber")) {
             // get the total page number and compare to the current value and update accordingly
             String[] splitStrings = parts[1].split(" ");

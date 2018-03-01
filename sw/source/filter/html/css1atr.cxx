@@ -226,7 +226,7 @@ void SwHTMLWriter::OutCSS1_Property( const sal_Char *pProp,
     {
         m_bFirstCSS1Rule = false;
         OutNewLine();
-        sOut.append("<" OOO_STRING_SVTOOLS_HTML_style " "
+        sOut.append("<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_style " "
                     OOO_STRING_SVTOOLS_HTML_O_type "=\"text/css\">");
     //  Optional CSS2 code for dot leaders (dotted line between the Table of Contents titles and page numbers):
     //  (More information: http://www.w3.org/Style/Examples/007/leaders.en.html)
@@ -288,7 +288,7 @@ void SwHTMLWriter::OutCSS1_Property( const sal_Char *pProp,
             }
             else
             {
-                HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_span, false );
+                HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_span, false );
                 return;
             }
             break;
@@ -590,7 +590,7 @@ void SwHTMLWriter::OutStyleSheet( const SwPageDesc& rPageDesc )
         DecIndentLevel();
 
         OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_style, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_style, false );
     }
     else
     {
@@ -1658,8 +1658,8 @@ static Writer& OutCSS1_SwPageDesc( Writer& rWrt, const SwPageDesc& rPageDesc,
         if( bRefLandscape != rPageDesc.GetLandscape() )
         {
             long nTmp = aRefSz.Height();
-            aRefSz.Height() = aRefSz.Width();
-            aRefSz.Width() = nTmp;
+            aRefSz.setHeight( aRefSz.Width() );
+            aRefSz.setWidth( nTmp );
         }
     }
 
@@ -2388,7 +2388,7 @@ static Writer& OutCSS1_SvxColor( Writer& rWrt, const SfxPoolItem& rHt )
 
     Color aColor( static_cast<const SvxColorItem&>(rHt).GetValue() );
     if( COL_AUTO == aColor.GetColor() )
-        aColor.SetColor( COL_BLACK );
+        aColor = COL_BLACK;
 
     rHTMLWrt.OutCSS1_PropertyAscii(sCSS1_P_color, lclGetCSS1Color(aColor));
 
@@ -2822,7 +2822,7 @@ static Writer& OutCSS1_SwFormatDrop( Writer& rWrt, const SfxPoolItem& rHt )
     }
     else
     {
-        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), OOO_STRING_SVTOOLS_HTML_span, false );
+        HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span, false );
     }
 
     return rWrt;
@@ -3061,6 +3061,10 @@ static Writer& OutCSS1_SvxFormatBreak_SwFormatPDesc_SvxFormatKeep( Writer& rWrt,
         }
     }
 
+    if (rHTMLWrt.mbSkipHeaderFooter)
+        // No page break when writing only a fragment.
+        return rWrt;
+
     if( pBreakBefore )
         rHTMLWrt.OutCSS1_PropertyAscii( sCSS1_P_page_break_before,
                                         pBreakBefore );
@@ -3135,7 +3139,7 @@ static Writer& OutCSS1_SvxBrush( Writer& rWrt, const SfxPoolItem& rHt,
     // get the color
     bool bColor = false;
     /// set <bTransparent> to true, if color is "no fill"/"auto fill"
-    bool bTransparent = (rColor.GetColor() == COL_TRANSPARENT);
+    bool bTransparent = (rColor == COL_TRANSPARENT);
     Color aColor;
     if( !bTransparent )
     {
@@ -3384,7 +3388,7 @@ Writer& OutCSS1_SvxBox( Writer& rWrt, const SfxPoolItem& rHt )
         }
         else
         {
-            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), OOO_STRING_SVTOOLS_HTML_span, false );
+            HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_span, false );
             return rWrt;
         }
     }

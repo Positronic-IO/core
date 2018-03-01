@@ -64,6 +64,7 @@
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/io/XOutputStream.hpp>
 #include <com/sun/star/style/LineSpacing.hpp>
@@ -577,6 +578,7 @@ void DrawingML::WriteOutline( const Reference<XPropertySet>& rXPropSet )
 
     sal_uInt32 nLineWidth = 0;
     sal_uInt32 nColor = 0;
+    sal_Int32 nColorAlpha = MAX_PERCENT;
     bool bColorSet = false;
     const char* cap = nullptr;
     drawing::LineDash aLineDash;
@@ -656,6 +658,10 @@ void DrawingML::WriteOutline( const Reference<XPropertySet>& rXPropSet )
                 nColor = mAny.get<sal_uInt32>() & 0xffffff;
                 bColorSet = true;
             }
+            if ( GETA( LineTransparence ) )
+            {
+                nColorAlpha = MAX_PERCENT - (mAny.get<sal_Int16>() * PER_PERCENT);
+            }
             break;
     }
 
@@ -670,7 +676,7 @@ void DrawingML::WriteOutline( const Reference<XPropertySet>& rXPropSet )
         if( nColor != nOriginalColor )
         {
             // the user has set a different color for the line
-            WriteSolidFill( nColor );
+            WriteSolidFill( nColor, nColorAlpha );
         }
         else if( !sColorFillScheme.isEmpty() )
         {
@@ -687,7 +693,7 @@ void DrawingML::WriteOutline( const Reference<XPropertySet>& rXPropSet )
         }
         else
         {
-            WriteSolidFill( nColor );
+            WriteSolidFill( nColor, nColorAlpha );
         }
     }
 
@@ -1050,6 +1056,36 @@ void DrawingML::WriteMediaNonVisualProperties(const css::uno::Reference<css::dra
     GetFS()->endElementNS(XML_p, XML_nvPr);
 }
 
+void DrawingML::WriteImageBrightnessContrastTransparence(uno::Reference<beans::XPropertySet> const & rXPropSet)
+{
+    sal_Int16 nBright = 0;
+    sal_Int32 nContrast = 0;
+    sal_Int32 nTransparence = 0;
+
+    if (GetProperty(rXPropSet, "AdjustLuminance"))
+        nBright = mAny.get<sal_Int16>();
+    if (GetProperty(rXPropSet, "AdjustContrast"))
+        nContrast = mAny.get<sal_Int32>();
+    if (GetProperty(rXPropSet, "FillTransparence"))
+        nTransparence = mAny.get<sal_Int32>();
+
+
+    if (nBright || nContrast)
+    {
+        mpFS->singleElementNS(XML_a, XML_lum,
+                   XML_bright, nBright ? I32S(nBright * 1000) : nullptr,
+                   XML_contrast, nContrast ? I32S(nContrast * 1000) : nullptr,
+                   FSEND);
+    }
+
+    if (nTransparence)
+    {
+        sal_Int32 nAlphaMod = (100 - nTransparence ) * PER_PERCENT;
+        mpFS->singleElementNS(XML_a, XML_alphaModFix,
+                              XML_amt, I32S(nAlphaMod), FSEND);
+    }
+}
+
 OUString DrawingML::WriteBlip( const Reference< XPropertySet >& rXPropSet, const OUString& rURL, bool bRelPathToMedia, const Graphic *pGraphic )
 {
     OUString sRelId;
@@ -1069,35 +1105,54 @@ OUString DrawingML::WriteBlip( const Reference< XPropertySet >& rXPropSet, const
         if (!rURL.isEmpty() && mpTextExport)
             mpTextExport->CacheRelId(nChecksum, sRelId);
     }
-    sal_Int16 nBright = 0;
-    sal_Int32 nContrast = 0;
-    sal_Int32 nTransparence = 0;
-
-    GET( nBright, AdjustLuminance );
-    GET( nContrast, AdjustContrast );
-    GET( nTransparence, FillTransparence );
 
     mpFS->startElementNS( XML_a, XML_blip,
-            FSNS( XML_r, XML_embed), sRelId.toUtf8().getStr(),
-            FSEND );
-    if( nBright || nContrast )
-    {
-        mpFS->singleElementNS( XML_a, XML_lum,
-                   XML_bright, nBright ? I32S( nBright*1000 ) : nullptr,
-                   XML_contrast, nContrast ? I32S( nContrast*1000 ) : nullptr,
-                   FSEND );
-    }
+        FSNS( XML_r, XML_embed), sRelId.toUtf8().getStr(),
+        FSEND );
 
-    if( nTransparence )
-    {
-        sal_Int32 nAlphaMod = (100 - nTransparence ) * PER_PERCENT;
-        mpFS->singleElementNS( XML_a, XML_alphaModFix,
-                               XML_amt, I32S( nAlphaMod), FSEND );
-    }
+    WriteImageBrightnessContrastTransparence(rXPropSet);
 
     WriteArtisticEffect( rXPropSet );
 
     mpFS->endElementNS( XML_a, XML_blip );
+
+    return sRelId;
+}
+
+OUString DrawingML::WriteXGraphicBlip(uno::Reference<beans::XPropertySet> const & rXPropSet,
+                                      uno::Reference<graphic::XGraphic> const & rxGraphic,
+                                      bool bRelPathToMedia)
+{
+    OUString sRelId;
+
+    if (!rxGraphic.is())
+        return sRelId;
+
+    Graphic aGraphic(rxGraphic);
+    if (mpTextExport)
+    {
+        BitmapChecksum nChecksum = aGraphic.GetChecksum();
+        sRelId = mpTextExport->FindRelId(nChecksum);
+    }
+    if (sRelId.isEmpty())
+    {
+        sRelId = WriteImage(aGraphic, bRelPathToMedia);
+        if (mpTextExport)
+        {
+            BitmapChecksum nChecksum = aGraphic.GetChecksum();
+            mpTextExport->CacheRelId(nChecksum, sRelId);
+        }
+    }
+
+    mpFS->startElementNS(XML_a, XML_blip,
+            FSNS(XML_r, XML_embed), sRelId.toUtf8().getStr(),
+            FSEND);
+
+    WriteImageBrightnessContrastTransparence(rXPropSet);
+
+    WriteArtisticEffect(rXPropSet);
+
+    mpFS->endElementNS(XML_a, XML_blip);
 
     return sRelId;
 }
@@ -1117,6 +1172,28 @@ void DrawingML::WriteBlipMode( const Reference< XPropertySet >& rXPropSet, const
         break;
     case BitmapMode_STRETCH:
         WriteStretch( rXPropSet, rURL );
+        break;
+    default:
+        break;
+    }
+}
+
+void DrawingML::WriteXGraphicBlipMode(uno::Reference<beans::XPropertySet> const & rXPropSet,
+                                      uno::Reference<graphic::XGraphic> const & rxGraphic)
+{
+    BitmapMode eBitmapMode(BitmapMode_NO_REPEAT);
+    if (GetProperty(rXPropSet, "FillBitmapMode"))
+        mAny >>= eBitmapMode;
+
+    SAL_INFO("oox.shape", "fill bitmap mode: " << int(eBitmapMode));
+
+    switch (eBitmapMode)
+    {
+    case BitmapMode_REPEAT:
+        mpFS->singleElementNS(XML_a, XML_tile, FSEND);
+        break;
+    case BitmapMode_STRETCH:
+        WriteXGraphicStretch(rXPropSet, rxGraphic);
         break;
     default:
         break;
@@ -1143,12 +1220,25 @@ void DrawingML::WriteBlipFill( const Reference< XPropertySet >& rXPropSet, const
 {
     if ( GetProperty( rXPropSet, sURLPropName ) )
     {
-        OUString aURL;
-        mAny >>= aURL;
-        bool bWriteMode = false;
-        if( sURLPropName == "FillBitmapURL" || sURLPropName == "BackGraphicURL")
-            bWriteMode = true;
-        WriteBlipFill( rXPropSet, aURL, nXmlNamespace, bWriteMode );
+        if (mAny.has<uno::Reference<awt::XBitmap>>())
+        {
+            uno::Reference<awt::XBitmap> xBitmap;
+            xBitmap = mAny.get<uno::Reference<awt::XBitmap>>();
+            uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+            if (xBitmap.is() && xGraphic.is())
+            {
+                WriteXGraphicBlipFill(rXPropSet, xGraphic, nXmlNamespace, true);
+            }
+        }
+        else
+        {
+            OUString aURL;
+            mAny >>= aURL;
+            bool bWriteMode = false;
+            if( sURLPropName == "FillBitmapURL" || sURLPropName == "BackGraphicURL")
+                bWriteMode = true;
+            WriteBlipFill( rXPropSet, aURL, nXmlNamespace, bWriteMode );
+        }
     }
 }
 
@@ -1178,6 +1268,33 @@ void DrawingML::WriteBlipFill( const Reference< XPropertySet >& rXPropSet, const
     }
 }
 
+void DrawingML::WriteXGraphicBlipFill(uno::Reference<beans::XPropertySet> const & rXPropSet,
+                                      uno::Reference<graphic::XGraphic> const & rxGraphic,
+                                      sal_Int32 nXmlNamespace, bool bWriteMode, bool bRelPathToMedia)
+{
+    if (!rxGraphic.is() )
+        return;
+
+    mpFS->startElementNS(nXmlNamespace , XML_blipFill, XML_rotWithShape, "0", FSEND);
+
+    WriteXGraphicBlip(rXPropSet, rxGraphic, bRelPathToMedia);
+
+    if (bWriteMode)
+    {
+        WriteXGraphicBlipMode(rXPropSet, rxGraphic);
+    }
+    else if(GetProperty(rXPropSet, "FillBitmapStretch"))
+    {
+            bool bStretch = mAny.get<bool>();
+
+            if (bStretch)
+            {
+                WriteXGraphicStretch(rXPropSet, rxGraphic);
+            }
+    }
+    mpFS->endElementNS(nXmlNamespace, XML_blipFill);
+}
+
 void DrawingML::WritePattFill( const Reference< XPropertySet >& rXPropSet )
 {
     if ( GetProperty( rXPropSet, "FillHatch" ) )
@@ -1196,7 +1313,7 @@ void DrawingML::WritePattFill(const Reference<XPropertySet>& rXPropSet, const cs
         WriteColor(rHatch.Color);
         mpFS->endElementNS( XML_a , XML_fgClr );
 
-        sal_uInt32 nColor = COL_WHITE;
+        ::Color nColor = COL_WHITE;
         sal_Int32 nAlpha  = 0;
         bool isBackgroundFilled = false;
 
@@ -1215,24 +1332,22 @@ void DrawingML::WritePattFill(const Reference<XPropertySet>& rXPropSet, const cs
         }
 
         mpFS->startElementNS( XML_a , XML_bgClr, FSEND );
-        WriteColor(nColor, nAlpha);
+        WriteColor(sal_uInt32(nColor), nAlpha);
         mpFS->endElementNS( XML_a , XML_bgClr );
 
         mpFS->endElementNS( XML_a , XML_pattFill );
 }
 
-void DrawingML::WriteSrcRect( const Reference< XPropertySet >& rXPropSet, const OUString& rURL )
+void DrawingML::WriteGraphicCropProperties(uno::Reference<beans::XPropertySet> const & rXPropSet, Size const & rOriginalSize, MapMode const & rMapMode)
 {
-    GraphicObject aGraphicObject = GraphicObject::CreateGraphicObjectFromURL(rURL);
-    Size aOriginalSize = aGraphicObject.GetPrefSize();
-    const MapMode& rMapMode = aGraphicObject.GetPrefMapMode();
-
-    // GraphicCrop is in mm100, so in case the original size is in pixels, convert it over.
-    if (rMapMode.GetMapUnit() == MapUnit::MapPixel)
-        aOriginalSize = Application::GetDefaultDevice()->PixelToLogic(aOriginalSize, MapMode(MapUnit::Map100thMM));
-
-    if ( GetProperty( rXPropSet, "GraphicCrop" ) )
+    if (GetProperty(rXPropSet, "GraphicCrop"))
     {
+        Size aOriginalSize(rOriginalSize);
+
+        // GraphicCrop is in mm100, so in case the original size is in pixels, convert it over.
+        if (rMapMode.GetMapUnit() == MapUnit::MapPixel)
+            aOriginalSize = Application::GetDefaultDevice()->PixelToLogic(aOriginalSize, MapMode(MapUnit::Map100thMM));
+
         css::text::GraphicCrop aGraphicCropStruct;
         mAny >>= aGraphicCropStruct;
 
@@ -1246,6 +1361,23 @@ void DrawingML::WriteSrcRect( const Reference< XPropertySet >& rXPropSet, const 
                           FSEND );
         }
     }
+}
+
+void DrawingML::WriteSrcRect(const uno::Reference<beans::XPropertySet>& rxPropertySet, const OUString& rURL)
+{
+    GraphicObject aGraphicObject = GraphicObject::CreateGraphicObjectFromURL(rURL);
+    Size aOriginalSize = aGraphicObject.GetPrefSize();
+    const MapMode& rMapMode = aGraphicObject.GetPrefMapMode();
+    WriteGraphicCropProperties(rxPropertySet, aOriginalSize, rMapMode);
+}
+
+void DrawingML::WriteSrcRectXGraphic(uno::Reference<beans::XPropertySet> const & rxPropertySet,
+                                     uno::Reference<graphic::XGraphic> const & rxGraphic)
+{
+    Graphic aGraphic(rxGraphic);
+    Size aOriginalSize = aGraphic.GetPrefSize();
+    const MapMode& rMapMode = aGraphic.GetPrefMapMode();
+    WriteGraphicCropProperties(rxPropertySet, aOriginalSize, rMapMode);
 }
 
 void DrawingML::WriteStretch( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, const OUString& rURL )
@@ -1277,6 +1409,42 @@ void DrawingML::WriteStretch( const css::uno::Reference< css::beans::XPropertySe
     }
 
     mpFS->endElementNS( XML_a, XML_stretch );
+}
+
+void DrawingML::WriteXGraphicStretch(uno::Reference<beans::XPropertySet> const & rXPropSet,
+                                     uno::Reference<graphic::XGraphic> const & rxGraphic)
+{
+    mpFS->startElementNS(XML_a, XML_stretch, FSEND);
+
+    bool bCrop = false;
+    if (GetProperty(rXPropSet, "GraphicCrop"))
+    {
+        css::text::GraphicCrop aGraphicCropStruct;
+        mAny >>= aGraphicCropStruct;
+
+        if ((0 != aGraphicCropStruct.Left)
+         || (0 != aGraphicCropStruct.Top)
+         || (0 != aGraphicCropStruct.Right)
+         || (0 != aGraphicCropStruct.Bottom))
+        {
+            Graphic aGraphic(rxGraphic);
+            Size aOriginalSize(aGraphic.GetPrefSize());
+            mpFS->singleElementNS(XML_a, XML_fillRect,
+                          XML_l, I32S(((aGraphicCropStruct.Left)   * 100000) / aOriginalSize.Width()),
+                          XML_t, I32S(((aGraphicCropStruct.Top)    * 100000) / aOriginalSize.Height()),
+                          XML_r, I32S(((aGraphicCropStruct.Right)  * 100000) / aOriginalSize.Width()),
+                          XML_b, I32S(((aGraphicCropStruct.Bottom) * 100000) / aOriginalSize.Height()),
+                          FSEND);
+            bCrop = true;
+        }
+    }
+
+    if (!bCrop)
+    {
+        mpFS->singleElementNS(XML_a, XML_fillRect, FSEND);
+    }
+
+    mpFS->endElementNS(XML_a, XML_stretch);
 }
 
 void DrawingML::WriteTransformation(const tools::Rectangle& rRect,
@@ -1571,11 +1739,11 @@ void DrawingML::WriteRunProperties( const Reference< XPropertySet >& rRun, bool 
     if( CGETAD( CharColor ) )
     {
         sal_uInt32 color = *o3tl::doAccess<sal_uInt32>(mAny);
-        SAL_INFO("oox.shape", "run color: " << color << " auto: " << COL_AUTO);
+        SAL_INFO("oox.shape", "run color: " << color << " auto: " << sal_uInt32(COL_AUTO));
 
         // tdf#104219 In LibreOffice and MS Office, there are two types of colors:
         // Automatic and Fixed. OOXML is setting automatic color, by not providing color.
-        if( color != COL_AUTO )
+        if( color != sal_uInt32(COL_AUTO) )
         {
             color &= 0xffffff;
             // TODO: special handle embossed/engraved
@@ -1587,7 +1755,7 @@ void DrawingML::WriteRunProperties( const Reference< XPropertySet >& rRun, bool 
     {
         sal_uInt32 color = *o3tl::doAccess<sal_uInt32>(mAny);
         // if color is automatic, then we shouldn't write information about color but to take color from character
-        if( color != COL_AUTO )
+        if( color != sal_uInt32(COL_AUTO) )
         {
             mpFS->startElementNS( XML_a, XML_uFill, FSEND);
             WriteSolidFill( color );
@@ -1907,6 +2075,7 @@ void DrawingML::WriteParagraphNumbering(const Reference< XPropertySet >& rXPropS
     awt::FontDescriptor aFontDesc;
     bool bHasFontDesc = false;
     OUString aGraphicURL;
+    uno::Reference<graphic::XGraphic> xGraphic;
     sal_Int16 nBulletRelSize = 0;
     sal_Int16 nStartWith = 1;
     sal_uInt32 nBulletColor = 0;
@@ -1964,6 +2133,11 @@ void DrawingML::WriteParagraphNumbering(const Reference< XPropertySet >& rXPropS
         {
             nStartWith = *o3tl::doAccess<sal_Int16>(pPropValue[i].Value);
         }
+        else if (aPropName == "GraphicBitmap")
+        {
+            auto xBitmap = pPropValue[i].Value.get<uno::Reference<awt::XBitmap>>();
+            xGraphic.set(xBitmap, uno::UNO_QUERY);
+        }
         else if ( aPropName == "GraphicURL" )
         {
             aGraphicURL = *o3tl::doAccess<OUString>(pPropValue[i].Value);
@@ -1979,39 +2153,38 @@ void DrawingML::WriteParagraphNumbering(const Reference< XPropertySet >& rXPropS
     if (nNumberingType == SVX_NUM_NUMBER_NONE)
         return;
 
-    if( !aGraphicURL.isEmpty() )
+    Graphic aGraphic(xGraphic);
+    if (xGraphic.is() && aGraphic.GetType() != GraphicType::NONE)
     {
         long nFirstCharHeightMm = TransformMetric(fFirstCharHeight * 100.f, FUNIT_POINT, FUNIT_MM);
         float fBulletSizeRel = aGraphicSize.Height / static_cast<float>(nFirstCharHeightMm) / OOX_BULLET_LIST_SCALE_FACTOR;
 
         OUString sRelationId;
 
-        if(fBulletSizeRel < 1.f)
+        if (fBulletSizeRel < 1.0f)
         {
             // Add padding to get the bullet point centered in PPT
-            Graphic aGraphic;
-            if (lcl_URLToGraphic(aGraphicURL, aGraphic))
-            {
-                Size aDestSize(64, 64);
-                float fBulletSizeRelX = fBulletSizeRel / aGraphicSize.Height * aGraphicSize.Width;
-                long nPaddingX = std::max<long>(0, std::lround((aDestSize.Width() - fBulletSizeRelX * aDestSize.Width()) / 2.f));
-                long nPaddingY = std::lround((aDestSize.Height() - fBulletSizeRel * aDestSize.Height()) / 2.f);
-                tools::Rectangle aDestRect(nPaddingX, nPaddingY, aDestSize.Width() - nPaddingX, aDestSize.Height() - nPaddingY);
+            Size aDestSize(64, 64);
+            float fBulletSizeRelX = fBulletSizeRel / aGraphicSize.Height * aGraphicSize.Width;
+            long nPaddingX = std::max<long>(0, std::lround((aDestSize.Width() - fBulletSizeRelX * aDestSize.Width()) / 2.f));
+            long nPaddingY = std::lround((aDestSize.Height() - fBulletSizeRel * aDestSize.Height()) / 2.f);
+            tools::Rectangle aDestRect(nPaddingX, nPaddingY, aDestSize.Width() - nPaddingX, aDestSize.Height() - nPaddingY);
 
-                AlphaMask aMask(aDestSize);
-                aMask.Erase(255);
-                BitmapEx aSourceBitmap(aGraphic.GetBitmapEx());
-                aSourceBitmap.Scale(aDestRect.GetSize());
-                tools::Rectangle aSourceRect(Point(0, 0), aDestRect.GetSize());
-                BitmapEx aDestBitmap(Bitmap(aDestSize, 24), aMask);
-                aDestBitmap.CopyPixel(aDestRect, aSourceRect, &aSourceBitmap);
-                Graphic aDestGraphic(aDestBitmap);
-                sRelationId = WriteImage(aDestGraphic);
-                fBulletSizeRel = 1.f;
-            }
+            AlphaMask aMask(aDestSize);
+            aMask.Erase(255);
+            BitmapEx aSourceBitmap(aGraphic.GetBitmapEx());
+            aSourceBitmap.Scale(aDestRect.GetSize());
+            tools::Rectangle aSourceRect(Point(0, 0), aDestRect.GetSize());
+            BitmapEx aDestBitmap(Bitmap(aDestSize, 24), aMask);
+            aDestBitmap.CopyPixel(aDestRect, aSourceRect, &aSourceBitmap);
+            Graphic aDestGraphic(aDestBitmap);
+            sRelationId = WriteImage(aDestGraphic);
+            fBulletSizeRel = 1.0f;
         }
         else
-            sRelationId = WriteImage(aGraphicURL);
+        {
+            sRelationId = WriteImage(aGraphic);
+        }
 
         mpFS->singleElementNS( XML_a, XML_buSzPct,
                                XML_val, IS( std::min(static_cast<sal_Int32>(std::lround(100000.f * fBulletSizeRel)), static_cast<sal_Int32>(400000))), FSEND);
@@ -2023,7 +2196,7 @@ void DrawingML::WriteParagraphNumbering(const Reference< XPropertySet >& rXPropS
     {
         if(bHasBulletColor)
         {
-               if (nBulletColor == COL_AUTO )
+               if (nBulletColor == sal_uInt32(COL_AUTO) )
                {
                    nBulletColor = mbIsBackgroundDark ? 0xffffff : 0x000000;
                }
@@ -2398,8 +2571,25 @@ void DrawingML::WriteText( const Reference< XInterface >& rXIface, const OUStrin
             TextFitToSizeType eFit = TextFitToSizeType_NONE;
             if (GETA(TextFitToSize))
                 mAny >>= eFit;
+
             if (eFit == TextFitToSizeType_AUTOFIT)
-                mpFS->singleElementNS(XML_a, XML_normAutofit, FSEND);
+            {
+                const sal_Int32 MAX_SCALE_VAL = 100000;
+                sal_Int32 nFontScale = MAX_SCALE_VAL;
+                SvxShapeText* pTextShape = dynamic_cast<SvxShapeText*>(rXIface.get());
+                if (pTextShape)
+                {
+                    SdrTextObj* pTextObject = dynamic_cast<SdrTextObj*>(pTextShape->GetSdrObject());
+                    if (pTextObject)
+                    {
+                        double fScaleY = pTextObject->GetFontScaleY();
+                        nFontScale = static_cast<sal_uInt32>(fScaleY * 100) * 1000;
+                    }
+                }
+
+                mpFS->singleElementNS(XML_a, XML_normAutofit, XML_fontScale,
+                    ( nFontScale < MAX_SCALE_VAL && nFontScale > 0 ) ? I32S(nFontScale) : nullptr, FSEND);
+            }
         }
         mpFS->endElementNS((nXmlNamespace ? nXmlNamespace : XML_a), XML_bodyPr);
     }
@@ -2963,7 +3153,7 @@ void DrawingML::WriteFill( const Reference< XPropertySet >& xPropSet )
         WriteGradientFill( xPropSet );
         break;
     case FillStyle_BITMAP :
-        WriteBlipFill( xPropSet, "FillBitmapURL" );
+        WriteBlipFill( xPropSet, "FillBitmap" );
         break;
     case FillStyle_HATCH :
         WritePattFill( xPropSet );
@@ -3223,31 +3413,33 @@ sal_Int32 lcl_CalculateDir(const double dX, const double dY)
 
 void DrawingML::WriteShapeEffects( const Reference< XPropertySet >& rXPropSet )
 {
-    if( !GetProperty( rXPropSet, "InteropGrabBag" ) )
-        return;
-
     Sequence< PropertyValue > aGrabBag, aEffects, aOuterShdwProps;
-    mAny >>= aGrabBag;
-    for( sal_Int32 i=0; i < aGrabBag.getLength(); ++i )
+    if( GetProperty( rXPropSet, "InteropGrabBag" ) )
     {
-        if( aGrabBag[i].Name == "EffectProperties" )
+        mAny >>= aGrabBag;
+        for( sal_Int32 i=0; i < aGrabBag.getLength(); ++i )
         {
-            aGrabBag[i].Value >>= aEffects;
-            for( sal_Int32 j=0; j < aEffects.getLength(); ++j )
+            if( aGrabBag[i].Name == "EffectProperties" )
             {
-                if( aEffects[j].Name == "outerShdw" )
+                aGrabBag[i].Value >>= aEffects;
+                for( sal_Int32 j=0; j < aEffects.getLength(); ++j )
                 {
-                    aEffects[j].Value >>= aOuterShdwProps;
-                    break;
+                    if( aEffects[j].Name == "outerShdw" )
+                    {
+                        aEffects[j].Value >>= aOuterShdwProps;
+                        break;
+                    }
                 }
+                break;
             }
-            break;
         }
     }
+
     if( aEffects.getLength() == 0 )
     {
         bool bHasShadow = false;
-        rXPropSet->getPropertyValue( "Shadow" ) >>= bHasShadow;
+        if( GetProperty( rXPropSet, "Shadow" ) )
+            mAny >>= bHasShadow;
         if( bHasShadow )
         {
             Sequence< PropertyValue > aShadowGrabBag( 3 );

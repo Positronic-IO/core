@@ -189,6 +189,10 @@ void ScDocumentImport::setAutoInput(const ScAddress& rPos, const OUString& rStr,
     if (!pBlockPos)
         return;
 
+    // If ScSetStringParam was given, ScColumn::ParseString() shall take care
+    // of checking. Ensure caller said so.
+    assert(!pStringParam || pStringParam->mbCheckLinkFormula);
+
     ScCellValue aCell;
     pTab->aCol[rPos.Col()].ParseString(
         aCell, rPos.Row(), rPos.Tab(), rStr, mpImpl->mrDoc.GetAddressConvention(), pStringParam);
@@ -209,6 +213,8 @@ void ScDocumentImport::setAutoInput(const ScAddress& rPos, const OUString& rStr,
             pBlockPos->miCellPos = rCells.set(pBlockPos->miCellPos, rPos.Row(), aCell.mfValue);
         break;
         case CELLTYPE_FORMULA:
+            if (!pStringParam)
+                mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *aCell.mpFormula->GetCode());
             // This formula cell instance is directly placed in the document without copying.
             pBlockPos->miCellPos = rCells.set(pBlockPos->miCellPos, rPos.Row(), aCell.mpFormula);
             aCell.mpFormula = nullptr;
@@ -284,6 +290,8 @@ void ScDocumentImport::setFormulaCell(
     std::unique_ptr<ScFormulaCell> pFC =
         o3tl::make_unique<ScFormulaCell>(&mpImpl->mrDoc, rPos, rFormula, eGrammar);
 
+    mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *pFC->GetCode());
+
     if (pResult)
     {
         // Set cached result to this formula cell.
@@ -311,6 +319,8 @@ void ScDocumentImport::setFormulaCell(
     std::unique_ptr<ScFormulaCell> pFC =
         o3tl::make_unique<ScFormulaCell>(&mpImpl->mrDoc, rPos, rFormula, eGrammar);
 
+    mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *pFC->GetCode());
+
     // Set cached result to this formula cell.
     pFC->SetHybridString(mpImpl->mrDoc.GetSharedStringPool().intern(rResult));
 
@@ -330,9 +340,14 @@ void ScDocumentImport::setFormulaCell(const ScAddress& rPos, ScTokenArray* pArra
     if (!pBlockPos)
         return;
 
+    std::unique_ptr<ScFormulaCell> pFC =
+        o3tl::make_unique<ScFormulaCell>(&mpImpl->mrDoc, rPos, pArray);
+
+    mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *pFC->GetCode());
+
     sc::CellStoreType& rCells = pTab->aCol[rPos.Col()].maCells;
     pBlockPos->miCellPos =
-        rCells.set(pBlockPos->miCellPos, rPos.Row(), new ScFormulaCell(&mpImpl->mrDoc, rPos, pArray));
+        rCells.set(pBlockPos->miCellPos, rPos.Row(), pFC.release());
 }
 
 void ScDocumentImport::setFormulaCell(const ScAddress& rPos, ScFormulaCell* pCell)
@@ -345,6 +360,9 @@ void ScDocumentImport::setFormulaCell(const ScAddress& rPos, ScFormulaCell* pCel
 
     if (!pBlockPos)
         return;
+
+    if (pCell)
+        mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *pCell->GetCode());
 
     sc::CellStoreType& rCells = pTab->aCol[rPos.Col()].maCells;
     pBlockPos->miCellPos =
@@ -369,6 +387,8 @@ void ScDocumentImport::setMatrixCells(
 
     // Set the master cell.
     ScFormulaCell* pCell = new ScFormulaCell(&mpImpl->mrDoc, rBasePos, rArray, eGram, ScMatrixMode::Formula);
+
+    mpImpl->mrDoc.CheckLinkFormulaNeedingCheck( *pCell->GetCode());
 
     pBlockPos->miCellPos =
         rCells.set(pBlockPos->miCellPos, rBasePos.Row(), pCell);

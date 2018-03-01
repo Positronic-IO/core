@@ -460,7 +460,7 @@ sal_Int32 OSXBluetoothWrapper::readLine( OString& aLine )
                     if (*p == '\n')
                         s << "\\n";
                     else if (*p < ' ' || *p >= 0x7F)
-                        s << "\\0x" << std::hex << std::setw(2) << std::setfill('0') << (int) *p << std::setfill(' ') << std::setw(1) << std::dec;
+                        s << "\\0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(*p) << std::setfill(' ') << std::setw(1) << std::dec;
                     else
                         s << *p;
                 }
@@ -1332,16 +1332,14 @@ void SAL_CALL BluetoothServer::run()
         return;
     }
 
-    SOCKADDR aName;
+    SOCKADDR_BTH aName;
     int aNameSize = sizeof(aName);
-    getsockname( aSocket, &aName, &aNameSize ); // Retrieve the local address and port
+    getsockname( aSocket, reinterpret_cast<SOCKADDR*>(&aName), &aNameSize ); // Retrieve the local address and port
 
     CSADDR_INFO aAddrInfo;
     memset( &aAddrInfo, 0, sizeof(aAddrInfo) );
-    aAddrInfo.LocalAddr.lpSockaddr = &aName;
+    aAddrInfo.LocalAddr.lpSockaddr = reinterpret_cast<SOCKADDR*>(&aName);
     aAddrInfo.LocalAddr.iSockaddrLength = sizeof( SOCKADDR_BTH );
-    aAddrInfo.RemoteAddr.lpSockaddr = &aName;
-    aAddrInfo.RemoteAddr.iSockaddrLength = sizeof( SOCKADDR_BTH );
     aAddrInfo.iSocketType = SOCK_STREAM;
     aAddrInfo.iProtocol = BTHPROTO_RFCOMM;
 
@@ -1365,7 +1363,6 @@ void SAL_CALL BluetoothServer::run()
     aRecord.dwNameSpace = NS_BTH;
     aRecord.dwNumberOfCsAddrs = 1;
     aRecord.lpcsaBuffer = &aAddrInfo;
-
     if (WSASetServiceW( &aRecord, RNRSERVICE_REGISTER, 0 ) == SOCKET_ERROR)
     {
         closesocket( aSocket );

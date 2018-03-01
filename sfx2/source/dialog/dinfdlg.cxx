@@ -21,9 +21,9 @@
 #include <svl/urihelper.hxx>
 #include <tools/datetime.hxx>
 #include <tools/urlobj.hxx>
-#include <vcl/layout.hxx>
 #include <vcl/mnemonic.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/cmdoptions.hxx>
 #include <comphelper/processfactory.hxx>
@@ -1239,7 +1239,7 @@ CustomPropertiesYesNoButton::CustomPropertiesYesNoButton(vcl::Window* pParent)
     SetBackground( Wallpaper( GetSettings().GetStyleSettings().GetFieldColor() ) );
     SetBorderStyle( WindowBorderStyle::MONO  );
     CheckNo();
-    Wallpaper aWall( Color( COL_TRANSPARENT ) );
+    Wallpaper aWall( COL_TRANSPARENT );
     m_aYesButton->SetBackground( aWall );
     m_aNoButton->SetBackground( aWall );
 }
@@ -1393,7 +1393,7 @@ void CustomPropertiesYesNoButton::Resize()
     Size aSize(nNewWidth, m_aYesButton->get_preferred_size().Height());
     Point aPos(n1Width, (aParentSize.Height() - aSize.Height()) / 2);
     m_aYesButton->SetPosSizePixel(aPos, aSize);
-    aPos.X() += aSize.Width() + n3Width;
+    aPos.AdjustX(aSize.Width() + n3Width );
     m_aNoButton->SetPosSizePixel(aPos, aSize);
 }
 
@@ -1658,7 +1658,9 @@ void CustomPropertiesWindow::ValidateLine( CustomPropertyLine* pLine, bool bIsFr
         if ( bIsFromTypeBox ) // LoseFocus of TypeBox
             pLine->m_bTypeLostFocus = true;
         vcl::Window* pParent = GetParent()->GetParent();
-        if (ScopedVclPtrInstance<MessageDialog>(pParent, SfxResId(STR_SFX_QUERY_WRONG_TYPE), VclMessageType::Question, VclButtonsType::OkCancel)->Execute() == RET_OK)
+        std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+                                                         VclMessageType::Question, VclButtonsType::OkCancel, SfxResId(STR_SFX_QUERY_WRONG_TYPE)));
+        if (xMessageBox->run() == RET_OK)
             pLine->m_aTypeBox->SelectEntryPos(pLine->m_aTypeBox->GetEntryPos(reinterpret_cast<void*>(CUSTOM_TYPE_TEXT)));
         else
             pLine->m_aValueEdit->GrabFocus();

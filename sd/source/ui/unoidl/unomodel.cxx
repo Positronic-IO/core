@@ -45,6 +45,7 @@
 #include "unopool.hxx"
 #include <sfx2/dispatch.hxx>
 #include <sfx2/bindings.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -179,20 +180,20 @@ void SdUnoForbiddenCharsTable::Notify( SfxBroadcaster&, const SfxHint& rHint ) t
     }
 }
 
-const sal_Int32 WID_MODEL_LANGUAGE           =  1;
-const sal_Int32 WID_MODEL_TABSTOP            =  2;
-const sal_Int32 WID_MODEL_VISAREA            =  3;
-const sal_Int32 WID_MODEL_MAPUNIT            =  4;
-const sal_Int32 WID_MODEL_FORBCHARS          =  5;
-const sal_Int32 WID_MODEL_CONTFOCUS          =  6;
-const sal_Int32 WID_MODEL_DSGNMODE           =  7;
-const sal_Int32 WID_MODEL_BASICLIBS          =  8;
-const sal_Int32 WID_MODEL_RUNTIMEUID         =  9;
-const sal_Int32 WID_MODEL_BUILDID            = 10;
-const sal_Int32 WID_MODEL_HASVALIDSIGNATURES = 11;
-const sal_Int32 WID_MODEL_DIALOGLIBS         = 12;
-const sal_Int32 WID_MODEL_FONTS              = 13;
-const sal_Int32 WID_MODEL_INTEROPGRABBAG     = 14;
+const sal_uInt16 WID_MODEL_LANGUAGE           =  1;
+const sal_uInt16 WID_MODEL_TABSTOP            =  2;
+const sal_uInt16 WID_MODEL_VISAREA            =  3;
+const sal_uInt16 WID_MODEL_MAPUNIT            =  4;
+const sal_uInt16 WID_MODEL_FORBCHARS          =  5;
+const sal_uInt16 WID_MODEL_CONTFOCUS          =  6;
+const sal_uInt16 WID_MODEL_DSGNMODE           =  7;
+const sal_uInt16 WID_MODEL_BASICLIBS          =  8;
+const sal_uInt16 WID_MODEL_RUNTIMEUID         =  9;
+const sal_uInt16 WID_MODEL_BUILDID            = 10;
+const sal_uInt16 WID_MODEL_HASVALIDSIGNATURES = 11;
+const sal_uInt16 WID_MODEL_DIALOGLIBS         = 12;
+const sal_uInt16 WID_MODEL_FONTS              = 13;
+const sal_uInt16 WID_MODEL_INTEROPGRABBAG     = 14;
 
 const SvxItemPropertySet* ImplGetDrawModelPropertySet()
 {
@@ -576,7 +577,7 @@ void SdXImpressDocument::SetModified() throw()
 }
 
 // XModel
-void SAL_CALL SdXImpressDocument    ::lockControllers(  )
+void SAL_CALL SdXImpressDocument::lockControllers(  )
 {
     ::SolarMutexGuard aGuard;
 
@@ -2336,6 +2337,22 @@ OUString SdXImpressDocument::getPartHash( int nPart )
     return OUString::number(pPage->GetHashCode());
 }
 
+VclPtr<vcl::Window> SdXImpressDocument::getDocWindow()
+{
+    SolarMutexGuard aGuard;
+    DrawViewShell* pViewShell = GetViewShell();
+    VclPtr<vcl::Window> pWindow;
+    if (pViewShell)
+        pWindow = pViewShell->GetActiveWindow();
+
+    LokChartHelper aChartHelper(pViewShell->GetViewShell());
+    VclPtr<vcl::Window> pChartWindow = aChartHelper.GetWindow();
+    if (pChartWindow)
+        pWindow = pChartWindow;
+
+    return pWindow;
+}
+
 void SdXImpressDocument::setPartMode( int nPartMode )
 {
     DrawViewShell* pViewSh = GetViewShell();
@@ -2455,35 +2472,26 @@ void SdXImpressDocument::postKeyEvent(int nType, int nCharCode, int nKeyCode)
 {
     SolarMutexGuard aGuard;
 
-    DrawViewShell* pViewShell = GetViewShell();
-    if (!pViewShell)
-        return;
-
-    vcl::Window* pWindow = pViewShell->GetActiveWindow();
+    VclPtr<vcl::Window> pWindow = getDocWindow();
     if (!pWindow)
         return;
 
-    LokChartHelper aChartHelper(pViewShell->GetViewShell());
-    vcl::Window* pChartWindow = aChartHelper.GetWindow();
-    if (pChartWindow)
-    {
-        pWindow = pChartWindow;
-    }
-
-    KeyEvent aEvent(nCharCode, nKeyCode, 0);
-
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = pWindow;
     switch (nType)
     {
     case LOK_KEYEVENT_KEYINPUT:
-        pWindow->KeyInput(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyInput;
         break;
     case LOK_KEYEVENT_KEYUP:
-        pWindow->KeyUp(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowKeyUp;
         break;
     default:
         assert(false);
-        break;
     }
+
+    pLOKEv->maKeyEvent = KeyEvent(nCharCode, nKeyCode, 0);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void SdXImpressDocument::postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier)
@@ -2511,33 +2519,28 @@ void SdXImpressDocument::postMouseEvent(int nType, int nX, int nY, int nCount, i
             return;
     }
 
-    Window* pWindow = pViewShell->GetActiveWindow();
-
-    Point aPos(Point(convertTwipToMm100(nX), convertTwipToMm100(nY)));
-    MouseEvent aEvent(aPos, nCount,
-            MouseEventModifiers::SIMPLECLICK, nButtons, nModifier);
-
+    LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
+    pLOKEv->mpWindow = pViewShell->GetActiveWindow();
     switch (nType)
     {
     case LOK_MOUSEEVENT_MOUSEBUTTONDOWN:
-        pViewShell->LogicMouseButtonDown(aEvent);
-
-        if (nButtons & MOUSE_RIGHT)
-        {
-            const CommandEvent aCEvt(aPos, CommandEventId::ContextMenu, true, nullptr);
-            pViewShell->Command(aCEvt, pWindow);
-        }
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonDown;
         break;
     case LOK_MOUSEEVENT_MOUSEBUTTONUP:
-        pViewShell->LogicMouseButtonUp(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowMouseButtonUp;
         break;
     case LOK_MOUSEEVENT_MOUSEMOVE:
-        pViewShell->LogicMouseMove(aEvent);
+        pLOKEv->mnEvent = VclEventId::WindowMouseMove;
         break;
     default:
         assert(false);
-        break;
     }
+
+    const Point aPos(Point(convertTwipToMm100(nX), convertTwipToMm100(nY)));
+    pLOKEv->maMouseEvent = MouseEvent(aPos, nCount,
+                                      MouseEventModifiers::SIMPLECLICK,
+                                      nButtons, nModifier);
+    Application::PostUserEvent(Link<void*, void>(pLOKEv, ITiledRenderable::LOKPostAsyncEvent));
 }
 
 void SdXImpressDocument::setTextSelection(int nType, int nX, int nY)
@@ -3130,27 +3133,24 @@ uno::Reference< drawing::XDrawPage > SAL_CALL SdMasterPagesAccess::insertNewByIn
         OUString aPrefix( aStdPrefix );
 
         bool bUnique = true;
-        sal_Int32 i = 0;
-        do
+
+        std::vector<OUString> aPageNames;
+        for (sal_Int32 nMaster = 1; nMaster < nMPageCount; ++nMaster)
         {
-            bUnique = true;
-            for( sal_Int32 nMaster = 1; nMaster < nMPageCount; nMaster++ )
-            {
-                SdPage* pPage = static_cast<SdPage*>(pDoc->GetMasterPage(static_cast<sal_uInt16>(nMaster)));
-                if( pPage && pPage->GetName() == aPrefix )
-                {
-                    bUnique = false;
-                    break;
-                }
-            }
+            const SdPage* pPage = static_cast<const SdPage*>(pDoc->GetMasterPage(static_cast<sal_uInt16>(nMaster)));
+            if (!pPage)
+                continue;
+            aPageNames.push_back(pPage->GetName());
+            if (aPageNames.back() == aPrefix)
+                bUnique = false;
+        }
 
-            if( !bUnique )
-            {
-                i++;
-                aPrefix = aStdPrefix + " " + OUString::number( i );
-            }
-
-        } while( !bUnique );
+        sal_Int32 i = 0;
+        while (!bUnique)
+        {
+            aPrefix = aStdPrefix + " " + OUString::number(++i);
+            bUnique = std::find(aPageNames.begin(), aPageNames.end(), aPrefix) == aPageNames.end();
+        }
 
         OUString aLayoutName( aPrefix );
         aLayoutName += SD_LT_SEPARATOR;

@@ -89,11 +89,11 @@ struct SfxInterface_Impl
 
     ~SfxInterface_Impl()
     {
-        for (SfxObjectUIArr_Impl::const_iterator it = aObjectBars.begin(); it != aObjectBars.end(); ++it)
-            delete *it;
+        for (auto const& objectBar : aObjectBars)
+            delete objectBar;
 
-        for (SfxObjectUIArr_Impl::const_iterator it = aChildWindows.begin(); it != aChildWindows.end(); ++it)
-            delete *it;
+        for (auto const& childWindow : aChildWindows)
+            delete childWindow;
     }
 };
 
@@ -201,7 +201,11 @@ SfxInterface::~SfxInterface()
     if ( bRegistered )
     {
         if ( pMod )
-            pMod->GetSlotPool()->ReleaseInterface(*this);
+        {
+            // can return nullptr if we are called from the SfxSlotPool destructor
+            if (pMod->GetSlotPool())
+                pMod->GetSlotPool()->ReleaseInterface(*this);
+        }
         else
             SfxGetpApp()->GetAppSlotPool_Impl().ReleaseInterface(*this);
     }

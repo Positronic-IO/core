@@ -16,9 +16,6 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-#ifdef _MSC_VER
-#pragma warning(disable : 4917 4555)
-#endif
 
 #include <embeddoc.hxx>
 
@@ -118,8 +115,8 @@ STDMETHODIMP EmbedDocument_Impl::GetData( FORMATETC * pFormatetc, STGMEDIUM * pM
     }
     else
     {
-        CLIPFORMAT cf_embSource = (CLIPFORMAT)RegisterClipboardFormatW( L"Embed Source" );
-        CLIPFORMAT cf_embObj = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+        CLIPFORMAT cf_embSource = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embed Source" ));
+        CLIPFORMAT cf_embObj = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
         if ( pFormatetc->cfFormat == cf_embSource || pFormatetc->cfFormat == cf_embObj )
         {
             if ( !( pFormatetc->tymed & TYMED_ISTORAGE ) )
@@ -157,8 +154,8 @@ STDMETHODIMP EmbedDocument_Impl::GetDataHere( FORMATETC * pFormatetc, STGMEDIUM 
       || pFormatetc->dwAspect == DVASPECT_DOCPRINT )
         return DV_E_DVASPECT;
 
-    CLIPFORMAT cf_embSource = (CLIPFORMAT)RegisterClipboardFormatW( L"Embed Source" );
-    CLIPFORMAT cf_embObj = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+    CLIPFORMAT cf_embSource = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embed Source" ));
+    CLIPFORMAT cf_embObj = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
 
     if ( pFormatetc->cfFormat == cf_embSource || pFormatetc->cfFormat == cf_embObj )
     {
@@ -204,8 +201,8 @@ STDMETHODIMP EmbedDocument_Impl::QueryGetData( FORMATETC * pFormatetc )
         }
         else
         {
-            CLIPFORMAT cf_embSource = (CLIPFORMAT)RegisterClipboardFormatW( L"Embed Source" );
-            CLIPFORMAT cf_embObj = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+            CLIPFORMAT cf_embSource = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embed Source" ));
+            CLIPFORMAT cf_embObj = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
             if ( pFormatetc->cfFormat == cf_embSource || pFormatetc->cfFormat == cf_embObj )
             {
                 if ( !( pFormatetc->tymed & TYMED_ISTORAGE ) )
@@ -241,8 +238,8 @@ STDMETHODIMP EmbedDocument_Impl::GetCanonicalFormatEtc( FORMATETC * pFormatetcIn
     }
     else
     {
-        CLIPFORMAT cf_embSource = (CLIPFORMAT)RegisterClipboardFormatW( L"Embed Source" );
-        CLIPFORMAT cf_embObj = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+        CLIPFORMAT cf_embSource = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embed Source" ));
+        CLIPFORMAT cf_embObj = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
         if ( pFormatetcIn->cfFormat == cf_embSource || pFormatetcIn->cfFormat == cf_embObj )
         {
             pFormatetcOut->tymed = TYMED_ISTORAGE;

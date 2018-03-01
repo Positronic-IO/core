@@ -45,6 +45,7 @@
 
 #include <vcl/virdev.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <inputopt.hxx>
 #include <global.hxx>
@@ -864,8 +865,10 @@ void ScDocument::UpdateExternalRefLinks(vcl::Window* pWin)
         aBuf.append(ScResId(SCSTR_EXTDOC_NOT_LOADED));
         aBuf.append("\n\n");
         aBuf.append(aFile);
-        ScopedVclPtrInstance< MessageDialog > aBox(pWin, aBuf.makeStringAndClear());
-        aBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                  VclMessageType::Warning, VclButtonsType::Ok,
+                                                  aBuf.makeStringAndClear()));
+        xBox->run();
     }
 
     pExternalRefMgr->enableDocTimer(true);
@@ -1182,8 +1185,24 @@ void ScDocument::CheckLinkFormulaNeedingCheck( const ScTokenArray& rCode )
     if (HasLinkFormulaNeedingCheck())
         return;
 
-    if (rCode.HasOpCodeRPN(ocDde) || rCode.HasOpCodeRPN(ocWebservice))
-        SetLinkFormulaNeedingCheck(true);
+    // Prefer RPN over tokenized formula if available.
+    if (rCode.GetCodeLen())
+    {
+        if (rCode.HasOpCodeRPN(ocDde) || rCode.HasOpCodeRPN(ocWebservice))
+            SetLinkFormulaNeedingCheck(true);
+    }
+    else if (rCode.GetLen())
+    {
+        if (rCode.HasOpCode(ocDde) || rCode.HasOpCode(ocWebservice))
+            SetLinkFormulaNeedingCheck(true);
+    }
+    else
+    {
+        // Possible with named expression without expression like Excel
+        // internal print ranges, obscure user define names, ... formula error
+        // cells without formula ...
+        SAL_WARN("sc.core","ScDocument::CheckLinkFormulaNeedingCheck - called with empty ScTokenArray");
+    }
 }
 
 // TimerDelays etc.

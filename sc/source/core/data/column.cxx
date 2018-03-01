@@ -46,6 +46,8 @@
 #include <refhint.hxx>
 #include <stlalgorithm.hxx>
 #include <formulagroup.hxx>
+#include <userdat.hxx>
+#include <drwlayer.hxx>
 
 #include <svl/poolcach.hxx>
 #include <svl/zforlist.hxx>
@@ -1234,7 +1236,7 @@ namespace {
 
 bool canCopyValue(const ScDocument& rDoc, const ScAddress& rPos, InsertDeleteFlags nFlags)
 {
-    sal_uInt32 nNumIndex = static_cast<const SfxUInt32Item*>(rDoc.GetAttr(rPos, ATTR_VALUE_FORMAT))->GetValue();
+    sal_uInt32 nNumIndex = rDoc.GetAttr(rPos, ATTR_VALUE_FORMAT)->GetValue();
     SvNumFormatType nType = rDoc.GetFormatTable()->GetType(nNumIndex);
     if ((nType == SvNumFormatType::DATE) || (nType == SvNumFormatType::TIME) || (nType == SvNumFormatType::DATETIME))
         return ((nFlags & InsertDeleteFlags::DATETIME) != InsertDeleteFlags::NONE);
@@ -1890,6 +1892,43 @@ void ScColumn::UpdateNoteCaptions( SCROW nRow1, SCROW nRow2 )
 {
     NoteCaptionUpdater aFunc(nCol, nTab);
     sc::ProcessNote(maCellNotes.begin(), maCellNotes, nRow1, nRow2, aFunc);
+}
+
+void ScColumn::UpdateDrawObjects(std::vector<std::vector<SdrObject*>>& pObjects, SCROW nRowStart, SCROW nRowEnd)
+{
+    assert(static_cast<int>(pObjects.size()) >= nRowEnd - nRowStart + 1);
+
+    int nObj = 0;
+    for (SCROW nCurrentRow = nRowStart; nCurrentRow <= nRowEnd; nCurrentRow++, nObj++)
+    {
+        if (pObjects[nObj].empty())
+            continue; // No draw objects in this row
+
+        UpdateDrawObjectsForRow(pObjects[nObj], nCol, nCurrentRow);
+    }
+}
+
+void ScColumn::UpdateDrawObjectsForRow( std::vector<SdrObject*>& pObjects, SCCOL nTargetCol, SCROW nTargetRow )
+{
+    for (auto &pObject : pObjects)
+    {
+        ScAddress aNewAddress = ScAddress(nTargetCol, nTargetRow, nTab);
+
+        // Update draw object according to new anchor
+        ScDrawLayer* pDrawLayer = GetDoc()->GetDrawLayer();
+        if (pDrawLayer)
+            pDrawLayer->MoveObject(pObject, aNewAddress);
+    }
+}
+
+bool ScColumn::IsDrawObjectsEmptyBlock(SCROW nStartRow, SCROW nEndRow) const
+{
+    ScDrawLayer* pDrawLayer = GetDoc()->GetDrawLayer();
+    if (!pDrawLayer)
+        return true;
+
+    ScRange aRange(nCol, nStartRow, nTab, nCol, nEndRow, nTab);
+    return !pDrawLayer->HasObjectsAnchoredInRange(aRange);
 }
 
 void ScColumn::SwapCol(ScColumn& rCol)

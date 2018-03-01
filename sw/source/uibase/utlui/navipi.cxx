@@ -57,6 +57,8 @@
 #include <unomid.h>
 #include <memory>
 
+#include <uiobject.hxx>
+
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::frame;
 
@@ -433,6 +435,11 @@ void SwNavigationPI::CreateNavigationTool(const tools::Rectangle& rRect, bool bS
     }
 }
 
+FactoryFunction SwNavigationPI::GetUITestFactory() const
+{
+    return SwNavigationPIUIObject::create;
+}
+
 void SwNavHelpToolBox::RequestHelp(const HelpEvent& rHEvt)
 {
     const sal_uInt16 nItemId = GetItemId(ScreenToOutputPixel(rHEvt.GetMousePosPixel()));
@@ -539,7 +546,7 @@ void SwNavigationPI::ZoomOut()
 
     Size aOptimalSize(GetOptimalSize());
     Size aNewSize(pNav->GetOutputSizePixel());
-    aNewSize.Height() = m_aExpandedSize.Height();
+    aNewSize.setHeight( m_aExpandedSize.Height() );
     pNav->SetMinOutputSizePixel(aOptimalSize);
     pNav->SetOutputSizePixel(aNewSize);
 
@@ -569,7 +576,7 @@ void SwNavigationPI::ZoomIn()
 
     Size aOptimalSize(GetOptimalSize());
     Size aNewSize(pNav->GetOutputSizePixel());
-    aNewSize.Height() = aOptimalSize.Height();
+    aNewSize.setHeight( aOptimalSize.Height() );
     pNav->SetMinOutputSizePixel(aOptimalSize);
     pNav->SetOutputSizePixel(aNewSize);
 
@@ -644,7 +651,7 @@ SwNavigationPI::SwNavigationPI(SfxBindings* _pBindings,
     Size aItemWinSize( aFirstRect.Left() - aSecondRect.Left(),
                        aFirstRect.Bottom() - aFirstRect.Top() );
     Size aOptimalSize(m_xEdit->get_preferred_size());
-    aItemWinSize.Width() = std::max(aItemWinSize.Width(), aOptimalSize.Width());
+    aItemWinSize.setWidth( std::max(aItemWinSize.Width(), aOptimalSize.Width()) );
     m_xEdit->SetSizePixel(aItemWinSize);
     m_aContentToolBox->InsertSeparator(4);
     m_aContentToolBox->InsertWindow( FN_PAGENUMBER, m_xEdit, ToolBoxItemBits::NONE, 4);
@@ -682,7 +689,7 @@ SwNavigationPI::SwNavigationPI(SfxBindings* _pBindings,
     m_aStatusArr[3] = SwResId(STR_ACTIVE_VIEW);
 
     m_aContentTree->SetStyle(m_aContentTree->GetStyle()|WB_HASBUTTONS|WB_HASBUTTONSATROOT|
-                             WB_CLIPCHILDREN|WB_HSCROLL );
+                             WB_CLIPCHILDREN|WB_HSCROLL|WB_TABSTOP);
     m_aContentTree->SetForceMakeVisible(true);
     m_aContentTree->SetSpaceBetweenEntries(3);
     m_aContentTree->SetSelectionMode(SelectionMode::Single);
@@ -696,7 +703,7 @@ SwNavigationPI::SwNavigationPI(SfxBindings* _pBindings,
 //  TreeListBox for global document
     m_aGlobalTree->SetSelectionMode( SelectionMode::Multiple );
     m_aGlobalTree->SetStyle(m_aGlobalTree->GetStyle()|WB_HASBUTTONS|WB_HASBUTTONSATROOT|
-                            WB_CLIPCHILDREN|WB_HSCROLL);
+                            WB_CLIPCHILDREN|WB_HSCROLL|WB_TABSTOP);
 
 //  Handler
     Link<ToolBox *, void> aLk = LINK(this, SwNavigationPI, ToolBoxSelectHdl);
@@ -867,7 +874,7 @@ void SwNavigationPI::StateChanged(StateChangedType nStateChange)
         // the sidebar or is otherwise docked. While the navigator could change
         // its size, the sidebar can not, and the navigator would just waste
         // space. Therefore hide this button.
-        m_aContentToolBox->ShowItem(m_aContentToolBox->GetItemId("listbox"), SfxChildWindowContext::GetFloatingWindow(GetParent()));
+        m_aContentToolBox->ShowItem(m_aContentToolBox->GetItemId("listbox"), SfxChildWindowContext::GetFloatingWindow(GetParent()) != nullptr);
     }
     else if (nStateChange == StateChangedType::ControlFocus)
     {

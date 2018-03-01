@@ -56,7 +56,7 @@ void SwClient::CheckRegistration( const SfxPoolItem* pOld )
             return;
         }
         // destroy connection
-        m_pRegisteredIn->Remove(this);
+        EndListeningAll();
     }
 }
 
@@ -67,6 +67,20 @@ void SwClient::SwClientNotify(const SwModify&, const SfxHint& rHint)
         Modify(pLegacyHint->m_pOld, pLegacyHint->m_pNew);
     }
 };
+
+void SwClient::StartListeningToSameModifyAs(const SwClient& other)
+{
+    if(other.m_pRegisteredIn)
+        other.m_pRegisteredIn->Add(this);
+    else
+        EndListeningAll();
+}
+
+void SwClient::EndListeningAll()
+{
+    if(m_pRegisteredIn)
+        m_pRegisteredIn->Remove(this);
+}
 
 void SwClient::Modify(SfxPoolItem const*const pOldValue, SfxPoolItem const*const /*pNewValue*/)
 {

@@ -34,7 +34,6 @@
 #include <vcl/msgbox.hxx>
 #include <unotools/configmgr.hxx>
 #include <sfx2/sfxuno.hxx>
-#include <helpids.h>
 #include <UITools.hxx>
 
 #include <tools/urlobj.hxx>
@@ -480,7 +479,7 @@ void OSQLMessageBox::impl_positionControls()
     if ( bHaveSecondaryText )
         aSecondaryRect = GetTextRect( aSecondaryRect, sSecondary, DrawTextFlags::WordBreak | DrawTextFlags::MultiLine | DrawTextFlags::Left );
     else
-        aSecondaryRect.Bottom() = aSecondaryRect.Top() - 1;
+        aSecondaryRect.SetBottom( aSecondaryRect.Top() - 1 );
 
     // adjust secondary control height accordingly
     m_aMessage->SetSizePixel( aSecondaryRect.GetSize() );
@@ -490,8 +489,8 @@ void OSQLMessageBox::impl_positionControls()
     if ( !bHaveSecondaryText )
     {   // then give the primary text as much horizontal space as it needs
         tools::Rectangle aSuggestedRect( GetTextRect( aPrimaryRect, sPrimary, DrawTextFlags::WordBreak | DrawTextFlags::MultiLine | DrawTextFlags::Center ) );
-        aPrimaryRect.Right() = aPrimaryRect.Left() + aSuggestedRect.GetWidth();
-        aPrimaryRect.Bottom() = aPrimaryRect.Top() + aSuggestedRect.GetHeight();
+        aPrimaryRect.SetRight( aPrimaryRect.Left() + aSuggestedRect.GetWidth() );
+        aPrimaryRect.SetBottom( aPrimaryRect.Top() + aSuggestedRect.GetHeight() );
         // and center it horizontally
         m_aTitle->SetStyle( ( m_aTitle->GetStyle() & ~WB_LEFT ) | WB_CENTER );
 
@@ -499,7 +498,7 @@ void OSQLMessageBox::impl_positionControls()
         // also, if it's not as high as the image ...
         if ( aPrimaryRect.GetHeight() < m_aInfoImage->GetSizePixel().Height() )
         {   // ... make it fit the image height
-            aPrimaryRect.Bottom() += aInfoRect.GetHeight() - aPrimaryRect.GetHeight();
+            aPrimaryRect.AdjustBottom(aInfoRect.GetHeight() - aPrimaryRect.GetHeight() );
             // and center it vertically
             m_aTitle->SetStyle( m_aTitle->GetStyle() | WB_VCENTER );
         }
@@ -516,8 +515,8 @@ void OSQLMessageBox::impl_positionControls()
     const tools::Rectangle& rBottomTextRect( bHaveSecondaryText ? aSecondaryRect : aPrimaryRect );
     Size aBorderSize = LogicToPixel(Size(OUTER_MARGIN, OUTER_MARGIN), MapMode(MapUnit::MapAppFont));
     Size aDialogSize( LogicToPixel(Size(DIALOG_WIDTH, 30), MapMode(MapUnit::MapAppFont)));
-    aDialogSize.Height() = rBottomTextRect.Bottom() + aBorderSize.Height();
-    aDialogSize.Width() = aPrimaryRect.Right() + aBorderSize.Width();
+    aDialogSize.setHeight( rBottomTextRect.Bottom() + aBorderSize.Height() );
+    aDialogSize.setWidth( aPrimaryRect.Right() + aBorderSize.Width() );
 
     SetSizePixel( aDialogSize );
     SetPageSizePixel( aDialogSize );
@@ -623,16 +622,16 @@ void OSQLMessageBox::Construct( MessBoxStyle _nStyle, MessageType _eImage )
             OSL_FAIL( "OSQLMessageBox::impl_initImage: unsupported image type!" );
             SAL_FALLTHROUGH;
         case Info:
-            m_aInfoImage->SetImage(InfoBox::GetStandardImage());
+            m_aInfoImage->SetImage(GetStandardInfoBoxImage());
             break;
         case Warning:
-            m_aInfoImage->SetImage(WarningBox::GetStandardImage());
+            m_aInfoImage->SetImage(GetStandardWarningBoxImage());
             break;
         case Error:
-            m_aInfoImage->SetImage(ErrorBox::GetStandardImage());
+            m_aInfoImage->SetImage(GetStandardErrorBoxImage());
             break;
         case Query:
-            m_aInfoImage->SetImage(QueryBox::GetStandardImage());
+            m_aInfoImage->SetImage(GetStandardQueryBoxImage());
             break;
     }
 

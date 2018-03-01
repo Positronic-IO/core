@@ -203,12 +203,9 @@ void LibBox::FillBox()
     InsertEntries( ScriptDocument::getApplicationScriptDocument(), LIBRARY_LOCATION_SHARE );
 
     ScriptDocuments aDocuments( ScriptDocument::getAllScriptDocuments( ScriptDocument::DocumentsSorted ) );
-    for (   ScriptDocuments::const_iterator doc = aDocuments.begin();
-            doc != aDocuments.end();
-            ++doc
-        )
+    for (auto const& doc : aDocuments)
     {
-        InsertEntries( *doc, LIBRARY_LOCATION_DOCUMENT );
+        InsertEntries(doc, LIBRARY_LOCATION_DOCUMENT);
     }
 
     SetUpdateMode(true);
@@ -408,8 +405,7 @@ void LanguageBox::FillBox()
             OUString sLanguage = SvtLanguageTable::GetLanguageString( eLangType );
             if ( bIsDefault )
             {
-                sLanguage += " ";
-                sLanguage += m_sDefaultLanguageStr;
+                sLanguage += " " + m_sDefaultLanguageStr;
             }
             sal_Int32 nPos = InsertEntry( sLanguage );
             SetEntryData( nPos, new LanguageEntry( pLocale[i], bIsDefault ) );

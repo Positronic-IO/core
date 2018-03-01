@@ -119,8 +119,8 @@ XMLCharContext::XMLCharContext(
                 sal_Int32 nTmp = xAttrList->getValueByIndex(i).toInt32();
                 if( nTmp > 0 )
                 {
-                    if( nTmp > USHRT_MAX )
-                        m_nCount = USHRT_MAX;
+                    if( nTmp > SAL_MAX_UINT16 )
+                        m_nCount = SAL_MAX_UINT16;
                     else
                         m_nCount = static_cast<sal_uInt16>(nTmp);
                 }
@@ -1484,9 +1484,14 @@ XMLImpSpanContext_Impl::XMLImpSpanContext_Impl(
 
 XMLImpSpanContext_Impl::~XMLImpSpanContext_Impl()
 {
-    if( pHint )
-        pHint->SetEnd( GetImport().GetTextImport()
-                            ->GetCursorAsRange()->getStart() );
+    if (!pHint)
+        return;
+
+    Reference<XTextRange> xCrsrRange(GetImport().GetTextImport()->GetCursorAsRange());
+    if (!xCrsrRange.is())
+        return; // Robust (defective file)
+
+    pHint->SetEnd(xCrsrRange->getStart());
 }
 
 SvXMLImportContextRef XMLImpSpanContext_Impl::CreateChildContext(
@@ -1881,7 +1886,7 @@ void XMLParaContext::EndElement()
         GetImport().GetTextImport());
     Reference < XTextRange > xCrsrRange( xTxtImport->GetCursorAsRange() );
     if( !xCrsrRange.is() )
-        return; // Robust (defect file)
+        return; // Robust (defective file)
     Reference < XTextRange > xEnd(xCrsrRange->getStart());
 
     // if we have an id set for this paragraph, get a cursor for this
@@ -1907,7 +1912,7 @@ void XMLParaContext::EndElement()
     try {
         xAttrCursor = xTxtImport->GetText()->createTextCursorByRange( xStart );
         if( !xAttrCursor.is() )
-            return; // Robust (defect file)
+            return; // Robust (defective file)
     } catch (const uno::Exception &) {
         // createTextCursorByRange() likes to throw runtime exception, even
         // though it just means 'we were unable to create the cursor'

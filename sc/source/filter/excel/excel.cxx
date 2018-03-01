@@ -222,18 +222,6 @@ ErrCode ScFormatFilterPluginImpl::ScExportExcel5( SfxMedium& rMedium, ScDocument
     return eRet;
 }
 
-extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportQPW(SvStream &rStream)
-{
-    ScDLL::Init();
-    ScDocument aDocument;
-    ScDocOptions aDocOpt = aDocument.GetDocOptions();
-    aDocOpt.SetLookUpColRowNames(false);
-    aDocument.SetDocOptions(aDocOpt);
-    aDocument.MakeTable(0);
-    aDocument.EnableExecuteLink(false);
-    return ScFormatFilter::Get().ScImportQuattroPro(&rStream, &aDocument) == ERRCODE_NONE;
-}
-
 extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportCalcRTF(SvStream &rStream)
 {
     ScDLL::Init();
@@ -243,6 +231,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportCalcRTF(SvStream &rStream)
     aDocument.SetDocOptions(aDocOpt);
     aDocument.MakeTable(0);
     aDocument.EnableExecuteLink(false);
+    aDocument.SetInsertingFromOtherDoc(true);
     ScRange aRange;
     return ScFormatFilter::Get().ScImportRTF(rStream, OUString(), &aDocument, aRange) == ERRCODE_NONE;
 }
@@ -267,6 +256,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportXLS(SvStream& rStream)
     rDoc.SetDocOptions(aDocOpt);
     rDoc.MakeTable(0);
     rDoc.EnableExecuteLink(false);
+    rDoc.SetInsertingFromOtherDoc(true);
     rDoc.InitDrawLayer(xDocShell.get());
     bool bRet(false);
     try
@@ -281,21 +271,6 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportXLS(SvStream& rStream)
     return bRet;
 }
 
-extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportWKS(SvStream& rStream)
-{
-    ScDLL::Init();
-    SfxMedium aMedium;
-    css::uno::Reference<css::io::XInputStream> xStm(new utl::OInputStreamWrapper(rStream));
-    aMedium.GetItemSet()->Put(SfxUnoAnyItem(SID_INPUTSTREAM, css::uno::makeAny(xStm)));
-    ScDocument aDocument;
-    ScDocOptions aDocOpt = aDocument.GetDocOptions();
-    aDocOpt.SetLookUpColRowNames(false);
-    aDocument.SetDocOptions(aDocOpt);
-    aDocument.MakeTable(0);
-    aDocument.EnableExecuteLink(false);
-    return ScFormatFilter::Get().ScImportLotus123(aMedium, &aDocument, RTL_TEXTENCODING_ASCII_US) == ERRCODE_NONE;
-}
-
 extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportDIF(SvStream &rStream)
 {
     ScDLL::Init();
@@ -305,6 +280,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportDIF(SvStream &rStream)
     aDocument.SetDocOptions(aDocOpt);
     aDocument.MakeTable(0);
     aDocument.EnableExecuteLink(false);
+    aDocument.SetInsertingFromOtherDoc(true);
     return ScFormatFilter::Get().ScImportDif(rStream, &aDocument, ScAddress(0, 0, 0), RTL_TEXTENCODING_IBM_850) == ERRCODE_NONE;
 }
 

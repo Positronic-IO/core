@@ -970,12 +970,12 @@ void SAL_CALL SwAccessibleContext::grabFocus()
 
 sal_Int32 SAL_CALL SwAccessibleContext::getForeground()
 {
-    return COL_BLACK;
+    return sal_Int32(COL_BLACK);
 }
 
 sal_Int32 SAL_CALL SwAccessibleContext::getBackground()
 {
-    return COL_WHITE;
+    return sal_Int32(COL_WHITE);
 }
 
 sal_Bool SAL_CALL SwAccessibleContext::supportsService (const OUString& ServiceName)
@@ -1369,9 +1369,8 @@ bool SwAccessibleContext::Select( SwPaM *pPaM, SdrObject *pObj,
     {
         if( pFEShell )
         {
-            Point aDummy;
             sal_uInt8 nFlags = bAdd ? SW_ADD_SELECT : 0;
-            pFEShell->SelectObj( aDummy, nFlags, pObj );
+            pFEShell->SelectObj( Point(), nFlags, pObj );
             bRet = true;
         }
     }

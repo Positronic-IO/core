@@ -21,7 +21,7 @@
 #include <rtl/strbuf.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/edit.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -553,10 +553,13 @@ static OUString searchValue( const OString &rBuffer, sal_Int32 from, const OStri
 }
 
 /// Parse the Persona web page, and find where to get the bitmaps + the color values.
-static bool parsePersonaInfo( const OString &rBuffer, OUString *pHeaderURL, OUString *pFooterURL,
+static bool parsePersonaInfo( const OString &rBufferArg, OUString *pHeaderURL, OUString *pFooterURL,
                               OUString *pTextColor, OUString *pAccentColor, OUString *pPreviewURL,
                               OUString *pName )
 {
+    // tdf#115417: buffer retrieved from html response can contain &quot; or &#34;
+    // let's replace the whole buffer with last one so we can treat it easily
+    OString rBuffer = rBufferArg.replaceAll(OString("&quot;"), OString("&#34;"));
     // it is the first attribute that contains "persona="
     sal_Int32 persona = rBuffer.indexOf( "data-browsertheme=\"{" );
     if ( persona < 0 )
@@ -706,8 +709,11 @@ void SearchAndParseThread::execute()
                     sError = CuiResId(RID_SVXSTR_SEARCHERROR);
                     sError = sError.replaceAll("%1", m_aURL);
                     m_pPersonaDialog->SetProgress( OUString() );
-                    ScopedVclPtrInstance< ErrorBox > aBox( nullptr, MessBoxStyle::Ok, sError);
-                    aBox->Execute();
+
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                              VclMessageType::Error, VclButtonsType::Ok,
+                                                              sError));
+                    xBox->run();
                     return;
                 }
             }
@@ -719,8 +725,10 @@ void SearchAndParseThread::execute()
                 sError = CuiResId(RID_SVXSTR_SEARCHERROR);
                 sError = sError.replaceAll("%1", m_aURL);
                 m_pPersonaDialog->SetProgress( OUString() );
-                ScopedVclPtrInstance< ErrorBox > aBox( nullptr, MessBoxStyle::Ok, sError );
-                aBox->Execute();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                          VclMessageType::Error, VclButtonsType::Ok,
+                                                          sError));
+                xBox->run();
                 return;
             }
 
@@ -747,10 +755,10 @@ void SearchAndParseThread::execute()
         else
             vLearnmoreURLs.push_back( m_aURL );
 
-        for( it = vLearnmoreURLs.begin(); it!=vLearnmoreURLs.end() && nIndex < MAX_RESULTS; ++it )
+        for (auto const& learnMoreUrl : vLearnmoreURLs)
         {
             OUString sPreviewFile, aPersonaSetting;
-            bool bResult = getPreviewFile( *it, &sPreviewFile, &aPersonaSetting );
+            bool bResult = getPreviewFile( learnMoreUrl, &sPreviewFile, &aPersonaSetting );
             // parsing is buggy at times, as HTML is not proper. Skip it.
             if(aPersonaSetting.isEmpty() || !bResult)
             {
@@ -760,8 +768,10 @@ void SearchAndParseThread::execute()
                     sError = CuiResId(RID_SVXSTR_SEARCHERROR);
                     sError = sError.replaceAll("%1", m_aURL);
                     m_pPersonaDialog->SetProgress( OUString() );
-                    ScopedVclPtrInstance< ErrorBox > aBox( nullptr, MessBoxStyle::Ok, sError);
-                    aBox->Execute();
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                              VclMessageType::Error, VclButtonsType::Ok,
+                                                              sError));
+                    xBox->run();
                     return;
                 }
                 continue;
@@ -778,6 +788,8 @@ void SearchAndParseThread::execute()
             m_pPersonaDialog->SetImages( Image( aBmp ), nIndex++ );
             m_pPersonaDialog->setOptimalLayoutSize();
             m_pPersonaDialog->AddPersonaSetting( aPersonaSetting );
+            if (nIndex >= MAX_RESULTS)
+                break;
         }
 
         if( !m_bExecute )
@@ -844,8 +856,10 @@ void SearchAndParseThread::execute()
             sError = CuiResId( RID_SVXSTR_SEARCHERROR );
             sError = sError.replaceAll("%1", m_aURL);
             m_pPersonaDialog->SetProgress( OUString() );
-            ScopedVclPtrInstance< ErrorBox > aBox( nullptr, MessBoxStyle::Ok, sError);
-            aBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Error, VclButtonsType::Ok,
+                                                      sError));
+            xBox->run();
             return;
         }
 

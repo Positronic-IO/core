@@ -354,11 +354,11 @@ void ScPatternAttr::GetFont(
 
     //  determine effective font color
 
-    if ( ( aColor.GetColor() == COL_AUTO && eAutoMode != SC_AUTOCOL_RAW ) ||
+    if ( ( aColor == COL_AUTO && eAutoMode != SC_AUTOCOL_RAW ) ||
             eAutoMode == SC_AUTOCOL_IGNOREFONT || eAutoMode == SC_AUTOCOL_IGNOREALL )
     {
         if ( eAutoMode == SC_AUTOCOL_BLACK )
-            aColor.SetColor( COL_BLACK );
+            aColor = COL_BLACK;
         else
         {
             //  get background color from conditional or own set
@@ -378,38 +378,38 @@ void ScPatternAttr::GetFont(
                     eAutoMode == SC_AUTOCOL_IGNOREBACK || eAutoMode == SC_AUTOCOL_IGNOREALL )
             {
                 if ( eAutoMode == SC_AUTOCOL_PRINT )
-                    aBackColor.SetColor( COL_WHITE );
+                    aBackColor = COL_WHITE;
                 else if ( pBackConfigColor )
                 {
                     // pBackConfigColor can be used to avoid repeated lookup of the configured color
                     aBackColor = *pBackConfigColor;
                 }
                 else
-                    aBackColor.SetColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor );
+                    aBackColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
             }
 
             //  get system text color for comparison
             Color aSysTextColor;
             if ( eAutoMode == SC_AUTOCOL_PRINT )
-                aSysTextColor.SetColor( COL_BLACK );
+                aSysTextColor = COL_BLACK;
             else if ( pTextConfigColor )
             {
                 // pTextConfigColor can be used to avoid repeated lookup of the configured color
                 aSysTextColor = *pTextConfigColor;
             }
             else
-                aSysTextColor.SetColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor );
+                aSysTextColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor;
 
             //  select the resulting color
             if ( aBackColor.IsDark() && aSysTextColor.IsDark() )
             {
                 //  use white instead of dark on dark
-                aColor.SetColor( COL_WHITE );
+                aColor = COL_WHITE;
             }
             else if ( aBackColor.IsBright() && aSysTextColor.IsBright() )
             {
                 //  use black instead of bright on bright
-                aColor.SetColor( COL_BLACK );
+                aColor = COL_BLACK;
             }
             else
             {
@@ -704,7 +704,7 @@ void ScPatternAttr::FillToEditItemSet( SfxItemSet& rEditSet, const SfxItemSet& r
 
     //  put items into EditEngine ItemSet
 
-    if ( aColorItem.GetValue().GetColor() == COL_AUTO )
+    if ( aColorItem.GetValue() == COL_AUTO )
     {
         //  When cell attributes are converted to EditEngine paragraph attributes,
         //  don't create a hard item for automatic color, because that would be converted
@@ -1081,7 +1081,7 @@ bool ScPatternAttr::IsVisible() const
 
     eState = rSet.GetItemState( ATTR_BACKGROUND, true, &pItem );
     if ( eState == SfxItemState::SET )
-        if ( static_cast<const SvxBrushItem*>(pItem)->GetColor().GetColor() != COL_TRANSPARENT )
+        if ( static_cast<const SvxBrushItem*>(pItem)->GetColor() != COL_TRANSPARENT )
             return true;
 
     eState = rSet.GetItemState( ATTR_BORDER, true, &pItem );

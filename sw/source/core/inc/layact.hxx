@@ -170,9 +170,9 @@ public:
 
     // #i28701# - method is now public;
     // delete 2nd parameter, because it's not used;
-    bool FormatLayoutFly( SwFlyFrame * );
+    void FormatLayoutFly( SwFlyFrame * );
     // #i28701# - method is now public
-    bool FormatFlyContent( const SwFlyFrame * );
+    void FormatFlyContent( const SwFlyFrame * );
 
 };
 
@@ -190,7 +190,7 @@ class SwLayIdle
 #endif
 
 #ifdef DBG_UTIL
-    void ShowIdle( ColorData eName );
+    void ShowIdle( Color eName );
 #endif
 
     enum IdleJobType{ ONLINE_SPELLING, AUTOCOMPLETE_WORDS, WORD_COUNT, SMART_TAGS };

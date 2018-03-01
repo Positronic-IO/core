@@ -69,11 +69,10 @@
 #include <com/sun/star/chart2/XDataProviderAccess.hpp>
 
 #include <svx/sidebar/SelectionChangeHandler.hxx>
-#include <vcl/msgbox.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <osl/mutex.hxx>
 
 #include <sfx2/sidebar/SidebarController.hxx>
@@ -1333,34 +1332,30 @@ void ChartController::executeDispatch_SourceData()
     if ( rModel.hasInternalDataProvider() )
     {
         // Check if we will able to create data provider later
-        Reference< lang::XServiceInfo > xParentServiceInfo( rModel.getParent(), uno::UNO_QUERY );
-        if ( !xParentServiceInfo.is() || !xParentServiceInfo->supportsService("com.sun.star.chart2.XDataProviderAccess") )
+        css::uno::Reference< com::sun::star::chart2::XDataProviderAccess > xCreatorDoc(
+            rModel.getParent(), uno::UNO_QUERY);
+        if (!xCreatorDoc.is())
             return;
 
         SolarMutexGuard aSolarGuard;
 
-        ScopedVclPtrInstance< MessageDialog > aQueryBox( GetChartWindow(), SchResId( STR_DLG_REMOVE_DATA_TABLE ), VclMessageType::Question, VclButtonsType::YesNo);
-
+        VclPtr<ChartWindow> xChartWindow(GetChartWindow());
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(xChartWindow ? xChartWindow->GetFrameWeld() : nullptr,
+                                                       VclMessageType::Question, VclButtonsType::YesNo, SchResId(STR_DLG_REMOVE_DATA_TABLE)));
         // If "No" then just return
-        if (aQueryBox->Execute() == RET_NO)
+        if (xQueryBox->run() == RET_NO)
             return;
 
         // Remove data table
         rModel.removeDataProviders();
 
         // Ask parent document to create new data provider
-        css::uno::Reference< com::sun::star::chart2::XDataProviderAccess > xCreatorDoc(
-            rModel.getParent(), uno::UNO_QUERY );
-        SAL_WARN_IF( !xCreatorDoc.is(), "chart2.main", "Invalid XDataProviderAccess" );
 
-        if ( xCreatorDoc.is() )
+        uno::Reference< data::XDataProvider > xDataProvider = xCreatorDoc->createDataProvider();
+        SAL_WARN_IF( !xDataProvider.is(), "chart2.main", "Data provider was not created" );
+        if (xDataProvider.is())
         {
-            uno::Reference< data::XDataProvider > xDataProvider = xCreatorDoc->createDataProvider();
-            SAL_WARN_IF( !xDataProvider.is(), "chart2.main", "Data provider was not created" );
-            if ( xDataProvider.is() )
-            {
-                rModel.attachDataProvider(xDataProvider);
-            }
+            rModel.attachDataProvider(xDataProvider);
         }
     }
 

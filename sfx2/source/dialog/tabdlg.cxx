@@ -342,34 +342,32 @@ void SfxTabDialog::dispose()
 {
     SavePosAndId();
 
-    for ( SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it )
+    for (auto & elem : m_pImpl->aData)
     {
-        Data_Impl* pDataObject = *it;
-
-        if ( pDataObject->pTabPage )
+        if ( elem->pTabPage )
         {
             // save settings of all pages (user data)
-            pDataObject->pTabPage->FillUserData();
-            OUString aPageData( pDataObject->pTabPage->GetUserData() );
+            elem->pTabPage->FillUserData();
+            OUString aPageData( elem->pTabPage->GetUserData() );
             if ( !aPageData.isEmpty() )
             {
                 // save settings of all pages (user data)
-                OUString sConfigId = OStringToOUString(pDataObject->pTabPage->GetConfigId(),
+                OUString sConfigId = OStringToOUString(elem->pTabPage->GetConfigId(),
                     RTL_TEXTENCODING_UTF8);
                 if (sConfigId.isEmpty())
                 {
                     SAL_WARN("sfx.dialog", "Tabpage needs to be converted to .ui format");
-                    sConfigId = OUString::number(pDataObject->nId);
+                    sConfigId = OUString::number(elem->nId);
                 }
 
                 SvtViewOptions aPageOpt(EViewType::TabPage, sConfigId);
                 aPageOpt.SetUserItem( USERITEM_NAME, makeAny( aPageData ) );
             }
 
-            pDataObject->pTabPage.disposeAndClear();
+            elem->pTabPage.disposeAndClear();
         }
-        delete pDataObject;
-        pDataObject = nullptr;
+        delete elem;
+        elem = nullptr;
     }
 
     m_pImpl.reset();
@@ -778,17 +776,16 @@ short SfxTabDialog::Ok()
 
     if ( !m_pOutSet )
     {
-        if ( !m_pExampleSet && m_pSet )
-            m_pOutSet = m_pSet->Clone( false );  // without Items
-        else if ( m_pExampleSet )
+        if ( m_pExampleSet )
             m_pOutSet = new SfxItemSet( *m_pExampleSet );
+        else if ( m_pSet )
+            m_pOutSet = m_pSet->Clone( false );  // without Items
     }
     bool bModified = false;
 
-    for ( SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it )
+    for (auto const& elem : m_pImpl->aData)
     {
-        Data_Impl* pDataObject = *it;
-        SfxTabPage* pTabPage = pDataObject->pTabPage;
+        SfxTabPage* pTabPage = elem->pTabPage;
 
         if ( pTabPage )
         {
@@ -965,6 +962,50 @@ IMPL_LINK_NOARG(SfxTabDialog, ResetHdl, Button*, void)
     DBG_ASSERT( pDataObject, "Id not known" );
 
     pDataObject->pTabPage->Reset( m_pSet );
+    // Also reset relevant items of ExampleSet and OutSet to initial state
+    if (pDataObject->fnGetRanges)
+    {
+        if (!m_pExampleSet)
+            m_pExampleSet = new SfxItemSet(*m_pSet);
+
+        const SfxItemPool* pPool = m_pSet->GetPool();
+        const sal_uInt16* pTmpRanges = (pDataObject->fnGetRanges)();
+
+        while (*pTmpRanges)
+        {
+            const sal_uInt16* pU = pTmpRanges + 1;
+
+            // Correct Range with multiple values
+            sal_uInt16 nTmp = *pTmpRanges, nTmpEnd = *pU;
+            DBG_ASSERT(nTmp <= nTmpEnd, "Range is sorted the wrong way");
+
+            if (nTmp > nTmpEnd)
+            {
+                // If really sorted wrongly, then set new
+                std::swap(nTmp, nTmpEnd);
+            }
+
+            while (nTmp && nTmp <= nTmpEnd)
+            {
+                // Iterate over the Range and set the Items
+                sal_uInt16 nWh = pPool->GetWhich(nTmp);
+                const SfxPoolItem* pItem;
+                if (SfxItemState::SET == m_pSet->GetItemState(nWh, false, &pItem))
+                {
+                    m_pExampleSet->Put(*pItem);
+                    m_pOutSet->Put(*pItem);
+                }
+                else
+                {
+                    m_pExampleSet->ClearItem(nWh);
+                    m_pOutSet->ClearItem(nWh);
+                }
+                nTmp++;
+            }
+            // Go to the next pair
+            pTmpRanges += 2;
+        }
+    }
 }
 
 
@@ -997,41 +1038,26 @@ IMPL_LINK_NOARG(SfxTabDialog, BaseFmtHdl, Button*, void)
         {
             const sal_uInt16* pU = pTmpRanges + 1;
 
-            if ( *pTmpRanges == *pU )
+            // Correct Range with multiple values
+            sal_uInt16 nTmp = *pTmpRanges, nTmpEnd = *pU;
+            DBG_ASSERT( nTmp <= nTmpEnd, "Range is sorted the wrong way" );
+
+            if ( nTmp > nTmpEnd )
             {
-                // Range which two identical values -> only set one Item
-                sal_uInt16 nWh = pPool->GetWhich( *pTmpRanges );
+                // If really sorted wrongly, then set new
+                std::swap(nTmp, nTmpEnd);
+            }
+
+            while ( nTmp && nTmp <= nTmpEnd ) // guard against overflow
+            {
+                // Iterate over the Range and set the Items
+                sal_uInt16 nWh = pPool->GetWhich( nTmp );
                 m_pExampleSet->ClearItem( nWh );
                 aTmpSet.ClearItem( nWh );
                 // At the Outset of InvalidateItem,
                 // so that the change takes effect
                 m_pOutSet->InvalidateItem( nWh );
-            }
-            else
-            {
-                // Correct Range with multiple values
-                sal_uInt16 nTmp = *pTmpRanges, nTmpEnd = *pU;
-                DBG_ASSERT( nTmp <= nTmpEnd, "Range is sorted the wrong way" );
-
-                if ( nTmp > nTmpEnd )
-                {
-                    // If really sorted wrongly, then set new
-                    sal_uInt16 nTmp1 = nTmp;
-                    nTmp = nTmpEnd;
-                    nTmpEnd = nTmp1;
-                }
-
-                while ( nTmp <= nTmpEnd )
-                {
-                    // Iterate over the Range and set the Items
-                    sal_uInt16 nWh = pPool->GetWhich( nTmp );
-                    m_pExampleSet->ClearItem( nWh );
-                    aTmpSet.ClearItem( nWh );
-                    // At the Outset of InvalidateItem,
-                    // so that the change takes effect
-                    m_pOutSet->InvalidateItem( nWh );
-                    nTmp++;
-                }
+                nTmp++;
             }
             // Go to the next pair
             pTmpRanges += 2;
@@ -1196,14 +1222,9 @@ IMPL_LINK( SfxTabDialog, DeactivatePageHdl, TabControl *, pTabCtrl, bool )
         RefreshInputSet();
         // Flag all Pages as to be initialized as new
 
-        for ( SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it )
+        for (auto const& elem : m_pImpl->aData)
         {
-            Data_Impl* pObj = *it;
-
-            if ( pObj->pTabPage.get() != pPage ) // Do not refresh own Page anymore
-                pObj->bRefresh = true;
-            else
-                pObj->bRefresh = false;
+            elem->bRefresh = ( elem->pTabPage.get() != pPage ); // Do not refresh own Page anymore
         }
     }
     return static_cast<bool>(nRet & DeactivateRC::LeavePage);
@@ -1269,13 +1290,12 @@ const sal_uInt16* SfxTabDialog::GetInputRanges( const SfxItemPool& rPool )
         return m_pRanges;
     std::vector<sal_uInt16> aUS;
 
-    for ( SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it )
+    for (auto const& elem : m_pImpl->aData)
     {
-        Data_Impl* pDataObject = *it;
 
-        if ( pDataObject->fnGetRanges )
+        if ( elem->fnGetRanges )
         {
-            const sal_uInt16* pTmpRanges = (pDataObject->fnGetRanges)();
+            const sal_uInt16* pTmpRanges = (elem->fnGetRanges)();
             const sal_uInt16* pIter = pTmpRanges;
 
             sal_uInt16 nLen;
@@ -1287,9 +1307,8 @@ const sal_uInt16* SfxTabDialog::GetInputRanges( const SfxItemPool& rPool )
 
     //! Remove duplicated Ids?
     {
-        sal_uInt16 nCount = aUS.size();
-        for ( sal_uInt16 i = 0; i < nCount; ++i )
-            aUS[i] = rPool.GetWhich( aUS[i] );
+        for (auto & elem : aUS)
+            elem = rPool.GetWhich(elem);
     }
 
     // sort
@@ -1333,15 +1352,15 @@ std::vector<OString> SfxTabDialog::getAllPageUIXMLDescriptions() const
 {
     std::vector<OString> aRetval;
 
-    for (SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it)
+    for (auto const& elem : m_pImpl->aData)
     {
-        SfxTabPage* pCandidate = GetTabPage((*it)->nId);
+        SfxTabPage* pCandidate = GetTabPage(elem->nId);
 
         if (!pCandidate)
         {
             // force SfxTabPage creation
-            const_cast<SfxTabDialog*>(this)->ShowPage((*it)->nId);
-            pCandidate = GetTabPage((*it)->nId);
+            const_cast<SfxTabDialog*>(this)->ShowPage(elem->nId);
+            pCandidate = GetTabPage(elem->nId);
         }
 
         if (pCandidate)
@@ -1356,20 +1375,20 @@ std::vector<OString> SfxTabDialog::getAllPageUIXMLDescriptions() const
 
 bool SfxTabDialog::selectPageByUIXMLDescription(const OString& rUIXMLDescription)
 {
-    for (SfxTabDlgData_Impl::const_iterator it = m_pImpl->aData.begin(); it != m_pImpl->aData.end(); ++it)
+    for (auto const& elem : m_pImpl->aData)
     {
-        SfxTabPage* pCandidate = (*it)->pTabPage;
+        SfxTabPage* pCandidate = elem->pTabPage;
 
         if (!pCandidate)
         {
             // force SfxTabPage creation
-            ShowPage((*it)->nId);
-            pCandidate = GetTabPage((*it)->nId);
+            ShowPage(elem->nId);
+            pCandidate = GetTabPage(elem->nId);
         }
 
         if (pCandidate && pCandidate->getUIFile() == rUIXMLDescription)
         {
-            ShowPage((*it)->nId);
+            ShowPage(elem->nId);
             return true;
         }
     }

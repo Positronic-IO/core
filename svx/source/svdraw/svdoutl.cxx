@@ -56,9 +56,8 @@ void SdrOutliner::SetTextObj( const SdrTextObj* pObj )
         nStat &= ~EEControlBits( EEControlBits::STRETCHING | EEControlBits::AUTOPAGESIZE );
         SetControlWord(nStat);
 
-        Size aNullSize;
         Size aMaxSize( 100000,100000 );
-        SetMinAutoPaperSize( aNullSize );
+        SetMinAutoPaperSize( Size() );
         SetMaxAutoPaperSize( aMaxSize );
         SetPaperSize( aMaxSize );
         ClearPolygon();
@@ -79,7 +78,7 @@ OUString SdrOutliner::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara
     OUString aRet;
 
     if(mpTextObj.is())
-        bOk = static_cast< SdrTextObj* >( mpTextObj.get())->CalcFieldValue(rField, nPara, nPos, false, rpTxtColor, rpFldColor, aRet);
+        bOk = mpTextObj->CalcFieldValue(rField, nPara, nPos, false, rpTxtColor, rpFldColor, aRet);
 
     if (!bOk)
         aRet = Outliner::CalcFieldValue(rField, nPara, nPos, rpTxtColor, rpFldColor);
@@ -89,10 +88,7 @@ OUString SdrOutliner::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara
 
 const SdrTextObj* SdrOutliner::GetTextObj() const
 {
-    if( mpTextObj.is() )
-        return static_cast< SdrTextObj* >( mpTextObj.get() );
-    else
-        return nullptr;
+    return mpTextObj.get();
 }
 
 bool SdrOutliner::hasEditViewCallbacks() const

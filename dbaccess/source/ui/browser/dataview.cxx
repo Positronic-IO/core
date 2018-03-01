@@ -20,7 +20,6 @@
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/frame/XModel.hpp>
 #include <dbaccess/dataview.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <sfx2/app.hxx>
@@ -96,7 +95,7 @@ namespace dbaui
         // position the separator
         const Size aSeparatorSize( aPlayground.GetWidth(), 2 );
         m_aSeparator->SetPosSizePixel( aPlayground.TopLeft(), aSeparatorSize );
-        aPlayground.Top() += aSeparatorSize.Height() + 1;
+        aPlayground.AdjustTop(aSeparatorSize.Height() + 1 );
 
         // position the controls of the document's view
         resizeDocumentView( aPlayground );

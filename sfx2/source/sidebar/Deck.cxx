@@ -130,10 +130,10 @@ void Deck::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*r
 
     // Paint the border.
     const int nBorderSize(Theme::GetInteger(Theme::Int_DeckBorderSize));
-    aBox.Left() += aPadding.Left();
-    aBox.Top() += aPadding.Top();
-    aBox.Right() -= aPadding.Right();
-    aBox.Bottom() -= aPadding.Bottom();
+    aBox.AdjustLeft(aPadding.Left() );
+    aBox.AdjustTop(aPadding.Top() );
+    aBox.AdjustRight( -(aPadding.Right()) );
+    aBox.AdjustBottom( -(aPadding.Bottom()) );
     const sfx2::sidebar::Paint& rHorizontalBorderPaint(Theme::GetPaint(Theme::Paint_HorizontalBorder));
     DrawHelper::DrawBorder(rRenderContext, aBox,
                            SvBorder(nBorderSize, nBorderSize, nBorderSize, nBorderSize),
@@ -320,9 +320,9 @@ void Deck::ScrollContainerWindow::Paint(vcl::RenderContext& rRenderContext, cons
     const sal_Int32 nLeft(0);
     const sal_Int32 nRight(GetSizePixel().Width() - 1);
     const sfx2::sidebar::Paint& rHorizontalBorderPaint(Theme::GetPaint(Theme::Paint_HorizontalBorder));
-    for (std::vector<sal_Int32>::const_iterator iY(maSeparators.begin()); iY != maSeparators.end(); ++iY)
+    for (auto const& separator : maSeparators)
     {
-        DrawHelper::DrawHorizontalLine(rRenderContext, nLeft, nRight, *iY,
+        DrawHelper::DrawHorizontalLine(rRenderContext, nLeft, nRight, separator,
                                        nSeparatorHeight, rHorizontalBorderPaint);
     }
 }

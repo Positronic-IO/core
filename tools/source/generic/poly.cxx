@@ -206,17 +206,17 @@ ImplPolygon::ImplPolygon( const Point& rCenter, long nRadX, long nRadY )
             long nY = FRound( -nRadY * sin( nAngle ) );
 
             Point* pPt = &(mxPointAry[i]);
-            pPt->X() =  nX + rCenter.X();
-            pPt->Y() =  nY + rCenter.Y();
+            pPt->setX(  nX + rCenter.X() );
+            pPt->setY(  nY + rCenter.Y() );
             pPt = &(mxPointAry[nPoints2-i-1]);
-            pPt->X() = -nX + rCenter.X();
-            pPt->Y() =  nY + rCenter.Y();
+            pPt->setX( -nX + rCenter.X() );
+            pPt->setY(  nY + rCenter.Y() );
             pPt = &(mxPointAry[i+nPoints2]);
-            pPt->X() = -nX + rCenter.X();
-            pPt->Y() = -nY + rCenter.Y();
+            pPt->setX( -nX + rCenter.X() );
+            pPt->setY( -nY + rCenter.Y() );
             pPt = &(mxPointAry[nPoints-i-1]);
-            pPt->X() =  nX + rCenter.X();
-            pPt->Y() = -nY + rCenter.Y();
+            pPt->setX(  nX + rCenter.X() );
+            pPt->setY( -nY + rCenter.Y() );
         }
     }
     else
@@ -297,8 +297,8 @@ ImplPolygon::ImplPolygon( const tools::Rectangle& rBound, const Point& rStart, c
         {
             Point& rPt = mxPointAry[nStart];
 
-            rPt.X() = FRound( fCenterX + fRadX * cos( fStart ) );
-            rPt.Y() = FRound( fCenterY - fRadY * sin( fStart ) );
+            rPt.setX( FRound( fCenterX + fRadX * cos( fStart ) ) );
+            rPt.setY( FRound( fCenterY - fRadY * sin( fStart ) ) );
         }
 
         if( PolyStyle::Chord == eStyle )
@@ -340,8 +340,8 @@ ImplPolygon::ImplPolygon( const Point& rBezPt1, const Point& rCtrlPt1,
         double fK12 = fK_1 * fK1_2;
         double fK21 = fK_2 * fK1_1;
 
-        rPt.X() = FRound( fK1_3 * fX0 + fK12 * fX1 + fK21 * fX2 + fK_3 * fX3 );
-        rPt.Y() = FRound( fK1_3 * fY0 + fK12 * fY1 + fK21 * fY2 + fK_3 * fY3 );
+        rPt.setX( FRound( fK1_3 * fX0 + fK12 * fX1 + fK21 * fX2 + fK_3 * fX3 ) );
+        rPt.setY( FRound( fK1_3 * fY0 + fK12 * fY1 + fK21 * fY2 + fK_3 * fY3 ) );
     }
 }
 
@@ -496,7 +496,6 @@ void ImplPolygon::ImplInitSize(sal_uInt16 nInitSize, bool bFlags)
     if (nInitSize)
     {
         mxPointAry.reset(new Point[nInitSize]);
-        memset(mxPointAry.get(), 0, nInitSize * sizeof(Point));
     }
 
     if (bFlags)
@@ -525,9 +524,8 @@ void ImplPolygon::ImplSetSize( sal_uInt16 nNewSize, bool bResize )
             // Copy the old points
             if ( mnPoints < nNewSize )
             {
-                // New points initialized to zero
+                // New points are already implicitly initialized to zero
                 const std::size_t nOldSz(mnPoints * sizeof(Point));
-                memset(xNewAry.get() + mnPoints, 0, nNewSz - nOldSz);
                 if (mxPointAry)
                     memcpy(xNewAry.get(), mxPointAry.get(), nOldSz);
             }
@@ -606,8 +604,6 @@ bool ImplPolygon::ImplSplit( sal_uInt16 nPos, sal_uInt16 nSpace, ImplPolygon con
 
         if( pInitPoly )
             memcpy(xNewAry.get() + nPos, pInitPoly->mxPointAry.get(), nSpaceSize);
-        else
-            memset(xNewAry.get() + nPos, 0, nSpaceSize);
 
         memcpy(xNewAry.get() + nSecPos, mxPointAry.get() + nPos, nRest * sizeof(Point));
         mxPointAry = std::move(xNewAry);
@@ -1372,8 +1368,8 @@ void Polygon::Move( long nHorzMove, long nVertMove )
     for ( sal_uInt16 i = 0; i < nCount; i++ )
     {
         Point& rPt = mpImplPolygon->mxPointAry[i];
-        rPt.X() += nHorzMove;
-        rPt.Y() += nVertMove;
+        rPt.AdjustX(nHorzMove );
+        rPt.AdjustY(nVertMove );
     }
 }
 
@@ -1388,8 +1384,8 @@ void Polygon::Scale( double fScaleX, double fScaleY )
     for ( sal_uInt16 i = 0, nCount = mpImplPolygon->mnPoints; i < nCount; i++ )
     {
         Point& rPnt = mpImplPolygon->mxPointAry[i];
-        rPnt.X() = static_cast<long>( fScaleX * rPnt.X() );
-        rPnt.Y() = static_cast<long>( fScaleY * rPnt.Y() );
+        rPnt.setX( static_cast<long>( fScaleX * rPnt.X() ) );
+        rPnt.setY( static_cast<long>( fScaleY * rPnt.Y() ) );
     }
 }
 
@@ -1415,8 +1411,8 @@ void Polygon::Rotate( const Point& rCenter, double fSin, double fCos )
 
         const long nX = rPt.X() - nCenterX;
         const long nY = rPt.Y() - nCenterY;
-        rPt.X() = FRound( fCos * nX + fSin * nY ) + nCenterX;
-        rPt.Y() = - FRound( fSin * nX - fCos * nY ) + nCenterY;
+        rPt.setX( FRound( fCos * nX + fSin * nY ) + nCenterX );
+        rPt.setY( - FRound( fSin * nX - fCos * nY ) + nCenterY );
     }
 }
 
@@ -1633,8 +1629,8 @@ SvStream& ReadPolygon( SvStream& rIStream, tools::Polygon& rPoly )
         {
             sal_Int32 nTmpX(0), nTmpY(0);
             rIStream.ReadInt32( nTmpX ).ReadInt32( nTmpY );
-            rPoly.mpImplPolygon->mxPointAry[i].X() = nTmpX;
-            rPoly.mpImplPolygon->mxPointAry[i].Y() = nTmpY;
+            rPoly.mpImplPolygon->mxPointAry[i].setX( nTmpX );
+            rPoly.mpImplPolygon->mxPointAry[i].setY( nTmpY );
         }
     }
 

@@ -36,6 +36,7 @@
 #include <comphelper/fileformat.h>
 #include <comphelper/propertysequence.hxx>
 #include <unotools/streamwrap.hxx>
+#include <svl/PasswordHelper.hxx>
 #include <docufld.hxx> // for SwHiddenTextField::ParseIfFieldDefinition() method call
 
 class Test : public SwModelTestBase
@@ -856,6 +857,37 @@ DECLARE_ODFEXPORT_TEST(testCharacterBorder, "charborder.odt")
     }
 }
 
+DECLARE_ODFEXPORT_TEST(testProtectionKey, "protection-key.fodt")
+{
+    OUString const password("1012345678901234567890123456789012345678901234567890");
+
+    // check 1 invalid OOo legacy password and 3 valid ODF 1.2 passwords
+    uno::Reference<text::XTextSectionsSupplier> xTextSectionsSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xSections(xTextSectionsSupplier->getTextSections(), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xSect0(xSections->getByIndex(0), uno::UNO_QUERY);
+    uno::Sequence<sal_Int8> const key0(getProperty<uno::Sequence<sal_Int8>>(xSect0, "ProtectionKey"));
+    CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key0, password));
+    uno::Reference<beans::XPropertySet> xSect1(xSections->getByIndex(1), uno::UNO_QUERY);
+    uno::Sequence<sal_Int8> const key1(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
+    CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key1, password));
+    uno::Reference<beans::XPropertySet> xSect2(xSections->getByIndex(2), uno::UNO_QUERY);
+    uno::Sequence<sal_Int8> const key2(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
+    CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key2, password));
+    uno::Reference<beans::XPropertySet> xSect3(xSections->getByIndex(3), uno::UNO_QUERY);
+    uno::Sequence<sal_Int8> const key3(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
+    CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key3, password));
+
+    // we can't assume that the user entered the password; check that we
+    // round-trip the password as-is
+    if (xmlDocPtr pXmlDoc = parseExport("content.xml"))
+    {
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section0' and @text:protected='true' and @text:protection-key='vbnhxyBKtPHCA1wB21zG1Oha8ZA=']");
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section1' and @text:protected='true' and @text:protection-key='nLHas0RIwepGDaH4c2hpyIUvIS8=']");
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section2' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']");
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section3' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']");
+    }
+}
+
 DECLARE_ODFEXPORT_TEST(testFdo43807, "fdo43807.odt")
 {
     uno::Reference<beans::XPropertySet> xSet(getParagraph(1), uno::UNO_QUERY);
@@ -949,6 +981,13 @@ DECLARE_ODFEXPORT_TEST(testRelhPage, "relh-page.odt")
 
     // This was 2601, 20% height was relative from margin, not page.
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3168), parseDump("/root/page/body/txt/anchored/fly/infos/bounds", "height").toInt32());
+}
+
+DECLARE_ODFEXPORT_TEST(testRelhPageTdf80282, "relh-page-tdf80282.odt")
+{
+    uno::Reference<drawing::XShape> xTextFrame = getShape(1);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Height", sal_Int32(8391), parseDump("//anchored/fly/infos/bounds", "height").toInt32());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Width",  sal_Int32(5953), parseDump("//anchored/fly/infos/bounds", "width").toInt32());
 }
 
 DECLARE_ODFEXPORT_TEST(testRelwPage, "relw-page.odt")
@@ -1402,9 +1441,10 @@ DECLARE_ODFEXPORT_TEST(testEmbeddedPdf, "embedded-pdf.odt")
 {
     uno::Reference<drawing::XShape> xShape = getShape(1);
     // This failed, pdf+png replacement graphics pair didn't survive an ODT roundtrip.
-    CPPUNIT_ASSERT(!getProperty<OUString>(xShape, "ReplacementGraphicURL").isEmpty());
+    auto xReplacementGraphic = getProperty<uno::Reference<graphic::XGraphic>>(xShape, "ReplacementGraphic");
+    CPPUNIT_ASSERT(xReplacementGraphic.is());
 
-    auto xGraphic = getProperty< uno::Reference<graphic::XGraphic> >(xShape, "Graphic");
+    auto xGraphic = getProperty<uno::Reference<graphic::XGraphic>>(xShape, "Graphic");
     CPPUNIT_ASSERT(xGraphic.is());
     // This was image/x-vclgraphic, not exposing the info that the image is a PDF one.
     CPPUNIT_ASSERT_EQUAL(OUString("application/pdf"), getProperty<OUString>(xGraphic, "MimeType"));
@@ -1843,6 +1883,56 @@ DECLARE_ODFEXPORT_TEST(testTdf77961, "tdf77961.odt")
     uno::Reference<beans::XPropertySet> xStyle(xStyles->getByName("Standard"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL( false , getProperty<bool>(xStyle, "GridDisplay"));
     CPPUNIT_ASSERT_EQUAL( false , getProperty<bool>(xStyle, "GridPrint"));
+}
+
+DECLARE_ODFEXPORT_TEST(testReferenceLanguage, "referencelanguage.odt")
+{
+    // Test loext:reference-language attribute of reference fields
+    // (used from LibreOffice 6.1, and proposed for next ODF)
+    const char* aFieldTexts[] = { "A 2", "Az 50-esek",
+        "A 2018-asok", "Az egyebek", "A fejezetek",
+        u8"Az „Őseinket...”", "a 2",
+        "Az v", "az 1", "Az e", "az 1",
+        "Az (5)", "az 1", "A 2", "az 1" };
+    uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
+    // update "A (4)" to "Az (5)"
+    uno::Reference<util::XRefreshable>(xTextFieldsSupplier->getTextFields(), uno::UNO_QUERY)->refresh();
+
+    uno::Reference<container::XEnumerationAccess> xFieldsAccess(xTextFieldsSupplier->getTextFields());
+    uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
+
+    uno::Any aHu = uno::makeAny(OUString("Hu"));
+    uno::Any ahu = uno::makeAny(OUString("hu"));
+    for (sal_uInt32 i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
+    {
+        uno::Any aField = xFields->nextElement();
+        uno::Reference<lang::XServiceInfo> xServiceInfo(aField, uno::UNO_QUERY);
+        if (xServiceInfo->supportsService("com.sun.star.text.textfield.GetReference"))
+        {
+            uno::Reference<beans::XPropertySet> xPropertySet(aField, uno::UNO_QUERY);
+            uno::Any aLang = xPropertySet->getPropertyValue("ReferenceFieldLanguage");
+            CPPUNIT_ASSERT_EQUAL(true, aLang == aHu || aLang == ahu);
+            uno::Reference<text::XTextContent> xField(aField, uno::UNO_QUERY);
+            CPPUNIT_ASSERT_EQUAL(OUString::fromUtf8(aFieldTexts[i]), xField->getAnchor()->getString());
+        }
+    }
+}
+
+DECLARE_ODFEXPORT_TEST(testBulletAsImage, "BulletAsImage.odt")
+{
+    uno::Reference<text::XTextRange> xPara(getParagraph(1));
+    uno::Reference<beans::XPropertySet> xPropertySet(xPara, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xLevels;
+    xLevels.set(xPropertySet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+    uno::Sequence<beans::PropertyValue> aProperties;
+    xLevels->getByIndex(0) >>= aProperties;
+    uno::Reference<awt::XBitmap> xBitmap;
+    for (int i = 0; i < aProperties.getLength(); ++i)
+    {
+        if (aProperties[i].Name == "GraphicBitmap")
+            xBitmap = aProperties[i].Value.get<uno::Reference<awt::XBitmap>>();
+    }
+    CPPUNIT_ASSERT(xBitmap.is());
 }
 
 #endif

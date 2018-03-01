@@ -19,10 +19,11 @@
 
 #include <sal/config.h>
 
+#include <o3tl/string_view.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <officecfg/Office/Security.hxx>
 #include <tools/config.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
@@ -38,7 +39,6 @@
 #include <sfx2/objsh.hxx>
 #include <unotools/bootstrap.hxx>
 #include <vcl/help.hxx>
-#include <vcl/layout.hxx>
 #include <vcl/builderfactory.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <unotools/pathoptions.hxx>
@@ -49,7 +49,6 @@
 #include <dialmgr.hxx>
 #include "optinet2.hxx"
 #include <svx/svxdlg.hxx>
-#include <helpids.h>
 #include <svx/ofaitem.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <svx/svxids.hrc>
@@ -98,7 +97,24 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::sfx2;
 
-// static ----------------------------------------------------------------
+namespace {
+
+bool isValidPort(OUString const & value) {
+    if (!comphelper::string::isdigitAsciiString(value)) {
+        return false;
+    }
+    auto const n = value.toUInt64();
+    if (n > 65535) {
+        return false;
+    }
+    if (n != 0) {
+        return true;
+    }
+    // Overflow in OUString::toUInt64 returns 0, so need to check value contains only zeroes:
+    return o3tl::u16string_view(value).find_first_not_of(u'0') == o3tl::u16string_view::npos;
+}
+
+}
 
 VCL_BUILDER_FACTORY_ARGS(SvxNoSpaceEdit, WB_LEFT|WB_VCENTER|WB_BORDER|WB_3DLOOK)
 
@@ -121,18 +137,19 @@ void SvxNoSpaceEdit::KeyInput( const KeyEvent& rKEvent )
         Edit::KeyInput(rKEvent);
 }
 
-
 void SvxNoSpaceEdit::Modify()
 {
     Edit::Modify();
 
     if ( bOnlyNumeric )
     {
-        OUString aValue = GetText();
-
-        if ( !comphelper::string::isdigitAsciiString(aValue) || static_cast<long>(aValue.toInt32()) > USHRT_MAX )
-            // the maximum value of a port number is USHRT_MAX
-            ScopedVclPtrInstance<MessageDialog>(this, CuiResId( RID_SVXSTR_OPT_PROXYPORTS))->Execute();
+        if ( !isValidPort(GetText()) )
+        {
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Warning, VclButtonsType::Ok,
+                                                           CuiResId( RID_SVXSTR_OPT_PROXYPORTS)));
+            xErrorBox->run();
+        }
     }
 }
 
@@ -527,9 +544,7 @@ IMPL_LINK( SvxProxyTabPage, ProxyHdl_Impl, ListBox&, rBox, void )
 IMPL_STATIC_LINK( SvxProxyTabPage, LoseFocusHdl_Impl, Control&, rControl, void )
 {
     Edit* pEdit = static_cast<Edit*>(&rControl);
-    OUString aValue = pEdit->GetText();
-
-    if ( !comphelper::string::isdigitAsciiString(aValue) || static_cast<long>(aValue.toInt32()) > USHRT_MAX )
+    if ( !isValidPort(pEdit->GetText()) )
         pEdit->SetText( OUString('0') );
 }
 
@@ -647,8 +662,12 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, SavePasswordHdl, Button*, void)
         }
         else
         {
-            ScopedVclPtrInstance< QueryBox > aQuery( this, MessBoxStyle::YesNo|MessBoxStyle::DefaultNo, m_sPasswordStoringDeactivateStr );
-            sal_uInt16 nRet = aQuery->Execute();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           m_sPasswordStoringDeactivateStr));
+            xQueryBox->set_default_response(RET_NO);
+
+            sal_uInt16 nRet = xQueryBox->run();
 
             if( RET_YES == nRet )
             {

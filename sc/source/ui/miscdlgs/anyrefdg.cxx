@@ -145,7 +145,7 @@ void ScFormulaReferenceHelper::ShowSimpleReference(const OUString& rStr)
                 for ( size_t i = 0, nRanges = aRangeList.size(); i < nRanges; ++i )
                 {
                     ScRange* pRangeEntry = aRangeList[ i ];
-                    ColorData aColName = ScRangeFindList::GetColorName( i );
+                    Color aColName = ScRangeFindList::GetColorName( i );
                     pTabViewShell->AddHighlightRange( *pRangeEntry, aColName );
                }
             }
@@ -228,7 +228,7 @@ void ScFormulaReferenceHelper::ShowFormulaReference(const OUString& rStr)
                             aRange.aStart = aRef.toAbs(aPos);
                             aRange.aEnd = aRange.aStart;
                         }
-                        ColorData aColName=ScRangeFindList::GetColorName(nIndex++);
+                        Color aColName=ScRangeFindList::GetColorName(nIndex++);
                         pTabViewShell->AddHighlightRange(aRange, aColName);
                     }
 
@@ -542,16 +542,16 @@ void ScFormulaReferenceHelper::RefInputStart( formula::RefEdit* pEdit, formula::
             long nOffset = 0;
             if (pRefBtn)
             {
-                aNewEditSize.Width() -= pRefBtn->GetSizePixel().Width();
-                aNewEditSize.Width() -= aOldButtonPos.X() - (aOldEditPos.X()+aOldEditSize.Width());
+                aNewEditSize.AdjustWidth( -(pRefBtn->GetSizePixel().Width()) );
+                aNewEditSize.AdjustWidth( -(aOldButtonPos.X() - (aOldEditPos.X()+aOldEditSize.Width())) );
 
                 long nHeight = pRefBtn->GetSizePixel().Height();
                 if ( nHeight > aOldEditSize.Height() )
                 {
-                    aNewDlgSize.Height() = nHeight;
+                    aNewDlgSize.setHeight( nHeight );
                     nOffset = (nHeight-aOldEditSize.Height()) / 2;
                 }
-                aNewEditSize.Width() -= nOffset;
+                aNewEditSize.AdjustWidth( -nOffset );
             }
             pRefEdit->SetPosSizePixel(Point(nOffset, nOffset), aNewEditSize);
 

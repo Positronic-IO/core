@@ -264,14 +264,13 @@ void AquaClipboard::fireClipboardChangedEvent()
 
     aGuard.clear();
 
-    while (!listeners.empty())
+    for (auto const& listener : listeners)
     {
-        if (listeners.front().is())
+        if (listener.is())
         {
-            try { listeners.front()->changedContents(aEvent); }
+            try { listener->changedContents(aEvent); }
             catch (RuntimeException&) { }
         }
-        listeners.pop_front();
     }
 }
 
@@ -292,7 +291,7 @@ void AquaClipboard::provideDataForType(NSPasteboard* sender, const NSString* typ
 
         if (dp.get() != nullptr)
         {
-            pBoardData = (NSData*)dp->getSystemData();
+            pBoardData = dp->getSystemData();
             [sender setData: pBoardData forType:const_cast<NSString*>(type)];
         }
     }

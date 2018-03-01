@@ -597,10 +597,10 @@ Point SwFEShell::FindAnchorPos( const Point& rAbsPos, bool bMoveIt )
                 MakeVisible( aTmpRect );
 #if OSL_DEBUG_LEVEL > 0
             //TODO: That doesn't seem to be intended
-            if( Color(COL_TRANSPARENT) != GetOut()->GetLineColor() )
+            if( COL_TRANSPARENT != GetOut()->GetLineColor() )
             {
                 OSL_FAIL( "Hey, Joe: Where's my Null Pen?" );
-                GetOut()->SetLineColor( Color(COL_TRANSPARENT) );
+                GetOut()->SetLineColor( COL_TRANSPARENT );
             }
 #endif
         }
@@ -1023,7 +1023,7 @@ bool SwFEShell::GetFlyFrameAttr( SfxItemSet &rSet ) const
         if ( RndStdIds::FLY_AT_PAGE != eType )
         {
             // OD 12.11.2003 #i22341# - content anchor of anchor item is needed.
-            // Thus, don't overwrite anchor item by default contructed anchor item.
+            // Thus, don't overwrite anchor item by default constructed anchor item.
             if ( RndStdIds::FLY_AS_CHAR == eType )
             {
                 rSet.ClearItem( RES_OPAQUE );
@@ -1116,8 +1116,7 @@ bool SwFEShell::SetDrawingAttr( SfxItemSet& rSet )
     if( GetDoc()->SetFlyFrameAttr( *pFormat, rSet ))
     {
         bRet = true;
-        Point aTmp;
-        SelectObj( aTmp, 0, pObj );
+        SelectObj( Point(), 0, pObj );
     }
     EndAllActionAndCall();
     EndUndo();
@@ -1125,10 +1124,8 @@ bool SwFEShell::SetDrawingAttr( SfxItemSet& rSet )
 }
 
 // Reset attributes contained in the set.
-bool SwFEShell::ResetFlyFrameAttr( const SfxItemSet* pSet )
+void SwFEShell::ResetFlyFrameAttr( const SfxItemSet* pSet )
 {
-    bool bRet = false;
-
     SET_CURR_SHELL( this );
 
     SwFlyFrame *pFly = GetSelectedOrCurrFlyFrame();
@@ -1150,11 +1147,9 @@ bool SwFEShell::ResetFlyFrameAttr( const SfxItemSet* pSet )
             pItem = aIter.NextItem();
         }
 
-        bRet = true;
         EndAllActionAndCall();
         GetDoc()->getIDocumentState().SetModified();
     }
-    return bRet;
 }
 
 // Returns frame-format if frame, otherwise 0
@@ -1326,8 +1321,8 @@ Size SwFEShell::RequestObjectResize( const SwRect &rRect, const uno::Reference <
                     aFrameSz.SetWidth( aNewSz.Width() );
                     if( ATT_MIN_SIZE != aFrameSz.GetHeightSizeType() )
                     {
-                        aNewSz.Height() += pChgFly->getFrameArea().Height() -
-                                               pFly->getFramePrintArea().Height();
+                        aNewSz.AdjustHeight(pChgFly->getFrameArea().Height() -
+                                               pFly->getFramePrintArea().Height() );
                         if( std::abs( aNewSz.Height() - pChgFly->getFrameArea().Height()) > 1 )
                             aFrameSz.SetHeight( aNewSz.Height() );
                     }
@@ -1341,8 +1336,8 @@ Size SwFEShell::RequestObjectResize( const SwRect &rRect, const uno::Reference <
         // set the new Size at the fly themself
         if ( pFly->getFramePrintArea().Height() > 0 && pFly->getFramePrintArea().Width() > 0 )
         {
-            aSz.Width() += pFly->getFrameArea().Width() - pFly->getFramePrintArea().Width();
-            aSz.Height()+= pFly->getFrameArea().Height()- pFly->getFramePrintArea().Height();
+            aSz.AdjustWidth(pFly->getFrameArea().Width() - pFly->getFramePrintArea().Width() );
+            aSz.AdjustHeight(pFly->getFrameArea().Height()- pFly->getFramePrintArea().Height() );
         }
         aResult = pFly->ChgSize( aSz );
 
@@ -1743,11 +1738,10 @@ ObjCntType SwFEShell::GetObjCntTypeOfSelection() const
     return eType;
 }
 
-bool SwFEShell::ReplaceSdrObj( const OUString& rGrfName, const Graphic* pGrf )
+void SwFEShell::ReplaceSdrObj( const OUString& rGrfName, const Graphic* pGrf )
 {
     SET_CURR_SHELL( this );
 
-    bool bRet = false;
     const SdrMarkList *pMrkList;
     if( Imp()->HasDrawView() &&  1 ==
         ( pMrkList = &Imp()->GetDrawView()->GetMarkedObjectList())->GetMarkCount() )
@@ -1794,9 +1788,7 @@ bool SwFEShell::ReplaceSdrObj( const OUString& rGrfName, const Graphic* pGrf )
 
         EndUndo();
         EndAllAction();
-        bRet = true;
     }
-    return bRet;
 }
 
 static sal_uInt16 SwFormatGetPageNum(const SwFlyFrameFormat * pFormat)

@@ -45,6 +45,7 @@
 #include <vector>
 #include <svx/svxdlg.hxx>
 #include <svx/dialogs.hrc>
+#include <vcl/lstbox.hxx>
 #include <bitmaps.hlst>
 
 #include <unomid.h>
@@ -112,10 +113,12 @@ void SwModelessRedlineAcceptDlg::Activate()
         if (!bMod)
             pSh->ResetModified();
         pImplDlg->Init();
+        SfxModelessDialog::Activate();
 
         return;
     }
 
+    SfxModelessDialog::Activate();
     pImplDlg->Activate();
 }
 

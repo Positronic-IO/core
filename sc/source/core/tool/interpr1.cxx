@@ -110,7 +110,8 @@ void ScInterpreter::ScIfJump()
                     xNew = (*aMapIter).second;
                 else
                 {
-                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>( nCols, nRows ) );
+                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>(
+                                pCur->GetOpCode(), nCols, nRows));
                     for ( SCSIZE nC=0; nC < nCols; ++nC )
                     {
                         for ( SCSIZE nR=0; nR < nRows; ++nR )
@@ -339,7 +340,8 @@ void ScInterpreter::ScIfError( bool bNAonly )
                 else
                 {
                     const ScMatrix* pMatPtr = pMat.get();
-                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>( nCols, nRows ) );
+                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>(
+                                pCur->GetOpCode(), nCols, nRows));
                     // Init all jumps to no error to save single calls. Error
                     // is the exceptional condition.
                     const double fFlagResult = CreateDoubleError( FormulaError::JumpMatHasResult);
@@ -430,7 +432,8 @@ void ScInterpreter::ScChooseJump()
                     xNew = (*aMapIter).second;
                 else
                 {
-                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>( nCols, nRows ) );
+                    std::shared_ptr<ScJumpMatrix> pJumpMat( std::make_shared<ScJumpMatrix>(
+                                pCur->GetOpCode(), nCols, nRows));
                     for ( SCSIZE nC=0; nC < nCols; ++nC )
                     {
                         for ( SCSIZE nR=0; nR < nRows; ++nR )
@@ -539,7 +542,7 @@ bool ScInterpreter::JumpMatrix( short nStackLevel )
             aCode.Pop();    // pop what Jump() pushed
         else
         {
-            OSL_FAIL( "ScInterpreter::JumpMatrix: pop goes the weasel" );
+            assert(!"pop goes the weasel");
         }
 
         if ( !bHasResMat )
@@ -799,8 +802,11 @@ bool ScInterpreter::JumpMatrix( short nStackLevel )
     {   // We're done with it, throw away jump matrix, keep result.
         // For an intermediate result of Reference use the array of references,
         // else (also for a final result of Reference) use the matrix.
-        formula::ParamClass eReturnType = ScParameterClassification::GetParameterType( pCur, SAL_MAX_UINT16);
-        if (eReturnType == ParamClass::Reference && aCode.PeekNextOperator())
+        // Treat the result of a jump command as final and use the matrix (see
+        // tdf#115493 for why).
+        if (!FormulaCompiler::IsOpCodeJumpCommand( pJumpMatrix->GetOpCode()) &&
+                ScParameterClassification::GetParameterType( pCur, SAL_MAX_UINT16) == ParamClass::Reference &&
+                aCode.PeekNextOperator())
         {
             FormulaTokenRef xRef = new ScRefListToken(true);
             *(xRef->GetRefList()) = pJumpMatrix->GetRefList();
@@ -2296,8 +2302,7 @@ void ScInterpreter::ScCell()
                 sal_Unicode c = 0;
                 if (aCell.hasString())
                 {
-                    const SvxHorJustifyItem* pJustAttr = static_cast<const SvxHorJustifyItem*>(
-                        pDok->GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_HOR_JUSTIFY ));
+                    const SvxHorJustifyItem* pJustAttr = pDok->GetAttr( aCellPos, ATTR_HOR_JUSTIFY );
                     switch( pJustAttr->GetValue() )
                     {
                         case SvxCellHorJustify::Standard:
@@ -2312,8 +2317,7 @@ void ScInterpreter::ScCell()
             }
             else if( aInfoType == "PROTECT" )
             {   // 1 = cell locked
-                const ScProtectionAttr* pProtAttr = static_cast<const ScProtectionAttr*>(
-                    pDok->GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_PROTECTION ));
+                const ScProtectionAttr* pProtAttr = pDok->GetAttr( aCellPos, ATTR_PROTECTION );
                 PushInt( pProtAttr->GetProtection() ? 1 : 0 );
             }
 
@@ -5805,7 +5809,7 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
                 case svExternalSingleRef:
                 case svExternalDoubleRef:
                     {
-                        pQueryMatrix = PopMatrix();
+                        pQueryMatrix = GetMatrix();
                         if (!pQueryMatrix)
                         {
                             PushError( FormulaError::IllegalParameter);
@@ -6029,7 +6033,7 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
                 case svExternalSingleRef:
                 case svExternalDoubleRef:
                     {
-                        pMainMatrix = PopMatrix();
+                        pMainMatrix = GetMatrix();
                         if (!pMainMatrix)
                         {
                             PushError( FormulaError::IllegalParameter);
@@ -7151,7 +7155,9 @@ bool ScInterpreter::FillEntry(ScQueryEntry& rEntry)
             }
         }
         break;
-        case svMatrix :
+        case svExternalDoubleRef:
+        case svExternalSingleRef:
+        case svMatrix:
         {
             svl::SharedString aStr;
             const ScMatValType nType = GetDoubleOrStringFromMatrix(rItem.mfVal, aStr);
@@ -7168,6 +7174,7 @@ bool ScInterpreter::FillEntry(ScQueryEntry& rEntry)
     } // switch ( GetStackType() )
     return true;
 }
+
 void ScInterpreter::ScVLookup()
 {
     CalculateLookup(false);

@@ -78,10 +78,6 @@ VCLXAccessibleListItem::VCLXAccessibleListItem(sal_Int32 _nIndexInParent, const 
         m_sEntryText = pListBoxHelper->GetEntry(static_cast<sal_uInt16>(_nIndexInParent));
 }
 
-VCLXAccessibleListItem::~VCLXAccessibleListItem()
-{
-}
-
 void VCLXAccessibleListItem::SetSelected( bool _bSelected )
 {
     if ( m_bSelected != _bSelected )
@@ -609,7 +605,7 @@ void SAL_CALL VCLXAccessibleListItem::removeAccessibleEventListener( const Refer
 // the color that is actually used.
 sal_Int32 SAL_CALL VCLXAccessibleListItem::getForeground()
 {
-    return COL_BLACK;
+    return sal_Int32(COL_BLACK);
 }
 
 // AF (Oct. 29 2002): Return white as constant background color.  This is an
@@ -617,7 +613,7 @@ sal_Int32 SAL_CALL VCLXAccessibleListItem::getForeground()
 // the color that is actually used.
 sal_Int32 SAL_CALL VCLXAccessibleListItem::getBackground()
 {
-    return COL_WHITE;
+    return sal_Int32(COL_WHITE);
 }
 
 

@@ -27,6 +27,7 @@
 #include <vcl/layout.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/strings.hrc>
 #include <sfx2/sfxresid.hxx>
 #include <sfx2/filedlghelper.hxx>
@@ -125,7 +126,7 @@ SvBaseLink::SvBaseLink()
       m_bIsReadOnly(false)
 {
     nObjType = OBJECT_CLIENT_SO;
-    pImplData = new ImplBaseLinkData;
+    pImplData.reset( new ImplBaseLinkData );
     bVisible = bSynchron = true;
     bWasLastEditOK = false;
 }
@@ -136,7 +137,7 @@ SvBaseLink::SvBaseLink( SfxLinkUpdateMode nUpdateMode, SotClipboardFormatId nCon
      m_bIsReadOnly(false)
 {
     nObjType = OBJECT_CLIENT_SO;
-    pImplData = new ImplBaseLinkData;
+    pImplData.reset( new ImplBaseLinkData );
     bVisible = bSynchron = true;
     bWasLastEditOK = false;
 
@@ -158,22 +159,20 @@ static DdeTopic* FindTopic( const OUString & rLinkName, sal_uInt16* pItemStt )
     OUString sService( sNm.getToken( 0, cTokenSeparator, nTokenPos ) );
 
     DdeServices& rSvc = DdeService::GetServices();
-    for (DdeServices::iterator aI = rSvc.begin(); aI != rSvc.end(); ++aI)
+    for (auto const& elem : rSvc)
     {
-        DdeService* pService = *aI;
-        if( pService->GetName() == sService )
+        if(elem->GetName() == sService)
         {
             // then we search for the Topic
             OUString sTopic( sNm.getToken( 0, cTokenSeparator, nTokenPos ) );
             if( pItemStt )
                 *pItemStt = nTokenPos;
 
-            std::vector<DdeTopic*>& rTopics = pService->GetTopics();
+            std::vector<DdeTopic*>& rTopics = elem->GetTopics();
 
-            for( std::vector<DdeTopic*>::iterator iterTopic = rTopics.begin();
-                 iterTopic != rTopics.end(); ++iterTopic )
-                if( (*iterTopic)->GetName() == sTopic )
-                    return *iterTopic;
+            for (auto const& topic : rTopics)
+                if( topic->GetName() == sTopic )
+                    return topic;
             break;
         }
     }
@@ -187,7 +186,7 @@ SvBaseLink::SvBaseLink( const OUString& rLinkName, sal_uInt16 nObjectType, SvLin
     bVisible = bSynchron = true;
     bWasLastEditOK = false;
     aLinkName = rLinkName;
-    pImplData = new ImplBaseLinkData;
+    pImplData.reset( new ImplBaseLinkData );
     nObjType = nObjectType;
 
     if( !pObj )
@@ -231,7 +230,7 @@ SvBaseLink::~SvBaseLink()
         break;
     }
 
-    delete pImplData;
+    pImplData.reset();
 }
 
 IMPL_LINK( SvBaseLink, EndEditHdl, const OUString&, _rNewName, void )
@@ -517,7 +516,9 @@ bool SvBaseLink::ExecuteEdit( const OUString& _rNewName )
             else
                 return false;
 
-            ScopedVclPtrInstance<MessageDialog>(pImpl->m_pParentWin, sError)->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pImpl->m_pParentWin->GetFrameWeld(),
+                                                                     VclMessageType::Warning, VclButtonsType::Ok, sError));
+            xBox->run();
         }
     }
     else if( !pImpl->m_bIsConnect )

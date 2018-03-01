@@ -20,7 +20,7 @@
 
 #include <memory>
 #include <vcl/graph.hxx>
-#include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 
 class FilterConfigItem;
 
@@ -32,14 +32,15 @@ private:
 
     SvStream& m_rPCX;               // the PCX file to read
 
-    Bitmap              aBmp;
+    std::unique_ptr<vcl::bitmap::RawBitmap> mpBitmap;
+    std::vector<Color>  mvPalette;
     sal_uInt8           nVersion;           // PCX-Version
     sal_uInt8           nEncoding;          // compression type
     sal_uLong           nBitsPerPlanePix;   // bits per plane per pixel
     sal_uLong           nPlanes;            // no of planes
     sal_uLong           nBytesPerPlaneLin;  // bytes per plane line
 
-    sal_uLong           nWidth, nHeight;    // dimension in pixel
+    sal_uInt32          nWidth, nHeight;    // dimension in pixel
     sal_uInt16          nResX, nResY;       // resolution in pixel per inch or 0,0
     sal_uInt16          nDestBitsPerPixel;  // bits per pixel in destination bitmap 1,4,8 or 24
     std::unique_ptr<sal_uInt8[]>
@@ -47,7 +48,7 @@ private:
     bool                bStatus;            // from now on do not read status from stream ( SJ )
 
 
-    void                ImplReadBody(BitmapWriteAccess * pAcc);
+    void                ImplReadBody();
     void                ImplReadPalette( sal_uLong nCol );
     void                ImplReadHeader();
 
@@ -95,27 +96,30 @@ bool PCXReader::ReadPCX(Graphic & rGraphic)
         bStatus = false;
     }
 
+    if (bStatus)
+    {
+        sal_uInt32 nResult;
+        bStatus = !o3tl::checked_multiply(nWidth, nHeight, nResult) && nResult <= SAL_MAX_INT32/2/3;
+    }
+
     // Write BMP header and conditionally (maybe invalid for now) color palette:
     if (bStatus)
     {
-        aBmp = Bitmap( Size( nWidth, nHeight ), nDestBitsPerPixel );
-        Bitmap::ScopedWriteAccess pAcc(aBmp);
-        if ( !pAcc )
-            return false;
+        mpBitmap.reset( new vcl::bitmap::RawBitmap( Size( nWidth, nHeight ), 24 ) );
 
         if ( nDestBitsPerPixel <= 8 )
         {
             sal_uInt16 nColors = 1 << nDestBitsPerPixel;
             sal_uInt8* pPal = pPalette.get();
-            pAcc->SetPaletteEntryCount( nColors );
+            mvPalette.resize( nColors );
             for ( sal_uInt16 i = 0; i < nColors; i++, pPal += 3 )
             {
-                pAcc->SetPaletteColor( i, BitmapColor ( pPal[ 0 ], pPal[ 1 ], pPal[ 2 ] ) );
+                mvPalette[i] = Color( pPal[ 0 ], pPal[ 1 ], pPal[ 2 ] );
             }
         }
 
         // read bitmap data
-        ImplReadBody(pAcc.get());
+        ImplReadBody();
 
         // If an extended color palette exists at the end of the file, then read it and
         // and write again in palette:
@@ -124,16 +128,16 @@ bool PCXReader::ReadPCX(Graphic & rGraphic)
             sal_uInt8* pPal = pPalette.get();
             m_rPCX.SeekRel(1);
             ImplReadPalette(256);
-            pAcc->SetPaletteEntryCount( 256 );
+            mvPalette.resize( 256 );
             for ( sal_uInt16 i = 0; i < 256; i++, pPal += 3 )
             {
-                pAcc->SetPaletteColor( i, BitmapColor ( pPal[ 0 ], pPal[ 1 ], pPal[ 2 ] ) );
+                mvPalette[i] = Color( pPal[ 0 ], pPal[ 1 ], pPal[ 2 ] );
             }
         }
 
         if ( bStatus )
         {
-            rGraphic = aBmp;
+            rGraphic = vcl::bitmap::CreateFromData(std::move(*mpBitmap));
             return true;
         }
     }
@@ -200,7 +204,7 @@ void PCXReader::ImplReadHeader()
     }
 }
 
-void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
+void PCXReader::ImplReadBody()
 {
     sal_uInt8   *pPlane[ 4 ], * pDest;
     sal_uLong   i, nx, ny, np, nCount, nPercent;
@@ -285,9 +289,9 @@ void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
                 {
                     sal_uLong nShift = ( i & 7 ) ^ 7;
                     if ( nShift == 0 )
-                        pAcc->SetPixelIndex( ny, i, *(pSource1++) & 1 );
+                        mpBitmap->SetPixel( ny, i, mvPalette[*(pSource1++) & 1] );
                     else
-                        pAcc->SetPixelIndex( ny, i, (*pSource1 >> nShift ) & 1 );
+                        mpBitmap->SetPixel( ny, i, mvPalette[(*pSource1 >> nShift ) & 1] );
                 }
                 break;
             // 4 colors
@@ -309,14 +313,14 @@ void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
                             nCol = ( *pSource1++ ) & 0x03;
                             break;
                     }
-                    pAcc->SetPixelIndex( ny, i, nCol );
+                    mpBitmap->SetPixel( ny, i, mvPalette[nCol] );
                 }
                 break;
             // 256 colors
             case 0x108 :
                 for ( i = 0; i < nWidth; i++ )
                 {
-                    pAcc->SetPixelIndex( ny, i, *pSource1++ );
+                    mpBitmap->SetPixel( ny, i, mvPalette[*pSource1++] );
                 }
                 break;
             // 8 colors
@@ -327,14 +331,14 @@ void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
                     if ( nShift == 0 )
                     {
                         nCol = ( *pSource1++ & 1) + ( ( *pSource2++ << 1 ) & 2 ) + ( ( *pSource3++ << 2 ) & 4 );
-                        pAcc->SetPixelIndex( ny, i, nCol );
+                        mpBitmap->SetPixel( ny, i, mvPalette[nCol] );
                     }
                     else
                     {
                         nCol = sal::static_int_cast< sal_uInt8 >(
                             ( ( *pSource1 >> nShift ) & 1)  + ( ( ( *pSource2 >> nShift ) << 1 ) & 2 ) +
                             ( ( ( *pSource3 >> nShift ) << 2 ) & 4 ));
-                        pAcc->SetPixelIndex( ny, i, nCol );
+                        mpBitmap->SetPixel( ny, i, mvPalette[nCol] );
                     }
                 }
                 break;
@@ -347,14 +351,14 @@ void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
                     {
                         nCol = ( *pSource1++ & 1) + ( ( *pSource2++ << 1 ) & 2 ) + ( ( *pSource3++ << 2 ) & 4 ) +
                             ( ( *pSource4++ << 3 ) & 8 );
-                        pAcc->SetPixelIndex( ny, i, nCol );
+                        mpBitmap->SetPixel( ny, i, mvPalette[nCol] );
                     }
                     else
                     {
                         nCol = sal::static_int_cast< sal_uInt8 >(
                             ( ( *pSource1 >> nShift ) & 1)  + ( ( ( *pSource2 >> nShift ) << 1 ) & 2 ) +
                             ( ( ( *pSource3 >> nShift ) << 2 ) & 4 ) + ( ( ( *pSource4 >> nShift ) << 3 ) & 8 ));
-                        pAcc->SetPixelIndex( ny, i, nCol );
+                        mpBitmap->SetPixel( ny, i, mvPalette[nCol] );
                     }
                 }
                 break;
@@ -362,7 +366,7 @@ void PCXReader::ImplReadBody(BitmapWriteAccess * pAcc)
             case 0x308 :
                 for ( i = 0; i < nWidth; i++ )
                 {
-                    pAcc->SetPixel( ny, i, Color( *pSource1++, *pSource2++, *pSource3++ ) );
+                    mpBitmap->SetPixel( ny, i, Color( *pSource1++, *pSource2++, *pSource3++ ) );
 
                 }
                 break;

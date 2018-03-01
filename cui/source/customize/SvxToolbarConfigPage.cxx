@@ -26,8 +26,7 @@
 
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/help.hxx>
-#include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/scrbar.hxx>
@@ -50,7 +49,6 @@
 #include <svtools/treelistentry.hxx>
 #include <svtools/viewdataentry.hxx>
 #include <tools/diagnose_ex.h>
-#include <toolkit/helper/vclunohelper.hxx>
 
 #include <algorithm>
 #include <helpids.h>
@@ -252,10 +250,10 @@ void SvxToolbarConfigPage::DeleteSelectedContent()
         if ( m_pContentsListBox->GetEntryCount() == 0 &&
              GetTopLevelSelection()->IsDeletable() )
         {
-            ScopedVclPtrInstance<MessageDialog> qbox(this,
-                CuiResId(RID_SXVSTR_CONFIRM_DELETE_TOOLBAR), VclMessageType::Question, VclButtonsType::YesNo);
-
-            if ( qbox->Execute() == RET_YES )
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           CuiResId(RID_SXVSTR_CONFIRM_DELETE_TOOLBAR)));
+            if (xQueryBox->run() == RET_YES)
             {
                 DeleteSelectedTopLevel();
             }
@@ -318,7 +316,7 @@ void SvxToolbarConfigPage::Init()
         comphelper::getProcessComponentContext(),
         m_xFrame,
         vcl::CommandInfoProvider::GetModuleIdentifier(m_xFrame));
-    m_pCommandCategoryListBox->categorySelected( m_pFunctions );
+    m_pCommandCategoryListBox->categorySelected( m_pFunctions, OUString(), GetSaveInData() );
 }
 
 SaveInData* SvxToolbarConfigPage::CreateSaveInData(
@@ -413,7 +411,7 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectCategory, ListBox&, void )
 {
     OUString aSearchTerm( m_pSearchEdit->GetText() );
 
-    m_pCommandCategoryListBox->categorySelected( m_pFunctions, aSearchTerm );
+    m_pCommandCategoryListBox->categorySelected( m_pFunctions, aSearchTerm, GetSaveInData() );
 }
 
 IMPL_LINK_NOARG( SvxToolbarConfigPage, AddCommandHdl, Button *, void )
@@ -683,10 +681,10 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, ResetToolbarHdl, Button *, void )
     SvxConfigEntry* pToolbar =
         static_cast<SvxConfigEntry*>(m_pTopLevelListBox->GetEntryData( nSelectionPos ));
 
-    ScopedVclPtrInstance<MessageDialog> qbox(this,
-        CuiResId(RID_SVXSTR_CONFIRM_RESTORE_DEFAULT), VclMessageType::Question, VclButtonsType::YesNo);
-
-    if ( qbox->Execute() == RET_YES )
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   CuiResId(RID_SVXSTR_CONFIRM_RESTORE_DEFAULT)));
+    if (xQueryBox->run() == RET_YES)
     {
         ToolbarSaveInData* pSaveInData =
             static_cast<ToolbarSaveInData*>(GetSaveInData());
@@ -723,9 +721,10 @@ short SvxToolbarConfigPage::QueryReset()
 
     OUString label = SvxConfigPageHelper::replaceSaveInName( msg, saveInName );
 
-    ScopedVclPtrInstance< QueryBox > qbox( this, MessBoxStyle::YesNo, label );
-
-    return qbox->Execute();
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   label));
+    return xQueryBox->run();
 }
 
 IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectToolbar, ListBox&, void )
@@ -752,21 +751,17 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectToolbar, ListBox&, void )
     }
 
     SvxEntries* pEntries = pToolbar->GetEntries();
-    SvxEntries::const_iterator iter = pEntries->begin();
-
-    for ( ; iter != pEntries->end(); ++iter )
+    for (auto const& entry : *pEntries)
     {
-        SvxConfigEntry* pEntry = *iter;
+        SvTreeListEntry* pNewLBEntry = InsertEntryIntoUI(entry);
 
-        SvTreeListEntry* pNewLBEntry = InsertEntryIntoUI( pEntry );
-
-        if(pEntry->IsSeparator())
+        if(entry->IsSeparator())
             m_pContentsListBox->SetCheckButtonInvisible( pNewLBEntry );
 
-        if (pEntry->IsBinding())
+        if (entry->IsBinding())
         {
             m_pContentsListBox->SetCheckButtonState( pNewLBEntry,
-                pEntry->IsVisible() ? SvButtonState::Checked : SvButtonState::Unchecked );
+                entry->IsVisible() ? SvButtonState::Checked : SvButtonState::Unchecked );
         }
         else
         {
@@ -882,7 +877,7 @@ Image SvxToolbarEntriesListBox::GetSizedImage(
     rVDev.DrawImage( aPos, aImage );
 
     // Draw separator line 2 pixels left from the right border
-    Color aLineColor = GetDisplayBackground().GetColor().IsDark() ? Color( COL_WHITE ) : Color( COL_BLACK );
+    Color aLineColor = GetDisplayBackground().GetColor().IsDark() ? COL_WHITE : COL_BLACK;
     rVDev.SetLineColor( aLineColor );
     rVDev.DrawLine( Point( aNewSize.Width()-3, 0 ), Point( aNewSize.Width()-3, aNewSize.Height()-1 ));
 

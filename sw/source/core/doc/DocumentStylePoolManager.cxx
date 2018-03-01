@@ -35,6 +35,7 @@
 #include <frmfmt.hxx>
 #include <fmtline.hxx>
 #include <numrule.hxx>
+#include <hints.hxx>
 #include <editeng/paperinf.hxx>
 #include <editeng/wghtitem.hxx>
 #include <editeng/fontitem.hxx>
@@ -61,6 +62,7 @@
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
 #include <strings.hrc>
+#include <frmatr.hxx>
 #include <com/sun/star/table/BorderLineStyle.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/RelOrientation.hpp>
@@ -201,7 +203,7 @@ namespace
                                     SvxNumberFormat::LABEL_WIDTH_AND_POSITION &&
                         ( rNFormat.GetAbsLSpace() || rNFormat.GetFirstLineOffset() ) )
                 {
-                    SvxLRSpaceItem aLR( static_cast<const SvxLRSpaceItem&>(pColl->GetFormatAttr( RES_LR_SPACE )) );
+                    SvxLRSpaceItem aLR( pColl->GetFormatAttr( RES_LR_SPACE ) );
                     aLR.SetTextFirstLineOfstValue( rNFormat.GetFirstLineOffset() );
                     aLR.SetTextLeft( rNFormat.GetAbsLSpace() );
                     pColl->SetFormatAttr( aLR );
@@ -1503,8 +1505,7 @@ SwFormat* DocumentStylePoolManager::GetFormatFromPool( sal_uInt16 nId )
 
     case RES_POOLCHR_INET_NORMAL:
         {
-            Color aCol( COL_BLUE );
-            aSet.Put( SvxColorItem( aCol, RES_CHRATR_COLOR ) );
+            aSet.Put( SvxColorItem( COL_BLUE, RES_CHRATR_COLOR ) );
             aSet.Put( SvxUnderlineItem( LINESTYLE_SINGLE, RES_CHRATR_UNDERLINE ) );
             // i40133: patch submitted by rail: set language to 'none' to prevent spell checking:
             aSet.Put( SvxLanguageItem( LANGUAGE_NONE, RES_CHRATR_LANGUAGE ) );
@@ -1514,8 +1515,7 @@ SwFormat* DocumentStylePoolManager::GetFormatFromPool( sal_uInt16 nId )
         break;
     case RES_POOLCHR_INET_VISIT:
         {
-            Color aCol( COL_RED );
-            aSet.Put( SvxColorItem( aCol, RES_CHRATR_COLOR ) );
+            aSet.Put( SvxColorItem( COL_RED, RES_CHRATR_COLOR ) );
             aSet.Put( SvxUnderlineItem( LINESTYLE_SINGLE, RES_CHRATR_UNDERLINE ) );
             aSet.Put( SvxLanguageItem( LANGUAGE_NONE, RES_CHRATR_LANGUAGE ) );
             aSet.Put( SvxLanguageItem( LANGUAGE_NONE, RES_CHRATR_CJK_LANGUAGE ) );
@@ -1524,8 +1524,7 @@ SwFormat* DocumentStylePoolManager::GetFormatFromPool( sal_uInt16 nId )
         break;
     case RES_POOLCHR_JUMPEDIT:
         {
-            Color aCol( COL_CYAN );
-            aSet.Put( SvxColorItem( aCol, RES_CHRATR_COLOR ) );
+            aSet.Put( SvxColorItem( COL_CYAN, RES_CHRATR_COLOR ) );
             aSet.Put( SvxUnderlineItem( LINESTYLE_DOTTED, RES_CHRATR_UNDERLINE ) );
             aSet.Put( SvxCaseMapItem( SvxCaseMap::SmallCaps, RES_CHRATR_CASEMAP ) );
         }
@@ -1989,7 +1988,7 @@ SwNumRule* DocumentStylePoolManager::GetNumRuleFromPool( sal_uInt16 nId )
             aFormat.SetIncludeUpperLevels( 1 );
             aFormat.SetSuffix( "." );
 
-            sal_uInt16 nOffs = 397; // 0.70 cm
+            long const nOffs = 397; // 0.70 cm
 
             if ( eNumberFormatPositionAndSpaceMode == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
             {
@@ -2009,7 +2008,7 @@ SwNumRule* DocumentStylePoolManager::GetNumRuleFromPool( sal_uInt16 nId )
                 }
                 else if ( eNumberFormatPositionAndSpaceMode == SvxNumberFormat::LABEL_ALIGNMENT )
                 {
-                    long nPos = (n+1) * static_cast<long>(nOffs);
+                    long nPos = (n+1) * nOffs;
                     aFormat.SetListtabPos(nPos + 357);
                     aFormat.SetIndentAt(nPos + 357);
                 }

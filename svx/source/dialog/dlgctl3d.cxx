@@ -135,7 +135,7 @@ void Svx3DPreviewControl::Construct()
         XATTR_FILL_FIRST, XATTR_FILLBITMAP>{} );
     aSet.Put( XLineStyleItem( drawing::LineStyle_NONE ) );
     aSet.Put( XFillStyleItem( drawing::FillStyle_SOLID ) );
-    aSet.Put( XFillColorItem( "", Color( COL_WHITE ) ) );
+    aSet.Put( XFillColorItem( "", COL_WHITE ) );
 
     mpScene->SetMergedItemSet(aSet);
 
@@ -907,7 +907,7 @@ Color Svx3DLightControl::GetLightColor(sal_uInt32 nNum) const
         }
     }
 
-    return Color(COL_BLACK);
+    return COL_BLACK;
 }
 
 basegfx::B3DVector Svx3DLightControl::GetLightDirection(sal_uInt32 nNum) const
@@ -1023,20 +1023,20 @@ void SvxLightCtl3D::NewLayout()
     maLightControl->SetPosSizePixel(aPoint, aDestSize);
 
     // hor scrollbar
-    aPoint.Y() = aSize.Height() - nScrollSize;
-    aDestSize.Height() = nScrollSize;
+    aPoint.setY( aSize.Height() - nScrollSize );
+    aDestSize.setHeight( nScrollSize );
     maHorScroller->SetPosSizePixel(aPoint, aDestSize);
 
     // vert scrollbar
-    aPoint.X() = aSize.Width() - nScrollSize;
-    aPoint.Y() = 0;
-    aDestSize.Width() = nScrollSize;
-    aDestSize.Height() = aSize.Height() - nScrollSize;
+    aPoint.setX( aSize.Width() - nScrollSize );
+    aPoint.setY( 0 );
+    aDestSize.setWidth( nScrollSize );
+    aDestSize.setHeight( aSize.Height() - nScrollSize );
     maVerScroller->SetPosSizePixel(aPoint, aDestSize);
 
     // button
-    aPoint.Y() = aSize.Height() - nScrollSize;
-    aDestSize.Height() = nScrollSize;
+    aPoint.setY( aSize.Height() - nScrollSize );
+    aDestSize.setHeight( nScrollSize );
     maSwitcher->SetPosSizePixel(aPoint, aDestSize);
 }
 
@@ -1197,8 +1197,8 @@ void SvxLightCtl3D::GetFocus()
 
         Size aFocusSize = maLightControl->GetOutputSizePixel();
 
-        aFocusSize.Width() -= 4;
-        aFocusSize.Height() -= 4;
+        aFocusSize.AdjustWidth( -4 );
+        aFocusSize.AdjustHeight( -4 );
 
         tools::Rectangle aFocusRect( Point( 2, 2 ), aFocusSize );
 

@@ -22,8 +22,9 @@
 #include <comphelper/processfactory.hxx>
 #include <tools/datetime.hxx>
 #include <unotools/datetime.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <ucbhelper/content.hxx>
 #include <sfx2/app.hxx>
 #include <helpids.h>
@@ -358,7 +359,9 @@ void GalleryBrowser1::ImplExecute(const OString &rIdent)
     }
     else if (rIdent == "delete")
     {
-        if( ScopedVclPtrInstance<MessageDialog>(nullptr, "QueryDeleteThemeDialog","svx/ui/querydeletethemedialog.ui")->Execute() == RET_YES )
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querydeletethemedialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryDeleteThemeDialog"));
+        if (xQuery->run() == RET_YES)
             mpGallery->RemoveTheme( mpThemes->GetSelectedEntry() );
     }
     else if (rIdent == "rename")
@@ -583,8 +586,8 @@ IMPL_LINK_NOARG(GalleryBrowser1, ShowContextMenuHdl, void*, void)
     const tools::Rectangle aThemesRect( mpThemes->GetPosPixel(), mpThemes->GetOutputSizePixel() );
     Point           aSelPos( mpThemes->GetBoundingRectangle( mpThemes->GetSelectedEntryPos() ).Center() );
 
-    aSelPos.X() = std::max( std::min( aSelPos.X(), aThemesRect.Right() ), aThemesRect.Left() );
-    aSelPos.Y() = std::max( std::min( aSelPos.Y(), aThemesRect.Bottom() ), aThemesRect.Top() );
+    aSelPos.setX( std::max( std::min( aSelPos.X(), aThemesRect.Right() ), aThemesRect.Left() ) );
+    aSelPos.setY( std::max( std::min( aSelPos.Y(), aThemesRect.Bottom() ), aThemesRect.Top() ) );
 
     aMenu->Execute( this, aSelPos );
 }

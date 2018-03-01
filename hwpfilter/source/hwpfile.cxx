@@ -122,6 +122,13 @@ int HWPFile::SetState(int errcode)
     return error_code;
 }
 
+bool HWPFile::Read1b(unsigned char &out)
+{
+    if (!hiodev || !hiodev->read1b(out))
+        return false;
+    return true;
+}
+
 bool HWPFile::Read1b(char &out)
 {
     unsigned char tmp8;
@@ -148,11 +155,6 @@ bool HWPFile::Read4b(int &out)
         return false;
     out = tmp32;
     return true;
-}
-
-size_t HWPFile::Read1b(void *ptr, size_t nmemb)
-{
-    return hiodev ? hiodev->read1b(ptr, nmemb) : 0;
 }
 
 size_t HWPFile::Read2b(void *ptr, size_t nmemb)
@@ -218,7 +220,7 @@ void HWPFile::ParaListRead()
     ReadParaList(plist);
 }
 
-bool HWPFile::ReadParaList(std::vector < HWPPara* > &aplist)
+void HWPFile::ReadParaList(std::vector < HWPPara* > &aplist)
 {
     std::unique_ptr<HWPPara> spNode( new HWPPara );
     unsigned char tmp_etcflag;
@@ -249,8 +251,6 @@ bool HWPFile::ReadParaList(std::vector < HWPPara* > &aplist)
         aplist.push_back(spNode.release());
         spNode.reset( new HWPPara );
     }
-
-    return true;
 }
 
 bool HWPFile::ReadParaList(std::vector< std::unique_ptr<HWPPara> > &aplist, unsigned char flag)
@@ -412,7 +412,7 @@ void HWPFile::TagsRead()
 ColumnDef *HWPFile::GetColumnDef(int num)
 {
     if (static_cast<size_t>(num) < columnlist.size())
-        return columnlist[num]->coldef;
+        return columnlist[num]->xColdef.get();
     else
         return nullptr;
 }
@@ -569,12 +569,12 @@ void HWPFile::AddColumnInfo()
     setMaxSettedPage();
 }
 
-void HWPFile::SetColumnDef(ColumnDef *coldef)
+void HWPFile::SetColumnDef(const std::shared_ptr<ColumnDef>& rColdef)
 {
     ColumnInfo *cinfo = columnlist.back().get();
     if( cinfo->bIsSet )
         return;
-    cinfo->coldef = coldef;
+    cinfo->xColdef = rColdef;
     cinfo->bIsSet = true;
 }
 

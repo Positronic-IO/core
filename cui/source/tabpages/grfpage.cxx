@@ -282,9 +282,9 @@ bool SvxGrfCropPage::FillItemSet(SfxItemSet *rSet)
 
         Size aTmpSz( aSz.GetSize() );
         if( m_pWidthMF->IsValueChangedFromSaved() )
-            aTmpSz.Width() = lcl_GetValue( *m_pWidthMF, eUnit );
+            aTmpSz.setWidth( lcl_GetValue( *m_pWidthMF, eUnit ) );
         if( m_pHeightMF->IsValueChangedFromSaved() )
-            aTmpSz.Height() = lcl_GetValue( *m_pHeightMF, eUnit );
+            aTmpSz.setHeight( lcl_GetValue( *m_pHeightMF, eUnit ) );
         aSz.SetSize( aTmpSz );
         m_pWidthMF->SaveValue();
         m_pHeightMF->SaveValue();
@@ -784,7 +784,7 @@ void SvxCropExample::Paint(vcl::RenderContext& rRenderContext, const ::tools::Re
     rRenderContext.SetRasterOp(RasterOp::OverPaint);
     rRenderContext.DrawRect(::tools::Rectangle(Point(), aWinSize));
 
-    rRenderContext.SetLineColor(Color(COL_WHITE));
+    rRenderContext.SetLineColor(COL_WHITE);
     ::tools::Rectangle aRect(Point((aWinSize.Width() - aFrameSize.Width())/2,
                           (aWinSize.Height() - aFrameSize.Height())/2),
                           aFrameSize);
@@ -792,12 +792,12 @@ void SvxCropExample::Paint(vcl::RenderContext& rRenderContext, const ::tools::Re
 
     Size aSz(2, 0);
     aSz = rRenderContext.PixelToLogic(aSz);
-    rRenderContext.SetFillColor(Color(COL_TRANSPARENT));
+    rRenderContext.SetFillColor(COL_TRANSPARENT);
     rRenderContext.SetRasterOp(RasterOp::Invert);
-    aRect.Left()    += aTopLeft.Y();
-    aRect.Top()     += aTopLeft.X();
-    aRect.Right()   -= aBottomRight.Y();
-    aRect.Bottom()  -= aBottomRight.X();
+    aRect.AdjustLeft(aTopLeft.Y() );
+    aRect.AdjustTop(aTopLeft.X() );
+    aRect.AdjustRight( -(aBottomRight.Y()) );
+    aRect.AdjustBottom( -(aBottomRight.X()) );
     rRenderContext.DrawRect(aRect);
 }
 
@@ -810,9 +810,9 @@ void SvxCropExample::SetFrameSize( const Size& rSz )
 {
     aFrameSize = rSz;
     if(!aFrameSize.Width())
-        aFrameSize.Width() = 1;
+        aFrameSize.setWidth( 1 );
     if(!aFrameSize.Height())
-        aFrameSize.Height() = 1;
+        aFrameSize.setHeight( 1 );
     Size aWinSize( GetOutputSizePixel() );
     Fraction aXScale( aWinSize.Width() * 4, aFrameSize.Width() * 5 );
     Fraction aYScale( aWinSize.Height() * 4, aFrameSize.Height() * 5 );

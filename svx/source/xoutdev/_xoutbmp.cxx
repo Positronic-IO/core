@@ -67,12 +67,12 @@ Animation XOutBitmap::MirrorAnimation( const Animation& rAnimation, bool bHMirr,
 
             // Adjust the positions inside the whole bitmap
             if( bHMirr )
-                aAnimBmp.aPosPix.X() = rGlobalSize.Width() - aAnimBmp.aPosPix.X() -
-                                       aAnimBmp.aSizePix.Width();
+                aAnimBmp.aPosPix.setX( rGlobalSize.Width() - aAnimBmp.aPosPix.X() -
+                                       aAnimBmp.aSizePix.Width() );
 
             if( bVMirr )
-                aAnimBmp.aPosPix.Y() = rGlobalSize.Height() - aAnimBmp.aPosPix.Y() -
-                                       aAnimBmp.aSizePix.Height();
+                aAnimBmp.aPosPix.setY( rGlobalSize.Height() - aAnimBmp.aPosPix.Y() -
+                                       aAnimBmp.aSizePix.Height() );
 
             aNewAnim.Replace( aAnimBmp, i );
         }
@@ -287,7 +287,7 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
                                 const Wallpaper aWallpaper( pVDev->GetBackground() );
                                 const Point     aPt;
 
-                                pVDev->SetBackground( Wallpaper( Color( COL_BLACK ) ) );
+                                pVDev->SetBackground( Wallpaper( COL_BLACK ) );
                                 pVDev->Erase();
                                 rGraphic.Draw( pVDev.get(), aPt, aSize );
 
@@ -453,54 +453,55 @@ Bitmap XOutBitmap::DetectEdges( const Bitmap& rBmp, const sal_uInt8 cThreshold )
         {
             bool bRet = false;
 
-            Bitmap              aDstBmp( aSize, 1 );
+            ScopedVclPtr<VirtualDevice> pVirDev(VclPtr<VirtualDevice>::Create());
+            pVirDev->SetOutputSizePixel(aSize);
             Bitmap::ScopedReadAccess pReadAcc(aWorkBmp);
-            Bitmap::ScopedWriteAccess pWriteAcc(aDstBmp);
 
-            if( pReadAcc && pWriteAcc )
+            if( pReadAcc )
             {
                 const long          nWidth = aSize.Width();
                 const long          nWidth2 = nWidth - 2;
                 const long          nHeight = aSize.Height();
                 const long          nHeight2 = nHeight - 2;
                 const long          lThres2 = static_cast<long>(cThreshold) * cThreshold;
-                const sal_uInt8 nWhitePalIdx(static_cast< sal_uInt8 >(pWriteAcc->GetBestPaletteIndex(Color(COL_WHITE))));
-                const sal_uInt8 nBlackPalIdx(static_cast< sal_uInt8 >(pWriteAcc->GetBestPaletteIndex(Color(COL_BLACK))));
                 long                nSum1;
                 long                nSum2;
                 long                lGray;
 
                 // initialize border with white pixels
-                pWriteAcc->SetLineColor( Color( COL_WHITE) );
-                pWriteAcc->DrawLine( Point(), Point( nWidth - 1, 0L ) );
-                pWriteAcc->DrawLine( Point( nWidth - 1, 0L ), Point( nWidth - 1, nHeight - 1 ) );
-                pWriteAcc->DrawLine( Point( nWidth - 1, nHeight - 1 ), Point( 0L, nHeight - 1 ) );
-                pWriteAcc->DrawLine( Point( 0, nHeight - 1 ), Point() );
+                pVirDev->SetLineColor( COL_WHITE );
+                pVirDev->DrawLine( Point(), Point( nWidth - 1, 0L ) );
+                pVirDev->DrawLine( Point( nWidth - 1, 0L ), Point( nWidth - 1, nHeight - 1 ) );
+                pVirDev->DrawLine( Point( nWidth - 1, nHeight - 1 ), Point( 0L, nHeight - 1 ) );
+                pVirDev->DrawLine( Point( 0, nHeight - 1 ), Point() );
 
                 for( long nY = 0, nY1 = 1, nY2 = 2; nY < nHeight2; nY++, nY1++, nY2++ )
                 {
+                    Scanline pScanlineRead = pReadAcc->GetScanline( nY );
+                    Scanline pScanlineRead1 = pReadAcc->GetScanline( nY1 );
+                    Scanline pScanlineRead2 = pReadAcc->GetScanline( nY2 );
                     for( long nX = 0, nXDst = 1, nXTmp; nX < nWidth2; nX++, nXDst++ )
                     {
                         nXTmp = nX;
 
-                        nSum1 = -( nSum2 = lGray = pReadAcc->GetPixelIndex( nY, nXTmp++ ) );
-                        nSum2 += static_cast<long>(pReadAcc->GetPixelIndex( nY, nXTmp++ )) << 1;
-                        nSum1 += ( lGray = pReadAcc->GetPixelIndex( nY, nXTmp ) );
+                        nSum1 = -( nSum2 = lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp++ ) );
+                        nSum2 += static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead, nXTmp++ )) << 1;
+                        nSum1 += ( lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp ) );
                         nSum2 += lGray;
 
-                        nSum1 += static_cast<long>(pReadAcc->GetPixelIndex( nY1, nXTmp )) << 1;
-                        nSum1 -= static_cast<long>(pReadAcc->GetPixelIndex( nY1, nXTmp -= 2 )) << 1;
+                        nSum1 += static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead1, nXTmp )) << 1;
+                        nSum1 -= static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead1, nXTmp -= 2 )) << 1;
 
-                        nSum1 += ( lGray = -static_cast<long>(pReadAcc->GetPixelIndex( nY2, nXTmp++ )) );
+                        nSum1 += ( lGray = -static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp++ )) );
                         nSum2 += lGray;
-                        nSum2 -= static_cast<long>(pReadAcc->GetPixelIndex( nY2, nXTmp++ )) << 1;
-                        nSum1 += ( lGray = static_cast<long>(pReadAcc->GetPixelIndex( nY2, nXTmp )) );
+                        nSum2 -= static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp++ )) << 1;
+                        nSum1 += ( lGray = static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp )) );
                         nSum2 -= lGray;
 
                         if( ( nSum1 * nSum1 + nSum2 * nSum2 ) < lThres2 )
-                            pWriteAcc->SetPixelIndex( nY1, nXDst, nWhitePalIdx );
+                            pVirDev->DrawPixel( Point(nXDst, nY), COL_WHITE );
                         else
-                            pWriteAcc->SetPixelIndex( nY1, nXDst, nBlackPalIdx );
+                            pVirDev->DrawPixel( Point(nXDst, nY), COL_BLACK );
                     }
                 }
 
@@ -508,10 +509,9 @@ Bitmap XOutBitmap::DetectEdges( const Bitmap& rBmp, const sal_uInt8 cThreshold )
             }
 
             pReadAcc.reset();
-            pWriteAcc.reset();
 
             if( bRet )
-                aRetBmp = aDstBmp;
+                aRetBmp = pVirDev->GetBitmap(Point(0,0), aSize);
         }
     }
 
@@ -532,8 +532,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
 {
     Bitmap      aWorkBmp;
     tools::Polygon aRetPoly;
-    Point       aTmpPoint;
-    tools::Rectangle   aWorkRect( aTmpPoint, rBmp.GetSizePixel() );
+    tools::Rectangle   aWorkRect( Point(), rBmp.GetSizePixel() );
 
     if( pWorkRectPixel )
         aWorkRect.Intersection( *pWorkRectPixel );
@@ -568,7 +567,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
             std::unique_ptr<Point[]> pPoints2;
             long                nX, nY;
             sal_uInt16              nPolyPos = 0;
-            const BitmapColor   aBlack = pAcc->GetBestMatchingColor( Color( COL_BLACK ) );
+            const BitmapColor   aBlack = pAcc->GetBestMatchingColor( COL_BLACK );
 
             if( nFlags & XOutFlags::ContourVert )
             {
@@ -582,7 +581,8 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                     // scan row from left to right
                     while( nY < nEndY1 )
                     {
-                        if( aBlack == pAcc->GetPixel( nY, nX ) )
+                        Scanline pScanline = pAcc->GetScanline( nY );
+                        if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                         {
                             pPoints1[ nPolyPos ] = Point( nX, nY );
                             nY = nStartY2;
@@ -590,7 +590,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                             // this loop always breaks eventually as there is at least one pixel
                             while( true )
                             {
-                                if( aBlack == pAcc->GetPixel( nY, nX ) )
+                                if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                                 {
                                     pPoints2[ nPolyPos ] = Point( nX, nY );
                                     break;
@@ -615,11 +615,12 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                 for ( nY = nStartY1; nY < nEndY1; nY++ )
                 {
                     nX = nStartX1;
+                    Scanline pScanline = pAcc->GetScanline( nY );
 
                     // scan row from left to right
                     while( nX < nEndX1 )
                     {
-                        if( aBlack == pAcc->GetPixel( nY, nX ) )
+                        if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                         {
                             pPoints1[ nPolyPos ] = Point( nX, nY );
                             nX = nStartX2;
@@ -627,7 +628,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                             // this loop always breaks eventually as there is at least one pixel
                             while( true )
                             {
-                                if( aBlack == pAcc->GetPixel( nY, nX ) )
+                                if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                                 {
                                     pPoints2[ nPolyPos ] = Point( nX, nY );
                                     break;

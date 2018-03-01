@@ -27,6 +27,7 @@
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <com/sun/star/view/XViewSettingsSupplier.hpp>
 #include <com/sun/star/text/RubyAdjust.hpp>
+#include <com/sun/star/text/RubyPosition.hpp>
 #include <com/sun/star/text/XTextColumns.hpp>
 #include <com/sun/star/text/HoriOrientation.hpp>
 
@@ -398,6 +399,8 @@ DECLARE_RTFEXPORT_TEST(testTdf49073, "tdf49073.rtf")
                          getProperty<sal_Int16>(getParagraph(5)->getStart(), "RubyAdjust"));
     CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_RIGHT),
                          getProperty<sal_Int16>(getParagraph(6)->getStart(), "RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyPosition::INTER_CHARACTER),
+                         getProperty<sal_Int16>(getParagraph(7)->getStart(), "RubyPosition"));
 }
 
 DECLARE_RTFEXPORT_TEST(testMathRuns, "math-runs.rtf")
@@ -694,7 +697,7 @@ DECLARE_RTFEXPORT_TEST(testParaShadow, "para-shadow.rtf")
     // The problem was that \brdrsh was ignored.
     table::ShadowFormat aShadow
         = getProperty<table::ShadowFormat>(getParagraph(2), "ParaShadowFormat");
-    CPPUNIT_ASSERT_EQUAL(COL_BLACK, sal_uInt32(aShadow.Color));
+    CPPUNIT_ASSERT_EQUAL(COL_BLACK, Color(aShadow.Color));
     CPPUNIT_ASSERT_EQUAL(table::ShadowLocation_BOTTOM_RIGHT, aShadow.Location);
     CPPUNIT_ASSERT_EQUAL(sal_Int16(convertTwipToMm100(60)), aShadow.ShadowWidth);
 }
@@ -736,7 +739,7 @@ DECLARE_RTFEXPORT_TEST(testCharacterBorder, "charborder.odt")
     {
         const table::ShadowFormat aShadow
             = getProperty<table::ShadowFormat>(xRun, "CharShadowFormat");
-        CPPUNIT_ASSERT_EQUAL(COL_BLACK, sal_uInt32(aShadow.Color));
+        CPPUNIT_ASSERT_EQUAL(COL_BLACK, Color(aShadow.Color));
         CPPUNIT_ASSERT_EQUAL(table::ShadowLocation_BOTTOM_RIGHT, aShadow.Location);
         CPPUNIT_ASSERT_EQUAL(sal_Int16(318), aShadow.ShadowWidth);
     }

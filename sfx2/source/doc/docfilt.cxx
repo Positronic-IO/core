@@ -67,33 +67,16 @@ SfxFilter::SfxFilter( const OUString &rName,
     lFormat(lFmt)
 {
     OUString aExts = GetWildcard().getGlob();
-    OUString aShort, aLong;
+    OUString glob;
     OUString aRet;
-    OUString aTest;
     sal_uInt16 nPos = 0;
     while (!(aRet = aExts.getToken(nPos++, ';')).isEmpty() )
     {
-        aTest = aRet;
-        aTest = aTest.replaceFirst( "*." , "" );
-        if( aTest.getLength() <= USHRT_MAX )
-        {
-            if (!aShort.isEmpty())
-                aShort += ";";
-            aShort += aRet;
-        }
-        else
-        {
-            if (!aLong.isEmpty())
-                aLong += ";";
-            aLong += aRet;
-        }
+        if (!glob.isEmpty())
+            glob += ";";
+        glob += aRet;
     }
-    if (!aShort.isEmpty() && !aLong.isEmpty())
-    {
-        aShort += ";";
-        aShort += aLong;
-    }
-    aWildCard.setGlob(aShort);
+    aWildCard.setGlob(glob);
 }
 
 SfxFilter::~SfxFilter()
@@ -192,9 +175,9 @@ OUString SfxFilter::GetTypeFromStorage(
             SotClipboardFormatId nClipId = SotExchange::GetFormat( aDataFlavor );
             if ( nClipId != SotClipboardFormatId::NONE )
             {
-                SfxFilterFlags nMust = SfxFilterFlags::IMPORT;
+                SfxFilterFlags const nMust = SfxFilterFlags::IMPORT;
                 // template filters shouldn't be detected if not explicitly asked for
-                SfxFilterFlags nDont = SFX_FILTER_NOTINSTALLED | SfxFilterFlags::TEMPLATEPATH;
+                SfxFilterFlags const nDont = SFX_FILTER_NOTINSTALLED | SfxFilterFlags::TEMPLATEPATH;
 
                 // get filter from storage MediaType
                 std::shared_ptr<const SfxFilter> pFilter = aMatcher.GetFilter4ClipBoardId( nClipId, nMust, nDont );

@@ -31,7 +31,7 @@
 
 using namespace css;
 
-#define TRANSCOL Color(COL_WHITE)
+#define TRANSCOL COL_WHITE
 
 ContourWindow::ContourWindow(vcl::Window* pParent, WinBits nBits)
     : GraphCtrl (pParent, nBits)
@@ -174,8 +174,7 @@ void ContourWindow::MouseMove( const MouseEvent& rMEvt )
 
 void ContourWindow::MouseButtonUp(const MouseEvent& rMEvt)
 {
-    Point aTmpPoint;
-    const tools::Rectangle aGraphRect( aTmpPoint, GetGraphicSize() );
+    const tools::Rectangle aGraphRect( Point(), GetGraphicSize() );
     const Point     aLogPt( PixelToLogic( rMEvt.GetPosPixel() ) );
 
     bClickValid = aGraphRect.IsInside( aLogPt );
@@ -191,8 +190,8 @@ void ContourWindow::MouseButtonUp(const MouseEvent& rMEvt)
     {
         GraphCtrl::MouseButtonUp( rMEvt );
 
-        aWorkRect.Right() = aLogPt.X();
-        aWorkRect.Bottom() = aLogPt.Y();
+        aWorkRect.SetRight( aLogPt.X() );
+        aWorkRect.SetBottom( aLogPt.Y() );
         aWorkRect.Intersection( aGraphRect );
         aWorkRect.Justify();
 
@@ -225,8 +224,8 @@ void ContourWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
 
     const Graphic& rGraphic = GetGraphic();
     rTarget.Push(PushFlags::LINECOLOR |PushFlags::FILLCOLOR);
-    rTarget.SetLineColor(Color(COL_BLACK));
-    rTarget.SetFillColor(Color(COL_WHITE));
+    rTarget.SetLineColor(COL_BLACK);
+    rTarget.SetFillColor(COL_WHITE);
     rTarget.DrawRect( tools::Rectangle( Point(), GetGraphicSize() ) );
     rTarget.Pop();
 

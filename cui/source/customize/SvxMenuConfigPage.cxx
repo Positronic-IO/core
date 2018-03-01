@@ -26,8 +26,7 @@
 
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/help.hxx>
-#include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/scrbar.hxx>
@@ -50,7 +49,6 @@
 #include <svtools/treelistentry.hxx>
 #include <svtools/viewdataentry.hxx>
 #include <tools/diagnose_ex.h>
-#include <toolkit/helper/vclunohelper.hxx>
 
 #include <algorithm>
 #include <strings.hrc>
@@ -190,7 +188,7 @@ void SvxMenuConfigPage::Init()
         comphelper::getProcessComponentContext(),
         m_xFrame,
         vcl::CommandInfoProvider::GetModuleIdentifier(m_xFrame));
-    m_pCommandCategoryListBox->categorySelected( m_pFunctions );
+    m_pCommandCategoryListBox->categorySelected( m_pFunctions, OUString(), GetSaveInData() );
 }
 
 void SvxMenuConfigPage::dispose()
@@ -286,9 +284,10 @@ short SvxMenuConfigPage::QueryReset()
 
     OUString label = SvxConfigPageHelper::replaceSaveInName( msg, saveInName );
 
-    ScopedVclPtrInstance<QueryBox> qbox( this, MessBoxStyle::YesNo, label );
-
-    return qbox->Execute();
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   label));
+    return xQueryBox->run();
 }
 
 IMPL_LINK_NOARG( SvxMenuConfigPage, SelectMenu, ListBox&, void )
@@ -303,12 +302,10 @@ IMPL_LINK_NOARG( SvxMenuConfigPage, SelectMenu, ListBox&, void )
         m_pMinusBtn->Enable( pMenuData->IsDeletable() );
 
         SvxEntries* pEntries = pMenuData->GetEntries();
-        SvxEntries::const_iterator iter = pEntries->begin();
 
-        for ( ; iter != pEntries->end(); ++iter )
+        for (auto const& entry : *pEntries)
         {
-            SvxConfigEntry* pEntry = *iter;
-            InsertEntryIntoUI( pEntry );
+            InsertEntryIntoUI(entry);
         }
     }
 
@@ -337,7 +334,7 @@ IMPL_LINK_NOARG( SvxMenuConfigPage, SelectCategory, ListBox&, void )
 {
     OUString aSearchTerm( m_pSearchEdit->GetText() );
 
-    m_pCommandCategoryListBox->categorySelected( m_pFunctions, aSearchTerm );
+    m_pCommandCategoryListBox->categorySelected( m_pFunctions, aSearchTerm, GetSaveInData() );
 }
 
 IMPL_LINK_NOARG( SvxMenuConfigPage, AddCommandHdl, Button *, void )
@@ -450,12 +447,13 @@ IMPL_LINK_NOARG( SvxMenuConfigPage, ResetMenuHdl, Button *, void )
 {
     SvxConfigEntry* pMenuData = GetTopLevelSelection();
 
-    ScopedVclPtrInstance<MessageDialog> qbox(this,
-        CuiResId(RID_SVXSTR_CONFIRM_RESTORE_DEFAULT_MENU), VclMessageType::Question, VclButtonsType::YesNo);
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   CuiResId(RID_SVXSTR_CONFIRM_RESTORE_DEFAULT_MENU)));
 
     // Resetting individual top-level menus is not possible at the moment.
     // So we are resetting only if it is a context menu
-    if (!m_bIsMenuBar && qbox->Execute() == RET_YES)
+    if (!m_bIsMenuBar && xQueryBox->run() == RET_YES)
     {
         sal_Int32 nPos = m_pTopLevelListBox->GetSelectedEntryPos();
         ContextMenuSaveInData* pSaveInData = static_cast< ContextMenuSaveInData* >(GetSaveInData());

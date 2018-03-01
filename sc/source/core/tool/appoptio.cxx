@@ -72,10 +72,10 @@ void ScAppOptions::SetDefaults()
     pLRUList[4] = SC_OPCODE_IF;
     nLRUFuncCount = 5;
 
-    nTrackContentColor = COL_TRANSPARENT;
-    nTrackInsertColor  = COL_TRANSPARENT;
-    nTrackDeleteColor  = COL_TRANSPARENT;
-    nTrackMoveColor    = COL_TRANSPARENT;
+    nTrackContentColor = sal_uInt32(COL_TRANSPARENT);
+    nTrackInsertColor  = sal_uInt32(COL_TRANSPARENT);
+    nTrackDeleteColor  = sal_uInt32(COL_TRANSPARENT);
+    nTrackMoveColor    = sal_uInt32(COL_TRANSPARENT);
     eLinkMode          = LM_ON_DEMAND;
 
     nDefaultObjectSizeWidth = 8000;
@@ -130,12 +130,12 @@ static void lcl_SetLastFunctions( ScAppOptions& rOpt, const Any& rValue )
     Sequence<sal_Int32> aSeq;
     if ( rValue >>= aSeq )
     {
-        long nCount = aSeq.getLength();
-        if ( nCount < USHRT_MAX )
+        sal_Int32 nCount = aSeq.getLength();
+        if ( nCount < SAL_MAX_UINT16 )
         {
             const sal_Int32* pArray = aSeq.getConstArray();
             std::unique_ptr<sal_uInt16[]> pUShorts(new sal_uInt16[nCount]);
-            for (long i=0; i<nCount; i++)
+            for (sal_Int32 i=0; i<nCount; i++)
                 pUShorts[i] = static_cast<sal_uInt16>(pArray[i]);
 
             rOpt.SetLRUFuncList( pUShorts.get(), sal::static_int_cast<sal_uInt16>(nCount) );

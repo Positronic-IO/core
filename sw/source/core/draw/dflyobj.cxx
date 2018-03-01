@@ -643,7 +643,7 @@ void SwVirtFlyDrawObj::NbcMove(const Size& rSiz)
         aOutRect = GetFlyFrame()->getFrameArea().SVRect();
     }
 
-    MoveRect( aOutRect, rSiz );
+    aOutRect.Move( rSiz );
     const Point aOldPos( GetFlyFrame()->getFrameArea().Pos() );
     const Point aNewPos( aOutRect.TopLeft() );
     const SwRect aFlyRect( aOutRect );
@@ -1045,7 +1045,7 @@ void SwVirtFlyDrawObj::NbcResize(const Point& rRef, const Fraction& xFact, const
                 }
                 nMin -= MINFLY;
             }
-            aSz.Width() = std::max( aSz.Width(), nMin );
+            aSz.setWidth( std::max( aSz.Width(), nMin ) );
         }
 
         SwFrameFormat *pFormat = GetFormat();
@@ -1105,7 +1105,7 @@ void SwVirtFlyDrawObj::NbcResize(const Point& rRef, const Fraction& xFact, const
         const Size aDeltaMove(
                 aNewPos.X() - aOldPos.X(),
                 aNewPos.Y() - aOldPos.Y());
-        MoveRect(aOutRect, Size(-aDeltaMove.Width(), -aDeltaMove.Height()));
+        aOutRect.Move(-aDeltaMove.Width(), -aDeltaMove.Height());
 
         // Now, move as needed (no empty delta which was a hack anyways)
         if(bIsTransformableSwFrame)
@@ -1260,8 +1260,8 @@ SdrObject* SwVirtFlyDrawObj::CheckMacroHit( const SdrObjMacroHitRec& rRec ) cons
         {
             aRect.Pos().setX(aRect.Pos().getX() + rRec.nTol);
             aRect.Pos().setY(aRect.Pos().getY() + rRec.nTol);
-            aRect.SSize().Height()-= 2 * rRec.nTol;
-            aRect.SSize().Width() -= 2 * rRec.nTol;
+            aRect.SSize().AdjustHeight( -(2 * rRec.nTol) );
+            aRect.SSize().AdjustWidth( -(2 * rRec.nTol) );
 
             if( aRect.IsInside( rRec.aPos ) )
             {

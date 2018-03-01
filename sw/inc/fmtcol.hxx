@@ -20,14 +20,14 @@
 #define INCLUDED_SW_INC_FMTCOL_HXX
 
 #include "swdllapi.h"
-#include "frmatr.hxx"
-#include "swtypes.hxx"
+#include "format.hxx"
 #include <rtl/ustring.hxx>
 
 #include <vector>
 #include <memory>
 
 class SwDoc;
+class SwAttrPool;
 namespace sw{ class DocumentStylePoolManager; }
 
 class SAL_DLLPUBLIC_RTTI SwFormatColl : public SwFormat
@@ -217,7 +217,7 @@ public:
     const SwCollCondition* HasCondition( const SwCollCondition& rCond ) const;
     const SwFormatCollConditions& GetCondColls() const { return m_CondColls; }
     void InsertCondition( const SwCollCondition& rCond );
-    bool RemoveCondition( const SwCollCondition& rCond );
+    void RemoveCondition( const SwCollCondition& rCond );
 
     void SetConditions( const SwFormatCollConditions& );
 };

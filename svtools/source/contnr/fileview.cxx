@@ -569,7 +569,7 @@ void ViewTabListBox_Impl::Resize()
     if ( mbShowHeader )
     {
         aBarSize = mpHeaderBar->GetSizePixel();
-        aBarSize.Width() = mbAutoResize ? aBoxSize.Width() : GetSizePixel().Width();
+        aBarSize.setWidth( mbAutoResize ? aBoxSize.Width() : GetSizePixel().Width() );
         mpHeaderBar->SetSizePixel( aBarSize );
     }
 
@@ -726,7 +726,6 @@ void ViewTabListBox_Impl::DeleteEntries()
     SvTreeListEntry* pEntry = FirstSelected();
     OUString aURL;
 
-    OString sDialogPosition;
     while ( pEntry )
     {
         SvTreeListEntry *pCurEntry = pEntry;
@@ -759,16 +758,12 @@ void ViewTabListBox_Impl::DeleteEntries()
         if ( eResult != svtools::QUERYDELETE_ALL )
         {
             INetURLObject aObj( aURL );
-            ScopedVclPtrInstance< svtools::QueryDeleteDlg_Impl > aDlg(nullptr, aObj.GetName( INetURLObject::DecodeMechanism::WithCharset ) );
-            if ( sDialogPosition.getLength() )
-                aDlg->SetWindowState( sDialogPosition );
+            svtools::QueryDeleteDlg_Impl aDlg(GetFrameWeld(), aObj.GetName(INetURLObject::DecodeMechanism::WithCharset));
 
             if ( GetSelectionCount() > 1 )
-                aDlg->EnableAllButton();
+                aDlg.EnableAllButton();
 
-            eResult = aDlg->Execute();
-
-            sDialogPosition = aDlg->GetWindowState( );
+            eResult = aDlg.run();
         }
 
         if ( ( eResult == svtools::QUERYDELETE_ALL ) ||
@@ -1299,7 +1294,7 @@ IMPL_LINK( SvtFileView, HeaderEndDrag_Impl, HeaderBar*, pBar, void )
     for ( sal_uInt16 i = 1; i <= nTabs; ++i )
     {
         long nWidth = pBar->GetItemSize(i);
-        aSize.Width() =  nWidth + nTmpSize;
+        aSize.setWidth(  nWidth + nTmpSize );
         nTmpSize += nWidth;
         mpImpl->mpView->SetTab( i, aSize.Width(), MapUnit::MapPixel );
     }
@@ -2186,24 +2181,17 @@ void SvtFileView_Impl::SetActualFolder( const INetURLObject& rActualFolder )
 
 namespace svtools {
 
-QueryDeleteDlg_Impl::QueryDeleteDlg_Impl(vcl::Window* pParent, const OUString& rName)
-    : MessageDialog(pParent, "QueryDeleteDialog", "svt/ui/querydeletedialog.ui")
+QueryDeleteDlg_Impl::QueryDeleteDlg_Impl(weld::Widget* pParent, const OUString& rName)
+    : m_xBuilder(Application::CreateBuilder(pParent, "svt/ui/querydeletedialog.ui"))
+    , m_xDialog(m_xBuilder->weld_message_dialog("QueryDeleteDialog"))
+    , m_xAllButton(m_xBuilder->weld_button("all"))
 {
-    get(m_pAllButton, "all");
-
     // display specified texts
-    set_secondary_text(get_secondary_text().replaceFirst("%s", rName));
+    m_xDialog->set_secondary_text(m_xDialog->get_secondary_text().replaceFirst("%s", rName));
 }
 
 QueryDeleteDlg_Impl::~QueryDeleteDlg_Impl()
 {
-    disposeOnce();
-}
-
-void QueryDeleteDlg_Impl::dispose()
-{
-    m_pAllButton.clear();
-    MessageDialog::dispose();
 }
 
 }

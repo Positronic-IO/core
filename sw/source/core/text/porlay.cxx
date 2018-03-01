@@ -1641,7 +1641,7 @@ long SwScriptInfo::Compress( long* pKernArray, sal_Int32 nIdx, sal_Int32 nLen,
                             nMove = nLast;
                         else
                         {
-                            pPoint->X() += nLast;
+                            pPoint->AdjustX(nLast );
                             nLast = 0;
                         }
                     }
@@ -1929,7 +1929,7 @@ void SwScriptInfo::ClearNoKashidaLine(sal_Int32 nStt, sal_Int32 nLen)
 }
 
 // mark the given character indices as invalid kashida positions
-bool SwScriptInfo::MarkKashidasInvalid(sal_Int32 nCnt, const sal_Int32* pKashidaPositions)
+void SwScriptInfo::MarkKashidasInvalid(sal_Int32 nCnt, const sal_Int32* pKashidaPositions)
 {
     SAL_WARN_IF( !pKashidaPositions || nCnt == 0, "sw.core", "Where are kashidas?" );
 
@@ -1945,12 +1945,11 @@ bool SwScriptInfo::MarkKashidasInvalid(sal_Int32 nCnt, const sal_Int32* pKashida
         }
 
         if ( pKashidaPositions [nKashidaPosIdx] != GetKashida( nCntKash ) || !IsKashidaValid ( nCntKash ) )
-            return false; // something is wrong
+            return; // something is wrong
 
         MarkKashidaInvalid ( nCntKash );
         nKashidaPosIdx++;
     }
-    return true;
 }
 
 sal_Int32 SwScriptInfo::ThaiJustify( const OUString& rText, long* pKernArray,
@@ -2126,8 +2125,7 @@ void SwScriptInfo::selectHiddenTextProperty(const SwTextNode& rNode, MultiSelect
         for( size_t nTmp = 0; nTmp < pHints->Count(); ++nTmp )
         {
             const SwTextAttr* pTextAttr = pHints->Get( nTmp );
-            const SvxCharHiddenItem* pHiddenItem =
-                static_cast<const SvxCharHiddenItem*>( CharFormat::GetItem( *pTextAttr, RES_CHRATR_HIDDEN ) );
+            const SvxCharHiddenItem* pHiddenItem = CharFormat::GetItem( *pTextAttr, RES_CHRATR_HIDDEN );
             if( pHiddenItem )
             {
                 const sal_Int32 nSt = pTextAttr->GetStart();

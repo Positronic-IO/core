@@ -94,9 +94,8 @@ public:
     void push( ScaleRangeContext const &aRC ) { maStrips.push_back( aRC ); }
     virtual void doWork() override
     {
-        std::vector< ScaleRangeContext >::iterator it;
-        for (it = maStrips.begin(); it != maStrips.end(); ++it)
-            mpFn( *(it->mrCtx), it->mnStartY, it->mnEndY );
+        for (auto const& strip : maStrips)
+            mpFn( *(strip.mrCtx), strip.mnStartY, strip.mnEndY );
     }
 };
 
@@ -110,6 +109,7 @@ void scalePallete8bit(ScaleContext &rCtx, long nStartY, long nEndY)
         long nTempFY = rCtx.mpMapFY[ nY ];
         Scanline pLine0 = rCtx.mpSrc->GetScanline( nTempY );
         Scanline pLine1 = rCtx.mpSrc->GetScanline( ++nTempY );
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
 
         for(long nX = nStartX, nXDst = 0; nX <= nEndX; nX++ )
         {
@@ -132,7 +132,7 @@ void scalePallete8bit(ScaleContext &rCtx, long nStartY, long nEndY)
             BitmapColor aColRes( MAP( cR0, cR1, nTempFY ),
                     MAP( cG0, cG1, nTempFY ),
                     MAP( cB0, cB1, nTempFY ) );
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -145,6 +145,7 @@ void scalePalleteGeneral(ScaleContext &rCtx, long nStartY, long nEndY)
     {
         long nTempY = rCtx.mpMapIY[ nY ];
         long nTempFY = rCtx.mpMapFY[ nY ];
+        Scanline pScanline = rCtx.mpDest->GetScanline( nY );
 
         for( long nX = nStartX, nXDst = 0; nX <= nEndX; nX++ )
         {
@@ -166,7 +167,7 @@ void scalePalleteGeneral(ScaleContext &rCtx, long nStartY, long nEndY)
             BitmapColor aColRes( MAP( cR0, cR1, nTempFY ),
                     MAP( cG0, cG1, nTempFY ),
                     MAP( cB0, cB1, nTempFY ) );
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanline, nXDst++, aColRes );
         }
     }
 }
@@ -181,6 +182,7 @@ void scale24bitBGR(ScaleContext &rCtx, long nStartY, long nEndY)
         long nTempFY = rCtx.mpMapFY[ nY ];
         Scanline pLine0 = rCtx.mpSrc->GetScanline( nTempY );
         Scanline pLine1 = rCtx.mpSrc->GetScanline( ++nTempY );
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
 
         for( long nX = nStartX, nXDst = 0; nX <= nEndX; nX++ )
         {
@@ -205,7 +207,7 @@ void scale24bitBGR(ScaleContext &rCtx, long nStartY, long nEndY)
             BitmapColor aColRes( MAP( cR0, cR1, nTempFY ),
                     MAP( cG0, cG1, nTempFY ),
                     MAP( cB0, cB1, nTempFY ) );
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -220,6 +222,7 @@ void scale24bitRGB(ScaleContext &rCtx, long nStartY, long nEndY)
         long nTempFY = rCtx.mpMapFY[ nY ];
         Scanline pLine0 = rCtx.mpSrc->GetScanline( nTempY );
         Scanline pLine1 = rCtx.mpSrc->GetScanline( ++nTempY );
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
 
         for( long nX = nStartX, nXDst = 0; nX <= nEndX; nX++ )
         {
@@ -244,7 +247,7 @@ void scale24bitRGB(ScaleContext &rCtx, long nStartY, long nEndY)
             BitmapColor aColRes( MAP( cR0, cR1, nTempFY ),
                     MAP( cG0, cG1, nTempFY ),
                     MAP( cB0, cB1, nTempFY ) );
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -257,6 +260,7 @@ void scaleNonPalleteGeneral(ScaleContext &rCtx, long nStartY, long nEndY)
     {
         long nTempY = rCtx.mpMapIY[ nY ];
         long nTempFY = rCtx.mpMapFY[ nY ];
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
 
         for( long nX = nStartX, nXDst = 0; nX <= nEndX; nX++ )
         {
@@ -278,7 +282,7 @@ void scaleNonPalleteGeneral(ScaleContext &rCtx, long nStartY, long nEndY)
             BitmapColor aColRes( MAP( cR0, cR1, nTempFY ),
                     MAP( cG0, cG1, nTempFY ),
                     MAP( cB0, cB1, nTempFY ) );
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -305,6 +309,7 @@ void scalePallete8bit2(ScaleContext &rCtx, long nStartY, long nEndY)
             nLineRange = ( rCtx.mpMapIY[ nBottom ] == rCtx.mpMapIY[ nTop ] ) ? 1 :( rCtx.mpMapIY[ nBottom ] - rCtx.mpMapIY[ nTop ] );
         }
 
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
         for( long nX = nStartX , nXDst = 0; nX <= nEndX; nX++ )
         {
             long nLeft = rCtx.mbHMirr ? ( nX + 1 ) : nX;
@@ -403,7 +408,7 @@ void scalePallete8bit2(ScaleContext &rCtx, long nStartY, long nEndY)
             }
 
             BitmapColor aColRes(static_cast<sal_uInt8>(nSumR), static_cast<sal_uInt8>(nSumG), static_cast<sal_uInt8>(nSumB));
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -430,6 +435,7 @@ void scalePalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
             nLineRange = ( rCtx.mpMapIY[ nBottom ] == rCtx.mpMapIY[ nTop ] ) ? 1 :( rCtx.mpMapIY[ nBottom ] - rCtx.mpMapIY[ nTop ] );
         }
 
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
         for( long nX = nStartX , nXDst = 0; nX <= nEndX; nX++ )
         {
             long nLeft = rCtx.mbHMirr ? ( nX + 1 ) : nX;
@@ -459,9 +465,10 @@ void scalePalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
                 long nSumRowB = 0;
                 long nTotalWeightX = 0;
 
+                Scanline pScanlineSrc = rCtx.mpSrc->GetScanline( nLineStart + i );
                 for(long j = 0; j <= nRowRange; j++)
                 {
-                    BitmapColor aCol0 = rCtx.mpSrc->GetPaletteColor ( rCtx.mpSrc->GetPixelIndex( nLineStart + i, nRowStart + j ) );
+                    BitmapColor aCol0 = rCtx.mpSrc->GetPaletteColor ( rCtx.mpSrc->GetIndexFromData( pScanlineSrc, nRowStart + j ) );
 
                     if(nX == nEndX )
                     {
@@ -530,7 +537,7 @@ void scalePalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
             }
 
             BitmapColor aColRes(static_cast<sal_uInt8>(nSumR), static_cast<sal_uInt8>(nSumG), static_cast<sal_uInt8>(nSumB));
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -558,6 +565,7 @@ void scale24bitBGR2(ScaleContext &rCtx, long nStartY, long nEndY)
             nLineRange = ( rCtx.mpMapIY[ nBottom ] == rCtx.mpMapIY[ nTop ] ) ? 1 :( rCtx.mpMapIY[ nBottom ] - rCtx.mpMapIY[ nTop ] );
         }
 
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
         for( long nX = nStartX , nXDst = 0; nX <= nEndX; nX++ )
         {
             long nLeft = rCtx.mbHMirr ? ( nX + 1 ) : nX;
@@ -653,7 +661,7 @@ void scale24bitBGR2(ScaleContext &rCtx, long nStartY, long nEndY)
                 nSumB /= nTotalWeightY;
             }
             BitmapColor aColRes(static_cast<sal_uInt8>(nSumR), static_cast<sal_uInt8>(nSumG), static_cast<sal_uInt8>(nSumB));
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -680,6 +688,7 @@ void scale24bitRGB2(ScaleContext &rCtx, long nStartY, long nEndY)
             nLineRange = ( rCtx.mpMapIY[ nBottom ] == rCtx.mpMapIY[ nTop ] ) ? 1 :( rCtx.mpMapIY[ nBottom ] - rCtx.mpMapIY[ nTop ] );
         }
 
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
         for( long nX = nStartX , nXDst = 0; nX <= nEndX; nX++ )
         {
             long nLeft = rCtx.mbHMirr ? ( nX + 1 ) : nX;
@@ -774,7 +783,7 @@ void scale24bitRGB2(ScaleContext &rCtx, long nStartY, long nEndY)
                 nSumB /= nTotalWeightY;
             }
             BitmapColor aColRes(static_cast<sal_uInt8>(nSumR), static_cast<sal_uInt8>(nSumG), static_cast<sal_uInt8>(nSumB));
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }
@@ -801,6 +810,7 @@ void scaleNonPalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
             nLineRange = ( rCtx.mpMapIY[ nBottom ] == rCtx.mpMapIY[ nTop ] ) ? 1 :( rCtx.mpMapIY[ nBottom ] - rCtx.mpMapIY[ nTop ] );
         }
 
+        Scanline pScanDest = rCtx.mpDest->GetScanline( nY );
         for( long nX = nStartX , nXDst = 0; nX <= nEndX; nX++ )
         {
             long nLeft = rCtx.mbHMirr ? ( nX + 1 ) : nX;
@@ -830,9 +840,10 @@ void scaleNonPalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
                 long nSumRowB = 0;
                 long nTotalWeightX = 0;
 
+                Scanline pScanlineSrc = rCtx.mpSrc->GetScanline( nLineStart + i );
                 for(long j = 0; j <= nRowRange; j++)
                 {
-                    BitmapColor aCol0 = rCtx.mpSrc->GetPixel( nLineStart + i, nRowStart + j );
+                    BitmapColor aCol0 = rCtx.mpSrc->GetPixelFromData( pScanlineSrc, nRowStart + j );
 
                     if(nX == nEndX )
                     {
@@ -900,7 +911,7 @@ void scaleNonPalleteGeneral2(ScaleContext &rCtx, long nStartY, long nEndY)
             }
 
             BitmapColor aColRes(static_cast<sal_uInt8>(nSumR), static_cast<sal_uInt8>(nSumG), static_cast<sal_uInt8>(nSumB));
-            rCtx.mpDest->SetPixel( nY, nXDst++, aColRes );
+            rCtx.mpDest->SetPixelOnData( pScanDest, nXDst++, aColRes );
         }
     }
 }

@@ -57,9 +57,6 @@ using namespace ::com::sun::star;
 
 #define JSCRIPT_ID_PROPERTY L"_environment"
 #define JSCRIPT_ID          L"jscript"
-namespace ole_adapter
-{
-
 
 // key: XInterface pointer created by Invocation Adapter Factory
 // value: XInterface pointer to the wrapper class.
@@ -79,11 +76,6 @@ std::unordered_map<sal_uIntPtr, sal_uIntPtr> AdapterToWrapperMap;
 std::unordered_map<sal_uIntPtr,sal_uIntPtr> WrapperToAdapterMap;
 
 std::unordered_map<sal_uIntPtr, WeakReference<XInterface> > ComPtrToWrapperMap;
-/*****************************************************************************
-
-    class implementation IUnknownWrapper_Impl
-
-*****************************************************************************/
 
 IUnknownWrapper_Impl::IUnknownWrapper_Impl( Reference<XMultiServiceFactory> const & xFactory,
                                            sal_uInt8 unoWrapperClass, sal_uInt8 comWrapperClass):
@@ -115,7 +107,7 @@ IUnknownWrapper_Impl::~IUnknownWrapper_Impl()
         WrapperToAdapterMap.erase( it);
     }
 
-     IT_Com it_c= ComPtrToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(m_spUnknown.p));
+    auto it_c= ComPtrToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(m_spUnknown.p));
     if(it_c != ComPtrToWrapperMap.end())
         ComPtrToWrapperMap.erase(it_c);
 }
@@ -939,7 +931,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdUnoTlb(const OUString& sFunctionName,
                                       "[automation bridge]IUnknownWrapper_Impl::"
                                       "invokeWithDispIdUnoTlb\n"
                                       "Could not create out parameter at index: " +
-                                OUString::number((sal_Int32) i));
+                                OUString::number(static_cast<sal_Int32>(i)));
                         }
 
                         CComPtr<IUnknown> pUnk(pParamObject->GetUnknown());
@@ -1020,7 +1012,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdUnoTlb(const OUString& sFunctionName,
                 {
                     if( pMethod->pParams[i].bOut )
                     {
-                        OutParamIndex[outIndex]= (sal_Int16) i;
+                        OutParamIndex[outIndex]= static_cast<sal_Int16>(i);
                         Any outAny;
                         if( !bJScriptObject)
                         {
@@ -1325,7 +1317,7 @@ uno::Any SAL_CALL IUnknownWrapper_Impl::directInvoke( const OUString& aName, con
             {
                 throw InvocationTargetException(
                     "[automation bridge] ITypeInfo::GetIDsOfNames returned error "
-                    + OUString::number((sal_Int32) hr, 16), Reference<XInterface>(), Any());
+                    + OUString::number(static_cast<sal_Int32>(hr), 16), Reference<XInterface>(), Any());
             }
         }
 
@@ -1693,7 +1685,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdComTlb(FuncDesc& aFuncDesc,
         OUStringBuffer buf(256);
         buf.append("[automation bridge] There are too many arguments for this method");
         throw IllegalArgumentException( buf.makeStringAndClear(),
-            Reference<XInterface>(), (sal_Int16) dispparams.cArgs);
+            Reference<XInterface>(), static_cast<sal_Int16>(dispparams.cArgs));
     }
 
     //Set up the array of DISPIDs (DISPPARAMS::rgdispidNamedArgs)
@@ -1775,7 +1767,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdComTlb(FuncDesc& aFuncDesc,
         {
             throw InvocationTargetException(
                 "[automation bridge] ITypeInfo::GetIDsOfNames returned error "
-                + OUString::number((sal_Int32) hr, 16), Reference<XInterface>(), Any());
+                + OUString::number(static_cast<sal_Int32>(hr), 16), Reference<XInterface>(), Any());
         }
     }
 
@@ -1786,7 +1778,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdComTlb(FuncDesc& aFuncDesc,
     arRefArgs = ptrRefArgs.get();
     try
     {
-        for (i = 0; i < (sal_Int32) dispparams.cArgs; i++)
+        for (i = 0; i < static_cast<sal_Int32>(dispparams.cArgs); i++)
         {
             revIndex= dispparams.cArgs - i -1;
             arRefArgs[revIndex].byref=nullptr;
@@ -1814,7 +1806,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdComTlb(FuncDesc& aFuncDesc,
                 buf.append(OUString::number(i));
                 buf.append(" (index starting at 0).");
                 throw IllegalArgumentException( buf.makeStringAndClear(),
-                                                Reference<XInterface>(), (sal_Int16) i);
+                                                Reference<XInterface>(), static_cast<sal_Int16>(i));
             }
 
             // Property Put arguments
@@ -2008,7 +2000,7 @@ Any  IUnknownWrapper_Impl::invokeWithDispIdComTlb(FuncDesc& aFuncDesc,
                 }
                 catch (IllegalArgumentException & e)
                 {
-                    e.ArgumentPosition = (sal_Int16)paramIndex;
+                    e.ArgumentPosition = static_cast<sal_Int16>(paramIndex);
                     throw;
                 }
                 catch (CannotConvertException & e)
@@ -2500,7 +2492,5 @@ ITypeInfo* IUnknownWrapper_Impl::getTypeInfo()
     }
     return m_spTypeInfo;
 }
-
-} // end namespace
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

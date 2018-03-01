@@ -253,7 +253,7 @@ void ScTabView::MakeDrawView( TriState nForceDesignMode )
         //  used when switching back from page preview: restore saved design mode state
         //  (otherwise, keep the default from the draw view ctor)
         if ( nForceDesignMode != TRISTATE_INDET )
-            pDrawView->SetDesignMode( nForceDesignMode );
+            pDrawView->SetDesignMode( nForceDesignMode != TRISTATE_FALSE );
 
         //  register at FormShell
         FmFormShell* pFormSh = aViewData.GetViewShell()->GetFormShell();
@@ -457,7 +457,7 @@ void ScTabView::ViewOptionsHasChanged( bool bHScrollChanged, bool bGraphicsChang
     if ( bGrow || bShrink )
     {
         Size aSize = pTabControl->GetSizePixel();
-        aSize.Width() = SC_TABBAR_DEFWIDTH;             // initial size
+        aSize.setWidth( SC_TABBAR_DEFWIDTH );             // initial size
         pTabControl->SetSizePixel(aSize);               // DoResize is called later...
     }
 }
@@ -667,10 +667,10 @@ void ScTabView::OnLOKNoteStateChanged(const ScPostIt* pNote)
     // placed, invalidated.
     const int nBorderSize = 200;
     tools::Rectangle aInvalidRect = aRect;
-    aInvalidRect.Left() -= nBorderSize;
-    aInvalidRect.Right() += nBorderSize;
-    aInvalidRect.Top() -= nBorderSize;
-    aInvalidRect.Bottom() += nBorderSize;
+    aInvalidRect.AdjustLeft( -nBorderSize );
+    aInvalidRect.AdjustRight( nBorderSize );
+    aInvalidRect.AdjustTop( -nBorderSize );
+    aInvalidRect.AdjustBottom( nBorderSize );
 
     SfxViewShell* pViewShell = SfxViewShell::GetFirst();
     while (pViewShell)

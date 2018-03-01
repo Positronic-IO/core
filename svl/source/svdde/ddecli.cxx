@@ -84,7 +84,7 @@ HDDEDATA CALLBACK DdeInternal::CliCallback( UINT nCode, UINT nCbType,
             switch( nCode )
             {
             case XTYP_XACT_COMPLETE:
-                if( (DWORD)(*iter)->nId == nInfo1 )
+                if( static_cast<DWORD>((*iter)->nId) == nInfo1 )
                 {
                     nCode = (*iter)->nType & (XCLASS_MASK | XTYP_MASK);
                     (*iter)->bBusy = false;
@@ -125,11 +125,6 @@ HDDEDATA CALLBACK DdeInternal::CliCallback( UINT nCode, UINT nCbType,
                 SAL_FALLTHROUGH;
 
             case XTYP_REQUEST:
-                if( !hData && XTYP_REQUEST == nCode )
-                {
-
-                }
-
                 DdeData d;
                 d.xImp->hData = hData;
                 d.xImp->nFmt  = DdeData::GetInternalFormat( nCbType );
@@ -270,7 +265,7 @@ void DdeTransaction::Execute()
 {
     HSZ     hItem = pName->getHSZ();
     void const * pData = aDdeData.getData();
-    DWORD   nData = (DWORD)aDdeData.getSize();
+    DWORD   nData = static_cast<DWORD>(aDdeData.getSize());
     SotClipboardFormatId nIntFmt = aDdeData.xImp->nFmt;
     UINT    nExtFmt  = DdeData::GetExternalFormat( nIntFmt );
     DdeInstData* pInst = ImpGetInstData();
@@ -286,8 +281,8 @@ void DdeTransaction::Execute()
     {
         HDDEDATA hData = DdeClientTransaction( static_cast<LPBYTE>(const_cast<void *>(pData)),
                                                nData, rDde.pImp->hConv,
-                                               hItem, nExtFmt, (UINT)nType,
-                                               (DWORD)nTime, nullptr );
+                                               hItem, nExtFmt, static_cast<UINT>(nType),
+                                               static_cast<DWORD>(nTime), nullptr );
 
         rDde.pImp->nStatus = DdeGetLastError( pInst->hDdeInstCli );
         if( hData && nType == XTYP_REQUEST )
@@ -311,7 +306,7 @@ void DdeTransaction::Execute()
         DWORD result;
         HDDEDATA hRet = DdeClientTransaction( static_cast<LPBYTE>(const_cast<void *>(pData)), nData,
                                             rDde.pImp->hConv, hItem, nExtFmt,
-                                            (UINT)nType, TIMEOUT_ASYNC,
+                                            static_cast<UINT>(nType), TIMEOUT_ASYNC,
                                             &result );
         nId = result;
         rDde.pImp->nStatus = hRet ? DMLERR_NO_ERROR
@@ -349,7 +344,7 @@ DdeLink::DdeLink( DdeConnection& d, const OUString& aItemName, long n )
 
 DdeLink::~DdeLink()
 {
-    nType = (sal_uInt16)XTYP_ADVSTOP;
+    nType = sal_uInt16(XTYP_ADVSTOP);
     nTime = 0;
 }
 

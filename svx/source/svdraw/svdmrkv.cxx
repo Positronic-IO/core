@@ -1268,10 +1268,10 @@ void SdrMarkView::ForceRefToMarked()
                 }
             }
 
-            maRef1.X()=aCenter.X();
-            maRef1.Y()=nY1;
-            maRef2.X()=aCenter.X();
-            maRef2.Y()=nY2;
+            maRef1.setX(aCenter.X() );
+            maRef1.setY(nY1 );
+            maRef2.setX(aCenter.X() );
+            maRef2.setY(nY2 );
 
             break;
         }
@@ -1698,10 +1698,10 @@ SdrObject* SdrMarkView::CheckSingleSdrObjectHit(const Point& rPnt, sal_uInt16 nT
         nTol2*=2;
     }
 
-    aRect.Left  ()-=nTol2; // add 1 tolerance for all objects
-    aRect.Top   ()-=nTol2;
-    aRect.Right ()+=nTol2;
-    aRect.Bottom()+=nTol2;
+    aRect.AdjustLeft( -nTol2 ); // add 1 tolerance for all objects
+    aRect.AdjustTop( -nTol2 );
+    aRect.AdjustRight(nTol2 );
+    aRect.AdjustBottom(nTol2 );
 
     if (aRect.IsInside(rPnt))
     {
@@ -1935,10 +1935,10 @@ bool SdrMarkView::PickMarkedObj(const Point& rPnt, SdrObject*& rpObj, SdrPageVie
             SdrPageView* pPV=pM->GetPageView();
             SdrObject* pObj=pM->GetMarkedSdrObj();
             tools::Rectangle aRect(pObj->GetCurrentBoundRect());
-            aRect.Left  ()-=mnHitTolLog;
-            aRect.Top   ()-=mnHitTolLog;
-            aRect.Right ()+=mnHitTolLog;
-            aRect.Bottom()+=mnHitTolLog;
+            aRect.AdjustLeft( -(mnHitTolLog) );
+            aRect.AdjustTop( -(mnHitTolLog) );
+            aRect.AdjustRight(mnHitTolLog );
+            aRect.AdjustBottom(mnHitTolLog );
             if (aRect.IsInside(rPnt)) {
                 rpObj=pObj;
                 rpPV=pPV;
@@ -2075,28 +2075,28 @@ const tools::Rectangle& SdrMarkView::GetMarkedObjRect() const
 }
 
 
-void SdrMarkView::ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr, ImpTakeDescriptionOptions nOpt) const
+OUString SdrMarkView::ImpGetDescriptionString(const char* pStrCacheID, ImpGetDescriptionOptions nOpt) const
 {
-    rStr = ImpGetResStr(pStrCacheID);
-    sal_Int32 nPos = rStr.indexOf("%1");
+    OUString sStr = ImpGetResStr(pStrCacheID);
+    const sal_Int32 nPos = sStr.indexOf("%1");
 
     if(nPos != -1)
     {
-        if(nOpt == ImpTakeDescriptionOptions::POINTS)
+        if(nOpt == ImpGetDescriptionOptions::POINTS)
         {
-            rStr = rStr.replaceAt(nPos, 2, GetDescriptionOfMarkedPoints());
+            sStr = sStr.replaceAt(nPos, 2, GetDescriptionOfMarkedPoints());
         }
-        else if(nOpt == ImpTakeDescriptionOptions::GLUEPOINTS)
+        else if(nOpt == ImpGetDescriptionOptions::GLUEPOINTS)
         {
-            rStr = rStr.replaceAt(nPos, 2, GetDescriptionOfMarkedGluePoints());
+            sStr = sStr.replaceAt(nPos, 2, GetDescriptionOfMarkedGluePoints());
         }
         else
         {
-            rStr = rStr.replaceAt(nPos, 2, GetDescriptionOfMarkedObjects());
+            sStr = sStr.replaceAt(nPos, 2, GetDescriptionOfMarkedObjects());
         }
     }
 
-    rStr = rStr.replaceFirst("%2", "0");
+    return sStr.replaceFirst("%2", "0");
 }
 
 

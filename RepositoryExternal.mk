@@ -115,9 +115,15 @@ ifeq (SANE,$(filter SANE,$(BUILD_TYPE)))
 
 define gb_LinkTarget__use_sane_headers
 $(call gb_LinkTarget_set_include,$(1),\
-	-I$(SRCDIR)/external/$(if $(filter WNT,$(OS)),twain,sane)/inc \
-	$$(INCLUDE) \
+    $(if $(filter WNT,$(OS)), \
+        -I$(call gb_UnpackedTarball_get_dir,twain_dsm/pub/include), \
+        -I$(SRCDIR)/external/sane/inc) \
+    $$(INCLUDE) \
 )
+
+ifeq ($(OS),WNT)
+$(call gb_LinkTarget_use_unpacked,$(1),twain_dsm)
+endif
 
 endef
 
@@ -845,7 +851,7 @@ define gb_ExternalProject__use_libxml2
 $(call gb_ExternalProject_use_package,$(1),libxml2)
 
 ifeq ($(COM),MSC)
-$(call gb_ExternalProject_use_external_project,$(1),icu)
+$(call gb_ExternalProject_use_packages,$(1),icu icu_ure)
 endif
 
 endef
@@ -3066,6 +3072,41 @@ endef
 
 endif # ENABLE_KDE4
 
+
+ifeq ($(ENABLE_KDE5),TRUE)
+
+define gb_LinkTarget__use_kde5
+$(call gb_LinkTarget_set_include,$(1),\
+	$(subst -isystem/,-isystem /,$(filter -I% -isystem%,$(subst -isystem /,-isystem/,$(KF5_CFLAGS)))) \
+	$$(INCLUDE) \
+)
+
+$(call gb_LinkTarget_add_defs,$(1),\
+	$(filter-out -I% -isystem%,$(subst -isystem /,-isystem/,$(KF5_CFLAGS))) \
+)
+
+$(call gb_LinkTarget_add_libs,$(1),\
+	$(KF5_LIBS) \
+)
+
+ifeq ($(COM),GCC)
+$(call gb_LinkTarget_add_cxxflags,$(1),\
+	-Wno-shadow \
+)
+endif
+
+endef
+
+else # !ENABLE_KDE5
+
+define gb_LinkTarget__use_kde5
+
+endef
+
+endif # ENABLE_KDE5
+
+
+
 ifeq ($(ENABLE_QT5),TRUE)
 
 define gb_LinkTarget__use_qt5
@@ -3976,6 +4017,7 @@ else
 
 define gb_ExternalExecutable__register_python
 $(call gb_ExternalExecutable_set_external,python,$(PYTHON_FOR_BUILD))
+$(call gb_ExternalExecutable_set_precommand,python,PYTHONPATH=$$$$PYTHONPATH$$$${PYTHONPATH:+$$$${PYPATH:+:}}$$$$PYPATH)
 
 endef
 

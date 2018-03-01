@@ -399,22 +399,22 @@ void ScZoomSliderWnd::DoPaint(vcl::RenderContext& rRenderContext)
 
     tools::Rectangle aSlider = aRect;
 
-    aSlider.Top() += (aSliderWindowSize.Height() - nSliderHeight) / 2 - 1;
-    aSlider.Bottom() = aSlider.Top() + nSliderHeight;
-    aSlider.Left() += nSliderXOffset;
-    aSlider.Right() -= nSliderXOffset;
+    aSlider.AdjustTop((aSliderWindowSize.Height() - nSliderHeight) / 2 - 1 );
+    aSlider.SetBottom( aSlider.Top() + nSliderHeight );
+    aSlider.AdjustLeft(nSliderXOffset );
+    aSlider.AdjustRight( -nSliderXOffset );
 
     tools::Rectangle aFirstLine(aSlider);
-    aFirstLine.Bottom() = aFirstLine.Top();
+    aFirstLine.SetBottom( aFirstLine.Top() );
 
     tools::Rectangle aSecondLine(aSlider);
-    aSecondLine.Top() = aSecondLine.Bottom();
+    aSecondLine.SetTop( aSecondLine.Bottom() );
 
     tools::Rectangle aLeft(aSlider);
-    aLeft.Right() = aLeft.Left();
+    aLeft.SetRight( aLeft.Left() );
 
     tools::Rectangle aRight(aSlider);
-    aRight.Left() = aRight.Right();
+    aRight.SetLeft( aRight.Right() );
 
     // draw VirtualDevice's background color
     Color aStartColor = rRenderContext.GetSettings().GetStyleSettings().GetFaceColor();
@@ -432,11 +432,11 @@ void ScZoomSliderWnd::DoPaint(vcl::RenderContext& rRenderContext)
     pVDev->DrawGradient(aRect, aGradient);
 
     // draw slider
-    pVDev->SetLineColor(Color(COL_WHITE));
+    pVDev->SetLineColor(COL_WHITE);
     pVDev->DrawRect(aSecondLine);
     pVDev->DrawRect(aRight);
 
-    pVDev->SetLineColor(Color(COL_GRAY));
+    pVDev->SetLineColor(COL_GRAY);
     pVDev->DrawRect(aFirstLine);
     pVDev->DrawRect(aLeft);
 
@@ -446,34 +446,34 @@ void ScZoomSliderWnd::DoPaint(vcl::RenderContext& rRenderContext)
         aSnappingPointIter != mpImpl->maSnappingPointOffsets.end();
         ++aSnappingPointIter)
     {
-        pVDev->SetLineColor(Color(COL_GRAY));
+        pVDev->SetLineColor(COL_GRAY);
         tools::Rectangle aSnapping(aRect);
-        aSnapping.Bottom()   = aSlider.Top();
-        aSnapping.Top() = aSnapping.Bottom() - nSnappingHeight;
-        aSnapping.Left() += *aSnappingPointIter;
-        aSnapping.Right() = aSnapping.Left();
+        aSnapping.SetBottom( aSlider.Top() );
+        aSnapping.SetTop( aSnapping.Bottom() - nSnappingHeight );
+        aSnapping.AdjustLeft(*aSnappingPointIter );
+        aSnapping.SetRight( aSnapping.Left() );
         pVDev->DrawRect(aSnapping);
 
-        aSnapping.Top() += nSnappingHeight + nSliderHeight;
-        aSnapping.Bottom() += nSnappingHeight + nSliderHeight;
+        aSnapping.AdjustTop(nSnappingHeight + nSliderHeight );
+        aSnapping.AdjustBottom(nSnappingHeight + nSliderHeight );
         pVDev->DrawRect(aSnapping);
     }
 
     // draw slider button
     Point aImagePoint = aRect.TopLeft();
-    aImagePoint.X() += Zoom2Offset(mpImpl->mnCurrentZoom);
-    aImagePoint.X() -= nButtonWidth / 2;
-    aImagePoint.Y() += (aSliderWindowSize.Height() - nButtonHeight) / 2;
+    aImagePoint.AdjustX(Zoom2Offset(mpImpl->mnCurrentZoom) );
+    aImagePoint.AdjustX( -(nButtonWidth / 2) );
+    aImagePoint.AdjustY( (aSliderWindowSize.Height() - nButtonHeight) / 2 );
     pVDev->DrawImage(aImagePoint, mpImpl->maSliderButton);
 
     // draw decrease button
     aImagePoint = aRect.TopLeft();
-    aImagePoint.X() += (nSliderXOffset - nIncDecWidth) / 2;
-    aImagePoint.Y() += (aSliderWindowSize.Height() - nIncDecHeight) / 2;
+    aImagePoint.AdjustX((nSliderXOffset - nIncDecWidth) / 2 );
+    aImagePoint.AdjustY((aSliderWindowSize.Height() - nIncDecHeight) / 2 );
     pVDev->DrawImage(aImagePoint, mpImpl->maDecreaseButton);
 
     // draw increase button
-    aImagePoint.X() = aRect.TopLeft().X() + aSliderWindowSize.Width() - nIncDecWidth - (nSliderXOffset - nIncDecWidth) / 2;
+    aImagePoint.setX( aRect.TopLeft().X() + aSliderWindowSize.Width() - nIncDecWidth - (nSliderXOffset - nIncDecWidth) / 2 );
     pVDev->DrawImage(aImagePoint, mpImpl->maIncreaseButton);
 
     rRenderContext.DrawOutDev(Point(0, 0), aSliderWindowSize, Point(0, 0), aSliderWindowSize, *pVDev);

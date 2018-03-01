@@ -67,7 +67,6 @@
 #include <vcl/cvtgrf.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/extract.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <rtl/crc.h>
 #include <comphelper/classids.hxx>
 #include <unotools/ucbstreamhelper.hxx>
@@ -140,7 +139,7 @@ sal_uInt16 PPTExBulletProvider::GetId( const OString& rUniqueId, Size& rGraphicS
                 xGraphicObject.reset(new GraphicObject(aMappedGraphic));
             }
         }
-        sal_uInt32 nId = pGraphicProv->GetBlibID(aBuExPictureStream, xGraphicObject->GetUniqueID());
+        sal_uInt32 nId = pGraphicProv->GetBlibID(aBuExPictureStream, *xGraphicObject.get());
 
         if ( nId && ( nId < 0x10000 ) )
             nRetValue = static_cast<sal_uInt16>(nId) - 1;
@@ -747,7 +746,7 @@ void PPTWriter::ImplWriteParagraphs( SvStream& rOut, TextObj& rTextObj )
         if ( nPropertyFlags & 0x20 )
         {
             sal_uInt32 nBulletColor = pPara->nBulletColor;
-            if ( nBulletColor == COL_AUTO )
+            if ( nBulletColor == sal_uInt32(COL_AUTO) )
             {
                 bool bIsDark = false;
                 css::uno::Any aAny;
@@ -800,7 +799,7 @@ void PPTWriter::ImplWritePortions( SvStream& rOut, TextObj& rTextObj )
             sal_uInt32 nCharAttr = rPortion.mnCharAttr;
             sal_uInt32 nCharColor = rPortion.mnCharColor;
 
-            if ( nCharColor == COL_AUTO )   // nCharColor depends to the background color
+            if ( nCharColor == sal_uInt32(COL_AUTO) )   // nCharColor depends to the background color
             {
                 bool bIsDark = false;
                 css::uno::Any aAny;
@@ -828,8 +827,7 @@ void PPTWriter::ImplWritePortions( SvStream& rOut, TextObj& rTextObj )
                 {
                     case css::drawing::FillStyle_GRADIENT :
                     {
-                        Point aEmptyPoint;
-                        ::tools::Rectangle aRect( aEmptyPoint, Size( 28000, 21000 ) );
+                        ::tools::Rectangle aRect( Point(), Size( 28000, 21000 ) );
                         EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm, aRect );
                         aPropOpt.CreateGradientProperties( mXPropSet );
                         aPropOpt.GetOpt( ESCHER_Prop_fillColor, nBackgroundColor );
@@ -851,8 +849,7 @@ void PPTWriter::ImplWritePortions( SvStream& rOut, TextObj& rTextObj )
                         {
                             case css::drawing::FillStyle_GRADIENT :
                             {
-                                Point aEmptyPoint;
-                                ::tools::Rectangle aRect( aEmptyPoint, Size( 28000, 21000 ) );
+                                ::tools::Rectangle aRect( Point(), Size( 28000, 21000 ) );
                                 EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm, aRect );
                                 aPropOpt.CreateGradientProperties( mXBackgroundPropSet );
                                 aPropOpt.GetOpt( ESCHER_Prop_fillColor, nBackgroundColor );
@@ -2219,7 +2216,7 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
                         ImplCreateShape( ESCHER_ShpInst_Rectangle,
                                          ShapeFlag::HaveAnchor | ShapeFlag::HaveShapeProperty,
                                          aSolverContainer );
-                        if ( aPropOpt.CreateGraphicProperties( mXPropSet, "GraphicURL", true, true, false ) )
+                        if ( aPropOpt.CreateGraphicProperties( mXPropSet, "Graphic", true, true, false ) )
                         {
                             aPropOpt.AddOpt( ESCHER_Prop_WrapText, ESCHER_WrapNone );
                             aPropOpt.AddOpt( ESCHER_Prop_AnchorText, ESCHER_AnchorMiddle );
@@ -2236,7 +2233,7 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
                                          ShapeFlag::HaveAnchor | ShapeFlag::HaveShapeProperty,
                                          aSolverContainer );
 
-                        if ( aPropOpt.CreateGraphicProperties( mXPropSet, "GraphicURL", false, true ) )
+                        if ( aPropOpt.CreateGraphicProperties( mXPropSet, "Graphic", false, true ) )
                         {
                             aPropOpt.AddOpt( ESCHER_Prop_LockAgainstGrouping, 0x800080 );
                         }
@@ -3093,7 +3090,7 @@ void PPTWriter::ImplCreateTable( uno::Reference< drawing::XShape > const & rXSha
                 aColumns.emplace_back( nPosition, aM.Width );
                 nPosition += aM.Width;
                 if ( x == nColumnCount - 1  && nPosition != maRect.Right() )
-                    maRect.Right() = nPosition;
+                    maRect.SetRight( nPosition );
             }
 
             nPosition = aPosition.Y;
@@ -3106,7 +3103,7 @@ void PPTWriter::ImplCreateTable( uno::Reference< drawing::XShape > const & rXSha
                 aRows.emplace_back( nPosition, aM.Height );
                 nPosition += aM.Height;
                 if ( y == nRowCount - 1 && nPosition != maRect.Bottom())
-                    maRect.Bottom() = nPosition;
+                    maRect.SetBottom( nPosition );
             }
             std::unique_ptr<ContainerGuard> xSpgrContainer(new ContainerGuard(mpPptEscherEx, ESCHER_SpgrContainer));
             std::unique_ptr<ContainerGuard> xSpContainer(new ContainerGuard(mpPptEscherEx, ESCHER_SpContainer));

@@ -50,6 +50,7 @@
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/style/LineNumberPosition.hpp>
 #include <com/sun/star/awt/XBitmap.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/style/VerticalAlignment.hpp>
 #include <o3tl/any.hxx>
@@ -57,9 +58,9 @@
 #include <vcl/font.hxx>
 #include <editeng/flstitem.hxx>
 #include <vcl/metric.hxx>
+#include <vcl/graph.hxx>
 #include <svtools/ctrltool.hxx>
 #include <vcl/svapp.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <editeng/unofdesc.hxx>
 #include <fmtornt.hxx>
 #include <SwStyleNameMapper.hxx>
@@ -858,8 +859,8 @@ void SwXLineNumberingProperties::setPropertyValue(
             sal_Int32 nVal = 0;
             aValue >>= nVal;
             sal_Int32 nTmp = convertMm100ToTwip(nVal);
-            if (nTmp > USHRT_MAX)
-                nTmp = USHRT_MAX;
+            if (nTmp > SAL_MAX_UINT16)
+                nTmp = SAL_MAX_UINT16;
             aFontMetric.SetPosFromLeft( static_cast< sal_uInt16 >(nTmp) );
         }
         break;
@@ -1451,8 +1452,8 @@ uno::Sequence<beans::PropertyValue> SwXNumberingRules::GetPropertiesForNumFormat
                 pGraphic = pBrush->GetGraphic();
             if(pGraphic)
             {
-                uno::Reference<awt::XBitmap> xBmp = VCLUnoHelper::CreateBitmap( pGraphic->GetBitmapEx() );
-                aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_GRAPHIC_BITMAP, xBmp));
+                uno::Reference<awt::XBitmap> xBitmap(pGraphic->GetXGraphic(), uno::UNO_QUERY);
+                aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_GRAPHIC_BITMAP, xBitmap));
             }
              Size aSize = rFormat.GetGraphicSize();
             // #i101131#
@@ -1959,9 +1960,9 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
                                 pSetBrush = new SvxBrushItem(OUString(), OUString(), GPOS_AREA, RES_BACKGROUND);
                         }
 
-                        BitmapEx aBmp = VCLUnoHelper::GetBitmap(xBitmap);
-                        Graphic aNewGr(aBmp);
-                        pSetBrush->SetGraphic( aNewGr );
+                        uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+                        Graphic aGraphic(xGraphic);
+                        pSetBrush->SetGraphic(aGraphic);
                     }
                     else
                         bWrongArg = true;
@@ -1977,8 +1978,8 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
                     {
                         size.Width = convertMm100ToTwip(size.Width);
                         size.Height = convertMm100ToTwip(size.Height);
-                        pSetSize->Width() = size.Width;
-                        pSetSize->Height() = size.Height;
+                        pSetSize->setWidth( size.Width );
+                        pSetSize->setHeight( size.Height );
                     }
                     else
                         bWrongArg = true;

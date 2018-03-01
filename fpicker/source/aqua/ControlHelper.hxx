@@ -82,6 +82,7 @@ public:
         VERSION,
         TEMPLATE,
         IMAGE_TEMPLATE,
+        IMAGE_ANCHOR,
         LIST_LAST
     };
 
@@ -115,7 +116,7 @@ public:
     }
 
     bool    isAutoExtensionEnabled() {
-        return ([((NSButton*) m_pToggles[AUTOEXTENSION]) state] == NSOnState);
+        return ([static_cast<NSButton*>(m_pToggles[AUTOEXTENSION]) state] == NSOnState);
     }
 
 private:

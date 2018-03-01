@@ -35,7 +35,6 @@
 #include <globals.hrc>
 #include <dbui.hrc>
 #include <bitmaps.hlst>
-#include <helpids.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::lang;
@@ -107,6 +106,7 @@ class SwAuthenticationSettingsDialog : public SfxModalDialog
     DECL_LINK(OKHdl_Impl, Button*, void);
     DECL_LINK( CheckBoxHdl_Impl, Button*, void);
     DECL_LINK(RadioButtonHdl_Impl, Button*, void);
+    DECL_LINK(InServerHdl_Impl, Button*, void);
 
 public:
     SwAuthenticationSettingsDialog(SwMailConfigPage* pParent, SwMailMergeConfigItem& rItem);
@@ -133,6 +133,7 @@ SwMailConfigPage::SwMailConfigPage( vcl::Window* pParent, const SfxItemSet& rSet
     m_pReplyToCB->SetClickHdl(LINK(this, SwMailConfigPage, ReplyToHdl));
     m_pServerAuthenticationPB->SetClickHdl(LINK(this, SwMailConfigPage, AuthenticationHdl));
     m_pTestPB->SetClickHdl(LINK(this, SwMailConfigPage, TestHdl));
+    m_pSecureCB->SetClickHdl(LINK(this, SwMailConfigPage, SecureHdl));
 }
 
 SwMailConfigPage::~SwMailConfigPage()
@@ -174,9 +175,7 @@ bool SwMailConfigPage::FillItemSet( SfxItemSet* /*rSet*/ )
     if(m_pServerED->IsValueChangedFromSaved())
         m_pConfigItem->SetMailServer(m_pServerED->GetText());
 
-    if(m_pPortNF->IsModified())
-        m_pConfigItem->SetMailPort(static_cast<sal_Int16>(m_pPortNF->GetValue()));
-
+    m_pConfigItem->SetMailPort(static_cast<sal_Int16>(m_pPortNF->GetValue()));
     m_pConfigItem->SetSecureConnection(m_pSecureCB->IsChecked());
 
     m_pConfigItem->Commit();
@@ -215,6 +214,8 @@ IMPL_LINK(SwMailConfigPage, ReplyToHdl, Button*, pBox, void)
 
 IMPL_LINK_NOARG(SwMailConfigPage, AuthenticationHdl, Button*, void)
 {
+    m_pConfigItem->SetMailAddress(m_pAddressED->GetText());
+
     ScopedVclPtrInstance< SwAuthenticationSettingsDialog > aDlg(this, *m_pConfigItem);
     aDlg->Execute();
 }
@@ -222,6 +223,14 @@ IMPL_LINK_NOARG(SwMailConfigPage, AuthenticationHdl, Button*, void)
 IMPL_LINK_NOARG(SwMailConfigPage, TestHdl, Button*, void)
 {
     ScopedVclPtrInstance<SwTestAccountSettingsDialog>(this)->Execute();
+}
+
+IMPL_LINK(SwMailConfigPage, SecureHdl, Button*, pBox, void)
+{
+    bool bEnable = static_cast<CheckBox*>(pBox)->IsChecked();
+    m_pConfigItem->SetSecureConnection(bEnable);
+    m_pConfigItem->SetMailPort(static_cast<sal_Int16>(m_pPortNF->GetValue()));
+    m_pPortNF->SetValue(m_pConfigItem->GetMailPort());
 }
 
 SwTestAccountSettingsDialog::SwTestAccountSettingsDialog(SwMailConfigPage* pParent)
@@ -374,10 +383,10 @@ void SwTestAccountSettingsDialog::Test()
 
     if (!bIsServer || !bIsLoggedIn)
     {
-        OUStringBuffer aErrorMessage(m_sErrorServer);
+        OUString aErrorMessage(m_sErrorServer);
         if (!sException.isEmpty())
-            aErrorMessage.append("\n--\n").append(sException);
-        m_pErrorsED->SetText(aErrorMessage.makeStringAndClear());
+            aErrorMessage += "\n--\n" + sException;
+        m_pErrorsED->SetText(aErrorMessage);
     }
 }
 
@@ -421,6 +430,9 @@ SwAuthenticationSettingsDialog::SwAuthenticationSettingsDialog(
     m_pSeparateAuthenticationRB->SetClickHdl( aRBLink );
     m_pSMTPAfterPOPRB->SetClickHdl( aRBLink );
     m_pOKPB->SetClickHdl( LINK( this, SwAuthenticationSettingsDialog, OKHdl_Impl));
+    Link<Button*,void> aInServerLink = LINK( this, SwAuthenticationSettingsDialog, InServerHdl_Impl );
+    m_pPOP3RB->SetClickHdl( aInServerLink );
+    m_pIMAPRB->SetClickHdl( aInServerLink );
 
     m_pAuthenticationCB->Check( rConfigItem.IsAuthentication() );
     if(rConfigItem.IsSMTPAfterPOP())
@@ -503,6 +515,16 @@ IMPL_LINK_NOARG(SwAuthenticationSettingsDialog, RadioButtonHdl_Impl, Button*, vo
     bool bNotSeparate = !bSeparate && bIsEnabled;
     bSeparate &= bIsEnabled;
 
+    if ( bSeparate && m_pUserNameED->GetText().isEmpty() )
+        m_pUserNameED->SetText( rConfigItem.GetMailAddress() );
+    else if ( !bSeparate && m_pUserNameED->GetText() == rConfigItem.GetMailAddress() )
+        m_pUserNameED->SetText("");
+
+    if ( bNotSeparate && m_pInUsernameED->GetText().isEmpty() )
+        m_pInUsernameED->SetText( rConfigItem.GetMailAddress() );
+    else if ( !bNotSeparate && m_pInUsernameED->GetText() == rConfigItem.GetMailAddress() )
+        m_pInUsernameED->SetText("");
+
     m_pOutgoingServerFT->Enable(bSeparate);
     m_pUserNameFT->Enable(bSeparate);
     m_pUserNameED->Enable(bSeparate);
@@ -521,6 +543,13 @@ IMPL_LINK_NOARG(SwAuthenticationSettingsDialog, RadioButtonHdl_Impl, Button*, vo
     m_pIMAPRB->Enable(bNotSeparate);
     m_pInPasswordFT->Enable(bNotSeparate);
     m_pInPasswordED->Enable(bNotSeparate);
+}
+
+IMPL_LINK_NOARG( SwAuthenticationSettingsDialog, InServerHdl_Impl, Button*, void)
+{
+    bool bPOP = m_pPOP3RB->IsChecked();
+    rConfigItem.SetInServerPOP(bPOP);
+    m_pPortNF->SetValue(rConfigItem.GetInServerPort());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

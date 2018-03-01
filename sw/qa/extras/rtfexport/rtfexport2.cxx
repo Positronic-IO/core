@@ -677,19 +677,24 @@ DECLARE_RTFEXPORT_TEST(testFdo63428, "hello.rtf")
                          getProperty<OUString>(getRun(getParagraph(1), 4), "TextPortionType"));
 }
 
-DECLARE_RTFEXPORT_TEST(testFdo69384, "hello.rtf")
+#endif
+
+DECLARE_RTFEXPORT_TEST(testFdo69384, "fdo69384-paste.rtf")
+{
+    // Check if the style is loaded
+    getStyles("ParagraphStyles")->getByName("Text body justified");
+}
+
+DECLARE_RTFEXPORT_TEST(testFdo69384Inserted, "hello.rtf")
 {
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
     paste("fdo69384-paste.rtf", xEnd);
 
-    // Import got interrupted in the middle of style sheet table import,
-    // resulting in missing styles and text.
-    getStyles("ParagraphStyles")->getByName("Text body justified");
+    // During insert of the RTF document we do not insert new styles
+    CPPUNIT_ASSERT(!getStyles("ParagraphStyles")->hasByName("Text body justified"));
 }
-
-#endif
 
 DECLARE_RTFEXPORT_TEST(testFdo61193, "hello.rtf")
 {
@@ -964,7 +969,7 @@ DECLARE_RTFEXPORT_TEST(testDoDhgtOld, "do-dhgt-old.rtf")
 
     xShape.set(getShape(2), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), getProperty<sal_Int32>(xShape, "ZOrder"));
-    CPPUNIT_ASSERT_EQUAL(COL_BLACK, getProperty<sal_uInt32>(xShape, "FillColor"));
+    CPPUNIT_ASSERT_EQUAL(COL_BLACK, Color(getProperty<sal_uInt32>(xShape, "FillColor")));
 
     xShape.set(getShape(3), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2), getProperty<sal_Int32>(xShape, "ZOrder"));
@@ -977,7 +982,7 @@ DECLARE_RTFEXPORT_TEST(testFdo61909, "fdo61909.rtf")
     // Was the Writer default font.
     CPPUNIT_ASSERT_EQUAL(OUString("Courier New"),
                          getProperty<OUString>(xTextRange, "CharFontName"));
-    CPPUNIT_ASSERT_EQUAL(COL_AUTO, getProperty<sal_uInt32>(xTextRange, "CharBackColor"));
+    CPPUNIT_ASSERT_EQUAL(COL_AUTO, Color(getProperty<sal_uInt32>(xTextRange, "CharBackColor")));
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo62288, "fdo62288.rtf")

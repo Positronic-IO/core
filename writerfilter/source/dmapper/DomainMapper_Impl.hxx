@@ -215,6 +215,12 @@ struct TextAppendContext
     css::uno::Reference<css::text::XParagraphCursor> xCursor;
     ParagraphPropertiesPtr pLastParagraphProperties;
 
+    /**
+     * Objects anchored to the current paragraph, may affect the paragraph
+     * spacing.
+     */
+    std::vector<css::uno::Reference<css::text::XTextContent>> m_aAnchoredObjects;
+
     TextAppendContext(const css::uno::Reference<css::text::XTextAppend>& xAppend, const css::uno::Reference<css::text::XTextCursor>& xCur)
         : xTextAppend(xAppend)
     {
@@ -356,20 +362,29 @@ struct FloatingTableInfo
     css::uno::Reference<css::text::XTextRange> m_xEnd;
     css::uno::Sequence<css::beans::PropertyValue> m_aFrameProperties;
     sal_Int32 m_nTableWidth;
+    sal_Int32 m_nTableWidthType;
     /// Break type of the section that contains this table.
     sal_Int32 m_nBreakType = -1;
 
     FloatingTableInfo(css::uno::Reference<css::text::XTextRange> const& xStart,
             css::uno::Reference<css::text::XTextRange> const& xEnd,
             const css::uno::Sequence<css::beans::PropertyValue>& aFrameProperties,
-            sal_Int32 nTableWidth)
+            sal_Int32 nTableWidth, sal_Int32 nTableWidthType)
         : m_xStart(xStart),
         m_xEnd(xEnd),
         m_aFrameProperties(aFrameProperties),
-        m_nTableWidth(nTableWidth)
+        m_nTableWidth(nTableWidth),
+        m_nTableWidthType(nTableWidthType)
     {
     }
     css::uno::Any getPropertyValue(const OUString &propertyName);
+};
+
+/// Stores info about objects anchored to a given paragraph.
+struct AnchoredObjectInfo
+{
+    css::uno::Reference<css::text::XTextRange> m_xParagraph;
+    std::vector<css::uno::Reference<css::text::XTextContent>> m_aAnchoredObjects;
 };
 
 struct SymbolData
@@ -488,6 +503,7 @@ private:
     /// If the current paragraph has any runs.
     bool                            m_bParaChanged;
     bool                            m_bIsFirstParaInSection;
+    bool                            m_bIsFirstParaInShape = false;
     bool                            m_bDummyParaAddedForTableInSection;
     bool                            m_bTextFrameInserted;
     bool                            m_bIsPreviousParagraphFramed;
@@ -578,6 +594,8 @@ public:
     bool GetIsLastSectionGroup() { return m_bIsLastSectionGroup;}
     void SetIsFirstParagraphInSection( bool bIsFirst );
     bool GetIsFirstParagraphInSection() { return m_bIsFirstParaInSection;}
+    void SetIsFirstParagraphInShape(bool bIsFirst);
+    bool GetIsFirstParagraphInShape() { return m_bIsFirstParaInShape; }
     void SetIsDummyParaAddedForTableInSection( bool bIsAdded );
     bool GetIsDummyParaAddedForTableInSection() { return m_bDummyParaAddedForTableInSection;}
     void SetIsTextFrameInserted( bool bIsInserted );
@@ -873,6 +891,7 @@ public:
     */
     void processDeferredCharacterProperties();
 
+    sal_Int32 getNumberingProperty(const sal_Int32 nListId, sal_Int32 nListLevel, const OUString& aProp);
     /// Get a property of the current numbering style's current level.
     sal_Int32 getCurrentNumberingProperty(const OUString& aProp);
 
@@ -912,6 +931,9 @@ public:
     bool m_bFrameBtLr; ///< Bottom to top, left to right text frame direction is requested for the current text frame.
     /// Pending floating tables: they may be converted to text frames at the section end.
     std::vector<FloatingTableInfo> m_aPendingFloatingTables;
+
+    /// Paragraphs with anchored objects in the current section.
+    std::vector<AnchoredObjectInfo> m_aAnchoredObjectAnchors;
 
     /// Append a property to a sub-grabbag if necessary (e.g. 'lineRule', 'auto')
     void appendGrabBag(std::vector<css::beans::PropertyValue>& rInteropGrabBag, const OUString& aKey, const OUString& aValue);

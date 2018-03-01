@@ -118,7 +118,7 @@ void ScTable::DeleteBeforeCopyFromClip(
 }
 
 void ScTable::CopyOneCellFromClip(
-    sc::CopyFromClipContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2, SCROW nSrcRow, ScTable* pSrcTab )
+    sc::CopyFromClipContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2, SCROW nSrcRow, const ScTable* pSrcTab )
 {
     ScRange aSrcRange = rCxt.getClipDoc()->GetClipParam().getWholeRange();
     SCCOL nSrcColSize = aSrcRange.aEnd.Col() - aSrcRange.aStart.Col() + 1;
@@ -130,10 +130,10 @@ void ScTable::CopyOneCellFromClip(
         assert(nColOffset >= 0);
         aCol[nCol].CopyOneCellFromClip(rCxt, nRow1, nRow2, nColOffset);
 
-        if ((rCxt.getInsertFlag() & InsertDeleteFlags::ATTRIB) && (nColOffset == 0))
+        if (rCxt.getInsertFlag() & InsertDeleteFlags::ATTRIB)
         {
             for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
-                CopyConditionalFormat(nCol, nRow, nCol + nSrcColSize - 1, nRow, nCol - aSrcRange.aStart.Col(),
+                CopyConditionalFormat(nCol, nRow, nCol, nRow, nCol - aSrcRange.aStart.Col() - nColOffset,
                         nRow - nSrcRow, pSrcTab);
         }
     }

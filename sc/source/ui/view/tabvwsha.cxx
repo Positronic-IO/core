@@ -561,7 +561,7 @@ void ScTabViewShell::ExecuteCellFormatDlg(SfxRequest& rReq, const OString &rName
 
                 pRequest->Done(*pOutSet);
             }
-        }, pDlg);
+        });
 }
 
 bool ScTabViewShell::IsRefInputMode() const
@@ -650,9 +650,8 @@ void ScTabViewShell::UpdateInputHandler( bool bForce /* = sal_False */, bool bSt
 
         if (pDoc->IsTabProtected(nTab))
         {
-            const ScProtectionAttr* pProt = static_cast<const ScProtectionAttr*>(
-                                            pDoc->GetAttr( nPosX,nPosY,nTab,
-                                                           ATTR_PROTECTION));
+            const ScProtectionAttr* pProt = pDoc->GetAttr( nPosX,nPosY,nTab,
+                                                           ATTR_PROTECTION);
             bHideFormula = pProt->GetHideFormula();
             bHideAll     = pProt->GetHideCell();
         }

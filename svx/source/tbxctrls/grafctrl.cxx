@@ -23,7 +23,6 @@
 #include <vcl/toolbox.hxx>
 #include <vcl/field.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/idle.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
@@ -303,7 +302,7 @@ void ImplGrafControl::GetFocus()
 void ImplGrafControl::Resize()
 {
     Size aFldSize(maField->GetSizePixel());
-    aFldSize.Width() = GetSizePixel().Width() - SYMBOL_TO_FIELD_OFFSET - maImage->GetSizePixel().Width();
+    aFldSize.setWidth( GetSizePixel().Width() - SYMBOL_TO_FIELD_OFFSET - maImage->GetSizePixel().Width() );
     maField->SetSizePixel(aFldSize);
 
     Control::Resize();

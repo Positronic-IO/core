@@ -157,7 +157,7 @@ void SvtUpButton_Impl::Select()
     if ( nId )
     {
         --nId;
-        assert( nId <= _aURLs.size() &&  "SvtUpButton_Impl:falscher Index" );
+        assert( nId <= _aURLs.size() &&  "SvtUpButton_Impl: wrong index" );
 
         GetDialogParent()->OpenURL_Impl(_aURLs[nId]);
     }
@@ -186,6 +186,8 @@ SvtExpFileDlg_Impl::SvtExpFileDlg_Impl()   :
     _pLbTemplates       ( nullptr ),
     _pFtImageTemplates  ( nullptr ),
     _pLbImageTemplates  ( nullptr ),
+    _pFtImageAnchor     ( nullptr ),
+    _pLbImageAnchor     ( nullptr ),
     _pFtFileType        ( nullptr ),
     _pLbFilter          ( nullptr ),
     _pBtnFileOpen       ( nullptr ),
@@ -213,7 +215,7 @@ SvtExpFileDlg_Impl::SvtExpFileDlg_Impl()   :
 SvtExpFileDlg_Impl::~SvtExpFileDlg_Impl()
 {
     _pBtnUp.disposeAndClear();
-    delete _pUserFilter;
+    _pUserFilter.reset();
     _pPlaces.disposeAndClear();
 }
 

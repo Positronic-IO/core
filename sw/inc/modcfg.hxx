@@ -19,8 +19,6 @@
 #ifndef INCLUDED_SW_INC_MODCFG_HXX
 #define INCLUDED_SW_INC_MODCFG_HXX
 
-#include <tools/wintypes.hxx>
-#include <vcl/field.hxx>
 #include <unotools/configitem.hxx>
 #include "swdllapi.h"
 #include "authratr.hxx"
@@ -28,7 +26,6 @@
 #include "tblenum.hxx"
 #include "itabenum.hxx"
 #include <tools/globname.hxx>
-#include <editeng/svxenum.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
 #include <vector>
@@ -65,14 +62,15 @@ class SwRevisionConfig : public utl::ConfigItem
 {
     friend class SwModuleOptions;
 
-    AuthorCharAttr  aInsertAttr;    //Revision/TextDisplay/Insert/Attribute  // Redlining: author character attributes
-                                    //Revision/TextDisplay/Insert/Color
-    AuthorCharAttr  aDeletedAttr;   //Revision/TextDisplay/Delete/Attribute
-                                    //Revision/TextDisplay/Delete/Color
-    AuthorCharAttr  aFormatAttr;    //Revision/TextDisplay/ChangeAttribute/Attribute
-                                    //Revision/TextDisplay/ChangeAttribute/Color
-    sal_uInt16          nMarkAlign;     //Revision/LinesChanged/Mark
-    Color           aMarkColor;     //Revision/LinesChanged/Color
+    AuthorCharAttr  aInsertAttr;        //Revision/TextDisplay/Insert/Attribute  // Redlining: author character attributes
+                                        //Revision/TextDisplay/Insert/Color
+    AuthorCharAttr  aDeletedAttr;       //Revision/TextDisplay/Delete/Attribute
+                                        //Revision/TextDisplay/Delete/Color
+    AuthorCharAttr  aFormatAttr;        //Revision/TextDisplay/ChangeAttribute/Attribute
+                                        //Revision/TextDisplay/ChangeAttribute/Color
+    sal_uInt16      nMarkAlign;         //Revision/LinesChanged/Mark
+    Color           aMarkColor;         //Revision/LinesChanged/Color
+    bool            bShowInlineTooltip; //ShowInlineTooltip
 
     static const css::uno::Sequence<OUString>& GetPropertyNames();
 
@@ -253,6 +251,10 @@ public:
     const AuthorCharAttr    &GetFormatAuthorAttr() const { return aRevisionConfig.aFormatAttr; }
     void        SetFormatAuthorAttr( AuthorCharAttr const &rAttr ) {  aRevisionConfig.aFormatAttr = rAttr;
                                                                       aRevisionConfig.SetModified();}
+
+    bool        IsShowInlineTooltip() const { return aRevisionConfig.bShowInlineTooltip; }
+    void        SetShowInlineTooltip( bool bSet ) {  aRevisionConfig.bShowInlineTooltip = bSet;
+                                                      aRevisionConfig.SetModified(); }
 
     sal_uInt16          GetMarkAlignMode()  const               { return aRevisionConfig.nMarkAlign; }
     void            SetMarkAlignMode(sal_uInt16 nMode)          { aRevisionConfig.nMarkAlign = nMode;

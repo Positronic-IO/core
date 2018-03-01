@@ -28,8 +28,10 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/scopeguard.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svtools/ehdl.hxx>
 #include <svl/stritem.hxx>
 #include <sfx2/dispatch.hxx>
@@ -404,12 +406,14 @@ void SwView::HyphenateDocument()
     // do not hyphenate if interactive hyphenation is active elsewhere
     if (SwEditShell::HasHyphIter())
     {
-        ScopedVclPtrInstance<MessBox>( nullptr, MessBoxStyle::Ok, 0, SwResId( STR_HYPH_TITLE ),
-                                       SwResId( STR_MULT_INTERACT_HYPH_WARN ) )->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr, VclMessageType::Warning,
+            VclButtonsType::Ok, SwResId(STR_MULT_INTERACT_HYPH_WARN)));
+        xBox->set_title(SwResId(STR_HYPH_TITLE));
+        xBox->run();
         return;
     }
 
-    SfxErrorContext aContext( ERRCTX_SVX_LINGU_HYPHENATION, OUString(), m_pEditWin,
+    SfxErrorContext aContext( ERRCTX_SVX_LINGU_HYPHENATION, OUString(), m_pEditWin->GetFrameWeld(),
          RID_SVXERRCTX, SvxResLocale() );
 
     Reference< XHyphenator >  xHyph( ::GetHyphenator() );
@@ -444,8 +448,10 @@ void SwView::HyphenateDocument()
         // turned on no special area
         {
             // I want also in special areas hyphenation
-            ScopedVclPtrInstance< MessageDialog > aBox(&GetEditWin(), SwResId(STR_QUERY_SPECIAL_FORCED), VclMessageType::Question, VclButtonsType::YesNo);
-            if( aBox->Execute() == RET_YES )
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetEditWin().GetFrameWeld(),
+                                                      VclMessageType::Question, VclButtonsType::YesNo,
+                                                      SwResId(STR_QUERY_SPECIAL_FORCED)));
+            if (xBox->run() == RET_YES)
             {
                 bOther = true;
                 if (xProp.is())
@@ -531,7 +537,7 @@ void SwView::StartThesaurus()
     if (!IsValidSelectionForThesaurus())
         return;
 
-    SfxErrorContext aContext( ERRCTX_SVX_LINGU_THESAURUS, OUString(), m_pEditWin,
+    SfxErrorContext aContext( ERRCTX_SVX_LINGU_THESAURUS, OUString(), m_pEditWin->GetFrameWeld(),
          RID_SVXERRCTX, SvxResLocale() );
 
     // Determine language
@@ -546,8 +552,9 @@ void SwView::StartThesaurus()
     }
 
     SwViewOption* pVOpt = const_cast<SwViewOption*>(m_pWrtShell->GetViewOptions());
-    bool bOldIdle = pVOpt->IsIdle();
+    const bool bOldIdle = pVOpt->IsIdle();
     pVOpt->SetIdle( false );
+    comphelper::ScopeGuard guard([&]() { pVOpt->SetIdle(bOldIdle); }); // restore when leaving scope
 
     // get initial LookUp text
     const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell)->HasSelection();
@@ -559,20 +566,27 @@ void SwView::StartThesaurus()
         SpellError( eLang );
     else
     {
-        ScopedVclPtr<AbstractThesaurusDialog> pDlg;
+        VclPtr<AbstractThesaurusDialog> pDlg;
         // create dialog
         {   //Scope for SwWait-Object
             SwWait aWait( *GetDocShell(), true );
             // load library with dialog only on demand ...
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-            pDlg.disposeAndReset(pFact->CreateThesaurusDialog( &GetEditWin(), xThes, aTmp, eLang ));
+            pDlg.reset(pFact->CreateThesaurusDialog(&GetEditWin(), xThes, aTmp, eLang));
         }
 
-        if ( pDlg->Execute()== RET_OK )
-            InsertThesaurusSynonym( pDlg->GetWord(), aTmp, bSelection );
-    }
+        if (pDlg)
+        {
+            guard.dismiss(); // ignore, we'll call SetIdle() explicitly after the dialog ends
 
-    pVOpt->SetIdle( bOldIdle );
+            pDlg->StartExecuteAsync([=](sal_Int32 nResult){
+                if (nResult == RET_OK )
+                    InsertThesaurusSynonym(pDlg->GetWord(), aTmp, bSelection);
+
+                pVOpt->SetIdle(bOldIdle);
+            });
+        }
+    }
 }
 
 // Offer online suggestions
@@ -855,8 +869,8 @@ SwFieldDialog::SwFieldDialog( SwEditWin* parent, IFieldmark *fieldBM ) :
     }
 
     Size lbSize(aListBox->GetOptimalSize());
-    lbSize.Width()+=50;
-    lbSize.Height()+=20;
+    lbSize.AdjustWidth(50 );
+    lbSize.AdjustHeight(20 );
     aListBox->SetSizePixel(lbSize);
     aListBox->SetSelectHdl( LINK( this, SwFieldDialog, MyListBoxHandler ) );
     aListBox->Show();

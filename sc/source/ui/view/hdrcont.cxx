@@ -82,8 +82,8 @@ ScHeaderControl::ScHeaderControl( vcl::Window* pParent, SelectionEngine* pSelect
     Size aSize = LogicToPixel( Size(
         GetTextWidth("8888"),
         GetTextHeight() ) );
-    aSize.Width()  += 4;    // place for highlight border
-    aSize.Height() += 3;
+    aSize.AdjustWidth(4 );    // place for highlight border
+    aSize.AdjustHeight(3 );
     SetSizePixel( aSize );
 
     nWidth = nSmallWidth = aSize.Width();
@@ -118,13 +118,13 @@ void ScHeaderControl::DoPaint( SCCOLROW nStart, SCCOLROW nEnd )
     tools::Rectangle aRect( Point(0,0), GetOutputSizePixel() );
     if ( bVertical )
     {
-        aRect.Top() = GetScrPos( nStart )-nLayoutSign;      // extra pixel for line at top of selection
-        aRect.Bottom() = GetScrPos( nEnd+1 )-nLayoutSign;
+        aRect.SetTop( GetScrPos( nStart )-nLayoutSign );      // extra pixel for line at top of selection
+        aRect.SetBottom( GetScrPos( nEnd+1 )-nLayoutSign );
     }
     else
     {
-        aRect.Left() = GetScrPos( nStart )-nLayoutSign;     // extra pixel for line left of selection
-        aRect.Right() = GetScrPos( nEnd+1 )-nLayoutSign;
+        aRect.SetLeft( GetScrPos( nStart )-nLayoutSign );     // extra pixel for line left of selection
+        aRect.SetRight( GetScrPos( nEnd+1 )-nLayoutSign );
     }
     Invalidate(aRect);
 }
@@ -258,9 +258,8 @@ void ScHeaderControl::Paint( vcl::RenderContext& /*rRenderContext*/, const tools
         aBoldFont.SetColor( aSelTextColor );
     SetTextColor( ( bBoldSet && !bHighContrast ) ? aSelTextColor : aTextColor );
 
-    Color aBlack( COL_BLACK );
     Color aSelLineColor = rStyleSettings.GetHighlightColor();
-    aSelLineColor.Merge( aBlack, 0xe0 );        // darken just a little bit
+    aSelLineColor.Merge( COL_BLACK, 0xe0 );        // darken just a little bit
 
     bool bLayoutRTL = IsLayoutRTL();
     long nLayoutSign = bLayoutRTL ? -1 : 1;
@@ -455,7 +454,7 @@ void ScHeaderControl::Paint( vcl::RenderContext& /*rRenderContext*/, const tools
                         aTransRect = tools::Rectangle( 0, nTransStart, nBarSize-1, nTransEnd );
                     else
                         aTransRect = tools::Rectangle( nTransStart, 0, nTransEnd, nBarSize-1 );
-                    SetBackground( Color( rStyleSettings.GetFaceColor() ) );
+                    SetBackground( rStyleSettings.GetFaceColor() );
                     DrawSelectionBackground( aTransRect, 0, true, false );
                     SetBackground();
                 }
@@ -533,21 +532,21 @@ void ScHeaderControl::Paint( vcl::RenderContext& /*rRenderContext*/, const tools
                                     bBoldSet = bMark;
                                 }
                                 aString = GetEntryText( nEntryNo );
-                                aTextSize.Width() = GetTextWidth( aString );
-                                aTextSize.Height() = GetTextHeight();
+                                aTextSize.setWidth( GetTextWidth( aString ) );
+                                aTextSize.setHeight( GetTextHeight() );
 
                                 Point aTxtPos(aScrPos);
                                 if (bVertical)
                                 {
-                                    aTxtPos.X() += (nBarSize-aTextSize.Width())/2;
-                                    aTxtPos.Y() += (nSizePix*nLayoutSign-aTextSize.Height())/2;
+                                    aTxtPos.AdjustX((nBarSize-aTextSize.Width())/2 );
+                                    aTxtPos.AdjustY((nSizePix*nLayoutSign-aTextSize.Height())/2 );
                                     if ( bMirrored )
-                                        aTxtPos.X() += 1;   // dark border is left instead of right
+                                        aTxtPos.AdjustX(1 );   // dark border is left instead of right
                                 }
                                 else
                                 {
-                                    aTxtPos.X() += (nSizePix*nLayoutSign-aTextSize.Width()+1)/2;
-                                    aTxtPos.Y() += (nBarSize-aTextSize.Height())/2;
+                                    aTxtPos.AdjustX((nSizePix*nLayoutSign-aTextSize.Width()+1)/2 );
+                                    aTxtPos.AdjustY((nBarSize-aTextSize.Height())/2 );
                                 }
                                 DrawText( aTxtPos, aString );
                             }
@@ -707,17 +706,16 @@ void ScHeaderControl::MouseButtonDown( const MouseEvent& rMEvt )
     else
     {
         pSelEngine->SetWindow( this );
-        Point aPoint;
-        tools::Rectangle aVis( aPoint,GetOutputSizePixel() );
+        tools::Rectangle aVis( Point(), GetOutputSizePixel() );
         if (bVertical)
         {
-            aVis.Left() = LONG_MIN;
-            aVis.Right() = LONG_MAX;
+            aVis.SetLeft( LONG_MIN );
+            aVis.SetRight( LONG_MAX );
         }
         else
         {
-            aVis.Top() = LONG_MIN;
-            aVis.Bottom() = LONG_MAX;
+            aVis.SetTop( LONG_MIN );
+            aVis.SetBottom( LONG_MAX );
         }
         pSelEngine->SetVisibleArea( aVis );
 
@@ -954,20 +952,20 @@ void ScHeaderControl::ShowDragHelp()
         if (!bVertical)
         {
             // above
-            aRect.Left() = aMousePos.X();
-            aRect.Top()  = aPos.Y() - 4;
+            aRect.SetLeft( aMousePos.X() );
+            aRect.SetTop( aPos.Y() - 4 );
             nAlign       = QuickHelpFlags::Bottom|QuickHelpFlags::Center;
         }
         else
         {
             // top right
-            aRect.Left() = aPos.X() + aSize.Width() + 8;
-            aRect.Top()  = aMousePos.Y() - 2;
+            aRect.SetLeft( aPos.X() + aSize.Width() + 8 );
+            aRect.SetTop( aMousePos.Y() - 2 );
             nAlign       = QuickHelpFlags::Left|QuickHelpFlags::Bottom;
         }
 
-        aRect.Right()   = aRect.Left();
-        aRect.Bottom()  = aRect.Top();
+        aRect.SetRight( aRect.Left() );
+        aRect.SetBottom( aRect.Top() );
 
         Help::ShowQuickHelp(this, aRect, aHelpStr, nAlign);
     }
@@ -1030,6 +1028,12 @@ OUString ScHeaderControl::GetDragHelp( long /* nVal */ )
 
 void ScHeaderControl::SetMarking( bool /* bSet */ )
 {
+}
+
+void ScHeaderControl::GetMarkRange(SCCOLROW& rStart, SCCOLROW& rEnd) const
+{
+    rStart = nMarkStart;
+    rEnd = nMarkEnd;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

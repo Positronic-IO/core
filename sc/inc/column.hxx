@@ -29,6 +29,7 @@
 #include "mtvelements.hxx"
 #include <formula/types.hxx>
 #include <svl/zforlist.hxx>
+#include <svx/svdobj.hxx>
 #include "attarray.hxx"
 
 #include <set>
@@ -226,11 +227,13 @@ public:
                 // data only:
     bool        IsEmptyBlock(SCROW nStartRow, SCROW nEndRow) const;
     SCSIZE      GetEmptyLinesInBlock( SCROW nStartRow, SCROW nEndRow, ScDirection eDir ) const;
-    bool        HasDataAt(SCROW nRow) const;
+    bool        HasDataAt(SCROW nRow, bool bConsiderCellNotes=false,
+                          bool bConsiderCellDrawObjects=false) const;
     bool        HasVisibleDataAt(SCROW nRow) const;
     SCROW       GetFirstDataPos() const;
     SCROW       GetLastDataPos() const;
-    SCROW       GetLastDataPos( SCROW nLastRow ) const;
+    SCROW       GetLastDataPos( SCROW nLastRow, bool bConsiderCellNotes=false,
+                                bool bConsiderCellDrawObjects=false ) const;
     bool        GetPrevDataPos(SCROW& rRow) const;
     bool        GetNextDataPos(SCROW& rRow) const;
     void        FindDataAreaPos(SCROW& rRow, bool bDown) const; // (without Broadcaster)
@@ -444,6 +447,10 @@ public:
         sc::EndListeningContext& rEndListenCxt, sc::CompileFormulaContext& rCompileCxt );
 
     const SfxPoolItem&      GetAttr( SCROW nRow, sal_uInt16 nWhich ) const;
+    template<class T> const T&  GetAttr( SCROW nRow, TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T&>(GetAttr(nRow, sal_uInt16(nWhich)));
+    }
     const ScPatternAttr*    GetPattern( SCROW nRow ) const;
     const ScPatternAttr*    GetMostUsedPattern( SCROW nStartRow, SCROW nEndRow ) const;
 
@@ -625,6 +632,10 @@ public:
                             sc::ColumnBlockPosition& maDestBlockPos, bool bCloneCaption, SCROW nRowOffsetDest=0 ) const;
 
     void UpdateNoteCaptions( SCROW nRow1, SCROW nRow2 );
+
+    void UpdateDrawObjects( std::vector<std::vector<SdrObject*>>& pObjects, SCROW nRowStart, SCROW nRowEnd );
+    void UpdateDrawObjectsForRow( std::vector<SdrObject*>& pObjects, SCCOL nTargetCol, SCROW nTargetRow );
+    bool IsDrawObjectsEmptyBlock(SCROW nStartRow, SCROW nEndRow) const;
 
     void InterpretDirtyCells( SCROW nRow1, SCROW nRow2 );
 

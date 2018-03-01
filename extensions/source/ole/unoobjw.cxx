@@ -69,8 +69,6 @@ using namespace com::sun::star::reflection;
 extern "C" const GUID IID_IDispatchEx;
 #endif
 
-namespace ole_adapter
-{
 std::unordered_map<sal_uIntPtr, WeakReference<XInterface> > UnoObjToWrapperMap;
 static bool writeBackOutParameter(VARIANTARG* pDest, VARIANT* pSource);
 static bool writeBackOutParameter2( VARIANTARG* pDest, VARIANT* pSource);
@@ -100,7 +98,7 @@ InterfaceOleWrapper_Impl::~InterfaceOleWrapper_Impl()
 {
     MutexGuard guard(getBridgeMutex());
     // remove entries in global map
-    IT_Uno it= UnoObjToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(m_xOrigin.get()));
+    auto it = UnoObjToWrapperMap.find( reinterpret_cast<sal_uIntPtr>(m_xOrigin.get()));
     if(it != UnoObjToWrapperMap.end())
         UnoObjToWrapperMap.erase(it);
 }
@@ -253,11 +251,11 @@ STDMETHODIMP InterfaceOleWrapper_Impl::GetIDsOfNames(REFIID /*riid*/,
                 if (d.flags != 0)
                 {
                     m_MemberInfos.push_back(d);
-                    iter = m_nameToDispIdMap.emplace(exactName, (DISPID)m_MemberInfos.size()).first;
+                    iter = m_nameToDispIdMap.emplace(exactName, static_cast<DISPID>(m_MemberInfos.size())).first;
 
                     if (exactName != name)
                     {
-                        iter = m_nameToDispIdMap.emplace(name, (DISPID)m_MemberInfos.size()).first;
+                        iter = m_nameToDispIdMap.emplace(name, static_cast<DISPID>(m_MemberInfos.size())).first;
                     }
                 }
             }
@@ -782,10 +780,10 @@ STDMETHODIMP InterfaceOleWrapper_Impl::Invoke(DISPID dispidMember,
                                               REFIID /*riid*/,
                                               LCID /*lcid*/,
                                               unsigned short wFlags,
-                                               DISPPARAMS * pdispparams,
+                                              DISPPARAMS * pdispparams,
                                               VARIANT * pvarResult,
                                               EXCEPINFO * pexcepinfo,
-                                               unsigned int * puArgErr )
+                                              unsigned int * puArgErr )
 {
     comphelper::ProfileZone aZone("COM Bridge");
     HRESULT ret = S_OK;
@@ -798,7 +796,7 @@ STDMETHODIMP InterfaceOleWrapper_Impl::Invoke(DISPID dispidMember,
         if( bHandled)
             return ret;
 
-        if ((dispidMember > 0) && ((size_t)dispidMember <= m_MemberInfos.size()) && m_xInvocation.is())
+        if ((dispidMember > 0) && (static_cast<size_t>(dispidMember) <= m_MemberInfos.size()) && m_xInvocation.is())
         {
             MemberInfo d = m_MemberInfos[dispidMember - 1];
             DWORD flags = wFlags & d.flags;
@@ -814,6 +812,17 @@ STDMETHODIMP InterfaceOleWrapper_Impl::Invoke(DISPID dispidMember,
                         Sequence<Any> params;
 
                         convertDispparamsArgs(dispidMember, wFlags, pdispparams , params );
+
+                        // Pass missing (hopefully optional) parameters as Any().
+                        InvocationInfo aInvocationInfo;
+                        getInvocationInfoForCall(dispidMember, aInvocationInfo);
+                        if (pdispparams->cArgs < (UINT)aInvocationInfo.aParamTypes.getLength())
+                        {
+                            params.realloc(aInvocationInfo.aParamTypes.getLength());
+                            Any* pParams = params.getArray();
+                            for (int i = pdispparams->cArgs; i < aInvocationInfo.aParamTypes.getLength(); ++i)
+                                pParams[i] = Any();
+                        }
 
                         ret= doInvoke(pdispparams, pvarResult,
                                       pexcepinfo, puArgErr, d.name, params);
@@ -1604,7 +1613,5 @@ VARTYPE getVarType( const Any& value)
     }
     return ret;
 }
-
-} // end namespace
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

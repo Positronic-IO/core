@@ -165,15 +165,15 @@ class EDITENG_DLLPUBLIC SvxAutoCorrectLanguageLists
     Date aModifiedDate;
     tools::Time aModifiedTime, aLastCheckTime;
 
-    SvStringsISortDtor*     pCplStt_ExcptLst;
-    SvStringsISortDtor*     pWrdStt_ExcptLst;
-    SvxAutocorrWordList*    pAutocorr_List;
+    std::unique_ptr<SvStringsISortDtor> pCplStt_ExcptLst;
+    std::unique_ptr<SvStringsISortDtor> pWrdStt_ExcptLst;
+    std::unique_ptr<SvxAutocorrWordList> pAutocorr_List;
     SvxAutoCorrect&         rAutoCorrect;
 
     long nFlags;
 
     bool IsFileChanged_Imp();
-    void LoadXMLExceptList_Imp( SvStringsISortDtor*& rpLst,
+    void LoadXMLExceptList_Imp( std::unique_ptr<SvStringsISortDtor>& rpLst,
                                 const sal_Char* pStrmName,
                                 tools::SvRef<SotStorage>& rStg);
     static void SaveExceptList_Imp( const SvStringsISortDtor& rLst,
@@ -193,14 +193,12 @@ public:
 
     // Load, Set, Get - the replacement list
     SvxAutocorrWordList* LoadAutocorrWordList();
-    void SetAutocorrWordList( SvxAutocorrWordList* pList );
     const SvxAutocorrWordList* GetAutocorrWordList();
 
     // Load, Set, Get - the exception list for Capital letter at the
     // beginning of a sentence
     SvStringsISortDtor* LoadCplSttExceptList();
     void SaveCplSttExceptList();
-    void SetCplSttExceptList( SvStringsISortDtor* pList );
     SvStringsISortDtor* GetCplSttExceptList();
     bool AddToCplSttExceptList(const OUString& rNew);
 
@@ -208,7 +206,6 @@ public:
     // beginning of a word.
     SvStringsISortDtor* LoadWrdSttExceptList();
     void SaveWrdSttExceptList();
-    void SetWrdSttExceptList( SvStringsISortDtor* pList );
     SvStringsISortDtor* GetWrdSttExceptList();
     bool AddToWrdSttExceptList(const OUString& rNew);
 
@@ -218,7 +215,7 @@ public:
     //  - pure Text
     bool PutText( const OUString& rShort, const OUString& rLong );
     //  - Text with attribution (only the SWG - SWG format!)
-    bool PutText( const OUString& rShort, SfxObjectShell& );
+    void PutText( const OUString& rShort, SfxObjectShell& );
     //  - Make combined changes in one pass
     bool MakeCombinedChanges( std::vector<SvxAutocorrWord>& aNewEntries, std::vector<SvxAutocorrWord>& aDeleteEntries );
 };
@@ -376,7 +373,7 @@ public:
                                     bool bAbbreviation = false);
 
     // Methods for the auto-correction
-    bool FnCapitalStartWord( SvxAutoCorrDoc&, const OUString&,
+    void FnCapitalStartWord( SvxAutoCorrDoc&, const OUString&,
                                 sal_Int32 nSttPos, sal_Int32 nEndPos,
                                 LanguageType eLang );
     bool FnChgOrdinalNumber( SvxAutoCorrDoc&, const OUString&,
@@ -393,7 +390,7 @@ public:
                                 LanguageType eLang );
     bool FnChgWeightUnderl( SvxAutoCorrDoc&, const OUString&,
                                 sal_Int32 nEndPos );
-    bool FnCapitalStartSentence( SvxAutoCorrDoc&, const OUString&, bool bNormalPos,
+    void FnCapitalStartSentence( SvxAutoCorrDoc&, const OUString&, bool bNormalPos,
                                 sal_Int32 nSttPos, sal_Int32 nEndPos,
                                 LanguageType eLang);
     bool FnCorrectCapsLock( SvxAutoCorrDoc&, const OUString&,

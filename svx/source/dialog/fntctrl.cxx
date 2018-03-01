@@ -99,8 +99,8 @@ void initFont(vcl::Font& rFont)
 void setFontSize(vcl::Font& rFont)
 {
     Size aSize(rFont.GetFontSize());
-    aSize.Height() = (aSize.Height() * 3) / 5;
-    aSize.Width() = (aSize.Width() * 3) / 5;
+    aSize.setHeight( (aSize.Height() * 3) / 5 );
+    aSize.setWidth( (aSize.Width() * 3) / 5 );
     rFont.SetFontSize(aSize);
 }
 
@@ -156,8 +156,8 @@ class FontPrevWin_Impl
     SvxFont maCTLFont;
     OUString maText;
     OUString maScriptText;
-    Color* mpColor;
-    Color* mpBackColor;
+    std::unique_ptr<Color> mpColor;
+    std::unique_ptr<Color> mpBackColor;
     long mnAscent;
     sal_Unicode mcStartBracket;
     sal_Unicode mcEndBracket;
@@ -182,8 +182,6 @@ public:
     FontPrevWin_Impl() :
         mpPrinter(nullptr),
         mbDelPrinter(false),
-        mpColor(nullptr),
-        mpBackColor(nullptr),
         mnAscent(0),
         mcStartBracket(0),
         mcEndBracket(0),
@@ -204,8 +202,6 @@ public:
 
     ~FontPrevWin_Impl()
     {
-        delete mpColor;
-        delete mpBackColor;
         if (mbDelPrinter)
             mpPrinter.disposeAndClear();
     }
@@ -425,7 +421,7 @@ void FontPrevWin_Impl::DrawPrev(vcl::RenderContext& rRenderContext, Printer* _pP
 
         rFont.DrawPrev(&rRenderContext, _pPrinter, rPt, maText, nStart, nEnd - nStart);
 
-        rPt.X() += maTextWidth[nIdx++];
+        rPt.AdjustX(maTextWidth[nIdx++] );
         if (nEnd < maText.getLength() && nIdx < nCnt)
         {
             nStart = nEnd;
@@ -604,22 +600,19 @@ void SvxFontPrevWindow::SetFont( const SvxFont& rNormalOutFont, const SvxFont& r
 
 void SvxFontPrevWindow::SetColor(const Color &rColor)
 {
-    delete pImpl->mpColor;
-    pImpl->mpColor = new Color(rColor);
+    pImpl->mpColor.reset(new Color(rColor));
     Invalidate();
 }
 
 void SvxFontPrevWindow::ResetColor()
 {
-    delete pImpl->mpColor;
-    pImpl->mpColor = nullptr;
+    pImpl->mpColor.reset();
     Invalidate();
 }
 
 void SvxFontPrevWindow::SetBackColor(const Color &rColor)
 {
-    delete pImpl->mpBackColor;
-    pImpl->mpBackColor = new Color(rColor);
+    pImpl->mpBackColor.reset(new Color(rColor));
     Invalidate();
 }
 

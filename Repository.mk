@@ -34,7 +34,6 @@ $(eval $(call gb_Helper_register_executables,NONE, \
 	genconv_dict \
 	gendict \
 	genindex_data \
-	genlang \
 	helpex \
 	idxdict \
 	langsupport \
@@ -143,6 +142,7 @@ $(eval $(call gb_Helper_register_executables_for_install,OOO,brand, \
 	$(call gb_Helper_optional,FUZZERS,mmlfuzzer) \
 	$(call gb_Helper_optional,FUZZERS,mtpfuzzer) \
 	$(call gb_Helper_optional,FUZZERS,htmlfuzzer) \
+	$(call gb_Helper_optional,FUZZERS,sftfuzzer) \
 	$(if $(filter-out ANDROID IOS MACOSX WNT,$(OS)),oosplash) \
 	soffice_bin \
 	$(if $(filter DESKTOP,$(BUILD_TYPE)),unopkg_bin) \
@@ -297,11 +297,19 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,gnome, \
 
 $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,kde, \
 	$(if $(ENABLE_KDE4),kde4be1) \
+	$(if $(ENABLE_KDE5),kde5be1) \
 	$(if $(USING_X11), \
 		$(if $(ENABLE_KDE4),vclplug_kde4) \
+		$(if $(ENABLE_KDE5),vclplug_kde5) \
         $(if $(ENABLE_QT5),vclplug_qt5) \
+		$(if $(ENABLE_GTK3_KDE5),vclplug_gtk3_kde5) \
 	) \
 ))
+ifneq ($(ENABLE_GTK3_KDE5),)
+$(eval $(call gb_Helper_register_executables_for_install,OOO,kde, \
+	lo_kde5filepicker \
+))
+endif
 
 $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,math, \
 	sm \
@@ -345,7 +353,8 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 		dba \
 		dbase \
 		dbmm \
-		dbaxml) \
+		dbaxml \
+		dbahsql) \
 	dbtools \
 	deploymentmisc \
 	$(if $(filter-out MACOSX WNT,$(OS)),desktopbe1) \
@@ -521,7 +530,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,writer, \
 
 # cli_cppuhelper is NONE even though it is actually in URE because it is CliNativeLibrary
 $(eval $(call gb_Helper_register_libraries,PLAINLIBS_NONE, \
-	getuid \
 	smoketest \
 	subsequenttest \
 	test \
@@ -627,7 +635,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,PLAINLIBS_OOO,ooo, \
 	ucppkg1 \
 	unopkgapp \
 	xmlsecurity \
-	xsec_fw \
 	xsec_xmlsec \
 	xstor \
 	$(if $(filter $(OS),MACOSX), \
@@ -876,7 +883,6 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	extras_gallmytheme \
 	extras_gallroot \
 	extras_gallsystem \
-	extras_gallwwwback \
 	extras_gallwwwgraf \
 	extras_glade \
 	extras_labels \
@@ -948,6 +954,7 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	)) \
 	sfx2_classification \
     $(if $(filter OPENCL,$(BUILD_TYPE)),sc_opencl_runtimetest) \
+    $(if $(and $(filter WNT,$(OS)), $(filter X86_64,$(CPUNAME))),twain_dsm) \
 ))
 
 $(eval $(call gb_Helper_register_packages_for_install,ooo_fonts,\

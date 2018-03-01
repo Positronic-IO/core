@@ -30,11 +30,13 @@
 #include <swtable.hxx>
 #include <frmtool.hxx>
 #include <doc.hxx>
+#include <node.hxx>
 #include <strings.hrc>
 #include <IDocumentLayoutAccess.hxx>
 #include <IDocumentStylePoolAccess.hxx>
 #include <poolfmt.hxx>
 #include <calbck.hxx>
+#include <hints.hxx>
 
 SwPageDesc::SwPageDesc(const OUString& rName, SwFrameFormat *pFormat, SwDoc *const pDoc)
     : SwModify(nullptr)

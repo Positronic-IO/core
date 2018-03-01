@@ -85,6 +85,7 @@
 #include <com/sun/star/drawing/Position3D.hpp>
 #include <com/sun/star/drawing/Direction3D.hpp>
 #include <com/sun/star/drawing/Hatch.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/text/GraphicCrop.hpp>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/localfilehelper.hxx>
@@ -586,7 +587,7 @@ void EscherPropertyContainer::CreateFillProperties(
 
             case drawing::FillStyle_BITMAP :
             {
-                CreateGraphicProperties( rXPropSet, "FillBitmapURL", true );
+                CreateGraphicProperties(rXPropSet, "FillBitmap", true);
                 AddOpt( ESCHER_Prop_fNoFillHitTest, 0x140014 );
                 AddOpt( ESCHER_Prop_fillBackColor, nFillBackColor  );
             }
@@ -1278,7 +1279,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<drawi
                 pVisArea.reset(new awt::Rectangle);
                 aAny >>= (*pVisArea);
             }
-            sal_uInt32 nBlibId = pGraphicProvider->GetBlibID( *pPicOutStrm, aUniqueId, pVisArea.get() );
+            sal_uInt32 nBlibId = pGraphicProvider->GetBlibID( *pPicOutStrm, rGraphicObj, pVisArea.get() );
             if ( nBlibId )
             {
                 AddOpt( ESCHER_Prop_pib, nBlibId, true );
@@ -1311,7 +1312,10 @@ bool EscherPropertyContainer::ImplCreateEmbeddedBmp( const OString& rUniqueId )
     {
         EscherGraphicProvider aProvider;
         SvMemoryStream aMemStrm;
-        if ( aProvider.GetBlibID( aMemStrm, rUniqueId ) )
+        // TODO: Get rid of UniqueID
+
+        GraphicObject aGraphicObject(rUniqueId);
+        if ( aProvider.GetBlibID( aMemStrm, aGraphicObject ) )
         {
             // grab BLIP from stream and insert directly as complex property
             // ownership of stream memory goes to complex property
@@ -1347,7 +1351,6 @@ void EscherPropertyContainer::CreateEmbeddedBitmapProperties(
     }
 }
 
-
 namespace {
 
 GraphicObject* lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackColor, bool bFillBackground, const tools::Rectangle& rRect )
@@ -1365,7 +1368,7 @@ GraphicObject* lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackCol
     aMtf.Clear();
     aMtf.Record(pVDev);
     pVDev->SetLineColor();
-    pVDev->SetFillColor(bFillBackground ? rBackColor : Color(COL_TRANSPARENT));
+    pVDev->SetFillColor(bFillBackground ? rBackColor : COL_TRANSPARENT);
     pVDev->DrawRect(rRect);
     pVDev->DrawHatch(tools::PolyPolygon(rRect), Hatch(static_cast<HatchStyle>(rHatch.Style), Color(rHatch.Color), rHatch.Distance, static_cast<sal_uInt16>(rHatch.Angle)));
     aMtf.Stop();
@@ -1388,10 +1391,12 @@ void EscherPropertyContainer::CreateEmbeddedHatchProperties(const drawing::Hatch
         AddOpt( ESCHER_Prop_fillType, ESCHER_FillTexture );
 }
 
-bool EscherPropertyContainer::CreateGraphicProperties(
-    const uno::Reference<beans::XPropertySet> & rXPropSet,
-        const OUString& rSource, const bool bCreateFillBitmap, const bool bCreateCroppingAttributes,
-            const bool bFillBitmapModeAllowed, const bool bOOxmlExport )
+bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans::XPropertySet> & rXPropSet,
+                                                      const OUString& rSource,
+                                                      const bool bCreateFillBitmap,
+                                                      const bool bCreateCroppingAttributes,
+                                                      const bool bFillBitmapModeAllowed,
+                                                      const bool bOOxmlExport )
 {
     bool        bRetValue = false;
     bool        bCreateFillStyles = false;
@@ -1400,6 +1405,8 @@ bool EscherPropertyContainer::CreateGraphicProperties(
     std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject);
     OUString        aGraphicUrl;
     OString         aUniqueId;
+
+    uno::Reference<graphic::XGraphic> xGraphic;
 
     drawing::BitmapMode eBitmapMode(drawing::BitmapMode_NO_REPEAT);
     uno::Any aAny;
@@ -1438,7 +1445,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(
                 }
             }
         }
-        else if ( rSource == "Bitmap" )
+        else if (rSource == "Bitmap" || rSource == "FillBitmap")
         {
             uno::Reference<awt::XBitmap> xBitmap(aAny, uno::UNO_QUERY);
             if (xBitmap.is())
@@ -1454,13 +1461,14 @@ bool EscherPropertyContainer::CreateGraphicProperties(
                 }
             }
         }
-        else if ( rSource == "FillBitmapURL" )
-        {
-            aGraphicUrl = *o3tl::doAccess<OUString>(aAny);
-        }
         else if ( rSource == "GraphicURL" )
         {
             aGraphicUrl = *o3tl::doAccess<OUString>(aAny);
+            bCreateFillStyles = true;
+        }
+        else if ( rSource == "Graphic" )
+        {
+            xGraphic = aAny.get<uno::Reference<graphic::XGraphic>>();
             bCreateFillStyles = true;
         }
         else if ( rSource == "FillHatch" )
@@ -1527,6 +1535,12 @@ bool EscherPropertyContainer::CreateGraphicProperties(
             nAngle = bRotate && EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "RotateAngle", true )
                 ? static_cast<sal_uInt16>( ( *o3tl::doAccess<sal_Int32>(aAny) ) + 5 ) / 10
                 : 0;
+        }
+
+        if (xGraphic.is())
+        {
+            Graphic aGraphic(xGraphic);
+            aGraphicUrl = aGraphic.getOriginURL();
         }
 
         if ( aGraphicUrl.getLength() )
@@ -1596,7 +1610,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(
             }
         }
 
-        if ( aGraphicUrl.getLength() || !aUniqueId.isEmpty() )
+        if ( aGraphicUrl.getLength() || !aUniqueId.isEmpty() || xGraphic.is())
         {
             if(bMirrored || nTransparency || nRed || nGreen || nBlue || (1.0 != fGamma))
             {
@@ -1673,12 +1687,61 @@ bool EscherPropertyContainer::CreateGraphicProperties(
             else
                 AddOpt( ESCHER_Prop_fillType, ESCHER_FillPicture );
 
-            if ( !aUniqueId.isEmpty() )
+            if (xGraphic.is())
+            {
+                Graphic aGraphic(xGraphic);
+                if (!aGraphic.getOriginURL().isEmpty())
+                {
+                    AddOpt(ESCHER_Prop_pibName, aGraphicUrl);
+                    sal_uInt32 nPibFlags = 0;
+                    GetOpt(ESCHER_Prop_pibFlags, nPibFlags);
+                    AddOpt(ESCHER_Prop_pibFlags, ESCHER_BlipFlagLinkToFile | ESCHER_BlipFlagFile | ESCHER_BlipFlagDoNotSave | nPibFlags);
+                }
+                else if (pGraphicProvider && pPicOutStrm && pShapeBoundRect) // write out embedded graphic
+                {
+                    GraphicObject aGraphicObject(aGraphic);
+                    const sal_uInt32 nBlibId(pGraphicProvider->GetBlibID(*pPicOutStrm, aGraphicObject, nullptr, pGraphicAttr.get()));
+
+                    if(nBlibId)
+                    {
+                        if(bCreateFillBitmap)
+                        {
+                            AddOpt(ESCHER_Prop_fillBlip, nBlibId, true);
+                        }
+                        else
+                        {
+                            AddOpt( ESCHER_Prop_pib, nBlibId, true );
+                            ImplCreateGraphicAttributes( rXPropSet, nBlibId, bCreateCroppingAttributes );
+                        }
+
+                        bRetValue = true;
+                    }
+                }
+                else
+                {
+                    EscherGraphicProvider aProvider;
+                    SvMemoryStream aMemStrm;
+                    GraphicObject aGraphicObject(aGraphic);
+
+                    if (aProvider.GetBlibID(aMemStrm, aGraphicObject, nullptr, pGraphicAttr.get(), bOOxmlExport))
+                    {
+                        // grab BLIP from stream and insert directly as complex property
+                        // ownership of stream memory goes to complex property
+                        aMemStrm.ObjectOwnsMemory( false );
+                        sal_uInt8 const * pBuf = static_cast<sal_uInt8 const *>(aMemStrm.GetData());
+                        sal_uInt32 nSize = aMemStrm.Seek( STREAM_SEEK_TO_END );
+                        AddOpt(ESCHER_Prop_fillBlip, true, nSize, const_cast<sal_uInt8 *>(pBuf), nSize );
+                        bRetValue = true;
+                    }
+                }
+            }
+            else if ( !aUniqueId.isEmpty() )
             {
                 // write out embedded graphic
                 if ( pGraphicProvider && pPicOutStrm && pShapeBoundRect )
                 {
-                    const sal_uInt32 nBlibId(pGraphicProvider->GetBlibID(*pPicOutStrm, aUniqueId, nullptr, pGraphicAttr.get()));
+                    GraphicObject aGraphicObject(aUniqueId);
+                    const sal_uInt32 nBlibId(pGraphicProvider->GetBlibID(*pPicOutStrm, aGraphicObject, nullptr, pGraphicAttr.get()));
 
                     if(nBlibId)
                     {
@@ -1700,7 +1763,9 @@ bool EscherPropertyContainer::CreateGraphicProperties(
                     EscherGraphicProvider aProvider;
                     SvMemoryStream aMemStrm;
 
-                    if ( aProvider.GetBlibID( aMemStrm, aUniqueId, nullptr, pGraphicAttr.get(), bOOxmlExport ) )
+                    GraphicObject aGraphicObject(aUniqueId);
+
+                    if ( aProvider.GetBlibID( aMemStrm, aGraphicObject, nullptr, pGraphicAttr.get(), bOOxmlExport ) )
                     {
                         // grab BLIP from stream and insert directly as complex property
                         // ownership of stream memory goes to complex property
@@ -1951,8 +2016,8 @@ bool EscherPropertyContainer::CreatePolygonProperties(
                 for (sal_uInt16 i = 0; i < nPoints; ++i)             // write points from polygon to buffer
                 {
                     Point aPoint = aPolygon[ i ];
-                    aPoint.X() -= rGeoRect.X;
-                    aPoint.Y() -= rGeoRect.Y;
+                    aPoint.AdjustX( -(rGeoRect.X) );
+                    aPoint.AdjustY( -(rGeoRect.Y) );
 
                     *pPtr++ = static_cast<sal_uInt8>( aPoint.X() );
                     *pPtr++ = static_cast<sal_uInt8>( aPoint.X() >> 8 );
@@ -2059,9 +2124,9 @@ sal_Int32 lcl_GetConnectorAdjustValue ( const XPolygon& rPoly, sal_uInt16 nIndex
     Point aStart = rPoly[0];
     Point aEnd = rPoly[k-1];
     if ( aEnd.Y() == aStart.Y() )
-        aEnd.Y() = aStart.Y() +4;
+        aEnd.setY( aStart.Y() +4 );
     if ( aEnd.X() == aStart.X() )
-        aEnd.X() = aStart.X() +4;
+        aEnd.setX( aStart.X() +4 );
 
     bool bVertical = ( rPoly[1].X()-aStart.X() ) == 0 ;
     // vertical and horizon alternate
@@ -2110,8 +2175,8 @@ void lcl_Rotate(sal_Int32 nAngle, Point center, Point& pt)
     }
     sal_Int32 x0 =pt.X()-center.X();
     sal_Int32 y0 =pt.Y()-center.Y();
-    pt.X()=center.X()+ x0*cs-y0*sn;
-    pt.Y()=center.Y()+ y0*cs+x0*sn;
+    pt.setX(center.X()+ x0*cs-y0*sn );
+    pt.setY(center.Y()+ y0*cs+x0*sn );
 }
 /*
  FlipV defines that the shape will be flipped vertically about the center of its bounding box.
@@ -3789,13 +3854,12 @@ bool EscherPropertyContainer::CreateBlipPropertiesforOLEControl(const uno::Refer
         SdrModel* pMod = pShape->GetModel();
         Graphic aGraphic(SdrExchangeView::GetObjGraphic( pMod, pShape));
 
-        std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject(aGraphic));
-        OString aUniqueId = xGraphicObject->GetUniqueID();
-        if ( aUniqueId.getLength() )
+        GraphicObject aGraphicObject(aGraphic);
+        if (!aGraphicObject.GetUniqueID().isEmpty())
         {
             if ( pGraphicProvider && pPicOutStrm && pShapeBoundRect )
             {
-                sal_uInt32 nBlibId = pGraphicProvider->GetBlibID( *pPicOutStrm, aUniqueId );
+                sal_uInt32 nBlibId = pGraphicProvider->GetBlibID(*pPicOutStrm, aGraphicObject);
                 if ( nBlibId )
                 {
                     AddOpt( ESCHER_Prop_pib, nBlibId, true );
@@ -4149,14 +4213,13 @@ bool EscherGraphicProvider::GetPrefSize( const sal_uInt32 nBlibId, Size& rPrefSi
     return bInRange;
 }
 
-sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, const OString& rId,
+sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObject const & rGraphicObject,
                                             const awt::Rectangle* pVisArea,
                                             const GraphicAttr* pGraphicAttr, const bool bOOxmlExport )
 {
     sal_uInt32 nBlibId = 0;
-    std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject(rId));
 
-    std::unique_ptr<EscherBlibEntry> p_EscherBlibEntry( new EscherBlibEntry( rPicOutStrm.Tell(), *xGraphicObject, rId, pGraphicAttr ) );
+    std::unique_ptr<EscherBlibEntry> p_EscherBlibEntry( new EscherBlibEntry( rPicOutStrm.Tell(), rGraphicObject, rGraphicObject.GetUniqueID(), pGraphicAttr ) );
     if ( !p_EscherBlibEntry->IsEmpty() )
     {
         for ( size_t i = 0; i < mvBlibEntrys.size(); i++ )
@@ -4170,7 +4233,7 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, const OStrin
 
         bool            bUseNativeGraphic( false );
 
-        Graphic             aGraphic(xGraphicObject->GetTransformedGraphic(pGraphicAttr));
+        Graphic             aGraphic(rGraphicObject.GetTransformedGraphic(pGraphicAttr));
         GfxLink             aGraphicLink;
         SvMemoryStream      aStream;
 

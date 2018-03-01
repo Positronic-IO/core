@@ -55,7 +55,9 @@
 #include <globstr.hrc>
 #include <o3tl/safeint.hxx>
 #include <tools/svlibrary.h>
+#include <unotools/configmgr.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 #include <memory>
 #include <osl/endian.h>
@@ -92,7 +94,8 @@ enum class SylkVersion
 // Whole document without Undo
 ScImportExport::ScImportExport( ScDocument* p )
     : pDocSh( dynamic_cast< ScDocShell* >(p->GetDocumentShell()) ), pDoc( p ),
-      nSizeLimit( 0 ), cSep( '\t' ), cStr( '"' ),
+      nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? MAXROW : SCROWS32K),
+      cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( true ), bSingle( true ), bUndo( false ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
@@ -107,7 +110,8 @@ ScImportExport::ScImportExport( ScDocument* p )
 ScImportExport::ScImportExport( ScDocument* p, const ScAddress& rPt )
     : pDocSh( dynamic_cast< ScDocShell* >(p->GetDocumentShell()) ), pDoc( p ),
       aRange( rPt ),
-      nSizeLimit( 0 ), cSep( '\t' ), cStr( '"' ),
+      nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? MAXROW : SCROWS32K),
+      cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( true ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
@@ -123,7 +127,8 @@ ScImportExport::ScImportExport( ScDocument* p, const ScAddress& rPt )
 ScImportExport::ScImportExport( ScDocument* p, const ScRange& r )
     : pDocSh( dynamic_cast<ScDocShell* >(p->GetDocumentShell()) ), pDoc( p ),
       aRange( r ),
-      nSizeLimit( 0 ), cSep( '\t' ), cStr( '"' ),
+      nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? MAXROW : SCROWS32K),
+      cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( false ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
@@ -140,7 +145,8 @@ ScImportExport::ScImportExport( ScDocument* p, const ScRange& r )
 // If a View exists, the TabNo of the view will be used.
 ScImportExport::ScImportExport( ScDocument* p, const OUString& rPos )
     : pDocSh( dynamic_cast< ScDocShell* >(p->GetDocumentShell()) ), pDoc( p ),
-      nSizeLimit( 0 ), cSep( '\t' ), cStr( '"' ),
+      nSizeLimit( 0 ), nMaxImportRow(!utl::ConfigManager::IsFuzzing() ? MAXROW : SCROWS32K),
+      cSep( '\t' ), cStr( '"' ),
       bFormulas( false ), bIncludeFiltered( true ),
       bAll( false ), bSingle( true ), bUndo( pDocSh != nullptr ),
       bOverflowRow( false ), bOverflowCol( false ), bOverflowCell( false ),
@@ -222,9 +228,11 @@ bool ScImportExport::StartPaste()
         ScEditableTester aTester( pDoc, aRange );
         if ( !aTester.IsEditable() )
         {
-            ScopedVclPtrInstance<InfoBox> aInfoBox( Application::GetDefDialogParent(),
-                                ScGlobal::GetRscString( aTester.GetMessageId() ) );
-            aInfoBox->Execute();
+            vcl::Window* pWin = Application::GetDefDialogParent();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          ScGlobal::GetRscString(aTester.GetMessageId())));
+            xInfoBox->run();
             return false;
         }
     }
@@ -843,6 +851,9 @@ bool ScImportExport::Text2Doc( SvStream& rStrm )
     pSeps[0] = cSep;
     pSeps[1] = 0;
 
+    ScSetStringParam aSetStringParam;
+    aSetStringParam.mbCheckLinkFormula = true;
+
     SCCOL nStartCol = aRange.aStart.Col();
     SCROW nStartRow = aRange.aStart.Row();
     SCCOL nEndCol = aRange.aEnd.Col();
@@ -892,7 +903,7 @@ bool ScImportExport::Text2Doc( SvStream& rStrm )
                         if (nRow>nEndRow) nEndRow = nRow;
                     }
                     if( bData && nCol <= nEndCol && nRow <= nEndRow )
-                        pDoc->SetString( nCol, nRow, aRange.aStart.Tab(), aCell );
+                        pDoc->SetString( nCol, nRow, aRange.aStart.Tab(), aCell, &aSetStringParam );
                 }
                 else                            // too many columns/rows
                 {
@@ -1208,6 +1219,7 @@ static bool lcl_PutString(
         aParam.mbDetectNumberFormat = bDetectNumFormat;
         aParam.meSetTextNumFormat = ScSetStringParam::SpecialNumberOnly;
         aParam.mbHandleApostrophe = false;
+        aParam.mbCheckLinkFormula = true;
         if ( bUseDocImport )
             rDocImport.setAutoInput(ScAddress(nCol, nRow, nTab), rStr, &aParam);
         else
@@ -1288,6 +1300,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     const OUString& rSeps       = pExtOptions->GetFieldSeps();
     const sal_Unicode* pSeps    = rSeps.getStr();
     bool    bMerge              = pExtOptions->IsMergeSeps();
+    bool    bRemoveSpace        = pExtOptions->IsRemoveSpace();
     sal_uInt16  nInfoCount      = pExtOptions->GetInfoCount();
     const sal_Int32* pColStart  = pExtOptions->GetColStart();
     const sal_uInt8* pColFormat = pExtOptions->GetColFormat();
@@ -1406,7 +1419,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
                 {
                     bool bIsQuoted = false;
                     p = ScImportExport::ScanNextFieldFromString( p, aCell,
-                            cStr, pSeps, bMerge, bIsQuoted, bOverflowCell );
+                            cStr, pSeps, bMerge, bIsQuoted, bOverflowCell, bRemoveSpace );
 
                     sal_uInt8 nFmt = SC_COL_STANDARD;
                     for ( i=nInfoStart; i<nInfoCount; i++ )
@@ -1463,8 +1476,9 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
             if ( !mbApi && nStartCol != nEndCol &&
                  !pDoc->IsBlockEmpty( nTab, nStartCol + 1, nStartRow, nEndCol, nRow ) )
             {
-                ScopedVclPtrInstance< ScReplaceWarnBox > aBox( ScDocShell::GetActiveDialogParent() );
-                if ( aBox->Execute() != RET_YES )
+                vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+                ScReplaceWarnBox aBox(pWin ? pWin->GetFrameWeld() : nullptr);
+                if (aBox.run() != RET_YES)
                 {
                     return false;
                 }
@@ -1514,7 +1528,7 @@ void ScImportExport::EmbeddedNullTreatment( OUString & rStr )
 
 const sal_Unicode* ScImportExport::ScanNextFieldFromString( const sal_Unicode* p,
         OUString& rField, sal_Unicode cStr, const sal_Unicode* pSeps, bool bMergeSeps, bool& rbIsQuoted,
-        bool& rbOverflowCell )
+        bool& rbOverflowCell, bool bRemoveSpace )
 {
     rbIsQuoted = false;
     rField.clear();
@@ -1541,7 +1555,13 @@ const sal_Unicode* ScImportExport::ScanNextFieldFromString( const sal_Unicode* p
         // this field.
         if (p > p1)
         {
-            if (!lcl_appendLineData( rField, p1, p))
+            const sal_Unicode* ptrim_f = p;
+            if ( bRemoveSpace )
+            {
+                while ( ptrim_f > p1  && ( *(ptrim_f - 1) == cBlank ) )
+                    --ptrim_f;
+            }
+            if (!lcl_appendLineData( rField, p1, ptrim_f))
                 rbOverflowCell = true;
         }
         if( *p )
@@ -1552,7 +1572,16 @@ const sal_Unicode* ScImportExport::ScanNextFieldFromString( const sal_Unicode* p
         const sal_Unicode* p0 = p;
         while ( *p && !ScGlobal::UnicodeStrChr( pSeps, *p ) )
             p++;
-        if (!lcl_appendLineData( rField, p0, p))
+        const sal_Unicode* ptrim_i = p0;
+        const sal_Unicode* ptrim_f = p;  // [ptrim_i,ptrim_f) is cell data after trimming
+        if ( bRemoveSpace )
+        {
+            while ( *ptrim_i == cBlank )
+                ++ptrim_i;
+            while ( ptrim_f > ptrim_i && ( *(ptrim_f - 1) == cBlank ) )
+                --ptrim_f;
+        }
+        if (!lcl_appendLineData( rField, ptrim_i, ptrim_f))
             rbOverflowCell = true;
         if( *p )
             p++;
@@ -1780,10 +1809,10 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                         {
                             bInvalidRow = false;
                             bool bFail = o3tl::checked_add(OUString(p).toInt32(), nStartRow - 1, nRow);
-                            if (bFail || nRow < 0 || MAXROW < nRow)
+                            if (bFail || nRow < 0 || nMaxImportRow < nRow)
                             {
                                 SAL_WARN("sc.ui","ScImportExport::Sylk2Doc - ;Y invalid nRow=" << nRow);
-                                nRow = std::max<SCROW>(0, std::min<SCROW>(nRow, MAXROW));
+                                nRow = std::max<SCROW>(0, std::min<SCROW>(nRow, nMaxImportRow));
                                 bInvalidRow = bOverflowRow = true;
                             }
                             break;
@@ -1804,10 +1833,10 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                         {
                             bInvalidRefRow = false;
                             bool bFail = o3tl::checked_add(OUString(p).toInt32(), nStartRow - 1, nRefRow);
-                            if (bFail || nRefRow < 0 || MAXROW < nRefRow)
+                            if (bFail || nRefRow < 0 || nMaxImportRow < nRefRow)
                             {
                                 SAL_WARN("sc.ui","ScImportExport::Sylk2Doc - ;R invalid nRefRow=" << nRefRow);
-                                nRefRow = std::max<SCROW>(0, std::min<SCROW>(nRefRow, MAXROW));
+                                nRefRow = std::max<SCROW>(0, std::min<SCROW>(nRefRow, nMaxImportRow));
                                 bInvalidRefRow = bOverflowRow = true;
                             }
                             break;
@@ -1817,7 +1846,7 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                             if( !bSingle &&
                                     ( nCol < nStartCol || nCol > nEndCol
                                       || nRow < nStartRow || nRow > nEndRow
-                                      || nCol > MAXCOL || nRow > MAXROW
+                                      || nCol > MAXCOL || nRow > nMaxImportRow
                                       || bInvalidCol || bInvalidRow ) )
                                 break;
                             if( !bData )
@@ -1891,6 +1920,7 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                             const formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_PODF_A1;
                             ScCompiler aComp( pDoc, aPos, eGrammar);
                             ScTokenArray* pCode = aComp.CompileString( aText );
+                            pDoc->CheckLinkFormulaNeedingCheck( *pCode);
                             if ( ch == 'M' )
                             {
                                 ScMarkData aMark;
@@ -1941,10 +1971,10 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                         {
                             bInvalidRow = false;
                             bool bFail = o3tl::checked_add(OUString(p).toInt32(), nStartRow - 1, nRow);
-                            if (bFail || nRow < 0 || MAXROW < nRow)
+                            if (bFail || nRow < 0 || nMaxImportRow < nRow)
                             {
                                 SAL_WARN("sc.ui","ScImportExport::Sylk2Doc - ;Y invalid nRow=" << nRow);
-                                nRow = std::max<SCROW>(0, std::min<SCROW>(nRow, MAXROW));
+                                nRow = std::max<SCROW>(0, std::min<SCROW>(nRow, nMaxImportRow));
                                 bInvalidRow = bOverflowRow = true;
                             }
                             break;
@@ -2302,7 +2332,9 @@ ScFormatFilterPlugin &ScFormatFilter::Get()
 #ifndef DISABLE_DYNLOADING
     OUString sFilterLib(SVLIBRARY("scfilt"));
     static ::osl::Module aModule;
-    bool bLoaded = aModule.loadRelative(&thisModule, sFilterLib);
+    bool bLoaded = aModule.is();
+    if (!bLoaded)
+        bLoaded = aModule.loadRelative(&thisModule, sFilterLib);
     if (!bLoaded)
         bLoaded = aModule.load(sFilterLib);
     if (bLoaded)

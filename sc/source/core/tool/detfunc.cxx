@@ -121,9 +121,9 @@ private:
     SfxItemSet          aCaptionSet;
 };
 
-ColorData ScDetectiveFunc::nArrowColor = 0;
-ColorData ScDetectiveFunc::nErrorColor = 0;
-ColorData ScDetectiveFunc::nCommentColor = 0;
+Color ScDetectiveFunc::nArrowColor = 0;
+Color ScDetectiveFunc::nErrorColor = 0;
+Color ScDetectiveFunc::nCommentColor = 0;
 bool ScDetectiveFunc::bColorsInitialized = false;
 
 static bool lcl_HasThickLine( const SdrObject& rObj )
@@ -142,7 +142,7 @@ ScDetectiveData::ScDetectiveData( SdrModel* pModel ) :
 {
     nMaxLevel = 0;
 
-    aBoxSet.Put( XLineColorItem( EMPTY_OUSTRING, Color( ScDetectiveFunc::GetArrowColor() ) ) );
+    aBoxSet.Put( XLineColorItem( EMPTY_OUSTRING, ScDetectiveFunc::GetArrowColor() ) );
     aBoxSet.Put( XFillStyleItem( drawing::FillStyle_NONE ) );
 
     //  create default line endings (like XLineEndList::Create)
@@ -187,7 +187,7 @@ ScDetectiveData::ScDetectiveData( SdrModel* pModel ) :
     aFromTabSet.Put( XLineEndWidthItem( 200 ) );
     aFromTabSet.Put( XLineEndCenterItem( false ) );
 
-    aCircleSet.Put( XLineColorItem( OUString(), Color( ScDetectiveFunc::GetErrorColor() ) ) );
+    aCircleSet.Put( XLineColorItem( OUString(), ScDetectiveFunc::GetErrorColor() ) );
     aCircleSet.Put( XFillStyleItem( drawing::FillStyle_NONE ) );
     aCircleSet.Put( XLineWidthItem( 55 ) ); // 54 = 1 Pixel
 }
@@ -316,20 +316,20 @@ Point ScDetectiveFunc::GetDrawPos( SCCOL nCol, SCROW nRow, DrawPosMode eMode ) c
             ++nRow;
         break;
         case DrawPosMode::DetectiveArrow:
-            aPos.X() += pDoc->GetColWidth( nCol, nTab ) / 4;
-            aPos.Y() += pDoc->GetRowHeight( nRow, nTab ) / 2;
+            aPos.AdjustX(pDoc->GetColWidth( nCol, nTab ) / 4 );
+            aPos.AdjustY(pDoc->GetRowHeight( nRow, nTab ) / 2 );
         break;
     }
 
     for ( SCCOL i = 0; i < nCol; ++i )
-        aPos.X() += pDoc->GetColWidth( i, nTab );
-    aPos.Y() += pDoc->GetRowHeight( 0, nRow - 1, nTab );
+        aPos.AdjustX(pDoc->GetColWidth( i, nTab ) );
+    aPos.AdjustY(pDoc->GetRowHeight( 0, nRow - 1, nTab ) );
 
-    aPos.X() = static_cast< long >( aPos.X() * HMM_PER_TWIPS );
-    aPos.Y() = static_cast< long >( aPos.Y() * HMM_PER_TWIPS );
+    aPos.setX( static_cast< long >( aPos.X() * HMM_PER_TWIPS ) );
+    aPos.setY( static_cast< long >( aPos.Y() * HMM_PER_TWIPS ) );
 
     if ( pDoc->IsNegativePage( nTab ) )
-        aPos.X() *= -1;
+        aPos.setX( aPos.X() * -1 );
 
     return aPos;
 }
@@ -476,9 +476,9 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
 
         aStartPos = Point( aEndPos.X() - 1000 * nPageSign, aEndPos.Y() - 1000 );
         if (aStartPos.X() * nPageSign < 0)
-            aStartPos.X() += 2000 * nPageSign;
+            aStartPos.AdjustX(2000 * nPageSign );
         if (aStartPos.Y() < 0)
-            aStartPos.Y() += 2000;
+            aStartPos.AdjustY(2000 );
     }
 
     SfxItemSet& rAttrSet = bFromOtherTab ? rData.GetFromTabSet() : rData.GetArrowSet();
@@ -488,8 +488,8 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
     else
         rAttrSet.Put( XLineWidthItem( 0 ) );                // single reference
 
-    ColorData nColorData = ( bRed ? GetErrorColor() : GetArrowColor() );
-    rAttrSet.Put( XLineColorItem( OUString(), Color( nColorData ) ) );
+    Color nColor = ( bRed ? GetErrorColor() : GetArrowColor() );
+    rAttrSet.Put( XLineColorItem( OUString(), nColor ) );
 
     basegfx::B2DPolygon aTempPoly;
     aTempPoly.append(basegfx::B2DPoint(aStartPos.X(), aStartPos.Y()));
@@ -545,7 +545,7 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
     Point aStartPos = GetDrawPos( nStartCol, nStartRow, DrawPosMode::DetectiveArrow );
     Point aEndPos   = Point( aStartPos.X() + 1000 * nPageSign, aStartPos.Y() - 1000 );
     if (aEndPos.Y() < 0)
-        aEndPos.Y() += 2000;
+        aEndPos.AdjustY(2000 );
 
     SfxItemSet& rAttrSet = rData.GetToTabSet();
     if (bArea)
@@ -553,8 +553,8 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
     else
         rAttrSet.Put( XLineWidthItem( 0 ) );                // single reference
 
-    ColorData nColorData = ( bRed ? GetErrorColor() : GetArrowColor() );
-    rAttrSet.Put( XLineColorItem( OUString(), Color( nColorData ) ) );
+    Color nColor = ( bRed ? GetErrorColor() : GetArrowColor() );
+    rAttrSet.Put( XLineColorItem( OUString(), nColor ) );
 
     basegfx::B2DPolygon aTempPoly;
     aTempPoly.append(basegfx::B2DPoint(aStartPos.X(), aStartPos.Y()));
@@ -620,10 +620,10 @@ void ScDetectiveFunc::DrawCircle( SCCOL nCol, SCROW nRow, ScDetectiveData& rData
     SdrPage* pPage = pModel->GetPage(static_cast<sal_uInt16>(nTab));
 
     tools::Rectangle aRect = GetDrawRect( nCol, nRow );
-    aRect.Left()    -= 250;
-    aRect.Right()   += 250;
-    aRect.Top()     -= 70;
-    aRect.Bottom()  += 70;
+    aRect.AdjustLeft( -250 );
+    aRect.AdjustRight(250 );
+    aRect.AdjustTop( -70 );
+    aRect.AdjustBottom(70 );
 
     SdrCircObj* pCircle = new SdrCircObj( OBJ_CIRC, aRect );
     SfxItemSet& rAttrSet = rData.GetCircleSet();
@@ -1498,8 +1498,8 @@ void ScDetectiveFunc::UpdateAllArrowColors()
 
                     if ( bArrow || bError )
                     {
-                        ColorData nColorData = ( bError ? GetErrorColor() : GetArrowColor() );
-                        pObject->SetMergedItem( XLineColorItem( OUString(), Color( nColorData ) ) );
+                        Color nColor = ( bError ? GetErrorColor() : GetArrowColor() );
+                        pObject->SetMergedItem( XLineColorItem( OUString(), nColor ) );
 
                         // repaint only
                         pObject->ActionChanged();
@@ -1579,7 +1579,7 @@ ScDetectiveObjType ScDetectiveFunc::GetDetectiveObjectType( SdrObject* pObject, 
                     FindFrameForObject( pObject, rSource );     // modifies rSource
                 }
 
-                ColorData nObjColor = pObject->GetMergedItem(XATTR_LINECOLOR).GetColorValue().GetColor();
+                Color nObjColor = pObject->GetMergedItem(XATTR_LINECOLOR).GetColorValue().GetColor();
                 if ( nObjColor == GetErrorColor() && nObjColor != GetArrowColor() )
                     rRedLine = true;
             }
@@ -1631,21 +1631,21 @@ void ScDetectiveFunc::InsertObject( ScDetectiveObjType eType,
     }
 }
 
-ColorData ScDetectiveFunc::GetArrowColor()
+Color ScDetectiveFunc::GetArrowColor()
 {
     if (!bColorsInitialized)
         InitializeColors();
     return nArrowColor;
 }
 
-ColorData ScDetectiveFunc::GetErrorColor()
+Color ScDetectiveFunc::GetErrorColor()
 {
     if (!bColorsInitialized)
         InitializeColors();
     return nErrorColor;
 }
 
-ColorData ScDetectiveFunc::GetCommentColor()
+Color ScDetectiveFunc::GetCommentColor()
 {
     if (!bColorsInitialized)
         InitializeColors();

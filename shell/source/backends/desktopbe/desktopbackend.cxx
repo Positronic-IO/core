@@ -124,8 +124,6 @@ void Default::setPropertyValue(OUString const &, css::uno::Any const &)
         static_cast< cppu::OWeakObject * >(this), -1);
 }
 
-namespace {
-
 OUString xdg_user_dir_lookup (const char *type)
 {
     char *config_home;
@@ -233,8 +231,6 @@ css::uno::Any xdgDirectoryIfExists(char const * type) {
         : css::beans::Optional<css::uno::Any>(false, css::uno::Any()));
 }
 
-} // namespace
-
 css::uno::Any Default::getPropertyValue(OUString const & PropertyName)
 {
     if (PropertyName == "TemplatePathVariable")
@@ -307,6 +303,10 @@ css::uno::Reference< css::uno::XInterface > createInstance(
         backend = createBackend(
             context,
             "com.sun.star.configuration.backend.KDE4Backend");
+    } else if ( desktop == "KDE5" ) {
+        backend = createBackend(
+            context,
+            "com.sun.star.configuration.backend.KDE5Backend");
     }
     return backend.is()
         ? backend : static_cast< cppu::OWeakObject * >(new Default);

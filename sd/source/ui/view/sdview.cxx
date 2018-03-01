@@ -93,6 +93,8 @@
 #include <comphelper/lok.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <svl/itemiter.hxx>
+#include <editeng/editeng.hxx>
 #include <DrawController.hxx>
 
 #include <memory>
@@ -258,7 +260,7 @@ drawinglayer::primitive2d::Primitive2DContainer ViewRedirector::createRedirected
                 if( aColor.bIsVisible )
                 {
                     // get basic object transformation
-                    const basegfx::BColor aRGBColor(Color(aColor.nColor).getBColor());
+                    const basegfx::BColor aRGBColor(aColor.nColor.getBColor());
                     basegfx::B2DHomMatrix aObjectMatrix;
                     basegfx::B2DPolyPolygon aObjectPolyPolygon;
                     pObject->TRGetBaseGeometry(aObjectMatrix, aObjectPolyPolygon);
@@ -761,9 +763,9 @@ SdrEndTextEditKind View::SdrEndTextEdit(bool bDontDeleteReally)
 {
     maMasterViewFilter.End();
 
-    SdrObjectWeakRef xObj( GetTextEditObject() );
+    ::tools::WeakReference<SdrTextObj> xObj( GetTextEditObject() );
 
-    bool bDefaultTextRestored = RestoreDefaultText( dynamic_cast< SdrTextObj* >( GetTextEditObject() ) );
+    bool bDefaultTextRestored = RestoreDefaultText( xObj.get() );
 
     SdrEndTextEditKind eKind = FmFormView::SdrEndTextEdit(bDontDeleteReally);
 
@@ -780,7 +782,7 @@ SdrEndTextEditKind View::SdrEndTextEdit(bool bDontDeleteReally)
     }
     else if( xObj.is() && xObj->IsEmptyPresObj() )
     {
-        SdrTextObj* pObj = dynamic_cast< SdrTextObj* >( xObj.get() );
+        SdrTextObj* pObj = xObj.get();
         if( pObj && pObj->HasText() )
         {
             SdrPage* pPage = pObj->GetPage();
@@ -1185,8 +1187,17 @@ void View::CheckPossibilities()
     maSmartTags.CheckPossibilities();
 }
 
-void View::OnBeginPasteOrDrop( PasteOrDropInfos* /*pInfo*/ )
+void View::OnBeginPasteOrDrop( PasteOrDropInfos* pInfo )
 {
+    SdrOutliner* pOutliner = GetTextEditOutliner();
+    if (!pOutliner)
+        return;
+
+    // Turn character attributes of the paragraph of the insert position into
+    // character-level attributes, so they are not lost when OnEndPasteOrDrop()
+    // sets the paragraph stylesheet.
+    SfxItemSet aSet(pOutliner->GetParaAttribs(pInfo->nStartPara));
+    pOutliner->SetCharAttribs(pInfo->nStartPara, aSet);
 }
 
 /** this is called after a paste or drop operation, make sure that the newly inserted paragraphs
@@ -1194,7 +1205,7 @@ void View::OnBeginPasteOrDrop( PasteOrDropInfos* /*pInfo*/ )
 void View::OnEndPasteOrDrop( PasteOrDropInfos* pInfo )
 {
     /* Style Sheet handling */
-    SdrTextObj* pTextObj = dynamic_cast< SdrTextObj* >( GetTextEditObject() );
+    SdrTextObj* pTextObj = GetTextEditObject();
     SdrOutliner* pOutliner = GetTextEditOutliner();
     if( !pOutliner || !pTextObj || !pTextObj->GetPage() )
         return;

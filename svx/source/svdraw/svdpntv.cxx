@@ -20,7 +20,7 @@
 #include <memory>
 #include <com/sun/star/awt/XWindow.hpp>
 #include <svx/svdpntv.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svx/sdrpaintwindow.hxx>
 #include <svtools/grfmgr.hxx>
 #include <svx/svdmodel.hxx>
@@ -178,7 +178,7 @@ void SdrPaintView::ImpClearVars()
     if (mpModel)
         SetDefaultStyleSheet(mpModel->GetDefaultStyleSheet(), true);
 
-    maGridColor = Color( COL_BLACK );
+    maGridColor = COL_BLACK;
 }
 
 SdrPaintView::SdrPaintView(SdrModel* pModel, OutputDevice* pOut)
@@ -929,7 +929,7 @@ void SdrPaintView::InvalidateAllWin(const tools::Rectangle& rRect)
             tools::Rectangle aRect(rRect);
 
             Point aOrg(rOutDev.GetMapMode().GetOrigin());
-            aOrg.X()=-aOrg.X(); aOrg.Y()=-aOrg.Y();
+            aOrg.setX(-aOrg.X() ); aOrg.setY(-aOrg.Y() );
             tools::Rectangle aOutRect(aOrg, rOutDev.GetOutputSize());
 
             // In case of tiled rendering we want to get all invalidations, so visual area is not interesting.
@@ -1028,7 +1028,10 @@ void SdrPaintView::SetDefaultAttr(const SfxItemSet& rAttr, bool bReplaceAll)
         if(bHasEEFeatureItems)
         {
             OUString aMessage("SdrPaintView::SetDefaultAttr(): Setting EE_FEATURE items at the SdrView does not make sense! It only leads to overhead and unreadable documents.");
-            ScopedVclPtrInstance<InfoBox>(nullptr, aMessage)->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          aMessage));
+            xInfoBox->run();
         }
     }
 #endif
@@ -1244,7 +1247,7 @@ void SdrPaintView::VisAreaChanged()
 
 void SdrPaintView::onChangeColorConfig()
 {
-    maGridColor = Color( maColorConfig.GetColorValue( svtools::DRAWGRID ).nColor );
+    maGridColor = maColorConfig.GetColorValue( svtools::DRAWGRID ).nColor;
 }
 
 

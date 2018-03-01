@@ -32,6 +32,8 @@
 #include <docsh.hxx>
 #include <IDocumentDeviceAccess.hxx>
 #include <IDocumentSettingAccess.hxx>
+#include <IDocumentRedlineAccess.hxx>
+
 #include <swmodule.hxx>
 #include <wrtsh.hxx>
 #include <uitool.hxx>
@@ -1588,12 +1590,12 @@ void SwMarkPreview::InitColors()
     // m_aTransCol and m_aMarkCol are _not_ changed because they are set from outside!
 
     const StyleSettings& rSettings = GetSettings().GetStyleSettings();
-    m_aBgCol = Color( rSettings.GetWindowColor() );
+    m_aBgCol = rSettings.GetWindowColor();
 
     bool bHC = rSettings.GetHighContrastMode();
-    m_aLineCol = bHC? SwViewOption::GetFontColor() : Color( COL_BLACK );
+    m_aLineCol = bHC? SwViewOption::GetFontColor() : COL_BLACK;
     m_aShadowCol = bHC? m_aBgCol : rSettings.GetShadowColor();
-    m_aTextCol = bHC? SwViewOption::GetFontColor() : Color( COL_GRAY );
+    m_aTextCol = bHC? SwViewOption::GetFontColor() : COL_GRAY;
     m_aPrintAreaCol = m_aTextCol;
 }
 
@@ -1623,8 +1625,8 @@ void SwMarkPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
 
     aLeftPagePrtArea = tools::Rectangle(Point(nLBorder, nTBorder), Point((nOutWPix - 1) - nRBorder, (nOutHPix - 1) - nBBorder));
     const long nWidth = aLeftPagePrtArea.GetWidth();
-    const long nKorr = (nWidth & 1) != 0 ? 0 : 1;
-    aLeftPagePrtArea.SetSize(Size(nWidth / 2 - (nLBorder + nRBorder) / 2 + nKorr, aLeftPagePrtArea.GetHeight()));
+    const long nCorr = (nWidth & 1) != 0 ? 0 : 1;
+    aLeftPagePrtArea.SetSize(Size(nWidth / 2 - (nLBorder + nRBorder) / 2 + nCorr, aLeftPagePrtArea.GetHeight()));
 
     aRightPagePrtArea = aLeftPagePrtArea;
     aRightPagePrtArea.Move(aLeftPagePrtArea.GetWidth() + nLBorder + nRBorder + 1, 0);
@@ -1684,8 +1686,8 @@ void SwMarkPreview::PaintPage(vcl::RenderContext& rRenderContext, const tools::R
 
     tools::Rectangle aTextLine = rRect;
     aTextLine.SetSize(Size(aTextLine.GetWidth(), 2));
-    aTextLine.Left()    += 4;
-    aTextLine.Right()   -= 4;
+    aTextLine.AdjustLeft(4 );
+    aTextLine.AdjustRight( -4 );
     aTextLine.Move(0, 4);
 
     const long nStep = aTextLine.GetHeight() + 2;
@@ -1752,6 +1754,7 @@ SwRedlineOptionsTabPage::SwRedlineOptionsTabPage( vcl::Window* pParent,
     get(m_pMarkPosLB,"markpos");
     get(m_pMarkColorLB,"markcolor");
     get(m_pMarkPreviewWN,"markpreview");
+    get(m_pShowChangesTooltip,"changestooltip");
 
     m_pInsertedPreviewWN->set_height_request(aPreviewSize.Height());
     m_pDeletedPreviewWN->set_height_request(aPreviewSize.Height());
@@ -1810,6 +1813,7 @@ void SwRedlineOptionsTabPage::dispose()
     m_pMarkPosLB.clear();
     m_pMarkColorLB.clear();
     m_pMarkPreviewWN.clear();
+    m_pShowChangesTooltip.clear();
     SfxTabPage::dispose();
 }
 
@@ -1831,7 +1835,9 @@ bool SwRedlineOptionsTabPage::FillItemSet( SfxItemSet* )
     AuthorCharAttr aOldDeletedAttr(pOpt->GetDeletedAuthorAttr());
     AuthorCharAttr aOldChangedAttr(pOpt->GetFormatAuthorAttr());
 
-    ColorData nOldMarkColor = pOpt->GetMarkAlignColor().GetColor();
+    const bool bOldShowInlineTooltips = pOpt->IsShowInlineTooltip();
+
+    Color nOldMarkColor = pOpt->GetMarkAlignColor();
     sal_uInt16 nOldMarkMode = pOpt->GetMarkAlignMode();
 
     sal_Int32 nPos = m_pInsertLB->GetSelectedEntryPos();
@@ -1874,14 +1880,15 @@ bool SwRedlineOptionsTabPage::FillItemSet( SfxItemSet* )
         case 4: nPos = text::HoriOrientation::INSIDE;     break;
     }
     pOpt->SetMarkAlignMode(nPos);
-
     pOpt->SetMarkAlignColor(m_pMarkColorLB->GetSelectEntryColor());
+    pOpt->SetShowInlineTooltip( m_pShowChangesTooltip->IsChecked() );
 
     if (!(aInsertedAttr == aOldInsertAttr) ||
         !(aDeletedAttr == aOldDeletedAttr) ||
         !(aChangedAttr == aOldChangedAttr) ||
        nOldMarkColor != pOpt->GetMarkAlignColor().GetColor() ||
-       nOldMarkMode != pOpt->GetMarkAlignMode())
+       nOldMarkMode != pOpt->GetMarkAlignMode() ||
+       bOldShowInlineTooltips != pOpt->IsShowInlineTooltip() )
     {
         // update all documents
         SwDocShell* pDocShell = static_cast<SwDocShell*>(SfxObjectShell::GetFirst(checkSfxObjectShell<SwDocShell>));
@@ -1909,16 +1916,18 @@ void SwRedlineOptionsTabPage::Reset( const SfxItemSet*  )
     InitFontStyle(*m_pDeletedPreviewWN);
     InitFontStyle(*m_pChangedPreviewWN);
 
-    ColorData nColor = rInsertAttr.m_nColor;
-    m_pInsertColorLB->SelectEntry(Color(nColor));
+    Color nColor = rInsertAttr.m_nColor;
+    m_pInsertColorLB->SelectEntry(nColor);
 
     nColor = rDeletedAttr.m_nColor;
-    m_pDeletedColorLB->SelectEntry(Color(nColor));
+    m_pDeletedColorLB->SelectEntry(nColor);
 
     nColor = rChangedAttr.m_nColor;
-    m_pChangedColorLB->SelectEntry(Color(nColor));
+    m_pChangedColorLB->SelectEntry(nColor);
 
     m_pMarkColorLB->SelectEntry(pOpt->GetMarkAlignColor());
+
+    m_pShowChangesTooltip->Check( pOpt->IsShowInlineTooltip() );
 
     m_pInsertLB->SelectEntryPos(0);
     m_pDeletedLB->SelectEntryPos(0);
@@ -1989,13 +1998,13 @@ IMPL_LINK( SwRedlineOptionsTabPage, AttribHdl, ListBox&, rLB, void )
 
     if (aColor == COL_NONE_COLOR)
     {
-        rFont.SetColor( Color( COL_BLACK ) );
-        rCJKFont.SetColor( Color( COL_BLACK ) );
+        rFont.SetColor( COL_BLACK );
+        rCJKFont.SetColor( COL_BLACK );
     }
     else if (aColor == COL_TRANSPARENT)
     {
-        rFont.SetColor( Color( COL_RED ) );
-        rCJKFont.SetColor( Color( COL_RED ) );
+        rFont.SetColor( COL_RED );
+        rCJKFont.SetColor( COL_RED );
     }
     else
     {
@@ -2043,9 +2052,9 @@ IMPL_LINK( SwRedlineOptionsTabPage, AttribHdl, ListBox&, rLB, void )
             if (aBgColor != COL_NONE_COLOR)
                 pPrev->SetColor(aBgColor);
             else
-                pPrev->SetColor(Color(COL_LIGHTGRAY));
-            rFont.SetColor( Color( COL_BLACK ) );
-            rCJKFont.SetColor( Color( COL_BLACK ) );
+                pPrev->SetColor(COL_LIGHTGRAY);
+            rFont.SetColor( COL_BLACK );
+            rCJKFont.SetColor( COL_BLACK );
         }
         break;
     }
@@ -2085,14 +2094,14 @@ IMPL_LINK( SwRedlineOptionsTabPage, ColorHdl, SvxColorListBox&, rListBox, void )
 
     if( pAttr->nItemId == SID_ATTR_BRUSH )
     {
-        rFont.SetColor( Color( COL_BLACK ) );
-        rCJKFont.SetColor( Color( COL_BLACK ) );
+        rFont.SetColor( COL_BLACK );
+        rCJKFont.SetColor( COL_BLACK );
 
         Color aBgColor = pColorLB->GetSelectEntryColor();
         if (aBgColor != COL_NONE_COLOR)
             pPrev->SetColor(aBgColor);
         else
-            pPrev->SetColor(Color(COL_LIGHTGRAY));
+            pPrev->SetColor(COL_LIGHTGRAY);
     }
     else
     {
@@ -2100,13 +2109,13 @@ IMPL_LINK( SwRedlineOptionsTabPage, ColorHdl, SvxColorListBox&, rListBox, void )
 
         if (aColor == COL_NONE_COLOR)
         {
-            rFont.SetColor( Color( COL_BLACK ) );
-            rCJKFont.SetColor( Color( COL_BLACK ) );
+            rFont.SetColor( COL_BLACK );
+            rCJKFont.SetColor( COL_BLACK );
         }
         else if (aColor == COL_TRANSPARENT)
         {
-            rFont.SetColor( Color( COL_RED ) );
-            rCJKFont.SetColor( Color( COL_RED ) );
+            rFont.SetColor( COL_RED );
+            rCJKFont.SetColor( COL_RED );
         }
         else
         {

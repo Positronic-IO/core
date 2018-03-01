@@ -445,15 +445,21 @@ void FormatterBase::ImplSetText( const OUString& rText, Selection const * pNewSe
 {
     if ( mpField )
     {
-        if ( pNewSelection )
-            mpField->SetText( rText, *pNewSelection );
+        if (pNewSelection)
+            mpField->SetText(rText, *pNewSelection);
         else
         {
             Selection aSel = mpField->GetSelection();
             aSel.Min() = aSel.Max();
-            mpField->SetText( rText, aSel );
+            mpField->SetText(rText, aSel);
         }
-
+        if (maOutputHdl.IsSet())
+        {
+            OUString sText(mpField->GetText());
+            mpField->SetText(OUString());
+            if (!maOutputHdl.Call(*mpField))
+                mpField->SetText(sText);
+        }
         MarkToBeReformatted( false );
     }
 }
@@ -576,20 +582,27 @@ void NumericFormatter::SetUserValue( sal_Int64 nNewValue )
     ImplSetUserValue( nNewValue );
 }
 
-sal_Int64 NumericFormatter::GetValue() const
+sal_Int64 NumericFormatter::GetValueFromString(const OUString& rStr) const
 {
-    if ( !GetField() )
-        return 0;
-
     sal_Int64 nTempValue;
 
-    if ( ImplNumericGetValue( GetField()->GetText(), nTempValue,
-                              GetDecimalDigits(), ImplGetLocaleDataWrapper() ) )
+    if (ImplNumericGetValue(rStr, nTempValue,
+        GetDecimalDigits(), ImplGetLocaleDataWrapper()))
     {
         return ClipAgainstMinMax(nTempValue);
     }
     else
         return mnLastValue;
+}
+
+sal_Int64 NumericFormatter::GetValue() const
+{
+    return GetField() ? GetValueFromString(GetField()->GetText()) : 0;
+}
+
+sal_Int64 NumericFormatter::GetSavedIntValue() const
+{
+    return GetField() ? GetValueFromString(GetField()->GetSavedValue()) : 0;
 }
 
 bool NumericFormatter::IsValueModified() const
@@ -857,7 +870,7 @@ namespace
             string::padToLength(aBuf, aBuf.getLength() + nDigits, '9');
         }
         aMaxTextSize = rSpinField.CalcMinimumSizeForText(sBuf.makeStringAndClear());
-        aRet.Width() = std::min(aRet.Width(), aMaxTextSize.Width());
+        aRet.setWidth( std::min(aRet.Width(), aMaxTextSize.Width()) );
 
         return aRet;
     }
@@ -890,8 +903,8 @@ Size NumericBox::CalcMinimumSize() const
     if (IsDropDownBox())
     {
         Size aComboSugg(ComboBox::CalcMinimumSize());
-        aRet.Width() = std::max(aRet.Width(), aComboSugg.Width());
-        aRet.Height() = std::max(aRet.Height(), aComboSugg.Height());
+        aRet.setWidth( std::max(aRet.Width(), aComboSugg.Width()) );
+        aRet.setHeight( std::max(aRet.Height(), aComboSugg.Height()) );
     }
 
     return aRet;
@@ -998,10 +1011,10 @@ static const OUString ImplMetricToString( FieldUnit rUnit )
     if( pList )
     {
         // return unit's default string (ie, the first one )
-        for( FieldUnitStringList::const_iterator it = pList->begin(); it != pList->end(); ++it )
+        for (auto const& elem : *pList)
         {
-            if ( it->second == rUnit )
-                return it->first;
+            if ( elem.second == rUnit )
+                return elem.first;
         }
     }
 
@@ -1015,10 +1028,10 @@ FieldUnit MetricFormatter::StringToMetric(const OUString &rMetricString)
     {
         // return FieldUnit
         OUString aStr = rMetricString.toAsciiLowerCase().replaceAll(" ", "");
-        for( FieldUnitStringList::const_iterator it = pList->begin(); it != pList->end(); ++it )
+        for (auto const& elem : *pList)
         {
-            if ( it->first == aStr )
-                return it->second;
+            if ( elem.first == aStr )
+                return elem.second;
         }
     }
 
@@ -1393,36 +1406,37 @@ void MetricFormatter::SetUserValue( sal_Int64 nNewValue, FieldUnit eInUnit )
     NumericFormatter::SetUserValue( nNewValue );
 }
 
-sal_Int64 MetricFormatter::GetValue( FieldUnit eOutUnit ) const
+sal_Int64 MetricFormatter::GetValueFromStringUnit(const OUString& rStr, FieldUnit eOutUnit) const
 {
-    if ( !GetField() )
-        return 0;
-
     double nTempValue;
     // caution: precision loss in double cast
-    if ( !ImplMetricGetValue( GetField()->GetText(), nTempValue, mnBaseValue, GetDecimalDigits(), ImplGetLocaleDataWrapper(), meUnit ) )
+    if (!ImplMetricGetValue(rStr, nTempValue, mnBaseValue, GetDecimalDigits(), ImplGetLocaleDataWrapper(), meUnit))
         nTempValue = static_cast<double>(mnLastValue);
 
     // caution: precision loss in double cast
-    if ( nTempValue > mnMax )
+    if (nTempValue > mnMax)
         nTempValue = static_cast<double>(mnMax);
-    else if ( nTempValue < mnMin )
+    else if (nTempValue < mnMin)
         nTempValue = static_cast<double>(mnMin);
 
     // convert to requested units
-    return MetricField::ConvertValue( static_cast<sal_Int64>(nTempValue), mnBaseValue, GetDecimalDigits(), meUnit, eOutUnit );
+    return MetricField::ConvertValue(static_cast<sal_Int64>(nTempValue), mnBaseValue, GetDecimalDigits(), meUnit, eOutUnit);
+}
+
+sal_Int64 MetricFormatter::GetValueFromString(const OUString& rStr) const
+{
+    return GetValueFromStringUnit(rStr, FUNIT_NONE);
+}
+
+sal_Int64 MetricFormatter::GetValue( FieldUnit eOutUnit ) const
+{
+    return GetField() ? GetValueFromStringUnit(GetField()->GetText(), eOutUnit) : 0;
 }
 
 void MetricFormatter::SetValue( sal_Int64 nValue )
 {
     // Implementation not inline, because it is a virtual Function
     SetValue( nValue, FUNIT_NONE );
-}
-
-sal_Int64 MetricFormatter::GetValue() const
-{
-    // Implementation not inline, because it is a virtual Function
-    return GetValue( FUNIT_NONE );
 }
 
 void MetricFormatter::SetMin( sal_Int64 nNewMin, FieldUnit eInUnit )
@@ -1673,8 +1687,8 @@ Size MetricBox::CalcMinimumSize() const
     if (IsDropDownBox())
     {
         Size aComboSugg(ComboBox::CalcMinimumSize());
-        aRet.Width() = std::max(aRet.Width(), aComboSugg.Width());
-        aRet.Height() = std::max(aRet.Height(), aComboSugg.Height());
+        aRet.setWidth( std::max(aRet.Width(), aComboSugg.Width()) );
+        aRet.setHeight( std::max(aRet.Height(), aComboSugg.Height()) );
     }
 
     return aRet;
@@ -1777,18 +1791,6 @@ sal_Int32 MetricBox::GetValuePos( sal_Int64 nValue, FieldUnit eInUnit ) const
     return ComboBox::GetEntryPos( CreateFieldText( nValue ) );
 }
 
-sal_Int64 MetricBox::GetValue( FieldUnit eOutUnit ) const
-{
-    // Implementation not inline, because it is a virtual Function
-    return MetricFormatter::GetValue( eOutUnit );
-}
-
-sal_Int64 MetricBox::GetValue() const
-{
-    // Implementation not inline, because it is a virtual Function
-    return GetValue( FUNIT_NONE );
-}
-
 static bool ImplCurrencyProcessKeyInput( const KeyEvent& rKEvt,
                                          bool bUseThousandSep, const LocaleDataWrapper& rWrapper )
 {
@@ -1843,13 +1845,10 @@ OUString CurrencyFormatter::CreateFieldText( sal_Int64 nValue ) const
                                                IsUseThousandSep() );
 }
 
-sal_Int64 CurrencyFormatter::GetValue() const
+sal_Int64 CurrencyFormatter::GetValueFromString(const OUString& rStr) const
 {
-    if ( !GetField() )
-        return 0;
-
     sal_Int64 nTempValue;
-    if ( ImplCurrencyGetValue( GetField()->GetText(), nTempValue, GetDecimalDigits(), ImplGetLocaleDataWrapper() ) )
+    if ( ImplCurrencyGetValue( rStr, nTempValue, GetDecimalDigits(), ImplGetLocaleDataWrapper() ) )
     {
         return ClipAgainstMinMax(nTempValue);
     }
@@ -2035,12 +2034,6 @@ void CurrencyBox::ReformatAll()
     }
     CurrencyFormatter::Reformat();
     SetUpdateMode( true );
-}
-
-sal_Int64 CurrencyBox::GetValue() const
-{
-    // Implementation not inline, because it is a virtual Function
-    return CurrencyFormatter::GetValue();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

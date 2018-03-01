@@ -29,6 +29,7 @@
 #include <sfx2/app.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/fcontnr.hxx>
+#include <unotools/configmgr.hxx>
 #include <grfatr.hxx>
 #include <fmtanchr.hxx>
 #include <fmtcntnt.hxx>
@@ -267,11 +268,18 @@ bool SwWW8ImplReader::ReadGrafFile(OUString& rFileName, Graphic*& rpGraphic,
     }
 
     GDIMetaFile aWMF;
-    pSt->Seek( nPosFc );
-    bool bOk = ReadWindowMetafile( *pSt, aWMF );
+    bool bOk = checkSeek(*pSt, nPosFc) && ReadWindowMetafile( *pSt, aWMF );
 
     if (!bOk || pSt->GetError() || !aWMF.GetActionSize())
         return false;
+
+    //skip duplicate graphics when fuzzing
+    if (utl::ConfigManager::IsFuzzing())
+    {
+        if (m_aGrafPosSet.find(nPosFc) != m_aGrafPosSet.end())
+            return false;
+        m_aGrafPosSet.insert(nPosFc);
+    }
 
     if (m_xWwFib->m_envr != 1) // !MAC as creator
     {
@@ -553,10 +561,9 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
                 m_pDataStream->SeekRel( nNameLen );
             }
 
-            tools::Rectangle aChildRect;
             tools::Rectangle aClientRect( 0,0, aPD.nWidth,  aPD.nHeight);
             SvxMSDffImportData aData( aClientRect );
-            pObject = m_xMSDffManager->ImportObj(*m_pDataStream, &aData, aClientRect, aChildRect, /*nCalledByGroup*/0, /*pShapeId*/nullptr );
+            pObject = m_xMSDffManager->ImportObj(*m_pDataStream, &aData, aClientRect, tools::Rectangle(), /*nCalledByGroup*/0, /*pShapeId*/nullptr );
             if (pObject)
             {
                 // for the frame

@@ -9,6 +9,7 @@
 
 #include <test/calc_unoapi_test.hxx>
 #include <test/sheet/cellproperties.hxx>
+#include <test/sheet/sheetcellrange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
 #include <test/sheet/xcellrangedata.hxx>
@@ -46,9 +47,8 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-#define NUMBER_OF_TESTS 29
-
 class ScCellRangeObj : public CalcUnoApiTest, public apitest::CellProperties,
+                                              public apitest::SheetCellRange,
                                               public apitest::XCellFormatRangesSupplier,
                                               public apitest::XCellRangeAddressable,
                                               public apitest::XCellRangeData,
@@ -79,6 +79,9 @@ public:
     // CellProperties
     CPPUNIT_TEST(testVertJustify);
     CPPUNIT_TEST(testRotateReference);
+
+    // SheetCellRange
+    CPPUNIT_TEST(testSheetCellRangeProperties);
 
     // XCellFormatRangesSupplier
     CPPUNIT_TEST(testGetCellFormatRanges);
@@ -140,12 +143,8 @@ public:
     CPPUNIT_TEST_SUITE_END();
 
 private:
-    static sal_Int32 nTest;
-    static uno::Reference< lang::XComponent > mxComponent;
+    uno::Reference< lang::XComponent > mxComponent;
 };
-
-sal_Int32 ScCellRangeObj::nTest = 0;
-uno::Reference< lang::XComponent > ScCellRangeObj::mxComponent;
 
 ScCellRangeObj::ScCellRangeObj():
         CalcUnoApiTest("/sc/qa/extras/testdocuments"),
@@ -157,13 +156,6 @@ ScCellRangeObj::ScCellRangeObj():
 
 uno::Reference< uno::XInterface > ScCellRangeObj::init()
 {
-    OUString aFileURL;
-    const OUString aFileBase("xcellrangesquery.ods");
-    createFileURL(aFileBase, aFileURL);
-    std::cout << OUStringToOString(aFileURL, RTL_TEXTENCODING_UTF8).getStr() << std::endl;
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
-
     uno::Reference< sheet::XSpreadsheetDocument> xDoc (mxComponent, UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document!", xDoc.is());
 
@@ -180,13 +172,6 @@ uno::Reference< uno::XInterface > ScCellRangeObj::init()
 
 uno::Reference< uno::XInterface > ScCellRangeObj::getXSpreadsheet()
 {
-    OUString aFileURL;
-    const OUString aFileBase("xcellrangesquery.ods");
-    createFileURL(aFileBase, aFileURL);
-    std::cout << OUStringToOString(aFileURL, RTL_TEXTENCODING_UTF8).getStr() << std::endl;
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
-
     uno::Reference< sheet::XSpreadsheetDocument> xDoc (mxComponent, UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document!", xDoc.is());
 
@@ -198,13 +183,6 @@ uno::Reference< uno::XInterface > ScCellRangeObj::getXSpreadsheet()
 
 uno::Reference< uno::XInterface > ScCellRangeObj::getXCellRangeData()
 {
-    OUString aFileURL;
-    const OUString aFileBase("xcellrangesquery.ods");
-    createFileURL(aFileBase, aFileURL);
-    std::cout << OUStringToOString(aFileURL, RTL_TEXTENCODING_UTF8).getStr() << std::endl;
-    if (!mxComponent.is())
-        mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
-
     uno::Reference< sheet::XSpreadsheetDocument> xDoc (mxComponent, UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document!", xDoc.is());
 
@@ -238,19 +216,17 @@ void ScCellRangeObj::testSortOOB()
 
 void ScCellRangeObj::setUp()
 {
-    nTest++;
-    CPPUNIT_ASSERT(nTest <= NUMBER_OF_TESTS);
     CalcUnoApiTest::setUp();
+
+    OUString aFileURL;
+    const OUString aFileBase("xcellrangesquery.ods");
+    createFileURL(aFileBase, aFileURL);
+    mxComponent = loadFromDesktop(aFileURL, "com.sun.star.sheet.SpreadsheetDocument");
 }
 
 void ScCellRangeObj::tearDown()
 {
-    if (nTest == NUMBER_OF_TESTS)
-    {
-        closeDocument(mxComponent);
-        mxComponent.clear();
-    }
-
+    closeDocument(mxComponent);
     CalcUnoApiTest::tearDown();
 }
 

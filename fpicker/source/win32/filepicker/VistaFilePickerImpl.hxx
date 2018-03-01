@@ -20,19 +20,9 @@
 #ifndef INCLUDED_FPICKER_SOURCE_WIN32_FILEPICKER_VISTAFILEPICKERIMPL_HXX
 #define INCLUDED_FPICKER_SOURCE_WIN32_FILEPICKER_VISTAFILEPICKERIMPL_HXX
 
-#ifdef _MSC_VER
-#pragma warning( disable : 4917 )
-#endif
-
 #include "platform_vista.h"
 
-#if defined _MSC_VER
-#pragma warning(push, 1)
-#endif
 #include <shobjidl.h>
-#if defined _MSC_VER
-#pragma warning(pop)
-#endif
 
 #include "asyncrequests.hxx"
 #include "comptr.hxx"
@@ -68,6 +58,7 @@ static const ::sal_Int32 FEATURE_PLAY           =  256;
 static const ::sal_Int32 FEATURE_READONLY       =  512;
 static const ::sal_Int32 FEATURE_VERSION        = 1024;
 static const ::sal_Int32 FEATURE_GPGPASSWORD    = 2048;
+static const ::sal_Int32 FEATURE_IMAGEANCHOR    = 4096;
 
 static const OUString PROP_PICKER_LISTENER("picker_listener"   ); // [XFilePickerListenert]
 static const OUString PROP_DIALOG_SHOW_RESULT("dialog_show_result" ); // [sal_Bool] true=OK, false=CANCEL

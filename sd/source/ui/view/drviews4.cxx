@@ -20,7 +20,7 @@
 #include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
 
 #include <DrawViewShell.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/urlbmk.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdundo.hxx>
@@ -105,7 +105,11 @@ void DrawViewShell::DeleteActualLayer()
     // replace placeholder
     aString = aString.replaceFirst("$", rName);
 
-    if (ScopedVclPtrInstance<QueryBox>(GetActiveWindow(), MessBoxStyle::YesNo, aString)->Execute() == RET_YES)
+    vcl::Window* pWin = GetActiveWindow();
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   aString));
+    if (xQueryBox->run() == RET_YES)
     {
         const SdrLayer* pLayer = rAdmin.GetLayer(rName);
         mpDrawView->DeleteLayer( pLayer->GetName() );
@@ -756,13 +760,13 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
 
                         //move the point into the visible window area
                         if( aMenuPos.X() < 0 )
-                            aMenuPos.X() = 0;
+                            aMenuPos.setX( 0 );
                         if( aMenuPos.Y() < 0 )
-                            aMenuPos.Y() = 0;
+                            aMenuPos.setY( 0 );
                         if( aMenuPos.X() > GetActiveWindow()->GetSizePixel().Width() )
-                            aMenuPos.X() = GetActiveWindow()->GetSizePixel().Width();
+                            aMenuPos.setX( GetActiveWindow()->GetSizePixel().Width() );
                         if( aMenuPos.Y() > GetActiveWindow()->GetSizePixel().Height() )
-                            aMenuPos.Y() = GetActiveWindow()->GetSizePixel().Height();
+                            aMenuPos.setY( GetActiveWindow()->GetSizePixel().Height() );
                     }
 
                     //open context menu at that point

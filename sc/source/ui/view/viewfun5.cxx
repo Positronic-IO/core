@@ -428,10 +428,10 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
             {
                 Point aInsPos = aPos;
                 tools::Rectangle aRect(pObj->GetLogicRect());
-                aInsPos.X() -= aRect.GetSize().Width()  / 2;
-                aInsPos.Y() -= aRect.GetSize().Height() / 2;
-                if ( aInsPos.X() < 0 ) aInsPos.X() = 0;
-                if ( aInsPos.Y() < 0 ) aInsPos.Y() = 0;
+                aInsPos.AdjustX( -(aRect.GetSize().Width()  / 2) );
+                aInsPos.AdjustY( -(aRect.GetSize().Height() / 2) );
+                if ( aInsPos.X() < 0 ) aInsPos.setX( 0 );
+                if ( aInsPos.Y() < 0 ) aInsPos.setY( 0 );
                 aRect.SetPos(aInsPos);
                 pObj->SetLogicRect(aRect);
 
@@ -607,8 +607,8 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
 
                 PasteFile( aPos, aFile, bLink );
 
-                aPos.X() += 400;
-                aPos.Y() += 400;
+                aPos.AdjustX(400 );
+                aPos.AdjustY(400 );
             }
             bRet = true;
         }

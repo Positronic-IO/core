@@ -45,12 +45,7 @@
 
 using namespace ::com::sun::star;
 
-/*************************************************************************
-|*
-|* Userdata-struct for tree-entries
-|*
-|************************************************************************/
-
+// Userdata-struct for tree-entries
 struct TargetData
 {
     OUString aUStrLinkname;
@@ -64,9 +59,7 @@ struct TargetData
     }
 };
 
-//#                                                                      #
-//# Tree-Window                                                          #
-//#                                                                      #
+// Tree-Window
 SvxHlmarkTreeLBox::SvxHlmarkTreeLBox(vcl::Window* pParent, WinBits nStyle)
     : SvTreeListBox(pParent, nStyle)
     , mpParentWnd(nullptr)
@@ -116,23 +109,16 @@ void SvxHlmarkTreeLBox::Paint(vcl::RenderContext& rRenderContext, const ::tools:
             break;
         }
 
-        rRenderContext.DrawText(aDrawRect, aStrMessage, DrawTextFlags::Left | DrawTextFlags::MultiLine | DrawTextFlags::WordBreak);
+        rRenderContext.DrawText(aDrawRect, aStrMessage, DrawTextFlags::Left
+                | DrawTextFlags::MultiLine | DrawTextFlags::WordBreak);
     }
 }
 
 
-//#                                                                      #
-//# Window-Class                                                         #
-//#                                                                      #
-
-
-/*************************************************************************
-|*
-|* Constructor / Destructor
-|*
-|************************************************************************/
+//*** Window-Class ***
+// Constructor / Destructor
 SvxHlinkDlgMarkWnd::SvxHlinkDlgMarkWnd( SvxHyperlinkTabPageBase *pParent )
-    : ModalDialog(pParent, "HyperlinkMark", "cui/ui/hyperlinkmarkdialog.ui")
+    : FloatingWindow(pParent, "HyperlinkMark", "cui/ui/hyperlinkmarkdialog.ui")
     , mbUserMoved(false)
     , mpParent(pParent)
     , mnError(LERR_NOERROR)
@@ -164,14 +150,10 @@ void SvxHlinkDlgMarkWnd::dispose()
     mpBtClose.clear();
     mpLbTree.clear();
     mpParent.clear();
-    ModalDialog::dispose();
+    FloatingWindow::dispose();
 }
 
-/*************************************************************************
-|*
-|* Set an errorstatus
-|*
-|************************************************************************/
+// Set an errorstatus
 sal_uInt16 SvxHlinkDlgMarkWnd::SetError( sal_uInt16 nError)
 {
     sal_uInt16 nOldError = mnError;
@@ -185,12 +167,7 @@ sal_uInt16 SvxHlinkDlgMarkWnd::SetError( sal_uInt16 nError)
     return nOldError;
 }
 
-/*************************************************************************
-|*
-|* Move window
-|*
-|************************************************************************/
-
+// Move window
 bool SvxHlinkDlgMarkWnd::MoveTo ( Point aNewPos )
 {
     if ( !mbUserMoved )
@@ -268,9 +245,8 @@ void SvxHlinkDlgMarkWnd::RestoreLastSelection()
         aViewSettings.GetUserItem(TG_SETTING_LASTPATH) >>= aTmp;
         aLastSelectedPath = comphelper::sequenceToContainer< std::deque<OUString> >(aTmp);
     }
-    //fallback to previous entry selected the last
-    //time we executed this dialog. First see if
-    //the exact mark exists and re-use that
+    //fallback to previous entry selected the last time we executed this dialog.
+    //First see if the exact mark exists and re-use that
     if (!sLastSelectedMark.isEmpty())
         bSelectedEntry = SelectEntry(sLastSelectedMark);
     //Otherwise just select the closest path available
@@ -282,12 +258,7 @@ void SvxHlinkDlgMarkWnd::RestoreLastSelection()
     }
 }
 
-/*************************************************************************
-|*
-|* Interface to refresh tree
-|*
-|************************************************************************/
-
+// Interface to refresh tree
 void SvxHlinkDlgMarkWnd::RefreshTree (const OUString& aStrURL)
 {
     OUString aUStrURL;
@@ -320,12 +291,7 @@ void SvxHlinkDlgMarkWnd::RefreshTree (const OUString& aStrURL)
     maStrLastURL = aStrURL;
 }
 
-/*************************************************************************
-|*
-|* get links from document
-|*
-|************************************************************************/
-
+// get links from document
 bool SvxHlinkDlgMarkWnd::RefreshFromDoc(const OUString& aURL)
 {
     mnError = LERR_NOERROR;
@@ -384,12 +350,8 @@ bool SvxHlinkDlgMarkWnd::RefreshFromDoc(const OUString& aURL)
     }
     return (mnError==0);
 }
-/*************************************************************************
-|*
-|* Fill Tree-Control
-|*
-|************************************************************************/
 
+// Fill Tree-Control
 int SvxHlinkDlgMarkWnd::FillTree( const uno::Reference< container::XNameAccess >& xLinks, SvTreeListEntry* pParentEntry )
 {
     int nEntries=0;
@@ -397,7 +359,6 @@ int SvxHlinkDlgMarkWnd::FillTree( const uno::Reference< container::XNameAccess >
     const sal_uLong nLinks = aNames.getLength();
     const OUString* pNames = aNames.getConstArray();
 
-    Color aMaskColor( COL_LIGHTMAGENTA );
     const OUString aProp_LinkDisplayName( "LinkDisplayName" );
     const OUString aProp_LinkTarget( "com.sun.star.document.LinkTarget" );
     const OUString aProp_LinkDisplayBitmap( "LinkDisplayBitmap" );
@@ -444,10 +405,11 @@ int SvxHlinkDlgMarkWnd::FillTree( const uno::Reference< container::XNameAccess >
                 try
                 {
                     // get bitmap for the tree-entry
-                    uno::Reference< awt::XBitmap > aXBitmap( xTarget->getPropertyValue( aProp_LinkDisplayBitmap ), uno::UNO_QUERY );
+                    uno::Reference< awt::XBitmap >
+                        aXBitmap( xTarget->getPropertyValue( aProp_LinkDisplayBitmap ), uno::UNO_QUERY );
                     if( aXBitmap.is() )
                     {
-                        Image aBmp(BitmapEx(VCLUnoHelper::GetBitmap(aXBitmap).GetBitmap(), aMaskColor));
+                        Image aBmp(BitmapEx(VCLUnoHelper::GetBitmap(aXBitmap).GetBitmap(), /*mask*/COL_LIGHTMAGENTA));
                         // insert Displayname into treelist with bitmaps
                         pEntry = mpLbTree->InsertEntry ( aStrDisplayname,
                                                         aBmp, aBmp,
@@ -489,12 +451,7 @@ int SvxHlinkDlgMarkWnd::FillTree( const uno::Reference< container::XNameAccess >
     return nEntries;
 }
 
-/*************************************************************************
-|*
-|* Clear Tree
-|*
-|************************************************************************/
-
+// Clear Tree
 void SvxHlinkDlgMarkWnd::ClearTree()
 {
     SvTreeListEntry* pEntry = mpLbTree->First();
@@ -510,12 +467,7 @@ void SvxHlinkDlgMarkWnd::ClearTree()
     mpLbTree->Clear();
 }
 
-/*************************************************************************
-|*
-|* Find Entry for String
-|*
-|************************************************************************/
-
+// Find Entry for String
 SvTreeListEntry* SvxHlinkDlgMarkWnd::FindEntry (const OUString& aStrName)
 {
     bool bFound=false;
@@ -533,12 +485,7 @@ SvTreeListEntry* SvxHlinkDlgMarkWnd::FindEntry (const OUString& aStrName)
     return pEntry;
 }
 
-/*************************************************************************
-|*
-|* Select Entry
-|*
-|************************************************************************/
-
+// Select Entry
 bool SvxHlinkDlgMarkWnd::SelectEntry(const OUString& aStrMark)
 {
     SvTreeListEntry* pEntry = FindEntry(aStrMark);
@@ -549,12 +496,7 @@ bool SvxHlinkDlgMarkWnd::SelectEntry(const OUString& aStrMark)
     return true;
 }
 
-/*************************************************************************
-|*
-|* Click on Apply-Button / Double-click on item in tree
-|*
-|************************************************************************/
-
+// Click on Apply-Button / Double-click on item in tree
 IMPL_LINK_NOARG(SvxHlinkDlgMarkWnd, DoubleClickApplyHdl_Impl, SvTreeListBox*, bool)
 {
     ClickApplyHdl_Impl(nullptr);
@@ -576,12 +518,7 @@ IMPL_LINK_NOARG(SvxHlinkDlgMarkWnd, ClickApplyHdl_Impl, Button*, void)
     }
 }
 
-/*************************************************************************
-|*
-|* Click on Close-Button
-|*
-|************************************************************************/
-
+// Click on Close-Button
 IMPL_LINK_NOARG(SvxHlinkDlgMarkWnd, ClickCloseHdl_Impl, Button*, void)
 {
     SvTreeListEntry* pEntry = mpLbTree->GetCurEntry();

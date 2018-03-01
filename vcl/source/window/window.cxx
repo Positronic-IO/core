@@ -26,6 +26,7 @@
 #include <vcl/help.hxx>
 #include <vcl/cursor.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/vclevent.hxx>
 #include <vcl/window.hxx>
 #include <vcl/syswin.hxx>
 #include <vcl/syschild.hxx>
@@ -387,9 +388,9 @@ void Window::dispose()
 
     // clear mnemonic labels
     std::vector<VclPtr<FixedText> > aMnemonicLabels(list_mnemonic_labels());
-    for (auto aI = aMnemonicLabels.begin(); aI != aMnemonicLabels.end(); ++aI)
+    for (auto const& mnemonicLabel : aMnemonicLabels)
     {
-        remove_mnemonic_label(*aI);
+        remove_mnemonic_label(mnemonicLabel);
     }
 
     // hide window in order to trigger the Paint-Handling
@@ -488,7 +489,7 @@ void Window::dispose()
     if ( pSVData->maWinData.mpLastDeacWin == this )
         pSVData->maWinData.mpLastDeacWin = nullptr;
 
-    if ( mpWindowImpl->mpFrameData )
+    if ( mpWindowImpl->mbFrame && mpWindowImpl->mpFrameData )
     {
         if ( mpWindowImpl->mpFrameData->mnFocusId )
             Application::RemoveUserEvent( mpWindowImpl->mpFrameData->mnFocusId );
@@ -621,8 +622,8 @@ WindowImpl::WindowImpl( WindowType nType )
     mpCursor                            = nullptr;                      // cursor
     mpVCLXWindow                        = nullptr;
     mpAccessibleInfos                   = nullptr;
-    maControlForeground                 = Color( COL_TRANSPARENT );  // no foreground set
-    maControlBackground                 = Color( COL_TRANSPARENT );  // no background set
+    maControlForeground                 = COL_TRANSPARENT;  // no foreground set
+    maControlBackground                 = COL_TRANSPARENT;  // no background set
     mnLeftBorder                        = 0;                         // left border
     mnTopBorder                         = 0;                         // top border
     mnRightBorder                       = 0;                         // right border
@@ -740,6 +741,7 @@ WindowImpl::WindowImpl( WindowType nType )
     mbDoubleBufferingRequested = bDoubleBuffer; // when we are not sure, assume it cannot do double-buffering via RenderContext
     mpLOKNotifier                       = nullptr;
     mnLOKWindowId                       = 0;
+    mbLOKParentNotifier                 = false;
 }
 
 WindowImpl::~WindowImpl()
@@ -1357,13 +1359,13 @@ void Window::ImplPointToLogic(vcl::RenderContext const & rRenderContext, vcl::Fo
 
     if (aSize.Width())
     {
-        aSize.Width() *= mpWindowImpl->mpFrameData->mnDPIX;
-        aSize.Width() += 72 / 2;
-        aSize.Width() /= 72;
+        aSize.setWidth( aSize.Width() * ( mpWindowImpl->mpFrameData->mnDPIX) );
+        aSize.AdjustWidth(72 / 2 );
+        aSize.setWidth( aSize.Width() / 72 );
     }
-    aSize.Height() *= mpWindowImpl->mpFrameData->mnDPIY;
-    aSize.Height() += 72/2;
-    aSize.Height() /= 72;
+    aSize.setHeight( aSize.Height() * ( mpWindowImpl->mpFrameData->mnDPIY) );
+    aSize.AdjustHeight(72/2 );
+    aSize.setHeight( aSize.Height() / 72 );
 
     if (rRenderContext.IsMapModeEnabled())
         aSize = rRenderContext.PixelToLogic(aSize);
@@ -1380,13 +1382,13 @@ void Window::ImplLogicToPoint(vcl::RenderContext const & rRenderContext, vcl::Fo
 
     if (aSize.Width())
     {
-        aSize.Width() *= 72;
-        aSize.Width() += mpWindowImpl->mpFrameData->mnDPIX / 2;
-        aSize.Width() /= mpWindowImpl->mpFrameData->mnDPIX;
+        aSize.setWidth( aSize.Width() * 72 );
+        aSize.AdjustWidth(mpWindowImpl->mpFrameData->mnDPIX / 2 );
+        aSize.setWidth( aSize.Width() / ( mpWindowImpl->mpFrameData->mnDPIX) );
     }
-    aSize.Height() *= 72;
-    aSize.Height() += mpWindowImpl->mpFrameData->mnDPIY / 2;
-    aSize.Height() /= mpWindowImpl->mpFrameData->mnDPIY;
+    aSize.setHeight( aSize.Height() * 72 );
+    aSize.AdjustHeight(mpWindowImpl->mpFrameData->mnDPIY / 2 );
+    aSize.setHeight( aSize.Height() / ( mpWindowImpl->mpFrameData->mnDPIY) );
 
     rFont.SetFontSize(aSize);
 }
@@ -1516,7 +1518,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
             {
                 if( ImplIsAntiparallel() )
                 {
-                    aPtDev.X() = mpWindowImpl->mnAbsScreenX;
+                    aPtDev.setX( mpWindowImpl->mnAbsScreenX );
                     nOrgX = mpWindowImpl->maPos.X();
                 }
             }
@@ -1538,7 +1540,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
                                        *pOverlapRegion, false, true );
             }
             mpWindowImpl->mnX = nX;
-            mpWindowImpl->maPos.X() = nOrgX;
+            mpWindowImpl->maPos.setX( nOrgX );
             mpWindowImpl->mnAbsScreenX = aPtDev.X();
             bNewPos = true;
         }
@@ -1556,7 +1558,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
                                        *pOverlapRegion, false, true );
             }
             mpWindowImpl->mnY = nY;
-            mpWindowImpl->maPos.Y() = nY;
+            mpWindowImpl->maPos.setY( nY );
             bNewPos = true;
         }
     }
@@ -1754,9 +1756,9 @@ void Window::ImplNewInputContext()
             // only set default sizes if the font height in logical
             // coordinates equals 0
             if ( rFont.GetFontSize().Height() )
-                aSize.Height() = 1;
+                aSize.setHeight( 1 );
             else
-                aSize.Height() = (12*pFocusWin->mnDPIY)/72;
+                aSize.setHeight( (12*pFocusWin->mnDPIY)/72 );
         }
         pFontInstance = pFocusWin->mpFontCache->GetFontInstance( pFocusWin->mpFontCollection,
                          rFont, aSize, static_cast<float>(aSize.Height()) );
@@ -1850,6 +1852,11 @@ void Window::LoseFocus()
     CompatNotify( aNEvt );
 }
 
+void Window::SetHelpHdl(const Link<vcl::Window&, bool>& rLink)
+{
+    mpWindowImpl->maHelpRequestHdl = rLink;
+}
+
 void Window::RequestHelp( const HelpEvent& rHEvt )
 {
     // if Balloon-Help is requested, show the balloon
@@ -1888,7 +1895,7 @@ void Window::RequestHelp( const HelpEvent& rHEvt )
             Help::ShowQuickHelp( this, aRect, rStr, aHelpText, QuickHelpFlags::CtrlText );
         }
     }
-    else
+    else if (!mpWindowImpl->maHelpRequestHdl.IsSet() || mpWindowImpl->maHelpRequestHdl.Call(*this))
     {
         OUString aStrHelpId( OStringToOUString( GetHelpId(), RTL_TEXTENCODING_UTF8 ) );
         if ( aStrHelpId.isEmpty() && ImplGetParent() )
@@ -2069,9 +2076,30 @@ void Window::SetInputContext( const InputContext& rInputContext )
         ImplNewInputContext();
 }
 
+void Window::PostExtTextInputEvent(VclEventId nType, const OUString& rText)
+{
+    switch (nType)
+    {
+    case VclEventId::ExtTextInput:
+    {
+        std::unique_ptr<ExtTextInputAttr[]> pAttr(new ExtTextInputAttr[rText.getLength()]);
+        for (int i = 0; i < rText.getLength(); ++i) {
+            pAttr[i] = ExtTextInputAttr::Underline;
+        }
+        SalExtTextInputEvent aEvent { rText, pAttr.get(), rText.getLength(), EXTTEXTINPUT_CURSOR_OVERWRITE };
+        ImplWindowFrameProc(this, SalEvent::ExtTextInput, &aEvent);
+    }
+    break;
+    case VclEventId::EndExtTextInput:
+        ImplWindowFrameProc(this, SalEvent::EndExtTextInput, nullptr);
+        break;
+    default:
+        assert(false);
+    }
+}
+
 void Window::EndExtTextInput()
 {
-
     if ( mpWindowImpl->mbExtTextInput )
         ImplGetFrame()->EndExtTextInput( EndExtTextInputFlags::Complete );
 }
@@ -2225,10 +2253,10 @@ void Window::Show(bool bVisible, ShowFlags nFlags)
                     */
                     const int workaround_border = 5;
                     tools::Rectangle aBounds( aInvRegion.GetBoundRect() );
-                    aBounds.Left()      -= workaround_border;
-                    aBounds.Top()       -= workaround_border;
-                    aBounds.Right()     += workaround_border;
-                    aBounds.Bottom()    += workaround_border;
+                    aBounds.AdjustLeft( -workaround_border );
+                    aBounds.AdjustTop( -workaround_border );
+                    aBounds.AdjustRight(workaround_border );
+                    aBounds.AdjustBottom(workaround_border );
                     aInvRegion = aBounds;
                 }
                 if ( !mpWindowImpl->mbNoParentUpdate && !(nFlags & ShowFlags::NoParentUpdate) )
@@ -2587,18 +2615,16 @@ void Window::EnableInput( bool bEnable, const vcl::Window* pExcludeWindow )
     if( mpWindowImpl->mbFrame )
     {
         ::std::vector< VclPtr<vcl::Window> >& rList = mpWindowImpl->mpFrameData->maOwnerDrawList;
-        auto p = rList.begin();
-        while( p != rList.end() )
+        for (auto const& elem : rList)
         {
             // Is Window in the path from this window
-            if ( ImplGetFirstOverlapWindow()->ImplIsWindowOrChild( (*p), true ) )
+            if ( ImplGetFirstOverlapWindow()->ImplIsWindowOrChild( elem, true ) )
             {
                 // Is Window not in the exclude window path or not the
                 // exclude window, than change the status
-                if ( !pExcludeWindow || !pExcludeWindow->ImplIsWindowOrChild( (*p), true ) )
-                    (*p)->EnableInput( bEnable );
+                if ( !pExcludeWindow || !pExcludeWindow->ImplIsWindowOrChild( elem, true ) )
+                    elem->EnableInput( bEnable );
             }
-            ++p;
         }
     }
 }
@@ -2883,8 +2909,8 @@ Point Window::OutputToAbsoluteScreenPixel( const Point& rPos ) const
     // relative to the screen
     Point p = OutputToScreenPixel( rPos );
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
-    p.X() += g.nX;
-    p.Y() += g.nY;
+    p.AdjustX(g.nX );
+    p.AdjustY(g.nY );
     return p;
 }
 
@@ -2893,8 +2919,8 @@ Point Window::AbsoluteScreenToOutputPixel( const Point& rPos ) const
     // relative to the screen
     Point p = ScreenToOutputPixel( rPos );
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetGeometry();
-    p.X() -= g.nX;
-    p.Y() -= g.nY;
+    p.AdjustX( -(g.nX) );
+    p.AdjustY( -(g.nY) );
     return p;
 }
 
@@ -2905,12 +2931,12 @@ tools::Rectangle Window::ImplOutputToUnmirroredAbsoluteScreenPixel( const tools:
     SalFrameGeometry g = mpWindowImpl->mpFrame->GetUnmirroredGeometry();
 
     Point p1 = OutputToScreenPixel( rRect.TopRight() );
-    p1.X() = g.nX+g.nWidth-p1.X();
-    p1.Y() += g.nY;
+    p1.setX( g.nX+g.nWidth-p1.X() );
+    p1.AdjustY(g.nY );
 
     Point p2 = OutputToScreenPixel( rRect.BottomLeft() );
-    p2.X() = g.nX+g.nWidth-p2.X();
-    p2.Y() += g.nY;
+    p2.setX( g.nX+g.nWidth-p2.X() );
+    p2.AdjustY(g.nY );
 
     return tools::Rectangle( p1, p2 );
 }
@@ -2935,16 +2961,16 @@ tools::Rectangle Window::ImplGetWindowExtentsRelative( vcl::Window *pRelativeWin
     const vcl::Window *pWin = (!bClientOnly && mpWindowImpl->mpBorderWindow) ? mpWindowImpl->mpBorderWindow : this;
 
     Point aPos( pWin->OutputToScreenPixel( Point(0,0) ) );
-    aPos.X() += g.nX;
-    aPos.Y() += g.nY;
+    aPos.AdjustX(g.nX );
+    aPos.AdjustY(g.nY );
     Size aSize ( pWin->GetSizePixel() );
     // #104088# do not add decoration to the workwindow to be compatible to java accessibility api
     if( !bClientOnly && (mpWindowImpl->mbFrame || (mpWindowImpl->mpBorderWindow && mpWindowImpl->mpBorderWindow->mpWindowImpl->mbFrame && GetType() != WindowType::WORKWINDOW)) )
     {
-        aPos.X() -= g.nLeftDecoration;
-        aPos.Y() -= g.nTopDecoration;
-        aSize.Width() += g.nLeftDecoration + g.nRightDecoration;
-        aSize.Height() += g.nTopDecoration + g.nBottomDecoration;
+        aPos.AdjustX( -sal_Int32(g.nLeftDecoration) );
+        aPos.AdjustY( -sal_Int32(g.nTopDecoration) );
+        aSize.AdjustWidth(g.nLeftDecoration + g.nRightDecoration );
+        aSize.AdjustHeight(g.nTopDecoration + g.nBottomDecoration );
     }
     if( pRelativeWindow )
     {
@@ -3089,7 +3115,7 @@ const Wallpaper& Window::GetDisplayBackground() const
     const Wallpaper& rBack = GetBackground();
     if( ! rBack.IsBitmap() &&
         ! rBack.IsGradient() &&
-        rBack.GetColor().GetColor() == COL_TRANSPARENT &&
+        rBack.GetColor()== COL_TRANSPARENT &&
         mpWindowImpl->mpParent )
             return mpWindowImpl->mpParent->GetDisplayBackground();
     return rBack;
@@ -3123,6 +3149,9 @@ const OUString& Window::GetHelpText() const
         mpWindowImpl->mbHelpTextDynamic = false;
     }
 
+    //Fallback to Window::GetAccessibleDescription without reentry to GetHelpText()
+    if (mpWindowImpl->maHelpText.isEmpty() && mpWindowImpl->mpAccessibleInfos && mpWindowImpl->mpAccessibleInfos->pAccessibleDescription)
+        return *mpWindowImpl->mpAccessibleInfos->pAccessibleDescription;
     return mpWindowImpl->maHelpText;
 }
 
@@ -3193,6 +3222,8 @@ void Window::SetLOKNotifier(const vcl::ILibreOfficeKitNotifier* pNotifier, bool 
         mpWindowImpl->mnLOKWindowId = sLastLOKWindowId++;
         GetLOKWindowsMap().insert(std::map<vcl::LOKWindowId, VclPtr<vcl::Window>>::value_type(mpWindowImpl->mnLOKWindowId, this));
     }
+    else
+        mpWindowImpl->mbLOKParentNotifier = true;
 
     mpWindowImpl->mpLOKNotifier = pNotifier;
 }
@@ -3242,7 +3273,7 @@ void Window::ImplCallDeactivateListeners( vcl::Window *pNew )
     if ( !pNew || !ImplIsChild( pNew ) )
     {
         VclPtr<vcl::Window> xWindow(this);
-        CallEventListeners( VclEventId::WindowDeactivate );
+        CallEventListeners( VclEventId::WindowDeactivate, pNew );
         if( xWindow->IsDisposed() )
             return;
 
@@ -3370,7 +3401,7 @@ void Window::DrawSelectionBackground( const tools::Rectangle& rRect,
     Color aSelectionFillCol( aSelectionBorderCol );
 
     bool bDark = rStyles.GetFaceColor().IsDark();
-    bool bBright = ( rStyles.GetFaceColor() == Color( COL_WHITE ) );
+    bool bBright = ( rStyles.GetFaceColor() == COL_WHITE );
 
     int c1 = aSelectionBorderCol.GetLuminance();
     int c2 = GetDisplayBackground().GetColor().GetLuminance();
@@ -3382,7 +3413,7 @@ void Window::DrawSelectionBackground( const tools::Rectangle& rRect,
         aSelectionFillCol.RGBtoHSB( h, s, b );
         if( b > 50 )    b -= 40;
         else            b += 40;
-        aSelectionFillCol.SetColor( Color::HSBtoRGB( h, s, b ) );
+        aSelectionFillCol = Color::HSBtoRGB( h, s, b );
         aSelectionBorderCol = aSelectionFillCol;
     }
 
@@ -3391,7 +3422,7 @@ void Window::DrawSelectionBackground( const tools::Rectangle& rRect,
     Color oldLineCol = GetLineColor();
 
     if( bDrawBorder )
-        SetLineColor( bDark ? Color(COL_WHITE) : ( bBright ? Color(COL_BLACK) : aSelectionBorderCol ) );
+        SetLineColor( bDark ? COL_WHITE : ( bBright ? COL_BLACK : aSelectionBorderCol ) );
     else
         SetLineColor();
 
@@ -3482,7 +3513,7 @@ bool Window::IsScrollable() const
 
 void Window::ImplMirrorFramePos( Point &pt ) const
 {
-    pt.X() = mpWindowImpl->mpFrame->maGeometry.nWidth-1-pt.X();
+    pt.setX( mpWindowImpl->mpFrame->maGeometry.nWidth-1-pt.X() );
 }
 
 // frame based modal counter (dialogs are not modal to the whole application anymore)

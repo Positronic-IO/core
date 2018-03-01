@@ -1027,14 +1027,14 @@ Size EditLine::CalcTextSize( ParaPortion& rParaPortion )
             case PortionKind::HYPHENATOR:
             {
                 aTmpSz = rPortion.GetSize();
-                aSz.Width() += aTmpSz.Width();
+                aSz.AdjustWidth(aTmpSz.Width() );
                 if ( aSz.Height() < aTmpSz.Height() )
-                    aSz.Height() = aTmpSz.Height();
+                    aSz.setHeight( aTmpSz.Height() );
             }
             break;
             case PortionKind::TAB:
             {
-                aSz.Width() += rPortion.GetSize().Width();
+                aSz.AdjustWidth(rPortion.GetSize().Width() );
             }
             break;
             case PortionKind::LINEBREAK: break;

@@ -645,10 +645,10 @@ void OutputDevice::ImplDrawStrikeoutChar( long nBaseX, long nBaseY,
     pLayout->DrawBase() = Point( nBaseX+mnTextOffX, nBaseY+mnTextOffY );
 
     tools::Rectangle aPixelRect;
-    aPixelRect.Left() = nBaseX+mnTextOffX;
-    aPixelRect.Right() = aPixelRect.Left()+nWidth;
-    aPixelRect.Bottom() = nBaseY+mpFontInstance->mxFontMetric->GetDescent();
-    aPixelRect.Top() = nBaseY-mpFontInstance->mxFontMetric->GetAscent();
+    aPixelRect.SetLeft( nBaseX+mnTextOffX );
+    aPixelRect.SetRight( aPixelRect.Left()+nWidth );
+    aPixelRect.SetBottom( nBaseY+mpFontInstance->mxFontMetric->GetDescent() );
+    aPixelRect.SetTop( nBaseY-mpFontInstance->mxFontMetric->GetAscent() );
 
     if (mpFontInstance->mnOrientation)
     {
@@ -816,7 +816,7 @@ void OutputDevice::SetTextLineColor()
     if ( mpMetaFile )
         mpMetaFile->AddAction( new MetaTextLineColorAction( Color(), false ) );
 
-    maTextLineColor = Color( COL_TRANSPARENT );
+    maTextLineColor = COL_TRANSPARENT;
 
     if( mpAlphaVDev )
         mpAlphaVDev->SetTextLineColor();
@@ -833,11 +833,11 @@ void OutputDevice::SetTextLineColor( const Color& rColor )
     {
         if ( mnDrawMode & DrawModeFlags::BlackText )
         {
-            aColor = Color( COL_BLACK );
+            aColor = COL_BLACK;
         }
         else if ( mnDrawMode & DrawModeFlags::WhiteText )
         {
-            aColor = Color( COL_WHITE );
+            aColor = COL_WHITE;
         }
         else if ( mnDrawMode & DrawModeFlags::GrayText )
         {
@@ -850,7 +850,7 @@ void OutputDevice::SetTextLineColor( const Color& rColor )
         }
 
         if( (mnDrawMode & DrawModeFlags::GhostedText) &&
-            (aColor.GetColor() != COL_TRANSPARENT) )
+            (aColor != COL_TRANSPARENT) )
         {
             aColor = Color( (aColor.GetRed() >> 1) | 0x80,
                             (aColor.GetGreen() >> 1) | 0x80,
@@ -873,7 +873,7 @@ void OutputDevice::SetOverlineColor()
     if ( mpMetaFile )
         mpMetaFile->AddAction( new MetaOverlineColorAction( Color(), false ) );
 
-    maOverlineColor = Color( COL_TRANSPARENT );
+    maOverlineColor = COL_TRANSPARENT;
 
     if( mpAlphaVDev )
         mpAlphaVDev->SetOverlineColor();
@@ -890,11 +890,11 @@ void OutputDevice::SetOverlineColor( const Color& rColor )
     {
         if ( mnDrawMode & DrawModeFlags::BlackText )
         {
-            aColor = Color( COL_BLACK );
+            aColor = COL_BLACK;
         }
         else if ( mnDrawMode & DrawModeFlags::WhiteText )
         {
-            aColor = Color( COL_WHITE );
+            aColor = COL_WHITE;
         }
         else if ( mnDrawMode & DrawModeFlags::GrayText )
         {
@@ -907,7 +907,7 @@ void OutputDevice::SetOverlineColor( const Color& rColor )
         }
 
         if( (mnDrawMode & DrawModeFlags::GhostedText) &&
-            (aColor.GetColor() != COL_TRANSPARENT) )
+            (aColor != COL_TRANSPARENT) )
         {
             aColor = Color( (aColor.GetRed() >> 1) | 0x80,
                             (aColor.GetGreen() >> 1) | 0x80,

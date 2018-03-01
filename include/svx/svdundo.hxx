@@ -144,8 +144,8 @@ protected:
 class SVX_DLLPUBLIC SdrUndoAttrObj : public SdrUndoObj
 {
 protected:
-    SfxItemSet*                 pUndoSet;
-    SfxItemSet*                 pRedoSet;
+    std::unique_ptr<SfxItemSet> pUndoSet;
+    std::unique_ptr<SfxItemSet> pRedoSet;
 
     // FIXME: Or should we better remember the StyleSheetNames?
     rtl::Reference< SfxStyleSheetBase > mxUndoStyleSheet;
@@ -154,13 +154,15 @@ protected:
     bool                        bHaveToTakeRedoSet;
 
     // When assigning TextItems to a drawing object with text:
-    OutlinerParaObject*         pTextUndo;
+    std::unique_ptr<OutlinerParaObject>
+                                pTextUndo;
     // #i8508#
     // The text rescue mechanism needs also to be implemented for redo actions.
-    OutlinerParaObject*         pTextRedo;
+    std::unique_ptr<OutlinerParaObject>
+                                pTextRedo;
 
     // If we have a group object:
-    SdrUndoGroup*               pUndoGroup;
+    std::unique_ptr<SdrUndoGroup> pUndoGroup;
 
     // Helper to ensure StyleSheet is in pool (provided by SdrModel from SdrObject)
     static void ensureStyleSheetInStyleSheetPool(SfxStyleSheetBasePool& rStyleSheetPool, SfxStyleSheet& rSheet);
@@ -207,10 +209,10 @@ public:
 class SVX_DLLPUBLIC SdrUndoGeoObj : public SdrUndoObj
 {
 protected:
-    SdrObjGeoData*              pUndoGeo;
-    SdrObjGeoData*              pRedoGeo;
+    std::unique_ptr<SdrObjGeoData>  pUndoGeo;
+    std::unique_ptr<SdrObjGeoData>  pRedoGeo;
     // If we have a group object:
-    SdrUndoGroup*               pUndoGroup;
+    std::unique_ptr<SdrUndoGroup>   pUndoGroup;
     /// If we have a table object, should its layout change?
     bool mbSkipChangeLayout;
 
@@ -398,8 +400,10 @@ public:
 class SVX_DLLPUBLIC SdrUndoObjSetText : public SdrUndoObj
 {
 protected:
-    OutlinerParaObject*         pOldText;
-    OutlinerParaObject*         pNewText;
+    std::unique_ptr<OutlinerParaObject>
+                                pOldText;
+    std::unique_ptr<OutlinerParaObject>
+                                pNewText;
     bool                        bNewTextAvailable;
     bool                        bEmptyPresObj;
     sal_Int32                   mnText;

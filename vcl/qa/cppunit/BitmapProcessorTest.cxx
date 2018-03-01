@@ -49,8 +49,8 @@ void BitmapProcessorTest::testDisabledImage()
     Bitmap aDisabledBitmap(aDisabledBitmapEx.GetBitmap());
     {
         Bitmap::ScopedReadAccess pReadAccess(aDisabledBitmap);
-        Color aColor(pReadAccess->GetPixel(0, 0));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x001E1E1E), aColor.GetColor());
+        Color aColor(pReadAccess->GetPixel(0, 0).GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x001E1E1E), sal_uInt32(aColor));
     }
 }
 

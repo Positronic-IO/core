@@ -37,13 +37,14 @@
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/frmhtmlw.hxx>
 #include <sfx2/progress.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/wrkwin.hxx>
 #include <svl/aeitem.hxx>
 #include <svx/svditer.hxx>
 #include <svtools/imaprect.hxx>
 #include <svtools/imapcirc.hxx>
 #include <svtools/imappoly.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/editobj.hxx>
 #include <svx/svdopath.hxx>
@@ -807,10 +808,10 @@ void HtmlExport::SetDocColors( SdPage* pPage )
         pPage = mpDoc->GetSdPage(0, PageKind::Standard);
 
     svtools::ColorConfig aConfig;
-    maVLinkColor = Color(aConfig.GetColorValue(svtools::LINKSVISITED).nColor);
-    maALinkColor = Color(aConfig.GetColorValue(svtools::LINKS).nColor);
-    maLinkColor  = Color(aConfig.GetColorValue(svtools::LINKS).nColor);
-    maTextColor  = Color(COL_BLACK);
+    maVLinkColor = aConfig.GetColorValue(svtools::LINKSVISITED).nColor;
+    maALinkColor = aConfig.GetColorValue(svtools::LINKS).nColor;
+    maLinkColor  = aConfig.GetColorValue(svtools::LINKS).nColor;
+    maTextColor  = COL_BLACK;
 
     SfxStyleSheet* pSheet = nullptr;
 
@@ -1421,7 +1422,7 @@ OUString HtmlExport::ParagraphToHTMLString( SdrOutliner const * pOutliner, sal_I
     if(nullptr == pPara)
         return OUString();
 
-    HtmlState aState( (mbUserAttr || mbDocColors)  ? maTextColor : Color(COL_BLACK) );
+    HtmlState aState( (mbUserAttr || mbDocColors)  ? maTextColor : COL_BLACK );
     std::vector<sal_Int32> aPortionList;
     rEditEngine.GetPortions( nPara, aPortionList );
 
@@ -1697,10 +1698,10 @@ bool HtmlExport::CreateHtmlForPresPages()
                 aRect.Move(-pPage->GetLeftBorder(), -pPage->GetUpperBorder());
 
                 double fLogicToPixel = static_cast<double>(mnWidthPixel) / nPageWidth;
-                aRect.Left()   = static_cast<long>(aRect.Left() * fLogicToPixel);
-                aRect.Top()    = static_cast<long>(aRect.Top() * fLogicToPixel);
-                aRect.Right()  = static_cast<long>(aRect.Right() * fLogicToPixel);
-                aRect.Bottom() = static_cast<long>(aRect.Bottom() * fLogicToPixel);
+                aRect.SetLeft( static_cast<long>(aRect.Left() * fLogicToPixel) );
+                aRect.SetTop( static_cast<long>(aRect.Top() * fLogicToPixel) );
+                aRect.SetRight( static_cast<long>(aRect.Right() * fLogicToPixel) );
+                aRect.SetBottom( static_cast<long>(aRect.Bottom() * fLogicToPixel) );
                 long nRadius = aRect.GetWidth() / 2;
 
                 /**
@@ -1746,10 +1747,10 @@ bool HtmlExport::CreateHtmlForPresPages()
                                 // conversion into pixel coordinates
                                 aArea.Move(aLogPos.X() - pPage->GetLeftBorder(),
                                            aLogPos.Y() - pPage->GetUpperBorder());
-                                aArea.Left()   = static_cast<long>(aArea.Left() * fLogicToPixel);
-                                aArea.Top()    = static_cast<long>(aArea.Top() * fLogicToPixel);
-                                aArea.Right()  = static_cast<long>(aArea.Right() * fLogicToPixel);
-                                aArea.Bottom() = static_cast<long>(aArea.Bottom() * fLogicToPixel);
+                                aArea.SetLeft( static_cast<long>(aArea.Left() * fLogicToPixel) );
+                                aArea.SetTop( static_cast<long>(aArea.Top() * fLogicToPixel) );
+                                aArea.SetRight( static_cast<long>(aArea.Right() * fLogicToPixel) );
+                                aArea.SetBottom( static_cast<long>(aArea.Bottom() * fLogicToPixel) );
 
                                 aStr.append(CreateHTMLRectArea(aArea, aURL));
                             }
@@ -1761,8 +1762,8 @@ bool HtmlExport::CreateHtmlForPresPages()
                                                  GetCenter(false));
                                 aCenter += Point(aLogPos.X() - pPage->GetLeftBorder(),
                                                  aLogPos.Y() - pPage->GetUpperBorder());
-                                aCenter.X() = static_cast<long>(aCenter.X() * fLogicToPixel);
-                                aCenter.Y() = static_cast<long>(aCenter.Y() * fLogicToPixel);
+                                aCenter.setX( static_cast<long>(aCenter.X() * fLogicToPixel) );
+                                aCenter.setY( static_cast<long>(aCenter.Y() * fLogicToPixel) );
 
                                 sal_uLong nCircleRadius = static_cast<IMapCircleObject*>(pArea)->
                                                  GetRadius(false);
@@ -2805,8 +2806,8 @@ OUString HtmlExport::CreateHTMLPolygonArea( const ::basegfx::B2DPolyPolygon& rPo
             // origin of ordinates
             aPnt.Move(aShift.Width(), aShift.Height());
 
-            aPnt.X() = static_cast<long>(aPnt.X() * fFactor);
-            aPnt.Y() = static_cast<long>(aPnt.Y() * fFactor);
+            aPnt.setX( static_cast<long>(aPnt.X() * fFactor) );
+            aPnt.setY( static_cast<long>(aPnt.Y() * fFactor) );
             aStr.append(OUString::number(aPnt.X()) + "," + OUString::number(aPnt.Y()));
 
             if (nPoint < nNoOfPoints - 1)
@@ -3097,9 +3098,12 @@ bool HtmlExport::checkForExistingFiles()
             osl::FileBase::getSystemPathFromFileURL( maExportPath, aSystemPath );
             OUString aMsg(SdResId(STR_OVERWRITE_WARNING));
             aMsg = aMsg.replaceFirst( "%FILENAME", aSystemPath );
-            ScopedVclPtrInstance< WarningBox > aWarning( nullptr, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aMsg );
-            aWarning->SetImage( WarningBox::GetStandardImage() );
-            bFound = ( RET_NO == aWarning->Execute() );
+
+            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Warning, VclButtonsType::YesNo,
+                                                       aMsg));
+            xWarn->set_default_response(RET_YES);
+            bFound = (RET_NO == xWarn->run());
         }
     }
     catch( Exception& )

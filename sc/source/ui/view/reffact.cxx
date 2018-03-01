@@ -78,7 +78,7 @@ namespace
     Class::Class( vcl::Window*               pParentP,                   \
                     sal_uInt16              nId,                        \
                     SfxBindings*        p,                          \
-                    SfxChildWinInfo*  pInfo )                     \
+                    const SfxChildWinInfo*  pInfo )                     \
         : SfxChildWindow(pParentP, nId)                             \
     {                                                               \
         /************************************************************************************/\
@@ -154,10 +154,10 @@ ScSimpleRefDlgWrapper::ScSimpleRefDlgWrapper( vcl::Window* pParentP,
 
     if(pInfo!=nullptr && bScSimpleRefFlag)
     {
-        pInfo->aPos.X()=nScSimpleRefX;
-        pInfo->aPos.Y()=nScSimpleRefY;
-        pInfo->aSize.Height()=nScSimpleRefHeight;
-        pInfo->aSize.Width()=nScSimpleRefWidth;
+        pInfo->aPos.setX(nScSimpleRefX );
+        pInfo->aPos.setY(nScSimpleRefY );
+        pInfo->aSize.setHeight(nScSimpleRefHeight );
+        pInfo->aSize.setWidth(nScSimpleRefWidth );
     }
     SetWindow(nullptr);
 

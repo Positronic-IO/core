@@ -418,6 +418,7 @@ protected:
 
     DECL_LINK( MoveHdl, Button *, void );
     DECL_LINK( SelectFunctionHdl, SvTreeListBox *, void );
+    DECL_LINK( FunctionDoubleClickHdl, SvTreeListBox *, bool );
 
     virtual SaveInData* CreateSaveInData(
         const css::uno::Reference< css::ui::XUIConfigurationManager >&,
@@ -634,21 +635,6 @@ public:
     DECL_LINK( DeleteHdl, Button *, void );
 };
 
-class SvxIconReplacementDialog : public MessBox
-{
-public:
-    SvxIconReplacementDialog(
-        vcl::Window *pWindow,
-        const OUString& aMessage,
-        bool aYestoAll);
-
-    SvxIconReplacementDialog(
-        vcl::Window *pWindow,
-        const OUString& aMessage );
-
-    static OUString ReplaceIconName( const OUString& );
-    sal_uInt16 ShowDialog();
-};
 //added for issue83555
 class SvxIconChangeDialog : public ModalDialog
 {

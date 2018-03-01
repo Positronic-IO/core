@@ -288,12 +288,12 @@ namespace emfio
             if (nHeight)
             {
                 double fHeight = (static_cast<double>(aFontSize.Height()) * rFont.lfHeight ) / nHeight;
-                aFontSize.Height() = static_cast<sal_Int32>( fHeight + 0.5 );
+                aFontSize.setHeight( static_cast<sal_Int32>( fHeight + 0.5 ) );
             }
         }
 
         // Convert height to positive
-        aFontSize.Height() = std::abs(aFontSize.Height());
+        aFontSize.setHeight( std::abs(aFontSize.Height()) );
 
         aFont.SetFontSize(aFontSize);
     };
@@ -497,7 +497,10 @@ namespace emfio
 
     tools::Rectangle MtfTools::ImplMap( const tools::Rectangle& rRect )
     {
-        return tools::Rectangle( ImplMap( rRect.TopLeft() ), ImplMap( rRect.GetSize() ) );
+        tools::Rectangle aRect;
+        aRect.SetPos(ImplMap(rRect.TopLeft()));
+        aRect.SaturatingSetSize(ImplMap(rRect.GetSize()));
+        return aRect;
     }
 
     void MtfTools::ImplMap( vcl::Font& rFont )
@@ -508,7 +511,7 @@ namespace emfio
 
         const auto nHeight = aFontSize.Height();
         if (nHeight < 0)
-            aFontSize.Height() = o3tl::saturating_toggle_sign(nHeight);
+            aFontSize.setHeight( o3tl::saturating_toggle_sign(nHeight) );
 
         rFont.SetFontSize( aFontSize );
 
@@ -563,48 +566,48 @@ namespace emfio
             {
                 case WHITE_BRUSH :
                 {
-                    maFillStyle = WinMtfFillStyle( Color( COL_WHITE ) );
+                    maFillStyle = WinMtfFillStyle( COL_WHITE );
                     mbFillStyleSelected = true;
                 }
                 break;
                 case LTGRAY_BRUSH :
                 {
-                    maFillStyle = WinMtfFillStyle( Color( COL_LIGHTGRAY ) );
+                    maFillStyle = WinMtfFillStyle( COL_LIGHTGRAY );
                     mbFillStyleSelected = true;
                 }
                 break;
                 case GRAY_BRUSH :
                 case DKGRAY_BRUSH :
                 {
-                    maFillStyle = WinMtfFillStyle( Color( COL_GRAY ) );
+                    maFillStyle = WinMtfFillStyle( COL_GRAY );
                     mbFillStyleSelected = true;
                 }
                 break;
                 case BLACK_BRUSH :
                 {
-                    maFillStyle = WinMtfFillStyle( Color( COL_BLACK ) );
+                    maFillStyle = WinMtfFillStyle( COL_BLACK );
                     mbFillStyleSelected = true;
                 }
                 break;
                 case NULL_BRUSH :
                 {
-                   maFillStyle = WinMtfFillStyle( Color( COL_TRANSPARENT ), true );
+                   maFillStyle = WinMtfFillStyle( COL_TRANSPARENT, true );
                    mbFillStyleSelected = true;
                 }
                 break;
                 case WHITE_PEN :
                 {
-                    maLineStyle = WinMtfLineStyle( Color( COL_WHITE ) );
+                    maLineStyle = WinMtfLineStyle( COL_WHITE );
                 }
                 break;
                 case BLACK_PEN :
                 {
-                    maLineStyle = WinMtfLineStyle( Color( COL_BLACK ) );
+                    maLineStyle = WinMtfLineStyle( COL_BLACK );
                 }
                 break;
                 case NULL_PEN :
                 {
-                    maLineStyle = WinMtfLineStyle( Color( COL_TRANSPARENT ), true );
+                    maLineStyle = WinMtfLineStyle( COL_TRANSPARENT, true );
                 }
                 break;
                 default:
@@ -752,7 +755,7 @@ namespace emfio
 
                     if ( pLineStyle->aLineInfo.GetStyle() == LineStyle::Dash )
                     {
-                        aSize.Width() += 1;
+                        aSize.AdjustWidth(1 );
                         long nDotLen = ImplMap( aSize ).Width();
                         pLineStyle->aLineInfo.SetDistance( nDotLen );
                         pLineStyle->aLineInfo.SetDotLen( nDotLen );
@@ -785,6 +788,8 @@ namespace emfio
 
     void MtfTools::IntersectClipRect( const tools::Rectangle& rRect )
     {
+        if (utl::ConfigManager::IsFuzzing())
+            return;
         mbClipNeedsUpdate=true;
         if ((rRect.Left()-rRect.Right()==0) && (rRect.Top()-rRect.Bottom()==0))
         {
@@ -795,18 +800,24 @@ namespace emfio
 
     void MtfTools::ExcludeClipRect( const tools::Rectangle& rRect )
     {
+        if (utl::ConfigManager::IsFuzzing())
+            return;
         mbClipNeedsUpdate=true;
         maClipPath.excludeClipRect( ImplMap( rRect ) );
     }
 
     void MtfTools::MoveClipRegion( const Size& rSize )
     {
+        if (utl::ConfigManager::IsFuzzing())
+            return;
         mbClipNeedsUpdate=true;
         maClipPath.moveClipRegion( ImplMap( rSize ) );
     }
 
     void MtfTools::SetClipPath( const tools::PolyPolygon& rPolyPolygon, sal_Int32 nClippingMode, bool bIsMapped )
     {
+        if (utl::ConfigManager::IsFuzzing())
+            return;
         mbClipNeedsUpdate = true;
         tools::PolyPolygon aPolyPolygon(rPolyPolygon);
 
@@ -921,7 +932,7 @@ namespace emfio
 
     void MtfTools::UpdateClipRegion()
     {
-        if ( mbClipNeedsUpdate )
+        if (mbClipNeedsUpdate)
         {
             mbClipNeedsUpdate = false;
             mbComplexClip = false;
@@ -973,8 +984,7 @@ namespace emfio
 
     void MtfTools::ImplSetNonPersistentLineColorTransparenz()
     {
-        Color aColor(  COL_TRANSPARENT);
-        WinMtfLineStyle aTransparentLine( aColor, true );
+        WinMtfLineStyle aTransparentLine( COL_TRANSPARENT, true );
         if ( ! ( maLatestLineStyle == aTransparentLine ) )
         {
             maLatestLineStyle = aTransparentLine;
@@ -1033,8 +1043,8 @@ namespace emfio
                     {
                         maNopFillStyle = maFillStyle;
                         maNopLineStyle = maLineStyle;
-                        maFillStyle = WinMtfFillStyle( Color( COL_TRANSPARENT ), true );
-                        maLineStyle = WinMtfLineStyle( Color( COL_TRANSPARENT ), true );
+                        maFillStyle = WinMtfFillStyle( COL_TRANSPARENT, true );
+                        maLineStyle = WinMtfLineStyle( COL_TRANSPARENT, true );
                         mbNopMode = true;
                     }
                 }
@@ -1506,8 +1516,8 @@ namespace emfio
             // check whether there is a font rotation applied via transformation
             Point aP1( ImplMap( Point() ) );
             Point aP2( ImplMap( Point( 0, 100 ) ) );
-            aP2.X() -= aP1.X();
-            aP2.Y() -= aP1.Y();
+            aP2.AdjustX( -(aP1.X()) );
+            aP2.AdjustY( -(aP1.Y()) );
             double fX = aP2.X();
             double fY = aP2.Y();
             if ( fX )
@@ -1538,16 +1548,16 @@ namespace emfio
                 if( nLen > 1 )
                     nTextWidth += pDXArry[ nLen - 2 ];
                 // tdf#39894: We should consider the distance to next character cell origin
-                aActPosDelta.X() = pDXArry[ nLen - 1 ];
+                aActPosDelta.setX( pDXArry[ nLen - 1 ] );
                 if ( pDYArry )
                 {
-                    aActPosDelta.Y() = pDYArry[ nLen - 1 ];
+                    aActPosDelta.setY( pDYArry[ nLen - 1 ] );
                 }
             }
             else
             {
                 nTextWidth = pVDev->GetTextWidth( rText );
-                aActPosDelta.X() = nTextWidth;
+                aActPosDelta.setX( nTextWidth );
             }
 
             if( mnTextAlign & TA_UPDATECP )
@@ -1556,13 +1566,13 @@ namespace emfio
             if ( mnTextAlign & TA_RIGHT_CENTER )
             {
                 Point aDisplacement( ( ( mnTextAlign & TA_RIGHT_CENTER ) == TA_RIGHT ) ? nTextWidth : nTextWidth >> 1, 0 );
-                Point().RotateAround(aDisplacement.X(), aDisplacement.Y(), maFont.GetOrientation());
+                Point().RotateAround(aDisplacement, maFont.GetOrientation());
                 rPosition -= aDisplacement;
             }
 
             if( mnTextAlign & TA_UPDATECP )
             {
-                Point().RotateAround(aActPosDelta.X(), aActPosDelta.Y(), maFont.GetOrientation());
+                Point().RotateAround(aActPosDelta, maFont.GetOrientation());
                 maActPos = rPosition + aActPosDelta;
             }
         }
@@ -1585,7 +1595,7 @@ namespace emfio
                 for (sal_Int32 i = 0; i < rText.getLength(); ++i)
                 {
                     Point aCharDisplacement( i ? pDXArry[i-1] : 0, i ? pDYArry[i-1] : 0 );
-                    Point().RotateAround(aCharDisplacement.X(), aCharDisplacement.Y(), maFont.GetOrientation());
+                    Point().RotateAround(aCharDisplacement, maFont.GetOrientation());
                     mpGDIMetaFile->AddAction( new MetaTextArrayAction( rPosition + aCharDisplacement, OUString( rText[i] ), nullptr, 0, 1 ) );
                 }
             }
@@ -1629,7 +1639,7 @@ namespace emfio
             }
             pVDev->SetMapMode( aMapMode );
             pVDev->SetOutputSizePixel( aSizePixel );
-            pVDev->SetFillColor( Color( COL_BLACK ) );
+            pVDev->SetFillColor( COL_BLACK );
             const tools::PolyPolygon aClip( maClipPath.getClipPath() );
             pVDev->DrawPolyPolygon( aClip );
             const Point aEmptyPoint;
@@ -1655,17 +1665,22 @@ namespace emfio
                         const long nWidth(std::min(pR->Width(), pW->Width()));
                         const long nHeight(std::min(pR->Height(), pW->Height()));
 
-                        for(long nY(0); nY < nHeight; nY++) for(long nX(0); nX < nWidth; nX++)
+                        for(long nY(0); nY < nHeight; nY++)
                         {
-                            const sal_uInt8 nIndR(pR->GetPixelIndex(nY, nX));
-                            const sal_uInt8 nIndW(pW->GetPixelIndex(nY, nX));
+                            Scanline pScanlineR = pR->GetScanline( nY );
+                            Scanline pScanlineW = pW->GetScanline( nY );
+                            for(long nX(0); nX < nWidth; nX++)
+                            {
+                                const sal_uInt8 nIndR(pR->GetIndexFromData(pScanlineR, nX));
+                                const sal_uInt8 nIndW(pW->GetIndexFromData(pScanlineW, nX));
 
-                            // these values represent transparency (0 == no, 255 == fully transparent),
-                            // so to blend these we have to multiply the inverse (opacity)
-                            // and re-invert the result to transparence
-                            const sal_uInt8 nCombined(0x00ff - (((0x00ff - nIndR) * (0x00ff - nIndW)) >> 8));
+                                // these values represent transparency (0 == no, 255 == fully transparent),
+                                // so to blend these we have to multiply the inverse (opacity)
+                                // and re-invert the result to transparence
+                                const sal_uInt8 nCombined(0x00ff - (((0x00ff - nIndR) * (0x00ff - nIndW)) >> 8));
 
-                            pW->SetPixelIndex(nY, nX, nCombined);
+                                pW->SetPixelOnData(pScanlineW, nX, BitmapColor(nCombined));
+                            }
                         }
                     }
 
@@ -1676,9 +1691,9 @@ namespace emfio
                 else
                 {
                     // need to blend in Mask quality (1Bit)
-                    Bitmap aMask(aVDevMask.CreateMask(Color(COL_WHITE)));
+                    Bitmap aMask(aVDevMask.CreateMask(COL_WHITE));
 
-                    if ( rBitmap.GetTransparentColor() == Color( COL_WHITE ) )
+                    if ( rBitmap.GetTransparentColor() == COL_WHITE )
                     {
                         aMask.CombineSimple( rBitmap.GetMask(), BmpCombine::Or );
                     }

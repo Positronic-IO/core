@@ -23,7 +23,6 @@
 #include <view.hxx>
 #include <wrtsh.hxx>
 #include <globals.hrc>
-#include <helpids.h>
 
 #include <sfx2/styfitem.hxx>
 
@@ -36,6 +35,7 @@
 #include <hints.hxx>
 
 #include <vcl/svapp.hxx>
+#include <vcl/lstbox.hxx>
 
 #include <swuiccoll.hxx>
 

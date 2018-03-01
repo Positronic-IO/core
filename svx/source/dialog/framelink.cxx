@@ -51,14 +51,12 @@ void Style::implEnsureImplStyle()
 }
 
 Style::Style() :
-    maImplStyle(),
-    mpUsingCell(nullptr)
+    maImplStyle()
 {
 }
 
 Style::Style( double nP, double nD, double nS, SvxBorderLineStyle nType, double fScale ) :
-    maImplStyle(new implStyle()),
-    mpUsingCell(nullptr)
+    maImplStyle(new implStyle())
 {
     maImplStyle->mnType = nType;
     maImplStyle->mfPatternScale = fScale;
@@ -66,8 +64,7 @@ Style::Style( double nP, double nD, double nS, SvxBorderLineStyle nType, double 
 }
 
 Style::Style( const Color& rColorPrim, const Color& rColorSecn, const Color& rColorGap, bool bUseGapColor, double nP, double nD, double nS, SvxBorderLineStyle nType, double fScale ) :
-    maImplStyle(new implStyle()),
-    mpUsingCell(nullptr)
+    maImplStyle(new implStyle())
 {
     maImplStyle->mnType = nType;
     maImplStyle->mfPatternScale = fScale;
@@ -75,8 +72,7 @@ Style::Style( const Color& rColorPrim, const Color& rColorSecn, const Color& rCo
 }
 
 Style::Style( const editeng::SvxBorderLine* pBorder, double fScale ) :
-    maImplStyle(),
-    mpUsingCell(nullptr)
+    maImplStyle()
 {
     if(nullptr != pBorder)
     {
@@ -318,7 +314,7 @@ bool Style::operator<( const Style& rOther) const
     if( (Secn() && rOther.Secn()) && !rtl::math::approxEqual(Dist(), rOther.Dist()) ) return Dist() > rOther.Dist();
 
     // both lines single and 1 unit thick, only one is dotted -> this<rOther, if this is dotted
-    if( (nLW == 1) && (Type() != rOther.Type()) ) return Type() != SvxBorderLineStyle::SOLID;
+    if ((nLW == 1) && !Secn() && !rOther.Secn() && (Type() != rOther.Type())) return Type() > rOther.Type();
 
     // seem to be equal
     return false;
@@ -646,7 +642,7 @@ StyleVectorCombination::StyleVectorCombination(
                         rStyle.Dist() * 0.5,
                         rStyle.UseGapColor()
                             ? (nullptr != pForceColor ? *pForceColor : rStyle.GetColorGap())
-                            : Color(COL_TRANSPARENT)));
+                            : COL_TRANSPARENT));
 
                 maOffsets.push_back(
                     OffsetAndHalfWidthAndColor(

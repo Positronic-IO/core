@@ -52,8 +52,7 @@
 #include <strings.hrc>
 #include <resourcemanager.hxx>
 
-#include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/configitem.hxx>
 #include <comphelper/storagehelper.hxx>
 
@@ -281,8 +280,10 @@ bool DigitalSignaturesDialog::canAddRemove()
     if ( (!bSave1_1  && bDoc1_1) || (bSave1_1 && bDoc1_1) )
     {
         //#4
-        ScopedVclPtrInstance< MessageDialog > err(nullptr, XsResId(STR_XMLSECDLG_OLD_ODF_FORMAT));
-        err->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                  VclMessageType::Warning, VclButtonsType::Ok,
+                                                  XsResId(STR_XMLSECDLG_OLD_ODF_FORMAT)));
+        xBox->run();
         ret = false;
     }
 
@@ -299,8 +300,10 @@ bool DigitalSignaturesDialog::canAddRemove()
             //It the user presses 'Add' or 'Remove' several times then, then the warning
             //is shown every time until the user presses 'OK'. From then on, the warning
             //is not displayed anymore as long as the signatures dialog is alive.
-            if (ScopedVclPtrInstance<MessageDialog>(
-                  nullptr, XsResId(STR_XMLSECDLG_QUERY_REMOVEDOCSIGNBEFORESIGN), VclMessageType::Question, VclButtonsType::YesNo)->Execute() == RET_NO)
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Question, VclButtonsType::YesNo,
+                                                      XsResId(STR_XMLSECDLG_QUERY_REMOVEDOCSIGNBEFORESIGN)));
+            if (xBox->run() == RET_NO)
                 ret = false;
             else
                 m_bWarningShowSignMacro = true;
@@ -321,8 +324,10 @@ bool DigitalSignaturesDialog::canRemove()
 
     if ( maSignatureManager.meSignatureMode == DocumentSignatureMode::Content )
     {
-        short nDlgRet = ScopedVclPtrInstance<MessageDialog>(
-              nullptr, XsResId(STR_XMLSECDLG_QUERY_REALLYREMOVE), VclMessageType::Question, VclButtonsType::YesNo)->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                  VclMessageType::Question, VclButtonsType::YesNo,
+                                                  XsResId(STR_XMLSECDLG_QUERY_REALLYREMOVE)));
+        short nDlgRet = xBox->run();
         bRet = ( nDlgRet == RET_YES );
     }
 
@@ -434,7 +439,10 @@ IMPL_LINK_NOARG(DigitalSignaturesDialog, AddButtonHdl, Button*, void)
     catch ( uno::Exception& )
     {
         OSL_FAIL( "Exception while adding a signature!" );
-        ScopedVclPtrInstance<ErrorBox>(this, XsResId(STR_XMLSECDLG_SIGNING_FAILED))->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                  VclMessageType::Error, VclButtonsType::Ok,
+                                                  XsResId(STR_XMLSECDLG_SIGNING_FAILED)));
+        xBox->run();
         // Don't keep invalid entries...
         ImplGetSignatureInformations(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
         ImplFillSignaturesBox();
@@ -466,7 +474,7 @@ IMPL_LINK_NOARG(DigitalSignaturesDialog, RemoveButtonHdl, Button*, void)
     }
 }
 
-IMPL_STATIC_LINK_NOARG(DigitalSignaturesDialog, CertMgrButtonHdl, Button*, void)
+IMPL_STATIC_LINK(DigitalSignaturesDialog, CertMgrButtonHdl, Button*, pButton, void)
 {
 #ifdef _WIN32
     // FIXME: call GpgME::dirInfo("bindir") somewhere in
@@ -508,11 +516,12 @@ IMPL_STATIC_LINK_NOARG(DigitalSignaturesDialog, CertMgrButtonHdl, Button*, void)
        }
        else
        {
-           ScopedVclPtrInstance<InfoBox>(nullptr, XsResId(STR_XMLSECDLG_NO_CERT_MANAGER))->Execute();
+           std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pButton->GetFrameWeld(),
+                                                         VclMessageType::Info, VclButtonsType::Ok,
+                                                         XsResId(STR_XMLSECDLG_NO_CERT_MANAGER)));
+           xInfoBox->run();
        }
-
     }
-
 }
 
 IMPL_LINK_NOARG(DigitalSignaturesDialog, StartVerifySignatureHdl, LinkParamNone*, bool)
@@ -740,7 +749,10 @@ void DigitalSignaturesDialog::ImplShowSignaturesDetails()
         }
         else
         {
-            ScopedVclPtrInstance<InfoBox>(nullptr, XsResId(STR_XMLSECDLG_NO_CERT_FOUND))->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          XsResId(STR_XMLSECDLG_NO_CERT_FOUND)));
+            xInfoBox->run();
         }
     }
 }

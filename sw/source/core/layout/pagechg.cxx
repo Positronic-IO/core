@@ -325,8 +325,7 @@ void SwPageFrame::CheckGrid( bool bInvalidate )
 
 void SwPageFrame::CheckDirection( bool bVert )
 {
-    SvxFrameDirection nDir =
-            static_cast<const SvxFrameDirectionItem&>(GetFormat()->GetFormatAttr( RES_FRAMEDIR )).GetValue();
+    SvxFrameDirection nDir = GetFormat()->GetFormatAttr( RES_FRAMEDIR ).GetValue();
     if( bVert )
     {
         if( SvxFrameDirection::Horizontal_LR_TB == nDir || SvxFrameDirection::Horizontal_RL_TB == nDir )
@@ -1380,7 +1379,7 @@ SwTwips SwRootFrame::GrowFrame( SwTwips nDist, bool bTst, bool )
     if ( !bTst )
     {
         SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
-        aFrm.SSize().Height() += nDist;
+        aFrm.SSize().AdjustHeight(nDist );
     }
 
     return nDist;
@@ -1394,7 +1393,7 @@ SwTwips SwRootFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool )
     if ( !bTst )
     {
         SwFrameAreaDefinition::FrameAreaWriteAccess aFrm(*this);
-        aFrm.SSize().Height() -= nDist;
+        aFrm.SSize().AdjustHeight( -nDist );
     }
 
     return nDist;
@@ -1761,10 +1760,10 @@ void SwRootFrame::ImplCalcBrowseWidth()
             SwBorderAttrAccess aAccess( SwFrame::GetCache(), pFrame );
             const SwBorderAttrs &rAttrs = *aAccess.Get();
             const SwFormatHoriOrient &rHori = rAttrs.GetAttrSet().GetHoriOrient();
-            long nWidth = rAttrs.GetSize().Width();
-            if ( nWidth < USHRT_MAX-2000 && //-2k, because USHRT_MAX gets missing while trying to resize!
-                 text::HoriOrientation::FULL != rHori.GetHoriOrient() )
+            if ( text::HoriOrientation::FULL != rHori.GetHoriOrient() )
             {
+                long nWidth = rAttrs.GetSize().Width();
+
                 const SwHTMLTableLayout *pLayoutInfo =
                     static_cast<const SwTabFrame *>(pFrame)->GetTable()
                                             ->GetHTMLTableLayout();

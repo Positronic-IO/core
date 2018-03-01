@@ -25,7 +25,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
 #include <svl/stritem.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/app.hxx>
 #include <globstr.hrc>
 #include <scmod.hxx>
@@ -417,11 +417,19 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     rMark.MarkToMulti();
                     if ( rMark.IsMultiMarked() )
                     {
-                        if (   rReq.IsAPI()
-                            || RET_YES ==
-                               ScopedVclPtrInstance<QueryBox>( pTabViewShell->GetDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                         ScGlobal::GetRscString(STR_UPDATE_SCENARIO) )->
-                                        Execute() )
+
+                        bool bExtend = rReq.IsAPI();
+                        if (!bExtend)
+                        {
+                            vcl::Window* pWin = pTabViewShell->GetDialogParent();
+                            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                                           ScGlobal::GetRscString(STR_UPDATE_SCENARIO)));
+                            xQueryBox->set_default_response(RET_YES);
+                            bExtend = xQueryBox->run() == RET_YES;
+                        }
+
+                        if (bExtend)
                         {
                             pTabViewShell->ExtendScenario();
                             rReq.Done();
@@ -429,9 +437,11 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     }
                     else if( ! rReq.IsAPI() )
                     {
-                        ScopedVclPtrInstance<MessageDialog> aErrorBox(pTabViewShell->GetDialogParent(),
-                                            ScGlobal::GetRscString(STR_NOAREASELECTED));
-                        aErrorBox->Execute();
+                        vcl::Window* pWin = pTabViewShell->GetDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Warning, VclButtonsType::Ok,
+                                                                       ScGlobal::GetRscString(STR_NOAREASELECTED)));
+                        xErrorBox->run();
                     }
                 }
                 else
@@ -481,7 +491,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                             if ( pReqArgs->GetItemState( SID_NEW_TABLENAME, true, &pItem ) == SfxItemState::SET )
                                 aArgComment = static_cast<const SfxStringItem*>(pItem)->GetValue();
 
-                            aColor = Color( COL_LIGHTGRAY );        // Default
+                            aColor = COL_LIGHTGRAY;        // Default
                             nFlags = ScScenarioFlags::NONE;         // not TwoWay
 
                             pTabViewShell->MakeScenario( aArgName, aArgComment, aColor, nFlags );
@@ -883,8 +893,12 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     }
                 }
                 else
-                    ScopedVclPtrInstance<MessageDialog>(pDlgParent,
-                              ScGlobal::GetRscString(STR_INVALID_AFAREA) )->Execute();
+                {
+                    std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pDlgParent ? pDlgParent->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                                   ScGlobal::GetRscString(STR_INVALID_AFAREA)));
+                    xErrorBox->run();
+                }
             }
             break;
 

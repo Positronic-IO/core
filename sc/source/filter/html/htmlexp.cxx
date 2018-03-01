@@ -287,9 +287,9 @@ Size ScHTMLExport::MMToPixel( const Size& rSize )
     aSize = pAppWin->LogicToPixel( rSize, MapMode( MapUnit::Map100thMM ) );
     // If there's something there should also be a Pixel
     if ( !aSize.Width() && rSize.Width() )
-        aSize.Width() = 1;
+        aSize.setWidth( 1 );
     if ( !aSize.Height() && rSize.Height() )
-        aSize.Height() = 1;
+        aSize.setHeight( 1 );
     return aSize;
 }
 
@@ -550,7 +550,7 @@ OString ScHTMLExport::BorderToStyle(const char* pBorderName,
 
         // color
         char hex[7];
-        snprintf( hex, 7, "%06x", static_cast< unsigned int >( pLine->GetColor().GetRGBColor() ) );
+        snprintf( hex, 7, "%06x", static_cast<sal_uInt32>( pLine->GetColor().GetRGBColor() ) );
         hex[6] = 0;
 
         aOut.append(hex);
@@ -881,7 +881,7 @@ void ScHTMLExport::WriteCell( SCCOL nCol, SCROW nRow, SCTAB nTab )
     OStringBuffer aStrTD(OOO_STRING_SVTOOLS_HTML_tabledata);
 
     // border of the cells
-    const SvxBoxItem* pBorder = static_cast<const SvxBoxItem*>( pDoc->GetAttr( nCol, nRow, nTab, ATTR_BORDER ) );
+    const SvxBoxItem* pBorder = pDoc->GetAttr( nCol, nRow, nTab, ATTR_BORDER );
     if ( pBorder && (pBorder->GetTop() || pBorder->GetBottom() || pBorder->GetLeft() || pBorder->GetRight()) )
     {
         aStrTD.append(' ').append(OOO_STRING_SVTOOLS_HTML_style).
@@ -1136,8 +1136,8 @@ void ScHTMLExport::WriteCell( SCCOL nCol, SCROW nRow, SCTAB nTab )
             Color   aColor = rColorItem.GetValue();
 
             //  always export automatic text color as black
-            if ( aColor.GetColor() == COL_AUTO )
-                aColor.SetColor( COL_BLACK );
+            if ( aColor == COL_AUTO )
+                aColor = COL_BLACK;
 
             aStr.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_color).
                 append('=').append(lcl_makeHTMLColorTriplet(aColor));

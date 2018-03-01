@@ -335,30 +335,34 @@ bool ImplReadRegion( tools::PolyPolygon& rPolyPoly, SvStream& rStream, sal_uInt3
     rStream.ReadUInt32(nCount);
     rStream.ReadUInt32(nRgnSize);
 
-    if (   nCount > 0
-        && nType == RDH_RECTANGLES
-        && nLen >= ((nCount << 4) + (nHdSize - 16)))
+    if (!rStream.good() || nCount == 0 || nType != RDH_RECTANGLES)
+        return false;
+
+    sal_uInt32 nSize;
+    if (o3tl::checked_multiply<sal_uInt32>(nCount, 16, nSize))
+        return false;
+    if (o3tl::checked_add<sal_uInt32>(nSize, nHdSize - 16, nSize))
+        return false;
+    if (nLen < nSize)
+        return false;
+
+    sal_Int32 nx1, ny1, nx2, ny2;
+    for (i = 0; i < nCount; i++)
     {
-        sal_Int32 nx1, ny1, nx2, ny2;
+        rStream.ReadInt32(nx1);
+        rStream.ReadInt32(ny1);
+        rStream.ReadInt32(nx2);
+        rStream.ReadInt32(ny2);
 
-        for (i = 0; i < nCount; i++)
-        {
-            rStream.ReadInt32(nx1);
-            rStream.ReadInt32(ny1);
-            rStream.ReadInt32(nx2);
-            rStream.ReadInt32(ny2);
+        tools::Rectangle aRectangle(Point(nx1, ny1), Point(nx2, ny2));
 
-            tools::Rectangle aRectangle(Point(nx1, ny1), Point(nx2, ny2));
-
-            tools::Polygon aPolygon(aRectangle);
-            tools::PolyPolygon aPolyPolyOr1(aPolygon);
-            tools::PolyPolygon aPolyPolyOr2(rPolyPoly);
-            rPolyPoly.GetUnion(aPolyPolyOr1, aPolyPolyOr2);
-            rPolyPoly = aPolyPolyOr2;
-        }
-        return true;
+        tools::Polygon aPolygon(aRectangle);
+        tools::PolyPolygon aPolyPolyOr1(aPolygon);
+        tools::PolyPolygon aPolyPolyOr2(rPolyPoly);
+        rPolyPoly.GetUnion(aPolyPolyOr1, aPolyPolyOr2);
+        rPolyPoly = aPolyPolyOr2;
     }
-    return false;
+    return true;
 }
 
 } // anonymous namespace
@@ -923,8 +927,8 @@ namespace emfio
                             sal_Int32 nTmpW(0), nTmpH(0);
 
                             mpInputStream->ReadUInt32( nStyle ).ReadInt32( nTmpW ).ReadInt32( nTmpH );
-                            aSize.Width() = nTmpW;
-                            aSize.Height() = nTmpH;
+                            aSize.setWidth( nTmpW );
+                            aSize.setHeight( nTmpH );
 
                             if ( aSize.Width() )
                                 aLineInfo.SetWidth( aSize.Width() );
@@ -1210,7 +1214,7 @@ namespace emfio
 
                     case EMR_SELECTCLIPPATH :
                     {
-                        sal_Int32 nClippingMode;
+                        sal_Int32 nClippingMode(0);
                         mpInputStream->ReadInt32(nClippingMode);
                         SetClipPath(GetPathObj(), nClippingMode, true);
                     }
@@ -1218,7 +1222,7 @@ namespace emfio
 
                     case EMR_EXTSELECTCLIPRGN :
                     {
-                        sal_Int32 nClippingMode, cbRgnData;
+                        sal_Int32 nClippingMode(0), cbRgnData(0);
                         mpInputStream->ReadInt32(cbRgnData);
                         mpInputStream->ReadInt32(nClippingMode);
 

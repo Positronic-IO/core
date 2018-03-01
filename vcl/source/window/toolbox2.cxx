@@ -145,16 +145,16 @@ Size ImplToolItem::GetSize( bool bHorz, bool bCheckMaxWidth, long maxWidth, cons
 
             if ( !bCheckMaxWidth || (aWinSize.Width() <= maxWidth) )
             {
-                aSize.Width()   = aWinSize.Width();
-                aSize.Height()  = aWinSize.Height();
+                aSize.setWidth( aWinSize.Width() );
+                aSize.setHeight( aWinSize.Height() );
                 mbShowWindow = true;
             }
             else
             {
                 if ( mbEmptyBtn )
                 {
-                    aSize.Width()   = 0;
-                    aSize.Height()  = 0;
+                    aSize.setWidth( 0 );
+                    aSize.setHeight( 0 );
                 }
             }
         }
@@ -163,19 +163,19 @@ Size ImplToolItem::GetSize( bool bHorz, bool bCheckMaxWidth, long maxWidth, cons
     {
         if ( bHorz )
         {
-            aSize.Width()   = mnSepSize;
-            aSize.Height()  = rDefaultSize.Height();
+            aSize.setWidth( mnSepSize );
+            aSize.setHeight( rDefaultSize.Height() );
         }
         else
         {
-            aSize.Width()   = rDefaultSize.Width();
-            aSize.Height()  = mnSepSize;
+            aSize.setWidth( rDefaultSize.Width() );
+            aSize.setHeight( mnSepSize );
         }
     }
     else if ( meType == ToolBoxItemType::BREAK )
     {
-        aSize.Width()   = 0;
-        aSize.Height()  = 0;
+        aSize.setWidth( 0 );
+        aSize.setHeight( 0 );
     }
 
     return aSize;
@@ -241,10 +241,10 @@ tools::Rectangle ImplToolItem::GetDropDownRect( bool bHorz ) const
         aRect = maRect;
         if( mbVisibleText && !bHorz )
             // item will be rotated -> place dropdown to the bottom
-            aRect.Top() = aRect.Bottom() - mnDropDownArrowWidth;
+            aRect.SetTop( aRect.Bottom() - mnDropDownArrowWidth );
         else
             // place dropdown to the right
-            aRect.Left() = aRect.Right() - mnDropDownArrowWidth;
+            aRect.SetLeft( aRect.Right() - mnDropDownArrowWidth );
     }
     return aRect;
 }
@@ -810,31 +810,31 @@ Point ToolBox::ImplGetPopupPosition( const tools::Rectangle& rRect ) const
         {
             case WindowAlign::Top:
                 aPos = rRect.BottomLeft();
-                aPos.Y()++;
+                aPos.AdjustY( 1 );
                 devPos = OutputToAbsoluteScreenPixel( aPos );
                 if( devPos.Y() >= aScreen.Bottom() )
-                    aPos.Y() = rRect.Top();
+                    aPos.setY( rRect.Top() );
                 break;
             case WindowAlign::Bottom:
                 aPos = rRect.TopLeft();
-                aPos.Y()--;
+                aPos.AdjustY( -1 );
                 devPos = OutputToAbsoluteScreenPixel( aPos );
                 if( devPos.Y() <= aScreen.Top() )
-                    aPos.Y() = rRect.Bottom();
+                    aPos.setY( rRect.Bottom() );
                 break;
             case WindowAlign::Left:
                 aPos = rRect.TopRight();
-                aPos.X()++;
+                aPos.AdjustX( 1 );
                 devPos = OutputToAbsoluteScreenPixel( aPos );
                 if( devPos.X() >= aScreen.Right() )
-                    aPos.X() = rRect.Left();
+                    aPos.setX( rRect.Left() );
                 break;
             case WindowAlign::Right:
                 aPos = rRect.TopLeft();
-                aPos.X()--;
+                aPos.AdjustX( -1 );
                 devPos = OutputToAbsoluteScreenPixel( aPos );
                 if( devPos.X() <= aScreen.Left() )
-                    aPos.X() = rRect.Right();
+                    aPos.setX( rRect.Right() );
                 break;
             default:
                 break;
@@ -965,11 +965,33 @@ void ToolBox::SetItemImage( sal_uInt16 nItemId, const Image& rImage )
     }
 }
 
+void ToolBox::SetItemOverlayImage( sal_uInt16 nItemId, const Image& rImage )
+{
+    ImplToolItems::size_type nPos = GetItemPos( nItemId );
+
+    if ( nPos != ITEM_NOTFOUND )
+    {
+        ImplToolItem* pItem = &mpData->m_aItems[nPos];
+        Size aOldSize = pItem->maOverlayImage.GetSizePixel();
+
+        pItem->maOverlayImage = rImage;
+
+        // only once all is calculated, do extra work
+        if (!mbCalc)
+        {
+            if (aOldSize != pItem->maOverlayImage.GetSizePixel())
+                ImplInvalidate( true );
+            else
+                ImplUpdateItem( nPos );
+        }
+    }
+}
+
 static Image ImplRotImage( const Image& rImage, long nAngle10 )
 {
     BitmapEx    aRotBitmapEx( rImage.GetBitmapEx() );
 
-    aRotBitmapEx.Rotate( nAngle10, Color( COL_WHITE ) );
+    aRotBitmapEx.Rotate( nAngle10, COL_WHITE );
 
     return Image( aRotBitmapEx );
 }

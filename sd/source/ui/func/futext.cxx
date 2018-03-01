@@ -784,8 +784,8 @@ bool FuText::MouseButtonUp(const MouseEvent& rMEvt)
             if (bSnapEnabled)
                 mpView->SetSnapEnabled(false);
 
-            aPnt.X() += nDrgLog + nDrgLog;
-            aPnt.Y() += nDrgLog + nDrgLog;
+            aPnt.AdjustX(nDrgLog + nDrgLog );
+            aPnt.AdjustY(nDrgLog + nDrgLog );
             mpView->MovAction(aPnt);
 
             mxTextObj.reset( dynamic_cast< SdrTextObj* >( mpView->GetCreateObj() ) );
@@ -1132,7 +1132,7 @@ void FuText::SetInEditMode(const MouseEvent& rMEvt, bool bQuickDrag)
                     }
                     else
                     {
-                        mpView->RestoreDefaultText(dynamic_cast< SdrTextObj* >( mxTextObj.get() ));
+                        mpView->RestoreDefaultText( mxTextObj.get() );
                     }
                 }
             }
@@ -1244,7 +1244,7 @@ void FuText::ReceiveRequest(SfxRequest& rReq)
         {
             // are we currently editing?
             if(!bTestText)
-                mxTextObj.reset( dynamic_cast< SdrTextObj* >( mpView->GetTextEditObject() ) );
+                mxTextObj.reset( mpView->GetTextEditObject() );
 
             if (!mxTextObj.is())
             {

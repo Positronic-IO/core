@@ -50,8 +50,6 @@
 #include <strings.hrc>
 #include <app.hrc>
 
-#include <helpids.h>
-
 #include <sdmod.hxx>
 #include <fupoor.hxx>
 #include <sdresid.hxx>
@@ -595,7 +593,7 @@ IMPL_LINK( DrawViewShell, TabSplitHdl, TabBar *, pTab, void )
         - maTabControl->GetPosPixel().X() ;
 
     Size aTabSize = maTabControl->GetSizePixel();
-    aTabSize.Width() = std::min(pTab->GetSplitSize(), static_cast<long>(nMax-1));
+    aTabSize.setWidth( std::min(pTab->GetSplitSize(), static_cast<long>(nMax-1)) );
 
     maTabControl->SetSizePixel(aTabSize);
 
@@ -605,7 +603,7 @@ IMPL_LINK( DrawViewShell, TabSplitHdl, TabBar *, pTab, void )
     }
 
     Point aPos = maTabControl->GetPosPixel();
-    aPos.X() += aTabSize.Width();
+    aPos.AdjustX(aTabSize.Width() );
 
     Size aScrSize(nMax - aTabSize.Width(), maScrBarWH.Height());
     mpHorizontalScrollBar->SetPosSizePixel(aPos, aScrSize);

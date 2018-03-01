@@ -32,6 +32,11 @@ class SdrObject;
 class SdrTextObj;
 class SdDrawDocument;
 
+namespace weld
+{
+class MessageDialog;
+}
+
 namespace sd {
 
 class View;
@@ -260,7 +265,7 @@ private:
         selection.  This copy is necessary because during the search
         process the mark list is modified.
     */
-    ::std::vector<SdrObjectWeakRef> maMarkListCopy;
+    ::std::vector<tools::WeakReference<SdrObject>> maMarkListCopy;
 
     /** Current object that may be a text object.  The object pointer to
         corresponds to <member>mnObjIndex</member>.  While iterating over the
@@ -521,7 +526,7 @@ private:
         window.  This function makes sure that the otherwise non-modal
         search dialog, if visible, is locked, too.
     */
-    sal_uInt16 ShowModalMessageBox (Dialog& rMessageBox);
+    sal_uInt16 ShowModalMessageBox(weld::MessageDialog& rMessageBox);
 };
 
 #endif

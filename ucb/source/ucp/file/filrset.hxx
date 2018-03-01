@@ -61,27 +61,27 @@ class XResultSet_impl : public Notifier,
 
         virtual ~XResultSet_impl() override;
 
-        virtual ContentEventNotifier*        cDEL() override
+        virtual std::unique_ptr<ContentEventNotifier> cDEL() override
         {
             return nullptr;
         }
 
-        virtual ContentEventNotifier*        cEXC( const OUString& ) override
+        virtual std::unique_ptr<ContentEventNotifier> cEXC( const OUString& ) override
         {
             return nullptr;
         }
 
-        virtual ContentEventNotifier*          cCEL() override
+        virtual std::unique_ptr<ContentEventNotifier> cCEL() override
         {
             return nullptr;
         }
 
-        virtual PropertySetInfoChangeNotifier* cPSL() override
+        virtual std::unique_ptr<PropertySetInfoChangeNotifier> cPSL() override
         {
             return nullptr;
         }
 
-        virtual PropertyChangeNotifier*        cPCL() override
+        virtual std::unique_ptr<PropertyChangeNotifier> cPCL() override
         {
             return nullptr;
         }
@@ -439,10 +439,9 @@ class XResultSet_impl : public Notifier,
 
         osl::Mutex                          m_aMutex;
         osl::Mutex                          m_aEventListenerMutex;
-        comphelper::OInterfaceContainerHelper2*   m_pDisposeEventListeners;
-
-        comphelper::OInterfaceContainerHelper2*   m_pRowCountListeners;
-        comphelper::OInterfaceContainerHelper2*   m_pIsFinalListeners;
+        std::unique_ptr<comphelper::OInterfaceContainerHelper2>   m_pDisposeEventListeners;
+        std::unique_ptr<comphelper::OInterfaceContainerHelper2>   m_pRowCountListeners;
+        std::unique_ptr<comphelper::OInterfaceContainerHelper2>   m_pIsFinalListeners;
 
         css::uno::Reference< css::ucb::XDynamicResultSetListener >       m_xListener;
 

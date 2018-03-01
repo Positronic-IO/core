@@ -187,11 +187,11 @@ class EDITENG_DLLPUBLIC SvxRTFParser : public SvRTFParser
     RTFPardAttrMapIds aPardMap;
     std::vector<sal_uInt16> aWhichMap;
 
-    EditPosition* pInsPos;
+    std::unique_ptr<EditPosition> pInsPos;
     SfxItemPool* pAttrPool;
-    Color*  pDfltColor;
-    vcl::Font*   pDfltFont;
-    SfxItemSet *pRTFDefaults;
+    std::unique_ptr<Color>  pDfltColor;
+    std::unique_ptr<vcl::Font>   pDfltFont;
+    std::unique_ptr<SfxItemSet> pRTFDefaults;
 
     int     nDfltFont;
 
@@ -312,9 +312,10 @@ class EDITENG_DLLPUBLIC SvxRTFItemStackType
     friend class SvxRTFParser;
 
     SfxItemSet   aAttrSet;
-    EditNodeIdx  *pSttNd, *pEndNd;
+    std::unique_ptr<EditNodeIdx> pSttNd;
+    EditNodeIdx  *pEndNd;
     sal_Int32    nSttCnt, nEndCnt;
-    SvxRTFItemStackList* m_pChildList;
+    std::unique_ptr<SvxRTFItemStackList> m_pChildList;
     sal_uInt16   nStyleNo;
 
     SvxRTFItemStackType(SvxRTFItemStackType const&) = delete;
@@ -354,7 +355,7 @@ public:
 
 inline const Color& SvxRTFParser::GetColor( size_t nId ) const
 {
-    Color* pColor = pDfltColor;
+    Color* pColor = pDfltColor.get();
     if( nId < aColorTbl.size() )
         pColor = aColorTbl[ nId ];
     return *pColor;

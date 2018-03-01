@@ -19,6 +19,7 @@
 
 #include <futransf.hxx>
 
+#include <comphelper/scopeguard.hxx>
 #include <svx/dialogs.hrc>
 #include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
@@ -26,6 +27,7 @@
 #include <strings.hrc>
 #include <ViewShell.hxx>
 #include <View.hxx>
+#include <Window.hxx>
 #include <sdresid.hxx>
 #include <drawdoc.hxx>
 #include <svx/svxdlg.hxx>
@@ -61,34 +63,15 @@ void setUndo(::sd::View* pView, const SfxItemSet* pArgs)
     pView->EndUndo();
 }
 
-class ScopeCleanup
-{
-    ViewShell* mpViewShell;
-public:
-    ScopeCleanup(ViewShell* pViewShell) : mpViewShell(pViewShell)
-    {
-    }
-
-    ~ScopeCleanup()
-    {
-        if (mpViewShell)
-        {
-            mpViewShell->Invalidate(SID_RULER_OBJECT);
-            mpViewShell->Cancel();
-        }
-    }
-
-    void ignore()
-    {
-        mpViewShell = nullptr;
-    }
-};
-
 }
 
 void FuTransform::DoExecute( SfxRequest& rReq )
 {
-    ScopeCleanup aCleanup(mpViewShell);
+    comphelper::ScopeGuard guard([&]() {
+        // cleanup when leaving
+        mpViewShell->Invalidate(SID_RULER_OBJECT);
+        mpViewShell->Cancel();
+    });
 
     if (!mpView->AreObjectsMarked())
         return;
@@ -119,7 +102,7 @@ void FuTransform::DoExecute( SfxRequest& rReq )
         if (!pFact)
             return;
 
-        pDlg.reset(pFact->CreateCaptionDialog(nullptr, mpView));
+        pDlg.reset(pFact->CreateCaptionDialog(mpViewShell->GetActiveWindow(), mpView));
 
         const sal_uInt16* pRange = pDlg->GetInputRanges( *aNewAttr.GetPool() );
         SfxItemSet aCombSet( *aNewAttr.GetPool(), pRange );
@@ -133,7 +116,7 @@ void FuTransform::DoExecute( SfxRequest& rReq )
         if (!pFact)
             return;
 
-        pDlg.reset(pFact->CreateSvxTransformTabDialog(nullptr, &aSet, mpView));
+        pDlg.reset(pFact->CreateSvxTransformTabDialog(mpViewShell->GetActiveWindow(), &aSet, mpView));
     }
 
     if (!pDlg)
@@ -141,7 +124,7 @@ void FuTransform::DoExecute( SfxRequest& rReq )
 
     std::shared_ptr<SfxRequest> pRequest(new SfxRequest(rReq));
     rReq.Ignore(); // the 'old' request is not relevant any more
-    aCleanup.ignore(); // the lambda does it
+    guard.dismiss(); // we'll invalidate explicitly after the dialog ends
 
     pDlg->StartExecuteAsync([=](sal_Int32 nResult){
         if (nResult == RET_OK)
@@ -152,7 +135,7 @@ void FuTransform::DoExecute( SfxRequest& rReq )
 
         mpViewShell->Invalidate(SID_RULER_OBJECT);
         mpViewShell->Cancel();
-    }, pDlg);
+    });
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

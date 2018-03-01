@@ -21,10 +21,13 @@
 #include <docfunc.hxx>
 #include <scitems.hxx>
 #include <editutil.hxx>
+#include <table.hxx>
 
 #include <sal/config.h>
 #include <editeng/wghtitem.hxx>
 #include <editeng/postitem.hxx>
+#include <svx/svdocirc.hxx>
+#include <svx/svdpage.hxx>
 #include <test/bootstrapfixture.hxx>
 
 void Test::testSort()
@@ -174,14 +177,14 @@ void Test::testSortHorizontal()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][4] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "table", "flag", "has UNIQUE", "Publish to EC2" },
             { "w2gi.mobilehit",     "Yes-No",  "Yes", "No" },
             { "w2gi.visitors",      "No-No",   "No",  "No" },
             { "w2gi.pagedimension", "Yes-Yes", "Yes", "Yes" },
         };
 
-        bool bSuccess = checkOutput<4>(m_pDoc, aDataRange, aOutputCheck, "Sorted by column with formula");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Sorted by column with formula");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1351,14 +1354,14 @@ void Test::testSortRefUpdate6()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "1" },
             { "9", "1", "2" },
             { "1", "2", "4" },
             { "8", "3", "7" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Initial value");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Initial value");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1383,14 +1386,14 @@ void Test::testSortRefUpdate6()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "1" },
             { "1", "2", "3" },
             { "8", "3", "6" },
             { "9", "1", "7" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1407,14 +1410,14 @@ void Test::testSortRefUpdate6()
 
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "1" },
             { "9", "1", "2" },
             { "1", "2", "4" },
             { "8", "3", "7" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "After undo");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "After undo");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1422,14 +1425,14 @@ void Test::testSortRefUpdate6()
     pUndoMgr->Redo();
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "1" },
             { "1", "2", "3" },
             { "8", "3", "6" },
             { "9", "1", "7" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "After redo");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "After redo");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1438,14 +1441,14 @@ void Test::testSortRefUpdate6()
     rFunc.SetValueCell(ScAddress(2,0,0), 11.0, false);
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "11" },
             { "1", "2", "13" },
             { "8", "3", "16" },
             { "9", "1", "17" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Change the header value");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Change the header value");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1453,14 +1456,14 @@ void Test::testSortRefUpdate6()
     pUndoMgr->Undo();
     {
         // Expected output table content.  0 = empty cell
-        const char* aOutputCheck[][3] = {
+        std::vector<std::vector<const char*>> aOutputCheck = {
             { "Order", "Value", "1" },
             { "1", "2", "3" },
             { "8", "3", "6" },
             { "9", "1", "7" },
         };
 
-        bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "After undo of header value change");
+        bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "After undo of header value change");
         CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
     }
 
@@ -1488,12 +1491,12 @@ void Test::testSortBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][7] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "1",   nullptr, nullptr, "0", "0",  "1",  "1" },
                 { "2", "8", nullptr, "8", "8", "10", "10" },
             };
 
-            bool bSuccess = checkOutput<7>(m_pDoc, aDataRange, aOutputCheck, "Initial value");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Initial value");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1519,12 +1522,12 @@ void Test::testSortBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][7] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "2", "8", nullptr, "8", "8", "10", "10" },
                 { "1",   nullptr, nullptr, "0", "0",  "1",  "1" },
             };
 
-            bool bSuccess = checkOutput<7>(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1580,7 +1583,7 @@ void Test::testSortBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][2] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "1", "2" },
                 {   nullptr, "8" },
                 { nullptr, nullptr },
@@ -1590,7 +1593,7 @@ void Test::testSortBroadcaster()
                 { "1", "10" },
             };
 
-            bool bSuccess = checkOutput<2>(m_pDoc, aDataRange, aOutputCheck, "Initial value");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Initial value");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1616,7 +1619,7 @@ void Test::testSortBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][2] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "2", "1" },
                 { "8",   nullptr },
                 { nullptr, nullptr },
@@ -1626,7 +1629,7 @@ void Test::testSortBroadcaster()
                 { "10", "1" },
             };
 
-            bool bSuccess = checkOutput<2>(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1688,12 +1691,12 @@ void Test::testSortBroadcastBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][3] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "1", "1", "1" },
                 { "2", "2", "2" },
             };
 
-            bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Initial value");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Initial value");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1719,12 +1722,12 @@ void Test::testSortBroadcastBroadcaster()
 
         {
             // Expected output table content.  0 = empty cell
-            const char* aOutputCheck[][3] = {
+            std::vector<std::vector<const char*>> aOutputCheck = {
                 { "2", "2", "2" },
                 { "1", "1", "1" },
             };
 
-            bool bSuccess = checkOutput<3>(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
+            bool bSuccess = checkOutput(m_pDoc, aDataRange, aOutputCheck, "Sorted without reference update");
             CPPUNIT_ASSERT_MESSAGE("Table output check failed", bSuccess);
         }
 
@@ -1880,6 +1883,67 @@ void Test::testSortPartialFormulaGroup()
     CPPUNIT_ASSERT_EQUAL(50.0, m_pDoc->GetValue(ScAddress(1,3,0)));
     CPPUNIT_ASSERT_EQUAL(47.0, m_pDoc->GetValue(ScAddress(1,4,0)));
     CPPUNIT_ASSERT_EQUAL(28.0, m_pDoc->GetValue(ScAddress(1,5,0)));
+
+    m_pDoc->DeleteTab(0);
+}
+
+void Test::testSortImages()
+{
+    m_pDoc->InsertTab(0, "testSortImages");
+
+    // We need a drawing layer in order to create caption objects.
+    m_pDoc->InitDrawLayer(&getDocShell());
+    ScDrawLayer* pDrawLayer = m_pDoc->GetDrawLayer();
+    CPPUNIT_ASSERT(pDrawLayer);
+
+    ScRange aDataRange;
+    ScAddress aPos(0,0,0);
+    {
+        const char* aData[][1] = {
+            { "2" },
+            { "1" },
+        };
+
+        clearRange(m_pDoc, ScRange(0, 0, 0, 1, SAL_N_ELEMENTS(aData), 0));
+        aDataRange = insertRangeData(m_pDoc, aPos, aData, SAL_N_ELEMENTS(aData));
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("failed to insert range data at correct position", aPos, aDataRange.aStart);
+    }
+
+    // Insert graphic in cell B2.
+    const tools::Rectangle aOrigRect = tools::Rectangle(1000, 1000, 1200, 1200);
+    SdrCircObj* pObj = new SdrCircObj(OBJ_CIRC, aOrigRect);
+    SdrPage* pPage = pDrawLayer->GetPage(0);
+    CPPUNIT_ASSERT(pPage);
+    pPage->InsertObject(pObj);
+    // Anchor to cell
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+    // Move to cell B2
+    ScAddress aCellPos(1, 1, 0);
+    pDrawLayer->MoveObject(pObj, aCellPos);
+
+    std::map<SCROW, std::vector<SdrObject*>> pRowObjects
+        = pDrawLayer->GetObjectsAnchoredToRange(aCellPos.Tab(), aCellPos.Col(), aCellPos.Row(), aCellPos.Row());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pRowObjects[aCellPos.Row()].size());
+
+    ScSortParam aSortData;
+    aSortData.nCol1 = 0;
+    aSortData.nCol2 = 1;
+    aSortData.nRow1 = 0;
+    aSortData.nRow2 = 1;
+    aSortData.maKeyState[0].bDoSort = true;
+    aSortData.maKeyState[0].nField = 0;
+    aSortData.maKeyState[0].bAscending = true;
+
+    m_pDoc->Sort(0, aSortData, false, true, nullptr, nullptr);
+
+    double nVal = m_pDoc->GetValue(0,0,0);
+    ASSERT_DOUBLES_EQUAL(nVal, 1.0);
+
+    // check that note is also moved after sorting
+    aCellPos = ScAddress(1, 0, 0);
+    pRowObjects
+        = pDrawLayer->GetObjectsAnchoredToRange(aCellPos.Tab(), aCellPos.Col(), aCellPos.Row(), aCellPos.Row());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pRowObjects[aCellPos.Row()].size());
 
     m_pDoc->DeleteTab(0);
 }

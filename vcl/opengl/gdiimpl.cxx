@@ -514,7 +514,7 @@ void OpenGLSalGraphicsImpl::SetROPFillColor(SalROPColor nROPColor)
     }
 }
 
-bool OpenGLSalGraphicsImpl::CheckOffscreenTexture()
+void OpenGLSalGraphicsImpl::CheckOffscreenTexture()
 {
     bool bClearTexture = false;
 
@@ -578,7 +578,6 @@ bool OpenGLSalGraphicsImpl::CheckOffscreenTexture()
     assert( maOffscreenTex );
 
     CHECK_GL_ERROR();
-    return true;
 }
 
 bool OpenGLSalGraphicsImpl::UseProgram( const OUString& rVertexShader, const OUString& rFragmentShader, const OString& preamble )
@@ -621,12 +620,11 @@ bool OpenGLSalGraphicsImpl::UseSolid( SalColor nColor, double fTransparency )
     return true;
 }
 
-bool OpenGLSalGraphicsImpl::UseSolid()
+void OpenGLSalGraphicsImpl::UseSolid()
 {
     if (!UseProgram("combinedVertexShader", "combinedFragmentShader"))
-        return false;
+        return;
     mpProgram->SetShaderType(DrawShaderType::Normal);
-    return true;
 }
 
 bool OpenGLSalGraphicsImpl::UseInvert50()
@@ -699,10 +697,10 @@ bool OpenGLSalGraphicsImpl::UseLine(SalColor nColor, double fTransparency, GLflo
     return true;
 }
 
-bool OpenGLSalGraphicsImpl::UseLine(GLfloat fLineWidth, bool bUseAA)
+void OpenGLSalGraphicsImpl::UseLine(GLfloat fLineWidth, bool bUseAA)
 {
     if (!UseProgram("combinedVertexShader", "combinedFragmentShader"))
-        return false;
+        return;
     mpProgram->SetShaderType(DrawShaderType::Line);
     mpProgram->SetUniform1f("line_width", fLineWidth);
     // The width of the feather - area we make lineary transparent in VS.
@@ -710,7 +708,6 @@ bool OpenGLSalGraphicsImpl::UseLine(GLfloat fLineWidth, bool bUseAA)
     mpProgram->SetUniform1f("feather", bUseAA ? 0.5f : 0.0f);
     // We need blending or AA won't work correctly
     mpProgram->SetBlendMode(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    return true;
 }
 
 void OpenGLSalGraphicsImpl::DrawConvexPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry, bool blockAA )
@@ -927,8 +924,8 @@ void OpenGLSalGraphicsImpl::DrawRegionBand( const RegionBand& rRegion )
 
     for(tools::Rectangle & rRect : aRects)
     {
-        rRect.Bottom() += 1;
-        rRect.Right() += 1;
+        rRect.AdjustBottom(1 );
+        rRect.AdjustRight(1 );
         ADD_VERTICE( rRect.TopLeft() );
         ADD_VERTICE( rRect.TopRight() );
         ADD_VERTICE( rRect.BottomLeft() );
@@ -1322,10 +1319,10 @@ void OpenGLSalGraphicsImpl::DeferredTextDraw(OpenGLTexture const & rTexture, Sal
     PostBatchDraw();
 }
 
-bool OpenGLSalGraphicsImpl::FlushLinesOrTriangles(DrawShaderType eType, RenderParameters const & rParameters)
+void OpenGLSalGraphicsImpl::FlushLinesOrTriangles(DrawShaderType eType, RenderParameters const & rParameters)
 {
     if (!UseProgram("combinedVertexShader", "combinedFragmentShader", "#define USE_VERTEX_COLORS"))
-        return false;
+        return;
 
     mpProgram->SetShaderType(eType);
     mpProgram->SetBlendMode(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1355,7 +1352,6 @@ bool OpenGLSalGraphicsImpl::FlushLinesOrTriangles(DrawShaderType eType, RenderPa
     CHECK_GL_ERROR();
 
     mpProgram->Clean();
-    return true;
 }
 
 void OpenGLSalGraphicsImpl::FlushDeferredDrawing()
@@ -1978,10 +1974,10 @@ bool OpenGLSalGraphicsImpl::drawGradient(const tools::PolyPolygon& rPolyPoly,
         return false;
     }
 
-    aBoundRect.Left()--;
-    aBoundRect.Top()--;
-    aBoundRect.Right()++;
-    aBoundRect.Bottom()++;
+    aBoundRect.AdjustLeft( -1 );
+    aBoundRect.AdjustTop( -1 );
+    aBoundRect.AdjustRight( 1 );
+    aBoundRect.AdjustBottom( 1 );
 
     PreDraw( XOROption::IMPLEMENT_XOR );
 

@@ -30,7 +30,6 @@
 #include <vcl/graph.hxx>
 #include <tools/debug.hxx>
 #include <svx/fmdpage.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/style/VerticalAlignment.hpp>
 #include <com/sun/star/awt/Gradient.hpp>
 #include <com/sun/star/drawing/PointSequence.hpp>
@@ -88,9 +87,9 @@ Size ImplEESdrWriter::ImplMapSize( const Size& rSize )
     Size aRetSize( OutputDevice::LogicToLogic( rSize, maMapModeSrc, maMapModeDest ) );
 
     if ( !aRetSize.Width() )
-        aRetSize.Width()++;
+        aRetSize.AdjustWidth( 1 );
     if ( !aRetSize.Height() )
-        aRetSize.Height()++;
+        aRetSize.AdjustHeight( 1 );
     return aRetSize;
 }
 
@@ -195,8 +194,6 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
                 }
             }
         }
-
-        Point aTextRefPoint;
 
         if( rObj.GetType() == "drawing.Group" )
         {
@@ -371,17 +368,17 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
                 nEndAngle = *o3tl::doAccess<sal_Int32>(rObj.GetUsrAny());
 
                 Point aStart, aEnd, aCenter;
-                aStart.X() = static_cast<sal_Int32>( cos( nStartAngle * F_PI18000 ) * 100.0 );
-                aStart.Y() = - static_cast<sal_Int32>( sin( nStartAngle * F_PI18000 ) * 100.0 );
-                aEnd.X() = static_cast<sal_Int32>( cos( nEndAngle * F_PI18000 ) * 100.0 );
-                aEnd.Y() = - static_cast<sal_Int32>( sin( nEndAngle * F_PI18000 ) * 100.0 );
+                aStart.setX( static_cast<sal_Int32>( cos( nStartAngle * F_PI18000 ) * 100.0 ) );
+                aStart.setY( - static_cast<sal_Int32>( sin( nStartAngle * F_PI18000 ) * 100.0 ) );
+                aEnd.setX( static_cast<sal_Int32>( cos( nEndAngle * F_PI18000 ) * 100.0 ) );
+                aEnd.setY( - static_cast<sal_Int32>( sin( nEndAngle * F_PI18000 ) * 100.0 ) );
                 const tools::Rectangle& rRect = aRect100thmm;
-                aCenter.X() = rRect.Left() + ( rRect.GetWidth() / 2 );
-                aCenter.Y() = rRect.Top() + ( rRect.GetHeight() / 2 );
-                aStart.X() += aCenter.X();
-                aStart.Y() += aCenter.Y();
-                aEnd.X() += aCenter.X();
-                aEnd.Y() += aCenter.Y();
+                aCenter.setX( rRect.Left() + ( rRect.GetWidth() / 2 ) );
+                aCenter.setY( rRect.Top() + ( rRect.GetHeight() / 2 ) );
+                aStart.AdjustX(aCenter.X() );
+                aStart.AdjustY(aCenter.Y() );
+                aEnd.AdjustX(aCenter.X() );
+                aEnd.AdjustY(aCenter.Y() );
                 tools::Polygon aPolygon( rRect, aStart, aEnd, ePolyKind );
                 if( rObj.GetAngle() )
                 {
@@ -549,7 +546,7 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
                        have to create a simple Rectangle with fill bitmap instead (while not allowing BitmapMode_Repeat).
                     */
                     addShape( ESCHER_ShpInst_Rectangle, ShapeFlag::HaveShapeProperty | ShapeFlag::HaveAnchor );
-                    if ( aPropOpt.CreateGraphicProperties( rObj.mXPropSet, "GraphicURL", true, true, false ) )
+                    if ( aPropOpt.CreateGraphicProperties( rObj.mXPropSet, "Graphic", true, true, false ) )
                     {
                         aPropOpt.AddOpt( ESCHER_Prop_WrapText, ESCHER_WrapNone );
                         aPropOpt.AddOpt( ESCHER_Prop_AnchorText, ESCHER_AnchorMiddle );
@@ -565,7 +562,7 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
                 else
                 {
                     addShape( ESCHER_ShpInst_PictureFrame, ShapeFlag::HaveShapeProperty | ShapeFlag::HaveAnchor );
-                    if ( aPropOpt.CreateGraphicProperties( rObj.mXPropSet, "GraphicURL", false, true, true, bOOxmlExport ) )
+                    if ( aPropOpt.CreateGraphicProperties( rObj.mXPropSet, "Graphic", false, true, true, bOOxmlExport ) )
                         aPropOpt.AddOpt( ESCHER_Prop_LockAgainstGrouping, 0x800080 );
                 }
             }
@@ -700,7 +697,7 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
         if( bAdditionalText )
         {
             mpEscherEx->EndShape( nShapeType, nShapeID );
-            ImplWriteAdditionalText( rObj, aTextRefPoint );
+            ImplWriteAdditionalText( rObj, Point() );
         }
 
     } while ( false );

@@ -251,7 +251,7 @@ private:
     bool consume(EventList&);
     void deleteUsedEvents();
     void sendPendingCharacters();
-    void addUnknownElementWithPrefix(const xmlChar **attributes, int i, rtl::Reference< FastAttributeList >& xAttributes);
+    void addUnknownElementWithPrefix(const xmlChar **attributes, int i, rtl::Reference< FastAttributeList > const & xAttributes);
 
     sal_Int32 GetToken( const xmlChar* pName, sal_Int32 nameLen );
     /// @throws css::xml::sax::SAXException
@@ -1221,7 +1221,7 @@ void FastSaxParserImpl::callbackStartElement(const xmlChar *localName , const xm
             produce();
         else
         {
-            SAL_INFO("sax.fastparser", " startElement line " << mxDocumentLocator->getLineNumber() << " column " << mxDocumentLocator->getColumnNumber() << " " << prefix << ":" << localName);
+            SAL_INFO("sax.fastparser", " startElement line " << mxDocumentLocator->getLineNumber() << " column " << mxDocumentLocator->getColumnNumber() << " " << ( prefix ? XML_CAST(prefix) : "(null)" ) << ":" << localName);
             rEntity.startElement( &rEvent );
         }
     }
@@ -1231,7 +1231,7 @@ void FastSaxParserImpl::callbackStartElement(const xmlChar *localName , const xm
     }
 }
 
-void FastSaxParserImpl::addUnknownElementWithPrefix(const xmlChar **attributes, int i, rtl::Reference< FastAttributeList >& xAttributes)
+void FastSaxParserImpl::addUnknownElementWithPrefix(const xmlChar **attributes, int i, rtl::Reference< FastAttributeList > const & xAttributes)
 {
     OUString aNamespaceURI;
     if ( !m_bIgnoreMissingNSDecl || attributes[i + 2] != nullptr )

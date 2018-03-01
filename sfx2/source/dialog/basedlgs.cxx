@@ -193,10 +193,9 @@ void SfxModalDialog::StateChanged( StateChangedType nType )
             // SfxModalDialog even though they are modeless, i.e., their Execute method
             // isn't called.
             SetLOKNotifier(SfxViewShell::Current());
-            const Size aSize = GetOptimalSize();
             std::vector<vcl::LOKPayloadItem> aItems;
             aItems.emplace_back("type", "dialog");
-            aItems.emplace_back("size", aSize.toString());
+            aItems.emplace_back("size", GetSizePixel().toString());
             if (!GetText().isEmpty())
                 aItems.emplace_back("title", GetText().toUtf8());
             SfxViewShell::Current()->notifyWindow(GetLOKWindowId(), "created", aItems);
@@ -231,23 +230,23 @@ void SfxModelessDialog::StateChanged( StateChangedType nStateChange )
 
                 Size aParentSize = GetParent()->GetOutputSizePixel();
                 Size aDlgSize = GetSizePixel();
-                aPos.X() += ( aParentSize.Width() - aDlgSize.Width() ) / 2;
-                aPos.Y() += ( aParentSize.Height() - aDlgSize.Height() ) / 2;
+                aPos.AdjustX(( aParentSize.Width() - aDlgSize.Width() ) / 2 );
+                aPos.AdjustY(( aParentSize.Height() - aDlgSize.Height() ) / 2 );
 
                 Point aPoint;
                 tools::Rectangle aRect = GetDesktopRectPixel();
-                aPoint.X() = aRect.Right() - aDlgSize.Width();
-                aPoint.Y() = aRect.Bottom() - aDlgSize.Height();
+                aPoint.setX( aRect.Right() - aDlgSize.Width() );
+                aPoint.setY( aRect.Bottom() - aDlgSize.Height() );
 
                 aPoint = OutputToScreenPixel( aPoint );
 
                 if ( aPos.X() > aPoint.X() )
-                    aPos.X() = aPoint.X() ;
+                    aPos.setX( aPoint.X() ) ;
                 if ( aPos.Y() > aPoint.Y() )
-                    aPos.Y() = aPoint.Y();
+                    aPos.setY( aPoint.Y() );
 
-                if ( aPos.X() < 0 ) aPos.X() = 0;
-                if ( aPos.Y() < 0 ) aPos.Y() = 0;
+                if ( aPos.X() < 0 ) aPos.setX( 0 );
+                if ( aPos.Y() < 0 ) aPos.setY( 0 );
 
                 SetPosPixel( aPos );
             }
@@ -259,7 +258,7 @@ void SfxModelessDialog::StateChanged( StateChangedType nStateChange )
             SetLOKNotifier(pViewShell);
             std::vector<vcl::LOKPayloadItem> aItems;
             aItems.emplace_back("type", "dialog");
-            aItems.emplace_back("size", GetOptimalSize().toString());
+            aItems.emplace_back("size", GetSizePixel().toString());
             if (!GetText().isEmpty())
                 aItems.emplace_back("title", GetText().toUtf8());
             pViewShell->notifyWindow(GetLOKWindowId(), "created", aItems);

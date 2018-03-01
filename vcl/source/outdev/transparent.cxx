@@ -88,11 +88,11 @@ Color OutputDevice::ImplDrawModeToColor( const Color& rColor ) const
         {
             if( nDrawMode & DrawModeFlags::BlackLine )
             {
-                aColor = Color( COL_BLACK );
+                aColor = COL_BLACK;
             }
             else if( nDrawMode & DrawModeFlags::WhiteLine )
             {
-                aColor = Color( COL_WHITE );
+                aColor = COL_WHITE;
             }
             else if( nDrawMode & DrawModeFlags::GrayLine )
             {
@@ -137,16 +137,16 @@ void OutputDevice::ImplPrintTransparent( const Bitmap& rBmp, const Bitmap& rMask
     // mirrored horizontically
     if( aDestSz.Width() < 0 )
     {
-        aDestSz.Width() = -aDestSz.Width();
-        aDestPt.X() -= ( aDestSz.Width() - 1 );
+        aDestSz.setWidth( -aDestSz.Width() );
+        aDestPt.AdjustX( -( aDestSz.Width() - 1 ) );
         nMirrFlags |= BmpMirrorFlags::Horizontal;
     }
 
     // mirrored vertically
     if( aDestSz.Height() < 0 )
     {
-        aDestSz.Height() = -aDestSz.Height();
-        aDestPt.Y() -= ( aDestSz.Height() - 1 );
+        aDestSz.setHeight( -aDestSz.Height() );
+        aDestPt.AdjustY( -( aDestSz.Height() - 1 ) );
         nMirrFlags |= BmpMirrorFlags::Vertical;
     }
 
@@ -168,7 +168,7 @@ void OutputDevice::ImplPrintTransparent( const Bitmap& rBmp, const Bitmap& rMask
     if( aMask.IsEmpty() )
     {
         aMask = Bitmap( aSrcRect.GetSize(), 1 );
-        aMask.Erase( Color( COL_BLACK ) );
+        aMask.Erase( COL_BLACK );
     }
 
     // do painting
@@ -192,14 +192,14 @@ void OutputDevice::ImplPrintTransparent( const Bitmap& rBmp, const Bitmap& rMask
     RectangleVector aRectangles;
     aWorkRgn.GetRegionRectangles(aRectangles);
 
-    for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+    for (auto const& rectangle : aRectangles)
     {
-        const Point aMapPt(pMapX[aRectIter->Left()], pMapY[aRectIter->Top()]);
-        const Size aMapSz( pMapX[aRectIter->Right() + 1] - aMapPt.X(),      // pMapX[L + W] -> L + ((R - L) + 1) -> R + 1
-                           pMapY[aRectIter->Bottom() + 1] - aMapPt.Y());    // same for Y
+        const Point aMapPt(pMapX[rectangle.Left()], pMapY[rectangle.Top()]);
+        const Size aMapSz( pMapX[rectangle.Right() + 1] - aMapPt.X(),      // pMapX[L + W] -> L + ((R - L) + 1) -> R + 1
+                           pMapY[rectangle.Bottom() + 1] - aMapPt.Y());    // same for Y
         Bitmap aBandBmp(aPaint);
 
-        aBandBmp.Crop(*aRectIter);
+        aBandBmp.Crop(rectangle);
         DrawBitmap(aMapPt, aMapSz, Point(), aBandBmp.GetSizePixel(), aBandBmp);
     }
 
@@ -393,8 +393,7 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
 
     tools::PolyPolygon aPolyPoly( LogicToPixel( rPolyPoly ) );
     tools::Rectangle aPolyRect( aPolyPoly.GetBoundRect() );
-    Point aPoint;
-    tools::Rectangle aDstRect( aPoint, GetOutputSizePixel() );
+    tools::Rectangle aDstRect( Point(), GetOutputSizePixel() );
 
     aDstRect.Intersection( aPolyRect );
 
@@ -476,7 +475,7 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
                     {
                         BitmapColor aPixCol;
                         const BitmapColor aFillCol( GetFillColor() );
-                        const BitmapColor aBlack( pR->GetBestMatchingColor( Color( COL_BLACK ) ) );
+                        const BitmapColor aBlack( pR->GetBestMatchingColor( COL_BLACK ) );
                         const long nWidth = pW->Width();
                         const long nHeight = pW->Height();
                         const long nR = aFillCol.GetRed();
@@ -525,11 +524,13 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
                             {
                                 for( nY = 0; nY < nHeight; nY++ )
                                 {
+                                    Scanline pScanline = pW->GetScanline(nY);
+                                    Scanline pScanlineRead = pR->GetScanline(nY);
                                     for( nX = 0; nX < nWidth; nX++ )
                                     {
-                                        if( pR->GetPixel( nY, nX ) == aBlack )
+                                        if( pR->GetPixelFromData( pScanlineRead, nX ) == aBlack )
                                         {
-                                            pW->SetPixel( nY, nX, pMap[ pW->GetPixel( nY, nX ).GetIndex() ] );
+                                            pW->SetPixelOnData( pScanline, nX, pMap[ pW->GetIndexFromData( pScanline, nX ) ] );
                                         }
                                     }
                                 }
@@ -569,12 +570,14 @@ void OutputDevice::EmulateDrawTransparent ( const tools::PolyPolygon& rPolyPoly,
                             {
                                 for( nY = 0; nY < nHeight; nY++ )
                                 {
+                                    Scanline pScanline = pW->GetScanline(nY);
+                                    Scanline pScanlineRead = pR->GetScanline(nY);
                                     for( nX = 0; nX < nWidth; nX++ )
                                     {
-                                        if( pR->GetPixel( nY, nX ) == aBlack )
+                                        if( pR->GetPixelFromData( pScanlineRead, nX ) == aBlack )
                                         {
                                             aPixCol = pW->GetColor( nY, nX );
-                                            pW->SetPixel( nY, nX, aPixCol.Merge( aFillCol, cTrans ) );
+                                            pW->SetPixelOnData(pScanline, nX, aPixCol.Merge( aFillCol, cTrans ) );
                                         }
                                     }
                                 }
@@ -799,7 +802,7 @@ void OutputDevice::DrawTransparent( const GDIMetaFile& rMtf, const Point& rPos,
                     xVDev->DrawGradient( tools::Rectangle( rPos, rSize ), rTransparenceGradient );
                     xVDev->SetDrawMode( DrawModeFlags::Default );
                     xVDev->EnableMapMode( false );
-                    xVDev->DrawMask( Point(), xVDev->GetOutputSizePixel(), aMask, Color( COL_WHITE ) );
+                    xVDev->DrawMask( Point(), xVDev->GetOutputSizePixel(), aMask, COL_WHITE );
 
                     aAlpha = xVDev->GetBitmap( Point(), xVDev->GetOutputSizePixel() );
 

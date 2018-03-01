@@ -50,7 +50,7 @@
 #define CSV_FORMAT_TYPE      (SfxFilterFlags::IMPORT | SfxFilterFlags::EXPORT | SfxFilterFlags::ALIEN )
 #define HTML_FORMAT_TYPE     (SfxFilterFlags::IMPORT | SfxFilterFlags::EXPORT | SfxFilterFlags::ALIEN )
 #define DIF_FORMAT_TYPE      (SfxFilterFlags::IMPORT | SfxFilterFlags::EXPORT | SfxFilterFlags::ALIEN )
-#define XLS_XML_FORMAT_TYPE  (SfxFilterFlags::IMPORT | SfxFilterFlags::EXPORT | SfxFilterFlags::ALIEN | SfxFilterFlags::STARONEFILTER)
+#define XLS_XML_FORMAT_TYPE  (SfxFilterFlags::IMPORT | SfxFilterFlags::ALIEN | SfxFilterFlags::PREFERED)
 #define XLSB_XML_FORMAT_TYPE (SfxFilterFlags::IMPORT |                          SfxFilterFlags::ALIEN | SfxFilterFlags::STARONEFILTER | SfxFilterFlags::PREFERED)
 #define FODS_FORMAT_TYPE     (SfxFilterFlags::IMPORT | SfxFilterFlags::EXPORT | SfxFilterFlags::OWN | SfxFilterFlags::STARONEFILTER )
 #define GNUMERIC_FORMAT_TYPE (SfxFilterFlags::IMPORT | SfxFilterFlags::ALIEN | SfxFilterFlags::PREFERED )
@@ -146,43 +146,6 @@ SCQAHELPER_DLLPUBLIC ScTokenArray* compileFormula(
 SCQAHELPER_DLLPUBLIC bool checkOutput(
     const ScDocument* pDoc, const ScRange& aOutRange,
     const std::vector<std::vector<const char*>>& aCheck, const char* pCaption );
-
-template<size_t Size>
-bool checkOutput(ScDocument* pDoc, const ScRange& aOutRange, const char* aOutputCheck[][Size], const char* pCaption)
-{
-    bool bResult = true;
-    const ScAddress& s = aOutRange.aStart;
-    const ScAddress& e = aOutRange.aEnd;
-    svl::GridPrinter printer(e.Row() - s.Row() + 1, e.Col() - s.Col() + 1, CALC_DEBUG_OUTPUT != 0);
-    SCROW nOutRowSize = e.Row() - s.Row() + 1;
-    SCCOL nOutColSize = e.Col() - s.Col() + 1;
-    for (SCROW nRow = 0; nRow < nOutRowSize; ++nRow)
-    {
-        for (SCCOL nCol = 0; nCol < nOutColSize; ++nCol)
-        {
-            OUString aVal = pDoc->GetString(nCol + s.Col(), nRow + s.Row(), s.Tab());
-            printer.set(nRow, nCol, aVal);
-            const char* p = aOutputCheck[nRow][nCol];
-            if (p)
-            {
-                OUString aCheckVal = OUString::createFromAscii(p);
-                bool bEqual = aCheckVal == aVal;
-                if (!bEqual)
-                {
-                    cout << "Expected: " << aCheckVal << "  Actual: " << aVal << endl;
-                    bResult = false;
-                }
-            }
-            else if (!aVal.isEmpty())
-            {
-                cout << "Empty cell expected" << endl;
-                bResult = false;
-            }
-        }
-    }
-    printer.print(pCaption);
-    return bResult;
-}
 
 SCQAHELPER_DLLPUBLIC void clearFormulaCellChangedFlag( ScDocument& rDoc, const ScRange& rRange );
 

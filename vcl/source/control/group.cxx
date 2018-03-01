@@ -128,8 +128,8 @@ void GroupBox::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
     }
     else
     {
-        aRect.Left() += GROUP_BORDER;
-        aRect.Right() -= GROUP_BORDER;
+        aRect.AdjustLeft(GROUP_BORDER );
+        aRect.AdjustRight( -(GROUP_BORDER) );
         aRect = pDev->GetTextRect( aRect, aText, nTextStyle );
         nTop = rPos.Y();
         nTop += aRect.GetHeight() / 2;
@@ -139,7 +139,7 @@ void GroupBox::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
     if( ! bLayout )
     {
         if ( nDrawFlags & DrawFlags::Mono )
-            pDev->SetLineColor( Color( COL_BLACK ) );
+            pDev->SetLineColor( COL_BLACK );
         else
             pDev->SetLineColor( rStyleSettings.GetShadowColor() );
 
@@ -200,7 +200,7 @@ void GroupBox::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
     pDev->SetMapMode();
     pDev->SetFont( aFont );
     if ( nFlags & DrawFlags::Mono )
-        pDev->SetTextColor( Color( COL_BLACK ) );
+        pDev->SetTextColor( COL_BLACK );
     else
         pDev->SetTextColor( GetTextColor() );
     pDev->SetTextFillColor();

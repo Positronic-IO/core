@@ -34,6 +34,7 @@
 #include <vcl/help.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <sot/storage.hxx>
 #include <svl/macitem.hxx>
 #include <unotools/securityoptions.hxx>
@@ -1038,10 +1039,10 @@ void SwEditWin::ChangeFly( sal_uInt8 nDir, bool bWeb )
         aSnap = rSh.GetViewOptions()->GetSnapSize();
         short nDiv = rSh.GetViewOptions()->GetDivisionX();
         if ( nDiv > 0 )
-            aSnap.Width() = std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Width()) / nDiv );
+            aSnap.setWidth( std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Width()) / nDiv ) );
         nDiv = rSh.GetViewOptions()->GetDivisionY();
         if ( nDiv > 0 )
-            aSnap.Height() = std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Height()) / nDiv );
+            aSnap.setHeight( std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Height()) / nDiv ) );
     }
 
     if(bHuge)
@@ -1239,10 +1240,10 @@ void SwEditWin::ChangeDrawing( sal_uInt8 nDir )
         Size aSnap( rSh.GetViewOptions()->GetSnapSize() );
         short nDiv = rSh.GetViewOptions()->GetDivisionX();
         if ( nDiv > 0 )
-            aSnap.Width() = std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Width()) / nDiv );
+            aSnap.setWidth( std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Width()) / nDiv ) );
         nDiv = rSh.GetViewOptions()->GetDivisionY();
         if ( nDiv > 0 )
-            aSnap.Height() = std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Height()) / nDiv );
+            aSnap.setHeight( std::max( sal_uLong(1), static_cast<sal_uLong>(aSnap.Height()) / nDiv ) );
 
         if(bOnePixel)
         {
@@ -1848,8 +1849,9 @@ KEYINPUT_CHECKTABLE_INSDEL:
                     }
                     else if (!rSh.IsCursorInParagraphMetadataField())
                     {
-                        ScopedVclPtrInstance<MessageDialog>(this, "InfoReadonlyDialog",
-                            "modules/swriter/ui/inforeadonlydialog.ui")->Execute();
+                        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui"));
+                        std::unique_ptr<weld::MessageDialog> xInfo(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
+                        xInfo->run();
                         eKeyState = SwKeyState::End;
                     }
                     break;
@@ -2024,8 +2026,9 @@ KEYINPUT_CHECKTABLE_INSDEL:
                     }
                     else if (!rSh.IsCursorInParagraphMetadataField())
                     {
-                        ScopedVclPtrInstance<MessageDialog>(this, "InfoReadonlyDialog",
-                            "modules/swriter/ui/inforeadonlydialog.ui")->Execute();
+                        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui"));
+                        std::unique_ptr<weld::MessageDialog> xInfo(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
+                        xInfo->run();
                         eKeyState = SwKeyState::End;
                     }
                     break;
@@ -2471,8 +2474,9 @@ KEYINPUT_CHECKTABLE_INSDEL:
             }
             else
             {
-                ScopedVclPtrInstance<MessageDialog>(this, "InfoReadonlyDialog",
-                    "modules/swriter/ui/inforeadonlydialog.ui")->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xInfo(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
+                xInfo->run();
                 eKeyState = SwKeyState::End;
             }
         break;
@@ -2958,8 +2962,8 @@ void SwEditWin::MouseButtonDown(const MouseEvent& _rMEvt)
 
     m_bIsInMove = false;
     m_aStartPos = rMEvt.GetPosPixel();
-    m_aRszMvHdlPt.X() = 0;
-    m_aRszMvHdlPt.Y() = 0;
+    m_aRszMvHdlPt.setX( 0 );
+    m_aRszMvHdlPt.setY( 0 );
 
     SwTab nMouseTabCol = SwTab::COL_NONE;
     const bool bTmp = !rSh.IsDrawCreate() && !m_pApplyTempl && !rSh.IsInSelect() &&
@@ -5667,8 +5671,8 @@ void SwEditWin::SelectMenuPosition(SwWrtShell& rSh, const Point& rMousePos )
                     aEEPos -= rOutputArea.TopRight();
                     //invert the horizontal direction and exchange X and Y
                     long nTemp = -aEEPos.X();
-                    aEEPos.X() = aEEPos.Y();
-                    aEEPos.Y() = nTemp;
+                    aEEPos.setX( aEEPos.Y() );
+                    aEEPos.setY( nTemp );
                 }
                 else
                     aEEPos -= rOutputArea.TopLeft();
@@ -5950,7 +5954,7 @@ void QuickHelpData::Start( SwWrtShell& rSh, sal_uInt16 nWrdLen )
     {
         Point aPt( rWin.OutputToScreenPixel( rWin.LogicToPixel(
                     rSh.GetCharRect().Pos() )));
-        aPt.Y() -= 3;
+        aPt.AdjustY( -3 );
         nTipId = Help::ShowPopover(&rWin, tools::Rectangle( aPt, Size( 1, 1 )),
                         m_aHelpStrings[ nCurArrPos ],
                         QuickHelpFlags::Left | QuickHelpFlags::Bottom);

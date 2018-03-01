@@ -18,7 +18,6 @@
  */
 
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/help.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svtools/imaprect.hxx>
@@ -53,7 +52,7 @@ using namespace com::sun::star;
 using ::com::sun::star::frame::XFrame;
 using ::com::sun::star::uno::Reference;
 
-#define TRANSCOL Color( COL_WHITE )
+#define TRANSCOL COL_WHITE
 
 IMapWindow::IMapWindow( vcl::Window* pParent, WinBits nBits, const Reference< XFrame >& rxDocumentFrame ) :
             GraphCtrl( pParent, nBits ),
@@ -182,8 +181,7 @@ void IMapWindow::SetTargetList( TargetList& rTargetList )
 
 SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
 {
-    Point       aPoint;
-    tools::Rectangle   aClipRect( aPoint, GetGraphicSize() );
+    tools::Rectangle   aClipRect( Point(), GetGraphicSize() );
     SdrObject*  pSdrObj = nullptr;
     IMapObjectPtr pCloneIMapObj;
 
@@ -263,12 +261,12 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
         if ( !pIMapObj->IsActive() )
         {
             aSet.Put( XFillTransparenceItem( 100 ) );
-            aSet.Put( XLineColorItem( "", Color( COL_RED ) ) );
+            aSet.Put( XLineColorItem( "", COL_RED ) );
         }
         else
         {
             aSet.Put( XFillTransparenceItem( 50 ) );
-            aSet.Put( XLineColorItem( "", Color( COL_BLACK ) ) );
+            aSet.Put( XLineColorItem( "", COL_BLACK ) );
         }
 
         pSdrObj->SetMergedItemSetAndBroadcast(aSet);
@@ -585,12 +583,12 @@ void IMapWindow::SetCurrentObjState( bool bActive )
         if ( !bActive )
         {
             aSet.Put( XFillTransparenceItem( 100 ) );
-            aSet.Put( XLineColorItem( "", Color( COL_RED ) ) );
+            aSet.Put( XLineColorItem( "", COL_RED ) );
         }
         else
         {
             aSet.Put( XFillTransparenceItem( 50 ) );
-            aSet.Put( XLineColorItem( "", Color( COL_BLACK ) ) );
+            aSet.Put( XLineColorItem( "", COL_BLACK ) );
         }
 
         pView->SetAttributes( aSet );
@@ -743,8 +741,8 @@ void IMapWindow::CreateDefaultObject()
     Size aPageSize = pPageView->GetPage()->GetSize();
     sal_uInt32 nDefaultObjectSizeWidth = aPageSize.Width() / 4;
     sal_uInt32 nDefaultObjectSizeHeight = aPageSize.Height() / 4;
-    aPagePos.X() += (aPageSize.Width() / 2) - (nDefaultObjectSizeWidth / 2);
-    aPagePos.Y() += (aPageSize.Height() / 2) - (nDefaultObjectSizeHeight / 2);
+    aPagePos.AdjustX((aPageSize.Width() / 2) - (nDefaultObjectSizeWidth / 2) );
+    aPagePos.AdjustY((aPageSize.Height() / 2) - (nDefaultObjectSizeHeight / 2) );
     tools::Rectangle aNewObjectRectangle(aPagePos, Size(nDefaultObjectSizeWidth, nDefaultObjectSizeHeight));
 
     SdrObject* pObj = SdrObjFactory::MakeNewObject( pView->GetCurrentObjInventor(), pView->GetCurrentObjIdentifier(), nullptr, pModel);

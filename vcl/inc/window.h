@@ -237,6 +237,7 @@ public:
     std::vector<Link<VclWindowEvent&,void>> maChildEventListeners;
     int mnChildEventListenersIteratingCount;
     std::set<Link<VclWindowEvent&,void>> maChildEventListenersDeleted;
+    Link<vcl::Window&, bool> maHelpRequestHdl;
 
     // The canvas interface for this VCL window. Is persistent after the first GetCanvas() call
     css::uno::WeakReference< css::rendering::XCanvas >    mxCanvas;
@@ -383,6 +384,7 @@ public:
 
     const vcl::ILibreOfficeKitNotifier* mpLOKNotifier; ///< To emit the LOK callbacks eg. for dialog tunneling.
     vcl::LOKWindowId mnLOKWindowId; ///< ID of this specific window.
+    bool mbLOKParentNotifier;
 };
 
 /// Sets up the buffer to have settings matching the window, and restores the original state in the dtor.

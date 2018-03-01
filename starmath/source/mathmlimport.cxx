@@ -410,7 +410,8 @@ SmXMLImport::SmXMLImport(
     const css::uno::Reference< css::uno::XComponentContext >& rContext,
     OUString const & implementationName, SvXMLImportFlags nImportFlags)
 :   SvXMLImport(rContext, implementationName, nImportFlags),
-    bSuccess(false)
+    bSuccess(false),
+    nParseDepth(0)
 {
 }
 
@@ -515,9 +516,9 @@ void SmXMLImport::endDocument()
             SmParser &rParser = pDocShell->GetParser();
             bool bVal = rParser.IsImportSymbolNames();
             rParser.SetImportSymbolNames( true );
-            SmNode *pTmpTree = rParser.Parse( aText );
+            auto pTmpTree = rParser.Parse( aText );
             aText = rParser.GetText();
-            delete pTmpTree;
+            pTmpTree.reset();
             rParser.SetImportSymbolNames( bVal );
 
             pDocShell->SetText( aText );
@@ -536,7 +537,15 @@ class SmXMLImportContext: public SvXMLImportContext
 public:
     SmXMLImportContext( SmXMLImport &rImport, sal_uInt16 nPrfx,
         const OUString& rLName)
-        : SvXMLImportContext(rImport, nPrfx, rLName) {}
+        : SvXMLImportContext(rImport, nPrfx, rLName)
+    {
+        GetSmImport().IncParseDepth();
+    }
+
+    virtual ~SmXMLImportContext() override
+    {
+        GetSmImport().DecParseDepth();
+    }
 
     SmXMLImport& GetSmImport()
     {
@@ -546,6 +555,12 @@ public:
     virtual void TCharacters(const OUString & /*rChars*/);
     virtual void Characters(const OUString &rChars) override;
     virtual SvXMLImportContextRef CreateChildContext(sal_uInt16 /*nPrefix*/, const OUString& /*rLocalName*/, const uno::Reference< xml::sax::XAttributeList > & /*xAttrList*/) override;
+    virtual void StartElement(const css::uno::Reference<css::xml::sax::XAttributeList>& rAttrList) override
+    {
+        if (GetSmImport().TooDeep())
+            throw std::range_error("too deep");
+        SvXMLImportContext::StartElement(rAttrList);
+    }
 };
 
 void SmXMLImportContext::TCharacters(const OUString & /*rChars*/)
@@ -906,7 +921,9 @@ public:
     SmXMLRowContext_Impl(SmXMLImport &rImport,sal_uInt16 nPrefix,
         const OUString& rLName)
         : SmXMLDocContext_Impl(rImport,nPrefix,rLName)
-        { nElementCount = GetSmImport().GetNodeStack().size(); }
+        , nElementCount(GetSmImport().GetNodeStack().size())
+    {
+    }
 
     virtual SvXMLImportContextRef CreateChildContext(sal_uInt16 nPrefix, const OUString& rLocalName, const uno::Reference< xml::sax::XAttributeList > &xAttrList) override;
 
@@ -915,7 +932,6 @@ public:
 
     void EndElement() override;
 };
-
 
 class SmXMLEncloseContext_Impl : public SmXMLRowContext_Impl
 {
@@ -1152,7 +1168,7 @@ void SmXMLFencedContext_Impl::EndElement()
 
     SmToken aDummy;
     SmStructureNode *pBody = new SmExpressionNode(aDummy);
-    pBody->SetSubNodes(aRelationArray);
+    pBody->SetSubNodes(std::move(aRelationArray));
 
 
     pSNode->SetSubNodes(pLeft,pBody,pRight);
@@ -1597,7 +1613,7 @@ void SmXMLSubContext_Impl::GenericEndElement(SmTokenType eType, SmSubSup eSubSup
 
     aSubNodes[eSubSup+1] = popOrZero(rNodeStack);
     aSubNodes[0] = popOrZero(rNodeStack);
-    pNode->SetSubNodes(aSubNodes);
+    pNode->SetSubNodes(std::move(aSubNodes));
     rNodeStack.push_front(std::move(pNode));
 }
 
@@ -1656,7 +1672,7 @@ void SmXMLSubSupContext_Impl::GenericEndElement(SmTokenType eType,
     aSubNodes[aSup+1] = popOrZero(rNodeStack);
     aSubNodes[aSub+1] = popOrZero(rNodeStack);
     aSubNodes[0] =  popOrZero(rNodeStack);
-    pNode->SetSubNodes(aSubNodes);
+    pNode->SetSubNodes(std::move(aSubNodes));
     rNodeStack.push_front(std::move(pNode));
 }
 
@@ -2302,7 +2318,7 @@ void SmXMLDocContext_Impl::EndElement()
         LineArray[n - (j + 1)] = pNode.release();
     }
     std::unique_ptr<SmStructureNode> pSNode2(new SmTableNode(aDummy));
-    pSNode2->SetSubNodes(LineArray);
+    pSNode2->SetSubNodes(std::move(LineArray));
     rNodeStack.push_front(std::move(pSNode2));
 }
 
@@ -2438,7 +2454,7 @@ void SmXMLRowContext_Impl::EndElement()
             SmToken aDummy;
             std::unique_ptr<SmStructureNode> pSNode(new SmBraceNode(aToken));
             SmStructureNode *pBody = new SmExpressionNode(aDummy);
-            pBody->SetSubNodes(aRelationArray2);
+            pBody->SetSubNodes(std::move(aRelationArray2));
 
             pSNode->SetSubNodes(pLeft,pBody,pRight);
             pSNode->SetScaleMode(SmScaleMode::Height);
@@ -2473,7 +2489,7 @@ void SmXMLRowContext_Impl::EndElement()
 
     SmToken aDummy;
     std::unique_ptr<SmStructureNode> pSNode(new SmExpressionNode(aDummy));
-    pSNode->SetSubNodes(aRelationArray);
+    pSNode->SetSubNodes(std::move(aRelationArray));
     rNodeStack.push_front(std::move(pSNode));
 }
 
@@ -2619,7 +2635,7 @@ void SmXMLMultiScriptsContext_Impl::ProcessSubSupPairs(bool bIsPrescript)
                 (!pScriptNode->GetToken().aText.isEmpty())))
                 aSubNodes[eSup+1] = pScriptNode;
 
-            pNode->SetSubNodes(aSubNodes);
+            pNode->SetSubNodes(std::move(aSubNodes));
             aReverseStack.push_front(std::move(pNode));
         }
         assert(!aReverseStack.empty());
@@ -2667,7 +2683,7 @@ void SmXMLTableContext_Impl::EndElement()
             aRelationArray[0] = pArray;
             SmToken aDummy;
             SmExpressionNode* pExprNode = new SmExpressionNode(aDummy);
-            pExprNode->SetSubNodes(aRelationArray);
+            pExprNode->SetSubNodes(std::move(aRelationArray));
             pArray = pExprNode;
         }
 
@@ -2680,20 +2696,20 @@ void SmXMLTableContext_Impl::EndElement()
         throw std::range_error("row limit");
     aExpressionArray.resize(nCols*nRows);
     size_t j=0;
-    while ( !aReverseStack.empty() )
+    for (auto & elem : aReverseStack)
     {
-        std::unique_ptr<SmStructureNode> xArray(static_cast<SmStructureNode*>(aReverseStack.front().release()));
-        aReverseStack.pop_front();
+        std::unique_ptr<SmStructureNode> xArray(static_cast<SmStructureNode*>(elem.release()));
         for (size_t i = 0; i < xArray->GetNumSubNodes(); ++i)
             aExpressionArray[j++] = xArray->GetSubNode(i);
-        xArray->SetSubNodes(SmNodeArray());
+        xArray->ClearSubNodes();
     }
+    aReverseStack.clear();
 
     SmToken aToken;
     aToken.cMathChar = '\0';
     aToken.eType = TMATRIX;
     std::unique_ptr<SmMatrixNode> pSNode(new SmMatrixNode(aToken));
-    pSNode->SetSubNodes(aExpressionArray);
+    pSNode->SetSubNodes(std::move(aExpressionArray));
     pSNode->SetRowCol(nRows, nCols);
     rNodeStack.push_front(std::move(pSNode));
 }
@@ -3018,6 +3034,7 @@ SvXMLImportContext *SmXMLImport::CreateActionContext(sal_uInt16 nPrefix,
 
 SmXMLImport::~SmXMLImport() throw ()
 {
+    cleanup();
 }
 
 void SmXMLImport::SetViewSettings(const Sequence<PropertyValue>& aViewProps)
@@ -3061,15 +3078,15 @@ void SmXMLImport::SetViewSettings(const Sequence<PropertyValue>& aViewProps)
         {
             pValue->Value >>= nTmp;
             Size aSize( aRect.GetSize() );
-            aSize.Width() = nTmp;
-            aRect.SetSize( aSize );
+            aSize.setWidth( nTmp );
+            aRect.SaturatingSetSize(aSize);
         }
         else if (pValue->Name == "ViewAreaHeight" )
         {
             pValue->Value >>= nTmp;
             Size aSize( aRect.GetSize() );
-            aSize.Height() = nTmp;
-            aRect.SetSize( aSize );
+            aSize.setHeight( nTmp );
+            aRect.SaturatingSetSize(aSize);
         }
         pValue++;
     }

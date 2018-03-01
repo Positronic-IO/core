@@ -88,6 +88,7 @@
 #include <editeng/blinkitem.hxx>
 #include <editeng/charhiddenitem.hxx>
 #include <editeng/editobj.hxx>
+#include <editeng/keepitem.hxx>
 #include <svx/xfillit0.hxx>
 #include <svx/xflgrit.hxx>
 #include <svx/fmglob.hxx>
@@ -125,6 +126,8 @@
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentStylePoolAccess.hxx>
 #include <IDocumentRedlineAccess.hxx>
+#include <grfatr.hxx>
+#include <frmatr.hxx>
 
 #include <osl/file.hxx>
 #include <vcl/embeddedfontshelper.hxx>
@@ -949,6 +952,25 @@ void lcl_writeParagraphMarkerProperties(DocxAttributeOutput& rAttributeOutput, c
         }
         nWhichId = aIter.NextWhich();
     }
+}
+
+const char *RubyAlignValues[] =
+{
+    "center",
+    "distributeLetter",
+    "distributeSpace",
+    "left",
+    "right",
+    "rightVertical"
+};
+
+
+const char *lclConvertWW8JCToOOXMLRubyAlign(sal_Int32 nJC)
+{
+    const sal_Int32 nElements = SAL_N_ELEMENTS(RubyAlignValues);
+    if ( nJC >=0 && nJC < nElements )
+        return RubyAlignValues[nJC];
+    return RubyAlignValues[0];
 }
 
 }
@@ -2492,23 +2514,34 @@ void DocxAttributeOutput::RunText( const OUString& rText, rtl_TextEncoding /*eCh
 
 void DocxAttributeOutput::RawText(const OUString& rText, rtl_TextEncoding /*eCharSet*/)
 {
-    assert (m_pHyperlinkAttrList.is() && "jluth is at mail dot com and wants example documents that use RawText/EEField");
-    if ( m_pHyperlinkAttrList.is() )
-        m_sRawText = rText;
+    assert ( (m_pHyperlinkAttrList.is() || m_rExport.SdrExporter().IsDMLAndVMLDrawingOpen() /* || m_rExport.SdrExporter().IsDrawingOpen() */) && "jluth is at mail dot com-and wants example documents that use RawText/EEField");
+    m_sRawText = rText;
 }
 
 void DocxAttributeOutput::StartRuby( const SwTextNode& rNode, sal_Int32 nPos, const SwFormatRuby& rRuby )
 {
+    WW8Ruby aWW8Ruby( rNode, rRuby, GetExport() );
     SAL_INFO("sw.ww8", "TODO DocxAttributeOutput::StartRuby( const SwTextNode& rNode, const SwFormatRuby& rRuby )" );
     EndRun( &rNode, nPos ); // end run before starting ruby to avoid nested runs, and overlap
     assert(!m_closeHyperlinkInThisRun); // check that no hyperlink overlaps ruby
     assert(!m_closeHyperlinkInPreviousRun);
+    m_pSerializer->startElementNS( XML_w, XML_r, FSEND );
     m_pSerializer->startElementNS( XML_w, XML_ruby, FSEND );
     m_pSerializer->startElementNS( XML_w, XML_rubyPr, FSEND );
-    // hps
-    // hpsBaseText
-    // hpsRaise
-    // lid
+
+    m_pSerializer->singleElementNS( XML_w, XML_rubyAlign,
+            FSNS( XML_w, XML_val ), lclConvertWW8JCToOOXMLRubyAlign(aWW8Ruby.GetJC()), FSEND );
+    sal_uInt32   nHps = (aWW8Ruby.GetRubyHeight() + 5) / 10;
+    sal_uInt32   nHpsBaseText = (aWW8Ruby.GetBaseHeight() + 5) / 10;
+    m_pSerializer->singleElementNS( XML_w, XML_hps,
+            FSNS( XML_w, XML_val ), OString::number(nHps).getStr(), FSEND );
+
+    m_pSerializer->singleElementNS( XML_w, XML_hpsRaise,
+            FSNS( XML_w, XML_val ), OString::number(nHpsBaseText).getStr(), FSEND );
+
+    m_pSerializer->singleElementNS( XML_w, XML_hpsBaseText,
+            FSNS( XML_w, XML_val ), OString::number(nHpsBaseText).getStr(), FSEND );
+
     lang::Locale aLocale( SwBreakIt::Get()->GetLocale(
                 rNode.GetLang( nPos ) ) );
     OUString sLang( LanguageTag::convertToBcp47( aLocale) );
@@ -2516,41 +2549,23 @@ void DocxAttributeOutput::StartRuby( const SwTextNode& rNode, sal_Int32 nPos, co
             FSNS( XML_w, XML_val ),
             OUStringToOString( sLang, RTL_TEXTENCODING_UTF8 ).getStr( ), FSEND );
 
-    OString sAlign ( "center" );
-    switch ( rRuby.GetAdjustment( ) )
-    {
-        case css::text::RubyAdjust_LEFT:
-            sAlign = OString( "left" );
-            break;
-        case css::text::RubyAdjust_CENTER:
-            // Defaults to center
-            break;
-        case css::text::RubyAdjust_RIGHT:
-            sAlign = OString( "right" );
-            break;
-        case css::text::RubyAdjust_BLOCK:
-            sAlign = OString( "distributeLetter" );
-            break;
-        case css::text::RubyAdjust_INDENT_BLOCK:
-            sAlign = OString( "distributeSpace" );
-            break;
-        default:
-            break;
-    }
-    m_pSerializer->singleElementNS( XML_w, XML_rubyAlign,
-            FSNS( XML_w, XML_val ), sAlign.getStr(), FSEND );
     m_pSerializer->endElementNS( XML_w, XML_rubyPr );
 
     m_pSerializer->startElementNS( XML_w, XML_rt, FSEND );
     StartRun( nullptr, nPos );
     StartRunProperties( );
-    SwWW8AttrIter aAttrIt( m_rExport, rNode );
-    aAttrIt.OutAttr( nPos, true );
 
-    sal_uInt16 nStyle = m_rExport.GetId( rRuby.GetTextRuby()->GetCharFormat() );
-    OString aStyleId(m_rExport.m_pStyles->GetStyleId(nStyle));
-    m_pSerializer->singleElementNS( XML_w, XML_rStyle,
-            FSNS( XML_w, XML_val ), aStyleId.getStr(), FSEND );
+    if (rRuby.GetTextRuby() && rRuby.GetTextRuby()->GetCharFormat())
+    {
+        const SwCharFormat* pFormat = rRuby.GetTextRuby()->GetCharFormat();
+        sal_uInt16 nScript = g_pBreakIt->GetBreakIter()->getScriptType(rRuby.GetText(), 0);
+        sal_uInt16 nWhichFont = (nScript == i18n::ScriptType::LATIN) ?  RES_CHRATR_FONT : RES_CHRATR_CJK_FONT;
+        sal_uInt16 nWhichFontSize = (nScript == i18n::ScriptType::LATIN) ?  RES_CHRATR_FONTSIZE : RES_CHRATR_CJK_FONTSIZE;
+
+        CharFont(ItemGet<SvxFontItem>(*pFormat, nWhichFont));
+        CharFontSize(ItemGet<SvxFontHeightItem>(*pFormat, nWhichFontSize));
+        CharFontSize(ItemGet<SvxFontHeightItem>(*pFormat, RES_CHRATR_CTL_FONTSIZE));
+    }
 
     EndRunProperties( nullptr );
     RunText( rRuby.GetText( ) );
@@ -2567,6 +2582,7 @@ void DocxAttributeOutput::EndRuby(const SwTextNode& rNode, sal_Int32 nPos)
     EndRun( &rNode, nPos );
     m_pSerializer->endElementNS( XML_w, XML_rubyBase );
     m_pSerializer->endElementNS( XML_w, XML_ruby );
+    m_pSerializer->endElementNS( XML_w, XML_r );
     StartRun(nullptr, nPos); // open Run again so OutputTextNode loop can close it
 }
 
@@ -4241,7 +4257,7 @@ void DocxAttributeOutput::OutputDefaultItem(const SfxPoolItem& rHt)
             bMustWrite = static_cast< const SvxCaseMapItem& >(rHt).GetCaseMap() != SvxCaseMap::NotMapped;
             break;
         case RES_CHRATR_COLOR:
-            bMustWrite = static_cast< const SvxColorItem& >(rHt).GetValue().GetColor() != COL_AUTO;
+            bMustWrite = static_cast< const SvxColorItem& >(rHt).GetValue() != COL_AUTO;
             break;
         case RES_CHRATR_CONTOUR:
             bMustWrite = static_cast< const SvxContourItem& >(rHt).GetValue();
@@ -4714,8 +4730,21 @@ void DocxAttributeOutput::FlyFrameGraphic( const SwGrfNode* pGrfNode, const Size
     m_pSerializer->startElementNS( XML_pic, XML_spPr,
             XML_bwMode, "auto",
             FSEND );
-    m_pSerializer->startElementNS( XML_a, XML_xfrm,
-            FSEND );
+
+    rtl::Reference<sax_fastparser::FastAttributeList> xFrameAttributes(
+        FastSerializerHelper::createAttrList());
+
+    if (pGrfNode)
+    {
+        MirrorGraph eMirror = pGrfNode->GetSwAttrSet().Get(RES_GRFATR_MIRRORGRF).GetValue();
+        if (eMirror == MirrorGraph::Vertical || eMirror == MirrorGraph::Both)
+            // Mirror on the vertical axis is a horizontal flip.
+            xFrameAttributes->add(XML_flipH, "1");
+    }
+
+    m_pSerializer->startElementNS(
+        XML_a, XML_xfrm, uno::Reference<xml::sax::XFastAttributeList>(xFrameAttributes.get()));
+
     m_pSerializer->singleElementNS( XML_a, XML_off,
             XML_x, "0", XML_y, "0",
             FSEND );
@@ -5545,6 +5574,13 @@ void DocxAttributeOutput::WriteOutliner(const OutlinerParaObject& rParaObj)
             {
                 OUString aOut( aStr.copy( nAktPos, nNextAttr - nAktPos ) );
                 RunText(aOut);
+            }
+
+            if ( !m_sRawText.isEmpty() )
+            {
+                assert (bTextAtr && "jluth is at mail dot com-and is looking for sample documents");
+                RunText( m_sRawText );
+                m_sRawText.clear();
             }
 
             m_pSerializer->endElementNS( XML_w, XML_r );
@@ -6737,7 +6773,7 @@ void DocxAttributeOutput::CharEscapement( const SvxEscapementItem& rEscapement )
         m_pSerializer->singleElementNS( XML_w, XML_vertAlign,
            FSNS( XML_w, XML_val ), sIss.getStr(), FSEND );
 
-    const SvxFontHeightItem& rItem = static_cast<const SvxFontHeightItem&>(m_rExport.GetItem(RES_CHRATR_FONTSIZE));
+    const SvxFontHeightItem& rItem = m_rExport.GetItem(RES_CHRATR_FONTSIZE);
     if (sIss.isEmpty() || sIss.match(OString("baseline")))
     {
         long nHeight = rItem.GetHeight();

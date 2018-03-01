@@ -93,9 +93,9 @@
 #include <unotools/useroptions.hxx>
 
 #include <vcl/graph.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/waitobj.hxx>
+#include <vcl/weld.hxx>
 
 #include <editeng/cmapitem.hxx>
 #include <editeng/escapementitem.hxx>
@@ -311,7 +311,7 @@ public:
         return m_aResults;
     }
 
-    bool collect()
+    void collect()
     {
         // Set to MASTER mode
         EditMode eOldMode = m_rDrawViewShell.GetEditMode();
@@ -345,13 +345,12 @@ public:
                         if (hasCustomPropertyField(aSections, m_aKeyCreator.makeCategoryNameKey()))
                         {
                             iterateSectionsAndCollect(aSections, rEditText);
-                            return true;
+                            return;
                         }
                     }
                 }
             }
         }
-        return false;
     }
 };
 
@@ -530,8 +529,8 @@ public:
             ::tools::Rectangle aRectangle(Point(), pMasterPage->GetSize());
             Point aPosition(aRectangle.Center().X(), aRectangle.Bottom());
 
-            aPosition.X() -= aTextSize.Width() / 2;
-            aPosition.Y() -= aTextSize.Height();
+            aPosition.AdjustX( -(aTextSize.Width() / 2) );
+            aPosition.AdjustY( -(aTextSize.Height()) );
 
             pObject->SetLogicRect(::tools::Rectangle(aPosition, aTextSize));
         }
@@ -883,20 +882,18 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             const SfxItemSet* pArgs = rReq.GetArgs();
 
-            if (pArgs && pArgs->Count () == 1 )
+            const SfxUInt16Item* pScale = (pArgs && pArgs->Count () == 1) ?
+                rReq.GetArg<SfxUInt16Item>(SID_ATTR_ZOOMSLIDER) : nullptr;
+            if (pScale && CHECK_RANGE (5, pScale->GetValue (), 3000))
             {
-                const SfxUInt16Item* pScale = rReq.GetArg<SfxUInt16Item>(SID_ATTR_ZOOMSLIDER);
-                if (CHECK_RANGE (5, pScale->GetValue (), 3000))
-                {
-                    SetZoom (pScale->GetValue ());
+                SetZoom (pScale->GetValue ());
 
-                    SfxBindings& rBindings = GetViewFrame()->GetBindings();
-                    rBindings.Invalidate( SID_ATTR_ZOOM );
-                    rBindings.Invalidate( SID_ZOOM_IN );
-                    rBindings.Invalidate( SID_ZOOM_OUT );
-                    rBindings.Invalidate( SID_ATTR_ZOOMSLIDER );
+                SfxBindings& rBindings = GetViewFrame()->GetBindings();
+                rBindings.Invalidate( SID_ATTR_ZOOM );
+                rBindings.Invalidate( SID_ZOOM_IN );
+                rBindings.Invalidate( SID_ZOOM_OUT );
+                rBindings.Invalidate( SID_ATTR_ZOOMSLIDER );
 
-                }
             }
 
             Cancel();
@@ -960,7 +957,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -1005,7 +1005,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -1033,7 +1036,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected(true,true,true) )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -1286,13 +1292,14 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 if (pObj && pObj->GetGraphicType() == GraphicType::Bitmap)
                 {
                     vcl::Window* pWin = GetActiveWindow();
+                    weld::Window* pFrame = GetFrameWeld();
                     GraphicAttr aGraphicAttr = pObj->GetGraphicAttr();
                     short nState = RET_CANCEL;
                     if (aGraphicAttr != GraphicAttr()) // the image has been modified
                     {
-                        if (pWin)
+                        if (pFrame)
                         {
-                            nState = GraphicHelper::HasToSaveTransformedImage(pWin);
+                            nState = GraphicHelper::HasToSaveTransformedImage(pFrame);
                         }
                     }
                     else
@@ -1546,7 +1553,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected(false) )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -1725,11 +1735,16 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if( !bDone )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
 #ifndef UNX
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_TWAIN_NO_SOURCE))->Execute();
+                                                              SdResId(STR_TWAIN_NO_SOURCE)
 #else
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_TWAIN_NO_SOURCE_UNX))->Execute();
+                                                              SdResId(STR_TWAIN_NO_SOURCE_UNX)
 #endif
+                                                              ));
+                xInfoBox->run();
+
             }
             else
             {
@@ -1797,11 +1812,11 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                             || aLayerName.isEmpty() )
                         {
                             // name already exists
-                            ScopedVclPtrInstance<WarningBox> aWarningBox (
-                                GetParentWindow(),
-                                MessBoxStyle::Ok,
-                                SdResId(STR_WARN_NAME_DUPLICATE));
-                            aWarningBox->Execute();
+                            vcl::Window* pWin = GetParentWindow();
+                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Warning, VclButtonsType::Ok,
+                                                                       SdResId(STR_WARN_NAME_DUPLICATE)));
+                            xWarn->run();
                         }
                         else
                             bLoop = false;
@@ -1966,11 +1981,11 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                              aLayerName != aOldLayerName) || aLayerName.isEmpty() )
                         {
                             // name already exists
-                            ScopedVclPtrInstance<WarningBox> aWarningBox (
-                                GetParentWindow(),
-                                MessBoxStyle::Ok,
-                                SdResId(STR_WARN_NAME_DUPLICATE));
-                            aWarningBox->Execute();
+                            vcl::Window* pWin = GetParentWindow();
+                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Warning, VclButtonsType::Ok,
+                                                                       SdResId(STR_WARN_NAME_DUPLICATE)));
+                            xWarn->run();
                         }
                         else
                             bLoop = false;
@@ -2334,15 +2349,15 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 pOutl->UpdateFields();
                 pOutl->SetUpdateMode( true );
                 Size aSize( pOutl->CalcTextSize() );
-                aSize.Width() *= nMul;
+                aSize.setWidth( aSize.Width() * nMul );
                 pOutl->SetUpdateMode( false );
 
                 Point aPos;
                 ::tools::Rectangle aRect( aPos, GetActiveWindow()->GetOutputSizePixel() );
                 aPos = aRect.Center();
                 aPos = GetActiveWindow()->PixelToLogic(aPos);
-                aPos.X() -= aSize.Width() / 2;
-                aPos.Y() -= aSize.Height() / 2;
+                aPos.AdjustX( -(aSize.Width() / 2) );
+                aPos.AdjustY( -(aSize.Height() / 2) );
 
                 ::tools::Rectangle aLogicRect(aPos, aSize);
                 pRectObj->SetLogicRect(aLogicRect);
@@ -2450,7 +2465,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected( true, true, true ) )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2569,7 +2587,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2586,7 +2607,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2606,7 +2630,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2627,7 +2654,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2648,7 +2678,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2690,7 +2723,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -2782,7 +2818,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected() )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {

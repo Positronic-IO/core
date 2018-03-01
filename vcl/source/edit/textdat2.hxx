@@ -99,11 +99,11 @@ public:
 
 struct TEWritingDirectionInfo
 {
-    sal_uInt8    nType;
+    bool         bLeftToRight;
     sal_Int32    nStartPos;
     sal_Int32    nEndPos;
-    TEWritingDirectionInfo( sal_uInt8 Type, sal_Int32 Start, sal_Int32 End )
-        : nType {Type}
+    TEWritingDirectionInfo( bool LeftToRight, sal_Int32 Start, sal_Int32 End )
+        : bLeftToRight {LeftToRight}
         , nStartPos {Start}
         , nEndPos {End}
     {}
@@ -212,15 +212,15 @@ public:
 class TEParaPortions
 {
 private:
-    std::vector<TEParaPortion*> mvData;
+    std::vector<std::unique_ptr<TEParaPortion>> mvData;
 
 public:
                     TEParaPortions() : mvData() {}
                     ~TEParaPortions();
 
     sal_uInt32      Count() const { return static_cast<sal_uInt32>(mvData.size()); }
-    TEParaPortion*  GetObject( sal_uInt32 nIndex ) { return mvData[nIndex]; }
-    void            Insert( TEParaPortion* pObject, sal_uInt32 nPos ) { mvData.insert( mvData.begin()+nPos, pObject ); }
+    TEParaPortion*  GetObject( sal_uInt32 nIndex ) { return mvData[nIndex].get(); }
+    void            Insert( TEParaPortion* pObject, sal_uInt32 nPos ) { mvData.emplace( mvData.begin()+nPos, pObject ); }
     void            Remove( sal_uInt32 nPos ) { mvData.erase( mvData.begin()+nPos ); }
 };
 
@@ -236,7 +236,7 @@ public:
 
     virtual void    CreateAnchor() override;
 
-    virtual bool    SetCursorAtPoint( const Point& rPointPixel, bool bDontSelectAtCursor = false ) override;
+    virtual void    SetCursorAtPoint( const Point& rPointPixel, bool bDontSelectAtCursor = false ) override;
 
     virtual bool    IsSelectionAtPoint( const Point& rPointPixel ) override;
     virtual void    DeselectAll() override;

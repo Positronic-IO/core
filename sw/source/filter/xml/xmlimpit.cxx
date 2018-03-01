@@ -379,7 +379,7 @@ bool SvXMLImportItemMapper::PutXMLValue(
                     if( !bOk )
                         return false;
 
-                    aColor.SetColor(nColor);
+                    aColor = nColor;
                     bColorFound = true;
                 }
                 else if( !bOffsetFound )
@@ -902,8 +902,8 @@ bool SvXMLImportItemMapper::PutXMLValue(
                         sal_Int32 nValue = rValue.toInt32();
                         if( nValue < MINLAY )
                             nValue = MINLAY;
-                        else if( nValue > USHRT_MAX )
-                            nValue = USHRT_MAX;
+                        else if( nValue > SAL_MAX_UINT16 )
+                            nValue = SAL_MAX_UINT16;
 
                         rFrameSize.SetWidth( static_cast<sal_uInt16>(nValue) );
                         rFrameSize.SetHeightSizeType( ATT_VAR_SIZE );

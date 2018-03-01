@@ -32,6 +32,7 @@
 
 #include <map>
 #include <set>
+#include <memory>
 
 
 class SvXMLExport;
@@ -151,9 +152,9 @@ class XMLTextFieldExport final
     SvXMLExport& rExport;
 
     /// store used text field master names (NULL means: don't collect)
-    ::std::map<
+    std::unique_ptr< ::std::map<
             css::uno::Reference< css::text::XText >,
-            ::std::set< OUString > > *
+            ::std::set< OUString > > >
         pUsedMasters;
 
 public:
@@ -463,6 +464,7 @@ private:
     const OUString sPropertyPlaceholderType;
     const OUString sPropertyReferenceFieldPart;
     const OUString sPropertyReferenceFieldSource;
+    const OUString sPropertyReferenceFieldLanguage;
     const OUString sPropertyScriptType;
     const OUString sPropertySelectedItem;
     const OUString sPropertySequenceNumber;
@@ -481,7 +483,7 @@ private:
     const OUString sPropertyTooltip;
     const OUString sPropertyTextRange;
 
-    XMLPropertyState* pCombinedCharactersPropertyState;
+    std::unique_ptr<XMLPropertyState> pCombinedCharactersPropertyState;
 
 };
 

@@ -47,6 +47,13 @@
 
 
 class BitmapEx;
+namespace weld
+{
+    class Builder;
+    class Container;
+    class MessageDialog;
+    class Widget;
+}
 class AllSettings;
 class DataChangedEvent;
 class Accelerator;
@@ -683,7 +690,7 @@ public:
 
     /** Remove a VCL event listener from the application.
 
-     @param     rEventListener  Const refernece to the event listener to be removed
+     @param     rEventListener  Const reference to the event listener to be removed
 
      @see AddEventListener, AddKeyListener, RemoveKeyListener
     */
@@ -1345,6 +1352,9 @@ public:
     static void                 ShowNativeErrorBox(const OUString& sTitle  ,
                                                    const OUString& sMessage);
 
+    /** Update main thread identifier */
+    static void                 UpdateMainThread();
+
     /** Do we have a native / system file selector available?
 
      @returns True if native file selector is available, false otherwise.
@@ -1384,6 +1394,10 @@ public:
     // For vclbootstrapprotector:
     static void setDeInitHook(Link<LinkParamNone*,void> const & hook);
 
+    static weld::Builder* CreateBuilder(weld::Widget* pParent, const OUString &rUIFile);
+
+    static weld::MessageDialog* CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType,
+                                                    VclButtonsType eButtonType, const OUString& rPrimaryMessage);
 private:
     DECL_STATIC_LINK( Application, PostEventHandler, void*, void );
 };

@@ -38,7 +38,7 @@
 #include <svl/intitem.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/opengrf.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <svx/svxdlg.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/dialoghelper.hxx>
@@ -237,13 +237,13 @@ bool SvxBitmapTabPage::FillItemSet( SfxItemSet* rAttrs )
                 sal_Int64 nHeightPercent = m_pBitmapHeight->Denormalize(m_pBitmapHeight->GetValue());
                 if(eStylePos == CUSTOM && m_pTsbScale->IsEnabled() && m_pTsbScale->GetState() == TRISTATE_TRUE)
                 {
-                    aSetBitmapSize.Width() = -nWidthPercent;
-                    aSetBitmapSize.Height() = -nHeightPercent;
+                    aSetBitmapSize.setWidth( -nWidthPercent );
+                    aSetBitmapSize.setHeight( -nHeightPercent );
                 }
                 else
                 {
-                    aSetBitmapSize.Width() = static_cast<long>(nWidthPercent*rBitmapSize.Width()/100);
-                    aSetBitmapSize.Height() = static_cast<long>(nHeightPercent*rBitmapSize.Height()/100);
+                    aSetBitmapSize.setWidth( static_cast<long>(nWidthPercent*rBitmapSize.Width()/100) );
+                    aSetBitmapSize.setHeight( static_cast<long>(nHeightPercent*rBitmapSize.Height()/100) );
                 }
                 break;
             }
@@ -316,8 +316,8 @@ void SvxBitmapTabPage::Reset( const SfxItemSet* rAttrs )
     {
         BitmapEx aBmpEx(pGraphicObject->GetGraphic().GetBitmapEx());
         Size aTempBitmapSize = aBmpEx.GetSizePixel();
-        rBitmapSize.Width() = ((OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Width()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale);
-        rBitmapSize.Height() = ((OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Height()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale);
+        rBitmapSize.setWidth( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Width()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
+        rBitmapSize.setHeight( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Height()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
         CalculateBitmapPresetSize();
     }
 
@@ -470,17 +470,17 @@ void SvxBitmapTabPage::CalculateBitmapPresetSize()
 
         if(std::abs(rBitmapSize.Width() - nObjectWidth) < std::abs(rBitmapSize.Height() - nObjectHeight))
         {
-            rFilledSize.Width() = nObjectWidth;
-            rFilledSize.Height() = rBitmapSize.Height()*nObjectWidth/rBitmapSize.Width();
-            rZoomedSize.Width() = rBitmapSize.Width()*nObjectHeight/rBitmapSize.Height();
-            rZoomedSize.Height() = nObjectHeight;
+            rFilledSize.setWidth( nObjectWidth );
+            rFilledSize.setHeight( rBitmapSize.Height()*nObjectWidth/rBitmapSize.Width() );
+            rZoomedSize.setWidth( rBitmapSize.Width()*nObjectHeight/rBitmapSize.Height() );
+            rZoomedSize.setHeight( nObjectHeight );
         }
         else
         {
-            rFilledSize.Width() = rBitmapSize.Width()*nObjectHeight/rBitmapSize.Height();
-            rFilledSize.Height() = nObjectHeight;
-            rZoomedSize.Width() = nObjectWidth;
-            rZoomedSize.Height() = rBitmapSize.Height()*nObjectWidth/rBitmapSize.Width();
+            rFilledSize.setWidth( rBitmapSize.Width()*nObjectHeight/rBitmapSize.Height() );
+            rFilledSize.setHeight( nObjectHeight );
+            rZoomedSize.setWidth( nObjectWidth );
+            rZoomedSize.setHeight( rBitmapSize.Height()*nObjectWidth/rBitmapSize.Width() );
         }
 
         nFilledWidthPercent = static_cast<sal_Int64>(rFilledSize.Width()*100/rBitmapSize.Width());
@@ -531,8 +531,8 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ModifyBitmapHdl, ValueSet*, void)
         Size aTempBitmapSize = aBmpEx.GetSizePixel();
         const double fUIScale = ( (mpView && mpView->GetModel()) ? double(mpView->GetModel()->GetUIScale()) : 1.0);
 
-        rBitmapSize.Width() = ((OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Width()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale);
-        rBitmapSize.Height() = ((OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Height()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale);
+        rBitmapSize.setWidth( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Width()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
+        rBitmapSize.setHeight( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Height()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
         CalculateBitmapPresetSize();
         ModifyBitmapStyleHdl( *m_pBitmapStyleLB );
         ModifyBitmapPositionHdl( *m_pPositionLB );
@@ -584,10 +584,9 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickRenameHdl, SvxPresetListBox*, void)
             }
             else
             {
-                ScopedVclPtrInstance<MessageDialog> aBox( GetParentDialog()
-                                                            ,"DuplicateNameDialog"
-                                                            ,"cui/ui/queryduplicatedialog.ui" );
-                aBox->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+                xBox->run();
             }
         }
     }
@@ -600,9 +599,10 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickDeleteHdl, SvxPresetListBox*, void)
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
     {
-        ScopedVclPtrInstance< MessageDialog > aQueryBox( GetParentDialog(),"AskDelBitmapDialog","cui/ui/querydeletebitmapdialog.ui" );
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querydeletebitmapdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("AskDelBitmapDialog"));
 
-        if( aQueryBox->Execute() == RET_YES )
+        if (xQueryBox->run() == RET_YES)
         {
             m_pBitmapList->Remove( static_cast<sal_uInt16>(nPos) );
             m_pBitmapLB->RemoveItem( nId );
@@ -694,13 +694,13 @@ IMPL_LINK_NOARG( SvxBitmapTabPage, ModifyBitmapStyleHdl, ListBox&, void )
                 sal_Int64 nHeightPercent = m_pBitmapWidth->Denormalize( m_pBitmapHeight->GetValue() );
                 if(eStylePos == CUSTOM && m_pTsbScale->IsEnabled() &&  m_pTsbScale->GetState() == TRISTATE_TRUE)
                 {
-                    aSetBitmapSize.Width() = -nWidthPercent;
-                    aSetBitmapSize.Height() = -nHeightPercent;
+                    aSetBitmapSize.setWidth( -nWidthPercent );
+                    aSetBitmapSize.setHeight( -nHeightPercent );
                 }
                 else
                 {
-                    aSetBitmapSize.Width() = static_cast<long>(nWidthPercent*rBitmapSize.Width()/100);
-                    aSetBitmapSize.Height() = static_cast<long>(nHeightPercent*rBitmapSize.Height()/100);
+                    aSetBitmapSize.setWidth( static_cast<long>(nWidthPercent*rBitmapSize.Width()/100) );
+                    aSetBitmapSize.setHeight( static_cast<long>(nHeightPercent*rBitmapSize.Height()/100) );
                 }
             }
             break;
@@ -772,7 +772,6 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickImportHdl, Button*, void)
         if( !nError )
         {
             OUString aDesc(CuiResId(RID_SVXSTR_DESC_EXT_BITMAP));
-            ScopedVclPtr<MessageDialog> pWarnBox;
 
             // convert file URL to UI name
             OUString        aName;
@@ -798,19 +797,13 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickImportHdl, Button*, void)
                     break;
                 }
 
-                if( !pWarnBox )
-                {
-                    pWarnBox.disposeAndReset(VclPtr<MessageDialog>::Create( GetParentDialog()
-                                                 ,"DuplicateNameDialog"
-                                                 ,"cui/ui/queryduplicatedialog.ui"));
-                }
-
-                if( pWarnBox->Execute() != RET_OK )
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+                if (xBox->run() != RET_OK)
                     break;
             }
 
             pDlg.disposeAndClear();
-            pWarnBox.disposeAndClear();
 
             if( !nError )
             {
@@ -827,10 +820,12 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickImportHdl, Button*, void)
             }
         }
         else
+        {
             // graphic couldn't be loaded
-            ScopedVclPtrInstance<MessageDialog>( GetParentDialog()
-                          ,"NoLoadedFileDialog"
-                          ,"cui/ui/querynoloadedfiledialog.ui")->Execute();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querynoloadedfiledialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("NoLoadedFileDialog"));
+            xBox->run();
+        }
     }
 }
 

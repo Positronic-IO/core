@@ -16,9 +16,6 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-#ifdef _MSC_VER
-#pragma warning(disable : 4917 4555)
-#endif
 
 #include <docholder.hxx>
 #include <embeddoc.hxx>
@@ -141,7 +138,7 @@ void DocumentHolder::LoadDocInFrame( bool bPluginMode )
             aSeq[nLen-1] = beans::PropertyValue(
                 "PluginMode",
                 -1,
-                uno::Any((sal_Int16) 3),
+                uno::Any(sal_Int16(3)),
                 beans::PropertyState_DIRECT_VALUE);
         }
 
@@ -538,18 +535,18 @@ BOOL DocumentHolder::InPlaceMenuCreate()
     int help = count-1;
 
     // start with 1, because we don't include "File"
-    WORD pos = (WORD)mgw.width[0];
+    WORD pos = static_cast<WORD>(mgw.width[0]);
     CopyToOLEMenu(m_nMenuHandle,1,hMenu,pos);
     mgw.width[1] = 1;
 
     // insert object menu here
-    pos = ((WORD)(mgw.width[0] + mgw.width[1] + mgw.width[2]));
+    pos = static_cast<WORD>(mgw.width[0] + mgw.width[1] + mgw.width[2]);
     for(WORD i = 2; i < help-1; ++i,++pos)
         CopyToOLEMenu(m_nMenuHandle,i,hMenu,pos);
     mgw.width[3] = help - 3;
 
     // insert help menu
-    pos = (WORD)(mgw.width[0] + mgw.width[1] + mgw.width[2] +
+    pos = static_cast<WORD>(mgw.width[0] + mgw.width[1] + mgw.width[2] +
                  mgw.width[3] + mgw.width[4]);
     CopyToOLEMenu(m_nMenuHandle,WORD(help),hMenu,pos);
     mgw.width[5] = 1;

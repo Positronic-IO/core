@@ -61,9 +61,9 @@ void SwShadowCursor::DrawTri( const Point& rPt, long nHeight, bool bLeft )
     while( aPt1.Y() <= aPt2.Y() )
     {
         pWin->DrawLine( aPt1, aPt2 );
-        aPt1.Y()++;
-        aPt2.Y()--;
-        aPt2.X() = aPt1.X() += nDiff;
+        aPt1.AdjustY( 1 );
+        aPt2.AdjustY( -1 );
+        aPt2.setX( aPt1.AdjustX(nDiff ) );
     }
 }
 
@@ -76,7 +76,7 @@ void SwShadowCursor::DrawCursor( const Point& rPt, long nHeight, sal_uInt16 nMod
     pWin->SetMapMode(MapMode(MapUnit::MapPixel));
     pWin->SetRasterOp( RasterOp::Xor );
 
-    pWin->SetLineColor( Color( aCol.GetColor() ^ COL_WHITE ) );
+    pWin->SetLineColor( Color( aCol.GetColor() ^ sal_uInt32(COL_WHITE) ) );
 
     // 1. The Line:
     pWin->DrawLine( Point( rPt.X(), rPt.Y() + 1),
@@ -108,11 +108,11 @@ tools::Rectangle SwShadowCursor::GetRect() const
     Size aSz( nWidth, nH );
 
     if( text::HoriOrientation::RIGHT == nOldMode )
-        aPt.X() -= aSz.Width();
+        aPt.AdjustX( -(aSz.Width()) );
     else if( text::HoriOrientation::CENTER == nOldMode )
     {
-        aPt.X() -= aSz.Width();
-        aSz.Width() *= 2;
+        aPt.AdjustX( -(aSz.Width()) );
+        aSz.setWidth( aSz.Width() * 2 );
     }
 
     return pWin->PixelToLogic( tools::Rectangle( aPt, aSz ) );

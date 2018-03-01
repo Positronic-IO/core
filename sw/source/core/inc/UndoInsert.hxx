@@ -41,7 +41,7 @@ class SwUndoInsert: public SwUndo, private SwUndoSaveContent
 {
     /// start of Content in UndoNodes for Redo
     std::unique_ptr<SwNodeIndex> m_pUndoNodeIndex;
-    OUString *pText;
+    std::unique_ptr<OUString> m_pText;
     std::unique_ptr<OUString> pUndoText;
     SwRedlineData* pRedlData;
     sal_uLong nNode;
@@ -91,7 +91,7 @@ public:
 };
 
 SwRewriter
-MakeUndoReplaceRewriter(sal_uLong const ocurrences,
+MakeUndoReplaceRewriter(sal_uLong const occurrences,
     OUString const& sOld, OUString const& sNew);
 
 class SwUndoReplace

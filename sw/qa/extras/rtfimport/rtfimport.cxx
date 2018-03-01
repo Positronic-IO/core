@@ -175,6 +175,24 @@ DECLARE_RTFIMPORT_TEST(testFdo46662, "fdo46662.rtf")
     }
 }
 
+DECLARE_RTFIMPORT_TEST(testTdf115715, "tdf115715.rtf")
+{
+    // This was 0, second paragraph was shifted to the right, it had the same
+    // horizontal position as the 3rd paragraph.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(-1270),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaFirstLineIndent"));
+}
+
+DECLARE_RTFIMPORT_TEST(testTdf115155, "tdf115155.rtf")
+{
+    auto xLevels
+        = getProperty<uno::Reference<container::XIndexAccess>>(getParagraph(2), "NumberingRules");
+    // 1st level
+    comphelper::SequenceAsHashMap aMap(xLevels->getByIndex(0));
+    // This was 1270: the left margin in the numbering rule was too small.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2540), aMap["IndentAt"].get<sal_Int32>());
+}
+
 DECLARE_RTFIMPORT_TEST(testTdf108951, "tdf108951.rtf")
 {
     // This test is import-only, as we assert the list ID, which is OK to
@@ -334,11 +352,10 @@ DECLARE_RTFIMPORT_TEST(testFdo52066, "fdo52066.rtf")
 
 DECLARE_RTFIMPORT_TEST(testTdf112211_2, "tdf112211-2.rtf")
 {
-    uno::Reference<beans::XPropertyState> xPropertyState(getParagraph(2), uno::UNO_QUERY);
-    beans::PropertyState ePropertyState = xPropertyState->getPropertyState("ParaLeftMargin");
-    // This was beans::PropertyState_DIRECT_VALUE -> direct formatting
-    // prevented inheritance from numbering definition.
-    CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DEFAULT_VALUE, ePropertyState);
+    // Spacing between the bullet and the actual text was too large.
+    // This is now around 269, large old value was 629.
+    int nWidth = parseDump("/root/page/body/txt[2]/Text[@nType='POR_TABLEFT']", "nWidth").toInt32();
+    CPPUNIT_ASSERT_LESS(300, nWidth);
 }
 
 DECLARE_RTFIMPORT_TEST(testFdo49892, "fdo49892.rtf")
@@ -697,6 +714,20 @@ DECLARE_RTFIMPORT_TEST(testGroupshapeRotation, "groupshape-rotation.rtf")
 {
     // Rotation on groupshapes wasn't handled correctly, RotateAngle was 4500.
     CPPUNIT_ASSERT_EQUAL(sal_Int32(315 * 100), getProperty<sal_Int32>(getShape(1), "RotateAngle"));
+}
+
+DECLARE_RTFIMPORT_TEST(testTdf115153, "tdf115153.rtf")
+{
+    auto const xShape(getShape(1));
+    CPPUNIT_ASSERT_EQUAL(text::HoriOrientation::NONE, getProperty<sal_Int16>(xShape, "HoriOrient"));
+    CPPUNIT_ASSERT_EQUAL(text::RelOrientation::PAGE_FRAME,
+                         getProperty<sal_Int16>(xShape, "HoriOrientRelation"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2533), getProperty<sal_Int32>(xShape, "HoriOrientPosition"));
+    // VertOrient was wrong
+    CPPUNIT_ASSERT_EQUAL(text::VertOrientation::NONE, getProperty<sal_Int16>(xShape, "VertOrient"));
+    CPPUNIT_ASSERT_EQUAL(text::RelOrientation::PAGE_FRAME,
+                         getProperty<sal_Int16>(xShape, "VertOrientRelation"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2131), getProperty<sal_Int32>(xShape, "VertOrientPosition"));
 }
 
 DECLARE_RTFIMPORT_TEST(testFdo68291, "fdo68291.odt")
@@ -1364,6 +1395,144 @@ DECLARE_RTFIMPORT_TEST(testTdf104016, "tdf104016.rtf")
     // interitance from numbering.
     CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DEFAULT_VALUE,
                          xParagraph->getPropertyState("ParaLeftMargin"));
+}
+
+DECLARE_RTFIMPORT_TEST(testTdf115242, "tdf115242.rtf")
+{
+    // This was 0, overridden left margin was lost by too aggressive style
+    // deduplication.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2787),
+                         getProperty<sal_Int32>(getParagraph(1), "ParaLeftMargin"));
+}
+
+DECLARE_RTFIMPORT_TEST(testDefaultValues, "default-values.rtf")
+{
+    // tdf#105910: control words without values must be treated as having default values,
+    // instead of being silently ignored
+
+    uno::Reference<text::XTextRange> paragraph = getParagraph(1);
+
+    uno::Reference<text::XTextRange> run = getRun(paragraph, 1, "scaleWidth50%");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(50), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 2, "scaleWidth100%");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 3, "fontSize25");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(25), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 4, "fontSize12");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 5, "textDown3pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(-25), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 6, "textUp3pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(25), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 7, "expand1pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int64(20),
+                         convertMm100ToTwip(getProperty<sal_Int16>(run, "CharKerning")));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 8, "expand0pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 9, "expand1pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int64(20),
+                         convertMm100ToTwip(getProperty<sal_Int16>(run, "CharKerning")));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 10, "expand0pt");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 11, "colorBlack");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_BLACK), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 12, "colorRed");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_LIGHTRED), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 13, "colorGreen");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_LIGHTGREEN), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 14, "colorBlue");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_LIGHTBLUE), getProperty<sal_Int32>(run, "CharColor"));
+
+    run = getRun(paragraph, 15, "colorAuto");
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(100), getProperty<sal_Int16>(run, "CharScaleWidth"));
+    CPPUNIT_ASSERT_EQUAL(double(12), getProperty<double>(run, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(run, "CharEscapement"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(100), getProperty<sal_Int32>(run, "CharEscapementHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), getProperty<sal_Int16>(run, "CharKerning"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), getProperty<sal_Int32>(run, "CharColor"));
 }
 
 // tests should only be added to rtfIMPORT *if* they fail round-tripping in rtfEXPORT

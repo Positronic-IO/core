@@ -43,7 +43,7 @@ using namespace ::com::sun::star;
 #include <svtools/sfxecode.hxx>
 #include <svx/ofaitem.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/waitobj.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <svx/drawitem.hxx>
@@ -119,9 +119,10 @@ void ScDocShell::ReloadAllLinks()
     getEmbeddedObjectContainer().setUserAllowsLinkUpdate(true);
 
     ReloadTabLinks();
-    aDocument.UpdateExternalRefLinks(GetActiveDialogParent());
+    vcl::Window *pDialogParent = GetActiveDialogParent();
+    aDocument.UpdateExternalRefLinks(pDialogParent);
 
-    bool bAnyDde = aDocument.GetDocLinkManager().updateDdeOrOleOrWebServiceLinks(GetActiveDialogParent());
+    bool bAnyDde = aDocument.GetDocLinkManager().updateDdeOrOleOrWebServiceLinks(pDialogParent ? pDialogParent->GetFrameWeld() : nullptr);
 
     if (bAnyDde)
     {
@@ -259,8 +260,11 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     aMessage += sTarget;
                     aMessage += aTemplate.getToken( 1, '#' );
 
-                    ScopedVclPtrInstance< QueryBox > aBox( nullptr, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aMessage );
-                    bDo = ( aBox->Execute() == RET_YES );
+                    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+                                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                                   aMessage));
+                    xQueryBox->set_default_response(RET_YES);
+                    bDo = xQueryBox->run() == RET_YES;
                 }
 
                 if (bDo)
@@ -519,9 +523,12 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     OSL_ENSURE(pViewSh,"SID_REIMPORT_AFTER_LOAD: no View");
                     if (pViewSh && pDBColl)
                     {
-                        ScopedVclPtrInstance<QueryBox> aBox( GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                                ScGlobal::GetRscString(STR_REIMPORT_AFTER_LOAD) );
-                        if (aBox->Execute() == RET_YES)
+                        vcl::Window* pWin = GetActiveDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_REIMPORT_AFTER_LOAD)));
+                        xQueryBox->set_default_response(RET_YES);
+                        if (xQueryBox->run() == RET_YES)
                         {
                             ScDBCollection::NamedDBs& rDBs = pDBColl->getNamedDBs();
                             ScDBCollection::NamedDBs::iterator itr = rDBs.begin(), itrEnd = rDBs.end();
@@ -587,7 +594,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
 
         case SID_GET_COLORLIST:
             {
-                const SvxColorListItem* pColItem = static_cast<const SvxColorListItem*>(GetItem(SID_COLOR_TABLE));
+                const SvxColorListItem* pColItem = GetItem(SID_COLOR_TABLE);
                 XColorListRef pList = pColItem->GetColorList();
                 rReq.SetReturnValue(OfaRefItem<XColorList>(SID_GET_COLORLIST, pList));
             }
@@ -611,10 +618,12 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     if ( !pItem )
                     {
                         // no dialog on playing the macro
-                        ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(),
-                            MessBoxStyle::YesNo | MessBoxStyle::DefaultNo,
-                            ScGlobal::GetRscString( STR_END_REDLINING ) );
-                        bDo = ( aBox->Execute() == RET_YES );
+                        vcl::Window* pWin = GetActiveDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                                   ScGlobal::GetRscString(STR_END_REDLINING)));
+                        xWarn->set_default_response(RET_NO);
+                        bDo = (xWarn->run() == RET_YES );
                     }
 
                     if ( bDo )
@@ -676,10 +685,12 @@ void ScDocShell::Execute( SfxRequest& rReq )
                 {
                     if ( nSlot == SID_DOCUMENT_COMPARE )
                     {   //! old changes trace will be lost
-                        ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(),
-                            MessBoxStyle::YesNo | MessBoxStyle::DefaultNo,
-                            ScGlobal::GetRscString( STR_END_REDLINING ) );
-                        if( aBox->Execute() == RET_YES )
+                        vcl::Window* pWin = GetActiveDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                                   ScGlobal::GetRscString(STR_END_REDLINING)));
+                        xWarn->set_default_response(RET_NO);
+                        if (xWarn->run() == RET_YES)
                             bDo = ExecuteChangeProtectionDialog( true );
                         else
                             bDo = false;
@@ -971,11 +982,12 @@ void ScDocShell::Execute( SfxRequest& rReq )
                             bool bContinue = true;
                             if ( HasName() )
                             {
-                                ScopedVclPtrInstance<QueryBox> aBox(
-                                    GetActiveDialogParent(),
-                                    MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                    ScGlobal::GetRscString( STR_DOC_WILLBESAVED ) );
-                                if ( aBox->Execute() == RET_NO )
+                                vcl::Window* pWin = GetActiveDialogParent();
+                                std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                               VclMessageType::Question, VclButtonsType::YesNo,
+                                                                               ScGlobal::GetRscString(STR_REIMPORT_AFTER_LOAD)));
+                                xQueryBox->set_default_response(RET_YES);
+                                if (xQueryBox->run() == RET_NO)
                                 {
                                     bContinue = false;
                                 }
@@ -1062,16 +1074,21 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                         OUString aMessage( ScGlobal::GetRscString( STR_FILE_LOCKED_TRY_LATER ) );
                                         aMessage = aMessage.replaceFirst( "%1", aUserName );
 
-                                        ScopedVclPtrInstance< WarningBox > aBox( GetActiveDialogParent(), MessBoxStyle::Ok, aMessage );
-                                        aBox->Execute();
+                                        vcl::Window* pWin = GetActiveDialogParent();
+                                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                                                   aMessage));
+                                        xWarn->run();
                                     }
                                     else
                                     {
-                                        ScopedVclPtrInstance<WarningBox> aBox(
-                                            GetActiveDialogParent(),
-                                            MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                            ScGlobal::GetRscString( STR_DOC_DISABLESHARED ) );
-                                        if ( aBox->Execute() == RET_YES )
+                                        vcl::Window* pWin = GetActiveDialogParent();
+                                        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                                                   ScGlobal::GetRscString(STR_DOC_DISABLESHARED)));
+                                        xWarn->set_default_response(RET_YES);
+
+                                        if (xWarn->run() == RET_YES)
                                         {
                                             xCloseable->close( true );
 
@@ -1103,9 +1120,11 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                 else
                                 {
                                     xCloseable->close( true );
-                                    ScopedVclPtrInstance<WarningBox> aBox( GetActiveDialogParent(), MessBoxStyle::Ok,
-                                        ScGlobal::GetRscString( STR_DOC_NOLONGERSHARED ) );
-                                    aBox->Execute();
+                                    vcl::Window* pWin = GetActiveDialogParent();
+                                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                               VclMessageType::Warning, VclButtonsType::Ok,
+                                                                               ScGlobal::GetRscString(STR_DOC_NOLONGERSHARED)));
+                                    xWarn->run();
                                 }
                             }
                             catch ( uno::Exception& )
@@ -1292,9 +1311,11 @@ bool ScDocShell::ExecuteChangeProtectionDialog( bool bJustQueryIfProtected )
                 }
                 else
                 {
-                    ScopedVclPtrInstance<InfoBox> aBox( GetActiveDialogParent(),
-                        ScResId( SCSTR_WRONGPASSWORD ) );
-                    aBox->Execute();
+                    vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                                  ScResId(SCSTR_WRONGPASSWORD)));
+                    xInfoBox->run();
                 }
             }
             else
@@ -1628,10 +1649,12 @@ void ScDocShell::PageStyleModified( const OUString& rStyleName, bool bApi )
 
         if (bWarn && !bApi)
         {
-            ScWaitCursorOff aWaitOff( GetActiveDialogParent() );
-            ScopedVclPtrInstance<InfoBox> aInfoBox(GetActiveDialogParent(),
-                                                   ScGlobal::GetRscString(STR_PRINT_INVALID_AREA));
-            aInfoBox->Execute();
+            vcl::Window* pWin = GetActiveDialogParent();
+            ScWaitCursorOff aWaitOff(pWin);
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          ScGlobal::GetRscString(STR_PRINT_INVALID_AREA)));
+            xInfoBox->run();
         }
     }
 
@@ -2056,8 +2079,8 @@ tools::Rectangle ScDocShell::GetVisArea( sal_uInt16 nAspect ) const
         tools::Rectangle aArea( 0,0, SC_PREVIEW_SIZE_X, SC_PREVIEW_SIZE_Y);
         if (aSize.Width() > aSize.Height())
         {
-            aArea.Right() = SC_PREVIEW_SIZE_Y;
-            aArea.Bottom() = SC_PREVIEW_SIZE_X;
+            aArea.SetRight( SC_PREVIEW_SIZE_Y );
+            aArea.SetBottom( SC_PREVIEW_SIZE_X );
         }
 
         bool bNegativePage = aDocument.IsNegativePage( aDocument.GetVisibleTab() );
@@ -2098,10 +2121,11 @@ tools::Rectangle ScDocShell::GetVisArea( sal_uInt16 nAspect ) const
 
 namespace {
 
-void SnapHor( const ScDocument& rDoc, SCTAB nTab, long& rVal, SCCOL& rStartCol )
+SAL_WARN_UNUSED_RESULT
+long SnapHorizontal( const ScDocument& rDoc, SCTAB nTab, long nVal, SCCOL& rStartCol )
 {
     SCCOL nCol = 0;
-    long nTwips = static_cast<long>(rVal / HMM_PER_TWIPS);
+    long nTwips = static_cast<long>(nVal / HMM_PER_TWIPS);
     long nSnap = 0;
     while ( nCol<MAXCOL )
     {
@@ -2114,14 +2138,16 @@ void SnapHor( const ScDocument& rDoc, SCTAB nTab, long& rVal, SCCOL& rStartCol )
         else
             break;
     }
-    rVal = static_cast<long>( nSnap * HMM_PER_TWIPS );
+    nVal = static_cast<long>( nSnap * HMM_PER_TWIPS );
     rStartCol = nCol;
+    return nVal;
 }
 
-void SnapVer( const ScDocument& rDoc, SCTAB nTab, long& rVal, SCROW& rStartRow )
+SAL_WARN_UNUSED_RESULT
+long SnapVertical( const ScDocument& rDoc, SCTAB nTab, long nVal, SCROW& rStartRow )
 {
     SCROW nRow = 0;
-    long nTwips = static_cast<long>(rVal / HMM_PER_TWIPS);
+    long nTwips = static_cast<long>(nVal / HMM_PER_TWIPS);
     long nSnap = 0;
 
     bool bFound = false;
@@ -2150,8 +2176,9 @@ void SnapVer( const ScDocument& rDoc, SCTAB nTab, long& rVal, SCROW& rStartRow )
     if (!bFound)
         nRow = MAXROW;  // all hidden down to the bottom
 
-    rVal = static_cast<long>( nSnap * HMM_PER_TWIPS );
+    nVal = static_cast<long>( nSnap * HMM_PER_TWIPS );
     rStartRow = nRow;
+    return nVal;
 }
 
 }
@@ -2164,14 +2191,14 @@ void ScDocShell::SnapVisArea( tools::Rectangle& rRect ) const
         ScDrawLayer::MirrorRectRTL( rRect );        // calculate with positive (LTR) values
 
     SCCOL nCol = 0;
-    SnapHor( aDocument, nTab, rRect.Left(), nCol );
+    rRect.SetLeft( SnapHorizontal( aDocument, nTab, rRect.Left(), nCol ) );
     ++nCol;                                         // at least one column
-    SnapHor( aDocument, nTab, rRect.Right(), nCol );
+    rRect.SetRight( SnapHorizontal( aDocument, nTab, rRect.Right(), nCol ) );
 
     SCROW nRow = 0;
-    SnapVer( aDocument, nTab, rRect.Top(), nRow );
+    rRect.SetTop( SnapVertical( aDocument, nTab, rRect.Top(), nRow ) );
     ++nRow;                                         // at least one row
-    SnapVer( aDocument, nTab, rRect.Bottom(), nRow );
+    rRect.SetBottom( SnapVertical( aDocument, nTab, rRect.Bottom(), nRow ) );
 
     if ( bNegativePage )
         ScDrawLayer::MirrorRectRTL( rRect );        // back to real rectangle

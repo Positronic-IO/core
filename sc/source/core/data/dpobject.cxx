@@ -73,7 +73,8 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <svl/zforlist.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 #include <utility>
 #include <vector>
@@ -945,7 +946,7 @@ ScRange ScDPObject::GetOutputRangeByType( sal_Int32 nType ) const
 
 static bool lcl_HasButton( const ScDocument* pDoc, SCCOL nCol, SCROW nRow, SCTAB nTab )
 {
-    return static_cast<const ScMergeFlagAttr*>(pDoc->GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG ))->HasPivotButton();
+    return pDoc->GetAttr( nCol, nRow, nTab, ATTR_MERGE_FLAG )->HasPivotButton();
 }
 
 void ScDPObject::RefreshAfterLoad()
@@ -3308,8 +3309,10 @@ uno::Reference<sdbc::XRowSet> ScDPCollection::DBCaches::createRowSet(
     catch ( const sdbc::SQLException& rError )
     {
         //! store error message
-        ScopedVclPtrInstance< InfoBox > aInfoBox( nullptr, rError.Message );
-        aInfoBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      rError.Message));
+        xInfoBox->run();
     }
     catch ( uno::Exception& )
     {

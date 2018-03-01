@@ -217,8 +217,8 @@ SwNumFormat::SwNumFormat(const SvxNumberFormat& rNumFormat, SwDoc* pDoc)
         }
         pCFormat->Add( this );
     }
-    else if( GetRegisteredIn() )
-        GetRegisteredInNonConst()->Remove( this );
+    else
+        EndListeningAll();
 }
 
 SwNumFormat::~SwNumFormat()
@@ -257,10 +257,7 @@ bool SwNumFormat::IsItemize() const
 SwNumFormat& SwNumFormat::operator=( const SwNumFormat& rNumFormat)
 {
     SvxNumberFormat::operator=(rNumFormat);
-    if( rNumFormat.GetRegisteredIn() )
-        rNumFormat.GetRegisteredInNonConst()->Add( this );
-    else if( GetRegisteredIn() )
-        GetRegisteredInNonConst()->Remove( this );
+    StartListeningToSameModifyAs(rNumFormat);
     //For i120928,record the cp info of graphic within bullet
     m_cGrfBulletCP = rNumFormat.m_cGrfBulletCP;
     return *this;
@@ -277,8 +274,8 @@ void SwNumFormat::SetCharFormat( SwCharFormat* pChFormat)
 {
     if( pChFormat )
         pChFormat->Add( this );
-    else if( GetRegisteredIn() )
-        GetRegisteredInNonConst()->Remove( this );
+    else
+        EndListeningAll();
 }
 
 void SwNumFormat::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )

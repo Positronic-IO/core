@@ -24,9 +24,11 @@
 #include <com/sun/star/table/XCellRange.hpp>
 #include <o3tl/numeric.hxx>
 #include <o3tl/make_unique.hxx>
+#include <o3tl/safeint.hxx>
 #include <svl/itemset.hxx>
 #include <svl/zformat.hxx>
 #include <sax/tools/converter.hxx>
+#include <unotools/configmgr.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/xmltkmap.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -35,6 +37,7 @@
 #include <xmloff/xmluconv.hxx>
 #include <xmloff/i18nmap.hxx>
 #include <editeng/protitem.hxx>
+#include <editeng/lrspitem.hxx>
 #include <poolfmt.hxx>
 #include <fmtfsize.hxx>
 #include <fmtornt.hxx>
@@ -58,6 +61,7 @@
 #include <vcl/svapp.hxx>
 #include <ndtxt.hxx>
 
+#include <algorithm>
 #include <vector>
 #include <memory>
 
@@ -471,12 +475,27 @@ SwXMLTableCellContext_Impl::SwXMLTableCellContext_Impl(
             break;
         case XML_TOK_TABLE_NUM_COLS_SPANNED:
             nColSpan = static_cast<sal_uInt32>(std::max<sal_Int32>(1, rValue.toInt32()));
+            if (nColSpan > 256)
+            {
+                SAL_INFO("sw.xml", "ignoring huge table:number-columns-spanned " << nColSpan);
+                nColSpan = 1;
+            }
             break;
         case XML_TOK_TABLE_NUM_ROWS_SPANNED:
             nRowSpan = static_cast<sal_uInt32>(std::max<sal_Int32>(1, rValue.toInt32()));
+            if (nRowSpan > 8192 || (nRowSpan > 256 && utl::ConfigManager::IsFuzzing()))
+            {
+                SAL_INFO("sw.xml", "ignoring huge table:number-rows-spanned " << nRowSpan);
+                nRowSpan = 1;
+            }
             break;
         case XML_TOK_TABLE_NUM_COLS_REPEATED:
             nColRepeat = static_cast<sal_uInt32>(std::max<sal_Int32>(1, rValue.toInt32()));
+            if (nColRepeat > 256)
+            {
+                SAL_INFO("sw.xml", "ignoring huge table:number-columns-repeated " << nColRepeat);
+                nColRepeat = 1;
+            }
             break;
         case XML_TOK_TABLE_FORMULA:
             {
@@ -751,7 +770,14 @@ SwXMLTableColContext_Impl::SwXMLTableColContext_Impl(
             if( IsXMLToken( aLocalName, XML_STYLE_NAME ) )
                 aStyleName = rValue;
             else if( IsXMLToken( aLocalName, XML_NUMBER_COLUMNS_REPEATED ) )
+            {
                 nColRep = static_cast<sal_uInt32>(std::max<sal_Int32>(1, rValue.toInt32()));
+                if (nColRep > 256)
+                {
+                    SAL_INFO("sw.xml", "ignoring huge table:number-columns-repeated " << nColRep);
+                    nColRep = 1;
+                }
+            }
             else if( IsXMLToken( aLocalName, XML_DEFAULT_CELL_STYLE_NAME ) )
                 aDfltCellStyleName = rValue;
         }
@@ -892,6 +918,11 @@ SwXMLTableRowContext_Impl::SwXMLTableRowContext_Impl( SwXMLImport& rImport,
             else if( IsXMLToken( aLocalName, XML_NUMBER_ROWS_REPEATED ) )
             {
                 nRowRepeat = static_cast<sal_uInt32>(std::max<sal_Int32>(1, rValue.toInt32()));
+                if (nRowRepeat > 8192 || (nRowRepeat > 256 && utl::ConfigManager::IsFuzzing()))
+                {
+                    SAL_INFO("sw.xml", "ignoring huge table:number-rows-repeated " << nRowRepeat);
+                    nRowRepeat = 1;
+                }
             }
             else if( IsXMLToken( aLocalName, XML_DEFAULT_CELL_STYLE_NAME ) )
             {
@@ -1199,6 +1230,10 @@ public:
     }
 };
 
+#if __cplusplus <= 201402 || (defined __GNUC__ && __GNUC__ <= 6 && !defined __clang__)
+constexpr sal_Int32 SwXMLTableContext::MAX_WIDTH;
+#endif
+
 const SwXMLTableCell_Impl *SwXMLTableContext::GetCell( sal_uInt32 nRow,
                                                  sal_uInt32 nCol ) const
 {
@@ -1450,8 +1485,8 @@ void SwXMLTableContext::InsertColumn( sal_Int32 nWidth2, bool bRelWidth2,
 
     if( nWidth2 < MINLAY )
         nWidth2 = MINLAY;
-    else if( nWidth2 > USHRT_MAX )
-        nWidth2 = USHRT_MAX;
+    else if( nWidth2 > MAX_WIDTH )
+        nWidth2 = MAX_WIDTH;
     m_aColumnWidths.emplace_back(nWidth2, bRelWidth2 );
     if( (pDfltCellStyleName && !pDfltCellStyleName->isEmpty()) ||
         m_pColumnDefaultCellStyleNames )
@@ -2381,7 +2416,10 @@ void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
                 {
                     if (nMinAbsColWidth == 0)
                         throw o3tl::divide_by_zero();
-                    sal_Int32 nRelCol = ( colIter->width * nMinRelColWidth) / nMinAbsColWidth;
+                    sal_Int32 nVal;
+                    if (o3tl::checked_multiply<sal_Int32>(colIter->width, nMinRelColWidth, nVal))
+                        throw std::overflow_error("overflow in multiply");
+                    sal_Int32 nRelCol = nVal / nMinAbsColWidth;
                     colIter->width = nRelCol;
                     colIter->isRelative = true;
                     nRelWidth += nRelCol;
@@ -2396,7 +2434,7 @@ void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
             // In this case, the columns get the correct width even if
             // the sum of the relative widths is smaller than the available
             // width in TWIP. Therefore, we can use the relative width.
-            m_nWidth = std::min<sal_Int32>(nRelWidth, USHRT_MAX);
+            m_nWidth = std::min(nRelWidth, MAX_WIDTH);
         }
         if( nRelWidth != m_nWidth && nRelWidth && nCols )
         {
@@ -2650,9 +2688,9 @@ void SwXMLTableContext::MakeTable()
             // of the relative column widths as reference width.
             // Unfortunately this works only if this sum interpreted as
             // twip value is larger than the space that is available.
-            // We don't know that space, so we have to use USHRT_MAX, too.
+            // We don't know that space, so we have to use MAX_WIDTH, too.
             // Even if a size is specified, it will be ignored!
-            m_nWidth = USHRT_MAX;
+            m_nWidth = MAX_WIDTH;
             break;
         default:
             if( pSize )
@@ -2665,13 +2703,15 @@ void SwXMLTableContext::MakeTable()
                 else
                 {
                     m_nWidth = pSize->GetWidth();
-                    if( m_nWidth < static_cast<sal_Int32>(GetColumnCount()) * MINLAY )
+                    sal_Int32 const min = static_cast<sal_Int32>(
+                        std::min<sal_uInt32>(GetColumnCount() * MINLAY, MAX_WIDTH));
+                    if( m_nWidth < min )
                     {
-                        m_nWidth = GetColumnCount() * MINLAY;
+                        m_nWidth = min;
                     }
-                    else if( m_nWidth > USHRT_MAX )
+                    else if( m_nWidth > MAX_WIDTH )
                     {
-                        m_nWidth = USHRT_MAX;
+                        m_nWidth = MAX_WIDTH;
                     }
                     m_bRelWidth = false;
                 }
@@ -2681,7 +2721,7 @@ void SwXMLTableContext::MakeTable()
                 eHoriOrient = text::HoriOrientation::LEFT_AND_WIDTH == eHoriOrient
                                     ? text::HoriOrientation::NONE : text::HoriOrientation::FULL;
                 bSetHoriOrient = true;
-                m_nWidth = USHRT_MAX;
+                m_nWidth = MAX_WIDTH;
             }
             break;
         }
@@ -2691,7 +2731,7 @@ void SwXMLTableContext::MakeTable()
     else
     {
         bSetHoriOrient = true;
-        m_nWidth = USHRT_MAX;
+        m_nWidth = MAX_WIDTH;
     }
 
     SwTableLine *pLine1 = m_pTableNode->GetTable().GetTabLines()[0U];

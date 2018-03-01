@@ -480,7 +480,7 @@ sal_Int32 SAL_CALL AccessibleSlideSorterView::getForeground()
 {
     ThrowIfDisposed();
     svtools::ColorConfig aColorConfig;
-    sal_uInt32 nColor = aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor;
+    Color nColor = aColorConfig.GetColorValue( svtools::FONTCOLOR ).nColor;
     return static_cast<sal_Int32>(nColor);
 }
 
@@ -672,9 +672,9 @@ void AccessibleSlideSorterView::Implementation::UpdateChildren()
         return;
     }
 
-    const Pair aRange (mrSlideSorter.GetView().GetVisiblePageRange());
-    mnFirstVisibleChild = aRange.A();
-    mnLastVisibleChild = aRange.B();
+    const Range aRange (mrSlideSorter.GetView().GetVisiblePageRange());
+    mnFirstVisibleChild = aRange.Min();
+    mnLastVisibleChild = aRange.Max();
 
     // Release all children.
     Clear();

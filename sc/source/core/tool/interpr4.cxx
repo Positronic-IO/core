@@ -284,10 +284,8 @@ bool ScInterpreter::CreateDoubleArr(SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
 {
 
     // Old Add-Ins are hard limited to sal_uInt16 values.
-#if MAXCOLCOUNT_DEFINE > USHRT_MAX
-#error Add check for columns > USHRT_MAX!
-#endif
-    if (nRow1 > USHRT_MAX || nRow2 > USHRT_MAX)
+    static_assert(MAXCOLCOUNT <= SAL_MAX_UINT16, "Add check for columns > SAL_MAX_UINT16!");
+    if (nRow1 > SAL_MAX_UINT16 || nRow2 > SAL_MAX_UINT16)
         return false;
 
     sal_uInt16 nCount = 0;
@@ -369,10 +367,8 @@ bool ScInterpreter::CreateStringArr(SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
 {
 
     // Old Add-Ins are hard limited to sal_uInt16 values.
-#if MAXCOLCOUNT_DEFINE > USHRT_MAX
-#error Add check for columns > USHRT_MAX!
-#endif
-    if (nRow1 > USHRT_MAX || nRow2 > USHRT_MAX)
+    static_assert(MAXCOLCOUNT <= SAL_MAX_UINT16, "Add check for columns > SAL_MAX_UINT16!");
+    if (nRow1 > SAL_MAX_UINT16 || nRow2 > SAL_MAX_UINT16)
         return false;
 
     sal_uInt16 nCount = 0;
@@ -468,10 +464,8 @@ bool ScInterpreter::CreateCellArr(SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
 {
 
     // Old Add-Ins are hard limited to sal_uInt16 values.
-#if MAXCOLCOUNT_DEFINE > USHRT_MAX
-#error Add check for columns > USHRT_MAX!
-#endif
-    if (nRow1 > USHRT_MAX || nRow2 > USHRT_MAX)
+    static_assert(MAXCOLCOUNT <= SAL_MAX_UINT16, "Add check for columns > SAL_MAX_UINT16!");
+    if (nRow1 > SAL_MAX_UINT16 || nRow2 > SAL_MAX_UINT16)
         return false;
 
     sal_uInt16 nCount = 0;
@@ -1580,7 +1574,7 @@ bool ScInterpreter::ConvertMatrixParameters()
             xNew = (*aMapIter).second;
         else
         {
-            std::unique_ptr<ScJumpMatrix> pJumpMat( new ScJumpMatrix( nJumpCols, nJumpRows) );
+            std::unique_ptr<ScJumpMatrix> pJumpMat( new ScJumpMatrix( pCur->GetOpCode(), nJumpCols, nJumpRows));
             pJumpMat->SetAllJumps( 1.0, nStart, nNext, nStop);
             // pop parameters and store in ScJumpMatrix, push in JumpMatrix()
             ScTokenVec* pParams = new ScTokenVec( nParams);
@@ -3993,7 +3987,7 @@ StackVar ScInterpreter::Interpret()
             nCurFmtType = SvNumFormatType::UNDEFINED;
         }
         else if (pTokenMatrixMap &&
-                 !(eOp == ocIf || eOp == ocIfError || eOp == ocIfNA || eOp == ocChoose) &&
+                 !FormulaCompiler::IsOpCodeJumpCommand( eOp ) &&
                 ((aTokenMatrixMapIter = pTokenMatrixMap->find( pCur)) !=
                  pTokenMatrixMap->end()) &&
                 (*aTokenMatrixMapIter).second->GetType() != svJumpMatrix)
@@ -4014,7 +4008,7 @@ StackVar ScInterpreter::Interpret()
             nFuncFmtType = SvNumFormatType::NUMBER;
             nFuncFmtIndex = 0;
 
-            if ( eOp == ocIf || eOp == ocChoose || eOp == ocIfError || eOp == ocIfNA )
+            if (FormulaCompiler::IsOpCodeJumpCommand( eOp ))
                 nStackBase = sp;        // don't mess around with the jumps
             else
             {

@@ -25,6 +25,7 @@
 #include "scdllapi.h"
 
 namespace vcl { class Window; }
+namespace weld { class Window; }
 
 namespace sc {
 
@@ -74,10 +75,10 @@ private:
     OUString aErrorMessage;
 
     bool DoMacro( const ScAddress& rPos, const OUString& rInput,
-                                ScFormulaCell* pCell, vcl::Window* pParent ) const;
+                                ScFormulaCell* pCell, weld::Window* pParent ) const;
 
     bool DoScript( const ScAddress& rPos, const OUString& rInput,
-                                ScFormulaCell* pCell, vcl::Window* pParent ) const;
+                                ScFormulaCell* pCell, weld::Window* pParent ) const;
 
     using ScConditionEntry::operator==;
 
@@ -134,7 +135,7 @@ public:
     bool IsDataValid( ScRefCellValue& rCell, const ScAddress& rPos ) const;
 
                     // TRUE -> break
-    bool DoError( vcl::Window* pParent, const OUString& rInput, const ScAddress& rPos ) const;
+    bool DoError(weld::Window* pParent, const OUString& rInput, const ScAddress& rPos) const;
     void DoCalcError( ScFormulaCell* pCell ) const;
 
     bool IsEmpty() const;

@@ -30,7 +30,6 @@
 #include <svx/fmpage.hxx>
 #include <svx/fmshell.hxx>
 #include <editeng/sizeitem.hxx>
-#include <svx/prtqry.hxx>
 #include <svx/sidebar/ContextChangeEventMultiplexer.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/printer.hxx>
@@ -348,8 +347,8 @@ void ScTabViewShell::InnerResizePixel( const Point &rOfs, const Size &rSize, boo
         Size aObjSize = GetObjectShell()->GetVisArea().GetSize();
 
           Size aSize( rSize );
-        aSize.Width() -= (aBorder.Left() + aBorder.Right());
-        aSize.Height() -= (aBorder.Top() + aBorder.Bottom());
+        aSize.AdjustWidth( -(aBorder.Left() + aBorder.Right()) );
+        aSize.AdjustHeight( -(aBorder.Top() + aBorder.Bottom()) );
 
         if ( aObjSize.Width() > 0 && aObjSize.Height() > 0 )
         {
@@ -359,8 +358,8 @@ void ScTabViewShell::InnerResizePixel( const Point &rOfs, const Size &rSize, boo
         }
 
         Point aPos( rOfs );
-        aPos.X() += aBorder.Left();
-        aPos.Y() += aBorder.Top();
+        aPos.AdjustX(aBorder.Left() );
+        aPos.AdjustY(aBorder.Top() );
         GetWindow()->SetPosSizePixel( aPos, aSize );
     }
     else
@@ -368,8 +367,8 @@ void ScTabViewShell::InnerResizePixel( const Point &rOfs, const Size &rSize, boo
         SvBorder aBorder;
         GetBorderSize( aBorder, rSize );
         SetBorderPixel( aBorder );
-        aNewSize.Width()  += aBorder.Left() + aBorder.Right();
-        aNewSize.Height() += aBorder.Top() + aBorder.Bottom();
+        aNewSize.AdjustWidth(aBorder.Left() + aBorder.Right() );
+        aNewSize.AdjustHeight(aBorder.Top() + aBorder.Bottom() );
     }
 
     DoResize( rOfs, aNewSize, true );                   // rSize = size of gridwin
@@ -444,7 +443,7 @@ void ScTabViewShell::QueryObjAreaPixel( tools::Rectangle& rRect ) const
     if ( bNegativePage )
     {
         // use right edge of aLogicRect, and aLogicSize
-        aLogicRect.Left() = aLogicRect.Right() - aLogicSize.Width() + 1;    // Right() is set below
+        aLogicRect.SetLeft( aLogicRect.Right() - aLogicSize.Width() + 1 );    // Right() is set below
     }
     aLogicRect.SetSize( aLogicSize );
 
@@ -1451,9 +1450,9 @@ void ScTabViewShell::Construct( TriState nForceDesignMode )
 
     pCurFrameLine   = new ::editeng::SvxBorderLine(&aColBlack, 20, SvxBorderLineStyle::SOLID);
     pPivotSource    = new ScArea;
-    StartListening(*GetViewData().GetDocShell(),true);
-    StartListening(*GetViewFrame(),true);
-    StartListening(*pSfxApp,true);              // #i62045# #i62046# application is needed for Calc's own hints
+    StartListening(*GetViewData().GetDocShell(), DuplicateHandling::Prevent);
+    StartListening(*GetViewFrame(), DuplicateHandling::Prevent);
+    StartListening(*pSfxApp, DuplicateHandling::Prevent); // #i62045# #i62046# application is needed for Calc's own hints
 
     SfxViewFrame* pFirst = SfxViewFrame::GetFirst(pDocSh);
     bool bFirstView = !pFirst
@@ -1774,10 +1773,12 @@ ScTabViewShell::~ScTabViewShell()
     // all to NULL, in case the TabView-dtor tries to access them
     //! (should not really! ??!?!)
     if (mpInputHandler)
+    {
         mpInputHandler->SetDocumentDisposing(true);
-    // We end edit mode, before destroying the input handler and the edit engine
-    // and before end listening (in order to call ScTabViewShell::KillEditView())
-    mpInputHandler->EnterHandler();
+        // We end edit mode, before destroying the input handler and the edit engine
+        // and before end listening (in order to call ScTabViewShell::KillEditView())
+        mpInputHandler->EnterHandler();
+    }
 
     ScDocShell* pDocSh = GetViewData().GetDocShell();
     EndListening(*pDocSh);

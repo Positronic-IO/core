@@ -197,7 +197,7 @@ void SAL_CALL OReadImagesDocumentHandler::startElement(
                 }
 
                 if ( !m_aImageList.pImageList )
-                    m_aImageList.pImageList = new ImageListDescriptor;
+                    m_aImageList.pImageList.reset( new ImageListDescriptor );
 
                 m_bImagesStartFound = true;
                 m_pImages = new ImageListItemDescriptor;
@@ -224,7 +224,7 @@ void SAL_CALL OReadImagesDocumentHandler::startElement(
                                     // the color value is given as #rrggbb and used the hexadecimal system!!
                                     sal_uInt32 nColor = aColor.copy( 1 ).toUInt32( 16 );
 
-                                    m_pImages->aMaskColor = Color( COLORDATA_RGB( nColor ) );
+                                    m_pImages->aMaskColor = Color( nColor );
                                 }
                             }
                             break;
@@ -511,7 +511,7 @@ void SAL_CALL OReadImagesDocumentHandler::endElement(const OUString& aName)
                 if ( m_pExternalImages && !m_aImageList.pExternalImageList )
                 {
                     if ( !m_aImageList.pExternalImageList )
-                        m_aImageList.pExternalImageList = m_pExternalImages;
+                        m_aImageList.pExternalImageList.reset( m_pExternalImages );
                 }
 
                 m_bExternalImagesStartFound = false;
@@ -614,7 +614,7 @@ void OWriteImagesDocumentHandler::WriteImagesDocument()
 
     if ( m_aImageListsItems.pImageList )
     {
-        ImageListDescriptor* pImageList = m_aImageListsItems.pImageList;
+        ImageListDescriptor* pImageList = m_aImageListsItems.pImageList.get();
 
         for ( size_t i = 0; i < m_aImageListsItems.pImageList->size(); i++ )
         {
@@ -625,7 +625,7 @@ void OWriteImagesDocumentHandler::WriteImagesDocument()
 
     if ( m_aImageListsItems.pExternalImageList )
     {
-        WriteExternalImageList( m_aImageListsItems.pExternalImageList );
+        WriteExternalImageList( m_aImageListsItems.pExternalImageList.get() );
     }
 
     m_xWriteDocumentHandler->ignorableWhitespace( OUString() );
@@ -670,7 +670,7 @@ void OWriteImagesDocumentHandler::WriteImageList( const ImageListItemDescriptor*
     else
     {
         OUStringBuffer   aColorStrBuffer( 8 );
-        sal_Int64       nValue = pImageList->aMaskColor.GetRGBColor();
+        sal_Int64       nValue = sal_uInt32(pImageList->aMaskColor.GetRGBColor());
 
         aColorStrBuffer.append( "#" );
         aColorStrBuffer.append( OUString::number( nValue, 16 ));

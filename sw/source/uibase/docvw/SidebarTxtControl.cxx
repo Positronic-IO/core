@@ -37,7 +37,7 @@
 
 #include <vcl/svapp.hxx>
 #include <vcl/help.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/scrbar.hxx>
@@ -134,7 +134,7 @@ void SidebarTextControl::Draw(OutputDevice* pDev, const Point& rPt, const Size& 
 {
     //Take the control's height, but overwrite the scrollbar area if there was one
     Size aSize(PixelToLogic(GetSizePixel()));
-    aSize.Width() = rSz.Width();
+    aSize.setWidth( rSz.Width() );
 
     if ( GetTextView() )
     {
@@ -271,8 +271,9 @@ void SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
             }
             else
             {
-                ScopedVclPtrInstance<MessageDialog>(this, "InfoReadonlyDialog",
-                    "modules/swriter/ui/inforeadonlydialog.ui")->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
+                xQuery->run();
             }
         }
         if (bDone)

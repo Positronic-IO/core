@@ -37,7 +37,7 @@
 #include <comphelper/string.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <sfx2/dispatch.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/urihelper.hxx>
 #include <svx/svxids.hrc>
 #include <vcl/xtextedt.hxx>
@@ -129,11 +129,11 @@ void lcl_DrawIDEWindowFrame(DockingWindow const * pWin, vcl::RenderContext& rRen
 
     Size aSz(pWin->GetOutputSizePixel());
     const Color aOldLineColor(rRenderContext.GetLineColor());
-    rRenderContext.SetLineColor(Color(COL_WHITE));
+    rRenderContext.SetLineColor(COL_WHITE);
     // White line on top
     rRenderContext.DrawLine(Point(0, 0), Point(aSz.Width(), 0));
     // Black line at bottom
-    rRenderContext.SetLineColor(Color(COL_BLACK));
+    rRenderContext.SetLineColor(COL_BLACK);
     rRenderContext.DrawLine(Point(0, aSz.Height() - 1),
                             Point(aSz.Width(), aSz.Height() - 1));
     rRenderContext.SetLineColor(aOldLineColor);
@@ -204,7 +204,7 @@ private:
 class EditorWindow::ProgressInfo : public SfxProgress
 {
 public:
-    ProgressInfo (SfxObjectShell* pObjSh, OUString const& rText, sal_uLong nRange) :
+    ProgressInfo (SfxObjectShell* pObjSh, OUString const& rText, sal_uInt32 nRange) :
         SfxProgress(pObjSh, rText, nRange),
         nCurState(0)
     { }
@@ -372,8 +372,8 @@ void EditorWindow::RequestHelp( const HelpEvent& rHEvt )
                     {
                         aTopLeft = GetEditView()->GetTextEngine()->PaMtoEditCursor( aStartOfWord ).BottomLeft();
                         aTopLeft = GetEditView()->GetWindowPos( aTopLeft );
-                        aTopLeft.X() += 5;
-                        aTopLeft.Y() += 5;
+                        aTopLeft.AdjustX(5 );
+                        aTopLeft.AdjustY(5 );
                         aTopLeft = OutputToScreenPixel( aTopLeft );
                     }
                 }
@@ -403,7 +403,7 @@ void EditorWindow::Resize()
         if ( pEditView->GetStartDocPos().Y() > nMaxVisAreaStart )
         {
             Point aStartDocPos( pEditView->GetStartDocPos() );
-            aStartDocPos.Y() = nMaxVisAreaStart;
+            aStartDocPos.setY( nMaxVisAreaStart );
             pEditView->SetStartDocPos( aStartDocPos );
             pEditView->ShowCursor();
             rModulWindow.GetBreakPointWindow().GetCurYOffset() = aStartDocPos.Y();
@@ -479,7 +479,10 @@ bool EditorWindow::ImpCanModify()
     {
         // If in Trace-mode, abort the trace or refuse input
         // Remove markers in the modules in Notify at Basic::Stopped
-        if (ScopedVclPtrInstance<QueryBox>(nullptr, MessBoxStyle::OkCancel, IDEResId(RID_STR_WILLSTOPPRG))->Execute() == RET_OK)
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Question, VclButtonsType::OkCancel,
+                                                       IDEResId(RID_STR_WILLSTOPPRG)));
+        if (xQueryBox->run() == RET_OK)
         {
             rModulWindow.GetBasicStatus().bIsRunning = false;
             StopBasic();
@@ -600,12 +603,11 @@ void EditorWindow::HandleAutoCorrect()
     HighlightPortion& r = aPortions.back();
     if( static_cast<size_t>(nIndex) != aPortions.size()-1 )
     {//cursor is not standing at the end of the line
-        for (std::vector<HighlightPortion>::iterator i(aPortions.begin());
-             i != aPortions.end(); ++i)
+        for (auto const& portion : aPortions)
         {
-            if( i->nEnd == nIndex )
+            if( portion.nEnd == nIndex )
             {
-                r = *i;
+                r = portion;
                 break;
             }
         }
@@ -673,12 +675,11 @@ TextSelection EditorWindow::GetLastHighlightPortionTextSelection()
     HighlightPortion& r = aPortions.back();
     if( static_cast<size_t>(nIndex) != aPortions.size()-1 )
     {//cursor is not standing at the end of the line
-        for (std::vector<HighlightPortion>::iterator i(aPortions.begin());
-             i != aPortions.end(); ++i)
+        for (auto const& portion : aPortions)
         {
-            if( i->nEnd == nIndex )
+            if( portion.nEnd == nIndex )
             {
-                r = *i;
+                r = portion;
                 break;
             }
         }
@@ -794,18 +795,17 @@ bool EditorWindow::GetProcedureName(OUString const & rLine, OUString& rProcType,
     bool bFoundType = false;
     bool bFoundName = false;
 
-    for (std::vector<HighlightPortion>::iterator i(aPortions.begin());
-         i != aPortions.end(); ++i)
+    for (auto const& portion : aPortions)
     {
-        OUString sTokStr = rLine.copy(i->nBegin, i->nEnd - i->nBegin);
+        OUString sTokStr = rLine.copy(portion.nBegin, portion.nEnd - portion.nBegin);
 
-        if( i->tokenType == TokenType::Keywords && ( sTokStr.equalsIgnoreAsciiCase("sub")
+        if( portion.tokenType == TokenType::Keywords && ( sTokStr.equalsIgnoreAsciiCase("sub")
             || sTokStr.equalsIgnoreAsciiCase("function")) )
         {
             rProcType = sTokStr;
             bFoundType = true;
         }
-        if( i->tokenType == TokenType::Identifier && bFoundType )
+        if( portion.tokenType == TokenType::Identifier && bFoundType )
         {
             rProcName = sTokStr;
             bFoundName = true;
@@ -1166,11 +1166,10 @@ void EditorWindow::ImpDoHighlight( sal_uLong nLine )
         std::vector<HighlightPortion> aPortions;
         aHighlighter.getHighlightPortions( aLine, aPortions );
 
-        for (std::vector<HighlightPortion>::iterator i(aPortions.begin());
-             i != aPortions.end(); ++i)
+        for (auto const& portion : aPortions)
         {
-            Color const aColor = rModulWindow.GetLayout().GetSyntaxColor(i->tokenType);
-            pEditEngine->SetAttrib(TextAttribFontColor(aColor), nLine, i->nBegin, i->nEnd);
+            Color const aColor = rModulWindow.GetLayout().GetSyntaxColor(portion.tokenType);
+            pEditEngine->SetAttrib(TextAttribFontColor(aColor), nLine, portion.nBegin, portion.nEnd);
         }
 
         pEditEngine->SetModified(bWasModified);
@@ -1261,11 +1260,9 @@ IMPL_LINK_NOARG(EditorWindow, SyntaxTimerHdl, Timer *, void)
     //pEditEngine->SetUpdateMode(false);
 
     bHighlighting = true;
-    for ( std::set<sal_uInt16>::const_iterator it = aSyntaxLineTable.begin();
-          it != aSyntaxLineTable.end(); ++it )
+    for (auto const& syntaxLine : aSyntaxLineTable)
     {
-        sal_uInt16 nLine = *it;
-        DoSyntaxHighlight( nLine );
+        DoSyntaxHighlight(syntaxLine);
     }
 
     // #i45572#
@@ -1297,7 +1294,7 @@ void EditorWindow::ParagraphInsertedDeleted( sal_uLong nPara, bool bInserted )
         Size aSz = rModulWindow.GetBreakPointWindow().GetOutputSize();
         tools::Rectangle aInvRect( Point( 0, 0 ), aSz );
         long nY = nPara*nLineHeight - rModulWindow.GetBreakPointWindow().GetCurYOffset();
-        aInvRect.Top() = nY;
+        aInvRect.SetTop( nY );
         rModulWindow.GetBreakPointWindow().Invalidate( aInvRect );
 
         Size aLnSz(rModulWindow.GetLineNumberWindow().GetWidth(),
@@ -1307,7 +1304,7 @@ void EditorWindow::ParagraphInsertedDeleted( sal_uLong nPara, bool bInserted )
     }
 }
 
-void EditorWindow::CreateProgress( const OUString& rText, sal_uLong nRange )
+void EditorWindow::CreateProgress( const OUString& rText, sal_uInt32 nRange )
 {
     DBG_ASSERT( !pProgress, "ProgressInfo exists already" );
     pProgress.reset(new ProgressInfo(
@@ -1383,8 +1380,8 @@ void BreakPointWindow::ShowMarker(vcl::RenderContext& rRenderContext)
     Size aMarkerSz(aMarker.GetSizePixel());
     aMarkerSz = rRenderContext.PixelToLogic(aMarkerSz);
     Point aMarkerOff(0, 0);
-    aMarkerOff.X() = (aOutSz.Width() - aMarkerSz.Width()) / 2;
-    aMarkerOff.Y() = (nLineHeight - aMarkerSz.Height()) / 2;
+    aMarkerOff.setX( (aOutSz.Width() - aMarkerSz.Width()) / 2 );
+    aMarkerOff.setY( (nLineHeight - aMarkerSz.Height()) / 2 );
 
     sal_uLong nY = nMarkerPos * nLineHeight - nCurYOffset;
     Point aPos(0, nY);
@@ -1571,8 +1568,8 @@ WatchWindow::WatchWindow (Layout* pParent)
     aRemoveWatchButton->SetModeImage(Image(BitmapEx(RID_BMP_REMOVEWATCH)));
     aRemoveWatchButton->SetQuickHelpText(IDEResId(RID_STR_REMOVEWATCHTIP));
     Size aSz( aRemoveWatchButton->GetModeImage().GetSizePixel() );
-    aSz.Width() += 6;
-    aSz.Height() += 6;
+    aSz.AdjustWidth(6 );
+    aSz.AdjustHeight(6 );
     aRemoveWatchButton->SetSizePixel( aSz );
     aRemoveWatchButton->Show();
 
@@ -1652,15 +1649,15 @@ void WatchWindow::Resize()
     Size aBoxSz( aSz.Width() - 2*DWBORDER, aSz.Height() - nVirtToolBoxHeight - DWBORDER );
 
     if ( aBoxSz.Width() < 4 )
-        aBoxSz.Width() = 0;
+        aBoxSz.setWidth( 0 );
     if ( aBoxSz.Height() < 4 )
-        aBoxSz.Height() = 0;
+        aBoxSz.setHeight( 0 );
 
-    aBoxSz.Height() -= nHeaderBarHeight;
+    aBoxSz.AdjustHeight( -nHeaderBarHeight );
     aTreeListBox->SetSizePixel( aBoxSz );
     aTreeListBox->GetHScroll()->SetPageSize( aTreeListBox->GetHScroll()->GetVisibleSize() );
 
-    aBoxSz.Height() = nHeaderBarHeight;
+    aBoxSz.setHeight( nHeaderBarHeight );
     aHeaderBar->SetSizePixel( aBoxSz );
 
     Invalidate();
@@ -1873,9 +1870,9 @@ void StackWindow::Resize()
     Size aBoxSz(aSz.Width() - 2*DWBORDER, aSz.Height() - nVirtToolBoxHeight - DWBORDER);
 
     if ( aBoxSz.Width() < 4 )
-        aBoxSz.Width() = 0;
+        aBoxSz.setWidth( 0 );
     if ( aBoxSz.Height() < 4 )
-        aBoxSz.Height() = 0;
+        aBoxSz.setHeight( 0 );
 
     aTreeListBox->SetSizePixel( aBoxSz );
 
@@ -1991,8 +1988,8 @@ void ComplexEditorWindow::Resize()
 {
     Size aOutSz = GetOutputSizePixel();
     Size aSz(aOutSz);
-    aSz.Width() -= 2*DWBORDER;
-    aSz.Height() -= 2*DWBORDER;
+    aSz.AdjustWidth( -(2*DWBORDER) );
+    aSz.AdjustHeight( -(2*DWBORDER) );
     long nBrkWidth = 20;
     long nSBWidth = aEWVScrollBar->GetSizePixel().Width();
 
@@ -2817,7 +2814,7 @@ void CodeCompleteWindow::ResizeAndPositionListBox()
         tools::Rectangle aRect = static_cast<TextEngine*>(pParent->GetEditEngine())->PaMtoEditCursor( pParent->GetEditView()->GetSelection().GetEnd() );
         long nViewYOffset = pParent->GetEditView()->GetStartDocPos().Y();
         Point aPos = aRect.BottomRight();// this variable will be used later (if needed)
-        aPos.Y() = (aPos.Y() - nViewYOffset) + nBasePad;
+        aPos.setY( (aPos.Y() - nViewYOffset) + nBasePad );
 
         OUString aLongestEntry = pListBox->GetEntry( 0 );// grab the longest one: max search
         for( sal_Int32 i=1; i< pListBox->GetEntryCount(); ++i )
@@ -2844,12 +2841,12 @@ void CodeCompleteWindow::ResizeAndPositionListBox()
         if( aVisArea.TopRight().getY() + aPos.getY() + aSize.getHeight() > aBottomPoint.getY() )
         {//clipped at the bottom: move it up
             const long& nParentFontHeight = pParent->GetEditEngine()->GetFont().GetFontHeight(); //parent's font (in the IDE): needed for height
-            aPos.Y() -= aSize.getHeight() + nParentFontHeight + nCursorPad;
+            aPos.AdjustY( -(aSize.getHeight() + nParentFontHeight + nCursorPad) );
         }
 
         if( aVisArea.TopLeft().getX() + aPos.getX() + aSize.getWidth() > aBottomPoint.getX() )
         {//clipped at the right side, move it a bit left
-            aPos.X() -= aSize.getWidth() + aVisArea.TopLeft().getX();
+            aPos.AdjustX( -(aSize.getWidth() + aVisArea.TopLeft().getX()) );
         }
         //set the position
         SetPosPixel( aPos );

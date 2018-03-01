@@ -23,8 +23,6 @@
 #include <svx/svdograf.hxx>
 #include <svx/svdpagv.hxx>
 
-#include <toolkit/helper/vclunohelper.hxx>
-
 #include <strings.hrc>
 #include <ViewShell.hxx>
 #include <DrawViewShell.hxx>
@@ -88,10 +86,10 @@ void Client::RequestNewObjectArea( ::tools::Rectangle& aObjRect )
         Point aWorkAreaTL = aWorkArea.TopLeft();
         Point aWorkAreaBR = aWorkArea.BottomRight();
 
-        aPos.X() = std::max(aPos.X(), aWorkAreaTL.X());
-        aPos.X() = std::min(aPos.X(), aWorkAreaBR.X()-aSize.Width());
-        aPos.Y() = std::max(aPos.Y(), aWorkAreaTL.Y());
-        aPos.Y() = std::min(aPos.Y(), aWorkAreaBR.Y()-aSize.Height());
+        aPos.setX( std::max(aPos.X(), aWorkAreaTL.X()) );
+        aPos.setX( std::min(aPos.X(), aWorkAreaBR.X()-aSize.Width()) );
+        aPos.setY( std::max(aPos.Y(), aWorkAreaTL.Y()) );
+        aPos.setY( std::min(aPos.Y(), aWorkAreaBR.Y()-aSize.Height()) );
 
         aObjRect.SetPos(aPos);
     }

@@ -58,6 +58,7 @@
 #include <com/sun/star/table/TableBorder2.hpp>
 #include <com/sun/star/table/TableBorderDistances.hpp>
 #include <com/sun/star/table/XCell.hpp>
+#include <com/sun/star/text/HorizontalAdjust.hpp>
 #include <com/sun/star/text/GraphicCrop.hpp>
 #include <com/sun/star/text/PageNumberType.hpp>
 #include <com/sun/star/text/SectionFileLink.hpp>
@@ -392,8 +393,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetFrameStylePropertyM
     /*not impl*/    { OUString(UNO_NAME_CLIENT_MAP), RES_URL,               cppu::UnoType<bool>::get(),         PROPERTY_NONE ,MID_URL_CLIENTMAP         },
         { OUString(UNO_NAME_CONTENT_PROTECTED), RES_PROTECT,            cppu::UnoType<bool>::get(),             PROPERTY_NONE, MID_PROTECT_CONTENT   },
         { OUString(UNO_NAME_EDIT_IN_READONLY), RES_EDIT_IN_READONLY,    cppu::UnoType<bool>::get(),         PROPERTY_NONE, 0},
-    //  { OUString(UNO_NAME_GRAPHIC), RES_BACKGROUND,       &,                              PROPERTY_NONE, MID_GRAPHIC
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), RES_BACKGROUND,         cppu::UnoType<css::style::GraphicLocation>::get(),          PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         // #i50322# - add missing map entry for transparency of graphic background
@@ -477,8 +478,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
     static SfxItemPropertyMapEntry const aPageStyleMap   [] =
     {
         { OUString(UNO_NAME_BACK_COLOR), RES_BACKGROUND,            cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE ,MID_BACK_COLOR        },
-    //  { OUString(UNO_NAME_GRAPHIC), RES_BACKGROUND,       &,                              PROPERTY_NONE, MID_GRAPHIC
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), RES_BACKGROUND,         cppu::UnoType<css::style::GraphicLocation>::get(), PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_LEFT_MARGIN), RES_LR_SPACE,             cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_L_MARGIN|CONVERT_TWIPS},
@@ -500,8 +501,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
         // The implementation will decide if these are part of Header/Footer or PageStyle depending on the SlotName,
         // more precisely on the first characters. Thus it is necessary that these are 'Header' for the Header slots
         { OUString(UNO_NAME_HEADER_BACK_COLOR), RES_BACKGROUND,   cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE ,MID_BACK_COLOR        },
-    //  { OUString(UNO_NAME_HEADER_GRAPHIC), RES_BACKGROUND,  &,                              PROPERTY_NONE, MID_GRAPHIC
         { OUString(UNO_NAME_HEADER_GRAPHIC_URL), RES_BACKGROUND,          cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_HEADER_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_HEADER_GRAPHIC_FILTER), RES_BACKGROUND,           cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_HEADER_GRAPHIC_LOCATION), RES_BACKGROUND,     cppu::UnoType<css::style::GraphicLocation>::get(), PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_HEADER_LEFT_MARGIN), RES_LR_SPACE,    cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_L_MARGIN|CONVERT_TWIPS},
@@ -529,8 +530,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
 
         //UUU use real WhichIDs for Footer, see Header (above) for more infos
         { OUString(UNO_NAME_FOOTER_BACK_COLOR), RES_BACKGROUND,   cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE ,MID_BACK_COLOR        },
-    //  { OUString(UNO_NAME_FOOTER_GRAPHIC), RES_BACKGROUND,      &,                              PROPERTY_NONE, MID_GRAPHIC
         { OUString(UNO_NAME_FOOTER_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_FOOTER_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_FOOTER_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_FOOTER_GRAPHIC_LOCATION), RES_BACKGROUND,     cppu::UnoType<css::style::GraphicLocation>::get(), PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_FOOTER_LEFT_MARGIN), RES_LR_SPACE,    cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_L_MARGIN|CONVERT_TWIPS},
@@ -583,7 +584,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
         { OUString(UNO_NAME_FOOTNOTE_LINE_COLOR), FN_PARAM_FTN_INFO,        cppu::UnoType<sal_Int32>::get(),   PROPERTY_NONE ,     MID_LINE_COLOR},
         { OUString(UNO_NAME_FOOTNOTE_LINE_STYLE), FN_PARAM_FTN_INFO,        cppu::UnoType<sal_Int8>::get(),    PROPERTY_NONE , MID_FTN_LINE_STYLE},
         { OUString(UNO_NAME_FOOTNOTE_LINE_RELATIVE_WIDTH), FN_PARAM_FTN_INFO,       cppu::UnoType<sal_Int8>::get(),        PROPERTY_NONE ,     MID_LINE_RELWIDTH    },
-        { OUString(UNO_NAME_FOOTNOTE_LINE_ADJUST), FN_PARAM_FTN_INFO,       cppu::UnoType<sal_Int16>::get(),   PROPERTY_NONE ,     MID_LINE_ADJUST     },
+        { OUString(UNO_NAME_FOOTNOTE_LINE_ADJUST), FN_PARAM_FTN_INFO,       cppu::UnoType<css::text::HorizontalAdjust>::get(),   PROPERTY_NONE ,     MID_LINE_ADJUST     },
         { OUString(UNO_NAME_FOOTNOTE_LINE_TEXT_DISTANCE), FN_PARAM_FTN_INFO,        cppu::UnoType<sal_Int32>::get(),   PROPERTY_NONE ,     MID_LINE_TEXT_DIST   |CONVERT_TWIPS },
         { OUString(UNO_NAME_FOOTNOTE_LINE_DISTANCE), FN_PARAM_FTN_INFO,         cppu::UnoType<sal_Int32>::get(),   PROPERTY_NONE ,     MID_LINE_FOOTNOTE_DIST|CONVERT_TWIPS},
         { OUString(UNO_NAME_WRITING_MODE), RES_FRAMEDIR, cppu::UnoType<sal_Int16>::get(), PROPERTY_NONE, 0 },
@@ -617,8 +618,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
         { OUString(UNO_NAME_HEADER_FILLBMP_POSITION_OFFSET_X),      XATTR_FILLBMP_POSOFFSETX,       cppu::UnoType<sal_Int32>::get() ,          0,  0},
         { OUString(UNO_NAME_HEADER_FILLBMP_POSITION_OFFSET_Y),      XATTR_FILLBMP_POSOFFSETY,       cppu::UnoType<sal_Int32>::get() ,          0,  0},
         { OUString(UNO_NAME_HEADER_FILLBMP_RECTANGLE_POINT),        XATTR_FILLBMP_POS,              cppu::UnoType<css::drawing::RectanglePoint>::get() , 0,  0},
-        { OUString(UNO_NAME_HEADER_FILLBMP_SIZE_X),                 XATTR_FILLBMP_SIZEX,            cppu::UnoType<sal_Int32>::get() ,          0,  SFX_METRIC_ITEM},
-        { OUString(UNO_NAME_HEADER_FILLBMP_SIZE_Y),                 XATTR_FILLBMP_SIZEY,            cppu::UnoType<sal_Int32>::get() ,          0,  SFX_METRIC_ITEM},
+        { OUString(UNO_NAME_HEADER_FILLBMP_SIZE_X),                 XATTR_FILLBMP_SIZEX,            cppu::UnoType<sal_Int32>::get() ,          0,  0, PropertyMoreFlags::METRIC_ITEM},
+        { OUString(UNO_NAME_HEADER_FILLBMP_SIZE_Y),                 XATTR_FILLBMP_SIZEY,            cppu::UnoType<sal_Int32>::get() ,          0,  0, PropertyMoreFlags::METRIC_ITEM},
         { OUString(UNO_NAME_HEADER_FILLBMP_STRETCH),                XATTR_FILLBMP_STRETCH,          cppu::UnoType<bool>::get() ,        0,  0},
         { OUString(UNO_NAME_HEADER_FILLBMP_TILE),                   XATTR_FILLBMP_TILE,             cppu::UnoType<bool>::get() ,        0,  0},
         { OUString(UNO_NAME_HEADER_FILLBMP_MODE),                   OWN_ATTR_FILLBMP_MODE,          cppu::UnoType<css::drawing::BitmapMode>::get(),      0,  0},
@@ -645,8 +646,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetPageStylePropertyMa
         { OUString(UNO_NAME_FOOTER_FILLBMP_POSITION_OFFSET_X),      XATTR_FILLBMP_POSOFFSETX,       cppu::UnoType<sal_Int32>::get() ,          0,  0},
         { OUString(UNO_NAME_FOOTER_FILLBMP_POSITION_OFFSET_Y),      XATTR_FILLBMP_POSOFFSETY,       cppu::UnoType<sal_Int32>::get() ,          0,  0},
         { OUString(UNO_NAME_FOOTER_FILLBMP_RECTANGLE_POINT),        XATTR_FILLBMP_POS,              cppu::UnoType<css::drawing::RectanglePoint>::get() , 0,  0},
-        { OUString(UNO_NAME_FOOTER_FILLBMP_SIZE_X),                 XATTR_FILLBMP_SIZEX,            cppu::UnoType<sal_Int32>::get() ,          0,  SFX_METRIC_ITEM},
-        { OUString(UNO_NAME_FOOTER_FILLBMP_SIZE_Y),                 XATTR_FILLBMP_SIZEY,            cppu::UnoType<sal_Int32>::get() ,          0,  SFX_METRIC_ITEM},
+        { OUString(UNO_NAME_FOOTER_FILLBMP_SIZE_X),                 XATTR_FILLBMP_SIZEX,            cppu::UnoType<sal_Int32>::get() ,          0,  0, PropertyMoreFlags::METRIC_ITEM},
+        { OUString(UNO_NAME_FOOTER_FILLBMP_SIZE_Y),                 XATTR_FILLBMP_SIZEY,            cppu::UnoType<sal_Int32>::get() ,          0,  0, PropertyMoreFlags::METRIC_ITEM},
         { OUString(UNO_NAME_FOOTER_FILLBMP_STRETCH),                XATTR_FILLBMP_STRETCH,          cppu::UnoType<bool>::get() ,        0,  0},
         { OUString(UNO_NAME_FOOTER_FILLBMP_TILE),                   XATTR_FILLBMP_TILE,             cppu::UnoType<bool>::get() ,        0,  0},
         { OUString(UNO_NAME_FOOTER_FILLBMP_MODE),                   OWN_ATTR_FILLBMP_MODE,          cppu::UnoType<css::drawing::BitmapMode>::get(),      0,  0},
@@ -679,6 +680,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetTablePropertyMap()
         { OUString(UNO_NAME_BACK_COLOR), RES_BACKGROUND,        cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE,MID_BACK_COLOR         },
         { OUString(UNO_NAME_BREAK_TYPE), RES_BREAK,                 cppu::UnoType<css::style::BreakType>::get(),       PROPERTY_NONE, 0},
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), RES_BACKGROUND,         cppu::UnoType<css::style::GraphicLocation>::get(), PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_LEFT_MARGIN), RES_LR_SPACE,             cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_L_MARGIN|CONVERT_TWIPS},
@@ -687,17 +689,17 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetTablePropertyMap()
         { OUString(UNO_NAME_KEEP_TOGETHER), RES_KEEP,               cppu::UnoType<bool>::get()  ,       PROPERTY_NONE, 0},
         { OUString(UNO_NAME_SPLIT), RES_LAYOUT_SPLIT,       cppu::UnoType<bool>::get()  ,       PROPERTY_NONE, 0},
         { OUString(UNO_NAME_PAGE_NUMBER_OFFSET), RES_PAGEDESC,              cppu::UnoType<sal_Int16>::get(),       PropertyAttribute::MAYBEVOID, MID_PAGEDESC_PAGENUMOFFSET},
-        { OUString(UNO_NAME_PAGE_DESC_NAME), RES_PAGEDESC,           cppu::UnoType<OUString>::get(),         PropertyAttribute::MAYBEVOID, 0xff},
-        { OUString(UNO_NAME_RELATIVE_WIDTH), FN_TABLE_RELATIVE_WIDTH,cppu::UnoType<sal_Int16>::get()  ,        PROPERTY_NONE, 0xff },
-        { OUString(UNO_NAME_REPEAT_HEADLINE), FN_TABLE_HEADLINE_REPEAT,cppu::UnoType<bool>::get(),      PROPERTY_NONE, 0xff},
-        { OUString(UNO_NAME_HEADER_ROW_COUNT), FN_TABLE_HEADLINE_COUNT,  cppu::UnoType<sal_Int32>::get(),      PROPERTY_NONE, 0xff},
+        { OUString(UNO_NAME_PAGE_DESC_NAME), RES_PAGEDESC,           cppu::UnoType<OUString>::get(),         PropertyAttribute::MAYBEVOID, 0xbf},
+        { OUString(UNO_NAME_RELATIVE_WIDTH), FN_TABLE_RELATIVE_WIDTH,cppu::UnoType<sal_Int16>::get()  ,        PROPERTY_NONE, 0xbf },
+        { OUString(UNO_NAME_REPEAT_HEADLINE), FN_TABLE_HEADLINE_REPEAT,cppu::UnoType<bool>::get(),      PROPERTY_NONE, 0xbf},
+        { OUString(UNO_NAME_HEADER_ROW_COUNT), FN_TABLE_HEADLINE_COUNT,  cppu::UnoType<sal_Int32>::get(),      PROPERTY_NONE, 0xbf},
         { OUString(UNO_NAME_SHADOW_FORMAT), RES_SHADOW,             cppu::UnoType<css::table::ShadowFormat>::get(),   PROPERTY_NONE, 0},
         { OUString(UNO_NAME_SHADOW_TRANSPARENCE), RES_SHADOW,       cppu::UnoType<sal_Int16>::get(),       PROPERTY_NONE, MID_SHADOW_TRANSPARENCE},
         { OUString(UNO_NAME_TOP_MARGIN), RES_UL_SPACE,          cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_UP_MARGIN|CONVERT_TWIPS},
         { OUString(UNO_NAME_BOTTOM_MARGIN), RES_UL_SPACE,           cppu::UnoType<sal_Int32>::get(), PROPERTY_NONE, MID_LO_MARGIN|CONVERT_TWIPS},
         { OUString(UNO_NAME_BACK_TRANSPARENT), RES_BACKGROUND,  cppu::UnoType<bool>::get(),         PROPERTY_NONE ,MID_GRAPHIC_TRANSPARENT       },
-        { OUString(UNO_NAME_WIDTH), FN_TABLE_WIDTH,         cppu::UnoType<sal_Int32>::get()  ,         PROPERTY_NONE, 0xff},
-        { OUString(UNO_NAME_IS_WIDTH_RELATIVE), FN_TABLE_IS_RELATIVE_WIDTH,         cppu::UnoType<bool>::get()  ,       PROPERTY_NONE, 0xff},
+        { OUString(UNO_NAME_WIDTH), FN_TABLE_WIDTH,         cppu::UnoType<sal_Int32>::get()  ,         PROPERTY_NONE, 0xbf},
+        { OUString(UNO_NAME_IS_WIDTH_RELATIVE), FN_TABLE_IS_RELATIVE_WIDTH,         cppu::UnoType<bool>::get()  ,       PROPERTY_NONE, 0xbf},
         { OUString(UNO_NAME_CHART_ROW_AS_LABEL), FN_UNO_RANGE_ROW_LABEL,            cppu::UnoType<bool>::get(),         PROPERTY_NONE,  0},
         { OUString(UNO_NAME_CHART_COLUMN_AS_LABEL), FN_UNO_RANGE_COL_LABEL,         cppu::UnoType<bool>::get()  ,       PROPERTY_NONE,     0},
         { OUString(UNO_NAME_TABLE_BORDER), FN_UNO_TABLE_BORDER,         cppu::UnoType<css::table::TableBorder>::get(), PropertyAttribute::MAYBEVOID, CONVERT_TWIPS },
@@ -706,7 +708,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetTablePropertyMap()
         { OUString(UNO_NAME_TABLE_COLUMN_SEPARATORS), FN_UNO_TABLE_COLUMN_SEPARATORS,   cppu::UnoType< cppu::UnoSequenceType<css::text::TableColumnSeparator> >::get(),   PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_TABLE_COLUMN_RELATIVE_SUM), FN_UNO_TABLE_COLUMN_RELATIVE_SUM,       cppu::UnoType<sal_Int16>::get(),       PropertyAttribute::READONLY, 0 },
         COMMON_TEXT_CONTENT_PROPERTIES
-        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xff},
+        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xbf},
         { OUString(UNO_NAME_USER_DEFINED_ATTRIBUTES), RES_UNKNOWNATR_CONTAINER, cppu::UnoType<css::container::XNameContainer>::get(), PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_TEXT_SECTION), FN_UNO_TEXT_SECTION, cppu::UnoType<css::text::XTextSection>::get(),  PropertyAttribute::MAYBEVOID|PropertyAttribute::READONLY ,0 },
         { OUString(UNO_NAME_WRITING_MODE), RES_FRAMEDIR, cppu::UnoType<sal_Int16>::get(), PROPERTY_NONE, 0 },
@@ -731,6 +733,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetRangePropertyMap()
         TABSTOPS_MAP_ENTRY
         { OUString(UNO_NAME_BACK_COLOR), FN_UNO_TABLE_CELL_BACKGROUND,  cppu::UnoType<sal_Int32>::get(),   PropertyAttribute::MAYBEVOID, MID_BACK_COLOR  },
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PropertyAttribute::MAYBEVOID ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PropertyAttribute::MAYBEVOID ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), FN_UNO_TABLE_CELL_BACKGROUND,   cppu::UnoType<css::style::GraphicLocation>::get(), PropertyAttribute::MAYBEVOID, MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_BACK_TRANSPARENT), FN_UNO_TABLE_CELL_BACKGROUND,    cppu::UnoType<bool>::get(), PropertyAttribute::MAYBEVOID, MID_GRAPHIC_TRANSPARENT      },
@@ -760,11 +763,12 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetSectionPropertyMap(
         { OUString(UNO_NAME_LINK_REGION), WID_SECT_REGION   , cppu::UnoType<OUString>::get()  ,        PROPERTY_NONE,     0},
         { OUString(UNO_NAME_TEXT_COLUMNS), RES_COL,                cppu::UnoType<css::text::XTextColumns>::get(),    PROPERTY_NONE, MID_COLUMNS},
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), RES_BACKGROUND,         cppu::UnoType<css::style::GraphicLocation>::get(),          PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_BACK_COLOR), RES_BACKGROUND,            cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE ,MID_BACK_COLOR        },
         { OUString(UNO_NAME_BACK_TRANSPARENT), RES_BACKGROUND,      cppu::UnoType<bool>::get(),         PROPERTY_NONE ,MID_GRAPHIC_TRANSPARENT       },
-        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xff},
+        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xbf},
         { OUString(UNO_NAME_USER_DEFINED_ATTRIBUTES), RES_UNKNOWNATR_CONTAINER, cppu::UnoType<css::container::XNameContainer>::get(), PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_FOOTNOTE_IS_COLLECT_AT_TEXT_END), RES_FTN_AT_TXTEND,        cppu::UnoType<bool>::get(),                PROPERTY_NONE ,MID_COLLECT                   },
         { OUString(UNO_NAME_FOOTNOTE_IS_RESTART_NUMBERING), RES_FTN_AT_TXTEND,      cppu::UnoType<bool>::get(),                PROPERTY_NONE , MID_RESTART_NUM },
@@ -847,7 +851,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetGraphicPropertyMap(
         { OUString(UNO_NAME_HORI_MIRRORED_ON_ODD_PAGES), RES_GRFATR_MIRRORGRF,  cppu::UnoType<bool>::get(),             PROPERTY_NONE,      MID_MIRROR_HORZ_ODD_PAGES                 },
         { OUString(UNO_NAME_VERT_MIRRORED), RES_GRFATR_MIRRORGRF,   cppu::UnoType<bool>::get(),             PROPERTY_NONE,     MID_MIRROR_VERT            },
         { OUString(UNO_NAME_GRAPHIC_URL), FN_UNO_GRAPHIC_U_R_L, cppu::UnoType<OUString>::get(), 0, 0 },
-        { OUString(UNO_NAME_REPLACEMENT_GRAPHIC_URL), FN_UNO_REPLACEMENT_GRAPHIC_U_R_L, cppu::UnoType<OUString>::get(), 0, 0 },
+        { OUString(UNO_NAME_REPLACEMENT_GRAPHIC), FN_UNO_REPLACEMENT_GRAPHIC, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0 },
         { OUString(UNO_NAME_GRAPHIC_FILTER), FN_UNO_GRAPHIC_FILTER,      cppu::UnoType<OUString>::get(), 0, 0 },
         { OUString(UNO_NAME_GRAPHIC), FN_UNO_GRAPHIC, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0 },
         { OUString(UNO_NAME_ACTUAL_SIZE), FN_UNO_ACTUAL_SIZE,    cppu::UnoType<css::awt::Size>::get(),  PropertyAttribute::READONLY, CONVERT_TWIPS},
@@ -893,7 +897,6 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetEmbeddedPropertyMap
         { OUString(UNO_NAME_CLSID),                FN_UNO_CLSID, cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
         { OUString(UNO_NAME_STREAM_NAME),           FN_UNO_STREAM_NAME, cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
         { OUString(UNO_NAME_MODEL), FN_UNO_MODEL, cppu::UnoType<css::frame::XModel>::get(), PropertyAttribute::READONLY|PropertyAttribute::MAYBEVOID, 0},
-        { OUString(UNO_NAME_GRAPHIC_URL), FN_UNO_REPLACEMENT_GRAPHIC_URL, cppu::UnoType<OUString>::get(), PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_GRAPHIC), FN_UNO_REPLACEMENT_GRAPHIC, cppu::UnoType<css::graphic::XGraphic>::get(), PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_COMPONENT),FN_UNO_COMPONENT, cppu::UnoType<css::lang::XComponent>::get(), PropertyAttribute::READONLY, 0},
         { OUString(UNO_NAME_EMBEDDED_OBJECT),FN_EMBEDDED_OBJECT, cppu::UnoType<css::embed::XEmbeddedObject>::get(), PROPERTY_NONE, 0},
@@ -966,6 +969,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetTextTableCursorProp
         // attributes from PROPERTY_MAP_TABLE_CELL:
         { OUString(UNO_NAME_BACK_COLOR), RES_BACKGROUND,    cppu::UnoType<sal_Int32>::get(),           PROPERTY_NONE , MID_BACK_COLOR       },
         { OUString(UNO_NAME_BACK_GRAPHIC_URL), RES_BACKGROUND,      cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_URL    },
+        { OUString(UNO_NAME_BACK_GRAPHIC), RES_BACKGROUND, cppu::UnoType<graphic::XGraphic>::get(), PROPERTY_NONE, MID_GRAPHIC },
         { OUString(UNO_NAME_BACK_GRAPHIC_FILTER), RES_BACKGROUND,       cppu::UnoType<OUString>::get(), PROPERTY_NONE ,MID_GRAPHIC_FILTER    },
         { OUString(UNO_NAME_BACK_GRAPHIC_LOCATION), RES_BACKGROUND,         cppu::UnoType<css::style::GraphicLocation>::get(), PROPERTY_NONE ,MID_GRAPHIC_POSITION},
         { OUString(UNO_NAME_NUMBER_FORMAT), RES_BOXATR_FORMAT,  cppu::UnoType<sal_Int32>::get(),           PropertyAttribute::MAYBEVOID ,0             },
@@ -984,7 +988,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetBookmarkPropertyMap
 {
     static SfxItemPropertyMapEntry const aBookmarkPropertyMap_Impl [] =
     {
-        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xff},
+        { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xbf},
         COMMON_TEXT_CONTENT_PROPERTIES
         { OUString(), 0, css::uno::Type(), 0, 0 }
     };

@@ -59,8 +59,8 @@
 #include <unotools/configmgr.hxx>
 #include <tools/svlibrary.h>
 #include <tools/diagnose_ex.h>
-#include <vcl/layout.hxx>
 #include <vcl/sysdata.hxx>
+#include <vcl/weld.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
@@ -501,8 +501,8 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         {
             // Askbot has URL's normalized to languages, not locales
             // Get language from locale: ll or lll or ll-CC or lll-CC
-            OUString aLang = LanguageTag(utl::ConfigManager::getLocale()).getLanguage();
-            OUString sURL("https://hub.libreoffice.org/forum/?LOlang=" + aLang);
+
+            OUString sURL("https://hub.libreoffice.org/forum/?LOlocale=" + utl::ConfigManager::getLocale());
             sfx2::openUriExternally(sURL, false);
             break;
         }
@@ -541,7 +541,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
             Help* pHelp = Application::GetHelp();
             if ( pHelp )
             {
-                pHelp->Start( ".uno:HelpIndex", nullptr ); // show start page
+                pHelp->Start(".uno:HelpIndex", static_cast<vcl::Window*>(nullptr)); // show start page
                 bDone = true;
             }
             break;
@@ -1605,7 +1605,10 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             SvtModuleOptions aModuleOpt;
             if ( !aModuleOpt.IsImpress() )
             {
-                ScopedVclPtrInstance<MessageDialog>( nullptr, SfxResId( STR_MODULENOTINSTALLED ))->Execute();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+                                                                         VclMessageType::Warning, VclButtonsType::Ok,
+                                                                         SfxResId(STR_MODULENOTINSTALLED)));
+                xBox->run();
                 return;
             }
 

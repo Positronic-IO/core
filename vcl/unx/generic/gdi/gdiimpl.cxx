@@ -109,11 +109,11 @@ namespace
             const BitmapPalette& rPalette = pBitmapBuffer->maPalette;
             if (rPalette.GetEntryCount() == 2)
             {
-                const BitmapColor aWhite(rPalette[rPalette.GetBestIndex(Color(COL_WHITE))]);
-                rValues.foreground = rColMap.GetPixel(ImplColorToSal(aWhite));
+                const BitmapColor aWhite(rPalette[rPalette.GetBestIndex(COL_WHITE)]);
+                rValues.foreground = rColMap.GetPixel(ImplColorToSal(aWhite.GetColor()));
 
-                const BitmapColor aBlack(rPalette[rPalette.GetBestIndex(Color(COL_BLACK))]);
-                rValues.background = rColMap.GetPixel(ImplColorToSal(aBlack));
+                const BitmapColor aBlack(rPalette[rPalette.GetBestIndex(COL_BLACK)]);
+                rValues.background = rColMap.GetPixel(ImplColorToSal(aBlack.GetColor()));
             }
             rBitmap.ReleaseBuffer(pBitmapBuffer, BitmapAccessMode::Read);
         }
@@ -157,7 +157,7 @@ void X11SalGraphicsImpl::Init()
     mnBrushPixel = mrParent.GetPixel( mnBrushColor );
 }
 
-bool X11SalGraphicsImpl::FillPixmapFromScreen( X11Pixmap* pPixmap, int nX, int nY )
+void X11SalGraphicsImpl::FillPixmapFromScreen( X11Pixmap* pPixmap, int nX, int nY )
 {
     //TODO lfrb: don't hardcode the depth
     Display* pDpy = mrParent.GetXDisplay();
@@ -166,7 +166,7 @@ bool X11SalGraphicsImpl::FillPixmapFromScreen( X11Pixmap* pPixmap, int nX, int n
     if( !aTmpGC )
     {
         SAL_WARN( "vcl", "Could not create GC from screen" );
-        return false;
+        return;
     }
 
     // Copy the background of the screen into a composite pixmap
@@ -180,7 +180,6 @@ bool X11SalGraphicsImpl::FillPixmapFromScreen( X11Pixmap* pPixmap, int nX, int n
                              0, 0 );
 
     XFreeGC( pDpy, aTmpGC );
-    return true;
 }
 
 bool X11SalGraphicsImpl::RenderPixmapToScreen( X11Pixmap* pPixmap, X11Pixmap* /*Mask*/, int nX, int nY )
@@ -1011,20 +1010,20 @@ bool X11SalGraphicsImpl::setClipRegion( const vcl::Region& i_rClip )
     RectangleVector aRectangles;
     i_rClip.GetRegionRectangles(aRectangles);
 
-    for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+    for (auto const& rectangle : aRectangles)
     {
-        const long nW(aRectIter->GetWidth());
+        const long nW(rectangle.GetWidth());
 
         if(nW)
         {
-            const long nH(aRectIter->GetHeight());
+            const long nH(rectangle.GetHeight());
 
             if(nH)
             {
                 XRectangle aRect;
 
-                aRect.x = static_cast<short>(aRectIter->Left());
-                aRect.y = static_cast<short>(aRectIter->Top());
+                aRect.x = static_cast<short>(rectangle.Left());
+                aRect.y = static_cast<short>(rectangle.Top());
                 aRect.width = static_cast<unsigned short>(nW);
                 aRect.height = static_cast<unsigned short>(nH);
                 XUnionRectWithRegion(&aRect, mrParent.mpClipRegion, mrParent.mpClipRegion);
@@ -1590,7 +1589,7 @@ bool X11SalGraphicsImpl::drawPolyLine(
     const SalColor aKeepBrushColor = mnBrushColor;
     mnBrushColor = mnPenColor;
 
-    // #i11575#desc5#b adjust B2D tesselation result to raster positions
+    // #i11575#desc5#b adjust B2D tessellation result to raster positions
     basegfx::B2DPolygon aPolygon = rPolygon;
     const double fHalfWidth = 0.5 * rLineWidth.getX();
 
@@ -1602,12 +1601,12 @@ bool X11SalGraphicsImpl::drawPolyLine(
     bool bDrawnOk = true;
     if( bIsHairline )
     {
-        // hairlines can benefit from a simplified tesselation
+        // hairlines can benefit from a simplified tessellation
         // e.g. for hairlines the linejoin style can be ignored
         basegfx::B2DTrapezoidVector aB2DTrapVector;
         basegfx::utils::createLineTrapezoidFromB2DPolygon( aB2DTrapVector, aPolygon, rLineWidth.getX() );
 
-        // draw tesselation result
+        // draw tessellation result
         const int nTrapCount = aB2DTrapVector.size();
         if( nTrapCount > 0 )
             bDrawnOk = drawFilledTrapezoids( &aB2DTrapVector[0], nTrapCount, fTransparency );

@@ -18,11 +18,14 @@
  */
 
 
-#if defined _MSC_VER
-#pragma warning(push, 1)
-#endif
-
 #include <pdfparse.hxx>
+
+// boost using obsolete stuff
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4996)
+#pragma warning(disable:4503)
+#endif
 
 // workaround windows compiler: do not include multi_pass.hpp
 #include <boost/spirit/include/classic_core.hpp>
@@ -30,15 +33,20 @@
 #include <boost/spirit/include/classic_error_handling.hpp>
 #include <boost/spirit/include/classic_file_iterator.hpp>
 #include <boost/bind.hpp>
+
 #include <string.h>
 
 #include <rtl/strbuf.hxx>
 #include <rtl/alloc.h>
 
 // disable warnings again because someone along the line has enabled them
-#if defined _MSC_VER
-#pragma warning(push, 1)
+// (we have  included boost headers, what did you expect?)
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4996)
+#pragma warning(disable:4503)
 #endif
+
 
 using namespace boost::spirit;
 using namespace pdfparse;
@@ -555,7 +563,7 @@ PDFEntry* PDFReader::read( const char* pBuffer, unsigned int nLen )
                                   aGrammar,
                                   boost::spirit::space_p );
 #if OSL_DEBUG_LEVEL > 0
-        SAL_INFO("sdext.pdfimport.pdfparse", "parseinfo: stop = " << aInfo.stop << " (buff=" << pBuffer << ", offset = " << aInfo.stop - pBuffer << "), hit = " << (aInfo.hit ? OUString("true") : OUString("false")) << ", full = " << (aInfo.full ? OUString("true") : OUString("false")) << ", length = " << (int)aInfo.length );
+        SAL_INFO("sdext.pdfimport.pdfparse", "parseinfo: stop = " << aInfo.stop << " (buff=" << pBuffer << ", offset = " << aInfo.stop - pBuffer << "), hit = " << (aInfo.hit ? OUString("true") : OUString("false")) << ", full = " << (aInfo.full ? OUString("true") : OUString("false")) << ", length = " << static_cast<int>(aInfo.length) );
 #endif
     }
     catch( const parser_error<const char*, const char*>& rError )
@@ -567,6 +575,8 @@ PDFEntry* PDFReader::read( const char* pBuffer, unsigned int nLen )
             aTmp += "   " + OString(typeid( *(aGrammar.m_aObjectStack[i]) ).name());
 
         SAL_WARN("sdext.pdfimport.pdfparse", "parse error: " << rError.descriptor << " at buffer pos " << rError.where - pBuffer << ", object stack: " << aTmp);
+#else
+        (void)rError;
 #endif
     }
 
@@ -602,7 +612,7 @@ PDFEntry* PDFReader::read( const char* pFileName )
     if( fp )
     {
         fseek( fp, 0, SEEK_END );
-        unsigned int nLen = (unsigned int)ftell( fp );
+        unsigned int nLen = static_cast<unsigned int>(ftell( fp ));
         fseek( fp, 0, SEEK_SET );
         char* pBuf = static_cast<char*>(rtl_allocateMemory( nLen ));
         if( pBuf )
@@ -677,9 +687,8 @@ PDFEntry* PDFReader::read( const char* pFileName )
 #endif // WIN32
 }
 
-#if defined _MSC_VER
+#if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

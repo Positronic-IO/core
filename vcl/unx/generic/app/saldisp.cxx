@@ -2307,8 +2307,8 @@ void SalDisplay::InitXinerama()
 #if OSL_DEBUG_LEVEL > 1
     if( m_bXinerama )
     {
-        for( std::vector< Rectangle >::const_iterator it = m_aXineramaScreens.begin(); it != m_aXineramaScreens.end(); ++it )
-            fprintf( stderr, "Xinerama screen: %ldx%ld+%ld+%ld\n", it->GetWidth(), it->GetHeight(), it->Left(), it->Top() );
+        for (auto const& screen : m_aXineramaScreens)
+            fprintf( stderr, "Xinerama screen: %ldx%ld+%ld+%ld\n", screen.GetWidth(), screen.GetHeight(), screen.Left(), screen.Top() );
     }
 #endif
 }
@@ -2374,10 +2374,10 @@ bool SalDisplay::XIfEventWithTimeout( XEvent* o_pEvent, XPointer i_pPredicateDat
     return bRet;
 }
 
-SalVisual::SalVisual()
-{
-    memset( this, 0, sizeof( SalVisual ) );
-}
+SalVisual::SalVisual():
+    eRGBMode_(RGB), nRedShift_(0), nGreenShift_(0), nBlueShift_(0), nRedBits_(0), nGreenBits_(0),
+    nBlueBits_(0)
+{}
 
 SalVisual::SalVisual( const XVisualInfo* pXVI )
 {

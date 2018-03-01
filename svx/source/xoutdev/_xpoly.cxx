@@ -17,6 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <algorithm>
+
 #include <osl/endian.h>
 #include <tools/stream.hxx>
 #include <tools/debug.hxx>
@@ -67,10 +71,10 @@ ImpXPolygon::ImpXPolygon( const ImpXPolygon& rImpXPoly )
 
 ImpXPolygon::~ImpXPolygon()
 {
-    delete[] reinterpret_cast<char*>(pPointAry);
+    delete[] pPointAry;
     if ( bDeleteOldPoints )
     {
-        delete[] reinterpret_cast<char*>(pOldPointAry);
+        delete[] pOldPointAry;
         pOldPointAry = nullptr;
     }
 }
@@ -111,8 +115,7 @@ void ImpXPolygon::Resize( sal_uInt16 nNewSize, bool bDeletePoints )
     }
     // create point array
     nSize     = nNewSize;
-    pPointAry = reinterpret_cast<Point*>(new char[ nSize*sizeof( Point ) ]);
-    memset( pPointAry, 0, nSize*sizeof( Point ) );
+    pPointAry = new Point[ nSize ];
 
     // create flag array
     pFlagAry.reset( new PolyFlags[ nSize ] );
@@ -137,7 +140,7 @@ void ImpXPolygon::Resize( sal_uInt16 nNewSize, bool bDeletePoints )
         }
         if ( bDeletePoints )
         {
-            delete[] reinterpret_cast<char*>(pOldPointAry);
+            delete[] pOldPointAry;
             pOldPointAry = nullptr;
         }
         else
@@ -165,7 +168,7 @@ void ImpXPolygon::InsertSpace( sal_uInt16 nPos, sal_uInt16 nCount )
                  nMove * sizeof(Point) );
         memmove( &pFlagAry[nPos+nCount], &pFlagAry[nPos], nMove );
     }
-    memset( &pPointAry[nPos], 0, nCount * sizeof( Point ) );
+    std::fill(pPointAry + nPos, pPointAry + nPos + nCount, Point());
     memset( &pFlagAry [nPos], 0, nCount );
 
     nPoints = nPoints + nCount;
@@ -185,7 +188,7 @@ void ImpXPolygon::Remove( sal_uInt16 nPos, sal_uInt16 nCount )
                      nMove * sizeof(Point) );
             memmove( &pFlagAry[nPos], &pFlagAry[nPos+nCount], nMove );
         }
-        memset( &pPointAry[nPoints - nCount], 0, nCount * sizeof( Point ) );
+        std::fill(pPointAry + (nPoints - nCount), pPointAry + nPoints, Point());
         memset( &pFlagAry [nPoints - nCount], 0, nCount );
         nPoints = nPoints - nCount;
     }
@@ -195,7 +198,7 @@ void ImpXPolygon::CheckPointDelete() const
 {
     if ( bDeleteOldPoints )
     {
-        delete[] reinterpret_cast<char*>(pOldPointAry);
+        delete[] pOldPointAry;
         const_cast< ImpXPolygon* >(this)->pOldPointAry = nullptr;
         const_cast< ImpXPolygon* >(this)->bDeleteOldPoints = false;
     }
@@ -257,20 +260,20 @@ XPolygon::XPolygon(const tools::Rectangle& rRect, long nRx, long nRy)
             switch ( nQuad )
             {
                 case 0: aCenter = rRect.TopLeft();
-                        aCenter.X() -= nRx;
-                        aCenter.Y() += nRy;
+                        aCenter.AdjustX( -nRx );
+                        aCenter.AdjustY(nRy );
                         break;
                 case 1: aCenter = rRect.TopRight();
-                        aCenter.X() += nRx;
-                        aCenter.Y() += nRy;
+                        aCenter.AdjustX(nRx );
+                        aCenter.AdjustY(nRy );
                         break;
                 case 2: aCenter = rRect.BottomRight();
-                        aCenter.X() += nRx;
-                        aCenter.Y() -= nRy;
+                        aCenter.AdjustX(nRx );
+                        aCenter.AdjustY( -nRy );
                         break;
                 case 3: aCenter = rRect.BottomLeft();
-                        aCenter.X() -= nRx;
-                        aCenter.Y() -= nRy;
+                        aCenter.AdjustX( -nRx );
+                        aCenter.AdjustY( -nRy );
                         break;
             }
             GenBezArc(aCenter, nRx, nRy, nXHdl, nYHdl, 0, 900, nQuad, nPos);
@@ -344,7 +347,8 @@ void XPolygon::SetPointCount( sal_uInt16 nPoints )
     if ( nPoints < pImpXPolygon->nPoints )
     {
         sal_uInt16 nSize = pImpXPolygon->nPoints - nPoints;
-        memset( &pImpXPolygon->pPointAry[nPoints], 0, nSize * sizeof( Point ) );
+        std::fill(
+            pImpXPolygon->pPointAry + nPoints, pImpXPolygon->pPointAry + nPoints + nSize, Point());
         memset( &pImpXPolygon->pFlagAry [nPoints], 0, nSize );
     }
     pImpXPolygon->nPoints = nPoints;
@@ -401,8 +405,8 @@ void XPolygon::Move( long nHorzMove, long nVertMove )
     for ( sal_uInt16 i = 0; i < nCount; i++ )
     {
         Point* pPt = &(pImpXPolygon->pPointAry[i]);
-        pPt->X() += nHorzMove;
-        pPt->Y() += nVertMove;
+        pPt->AdjustX( nHorzMove );
+        pPt->AdjustY( nVertMove );
     }
 }
 
@@ -532,28 +536,28 @@ void XPolygon::SubdivideBezier(sal_uInt16 nPos, bool bCalcFirst, double fT)
         nPosInc = 1;
         nIdxInc = 1;
     }
-    pPoints[nPos].X() = static_cast<long>(fU3 *       pPoints[nIdx  ].X() +
+    pPoints[nPos].setX( static_cast<long>(fU3 *       pPoints[nIdx  ].X() +
                                 fT  * fU2 * pPoints[nIdx+1].X() * 3 +
                                 fT2 * fU  * pPoints[nIdx+2].X() * 3 +
-                                fT3 *       pPoints[nIdx+3].X());
-    pPoints[nPos].Y() = static_cast<long>(fU3 *       pPoints[nIdx  ].Y() +
+                                fT3 *       pPoints[nIdx+3].X()) );
+    pPoints[nPos].setY( static_cast<long>(fU3 *       pPoints[nIdx  ].Y() +
                                 fT  * fU2 * pPoints[nIdx+1].Y() * 3 +
                                 fT2 * fU  * pPoints[nIdx+2].Y() * 3 +
-                                fT3 *       pPoints[nIdx+3].Y());
+                                fT3 *       pPoints[nIdx+3].Y()) );
     nPos = nPos + nPosInc;
     nIdx = nIdx + nIdxInc;
-    pPoints[nPos].X() = static_cast<long>(fU2 *       pPoints[nIdx  ].X() +
+    pPoints[nPos].setX( static_cast<long>(fU2 *       pPoints[nIdx  ].X() +
                                 fT  * fU *  pPoints[nIdx+1].X() * 2 +
-                                fT2 *       pPoints[nIdx+2].X());
-    pPoints[nPos].Y() = static_cast<long>(fU2 *       pPoints[nIdx  ].Y() +
+                                fT2 *       pPoints[nIdx+2].X()) );
+    pPoints[nPos].setY( static_cast<long>(fU2 *       pPoints[nIdx  ].Y() +
                                 fT  * fU *  pPoints[nIdx+1].Y() * 2 +
-                                fT2 *       pPoints[nIdx+2].Y());
+                                fT2 *       pPoints[nIdx+2].Y()) );
     nPos = nPos + nPosInc;
     nIdx = nIdx + nIdxInc;
-    pPoints[nPos].X() = static_cast<long>(fU * pPoints[nIdx  ].X() +
-                                fT * pPoints[nIdx+1].X());
-    pPoints[nPos].Y() = static_cast<long>(fU * pPoints[nIdx  ].Y() +
-                                fT * pPoints[nIdx+1].Y());
+    pPoints[nPos].setX( static_cast<long>(fU * pPoints[nIdx  ].X() +
+                                fT * pPoints[nIdx+1].X()) );
+    pPoints[nPos].setY( static_cast<long>(fU * pPoints[nIdx  ].Y() +
+                                fT * pPoints[nIdx+1].Y()) );
 }
 
 /// Generate a Bézier arc
@@ -576,22 +580,26 @@ void XPolygon::GenBezArc(const Point& rCenter, long nRx, long nRy,
 
     if ( nQuad == 0 || nQuad == 2 )
     {
-        pPoints[nFirst].X() += nRx; pPoints[nFirst+3].Y() += nRy;
+        pPoints[nFirst].AdjustX( nRx );
+        pPoints[nFirst+3].AdjustY( nRy );
     }
     else
     {
-        pPoints[nFirst].Y() += nRy; pPoints[nFirst+3].X() += nRx;
+        pPoints[nFirst].AdjustY( nRy );
+        pPoints[nFirst+3].AdjustX( nRx );
     }
     pPoints[nFirst+1] = pPoints[nFirst];
     pPoints[nFirst+2] = pPoints[nFirst+3];
 
     if ( nQuad == 0 || nQuad == 2 )
     {
-        pPoints[nFirst+1].Y() += nYHdl; pPoints[nFirst+2].X() += nXHdl;
+        pPoints[nFirst+1].AdjustY( nYHdl );
+        pPoints[nFirst+2].AdjustX( nXHdl );
     }
     else
     {
-        pPoints[nFirst+1].X() += nXHdl; pPoints[nFirst+2].Y() += nYHdl;
+        pPoints[nFirst+1].AdjustX( nXHdl );
+        pPoints[nFirst+2].AdjustY( nYHdl );
     }
     if ( nStart > 0 )
         SubdivideBezier(nFirst, false, static_cast<double>(nStart) / 900);
@@ -649,8 +657,8 @@ void XPolygon::CalcSmoothJoin(sal_uInt16 nCenter, sal_uInt16 nDrag, sal_uInt16 n
         // keep the length if SMOOTH
         if ( GetFlags(nCenter) == PolyFlags::Smooth || !IsControl(nDrag) )
         {
-            aDiff.X() = static_cast<long>(fRatio * aDiff.X());
-            aDiff.Y() = static_cast<long>(fRatio * aDiff.Y());
+            aDiff.setX( static_cast<long>(fRatio * aDiff.X()) );
+            aDiff.setY( static_cast<long>(fRatio * aDiff.Y()) );
         }
         pPoints[nPnt] = pPoints[nCenter] - aDiff;
     }
@@ -682,10 +690,10 @@ void XPolygon::CalcTangent(sal_uInt16 nCenter, sal_uInt16 nPrev, sal_uInt16 nNex
         fPrevLen = (fNextLen + fPrevLen) / 2;
         fNextLen = fPrevLen;
     }
-    rNext.X() = rCenter.X() + static_cast<long>(fNextLen * aDiff.X());
-    rNext.Y() = rCenter.Y() + static_cast<long>(fNextLen * aDiff.Y());
-    rPrev.X() = rCenter.X() - static_cast<long>(fPrevLen * aDiff.X());
-    rPrev.Y() = rCenter.Y() - static_cast<long>(fPrevLen * aDiff.Y());
+    rNext.setX( rCenter.X() + static_cast<long>(fNextLen * aDiff.X()) );
+    rNext.setY( rCenter.Y() + static_cast<long>(fNextLen * aDiff.Y()) );
+    rPrev.setX( rCenter.X() - static_cast<long>(fPrevLen * aDiff.X()) );
+    rPrev.setY( rCenter.Y() - static_cast<long>(fPrevLen * aDiff.Y()) );
 }
 
 /// convert four polygon points into a Bézier curve
@@ -765,8 +773,8 @@ void XPolygon::Scale(double fSx, double fSy)
     for (sal_uInt16 i = 0; i < nPntCnt; i++)
     {
         Point& rPnt = pImpXPolygon->pPointAry[i];
-        rPnt.X() = static_cast<long>(fSx * rPnt.X());
-        rPnt.Y() = static_cast<long>(fSy * rPnt.Y());
+        rPnt.setX( static_cast<long>(fSx * rPnt.X()) );
+        rPnt.setY( static_cast<long>(fSy * rPnt.Y()) );
     }
 }
 
@@ -822,10 +830,10 @@ void XPolygon::Distort(const tools::Rectangle& rRefRect,
         fUx = 1.0 - fTx;
         fUy = 1.0 - fTy;
 
-        rPnt.X() = static_cast<long>( fUy * (fUx * X1 + fTx * X2) +
-                            fTy * (fUx * X3 + fTx * X4) );
-        rPnt.Y() = static_cast<long>( fUx * (fUy * Y1 + fTy * Y3) +
-                            fTx * (fUy * Y2 + fTy * Y4) );
+        rPnt.setX( static_cast<long>( fUy * (fUx * X1 + fTx * X2) +
+                            fTy * (fUx * X3 + fTx * X4) ) );
+        rPnt.setY( static_cast<long>( fUx * (fUy * Y1 + fTy * Y3) +
+                            fTx * (fUy * Y2 + fTy * Y4) ) );
     }
 }
 

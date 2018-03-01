@@ -96,6 +96,7 @@
 #include <vcl/FilterConfigItem.hxx>
 #include <comphelper/processfactory.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sdabstdlg.hxx>
 
 using namespace ::com::sun::star;
 
@@ -288,5 +289,15 @@ void SdDLL::Init()
         RegisterRemotes();
 #endif
 }
+
+#ifndef DISABLE_DYNLOADING
+
+extern "C" SAL_DLLPUBLIC_EXPORT
+void lok_preload_hook()
+{
+    SdAbstractDialogFactory::Create();
+}
+
+#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

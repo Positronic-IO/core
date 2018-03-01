@@ -36,7 +36,6 @@
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <com/sun/star/ui/theUICategoryDescription.hpp>
 
-#include <helpids.h>
 #include <basic/sbx.hxx>
 #include <basic/basicmanagerrepository.hxx>
 #include <basic/sbstar.hxx>
@@ -960,12 +959,9 @@ void SfxConfigGroupListBox::GroupSelected()
             if (pFamily)
             {
                 const std::vector< SfxStyleInfo_Impl > lStyles = pStylesInfo->getStyles(pFamily->sFamily);
-                std::vector< SfxStyleInfo_Impl >::const_iterator pIt;
-                for (  pIt  = lStyles.begin();
-                       pIt != lStyles.end()  ;
-                     ++pIt                   )
+                for (auto const& lStyle : lStyles)
                 {
-                    SfxStyleInfo_Impl* pStyle = new SfxStyleInfo_Impl(*pIt);
+                    SfxStyleInfo_Impl* pStyle = new SfxStyleInfo_Impl(lStyle);
                     SvTreeListEntry* pFuncEntry = pFunctionListBox->InsertEntry( pStyle->sLabel );
                     pFunctionListBox->aArr.push_back( o3tl::make_unique<SfxGroupInfo_Impl>( SfxCfgKind::GROUP_STYLES, 0, pStyle ) );
                     pFunctionListBox->aArr.back()->sCommand = pStyle->sCommand;
@@ -1043,12 +1039,9 @@ void SfxConfigGroupListBox::RequestingChildren( SvTreeListEntry *pEntry )
             if ( !GetChildCount( pEntry ) )
             {
                 const std::vector< SfxStyleInfo_Impl >                 lStyleFamilies = pStylesInfo->getStyleFamilies();
-                      std::vector< SfxStyleInfo_Impl >::const_iterator pIt;
-                for (  pIt  = lStyleFamilies.begin();
-                       pIt != lStyleFamilies.end()  ;
-                     ++pIt                          )
+                for (auto const& lStyleFamily : lStyleFamilies)
                 {
-                    SfxStyleInfo_Impl* pFamily = new SfxStyleInfo_Impl(*pIt);
+                    SfxStyleInfo_Impl* pFamily = new SfxStyleInfo_Impl(lStyleFamily);
                     SvTreeListEntry* pStyleEntry = InsertEntry( pFamily->sLabel, pEntry );
                     aArr.push_back( o3tl::make_unique<SfxGroupInfo_Impl>( SfxCfgKind::GROUP_STYLES, 0, pFamily ));
                     pStyleEntry->SetUserData( aArr.back().get() );
@@ -1059,7 +1052,7 @@ void SfxConfigGroupListBox::RequestingChildren( SvTreeListEntry *pEntry )
         }
 
         default:
-            OSL_FAIL( "Falscher Gruppentyp!" );
+            OSL_FAIL( "Wrong group type!" );
             break;
     }
 }

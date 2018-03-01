@@ -264,7 +264,7 @@ void SwDropCapsPict::GetFontSettings( const SwDropCapsPage& _rPage, vcl::Font& _
 void SwDropCapsPict::UpdatePaintSettings()
 {
     maBackColor = GetSettings().GetStyleSettings().GetWindowColor();
-    maTextLineColor = Color( COL_LIGHTGRAY );
+    maTextLineColor = COL_LIGHTGRAY;
 
     // gray lines
     mnTotLineH = (GetOutputSizePixel().Height() - 2 * BORDER) / LINES;
@@ -409,7 +409,7 @@ void SwDropCapsPict::DrawPrev(vcl::RenderContext& rRenderContext, const Point& r
         rFnt.DrawPrev(&rRenderContext, mpPrinter, aPt, maText, nStart, nEnd - nStart);
 
         if (!maScriptChanges.empty())
-            aPt.X() += maScriptChanges[nIdx].textWidth;
+            aPt.AdjustX(maScriptChanges[nIdx].textWidth );
 
         if (!GetNextScriptSegment(nIdx, nStart, nEnd, nScript))
             break;

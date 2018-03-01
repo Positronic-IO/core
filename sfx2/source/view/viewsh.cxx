@@ -22,9 +22,9 @@
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/layout.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/toolbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/intitem.hxx>
 #include <svtools/langhelp.hxx>
 #include <svtools/sfxecode.hxx>
@@ -450,7 +450,7 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
         {
             SfxObjectShell* pDoc = GetObjectShell();
             if ( pDoc && pDoc->QueryHiddenInformation(
-                             HiddenWarningFact::WhenSaving, &GetViewFrame()->GetWindow() ) != RET_YES )
+                             HiddenWarningFact::WhenSaving, GetViewFrame()->GetWindow().GetFrameWeld() ) != RET_YES )
                 break;
 
 
@@ -497,8 +497,11 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
 
             if ( eResult == SfxMailModel::SEND_MAIL_ERROR )
             {
-                ScopedVclPtrInstance< MessageDialog > aBox(SfxGetpApp()->GetTopWindow(), SfxResId( STR_ERROR_SEND_MAIL ), VclMessageType::Info);
-                aBox->Execute();
+                vcl::Window* pWin = SfxGetpApp()->GetTopWindow();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                         VclMessageType::Info, VclButtonsType::Ok,
+                                                                         SfxResId(STR_ERROR_SEND_MAIL)));
+                xBox->run();
                 rReq.Ignore();
             }
             else
@@ -511,15 +514,18 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
             SfxBluetoothModel aModel;
             SfxObjectShell* pDoc = GetObjectShell();
             if ( pDoc && pDoc->QueryHiddenInformation(
-                            HiddenWarningFact::WhenSaving, &GetViewFrame()->GetWindow() ) != RET_YES )
+                            HiddenWarningFact::WhenSaving, GetViewFrame()->GetWindow().GetFrameWeld() ) != RET_YES )
                 break;
             uno::Reference < frame::XFrame > xFrame( pFrame->GetFrame().GetFrameInterface() );
             SfxMailModel::SendMailResult eResult = aModel.SaveAndSend( xFrame );
             if( eResult == SfxMailModel::SEND_MAIL_ERROR )
             {
-                    ScopedVclPtrInstance< MessageDialog > aBox(SfxGetpApp()->GetTopWindow(), SfxResId( STR_ERROR_SEND_MAIL ), VclMessageType::Info);
-                    aBox->Execute();
-                    rReq.Ignore();
+                vcl::Window* pWin = SfxGetpApp()->GetTopWindow();
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                         VclMessageType::Info, VclButtonsType::Ok,
+                                                                         SfxResId(STR_ERROR_SEND_MAIL)));
+                xBox->run();
+                rReq.Ignore();
             }
             else
                 rReq.Done();
@@ -1116,8 +1122,10 @@ bool SfxViewShell::PrepareClose
     {
         if ( bUI )
         {
-            ScopedVclPtrInstance< MessageDialog > aInfoBox(&GetViewFrame()->GetWindow(), SfxResId( STR_CANT_CLOSE ), VclMessageType::Info );
-            aInfoBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetViewFrame()->GetWindow().GetFrameWeld(),
+                                                                     VclMessageType::Info, VclButtonsType::Ok,
+                                                                     SfxResId(STR_CANT_CLOSE)));
+            xBox->run();
         }
 
         return false;
@@ -1267,8 +1275,8 @@ void SfxViewShell::PushSubShells_Impl( bool bPush )
     SfxDispatcher *pDisp = pFrame->GetDispatcher();
     if ( bPush )
     {
-        for(SfxShellArr_Impl::const_iterator i = pImpl->aArr.begin(); i != pImpl->aArr.end(); ++i)
-            pDisp->Push(**i);
+        for (auto const& elem : pImpl->aArr)
+            pDisp->Push(*elem);
     }
     else if(!pImpl->aArr.empty())
     {
@@ -1707,9 +1715,9 @@ void SfxViewShell::SetMargin( const Size& rSize )
     // the default margin was verified using www.apple.com !!
     Size aMargin = rSize;
     if ( aMargin.Width() == -1 )
-        aMargin.Width() = DEFAULT_MARGIN_WIDTH;
+        aMargin.setWidth( DEFAULT_MARGIN_WIDTH );
     if ( aMargin.Height() == -1 )
-        aMargin.Height() = DEFAULT_MARGIN_HEIGHT;
+        aMargin.setHeight( DEFAULT_MARGIN_HEIGHT );
 
     if ( aMargin != pImpl->aMargin )
     {

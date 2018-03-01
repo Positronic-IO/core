@@ -93,13 +93,13 @@ bool HWPPara::Read(HWPFile & hwpf, unsigned char flag)
     int ii;
     scflag = flag;
 // Paragraph Information
-    hwpf.Read1b(&reuse_shape, 1);
+    hwpf.Read1b(reuse_shape);
     hwpf.Read2b(&nch, 1);
     hwpf.Read2b(&nline, 1);
-    hwpf.Read1b(&contain_cshape, 1);
-    hwpf.Read1b(&etcflag, 1);
+    hwpf.Read1b(contain_cshape);
+    hwpf.Read1b(etcflag);
     hwpf.Read4b(&ctrlflag, 1);
-    hwpf.Read1b(&pstyno, 1);
+    hwpf.Read1b(pstyno);
 
 /* Paragraph representative character */
     cshape->Read(hwpf);
@@ -124,8 +124,8 @@ bool HWPPara::Read(HWPFile & hwpf, unsigned char flag)
     }
 
     if (nch && !reuse_shape){
-         if( pshape->coldef.ncols > 1 ) {
-             hwpf.SetColumnDef(&(pshape->coldef));
+         if( pshape->xColdef->ncols > 1 ) {
+             hwpf.SetColumnDef(pshape->xColdef);
          }
     }
 
@@ -148,7 +148,7 @@ bool HWPPara::Read(HWPFile & hwpf, unsigned char flag)
             memset(cshapep[ii].get(), 0, sizeof(CharShape));
 
             unsigned char same_cshape(0);
-            hwpf.Read1b(&same_cshape, 1);
+            hwpf.Read1b(same_cshape);
             if (!same_cshape)
             {
                 cshapep[ii]->Read(hwpf);
@@ -162,7 +162,6 @@ bool HWPPara::Read(HWPFile & hwpf, unsigned char flag)
         }
     }
 // read string
-    hhstr.resize(nch);
     ii = 0;
     while (ii < nch)
     {

@@ -30,21 +30,6 @@ class SvStream;
 class Graphic;
 namespace vcl { class Window; }
 
-struct FltCallDialogParameter
-{
-
-    VclPtr<vcl::Window> pWindow;
-    FieldUnit   eFieldUnit;
-    OUString    aFilterExt;
-
-    // In and Out PropertySequence for all filter dialogs
-    css::uno::Sequence< css::beans::PropertyValue > aFilterData;
-
-    FltCallDialogParameter( vcl::Window* pW, FieldUnit eFiUni ) :
-        pWindow         ( pW ),
-        eFieldUnit      ( eFiUni ) {};
-};
-
 typedef bool (*PFilterCall)(SvStream & rStream, Graphic & rGraphic,
                             FilterConfigItem* pConfigItem);
     // Of this type are both export-filter and import-filter functions

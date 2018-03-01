@@ -42,7 +42,7 @@ class TableModel;
 class SVX_DLLPUBLIC SvxTableController: public sdr::SelectionController
 {
 public:
-    SVX_DLLPRIVATE SvxTableController( SdrObjEditView* pView, const SdrObject* pObj );
+    SVX_DLLPRIVATE SvxTableController( SdrObjEditView* pView, const SdrTableObj* pObj );
     SVX_DLLPRIVATE virtual ~SvxTableController() override;
 
     // from sdr::SelectionController
@@ -76,7 +76,7 @@ public:
     SVX_DLLPRIVATE void DistributeRows();
     SVX_DLLPRIVATE void SetVertical( sal_uInt16 nSId );
 
-    SVX_DLLPRIVATE static rtl::Reference< sdr::SelectionController > create( SdrObjEditView* pView, const SdrObject* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
+    SVX_DLLPRIVATE static rtl::Reference< sdr::SelectionController > create( SdrObjEditView* pView, const SdrTableObj* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
 
     SVX_DLLPRIVATE void MergeAttrFromSelectedCells(SfxItemSet& rAttr, bool bOnlyHardAttr) const;
     SVX_DLLPRIVATE void SetAttrToSelectedCells(const SfxItemSet& rAttr, bool bReplaceAll);
@@ -116,7 +116,7 @@ public:
     bool isColumnSelected( sal_Int32 nColumn );
     bool isRowHeader();
     bool isColumnHeader();
-    sdr::table::SdrTableObj* GetTableObj() { return dynamic_cast< sdr::table::SdrTableObj* >( mxTableObj.get() ); }
+    sdr::table::SdrTableObj* GetTableObj() { return mxTableObj.get(); }
 private:
     SvxTableController(SvxTableController &) = delete;
     void operator =(SvxTableController &) = delete;
@@ -176,7 +176,7 @@ private:
     sdr::overlay::OverlayObjectList*  mpSelectionOverlay;
 
     SdrView* mpView;
-    SdrObjectWeakRef mxTableObj;
+    tools::WeakReference<SdrTableObj> mxTableObj;
     SdrModel* mpModel;
 
     css::uno::Reference< css::util::XModifyListener > mxModifyListener;
@@ -184,7 +184,7 @@ private:
     ImplSVEvent * mnUpdateEvent;
 };
 
-rtl::Reference< sdr::SelectionController > CreateTableController( SdrObjEditView* pView, const SdrObject* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
+rtl::Reference< sdr::SelectionController > CreateTableController( SdrObjEditView* pView, const SdrTableObj* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
 
 } }
 

@@ -22,6 +22,9 @@
 
 #include <tools/time.hxx>
 
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
+
+#include <vcl/ITiledRenderable.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/salgtype.hxx>
 #include <vcl/window.hxx>
@@ -64,8 +67,8 @@ WindowHitTest Window::ImplHitTest( const Point& rFramePos )
     if ( mpWindowImpl->mbWinRegion )
     {
         Point aTempPos = aFramePos;
-        aTempPos.X() -= mnOutOffX;
-        aTempPos.Y() -= mnOutOffY;
+        aTempPos.AdjustX( -(mnOutOffX) );
+        aTempPos.AdjustY( -(mnOutOffY) );
         if ( !mpWindowImpl->maWinRegion.IsInside( aTempPos ) )
             return WindowHitTest::NONE;
     }
@@ -481,6 +484,27 @@ void Window::SetPointer( const Pointer& rPointer )
     // possibly immediately move pointer
     if ( !mpWindowImpl->mpFrameData->mbInMouseMove && ImplTestMousePointerSet() )
         mpWindowImpl->mpFrame->SetPointer( ImplGetMousePointer() );
+
+    if (VclPtr<vcl::Window> pWin = GetParentWithLOKNotifier())
+    {
+        Pointer aPointer = GetPointer();
+        // We don't map all possible pointers hence we need a default
+        OString aPointerString = "default";
+        auto aIt = vcl::gaLOKPointerMap.find(aPointer.GetStyle());
+        if (aIt != vcl::gaLOKPointerMap.end())
+        {
+            aPointerString = aIt->second;
+        }
+
+        // issue mouse pointer events only for document windows
+        // Doc windows' immediate parent SfxFrameViewWindow_Impl is the one with
+        // parent notifier set during initialization
+        if (GetParent()->ImplGetWindowImpl()->mbLOKParentNotifier &&
+            GetParent()->ImplGetWindowImpl()->mnLOKWindowId == 0)
+        {
+            pWin->GetLOKNotifier()->libreOfficeKitViewCallback(LOK_CALLBACK_MOUSE_POINTER, aPointerString.getStr());
+        }
+    }
 }
 
 void Window::EnableChildPointerOverwrite( bool bOverwrite )

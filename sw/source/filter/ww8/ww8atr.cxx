@@ -642,7 +642,7 @@ void WW8Export::PrepareNewPageDesc( const SfxItemSet*pSet,
     }
 }
 
-void MSWordExportBase::CorrectTabStopInSet( SfxItemSet& rSet, sal_uInt16 nAbsLeft )
+void MSWordExportBase::CorrectTabStopInSet( SfxItemSet& rSet, short nAbsLeft )
 {
     if (const SvxTabStopItem *pItem = rSet.GetItem<SvxTabStopItem>(RES_PARATR_TABSTOP))
     {
@@ -1387,8 +1387,7 @@ void WW8AttributeOutput::CharEscapement( const SvxEscapementItem& rEscapement )
 
     if ( 0 == b || 0xFF == b )
     {
-        long nHeight = static_cast<const SvxFontHeightItem&>(m_rWW8Export.GetItem(
-                                    RES_CHRATR_FONTSIZE )).GetHeight();
+        long nHeight = m_rWW8Export.GetItem( RES_CHRATR_FONTSIZE ).GetHeight();
         m_rWW8Export.InsUInt16( NS_sprm::sprmCHpsPos );
 
         m_rWW8Export.InsUInt16( static_cast<short>(( nHeight * nEsc + 500 ) / 1000 ));
@@ -1538,7 +1537,7 @@ bool WW8Export::TransBrush(const Color& rCol, WW8_SHD& rShd)
 
 sal_uInt32 SuitableBGColor(sal_uInt32 nIn)
 {
-    if (nIn == COL_AUTO)
+    if (nIn == sal_uInt32(COL_AUTO))
         return 0xFF000000;
     return wwUtility::RGBToBGR(nIn);
 }
@@ -2162,7 +2161,7 @@ void AttributeOutputBase::StartTOX( const SwSection& rSect )
                 sStr = FieldString(eCode);
 
                 {
-                    const SwFormatCol& rCol = static_cast<const SwFormatCol&>( rSect.GetFormat()->GetFormatAttr( RES_COL ) );
+                    const SwFormatCol& rCol = rSect.GetFormat()->GetFormatAttr( RES_COL );
                     const SwColumns& rColumns = rCol.GetColumns();
                     sal_Int32 nCol = rColumns.size();
 
@@ -2494,7 +2493,7 @@ void AttributeOutputBase::EndTOX( const SwSection& rSect,bool bCareEnd )
 
         if ( pTOX->GetType() == TOX_INDEX && GetExport().AddSectionBreaksForTOX() )
         {
-            const SwFormatCol& rCol = static_cast<const SwFormatCol&>( rSect.GetFormat()->GetFormatAttr( RES_COL ) );
+            const SwFormatCol& rCol = rSect.GetFormat()->GetFormatAttr( RES_COL );
             const SwColumns& rColumns = rCol.GetColumns();
             sal_Int32 nCol = rColumns.size();
 
@@ -4284,7 +4283,7 @@ WW8_BRCVer9 WW8Export::TranslateBorderLine(const SvxBorderLine& rLine,
             nWidth = 1;                         // don't omit
 
         // BRC.cv
-        nColBGR = wwUtility::RGBToBGR(rLine.GetColor().GetRGBColor());
+        nColBGR = wwUtility::RGBToBGR(sal_uInt32(rLine.GetColor().GetRGBColor()));
     }
 
     // BRC.dptSpace

@@ -37,6 +37,8 @@ namespace com { namespace sun { namespace star {
     }
 }}}
 
+namespace weld { class Window; }
+
 namespace sfx2
 {
     // For the link to receive information about the status of graphics that
@@ -100,7 +102,7 @@ public:
     void        InsertDDELink( SvBaseLink* );
 
     // Connect the links to a pseudo-object and add to the list
-    bool InsertFileLink( sfx2::SvBaseLink&,
+    void InsertFileLink( sfx2::SvBaseLink&,
                         sal_uInt16 nFileType,
                         const OUString& rFileNm,
                         const OUString* pFilterNm = nullptr,
@@ -126,9 +128,9 @@ public:
 
     static SvLinkSourceRef CreateObj( SvBaseLink const * );
 
-    void        UpdateAllLinks( bool bAskUpdate,
-                                bool bUpdateGrfLinks,
-                                vcl::Window* pParentWin );
+    void        UpdateAllLinks(bool bAskUpdate,
+                               bool bUpdateGrfLinks,
+                               weld::Window* pParentWin);
 
     // Call for list of links (eg for link-dialog)
     const       SvBaseLinks& GetLinks() const { return aLinkTbl; }

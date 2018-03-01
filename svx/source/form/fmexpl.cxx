@@ -37,7 +37,6 @@
 #include <svx/svditer.hxx>
 #include <svx/svdouno.hxx>
 #include <svx/svdobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/viewsh.hxx>
@@ -176,7 +175,7 @@ void FmEntryDataList::clear()
 FmEntryData::FmEntryData( FmEntryData* pParentData, const Reference< XInterface >& _rxIFace )
     :pParent( pParentData )
 {
-    pChildList = new FmEntryDataList();
+    pChildList.reset( new FmEntryDataList() );
 
     newObject( _rxIFace );
 }
@@ -184,8 +183,7 @@ FmEntryData::FmEntryData( FmEntryData* pParentData, const Reference< XInterface 
 
 FmEntryData::~FmEntryData()
 {
-    GetChildList()->clear();
-    delete pChildList;
+    pChildList->clear();
 }
 
 
@@ -200,7 +198,7 @@ void FmEntryData::newObject( const css::uno::Reference< css::uno::XInterface >& 
 
 FmEntryData::FmEntryData( const FmEntryData& rEntryData )
 {
-    pChildList = new FmEntryDataList();
+    pChildList.reset( new FmEntryDataList() );
     aText = rEntryData.GetText();
     m_aNormalImage = rEntryData.GetNormalImage();
     pParent = rEntryData.GetParent();
@@ -560,8 +558,8 @@ namespace svxform
 
         Size aLogOutputSize = PixelToLogic(GetOutputSizePixel(), MapMode(MapUnit::MapAppFont));
         Size aLogExplSize = aLogOutputSize;
-        aLogExplSize.Width() -= 6;
-        aLogExplSize.Height() -= 6;
+        aLogExplSize.AdjustWidth( -6 );
+        aLogExplSize.AdjustHeight( -6 );
 
         Point aExplPos = LogicToPixel(Point(3, 3), MapMode(MapUnit::MapAppFont));
         Size aExplSize = LogicToPixel(aLogExplSize, MapMode(MapUnit::MapAppFont));

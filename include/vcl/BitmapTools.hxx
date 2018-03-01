@@ -10,17 +10,78 @@
 #ifndef INCLUDED_VCL_BITMAP_TOOLS_HXX
 #define INCLUDED_VCL_BITMAP_TOOLS_HXX
 
+#include <config_cairo_canvas.h>
 #include <vcl/bitmapex.hxx>
-#include <tools/stream.hxx>
-
 #include <vcl/ImageTree.hxx>
+#include <vcl/salbtype.hxx>
+#include <tools/stream.hxx>
+#if ENABLE_CAIRO_CANVAS
+#include <vcl/cairo.hxx>
+#endif
 
 namespace vcl {
 namespace bitmap {
 
+/**
+ * Intended to be used to feed into CreateFromData to create a BitmapEx. RGB data format.
+ */
+class VCL_DLLPUBLIC RawBitmap
+{
+friend BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap&& rawBitmap );
+    std::unique_ptr<sal_uInt8[]> mpData;
+    Size maSize;
+    sal_uInt8 mnBitCount;
+public:
+    RawBitmap(Size const & rSize, sal_uInt8 nBitCount)
+        : mpData(new sal_uInt8[ rSize.getWidth() * nBitCount/8 * rSize.getHeight()]),
+          maSize(rSize),
+          mnBitCount(nBitCount)
+    {
+        assert(nBitCount == 24 || nBitCount == 32);
+    }
+    void SetPixel(long nY, long nX, Color nColor)
+    {
+        long p = (nY * maSize.getWidth() + nX) * (mnBitCount/8);
+        mpData[ p++ ] = nColor.GetRed();
+        mpData[ p++ ] = nColor.GetGreen();
+        mpData[ p++ ] = nColor.GetBlue();
+        if (mnBitCount == 32)
+            mpData[ p ] = nColor.GetTransparency();
+    }
+    Color GetPixel(long nY, long nX) const
+    {
+        long p = (nY * maSize.getWidth() + nX) * mnBitCount/8;
+        if (mnBitCount == 24)
+            return Color( mpData[p], mpData[p+1], mpData[p+2]);
+        else
+            return Color( mpData[p+3], mpData[p], mpData[p+1], mpData[p+2]);
+    }
+    // so we don't accidentally leave any code in that uses palette color indexes
+    void SetPixel(long nY, long nX, BitmapColor nColor) = delete;
+    long Height() { return maSize.Height(); }
+    long Width() { return maSize.Width(); }
+    sal_uInt8 GetBitCount() { return mnBitCount; }
+};
+
 BitmapEx VCL_DLLPUBLIC loadFromName(const OUString& rFileName, const ImageLoadFlags eFlags = ImageLoadFlags::NONE);
 
 void loadFromSvg(SvStream& rStream, const OUString& sPath, BitmapEx& rBitmapEx, double fScaleFactor);
+
+/** Copy block of image data into the bitmap.
+    Assumes that the Bitmap has been constructed with the desired size.
+
+    @param pData
+    The block of data to copy
+    @param nStride
+    The number of bytes in a scanline, must be >= (width * nBitCount / 8)
+*/
+BitmapEx VCL_DLLPUBLIC CreateFromData( sal_uInt8 const *pData, sal_Int32 nWidth, sal_Int32 nHeight, sal_Int32 nStride, sal_uInt16 nBitCount );
+
+BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap && data );
+
+#if ENABLE_CAIRO_CANVAS
+VCL_DLLPUBLIC BitmapEx* CreateFromCairoSurface(Size size, cairo_surface_t* pSurface);
+#endif
 
 }} // end vcl::bitmap
 

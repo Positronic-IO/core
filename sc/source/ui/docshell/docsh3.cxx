@@ -34,6 +34,7 @@
 #include <unotools/misccfg.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <docsh.hxx>
 #include "docshimp.hxx"
@@ -1203,9 +1204,12 @@ bool ScDocShell::MergeSharedDocument( ScDocShell* pSharedDocShell )
                     ScopedVclPtrInstance< ScConflictsDlg > aDlg( GetActiveDialogParent(), GetViewData(), &rSharedDoc, aConflictsList );
                     if ( aDlg->Execute() == RET_CANCEL )
                     {
-                        ScopedVclPtrInstance<QueryBox> aBox( GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                            ScGlobal::GetRscString( STR_DOC_WILLNOTBESAVED ) );
-                        if ( aBox->Execute() == RET_YES )
+                        vcl::Window* pWin = GetActiveDialogParent();
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       ScGlobal::GetRscString(STR_DOC_WILLNOTBESAVED)));
+                        xQueryBox->set_default_response(RET_YES);
+                        if (xQueryBox->run() == RET_YES)
                         {
                             return false;
                         }
@@ -1317,8 +1321,11 @@ bool ScDocShell::MergeSharedDocument( ScDocShell* pSharedDocShell )
         PostPaintExtras();
         PostPaintGridAll();
 
-        ScopedVclPtrInstance< InfoBox > aInfoBox( GetActiveDialogParent(), ScGlobal::GetRscString( STR_DOC_UPDATED ) );
-        aInfoBox->Execute();
+        vcl::Window* pWin = GetActiveDialogParent();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      ScGlobal::GetRscString(STR_DOC_UPDATED)));
+        xInfoBox->run();
     }
 
     return ( pThisAction != nullptr );

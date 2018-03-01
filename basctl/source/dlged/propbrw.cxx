@@ -39,6 +39,7 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/stdtext.hxx>
+#include <vcl/weld.hxx>
 
 #include <memory>
 
@@ -135,7 +136,8 @@ void PropBrw::ImplReCreateController()
         m_xBrowserController.set( xFactory->createInstanceWithContext( s_sControllerServiceName, xInspectorContext ), UNO_QUERY );
         if ( !m_xBrowserController.is() )
         {
-            ShowServiceNotAvailableError( GetParent(), s_sControllerServiceName, true );
+            vcl::Window* pWin = GetParent();
+            ShowServiceNotAvailableError(pWin ? pWin->GetFrameWeld() : nullptr, s_sControllerServiceName, true);
         }
         else
         {
@@ -156,8 +158,8 @@ void PropBrw::ImplReCreateController()
 
         Point aPropWinPos = Point( WIN_BORDER, WIN_BORDER );
         Size  aPropWinSize(STD_WIN_SIZE_X,STD_WIN_SIZE_Y);
-        aPropWinSize.Width() -= (2*WIN_BORDER);
-        aPropWinSize.Height() -= (2*WIN_BORDER);
+        aPropWinSize.AdjustWidth( -(2*WIN_BORDER) );
+        aPropWinSize.AdjustHeight( -(2*WIN_BORDER) );
 
         if ( m_xBrowserComponentWindow.is() )
         {
@@ -426,8 +428,8 @@ void PropBrw::Resize()
     // adjust size
     Size aSize_ = GetOutputSizePixel();
     Size aPropWinSize( aSize_ );
-    aPropWinSize.Width() -= (2*WIN_BORDER);
-    aPropWinSize.Height() -= (2*WIN_BORDER);
+    aPropWinSize.AdjustWidth( -(2*WIN_BORDER) );
+    aPropWinSize.AdjustHeight( -(2*WIN_BORDER) );
 
     if (m_xBrowserComponentWindow.is())
     {

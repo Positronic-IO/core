@@ -277,10 +277,10 @@ void ImageProducer::startProduction()
             ConsumerList_t aTmp = maConsList;
 
             // iterate through interfaces
-            for( ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter )
+            for (auto const& elem : aTmp)
             {
-                (*iter)->init( 0, 0 );
-                (*iter)->complete( css::awt::ImageStatus::IMAGESTATUS_STATICIMAGEDONE, this );
+                elem->init( 0, 0 );
+                elem->complete( css::awt::ImageStatus::IMAGESTATUS_STATICIMAGEDONE, this );
             }
 
             maDoneHdl.Call( nullptr );
@@ -321,8 +321,8 @@ void ImageProducer::ImplUpdateData( const Graphic& rGraphic )
         mbConsInit = false;
 
         // iterate through interfaces
-        for( ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter )
-            (*iter)->complete( css::awt::ImageStatus::IMAGESTATUS_STATICIMAGEDONE, this );
+        for (auto const& elem : aTmp)
+            elem->complete( css::awt::ImageStatus::IMAGESTATUS_STATICIMAGEDONE, this );
     }
 }
 
@@ -385,10 +385,10 @@ void ImageProducer::ImplInitConsumer( const Graphic& rGraphic )
         ConsumerList_t aTmp = maConsList;
 
         // iterate through interfaces
-        for( ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter)
+        for (auto const& elem : aTmp)
         {
-            (*iter)->init( pBmpAcc->Width(), pBmpAcc->Height() );
-            (*iter)->setColorModel( pBmpAcc->GetBitCount(),aRGBPal, nRMask, nGMask, nBMask, nAMask );
+            elem->init( pBmpAcc->Width(), pBmpAcc->Height() );
+            elem->setColorModel( pBmpAcc->GetBitCount(),aRGBPal, nRMask, nGMask, nBMask, nAMask );
         }
 
         Bitmap::ReleaseAccess( pBmpAcc );
@@ -428,7 +428,7 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 
         if( pBmpAcc->HasPalette() )
         {
-            const BitmapColor aWhite( pMskAcc->GetBestMatchingColor( Color( COL_WHITE ) ) );
+            const BitmapColor aWhite( pMskAcc->GetBestMatchingColor( COL_WHITE ) );
 
             if( mnTransIndex < 256 )
             {
@@ -437,19 +437,21 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 
                 for( long nY = nStartY; nY <= nEndY; nY++ )
                 {
+                    Scanline pScanlineMask = pMskAcc->GetScanline( nY );
+                    Scanline pScanline = pBmpAcc->GetScanline( nY );
                     for( long nX = nStartX; nX <= nEndX; nX++ )
                     {
-                        if( pMskAcc->GetPixel( nY, nX ) == aWhite )
+                        if( pMskAcc->GetPixelFromData( pScanlineMask, nX ) == aWhite )
                             *pTmp++ = sal::static_int_cast< sal_Int8 >(
                                 mnTransIndex );
                         else
-                            *pTmp++ = pBmpAcc->GetPixel( nY, nX ).GetIndex();
+                            *pTmp++ = pBmpAcc->GetPixelFromData( pScanline, nX ).GetIndex();
                     }
                 }
 
                 // iterate through interfaces
-                for (ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter)
-                    (*iter)->setPixelsByBytes( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
+                for (auto const& elem : aTmp)
+                    elem->setPixelsByBytes( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
             }
             else
             {
@@ -458,44 +460,48 @@ void ImageProducer::ImplUpdateConsumer( const Graphic& rGraphic )
 
                 for( long nY = nStartY; nY <= nEndY; nY++ )
                 {
+                    Scanline pScanlineMask = pMskAcc->GetScanline( nY );
+                    Scanline pScanline = pBmpAcc->GetScanline( nY );
                     for( long nX = nStartX; nX <= nEndX; nX++ )
                     {
-                        if( pMskAcc->GetPixel( nY, nX ) == aWhite )
+                        if( pMskAcc->GetPixelFromData( pScanlineMask, nX ) == aWhite )
                             *pTmp++ = mnTransIndex;
                         else
-                            *pTmp++ = pBmpAcc->GetPixel( nY, nX ).GetIndex();
+                            *pTmp++ = pBmpAcc->GetPixelFromData( pScanline, nX ).GetIndex();
                     }
                 }
 
                 // iterate through interfaces
-                for (ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter)
-                    (*iter)->setPixelsByLongs( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
+                for (auto const& elem : aTmp)
+                    elem->setPixelsByLongs( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
             }
         }
         else
         {
             css::uno::Sequence<sal_Int32>  aData( nPartWidth * nPartHeight );
-            const BitmapColor                           aWhite( pMskAcc->GetBestMatchingColor( Color( COL_WHITE ) ) );
+            const BitmapColor                           aWhite( pMskAcc->GetBestMatchingColor( COL_WHITE ) );
             sal_Int32*                                  pTmp = aData.getArray();
 
             for( long nY = nStartY; nY <= nEndY; nY++ )
             {
+                Scanline pScanlineMask = pMskAcc->GetScanline( nY );
+                Scanline pScanline = pBmpAcc->GetScanline( nY );
                 for( long nX = nStartX; nX <= nEndX; nX++, pTmp++ )
                 {
-                    const BitmapColor aCol( pBmpAcc->GetPixel( nY, nX ) );
+                    const BitmapColor aCol( pBmpAcc->GetPixelFromData( pScanline, nX ) );
 
                     *pTmp = static_cast<sal_Int32>(aCol.GetRed()) << 24;
                     *pTmp |= static_cast<sal_Int32>(aCol.GetGreen()) << 16;
                     *pTmp |= static_cast<sal_Int32>(aCol.GetBlue()) << 8;
 
-                    if( pMskAcc->GetPixel( nY, nX ) != aWhite )
+                    if( pMskAcc->GetPixelFromData( pScanlineMask, nX ) != aWhite )
                         *pTmp |= 0x000000ffUL;
                 }
             }
 
             // iterate through interfaces
-                for (ConsumerList_t::iterator iter = aTmp.begin(); iter != aTmp.end(); ++iter)
-                    (*iter)->setPixelsByLongs( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
+            for (auto const& elem : aTmp)
+                elem->setPixelsByLongs( nStartX, nStartY, nPartWidth, nPartHeight, aData, 0UL, nPartWidth );
         }
 
         Bitmap::ReleaseAccess( pBmpAcc );

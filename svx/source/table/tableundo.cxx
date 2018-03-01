@@ -34,7 +34,7 @@ using namespace ::com::sun::star::table;
 
 namespace sdr { namespace table {
 
-CellUndo::CellUndo( const SdrObjectWeakRef& xObjRef, const CellRef& xCell )
+CellUndo::CellUndo( const tools::WeakReference<SdrObject>& xObjRef, const CellRef& xCell )
     : SdrUndoAction( *xCell->GetModel() )
     , mxObjRef( xObjRef )
     , mxCell( xCell )
@@ -499,7 +499,7 @@ void TableStyleUndo::Redo()
 
 void TableStyleUndo::setData( const Data& rData )
 {
-    SdrTableObj* pTableObj = dynamic_cast< SdrTableObj* >( mxObjRef.get() );
+    SdrTableObj* pTableObj = mxObjRef.get();
     if( pTableObj )
     {
         pTableObj->setTableStyle( rData.mxTableStyle );
@@ -509,7 +509,7 @@ void TableStyleUndo::setData( const Data& rData )
 
 void TableStyleUndo::getData( Data& rData )
 {
-    SdrTableObj* pTableObj = dynamic_cast< SdrTableObj* >( mxObjRef.get() );
+    SdrTableObj* pTableObj = mxObjRef.get();
     if( pTableObj )
     {
         rData.maSettings = pTableObj->getTableStyleSettings();

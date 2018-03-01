@@ -37,29 +37,18 @@ using namespace com::sun::star::uno;
 using namespace com::sun::star::bridge;
 using namespace com::sun::star::bridge::ModelDependent;
 
-
-namespace ole_adapter
-{
-
 #include <initguid.h>
 
 // GUID used since 5.2 ( src569 m)
 // {82154420-0FBF-11d4-8313-005004526AB4}
 DEFINE_GUID(OID_ServiceManager, 0x82154420, 0xfbf, 0x11d4, 0x83, 0x13, 0x0, 0x50, 0x4, 0x52, 0x6a, 0xb4);
 
-/*****************************************************************************
-
-    class implementation ProviderOleWrapper_Impl
-
-*****************************************************************************/
-
 ProviderOleWrapper_Impl::ProviderOleWrapper_Impl(const Reference<XMultiServiceFactory>& smgr,
                                                  const Reference<XSingleServiceFactory>& xSFact, GUID const * pGuid)
     : m_xSingleServiceFactory(xSFact),
+      m_guid(*pGuid),
       m_smgr( smgr)
 {
-    m_guid = *pGuid;
-
     Reference<XInterface> xInt = smgr->createInstance("com.sun.star.bridge.oleautomation.BridgeSupplier");
 
     if (xInt.is())
@@ -181,22 +170,15 @@ STDMETHODIMP ProviderOleWrapper_Impl::LockServer(int /*fLock*/)
     return NOERROR;
 }
 
-/*****************************************************************************
-
-    class implementation OneInstanceOleWrapper_Impl
-
-*****************************************************************************/
-
 OneInstanceOleWrapper_Impl::OneInstanceOleWrapper_Impl(  const Reference<XMultiServiceFactory>& smgr,
                                                          const Reference<XInterface>& xInst,
                                                          GUID const * pGuid )
     : m_refCount(0)
     , m_xInst(xInst)
+    , m_guid(*pGuid)
     , m_factoryHandle(0)
     , m_smgr(smgr)
 {
-    m_guid = *pGuid;
-
     Reference<XInterface> xInt = m_smgr->createInstance("com.sun.star.bridge.oleautomation.BridgeSupplier");
 
     if (xInt.is())
@@ -306,13 +288,6 @@ STDMETHODIMP OneInstanceOleWrapper_Impl::LockServer(int /*fLock*/)
 {
     return NOERROR;
 }
-
-
-/*****************************************************************************
-
-    class implementation OleConverter_Impl2
-
-*****************************************************************************/
 
 OleConverter_Impl2::OleConverter_Impl2( const Reference<XMultiServiceFactory> &smgr):
     UnoConversionUtilities<OleConverter_Impl2>( smgr)
@@ -481,13 +456,6 @@ Reference< XInterface > OleConverter_Impl2::createComWrapperInstance()
     return Reference<XInterface>( xWeak, UNO_QUERY);
 }
 
-
-/*****************************************************************************
-
-    class implementation OleClient_Impl
-
-*****************************************************************************/
-
 OleClient_Impl::OleClient_Impl( const Reference<XMultiServiceFactory>& smgr):
     UnoConversionUtilities<OleClient_Impl>( smgr)
 {
@@ -606,13 +574,6 @@ Reference< XInterface > OleClient_Impl::createComWrapperInstance( )
     return Reference<XInterface>( xWeak, UNO_QUERY);
 }
 
-
-/*****************************************************************************
-
-    class implementation OleServer_Impl
-
-*****************************************************************************/
-
 OleServer_Impl::OleServer_Impl( const Reference<XMultiServiceFactory>& smgr):
     m_smgr( smgr)
 {
@@ -629,12 +590,12 @@ OleServer_Impl::OleServer_Impl( const Reference<XMultiServiceFactory>& smgr):
 
 OleServer_Impl::~OleServer_Impl()
 {
-    while (!m_wrapperList.empty())
+    for (auto const& elem : m_wrapperList)
     {
-        (*m_wrapperList.begin())->deregisterClass();
-        (*m_wrapperList.begin())->Release();
-        m_wrapperList.pop_front();
+        elem->deregisterClass();
+        elem->Release();
     }
+    m_wrapperList.clear();
 }
 
 OUString OleServer_Impl::getImplementationName()
@@ -675,8 +636,5 @@ bool OleServer_Impl::provideInstance(const Reference<XInterface>& xInst, GUID co
 
     return pFac->registerClass();
 }
-
-
-} // end namespace
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -406,6 +406,14 @@ bool DrawDocShell::ImportFrom(SfxMedium &rMedium,
         mpDoc->SetSummationOfParagraphs();
     }
 
+    // Set this flag for MSO formats
+    if (aFilterName.startsWith("MS PowerPoint 97") ||
+        aFilterName.startsWith("Impress MS PowerPoint 2007 XML") ||
+        aFilterName.startsWith("Impress Office Open XML"))
+    {
+        mpDoc->SetHoriAlignIgnoreTrailingWhitespace(true);
+    }
+
     const bool bRet = SfxObjectShell::ImportFrom(rMedium, xInsertPosition);
 
     SfxItemSet* pSet = rMedium.GetItemSet();
@@ -493,6 +501,14 @@ bool DrawDocShell::ConvertFrom( SfxMedium& rMedium )
         mpDoc->CreateFirstPages();
         mpDoc->StopWorkStartupDelay();
         bRet = SdGRFFilter( rMedium, *this ).Import();
+    }
+
+    // Set this flag for MSO formats
+    if (aFilterName.startsWith("MS PowerPoint 97") ||
+        aFilterName.startsWith("Impress MS PowerPoint 2007 XML") ||
+        aFilterName.startsWith("Impress Office Open XML"))
+    {
+        mpDoc->SetHoriAlignIgnoreTrailingWhitespace(true);
     }
 
     FinishedLoading();
@@ -699,10 +715,8 @@ SfxStyleSheetBasePool* DrawDocShell::GetStyleSheetPool()
     return mpDoc->GetStyleSheetPool();
 }
 
-bool DrawDocShell::GotoBookmark(const OUString& rBookmark)
+void DrawDocShell::GotoBookmark(const OUString& rBookmark)
 {
-    bool bFound = false;
-
     if (mpViewShell && dynamic_cast< const DrawViewShell *>( mpViewShell ) !=  nullptr)
     {
         DrawViewShell* pDrawViewShell = static_cast<DrawViewShell*>(mpViewShell);
@@ -762,7 +776,6 @@ bool DrawDocShell::GotoBookmark(const OUString& rBookmark)
         {
             // Jump to the bookmarked page.  This is done in three steps.
 
-            bFound = true;
             SdPage* pPage;
             if (bIsMasterPage)
                 pPage = static_cast<SdPage*>( mpDoc->GetMasterPage(nPageNumber) );
@@ -774,7 +787,7 @@ bool DrawDocShell::GotoBookmark(const OUString& rBookmark)
             PageKind eNewPageKind = pPage->GetPageKind();
 
             if( (eNewPageKind != PageKind::Standard) && (mpDoc->GetDocumentType() == DocumentType::Draw) )
-                return false;
+                return;
 
             if (eNewPageKind != pDrawViewShell->GetPageKind())
             {
@@ -857,8 +870,6 @@ bool DrawDocShell::GotoBookmark(const OUString& rBookmark)
         rBindings.Invalidate(SID_NAVIGATOR_STATE, true);
         rBindings.Invalidate(SID_NAVIGATOR_PAGENAME);
     }
-
-    return bFound;
 }
 
 /**

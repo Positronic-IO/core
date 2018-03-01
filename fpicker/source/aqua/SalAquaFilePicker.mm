@@ -203,7 +203,7 @@ void SAL_CALL SalAquaFilePicker::setMultiSelectionMode( sal_Bool /* bMode */ )
     SolarMutexGuard aGuard;
 
     if (m_nDialogType == NAVIGATIONSERVICES_OPEN) {
-        [(NSOpenPanel*)m_pDialog setAllowsMultipleSelection:YES];
+        [static_cast<NSOpenPanel*>(m_pDialog) setAllowsMultipleSelection:YES];
     }
 }
 
@@ -256,7 +256,7 @@ uno::Sequence<rtl::OUString> SAL_CALL SalAquaFilePicker::getSelectedFiles()
 
     NSArray *files = nil;
     if (m_nDialogType == NAVIGATIONSERVICES_OPEN) {
-        files = [(NSOpenPanel*)m_pDialog URLs];
+        files = [static_cast<NSOpenPanel*>(m_pDialog) URLs];
     }
     else if (m_nDialogType == NAVIGATIONSERVICES_SAVE) {
         files = [NSArray arrayWithObjects:[m_pDialog URL], nil];
@@ -424,6 +424,9 @@ void SAL_CALL SalAquaFilePicker::initialize( const uno::Sequence<uno::Any>& aArg
             m_nDialogType = NAVIGATIONSERVICES_SAVE;
             break;
         case FILEOPEN_LINK_PREVIEW_IMAGE_TEMPLATE:
+            m_nDialogType = NAVIGATIONSERVICES_OPEN;
+            break;
+        case FILEOPEN_LINK_PREVIEW_IMAGE_ANCHOR:
             m_nDialogType = NAVIGATIONSERVICES_OPEN;
             break;
         case FILEOPEN_PLAY:

@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <config_features.h>
+#include <config_gpgme.h>
 
 #include <svx/dialogs.hrc>
 
@@ -101,7 +102,7 @@
 #include <unotools/viewoptions.hxx>
 #include <vcl/help.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/waitobj.hxx>
 #include <vcl/settings.hxx>
 #include <svtools/treelistentry.hxx>
@@ -490,9 +491,15 @@ void OfaTreeOptionsDialog::InitWidgets()
     get(pTabBox, "box");
     Size aSize(pTabBox->LogicToPixel(Size(278, 259), MapMode(MapUnit::MapAppFont)));
     pTabBox->set_width_request(aSize.Width());
+#if HAVE_FEATURE_GPGME
+    // tdf#115015: make enough space for crypto settings (approx. 14 text edits + padding)
+    pTabBox->set_height_request((Edit::GetMinimumEditSize().Height() + 6) * 14);
+#else
     pTabBox->set_height_request(aSize.Height() - get_action_area()->get_preferred_size().Height());
+#endif
     pTreeLB->set_width_request(pTreeLB->approximate_char_width() * 25);
     pTreeLB->set_height_request(pTabBox->get_height_request());
+
 }
 
 // Ctor() with Frame -----------------------------------------------------
@@ -975,7 +982,10 @@ void OfaTreeOptionsDialog::SelectHdl_Impl()
                 if(!pGroupInfo->m_pModule)
                 {
                     pGroupInfo->m_bLoadError = true;
-                    ScopedVclPtrInstance<InfoBox>(pBox, sNotLoadedError)->Execute();
+                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pBox->GetFrameWeld(),
+                                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                                  sNotLoadedError));
+                    xInfoBox->run();
                     return;
                 }
                 if(bIdentical)

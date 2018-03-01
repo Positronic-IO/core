@@ -55,11 +55,6 @@
 
 #include <rtl/strbuf.hxx>
 
-#ifdef _WIN32
-// for ADD_SPB_NUMERIC
-#pragma warning(disable: 4310) // cast truncates data
-#endif
-
 using namespace connectivity::firebird;
 using namespace connectivity;
 
@@ -88,7 +83,6 @@ static const OUStringLiteral our_sFBKLocation( "firebird.fbk" );
 
 Connection::Connection(FirebirdDriver*    _pDriver)
     : Connection_BASE(m_aMutex)
-    , OSubComponent<Connection, Connection_BASE>(static_cast<cppu::OWeakObject*>(_pDriver), this)
     , m_xDriver(_pDriver)
     , m_sConnectionURL()
     , m_sFirebirdURL()
@@ -115,11 +109,6 @@ Connection::~Connection()
 {
     if(!isClosed())
         close();
-}
-
-void SAL_CALL Connection::release() throw()
-{
-    release_ChildImpl();
 }
 
 struct ConnectionGuard
@@ -205,11 +194,9 @@ void Connection::construct(const ::rtl::OUString& url, const Sequence< PropertyV
                 }
                 else
                 {
-                    ::connectivity::SharedResources aResources;
-                    // TODO FIXME: this does _not_ look like the right error message
-                    const OUString sMessage = aResources.getResourceString(STR_ERROR_NEW_VERSION);
-                    ::dbtools::throwGenericSQLException(sMessage ,*this);
-
+                    // There might be files which are not firebird databases.
+                    // This is not a problem.
+                    bIsNewDatabase = true;
                 }
             }
             // TODO: Get DB properties from XML
@@ -639,7 +626,14 @@ void Connection::runBackupService(const short nAction)
         aRequest.append(char(isc_spb_options)); // 4-Byte bitmask
         char sOptions[4];
         char * pOptions = sOptions;
+#ifdef _WIN32
+#pragma warning(push)
+#pragma warning(disable: 4310) // cast truncates data
+#endif
         ADD_SPB_NUMERIC(pOptions, isc_spb_res_create);
+#ifdef _WIN32
+#pragma warning(pop)
+#endif
         aRequest.append(sOptions, 4);
     }
 
@@ -928,7 +922,6 @@ void Connection::disposing()
     }
     // TODO: write to storage again?
 
-    dispose_ChildImpl();
     cppu::WeakComponentImplHelperBase::disposing();
     m_xDriver.clear();
 
@@ -942,9 +935,9 @@ void Connection::disposing()
 void Connection::disposeStatements()
 {
     MutexGuard aGuard(m_aMutex);
-    for (OWeakRefArray::iterator i = m_aStatements.begin(); m_aStatements.end() != i; ++i)
+    for (auto const& statement : m_aStatements)
     {
-        Reference< XComponent > xComp(i->get(), UNO_QUERY);
+        Reference< XComponent > xComp(statement.get(), UNO_QUERY);
         if (xComp.is())
             xComp->dispose();
     }

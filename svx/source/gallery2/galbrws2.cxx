@@ -20,7 +20,6 @@
 
 #include <comphelper/string.hxx>
 #include <sot/formats.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/urlbmk.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
@@ -43,6 +42,7 @@
 #include <galbrws2.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/weld.hxx>
 #include <svx/fmmodel.hxx>
 #include <svx/dialmgr.hxx>
 #include <svx/svxdlg.hxx>
@@ -959,8 +959,8 @@ sal_uInt32 GalleryBrowser2::ImplGetSelectedItemId( const Point* pSelPos, Point& 
         }
     }
 
-    rSelPos.X() = std::max( std::min( rSelPos.X(), aOutputSizePixel.Width() - 1 ), 0L );
-    rSelPos.Y() = std::max( std::min( rSelPos.Y(), aOutputSizePixel.Height() - 1 ), 0L );
+    rSelPos.setX( std::max( std::min( rSelPos.X(), aOutputSizePixel.Width() - 1 ), 0L ) );
+    rSelPos.setY( std::max( std::min( rSelPos.Y(), aOutputSizePixel.Height() - 1 ), 0L ) );
 
     if( nRet && ( !mpCurTheme || ( nRet > mpCurTheme->GetObjectCount() ) ) )
     {
@@ -1099,10 +1099,14 @@ void GalleryBrowser2::Execute(const OString &rIdent)
             SetMode( ( GALLERYBROWSERMODE_PREVIEW != GetMode() ) ? GALLERYBROWSERMODE_PREVIEW : meLastMode );
         else if (rIdent == "delete")
         {
-            if( !mpCurTheme->IsReadOnly() &&
-                ScopedVclPtrInstance<MessageDialog>(nullptr, "QueryDeleteObjectDialog","svx/ui/querydeleteobjectdialog.ui")->Execute() == RET_YES )
+            if (!mpCurTheme->IsReadOnly())
             {
-                mpCurTheme->RemoveObject( mnCurActionPos );
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querydeleteobjectdialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryDeleteObjectDialog"));
+                if (xQuery->run() == RET_YES)
+                {
+                    mpCurTheme->RemoveObject( mnCurActionPos );
+                }
             }
         }
         else if (rIdent == "title")

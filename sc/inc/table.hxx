@@ -121,26 +121,27 @@ struct ScInterpreterContext;
 class ScColumnsRange final
 {
  public:
-    class Iterator final : public std::iterator<
-                            std::input_iterator_tag,  // iterator_category
-                            SCCOL,                    // value_type
-                            SCCOL,                    // difference_type
-                            const SCCOL*,             // pointer
-                            SCCOL>                    // reference
+    class Iterator final
     {
         std::vector<ScColumn*>::const_iterator maColIter;
     public:
-        explicit Iterator(std::vector<ScColumn*>::const_iterator colIter) : maColIter(colIter) {}
+        typedef std::input_iterator_tag iterator_category;
+        typedef SCCOL value_type;
+        typedef SCCOL difference_type;
+        typedef const SCCOL* pointer;
+        typedef SCCOL reference;
 
-        Iterator& operator++() { maColIter++; return *this;}
-        Iterator& operator--() { maColIter--; return *this;}
+        explicit Iterator(const std::vector<ScColumn*>::const_iterator& colIter) : maColIter(colIter) {}
 
-        bool operator==(Iterator other) const {return maColIter == other.maColIter;}
-        bool operator!=(Iterator other) const {return !(*this == other);}
-        reference operator*() const {return (*maColIter)->GetCol();}
+        Iterator& operator++() { ++maColIter; return *this;}
+        Iterator& operator--() { --maColIter; return *this;}
+
+        bool operator==(const Iterator & rOther) const {return maColIter == rOther.maColIter;}
+        bool operator!=(const Iterator & rOther) const {return !(*this == rOther);}
+        SCCOL operator*() const {return (*maColIter)->GetCol();}
     };
 
-    ScColumnsRange(Iterator nBegin, Iterator nEnd) : maBegin(nBegin), maEnd(nEnd) {}
+    ScColumnsRange(const Iterator & rBegin, const Iterator & rEnd) : maBegin(rBegin), maEnd(rEnd) {}
     const Iterator & begin() { return maBegin; }
     const Iterator & end() { return maEnd; }
     std::reverse_iterator<Iterator> rbegin() { return std::reverse_iterator<Iterator>(maEnd); }
@@ -405,7 +406,7 @@ public:
     bool        IsBlockEmpty( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2, bool bIgnoreNotes ) const;
 
     bool        SetString( SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rString,
-                           ScSetStringParam* pParam = nullptr );
+                           const ScSetStringParam * pParam = nullptr );
 
     bool SetEditText( SCCOL nCol, SCROW nRow, EditTextObject* pEditText );
     void SetEditText( SCCOL nCol, SCROW nRow, const EditTextObject& rEditText, const SfxItemPool* pEditPool );
@@ -504,7 +505,7 @@ public:
         sc::CopyFromClipContext& rCxt, const ScTable& rClipTab, sc::ColumnSpanSet& rBroadcastSpans );
 
     void CopyOneCellFromClip(
-        sc::CopyFromClipContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2, SCROW nSrcRow, ScTable* pSrcTab );
+        sc::CopyFromClipContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2, SCROW nSrcRow, const ScTable* pSrcTab );
 
     void CopyFromClip(
         sc::CopyFromClipContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
@@ -530,7 +531,7 @@ public:
         InsertDeleteFlags nFlags, bool bMarked, ScTable* pDestTab );
 
     void        CopyConditionalFormat( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
-                            SCCOL nDx, SCROW nDy, ScTable* pTable);
+                            SCCOL nDx, SCROW nDy, const ScTable* pTable);
     void        TransposeClip( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
                                 ScTable* pTransClip, InsertDeleteFlags nFlags, bool bAsLink );
 
@@ -577,9 +578,11 @@ public:
 
     bool        ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rStartRow,
                                       SCCOL& rEndCol, SCROW& rEndRow, bool bColumnsOnly,
-                                      bool bStickyTopRow, bool bStickyLeftCol, bool bConsiderCellNotes ) const;
+                                      bool bStickyTopRow, bool bStickyLeftCol, bool bConsiderCellNotes,
+                                      bool bConsiderCellDrawObjects ) const;
 
-    SCROW GetLastDataRow( SCCOL nCol1, SCCOL nCol2, SCROW nLastRow ) const;
+    SCROW GetLastDataRow( SCCOL nCol1, SCCOL nCol2, SCROW nLastRow,
+                         bool bConsiderCellNotes = false, bool bConsiderCellDrawObjects = false ) const;
 
     SCSIZE      GetEmptyLinesInBlock( SCCOL nStartCol, SCROW nStartRow,
                                         SCCOL nEndCol, SCROW nEndRow, ScDirection eDir ) const;
@@ -672,6 +675,10 @@ public:
     void SetMergedCells( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2 );
 
     const SfxPoolItem*      GetAttr( SCCOL nCol, SCROW nRow, sal_uInt16 nWhich ) const;
+    template<class T> const T* GetAttr( SCCOL nCol, SCROW nRow, TypedWhichId<T> nWhich ) const
+    {
+        return static_cast<const T*>(GetAttr(nCol, nRow, sal_uInt16(nWhich)));
+    }
     const ScPatternAttr*    GetPattern( SCCOL nCol, SCROW nRow ) const;
     const ScPatternAttr*    GetMostUsedPattern( SCCOL nCol, SCROW nStartRow, SCROW nEndRow ) const;
 
@@ -1074,11 +1081,11 @@ private:
 
     void FillSeriesSimple(
         const ScCellValue& rSrcCell, SCCOLROW& rInner, SCCOLROW nIMin, SCCOLROW nIMax,
-        SCCOLROW& rCol, SCCOLROW& rRow, bool bVertical, ScProgress* pProgress, sal_uLong& rProgress );
+        const SCCOLROW& rCol, const SCCOLROW& rRow, bool bVertical, ScProgress* pProgress, sal_uLong& rProgress );
 
     void FillAutoSimple(
         SCCOLROW nISrcStart, SCCOLROW nISrcEnd, SCCOLROW nIStart, SCCOLROW nIEnd,
-        SCCOLROW& rInner, SCCOLROW& rCol, SCCOLROW& rRow,
+        SCCOLROW& rInner, const SCCOLROW& rCol, const SCCOLROW& rRow,
         sal_uLong nActFormCnt, sal_uLong nMaxFormCnt,
         bool bHasFiltered, bool bVertical, bool bPositive,
         ScProgress* pProgress, sal_uLong& rProgress );

@@ -638,12 +638,12 @@ void ScViewDataTable::ReadUserDataSequence(const uno::Sequence <beans::PropertyV
         else if (sName == SC_UNONAME_TABCOLOR)
         {
             // There are documents out there that have their tab color defined as a view setting.
-            sal_Int32 nColor = COL_AUTO;
-            aSettings[i].Value >>= nColor;
-            if (static_cast<ColorData>(nColor) != COL_AUTO)
+            Color aColor = COL_AUTO;
+            aSettings[i].Value >>= aColor;
+            if (aColor != COL_AUTO)
             {
                 ScDocument* pDoc = rViewData.GetDocument();
-                pDoc->SetTabBgColor(nTab, Color(static_cast<ColorData>(nColor)));
+                pDoc->SetTabBgColor(nTab, aColor);
             }
         }
         // Fallback to common SdrModel processing
@@ -1524,7 +1524,7 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
     //  when right-aligned, leave space for the cursor
     //  in vertical mode, editing is always right-aligned
     if ( GetEditAdjust() == SvxAdjust::Right || bAsianVertical )
-        aPixRect.Right() += 1;
+        aPixRect.AdjustRight(1 );
 
     tools::Rectangle aOutputArea = pWin->PixelToLogic( aPixRect, GetLogicMode() );
     pEditView[eWhich]->SetOutputArea( aOutputArea );
@@ -1591,7 +1591,7 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
             Fraction aFract(1,1);
             tools::Rectangle aUtilRect = ScEditUtil( pDoc,nNewX,nNewY,nTabNo, Point(0,0), pWin,
                                     HMM_PER_TWIPS, HMM_PER_TWIPS, aFract, aFract ).GetEditArea( pPattern, false );
-            aPaperSize.Width() = aUtilRect.GetWidth();
+            aPaperSize.setWidth( aUtilRect.GetWidth() );
         }
         pNewEngine->SetPaperSize( aPaperSize );
 
@@ -1601,20 +1601,20 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
         long nDiff = aVis.Right() - aVis.Left();
         if ( GetEditAdjust() == SvxAdjust::Right )
         {
-            aVis.Right() = aPaper.Width() - 1;
+            aVis.SetRight( aPaper.Width() - 1 );
             bMoveArea = !bLayoutRTL;
         }
         else if ( GetEditAdjust() == SvxAdjust::Center )
         {
-            aVis.Right() = ( aPaper.Width() - 1 + nDiff ) / 2;
+            aVis.SetRight( ( aPaper.Width() - 1 + nDiff ) / 2 );
             bMoveArea = true;   // always
         }
         else
         {
-            aVis.Right() = nDiff;
+            aVis.SetRight( nDiff );
             bMoveArea = bLayoutRTL;
         }
-        aVis.Left() = aVis.Right() - nDiff;
+        aVis.SetLeft( aVis.Right() - nDiff );
         // #i49561# Important note:
         // The set offset of the visible area of the EditView for centered and
         // right alignment in horizontal layout is consider by instances of
@@ -1647,7 +1647,7 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
     ScModule* pScMod = SC_MOD();
     if ( aBackCol.GetTransparency() > 0 )
     {
-        aBackCol.SetColor( pScMod->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor );
+        aBackCol = pScMod->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
     }
     pEditView[eWhich]->SetBackgroundColor( aBackCol );
 
@@ -1744,15 +1744,15 @@ void ScViewData::EditGrowX()
                 nLogicRight = pWin->PixelToLogic(Size(nRightPix,0)).Width();
             }
 
-            aArea.Left() -= bLayoutRTL ? nLogicRight : nLogicLeft;
-            aArea.Right() += bLayoutRTL ? nLogicLeft : nLogicRight;
+            aArea.AdjustLeft( -(bLayoutRTL ? nLogicRight : nLogicLeft) );
+            aArea.AdjustRight(bLayoutRTL ? nLogicLeft : nLogicRight );
 
             if ( aArea.Right() > aArea.Left() + aSize.Width() - 1 )
             {
                 long nCenter = ( aArea.Left() + aArea.Right() ) / 2;
                 long nHalf = aSize.Width() / 2;
-                aArea.Left() = nCenter - nHalf + 1;
-                aArea.Right() = nCenter + aSize.Width() - nHalf - 1;
+                aArea.SetLeft( nCenter - nHalf + 1 );
+                aArea.SetRight( nCenter + aSize.Width() - nHalf - 1 );
             }
 
             bChanged = true;
@@ -1768,16 +1768,16 @@ void ScViewData::EditGrowX()
             long nPix = ToPixel( pLocalDoc->GetColWidth( nEditStartCol, nTabNo ), nPPTX );
             long nLogicWidth = pWin->PixelToLogic(Size(nPix,0)).Width();
             if ( !bLayoutRTL )
-                aArea.Left() -= nLogicWidth;
+                aArea.AdjustLeft( -nLogicWidth );
             else
-                aArea.Right() += nLogicWidth;
+                aArea.AdjustRight(nLogicWidth );
 
             if ( aArea.Right() > aArea.Left() + aSize.Width() - 1 )
             {
                 if ( !bLayoutRTL )
-                    aArea.Left() = aArea.Right() - aSize.Width() + 1;
+                    aArea.SetLeft( aArea.Right() - aSize.Width() + 1 );
                 else
-                    aArea.Right() = aArea.Left() + aSize.Width() - 1;
+                    aArea.SetRight( aArea.Left() + aSize.Width() - 1 );
             }
 
             bChanged = true;
@@ -1791,16 +1791,16 @@ void ScViewData::EditGrowX()
             long nPix = ToPixel( pLocalDoc->GetColWidth( nEditEndCol, nTabNo ), nPPTX );
             long nLogicWidth = pWin->PixelToLogic(Size(nPix,0)).Width();
             if ( bLayoutRTL )
-                aArea.Left() -= nLogicWidth;
+                aArea.AdjustLeft( -nLogicWidth );
             else
-                aArea.Right() += nLogicWidth;
+                aArea.AdjustRight(nLogicWidth );
 
             if ( aArea.Right() > aArea.Left() + aSize.Width() - 1 )
             {
                 if ( bLayoutRTL )
-                    aArea.Left() = aArea.Right() - aSize.Width() + 1;
+                    aArea.SetLeft( aArea.Right() - aSize.Width() + 1 );
                 else
-                    aArea.Right() = aArea.Left() + aSize.Width() - 1;
+                    aArea.SetRight( aArea.Left() + aSize.Width() - 1 );
             }
 
             bChanged = true;
@@ -1821,8 +1821,8 @@ void ScViewData::EditGrowX()
 
                 long nCenter = aSize.Width() / 2;
                 long nVisSize = aArea.GetWidth();
-                aVis.Left() = nCenter - nVisSize / 2;
-                aVis.Right() = aVis.Left() + nVisSize - 1;
+                aVis.SetLeft( nCenter - nVisSize / 2 );
+                aVis.SetRight( aVis.Left() + nVisSize - 1 );
             }
             else if ( bGrowToLeft )
             {
@@ -1830,8 +1830,8 @@ void ScViewData::EditGrowX()
 
                 pEngine->SetDefaultItem( SvxAdjustItem( SvxAdjust::Right, EE_PARA_JUST ) );
 
-                aVis.Right() = aSize.Width() - 1;
-                aVis.Left() = aSize.Width() - aArea.GetWidth();     // with the new, increased area
+                aVis.SetRight( aSize.Width() - 1 );
+                aVis.SetLeft( aSize.Width() - aArea.GetWidth() );     // with the new, increased area
             }
             else
             {
@@ -1840,8 +1840,8 @@ void ScViewData::EditGrowX()
                 pEngine->SetDefaultItem( SvxAdjustItem( SvxAdjust::Left, EE_PARA_JUST ) );
 
                 long nMove = aVis.Left();
-                aVis.Left() = 0;
-                aVis.Right() -= nMove;
+                aVis.SetLeft( 0 );
+                aVis.AdjustRight( -nMove );
             }
             pCurView->SetVisArea( aVis );
             bMoveArea = false;
@@ -1855,11 +1855,11 @@ void ScViewData::EditGrowX()
         //  the whole text will move, and may not even obscure all of the original display.
         if ( bUnevenGrow )
         {
-            aArea.Left() = pWin->PixelToLogic( Point(0,0) ).X();
-            aArea.Right() = pWin->PixelToLogic( aScrSize ).Width();
+            aArea.SetLeft( pWin->PixelToLogic( Point(0,0) ).X() );
+            aArea.SetRight( pWin->PixelToLogic( aScrSize ).Width() );
         }
         else if ( !bAsianVertical && !bGrowToLeft && !bGrowCentered )
-            aArea.Left() = nOldRight;
+            aArea.SetLeft( nOldRight );
         pWin->Invalidate(aArea);
 
         // invalidate other views
@@ -1925,11 +1925,11 @@ void ScViewData::EditGrowY( bool bInitial )
         ++nEditEndRow;
         ScDocument* pLocalDoc = GetDocument();
         long nPix = ToPixel( pLocalDoc->GetRowHeight( nEditEndRow, nTabNo ), nPPTY );
-        aArea.Bottom() += pWin->PixelToLogic(Size(0,nPix)).Height();
+        aArea.AdjustBottom(pWin->PixelToLogic(Size(0,nPix)).Height() );
 
         if ( aArea.Bottom() > aArea.Top() + aSize.Height() - 1 )
         {
-            aArea.Bottom() = aArea.Top() + aSize.Height() - 1;
+            aArea.SetBottom( aArea.Top() + aSize.Height() - 1 );
             bMaxReached = true;     // don't occupy more cells beyond paper size
         }
 
@@ -1947,7 +1947,7 @@ void ScViewData::EditGrowY( bool bInitial )
                 pCurView->SetControlWord( nControl | EVControlBits::AUTOSCROLL );
         }
 
-        aArea.Top() = nOldBottom;
+        aArea.SetTop( nOldBottom );
         pWin->Invalidate(aArea);
 
         // invalidate other views
@@ -2111,8 +2111,8 @@ Point ScViewData::GetScrPos( SCCOL nWhereX, SCROW nWhereY, ScSplitPos eWhich,
 
     if (pView)
     {
-        const_cast<ScViewData*>(this)->aScrSize.Width()  = pView->GetGridWidth(eWhichX);
-        const_cast<ScViewData*>(this)->aScrSize.Height() = pView->GetGridHeight(eWhichY);
+        const_cast<ScViewData*>(this)->aScrSize.setWidth( pView->GetGridWidth(eWhichX) );
+        const_cast<ScViewData*>(this)->aScrSize.setHeight( pView->GetGridHeight(eWhichY) );
     }
 
     sal_uInt16 nTSize;
@@ -2237,7 +2237,7 @@ SCCOL ScViewData::CellsAtX( SCCOL nPosX, SCCOL nDir, ScHSplitPos eWhichX, sal_uI
     OSL_ENSURE( nDir==1 || nDir==-1, "wrong CellsAt call" );
 
     if (pView)
-        const_cast<ScViewData*>(this)->aScrSize.Width()  = pView->GetGridWidth(eWhichX);
+        const_cast<ScViewData*>(this)->aScrSize.setWidth( pView->GetGridWidth(eWhichX) );
 
     SCCOL  nX;
     sal_uInt16  nScrPosX = 0;
@@ -2279,7 +2279,7 @@ SCROW ScViewData::CellsAtY( SCROW nPosY, SCROW nDir, ScVSplitPos eWhichY, sal_uI
     OSL_ENSURE( nDir==1 || nDir==-1, "wrong CellsAt call" );
 
     if (pView)
-        const_cast<ScViewData*>(this)->aScrSize.Height() = pView->GetGridHeight(eWhichY);
+        const_cast<ScViewData*>(this)->aScrSize.setHeight( pView->GetGridHeight(eWhichY) );
 
     if (nScrSizeY == SC_SIZE_NONE) nScrSizeY = static_cast<sal_uInt16>(aScrSize.Height());
 
@@ -2334,7 +2334,7 @@ SCROW ScViewData::PrevCellsY( ScVSplitPos eWhichY ) const
 
 bool ScViewData::GetMergeSizePixel( SCCOL nX, SCROW nY, long& rSizeXPix, long& rSizeYPix ) const
 {
-    const ScMergeAttr* pMerge = static_cast<const ScMergeAttr*>( pDoc->GetAttr( nX,nY,nTabNo, ATTR_MERGE ) );
+    const ScMergeAttr* pMerge = pDoc->GetAttr( nX,nY,nTabNo, ATTR_MERGE );
     if ( pMerge->GetColMerge() > 1 || pMerge->GetRowMerge() > 1 )
     {
         long nOutWidth = 0;
@@ -2382,7 +2382,7 @@ void ScViewData::GetPosFromPixel( long nClickX, long nClickY, ScSplitPos eWhich,
     {
         //  mirror horizontal position
         if (pView)
-            aScrSize.Width() = pView->GetGridWidth(eHWhich);
+            aScrSize.setWidth( pView->GetGridWidth(eHWhich) );
         nClickX = aScrSize.Width() - 1 - nClickX;
     }
 
@@ -2427,14 +2427,14 @@ void ScViewData::GetPosFromPixel( long nClickX, long nClickY, ScSplitPos eWhich,
     if ( rPosX == nStartPosX && nClickX > 0 )
     {
          if (pView)
-            aScrSize.Width() = pView->GetGridWidth(eHWhich);
+            aScrSize.setWidth( pView->GetGridWidth(eHWhich) );
          if ( nClickX > aScrSize.Width() )
             ++rPosX;
     }
     if ( rPosY == nStartPosY && nClickY > 0 )
     {
         if (pView)
-            aScrSize.Height() = pView->GetGridHeight(eVWhich);
+            aScrSize.setHeight( pView->GetGridHeight(eVWhich) );
         if ( nClickY > aScrSize.Height() )
             ++rPosY;
     }
@@ -2455,8 +2455,7 @@ void ScViewData::GetPosFromPixel( long nClickX, long nClickY, ScSplitPos eWhich,
 
         if ( bRepair && ( bHOver || bVOver ) )
         {
-            const ScMergeAttr* pMerge = static_cast<const ScMergeAttr*>(
-                                pDoc->GetAttr( rPosX, rPosY, nTabNo, ATTR_MERGE ) );
+            const ScMergeAttr* pMerge = pDoc->GetAttr( rPosX, rPosY, nTabNo, ATTR_MERGE );
             if ( ( bHOver && pMerge->GetColMerge() <= 1 ) ||
                  ( bVOver && pMerge->GetRowMerge() <= 1 ) )
             {
@@ -2692,8 +2691,8 @@ void ScViewData::SetScreen( const tools::Rectangle& rVisArea )
     //  here without GetOutputFactor(), since it's for the output into a Metafile
 
     aScrSize = rVisArea.GetSize();
-    aScrSize.Width() = static_cast<long>( aScrSize.Width() * ScGlobal::nScreenPPTX / HMM_PER_TWIPS );
-    aScrSize.Height() = static_cast<long>( aScrSize.Height() * ScGlobal::nScreenPPTY / HMM_PER_TWIPS );
+    aScrSize.setWidth( static_cast<long>( aScrSize.Width() * ScGlobal::nScreenPPTX / HMM_PER_TWIPS ) );
+    aScrSize.setHeight( static_cast<long>( aScrSize.Height() * ScGlobal::nScreenPPTY / HMM_PER_TWIPS ) );
 }
 
 ScDocFunc& ScViewData::GetDocFunc() const
@@ -2768,8 +2767,8 @@ void ScViewData::UpdateScreenZoom( const Fraction& rNewX, const Fraction& rNewY 
     aHeight *= Fraction( aScrSize.Height(),1 );
     aHeight /= aOldY;
 
-    aScrSize.Width()  = static_cast<long>(aWidth);
-    aScrSize.Height() = static_cast<long>(aHeight);
+    aScrSize.setWidth( static_cast<long>(aWidth) );
+    aScrSize.setHeight( static_cast<long>(aHeight) );
 }
 
 void ScViewData::CalcPPT()
@@ -3032,7 +3031,7 @@ void ScViewData::WriteExtOptions( ScExtDocOptions& rDocOpt ) const
                 rSplitPos = Point( bHSplit ? pViewTab->nHSplitPos : 0, bVSplit ? pViewTab->nVSplitPos : 0 );
                 rSplitPos = Application::GetDefaultDevice()->PixelToLogic( rSplitPos, MapMode( MapUnit::MapTwip ) );
                 if( pDocShell )
-                    rSplitPos.X() = static_cast<long>(static_cast<double>(rSplitPos.X()) / pDocShell->GetOutputFactor());
+                    rSplitPos.setX( static_cast<long>(static_cast<double>(rSplitPos.X()) / pDocShell->GetOutputFactor()) );
             }
             else if( bFrozen )
             {
@@ -3074,11 +3073,11 @@ void ScViewData::WriteExtOptions( ScExtDocOptions& rDocOpt ) const
             rMarkData.FillRangeListWithMarks( &rTabSett.maSelection, true );
 
             // grid color
-            rTabSett.maGridColor.SetColor( COL_AUTO );
+            rTabSett.maGridColor = COL_AUTO;
             if( pOptions )
             {
                 const Color& rGridColor = pOptions->GetGridColor();
-                if( rGridColor.GetColor() != SC_STD_GRIDCOLOR )
+                if( rGridColor != SC_STD_GRIDCOLOR )
                     rTabSett.maGridColor = rGridColor;
             }
             rTabSett.mbShowGrid = pViewTab->bShowGrid;
@@ -3172,7 +3171,7 @@ void ScViewData::ReadExtOptions( const ScExtDocOptions& rDocOpt )
                 if( pDocShell && SC_MOD()->GetInputOptions().GetTextWysiwyg())
                 {
                     double nFactor = pDocShell->GetOutputFactor();
-                    aPixel.X() = static_cast<long>( aPixel.X() * nFactor + 0.5 );
+                    aPixel.setX( static_cast<long>( aPixel.X() * nFactor + 0.5 ) );
                 }
 
                 bHSplit = bHSplit && aPixel.X() > 0;
@@ -3239,8 +3238,8 @@ void ScViewData::ReadExtOptions( const ScExtDocOptions& rDocOpt )
                 if( pOptions )
                 {
                     Color aGridColor( rTabSett.maGridColor );
-                    if( aGridColor.GetColor() == COL_AUTO )
-                        aGridColor.SetColor( SC_STD_GRIDCOLOR );
+                    if( aGridColor == COL_AUTO )
+                        aGridColor = SC_STD_GRIDCOLOR;
                     pOptions->SetGridColor( aGridColor, EMPTY_OUSTRING );
                 }
 
@@ -3460,8 +3459,8 @@ void ScViewData::ReadUserDataSequence(const uno::Sequence <beans::PropertyValue>
             {
                 Color aColor(static_cast<sal_uInt32>(nColor));
                 // #i47435# set automatic grid color explicitly
-                if( aColor.GetColor() == COL_AUTO )
-                    aColor.SetColor( SC_STD_GRIDCOLOR );
+                if( aColor == COL_AUTO )
+                    aColor = SC_STD_GRIDCOLOR;
                 pOptions->SetGridColor(aColor, OUString());
             }
         }

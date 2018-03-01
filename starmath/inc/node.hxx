@@ -235,8 +235,9 @@ public:
 
     using   SmNode::GetSubNode;
     virtual SmNode *    GetSubNode(size_t nIndex) override;
+    void ClearSubNodes();
             void SetSubNodes(SmNode *pFirst, SmNode *pSecond, SmNode *pThird = nullptr);
-            void SetSubNodes(const SmNodeArray &rNodeArray);
+            void SetSubNodes(SmNodeArray&& rNodeArray);
 
     virtual void  GetAccessibleText( OUStringBuffer &rText ) const override;
 
@@ -265,12 +266,13 @@ public:
         {
             //Resize subnodes array
             maSubNodes.resize(nIndex + 1);
-            //Set new slots to NULL
-            for (size_t i = size; i < nIndex+1; i++)
+            //Set new slots to NULL except at nIndex
+            for (size_t i = size; i < nIndex; i++)
                 maSubNodes[i] = nullptr;
         }
         maSubNodes[nIndex] = pNode;
-        ClaimPaternity();
+        if (pNode)
+            pNode->SetParent(this);
     }
 
 private:

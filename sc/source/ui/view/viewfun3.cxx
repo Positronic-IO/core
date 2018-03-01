@@ -32,7 +32,7 @@
 #include <sot/storage.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/virdev.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <tools/urlobj.hxx>
 #include <sot/exchange.hxx>
 #include <memory>
@@ -822,7 +822,7 @@ static bool lcl_SelHasAttrib( const ScDocument* pDoc, SCCOL nCol1, SCROW nRow1, 
 
 namespace {
 
-bool checkDestRangeForOverwrite(const ScRangeList& rDestRanges, const ScDocument* pDoc, const ScMarkData& rMark, vcl::Window* pParentWnd)
+bool checkDestRangeForOverwrite(const ScRangeList& rDestRanges, const ScDocument* pDoc, const ScMarkData& rMark, weld::Window* pParentWnd)
 {
     bool bIsEmpty = true;
     ScMarkData::const_iterator itrTab = rMark.begin(), itrTabEnd = rMark.end();
@@ -840,8 +840,8 @@ bool checkDestRangeForOverwrite(const ScRangeList& rDestRanges, const ScDocument
 
     if (!bIsEmpty)
     {
-        ScopedVclPtrInstance< ScReplaceWarnBox > aBox(pParentWnd);
-        if (aBox->Execute() != RET_YES)
+        ScReplaceWarnBox aBox(pParentWnd);
+        if (aBox.run() != RET_YES)
         {
             //  changing the configuration is within the ScReplaceWarnBox
             return false;
@@ -1052,9 +1052,13 @@ bool ScViewFunc::PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
         {
             ScWaitCursorOff aWaitOff( GetFrameWin() );
             OUString aMessage = ScGlobal::GetRscString( STR_PASTE_BIGGER );
-            ScopedVclPtrInstance<QueryBox> aBox( GetViewData().GetDialogParent(),
-                            MessBoxStyle::YesNo | MessBoxStyle::DefaultNo, aMessage );
-            if ( aBox->Execute() != RET_YES )
+
+            vcl::Window* pWin = GetViewData().GetDialogParent();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           aMessage));
+            xQueryBox->set_default_response(RET_NO);
+            if (xQueryBox->run() != RET_YES)
             {
                 return false;
             }
@@ -1139,7 +1143,8 @@ bool ScViewFunc::PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
         {
             ScRangeList aTestRanges;
             aTestRanges.Append(aUserRange);
-            if (!checkDestRangeForOverwrite(aTestRanges, pDoc, aFilteredMark, GetViewData().GetDialogParent()))
+            vcl::Window* pWin = GetViewData().GetDialogParent();
+            if (!checkDestRangeForOverwrite(aTestRanges, pDoc, aFilteredMark, pWin ? pWin->GetFrameWeld() : nullptr))
                 return false;
         }
     }
@@ -1507,7 +1512,8 @@ bool ScViewFunc::PasteMultiRangesFromClip(
     {
         ScRangeList aTestRanges;
         aTestRanges.Append(aMarkedRange);
-        if (!checkDestRangeForOverwrite(aTestRanges, pDoc, aMark, rViewData.GetDialogParent()))
+        vcl::Window* pWin = GetViewData().GetDialogParent();
+        if (!checkDestRangeForOverwrite(aTestRanges, pDoc, aMark, pWin ? pWin->GetFrameWeld() : nullptr))
             return false;
     }
 
@@ -1669,7 +1675,8 @@ bool ScViewFunc::PasteFromClipToMultiRanges(
 
     if (bAskIfNotEmpty)
     {
-        if (!checkDestRangeForOverwrite(aRanges, pDoc, aMark, rViewData.GetDialogParent()))
+        vcl::Window* pWin = GetViewData().GetDialogParent();
+        if (!checkDestRangeForOverwrite(aRanges, pDoc, aMark, pWin ? pWin->GetFrameWeld() : nullptr))
             return false;
     }
 

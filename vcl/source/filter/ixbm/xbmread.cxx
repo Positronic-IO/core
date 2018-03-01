@@ -241,8 +241,9 @@ bool XBMReader::ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat
 
                 if( bProcessed )
                 {
+                    Scanline pScanline = pAcc1->GetScanline(nRow);
                     while( ( nCol < nWidth ) && ( nBit < nBits ) )
-                        pAcc1->SetPixel( nRow, nCol++, ( nValue & ( 1 << nBit++ ) ) ? aBlack : aWhite );
+                        pAcc1->SetPixelOnData(pScanline, nCol++, ( nValue & ( 1 << nBit++ ) ) ? aBlack : aWhite);
 
                     if( nCol == nWidth )
                     {
@@ -326,8 +327,8 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
 
                             if( pAcc1 )
                             {
-                                aWhite = pAcc1->GetBestMatchingColor( Color( COL_WHITE ) );
-                                aBlack = pAcc1->GetBestMatchingColor( Color( COL_BLACK ) );
+                                aWhite = pAcc1->GetBestMatchingColor( COL_WHITE );
+                                aBlack = pAcc1->GetBestMatchingColor( COL_BLACK );
                                 bStatus = ParseData( &rIStm, aLine, eFormat );
                             }
                             else
@@ -343,7 +344,7 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
             Bitmap aBlackBmp( Size( pAcc1->Width(), pAcc1->Height() ), 1 );
 
             pAcc1.reset();
-            aBlackBmp.Erase( Color( COL_BLACK ) );
+            aBlackBmp.Erase( COL_BLACK );
             rGraphic = BitmapEx( aBlackBmp, aBmp1 );
             eReadState = XBMREAD_OK;
         }

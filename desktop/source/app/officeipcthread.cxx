@@ -781,12 +781,12 @@ RequestHandler::Status PipeIpcThread::enable(rtl::Reference<IpcThread> * thread)
         osl::Security security;
 
         // Try to create pipe
-        if ( pipe.create( aPipeIdent.getStr(), osl_Pipe_CREATE, security ))
+        if ( pipe.create( aPipeIdent, osl_Pipe_CREATE, security ))
         {
             // Pipe created
             nPipeMode = PIPEMODE_CREATED;
         }
-        else if( pipe.create( aPipeIdent.getStr(), osl_Pipe_OPEN, security )) // Creation not successful, now we try to connect
+        else if( pipe.create( aPipeIdent, osl_Pipe_OPEN, security )) // Creation not successful, now we try to connect
         {
             osl::StreamPipe aStreamPipe(pipe.getHandle());
             if (readStringFromPipe(aStreamPipe) == SEND_ARGUMENTS)
@@ -1310,12 +1310,21 @@ static void AddConversionsToDispatchList(
     }
 }
 
+struct ConditionSetGuard
+{
+    osl::Condition* m_pCondition;
+    ConditionSetGuard(osl::Condition* pCondition) : m_pCondition(pCondition) {}
+    ~ConditionSetGuard() { if (m_pCondition) m_pCondition->set(); }
+};
 
 bool RequestHandler::ExecuteCmdLineRequests(
     ProcessDocumentsRequest& aRequest, bool noTerminate)
 {
     // protect the dispatch list
     osl::ClearableMutexGuard aGuard( GetMutex() );
+
+    // ensure that Processed flag (if exists) is signaled in any outcome
+    ConditionSetGuard(aRequest.pcProcessed);
 
     static std::vector<DispatchWatcher::DispatchRequest> aDispatchList;
 
@@ -1334,7 +1343,13 @@ bool RequestHandler::ExecuteCmdLineRequests(
     if ( pGlobal.is() )
     {
         if( ! pGlobal->AreRequestsEnabled() )
+        {
+            // Either starting, or downing - do not process the request, just try to bring Office to front
+            ApplicationEvent* pAppEvent =
+                new ApplicationEvent(ApplicationEvent::Type::Appear);
+            ImplPostForeignAppEvent(pAppEvent);
             return bShutdown;
+        }
 
         pGlobal->mnPendingRequests += aDispatchList.size();
         if ( !pGlobal->mpDispatchWatcher.is() )
@@ -1352,10 +1367,6 @@ bool RequestHandler::ExecuteCmdLineRequests(
 
         // Execute dispatch requests
         bShutdown = dispatchWatcher->executeDispatchRequests( aTempList, noTerminate);
-
-        // set processed flag
-        if (aRequest.pcProcessed != nullptr)
-            aRequest.pcProcessed->set();
     }
 
     return bShutdown;

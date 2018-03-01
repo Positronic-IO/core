@@ -37,7 +37,6 @@ using namespace ::com::sun::star::lang;
 IMPLEMENT_SERVICE_INFO(OCatalog,"com.sun.star.comp.connectivity.OCatalog","com.sun.star.sdbcx.DatabaseDefinition")
 
 OCatalog::OCatalog(const Reference< XConnection> &_xConnection) : OCatalog_BASE(m_aMutex)
-            ,connectivity::OSubComponent<OCatalog, OCatalog_BASE>(_xConnection, this)
             ,m_pTables(nullptr)
             ,m_pViews(nullptr)
             ,m_pGroups(nullptr)
@@ -55,17 +54,7 @@ OCatalog::OCatalog(const Reference< XConnection> &_xConnection) : OCatalog_BASE(
 
 OCatalog::~OCatalog()
 {
-    delete m_pTables;
-    delete m_pViews;
-    delete m_pGroups;
-    delete m_pUsers;
 }
-
-void SAL_CALL OCatalog::release() throw()
-{
-    release_ChildImpl();
-}
-
 
 void SAL_CALL OCatalog::disposing()
 {
@@ -80,7 +69,6 @@ void SAL_CALL OCatalog::disposing()
     if(m_pUsers)
         m_pUsers->disposing();
 
-    dispose_ChildImpl();
     OCatalog_BASE::disposing();
 }
 
@@ -105,7 +93,7 @@ Reference< XNameAccess > SAL_CALL OCatalog::getTables(  )
         // allowed
     }
 
-    return m_pTables;
+    return m_pTables.get();
 }
 
 // XViewsSupplier
@@ -129,7 +117,7 @@ Reference< XNameAccess > SAL_CALL OCatalog::getViews(  )
         // allowed
     }
 
-    return m_pViews;
+    return m_pViews.get();
 }
 
 // XUsersSupplier
@@ -153,7 +141,7 @@ Reference< XNameAccess > SAL_CALL OCatalog::getUsers(  )
         // allowed
     }
 
-    return m_pUsers;
+    return m_pUsers.get();
 }
 
 // XGroupsSupplier
@@ -177,7 +165,7 @@ Reference< XNameAccess > SAL_CALL OCatalog::getGroups(  )
         // allowed
     }
 
-    return m_pGroups;
+    return m_pGroups.get();
 }
 
 OUString OCatalog::buildName(const Reference< XRow >& _xRow)

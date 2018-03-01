@@ -18,7 +18,6 @@
  */
 
 #include <svx/svxdlg.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <sfx2/app.hxx>
 #include <svl/aeitem.hxx>
@@ -34,7 +33,6 @@
 
 #include <optpath.hxx>
 #include <dialmgr.hxx>
-#include <helpids.h>
 #include <strings.hrc>
 #include <comphelper/configuration.hxx>
 #include <comphelper/processfactory.hxx>
@@ -706,7 +704,7 @@ IMPL_LINK( SvxPathTabPage, HeaderEndDrag_Impl, HeaderBar*, pBar, void )
         for ( sal_uInt16 i = 1; i <= nTabs; ++i )
         {
             long _nWidth = pBar->GetItemSize(i);
-            aSz.Width() =  _nWidth + nTmpSz;
+            aSz.setWidth(  _nWidth + nTmpSz );
             nTmpSz += _nWidth;
             pPathBox->SetTab( i, PixelToLogic( aSz, MapMode(MapUnit::MapAppFont) ).Width() );
         }

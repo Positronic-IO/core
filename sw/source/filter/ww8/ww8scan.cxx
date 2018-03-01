@@ -886,7 +886,7 @@ void WW8SprmIter::advance()
 {
     if (nRemLen > 0 )
     {
-        sal_uInt16 nSize = nAktSize;
+        sal_uInt16 nSize = nCurrentSize;
         if (nSize > nRemLen)
             nSize = nRemLen;
         pSprms += nSize;
@@ -901,18 +901,18 @@ void WW8SprmIter::UpdateMyMembers()
 
     if (bValid)
     {
-        nAktId = mrSprmParser.GetSprmId(pSprms);
-        nAktSize = mrSprmParser.GetSprmSize(nAktId, pSprms, nRemLen);
-        pAktParams = pSprms + mrSprmParser.DistanceToData(nAktId);
-        bValid = nAktSize <= nRemLen;
+        nCurrentId = mrSprmParser.GetSprmId(pSprms);
+        nCurrentSize = mrSprmParser.GetSprmSize(nCurrentId, pSprms, nRemLen);
+        pCurrentParams = pSprms + mrSprmParser.DistanceToData(nCurrentId);
+        bValid = nCurrentSize <= nRemLen;
         SAL_WARN_IF(!bValid, "sw.ww8", "sprm longer than remaining bytes, doc or parser is wrong");
     }
 
     if (!bValid)
     {
-        nAktId = 0;
-        pAktParams = nullptr;
-        nAktSize = 0;
+        nCurrentId = 0;
+        pCurrentParams = nullptr;
+        nCurrentSize = 0;
         nRemLen = 0;
     }
 }
@@ -921,11 +921,11 @@ SprmResult WW8SprmIter::FindSprm(sal_uInt16 nId)
 {
     while (GetSprms())
     {
-        if (GetAktId() == nId)
+        if (GetCurrentId() == nId)
         {
             sal_uInt16 nFixedLen =  mrSprmParser.DistanceToData(nId);
             sal_uInt16 nL = mrSprmParser.GetSprmSize(nId, GetSprms(), GetRemLen());
-            return SprmResult(GetAktParams(), nL - nFixedLen); // SPRM found!
+            return SprmResult(GetCurrentParams(), nL - nFixedLen); // SPRM found!
         }
         advance();
     }
@@ -1181,14 +1181,14 @@ void WW8PLCFx_PCD::advance()
         pPcdI->advance();
 }
 
-WW8_FC WW8PLCFx_PCD::AktPieceStartCp2Fc( WW8_CP nCp )
+WW8_FC WW8PLCFx_PCD::CurrentPieceStartCp2Fc( WW8_CP nCp )
 {
     WW8_CP nCpStart, nCpEnd;
     void* pData;
 
     if ( !pPcdI->Get(nCpStart, nCpEnd, pData) )
     {
-        OSL_ENSURE( false, "AktPieceStartCp2Fc() with false Cp found (1)" );
+        OSL_ENSURE( false, "CurrentPieceStartCp2Fc() with false Cp found (1)" );
         return WW8_FC_MAX;
     }
 
@@ -1234,7 +1234,7 @@ WW8_FC WW8PLCFx_PCD::AktPieceStartCp2Fc( WW8_CP nCp )
     return nRet;
 }
 
-void WW8PLCFx_PCD::AktPieceFc2Cp( WW8_CP& rStartPos, WW8_CP& rEndPos,
+void WW8PLCFx_PCD::CurrentPieceFc2Cp( WW8_CP& rStartPos, WW8_CP& rEndPos,
     const WW8ScannerBase *pSBase )
 {
     //No point going anywhere with this
@@ -1245,13 +1245,13 @@ void WW8PLCFx_PCD::AktPieceFc2Cp( WW8_CP& rStartPos, WW8_CP& rEndPos,
     rEndPos = pSBase->WW8Fc2Cp( rEndPos );
 }
 
-WW8_CP WW8PLCFx_PCD::AktPieceStartFc2Cp( WW8_FC nStartPos )
+WW8_CP WW8PLCFx_PCD::CurrentPieceStartFc2Cp( WW8_FC nStartPos )
 {
     WW8_CP nCpStart, nCpEnd;
     void* pData;
     if ( !pPcdI->Get( nCpStart, nCpEnd, pData ) )
     {
-        OSL_ENSURE( false, "AktPieceStartFc2Cp() - error" );
+        OSL_ENSURE( false, "CurrentPieceStartFc2Cp() - error" );
         return WW8_CP_MAX;
     }
     bool bIsUnicode = false;
@@ -1342,7 +1342,7 @@ WW8_BRCVer9::WW8_BRCVer9(const WW8_BRC& brcVer8)
     else
     {
         sal_uInt32 _cv = brcVer8.ico() == 0 ? 0xff000000 // "auto" colour
-            : wwUtility::RGBToBGR(SwWW8ImplReader::GetCol(brcVer8.ico()));
+            : wwUtility::RGBToBGR(sal_uInt32(SwWW8ImplReader::GetCol(brcVer8.ico())));
         *this = WW8_BRCVer9(_cv, brcVer8.dptLineWidth(), brcVer8.brcType(),
             brcVer8.dptSpace(), brcVer8.fShadow(), brcVer8.fFrame());
     }
@@ -1464,7 +1464,21 @@ WW8_CP WW8ScannerBase::WW8Fc2Cp( WW8_FC nFcPos ) const
             {
                 bIsUnicode = m_pWw8Fib->m_fExtChar;
             }
-            sal_Int32 nLen = (nCpEnd - nCpStart) * (bIsUnicode ? 2 : 1);
+
+            sal_Int32 nLen;
+            if (o3tl::checked_sub(nCpEnd, nCpStart, nLen))
+            {
+                SAL_WARN("sw.ww8", "broken offset, ignoring");
+                return WW8_CP_MAX;
+            }
+            if (bIsUnicode)
+            {
+                if (o3tl::checked_multiply<WW8_CP>(nLen, 2, nLen))
+                {
+                    SAL_WARN("sw.ww8", "broken offset, ignoring");
+                    return WW8_CP_MAX;
+                }
+            }
 
             /*
             If this cp is inside this piece, or it's the last piece and we are
@@ -1473,8 +1487,20 @@ WW8_CP WW8ScannerBase::WW8Fc2Cp( WW8_FC nFcPos ) const
             if (nFcPos >= nFcStart)
             {
                 // found
-                WW8_CP nTempCp =
-                    nCpStart + ((nFcPos - nFcStart) / (bIsUnicode ? 2 : 1));
+                WW8_FC nFcDiff;
+                if (o3tl::checked_sub(nFcPos, nFcStart, nFcDiff))
+                {
+                    SAL_WARN("sw.ww8", "broken offset, ignoring");
+                    return WW8_CP_MAX;
+                }
+                if (bIsUnicode)
+                    nFcDiff /= 2;
+                WW8_CP nTempCp;
+                if (o3tl::checked_add(nCpStart, nFcDiff, nTempCp))
+                {
+                    SAL_WARN("sw.ww8", "broken offset, ignoring");
+                    return WW8_CP_MAX;
+                }
                 if (nFcPos < nFcStart + nLen)
                 {
                     m_pPieceIter->SetIdx( nOldPos );
@@ -2009,21 +2035,21 @@ OUString read_uInt16_BeltAndBracesString(SvStream& rStrm)
 }
 
 sal_Int32 WW8ScannerBase::WW8ReadString( SvStream& rStrm, OUString& rStr,
-    WW8_CP nAktStartCp, long nTotalLen, rtl_TextEncoding eEnc ) const
+    WW8_CP nCurrentStartCp, long nTotalLen, rtl_TextEncoding eEnc ) const
 {
     // Read in plain text, which can extend over several pieces
     rStr.clear();
 
-    if (nAktStartCp < 0 || nTotalLen < 0)
+    if (nCurrentStartCp < 0 || nTotalLen < 0)
         return 0;
 
-    WW8_CP nBehindTextCp = nAktStartCp + nTotalLen;
+    WW8_CP nBehindTextCp = nCurrentStartCp + nTotalLen;
     WW8_CP nNextPieceCp  = nBehindTextCp; // Initialization, important for Ver6
     long nTotalRead = 0;
     do
     {
         bool bIsUnicode(false), bPosOk(false);
-        WW8_FC fcAct = WW8Cp2Fc(nAktStartCp,&bIsUnicode,&nNextPieceCp,&bPosOk);
+        WW8_FC fcAct = WW8Cp2Fc(nCurrentStartCp,&bIsUnicode,&nNextPieceCp,&bPosOk);
 
         // Probably aimed beyond file end, doesn't matter!
         if( !bPosOk )
@@ -2036,12 +2062,9 @@ sal_Int32 WW8ScannerBase::WW8ReadString( SvStream& rStrm, OUString& rStr,
         WW8_CP nEnd = (nNextPieceCp < nBehindTextCp) ? nNextPieceCp
             : nBehindTextCp;
         WW8_CP nLen;
-        const bool bFail = o3tl::checked_sub(nEnd, nAktStartCp, nLen);
+        const bool bFail = o3tl::checked_sub(nEnd, nCurrentStartCp, nLen);
         if (bFail)
             break;
-
-        if( nLen > USHRT_MAX - 1 )
-            nLen = USHRT_MAX - 1;
 
         if( 0 >= nLen )
             break;
@@ -2051,7 +2074,7 @@ sal_Int32 WW8ScannerBase::WW8ReadString( SvStream& rStrm, OUString& rStr,
              : read_uInt8s_ToOUString(rStrm, nLen, eEnc);
 
         nTotalRead  += nLen;
-        nAktStartCp += nLen;
+        nCurrentStartCp += nLen;
         if ( nTotalRead != rStr.getLength() )
             break;
     }
@@ -2298,8 +2321,9 @@ void WW8PLCF::GeneratePLCF(SvStream& rSt, sal_Int32 nPN, sal_Int32 ncpN)
 
     if (!failure)
     {
+        // Check arguments to ShortToSVBT16 in loop below will all be valid:
         sal_Int32 nResult;
-        failure = o3tl::checked_add(nPN, ncpN, nResult) || nResult > USHRT_MAX;
+        failure = o3tl::checked_add(nPN, ncpN, nResult) || nResult > SAL_MAX_UINT16;
     }
 
     if (!failure)
@@ -2748,7 +2772,7 @@ WW8PLCFx_Fc_FKP::WW8Fkp::WW8Fkp(const WW8Fib& rFib, SvStream* pSt,
             WW8SprmIter aIter(pSprms, nLen, maSprmParser);
             while (aIter.GetSprms())
             {
-                fprintf(stderr, "id is %x\n", aIter.GetAktId());
+                fprintf(stderr, "id is %x\n", aIter.GetCurrentId());
                 aIter.advance();
             }
         }
@@ -2908,11 +2932,11 @@ void WW8PLCFx_Fc_FKP::WW8Fkp::HasSprm(sal_uInt16 nId,
 
     while(aIter.GetSprms())
     {
-        if (aIter.GetAktId() == nId)
+        if (aIter.GetCurrentId() == nId)
         {
             sal_uInt16 nFixedLen = maSprmParser.DistanceToData(nId);
             sal_uInt16 nL = maSprmParser.GetSprmSize(nId, aIter.GetSprms(), aIter.GetRemLen());
-            rResult.emplace_back(aIter.GetAktParams(), nL - nFixedLen);
+            rResult.emplace_back(aIter.GetCurrentParams(), nL - nFixedLen);
         }
         aIter.advance();
     };
@@ -3007,8 +3031,8 @@ bool WW8PLCFx_Fc_FKP::NewFkp()
     long nPo = SVBT16ToShort( static_cast<sal_uInt8 *>(pPage) );
     nPo <<= 9;                                  // shift as LONG
 
-    long nAktFkpFilePos = pFkp ? pFkp->GetFilePos() : -1;
-    if (nAktFkpFilePos == nPo)
+    long nCurrentFkpFilePos = pFkp ? pFkp->GetFilePos() : -1;
+    if (nCurrentFkpFilePos == nPo)
         pFkp->Reset(GetStartFc());
     else
     {
@@ -3220,7 +3244,7 @@ SprmResult WW8PLCFx_Fc_FKP::HasSprm(sal_uInt16 nId)
     return aRes;
 }
 
-bool WW8PLCFx_Fc_FKP::HasSprm(sal_uInt16 nId, std::vector<SprmResult> &rResult)
+void WW8PLCFx_Fc_FKP::HasSprm(sal_uInt16 nId, std::vector<SprmResult> &rResult)
 {
     // const would be nicer, but for that, NewFkp() would need to be replaced or eliminated
     if (!pFkp)
@@ -3228,11 +3252,11 @@ bool WW8PLCFx_Fc_FKP::HasSprm(sal_uInt16 nId, std::vector<SprmResult> &rResult)
        OSL_FAIL( "+Motz: HasSprm: NewFkp needed ( no const possible )" );
        // happens in BugDoc 31722
        if( !NewFkp() )
-           return false;
+           return;
     }
 
     if (!pFkp)
-        return false;
+        return;
 
     pFkp->HasSprm(nId, rResult);
 
@@ -3245,16 +3269,15 @@ bool WW8PLCFx_Fc_FKP::HasSprm(sal_uInt16 nId, std::vector<SprmResult> &rResult)
         WW8SprmIter aIter(aDesc.pMemPos, aDesc.nSprmsLen, rSprmParser);
         while(aIter.GetSprms())
         {
-            if (aIter.GetAktId() == nId)
+            if (aIter.GetCurrentId() == nId)
             {
                 sal_uInt16 nFixedLen = rSprmParser.DistanceToData(nId);
                 sal_uInt16 nL = rSprmParser.GetSprmSize(nId, aIter.GetSprms(), aIter.GetRemLen());
-                rResult.emplace_back(aIter.GetAktParams(), nL - nFixedLen);
+                rResult.emplace_back(aIter.GetCurrentParams(), nL - nFixedLen);
             }
             aIter.advance();
         };
     }
-    return !rResult.empty();
 }
 
 WW8PLCFx_Cp_FKP::WW8PLCFx_Cp_FKP( SvStream* pSt, SvStream* pTableSt,
@@ -3308,7 +3331,7 @@ bool WW8PLCFx_Cp_FKP::SeekPos(WW8_CP nCpPos)
             return false;
         if (pPCDAttrs && !pPCDAttrs->GetIter()->SeekPos(nCpPos))
             return false;
-        return WW8PLCFx_Fc_FKP::SeekPos(pPcd->AktPieceStartCp2Fc(nCpPos));
+        return WW8PLCFx_Fc_FKP::SeekPos(pPcd->CurrentPieceStartCp2Fc(nCpPos));
     }
                                     // NO piece table !!!
     return WW8PLCFx_Fc_FKP::SeekPos( rSBase.WW8Cp2Fc(nCpPos) );
@@ -3318,7 +3341,7 @@ WW8_CP WW8PLCFx_Cp_FKP::Where()
 {
     WW8_FC nFc = WW8PLCFx_Fc_FKP::Where();
     if( pPcd )
-        return pPcd->AktPieceStartFc2Cp( nFc ); // identify piece
+        return pPcd->CurrentPieceStartFc2Cp( nFc ); // identify piece
     return rSBase.WW8Fc2Cp( nFc );      // NO piece table !!!
 }
 
@@ -3581,7 +3604,7 @@ void WW8PLCFx_Cp_FKP::GetSprms(WW8PLCFxDesc* p)
                 pPieceIter->SetIdx( nOldPos );
             }
             else
-                WW8PLCFx_PCD::AktPieceFc2Cp( p->nStartPos, p->nEndPos,&rSBase );
+                WW8PLCFx_PCD::CurrentPieceFc2Cp( p->nStartPos, p->nEndPos,&rSBase );
         }
         else
         {
@@ -3615,7 +3638,7 @@ void WW8PLCFx_Cp_FKP::advance()
     // get Fkp entry
     WW8PLCFx_Fc_FKP::GetSprmsAndPos(nAttrStart, nAttrEnd, nFkpLen);
 
-    WW8PLCFx_PCD::AktPieceFc2Cp( nAttrStart, nAttrEnd, &rSBase );
+    WW8PLCFx_PCD::CurrentPieceFc2Cp( nAttrStart, nAttrEnd, &rSBase );
     bLineEnd = (ePLCF == PAP);
 }
 
@@ -3744,9 +3767,9 @@ bool WW8PLCFx_SEPX::Find4Sprms(sal_uInt16 nId1,sal_uInt16 nId2,sal_uInt16 nId3,s
     while (i + maSprmParser.MinSprmLen() <= nSprmSiz)
     {
         // Sprm found?
-        const sal_uInt16 nAktId = maSprmParser.GetSprmId(pSp);
+        const sal_uInt16 nCurrentId = maSprmParser.GetSprmId(pSp);
         sal_Int32 nRemLen = nSprmSiz - i;
-        const sal_uInt16 x = maSprmParser.GetSprmSize(nAktId, pSp, nRemLen);
+        const sal_uInt16 x = maSprmParser.GetSprmSize(nCurrentId, pSp, nRemLen);
         bool bValid = x <= nRemLen;
         if (!bValid)
         {
@@ -3754,22 +3777,22 @@ bool WW8PLCFx_SEPX::Find4Sprms(sal_uInt16 nId1,sal_uInt16 nId2,sal_uInt16 nId3,s
             break;
         }
         bool bOk = true;
-        if( nAktId  == nId1 )
+        if( nCurrentId  == nId1 )
         {
             sal_uInt16 nFixedLen = maSprmParser.DistanceToData(nId1);
             r1 = SprmResult(pSp + nFixedLen, x - nFixedLen);
         }
-        else if( nAktId  == nId2 )
+        else if( nCurrentId  == nId2 )
         {
             sal_uInt16 nFixedLen = maSprmParser.DistanceToData(nId2);
             r2 = SprmResult(pSp + nFixedLen, x - nFixedLen);
         }
-        else if( nAktId  == nId3 )
+        else if( nCurrentId  == nId3 )
         {
             sal_uInt16 nFixedLen = maSprmParser.DistanceToData(nId3);
             r3 = SprmResult(pSp + nFixedLen, x - nFixedLen);
         }
-        else if( nAktId  == nId4 )
+        else if( nCurrentId  == nId4 )
         {
             sal_uInt16 nFixedLen = maSprmParser.DistanceToData(nId4);
             r4 = SprmResult(pSp + nFixedLen, x - nFixedLen);
@@ -3794,9 +3817,9 @@ SprmResult WW8PLCFx_SEPX::HasSprm( sal_uInt16 nId, sal_uInt8 n2nd ) const
     while (i + maSprmParser.MinSprmLen() <= nSprmSiz)
     {
         // Sprm found?
-        const sal_uInt16 nAktId = maSprmParser.GetSprmId(pSp);
-        const sal_uInt16 x = maSprmParser.GetSprmSize(nAktId, pSp, nSprmSiz - i);
-        if (nAktId == nId)
+        const sal_uInt16 nCurrentId = maSprmParser.GetSprmId(pSp);
+        const sal_uInt16 x = maSprmParser.GetSprmSize(nCurrentId, pSp, nSprmSiz - i);
+        if (nCurrentId == nId)
         {
             sal_uInt16 nFixedLen =  maSprmParser.DistanceToData(nId);
             const sal_uInt8 *pRet = pSp + nFixedLen;
@@ -3880,7 +3903,12 @@ void WW8PLCFx_SubDoc::GetSprms(WW8PLCFxDesc* p)
         return;
     }
 
-    p->nEndPos = p->nStartPos + 1;
+    if (o3tl::checked_add<WW8_CP>(p->nStartPos, 1, p->nEndPos))
+    {
+        SAL_WARN("sw.ww8", "broken offset, ignoring");
+        p->nEndPos = p->nStartPos = WW8_CP_MAX;
+        return;
+    }
 
     if (!pText)
         return;
@@ -4163,8 +4191,8 @@ void WW8ReadSTTBF(bool bVer8, SvStream& rStrm, sal_uInt32 nStart, sal_Int32 nLen
             {
                 OSL_ENSURE(nLen2 == nLen,
                     "Fib length and read length are different");
-                if (nLen > USHRT_MAX)
-                    nLen = USHRT_MAX;
+                if (nLen > SAL_MAX_UINT16)
+                    nLen = SAL_MAX_UINT16;
                 else if (nLen < 2 )
                     nLen = 2;
                 nLen2 = static_cast<sal_uInt16>(nLen);
@@ -4393,13 +4421,13 @@ OUString WW8PLCFx_Book::GetBookmark(long nStart,long nEnd, sal_uInt16 &nIndex)
     sal_uInt16 i = 0;
     if (pBook[0] && pBook[1])
     {
-        WW8_CP nStartAkt, nEndAkt;
+        WW8_CP nStartCurrent, nEndCurrent;
         while (sal::static_int_cast<decltype(aBookNames)::size_type>(i) < aBookNames.size())
         {
             void* p;
             sal_uInt16 nEndIdx;
 
-            if( pBook[0]->GetData( i, nStartAkt, p ) && p )
+            if( pBook[0]->GetData( i, nStartCurrent, p ) && p )
                 nEndIdx = SVBT16ToShort( *static_cast<SVBT16*>(p) );
             else
             {
@@ -4407,9 +4435,9 @@ OUString WW8PLCFx_Book::GetBookmark(long nStart,long nEnd, sal_uInt16 &nIndex)
                 nEndIdx = i;
             }
 
-            nEndAkt = pBook[1]->GetPos( nEndIdx );
+            nEndCurrent = pBook[1]->GetPos( nEndIdx );
 
-            if ((nStartAkt >= nStart) && (nEndAkt <= nEnd))
+            if ((nStartCurrent >= nStart) && (nEndCurrent <= nEnd))
             {
                 nIndex = i;
                 bFound=true;
@@ -8316,17 +8344,17 @@ SprmResult wwSprmParser::findSprmData(sal_uInt16 nId, sal_uInt8* pSprms,
 {
     while (nLen >= MinSprmLen())
     {
-        const sal_uInt16 nAktId = GetSprmId(pSprms);
+        const sal_uInt16 nCurrentId = GetSprmId(pSprms);
         // set pointer to data
-        sal_uInt16 nSize = GetSprmSize(nAktId, pSprms, nLen);
+        sal_uInt16 nSize = GetSprmSize(nCurrentId, pSprms, nLen);
 
         bool bValid = nSize <= nLen;
 
         SAL_WARN_IF(!bValid, "sw.ww8",
-            "sprm 0x" << std::hex << nAktId << std::dec << " longer than remaining bytes, " <<
+            "sprm 0x" << std::hex << nCurrentId << std::dec << " longer than remaining bytes, " <<
             nSize << " vs " << nLen << "doc or parser is wrong");
 
-        if (nAktId == nId && bValid) // Sprm found
+        if (nCurrentId == nId && bValid) // Sprm found
         {
             sal_uInt16 nFixedLen = DistanceToData(nId);
             return SprmResult(pSprms + nFixedLen, nSize - nFixedLen);

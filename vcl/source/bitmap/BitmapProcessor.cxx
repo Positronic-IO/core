@@ -27,26 +27,32 @@ BitmapEx BitmapProcessor::createLightImage(const BitmapEx& rBitmapEx)
     {
         for (long nY = 0; nY < aSize.Height(); ++nY)
         {
+            Scanline pScanline = pWrite->GetScanline( nY );
+            Scanline pScanlineRead = pRead->GetScanline( nY );
             for (long nX = 0; nX < aSize.Width(); ++nX)
             {
-                BitmapColor aColor = pRead->HasPalette() ?
-                                        pRead->GetPaletteColor(pRead->GetPixelIndex(nY, nX)) :
-                                        pRead->GetPixel(nY, nX);
-                basegfx::BColor aBColor(Color(aColor.Invert()).getBColor());
+                BitmapColor aBmpColor = pRead->HasPalette() ?
+                                        pRead->GetPaletteColor(pRead->GetIndexFromData(pScanlineRead, nX)) :
+                                        pRead->GetPixelFromData(pScanlineRead, nX);
+                basegfx::BColor aBColor(aBmpColor.Invert().GetColor().getBColor());
                 aBColor = basegfx::utils::rgb2hsl(aBColor);
 
                 double fHue = aBColor.getRed();
                 fHue += 180.0;
+
                 while (fHue > 360.0)
+                {
                     fHue -= 360.0;
+                }
+
                 aBColor.setRed(fHue);
 
                 aBColor = basegfx::utils::hsl2rgb(aBColor);
-                aColor.SetRed((aBColor.getRed()   * 255.0) + 0.5);
-                aColor.SetGreen((aBColor.getGreen() * 255.0) + 0.5);
-                aColor.SetBlue((aBColor.getBlue()  * 255.0) + 0.5);
+                aBmpColor.SetRed((aBColor.getRed() * 255.0) + 0.5);
+                aBmpColor.SetGreen((aBColor.getGreen() * 255.0) + 0.5);
+                aBmpColor.SetBlue((aBColor.getBlue() * 255.0) + 0.5);
 
-                pWrite->SetPixel(nY, nX, aColor);
+                pWrite->SetPixelOnData(pScanline, nX, aBmpColor);
             }
         }
     }
@@ -89,16 +95,19 @@ BitmapEx BitmapProcessor::createDisabledImage(const BitmapEx& rBitmapEx)
 
             for (long nY = 0; nY < aSize.Height(); ++nY)
             {
+                Scanline pScanAlpha = pGreyAlpha->GetScanline( nY );
+                Scanline pScanline = pGrey->GetScanline( nY );
+                Scanline pScanReadAlpha = pReadAlpha->GetScanline( nY );
                 for (long nX = 0; nX < aSize.Width(); ++nX)
                 {
                     const sal_uInt8 nLum(pRead->GetLuminance(nY, nX));
                     BitmapColor aGreyValue(nLum, nLum, nLum);
-                    pGrey->SetPixel(nY, nX, aGreyValue);
+                    pGrey->SetPixelOnData(pScanline, nX, aGreyValue);
 
-                    const BitmapColor aBitmapAlphaValue(pReadAlpha->GetPixel(nY, nX));
+                    const BitmapColor aBitmapAlphaValue(pReadAlpha->GetPixelFromData(pScanReadAlpha, nX));
 
                     aGreyAlphaValue.SetIndex(sal_uInt8(std::min(aBitmapAlphaValue.GetIndex() + 178ul, 255ul)));
-                    pGreyAlpha->SetPixel(nY, nX, aGreyAlphaValue);
+                    pGreyAlpha->SetPixelOnData(pScanAlpha, nX, aGreyAlphaValue);
                 }
             }
         }
@@ -113,14 +122,16 @@ BitmapEx BitmapProcessor::createDisabledImage(const BitmapEx& rBitmapEx)
 
             for (long nY = 0; nY < aSize.Height(); ++nY)
             {
+                Scanline pScanAlpha = pGreyAlpha->GetScanline( nY );
+                Scanline pScanline = pGrey->GetScanline( nY );
                 for (long nX = 0; nX < aSize.Width(); ++nX)
                 {
                     const sal_uInt8 nLum(pRead->GetLuminance(nY, nX));
                     BitmapColor aGreyValue(nLum, nLum, nLum);
-                    pGrey->SetPixel(nY, nX, aGreyValue);
+                    pGrey->SetPixelOnData(pScanline, nX, aGreyValue);
 
                     aGreyAlphaValue.SetIndex(128);
-                    pGreyAlpha->SetPixel(nY, nX, aGreyAlphaValue);
+                    pGreyAlpha->SetPixelOnData(pScanAlpha, nX, aGreyAlphaValue);
                 }
             }
         }
@@ -191,13 +202,14 @@ void BitmapProcessor::colorizeImage(BitmapEx const & rBitmapEx, Color aColor)
     {
         for (nY = 0; nY < nH; ++nY)
         {
+            Scanline pScanline = pWriteAccess->GetScanline( nY );
             for (nX = 0; nX < nW; ++nX)
             {
-                aBitmapColor = pWriteAccess->GetPixel(nY, nX);
+                aBitmapColor = pWriteAccess->GetPixelFromData(pScanline, nX);
                 aBitmapColor.SetRed(aMapR[aBitmapColor.GetRed()]);
                 aBitmapColor.SetGreen(aMapG[aBitmapColor.GetGreen()]);
                 aBitmapColor.SetBlue(aMapB[aBitmapColor.GetBlue()]);
-                pWriteAccess->SetPixel(nY, nX, aBitmapColor);
+                pWriteAccess->SetPixelOnData(pScanline, nX, aBitmapColor);
             }
         }
     }

@@ -249,7 +249,7 @@ public:
 
     tools::Rectangle GetVisRect() const;
 
-    // clips the VisArea and calculates with the negativ coordinates
+    // clips the VisArea and calculates with the negative coordinates
     tools::Rectangle CorrectVisArea(const tools::Rectangle& rVisArea) const;
 };
 
@@ -265,9 +265,8 @@ bool ScPreviewViewForwarder::IsValid() const
 
 tools::Rectangle ScPreviewViewForwarder::GetVisArea() const
 {
-    tools::Rectangle aVisArea;
     OSL_FAIL("should be implemented in an abrevated class");
-    return aVisArea;
+    return tools::Rectangle();
 }
 
 Point ScPreviewViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -325,8 +324,7 @@ tools::Rectangle ScPreviewViewForwarder::GetVisRect() const
         vcl::Window* pWindow = mpViewShell->GetWindow();
         if ( pWindow )
             aOutputSize = pWindow->GetOutputSizePixel();
-        Point aPoint;
-        tools::Rectangle aVisRect( aPoint, aOutputSize );
+        tools::Rectangle aVisRect( Point(), aOutputSize );
         return aVisRect;
     }
     return tools::Rectangle();
@@ -710,21 +708,18 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
 
         // #i92143# text getRangeExtents reports incorrect 'x' values for spreadsheet cells
         long nIndent = 0;
-        const SvxHorJustifyItem* pHorJustifyItem = static_cast< const SvxHorJustifyItem* >(
-            rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_HOR_JUSTIFY ) );
+        const SvxHorJustifyItem* pHorJustifyItem = rDoc.GetAttr( aCellPos, ATTR_HOR_JUSTIFY );
         SvxCellHorJustify eHorJust = pHorJustifyItem ? pHorJustifyItem->GetValue() : SvxCellHorJustify::Standard;
         if ( eHorJust == SvxCellHorJustify::Left )
         {
-            const SfxUInt16Item* pIndentItem = static_cast< const SfxUInt16Item* >(
-                rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_INDENT ) );
+            const SfxUInt16Item* pIndentItem = rDoc.GetAttr( aCellPos, ATTR_INDENT );
             if ( pIndentItem )
             {
                 nIndent = static_cast< long >( pIndentItem->GetValue() );
             }
         }
 
-        const SvxMarginItem* pMarginItem = static_cast< const SvxMarginItem* >(
-            rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_MARGIN ) );
+        const SvxMarginItem* pMarginItem = rDoc.GetAttr( aCellPos, ATTR_MARGIN );
         ScViewData& rViewData = mpViewShell->GetViewData();
         double nPPTX = rViewData.GetPPTX();
         double nPPTY = rViewData.GetPPTY();
@@ -752,8 +747,7 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
             return the size of the complete text then, which is used to expand
             the cell bounding box in ScAccessibleCell::GetBoundingBox()
             (see sc/source/ui/Accessibility/AccessibleCell.cxx). */
-        const SfxInt32Item* pItem = static_cast< const SfxInt32Item* >(
-            rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_ROTATE_VALUE ) );
+        const SfxInt32Item* pItem = rDoc.GetAttr( aCellPos, ATTR_ROTATE_VALUE );
         if( pItem && (pItem->GetValue() != 0) )
         {
             pEditEngine->SetPaperSize( Size( LONG_MAX, aSize.getHeight() ) );
@@ -763,8 +757,7 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
         else
         {
             // #i92143# text getRangeExtents reports incorrect 'x' values for spreadsheet cells
-            const SfxBoolItem* pLineBreakItem = static_cast< const SfxBoolItem* >(
-                rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_LINEBREAK ) );
+            const SfxBoolItem* pLineBreakItem = rDoc.GetAttr( aCellPos, ATTR_LINEBREAK );
             bool bLineBreak = ( pLineBreakItem && pLineBreakItem->GetValue() );
             if ( !bLineBreak )
             {
@@ -813,8 +806,7 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
         }
 
         long nOffsetY = 0;
-        const SvxVerJustifyItem* pVerJustifyItem = static_cast< const SvxVerJustifyItem* >(
-            rDoc.GetAttr( aCellPos.Col(), aCellPos.Row(), aCellPos.Tab(), ATTR_VER_JUSTIFY ) );
+        const SvxVerJustifyItem* pVerJustifyItem = rDoc.GetAttr( aCellPos, ATTR_VER_JUSTIFY );
         SvxCellVerJustify eVerJust = ( pVerJustifyItem ? pVerJustifyItem->GetValue() : SvxCellVerJustify::Standard );
         switch ( eVerJust )
         {
@@ -1280,8 +1272,7 @@ SvxTextForwarder* ScAccessiblePreviewHeaderCellTextData::GetTextForwarder()
             vcl::Window* pWindow = mpViewShell->GetWindow();
             if ( pWindow )
                 aOutputSize = pWindow->GetOutputSizePixel();
-            Point aPoint;
-            tools::Rectangle aVisRect( aPoint, aOutputSize );
+            tools::Rectangle aVisRect( Point(), aOutputSize );
             Size aSize(mpViewShell->GetLocationData().GetHeaderCellOutputRect(aVisRect, aCellPos, mbColHeader).GetSize());
             if (pWindow)
                 aSize = pWindow->PixelToLogic(aSize, pEditEngine->GetRefMapMode());
@@ -1507,8 +1498,7 @@ SvxTextForwarder* ScAccessibleNoteTextData::GetTextForwarder()
             vcl::Window* pWindow = mpViewShell->GetWindow();
             if ( pWindow )
                 aOutputSize = pWindow->GetOutputSizePixel();
-            Point aPoint;
-            tools::Rectangle aVisRect( aPoint, aOutputSize );
+            tools::Rectangle aVisRect( Point(), aOutputSize );
             Size aSize(mpViewShell->GetLocationData().GetNoteInRangeOutputRect(aVisRect, mbMarkNote, maCellPos).GetSize());
             if (pWindow)
                 aSize = pWindow->PixelToLogic(aSize, mpEditEngine->GetRefMapMode());

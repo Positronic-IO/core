@@ -319,6 +319,9 @@ public:
     /// @see vcl::ITiledRenderable::getPartHash().
     virtual OUString getPartHash( int nPart ) override;
 
+    /// @see vcl::ITiledRenderable::getDocWindow().
+    virtual VclPtr<vcl::Window> getDocWindow() override;
+
     /// @see vcl::ITiledRenderable::initializeForTiledRendering().
     virtual void initializeForTiledRendering(const css::uno::Sequence<css::beans::PropertyValue>& rArguments) override;
 

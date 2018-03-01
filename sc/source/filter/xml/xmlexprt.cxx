@@ -1102,7 +1102,7 @@ const SvxFieldData* toXMLPropertyStates(
                 if (!static_cast<const SvxColorItem*>(p)->QueryValue(aAny, pEntry->mnFlag))
                     continue;
 
-                sal_uInt32 nColor = 0;
+                ::Color nColor;
                 if ( aAny >>= nColor )
                 {
                     sal_Int32 nIndexColor = ( nColor == COL_AUTO ) ? xMapper->GetEntryIndex(
@@ -1702,6 +1702,11 @@ void ScXMLExport::SetBodyAttributes()
                 aPassHash = p->getPasswordHash(PASSHASH_SHA1);
                 eHashUsed = PASSHASH_SHA1;
             }
+            else if (p->hasPasswordHash(PASSHASH_SHA256))
+            {
+                aPassHash = p->getPasswordHash(PASSHASH_SHA256);
+                eHashUsed = PASSHASH_SHA256;
+            }
             else if (p->hasPasswordHash(PASSHASH_XL, PASSHASH_SHA1))
             {
                 aPassHash = p->getPasswordHash(PASSHASH_XL, PASSHASH_SHA1);
@@ -1723,8 +1728,15 @@ void ScXMLExport::SetBodyAttributes()
                                 ScPassHashHelper::getHashURI(PASSHASH_SHA1));
                 }
                 else if (eHashUsed == PASSHASH_SHA1)
+                {
                     AddAttribute(XML_NAMESPACE_TABLE, XML_PROTECTION_KEY_DIGEST_ALGORITHM,
                                  ScPassHashHelper::getHashURI(PASSHASH_SHA1));
+                }
+                else if (eHashUsed == PASSHASH_SHA256)
+                {
+                    AddAttribute(XML_NAMESPACE_TABLE, XML_PROTECTION_KEY_DIGEST_ALGORITHM,
+                                 ScPassHashHelper::getHashURI(PASSHASH_SHA256));
+                }
             }
         }
     }
@@ -2840,6 +2852,12 @@ void ScXMLExport::WriteTable(sal_Int32 nTable, const uno::Reference<sheet::XSpre
                         pProtect->getPasswordHash(PASSHASH_SHA1));
                     eHashUsed = PASSHASH_SHA1;
                 }
+                else if (pProtect->hasPasswordHash(PASSHASH_SHA256))
+                {
+                    ::sax::Converter::encodeBase64(aBuffer,
+                        pProtect->getPasswordHash(PASSHASH_SHA256));
+                    eHashUsed = PASSHASH_SHA256;
+                }
                 else if (pProtect->hasPasswordHash(PASSHASH_XL, PASSHASH_SHA1))
                 {
                     // Double-hash this by SHA1 on top of the legacy xls hash.
@@ -2861,8 +2879,15 @@ void ScXMLExport::WriteTable(sal_Int32 nTable, const uno::Reference<sheet::XSpre
                                         ScPassHashHelper::getHashURI(PASSHASH_SHA1));
                         }
                         else if (eHashUsed == PASSHASH_SHA1)
+                        {
                             AddAttribute(XML_NAMESPACE_TABLE, XML_PROTECTION_KEY_DIGEST_ALGORITHM,
                                          ScPassHashHelper::getHashURI(PASSHASH_SHA1));
+                        }
+                        else if (eHashUsed == PASSHASH_SHA256)
+                        {
+                            AddAttribute(XML_NAMESPACE_TABLE, XML_PROTECTION_KEY_DIGEST_ALGORITHM,
+                                         ScPassHashHelper::getHashURI(PASSHASH_SHA256));
+                        }
                     }
                 }
             }
@@ -4430,7 +4455,7 @@ void ScXMLExport::ExportConditionalFormat(SCTAB nTab)
                             else
                             {
                                 OUStringBuffer aBuffer;
-                                ::sax::Converter::convertColor(aBuffer, Color(COL_LIGHTRED).GetColor());
+                                ::sax::Converter::convertColor(aBuffer, sal_Int32(COL_LIGHTRED));
                                 AddAttribute(XML_NAMESPACE_CALC_EXT, XML_NEGATIVE_COLOR, aBuffer.makeStringAndClear());
                             }
                         }

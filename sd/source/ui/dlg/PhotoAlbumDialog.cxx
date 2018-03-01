@@ -25,7 +25,8 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <officecfg/Office/Impress.hxx>
 #include <svx/svdview.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <svx/unoshape.hxx>
 #include <svx/xfltrit.hxx>
 #include <svx/xfillit.hxx>
@@ -42,7 +43,7 @@ SdPhotoAlbumDialog::SdPhotoAlbumDialog(vcl::Window* pWindow, SdDrawDocument* pAc
 : ModalDialog(pWindow, "PhotoAlbumCreatorDialog", "modules/simpress/ui/photoalbum.ui"),
   pDoc(pActDoc)
 {
-    get(pCancelBtn, "cancel_btn");
+    get(pCancelBtn, "cancel");
     get(pCreateBtn, "create_btn");
 
     get(pAddBtn, "add_btn");
@@ -109,8 +110,10 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, CreateHdl, Button*, void)
 {
     if (pImagesLst->GetEntryCount() == 0)
     {
-        ScopedVclPtrInstance< WarningBox > aWarning(this, MessBoxStyle::Ok, SdResId(STR_PHOTO_ALBUM_EMPTY_WARNING));
-        aWarning->Execute();
+        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                   SdResId(STR_PHOTO_ALBUM_EMPTY_WARNING)));
+        xWarn->run();
     }
     else
     {
@@ -490,8 +493,10 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, CreateHdl, Button*, void)
         }
         else
         {
-            ScopedVclPtrInstance< InfoBox > aInfo(this, OUString("Function is not implemented!"));
-            aInfo->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          "Function is not implemented!"));
+            xInfoBox->run();
         }
         EndDialog();
     }
@@ -750,10 +755,10 @@ void SdPhotoAlbumDialog::createCaption(const awt::Size& aPageSize )
     Point CapPos;
     Size CapSize;
 
-    CapSize.Width() = aPageSize.Width;
-    CapSize.Height() = aPageSize.Height/6;
-    CapPos.X() = 0;
-    CapPos.Y() = aPageSize.Height - CapSize.Height();
+    CapSize.setWidth( aPageSize.Width );
+    CapSize.setHeight( aPageSize.Height/6 );
+    CapPos.setX( 0 );
+    CapPos.setY( aPageSize.Height - CapSize.Height() );
     SdPage* pSlide = pDoc->GetSdPage( pDoc->GetSdPageCount(PageKind::Standard)-1, PageKind::Standard );
 
     // try to get existing PresObj
@@ -784,7 +789,7 @@ void SdPhotoAlbumDialog::createCaption(const awt::Size& aPageSize )
         SfxItemSet aSet(pDoc->GetItemPool() );
 
         aSet.Put( XFillStyleItem(drawing::FillStyle_SOLID) );
-        aSet.Put( XFillColorItem( "", Color(COL_BLACK) ) );
+        aSet.Put( XFillColorItem( "", COL_BLACK ) );
         aSet.Put( XFillTransparenceItem( 20 ) );
         pSdrObj->SetMergedItemSetAndBroadcast(aSet);
     }

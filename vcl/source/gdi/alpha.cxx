@@ -80,9 +80,9 @@ Bitmap const & AlphaMask::GetBitmap() const
     return ImplGetBitmap();
 }
 
-bool AlphaMask::Erase( sal_uInt8 cTransparency )
+void AlphaMask::Erase( sal_uInt8 cTransparency )
 {
-    return Bitmap::Erase( Color( cTransparency, cTransparency, cTransparency ) );
+    Bitmap::Erase( Color( cTransparency, cTransparency, cTransparency ) );
 }
 
 bool AlphaMask::Replace( const Bitmap& rMask, sal_uInt8 cReplaceTransparency )
@@ -95,20 +95,23 @@ bool AlphaMask::Replace( const Bitmap& rMask, sal_uInt8 cReplaceTransparency )
         const BitmapColor   aReplace( cReplaceTransparency );
         const long          nWidth = std::min( pMaskAcc->Width(), pAcc->Width() );
         const long          nHeight = std::min( pMaskAcc->Height(), pAcc->Height() );
-        const BitmapColor   aMaskWhite( pMaskAcc->GetBestMatchingColor( Color( COL_WHITE ) ) );
+        const BitmapColor   aMaskWhite( pMaskAcc->GetBestMatchingColor( COL_WHITE ) );
 
         for( long nY = 0; nY < nHeight; nY++ )
+        {
+            Scanline pScanline = pAcc->GetScanline(nY);
+            Scanline pScanlineMask = pMaskAcc->GetScanline(nY);
             for( long nX = 0; nX < nWidth; nX++ )
-                if( pMaskAcc->GetPixel( nY, nX ) == aMaskWhite )
-                    pAcc->SetPixel( nY, nX, aReplace );
+                if( pMaskAcc->GetPixelFromData( pScanlineMask, nX ) == aMaskWhite )
+                    pAcc->SetPixelOnData( pScanline, nX, aReplace );
+        }
     }
     return false;
 }
 
-bool AlphaMask::Replace( sal_uInt8 cSearchTransparency, sal_uInt8 cReplaceTransparency )
+void AlphaMask::Replace( sal_uInt8 cSearchTransparency, sal_uInt8 cReplaceTransparency )
 {
     AlphaMask::ScopedWriteAccess pAcc(*this);
-    bool                bRet = false;
 
     if( pAcc && pAcc->GetBitCount() == 8 )
     {
@@ -133,18 +136,15 @@ bool AlphaMask::Replace( sal_uInt8 cSearchTransparency, sal_uInt8 cReplaceTransp
 
             for( long nY = 0; nY < nHeight; nY++ )
             {
+                Scanline pScanline = pAcc->GetScanline(nY);
                 for( long nX = 0; nX < nWidth; nX++ )
                 {
-                    if( pAcc->GetPixel( nY, nX ).GetIndex() == cSearchTransparency )
-                        pAcc->SetPixel( nY, nX, aReplace );
+                    if( pAcc->GetIndexFromData( pScanline, nX ) == cSearchTransparency )
+                        pAcc->SetPixelOnData( pScanline, nX, aReplace );
                 }
             }
         }
-
-        bRet = true;
     }
-
-    return bRet;
 }
 
 void AlphaMask::ReleaseAccess( BitmapReadAccess* pAccess )

@@ -29,6 +29,7 @@
 #include <scitems.hxx>
 #include <cellform.hxx>
 #include <sharedformula.hxx>
+#include <drwlayer.hxx>
 
 #include <svl/sharedstringpool.hxx>
 #include <o3tl/make_unique.hxx>
@@ -1085,6 +1086,25 @@ void ScColumn::Swap( ScColumn& rOther, SCROW nRow1, SCROW nRow2, bool bPattern )
     maCellTextAttrs.swap(nRow1, nRow2, rOther.maCellTextAttrs, nRow1);
     maCellNotes.swap(nRow1, nRow2, rOther.maCellNotes, nRow1);
     maBroadcasters.swap(nRow1, nRow2, rOther.maBroadcasters, nRow1);
+
+    // Update draw object anchors
+    ScDrawLayer* pDrawLayer = GetDoc()->GetDrawLayer();
+    if (pDrawLayer)
+    {
+        std::map<SCROW, std::vector<SdrObject*>> aThisColRowDrawObjects
+            = pDrawLayer->GetObjectsAnchoredToRange(GetTab(), GetCol(), nRow1, nRow2);
+        std::map<SCROW, std::vector<SdrObject*>> aOtherColRowDrawObjects
+            = pDrawLayer->GetObjectsAnchoredToRange(GetTab(), rOther.GetCol(), nRow1, nRow2);
+        for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
+        {
+            std::vector<SdrObject*>& rThisCellDrawObjects = aThisColRowDrawObjects[nRow];
+            if (!rThisCellDrawObjects.empty())
+                UpdateDrawObjectsForRow(rThisCellDrawObjects, rOther.GetCol(), nRow);
+            std::vector<SdrObject*>& rOtherCellDrawObjects = aOtherColRowDrawObjects[nRow];
+            if (!rOtherCellDrawObjects.empty())
+                rOther.UpdateDrawObjectsForRow(rOtherCellDrawObjects, GetCol(), nRow);
+        }
+    }
 
     if (bPattern)
     {

@@ -42,6 +42,11 @@ class ScrollBarBox;
 class SdDrawDocument;
 class ScrollBar;
 
+namespace weld
+{
+    class Window;
+}
+
 namespace com { namespace sun { namespace star {
 namespace embed {
     class XEmbeddedObject;
@@ -155,6 +160,7 @@ public:
         show running then the active window is a ShowWindow.
     */
     ::sd::Window* GetActiveWindow() const { return mpActiveWindow;}
+    weld::Window* GetFrameWeld() const;
 
     /** Set the active window.  When the shell is displayed in the center
         pane then the window of the ViewShellBase is also set to the given
@@ -410,12 +416,6 @@ public:
         SdPage* pPage,
         const sal_Int32 nInsertPosition = -1);
 
-    /// Same as MouseButtonDown(), but coordinates are in logic unit.
-    void LogicMouseButtonDown(const MouseEvent& rMouseEvent);
-    /// Same as MouseButtonUp(), but coordinates are in logic unit.
-    void LogicMouseButtonUp(const MouseEvent& rMouseEvent);
-    /// Same as MouseMove(), but coordinates are in logic unit.
-    void LogicMouseMove(const MouseEvent& rMouseEvent);
     /// Allows adjusting the point or mark of the selection to a document coordinate.
     void SetCursorMm100Position(const Point& rPosition, bool bPoint, bool bClearMark);
     /// Gets the currently selected text.
@@ -529,7 +529,7 @@ protected:
         i.e. construct calls Show, and if a11y is enabled this
         reenters the not-fully constructed object and calls
         CreateAccessibleDocumentView, so if construct is called
-        from the ctor then if a derived class is contructed the base-case
+        from the ctor then if a derived class is constructed the base-case
         CreateAccessibleDocumentView is used, not the derived
         CreateAccessibleDocumentView. i.e. run smoketest under a11y with
         debugging assertions enabled

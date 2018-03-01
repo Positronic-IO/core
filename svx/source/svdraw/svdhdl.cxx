@@ -554,13 +554,13 @@ void SdrHdl::CreateB2dIAObject()
                         Size aOffset = rOutDev.PixelToLogic(Size(4, 4));
 
                         if(eKind == SdrHdlKind::UpperLeft || eKind == SdrHdlKind::Upper || eKind == SdrHdlKind::UpperRight)
-                            aMoveOutsideOffset.Y() -= aOffset.Width();
+                            aMoveOutsideOffset.AdjustY( -(aOffset.Width()) );
                         if(eKind == SdrHdlKind::LowerLeft || eKind == SdrHdlKind::Lower || eKind == SdrHdlKind::LowerRight)
-                            aMoveOutsideOffset.Y() += aOffset.Height();
+                            aMoveOutsideOffset.AdjustY(aOffset.Height() );
                         if(eKind == SdrHdlKind::UpperLeft || eKind == SdrHdlKind::Left  || eKind == SdrHdlKind::LowerLeft)
-                            aMoveOutsideOffset.X() -= aOffset.Width();
+                            aMoveOutsideOffset.AdjustX( -(aOffset.Width()) );
                         if(eKind == SdrHdlKind::UpperRight || eKind == SdrHdlKind::Right || eKind == SdrHdlKind::LowerRight)
-                            aMoveOutsideOffset.X() += aOffset.Height();
+                            aMoveOutsideOffset.AdjustX(aOffset.Height() );
                     }
 
                     rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
@@ -585,29 +585,28 @@ void SdrHdl::CreateB2dIAObject()
                             float fScalingFactor = rOutDev.GetDPIScaleFactor();
                             basegfx::B2DSize aB2DSize(fSize * fScalingFactor, fSize * fScalingFactor);
 
-                            Color aHandleStrokeColor(COL_BLACK);
                             Color aHandleFillColor(COL_LIGHTGREEN);
                             switch (eColIndex)
                             {
                                 case BitmapColorIndex::Cyan:
-                                    aHandleFillColor = Color(COL_CYAN);
+                                    aHandleFillColor = COL_CYAN;
                                     break;
                                 case BitmapColorIndex::LightCyan:
-                                    aHandleFillColor = Color(COL_LIGHTCYAN);
+                                    aHandleFillColor = COL_LIGHTCYAN;
                                     break;
                                 case BitmapColorIndex::Red:
-                                    aHandleFillColor = Color(COL_RED);
+                                    aHandleFillColor = COL_RED;
                                     break;
                                 case BitmapColorIndex::LightRed:
-                                    aHandleFillColor = Color(COL_LIGHTRED);
+                                    aHandleFillColor = COL_LIGHTRED;
                                     break;
                                 case BitmapColorIndex::Yellow:
-                                    aHandleFillColor = Color(COL_YELLOW);
+                                    aHandleFillColor = COL_YELLOW;
                                     break;
                                 default:
                                     break;
                             }
-                            pNewOverlayObject = new sdr::overlay::OverlayHandle(aPosition, aB2DSize, aHandleStrokeColor, aHandleFillColor);
+                            pNewOverlayObject = new sdr::overlay::OverlayHandle(aPosition, aB2DSize, /*HandleStrokeColor*/COL_BLACK, aHandleFillColor);
                         }
                         else
                         {
@@ -1114,12 +1113,12 @@ void SdrHdlColor::CreateB2dIAObject()
                         rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
-                            Bitmap aBmpCol(CreateColorDropper(aMarkerColor));
+                            BitmapEx aBmpCol(CreateColorDropper(aMarkerColor));
                             basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
                             sdr::overlay::OverlayObject* pNewOverlayObject = new
                                 sdr::overlay::OverlayBitmapEx(
                                     aPosition,
-                                    BitmapEx(aBmpCol),
+                                    aBmpCol,
                                     static_cast<sal_uInt16>(aBmpCol.GetSizePixel().Width() - 1) >> 1,
                                     static_cast<sal_uInt16>(aBmpCol.GetSizePixel().Height() - 1) >> 1
                                 );
@@ -1135,49 +1134,44 @@ void SdrHdlColor::CreateB2dIAObject()
     }
 }
 
-Bitmap SdrHdlColor::CreateColorDropper(Color aCol)
+BitmapEx SdrHdlColor::CreateColorDropper(Color aCol)
 {
     // get the Bitmap
-    Bitmap aRetval(aMarkerSize, 24);
-    aRetval.Erase(aCol);
+    VclPtr<VirtualDevice> pWrite(VclPtr<VirtualDevice>::Create());
+    pWrite->SetOutputSizePixel(aMarkerSize);
+    pWrite->SetBackground(aCol);
+    pWrite->Erase();
 
-    // get write access
-    std::unique_ptr<BitmapWriteAccess> pWrite(aRetval.AcquireWriteAccess());
-    DBG_ASSERT(pWrite, "Got NO write access to a new Bitmap!");
+    // draw outer border
+    sal_Int32 nWidth = aMarkerSize.Width();
+    sal_Int32 nHeight = aMarkerSize.Height();
 
-    if(pWrite)
-    {
-        // draw outer border
-        sal_Int32 nWidth = aMarkerSize.Width();
-        sal_Int32 nHeight = aMarkerSize.Height();
+    pWrite->SetLineColor(COL_LIGHTGRAY);
+    pWrite->DrawLine(Point(0, 0), Point(0, nHeight - 1));
+    pWrite->DrawLine(Point(1, 0), Point(nWidth - 1, 0));
+    pWrite->SetLineColor(COL_GRAY);
+    pWrite->DrawLine(Point(1, nHeight - 1), Point(nWidth - 1, nHeight - 1));
+    pWrite->DrawLine(Point(nWidth - 1, 1), Point(nWidth - 1, nHeight - 2));
 
-        pWrite->SetLineColor(Color(COL_LIGHTGRAY));
-        pWrite->DrawLine(Point(0, 0), Point(0, nHeight - 1));
-        pWrite->DrawLine(Point(1, 0), Point(nWidth - 1, 0));
-        pWrite->SetLineColor(Color(COL_GRAY));
-        pWrite->DrawLine(Point(1, nHeight - 1), Point(nWidth - 1, nHeight - 1));
-        pWrite->DrawLine(Point(nWidth - 1, 1), Point(nWidth - 1, nHeight - 2));
+    // draw lighter UpperLeft
+    const Color aLightColor(
+        static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetRed()) + sal_Int16(0x0040)), sal_Int16(0x00ff))),
+        static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetGreen()) + sal_Int16(0x0040)), sal_Int16(0x00ff))),
+        static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetBlue()) + sal_Int16(0x0040)), sal_Int16(0x00ff))));
+    pWrite->SetLineColor(aLightColor);
+    pWrite->DrawLine(Point(1, 1), Point(1, nHeight - 2));
+    pWrite->DrawLine(Point(2, 1), Point(nWidth - 2, 1));
 
-        // draw lighter UpperLeft
-        const Color aLightColor(
-            static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetRed()) + sal_Int16(0x0040)), sal_Int16(0x00ff))),
-            static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetGreen()) + sal_Int16(0x0040)), sal_Int16(0x00ff))),
-            static_cast<sal_uInt8>(::std::min(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetBlue()) + sal_Int16(0x0040)), sal_Int16(0x00ff))));
-        pWrite->SetLineColor(aLightColor);
-        pWrite->DrawLine(Point(1, 1), Point(1, nHeight - 2));
-        pWrite->DrawLine(Point(2, 1), Point(nWidth - 2, 1));
+    // draw darker LowerRight
+    const Color aDarkColor(
+        static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetRed()) - sal_Int16(0x0040)), sal_Int16(0x0000))),
+        static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetGreen()) - sal_Int16(0x0040)), sal_Int16(0x0000))),
+        static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetBlue()) - sal_Int16(0x0040)), sal_Int16(0x0000))));
+    pWrite->SetLineColor(aDarkColor);
+    pWrite->DrawLine(Point(2, nHeight - 2), Point(nWidth - 2, nHeight - 2));
+    pWrite->DrawLine(Point(nWidth - 2, 2), Point(nWidth - 2, nHeight - 3));
 
-        // draw darker LowerRight
-        const Color aDarkColor(
-            static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetRed()) - sal_Int16(0x0040)), sal_Int16(0x0000))),
-            static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetGreen()) - sal_Int16(0x0040)), sal_Int16(0x0000))),
-            static_cast<sal_uInt8>(::std::max(static_cast<sal_Int16>(static_cast<sal_Int16>(aCol.GetBlue()) - sal_Int16(0x0040)), sal_Int16(0x0000))));
-        pWrite->SetLineColor(aDarkColor);
-        pWrite->DrawLine(Point(2, nHeight - 2), Point(nWidth - 2, nHeight - 2));
-        pWrite->DrawLine(Point(nWidth - 2, 2), Point(nWidth - 2, nHeight - 3));
-    }
-
-    return aRetval;
+    return pWrite->GetBitmapEx(Point(0,0), aMarkerSize);
 }
 
 Color SdrHdlColor::GetLuminance(const Color& rCol)
@@ -1289,7 +1283,7 @@ void SdrHdlGradient::CreateB2dIAObject()
                                 );
                             DBG_ASSERT(pNewOverlayObject, "Got NO new IAO!");
 
-                            pNewOverlayObject->setBaseColor(IsGradient() ? Color(COL_BLACK) : Color(COL_BLUE));
+                            pNewOverlayObject->setBaseColor(IsGradient() ? COL_BLACK : COL_BLUE);
                             xManager->add(*pNewOverlayObject);
                             maOverlayGroup.append(pNewOverlayObject);
 
@@ -1308,7 +1302,7 @@ void SdrHdlGradient::CreateB2dIAObject()
                                     aPositionLeft,
                                     aPosition2,
                                     aPositionRight,
-                                    IsGradient() ? Color(COL_BLACK) : Color(COL_BLUE)
+                                    IsGradient() ? COL_BLACK : COL_BLUE
                                 );
                             DBG_ASSERT(pNewOverlayObject, "Got NO new IAO!");
 
@@ -1438,7 +1432,7 @@ void SdrHdlLine::CreateB2dIAObject()
 
                             // OVERLAYMANAGER
                             // color(?)
-                            pNewOverlayObject->setBaseColor(Color(COL_LIGHTRED));
+                            pNewOverlayObject->setBaseColor(COL_LIGHTRED);
 
                             xManager->add(*pNewOverlayObject);
                             maOverlayGroup.append(pNewOverlayObject);
@@ -1498,7 +1492,7 @@ void SdrHdlBezWgt::CreateB2dIAObject()
                                 pNewOverlayObject->setHittable(false);
 
                                 // color(?)
-                                pNewOverlayObject->setBaseColor(Color(COL_LIGHTBLUE));
+                                pNewOverlayObject->setBaseColor(COL_LIGHTBLUE);
 
                                 xManager->add(*pNewOverlayObject);
                                 maOverlayGroup.append(pNewOverlayObject);
@@ -1544,7 +1538,7 @@ void E3dVolumeMarker::CreateB2dIAObject()
                                 aWireframePoly);
 
                             // OVERLAYMANAGER
-                            pNewOverlayObject->setBaseColor(Color(COL_BLACK));
+                            pNewOverlayObject->setBaseColor(COL_BLACK);
 
                             xManager->add(*pNewOverlayObject);
                             maOverlayGroup.append(pNewOverlayObject);
@@ -1660,7 +1654,7 @@ bool ImpEdgeHdl::IsHorzDrag() const
     if (nObjHdlNum<=1)
         return false;
 
-    SdrEdgeKind eEdgeKind = static_cast<const SdrEdgeKindItem&>(pEdge->GetObjectItem(SDRATTR_EDGEKIND)).GetValue();
+    SdrEdgeKind eEdgeKind = pEdge->GetObjectItem(SDRATTR_EDGEKIND).GetValue();
 
     const SdrEdgeInfoRec& rInfo=pEdge->aEdgeInfo;
     if (eEdgeKind==SdrEdgeKind::OrthoLines || eEdgeKind==SdrEdgeKind::Bezier)

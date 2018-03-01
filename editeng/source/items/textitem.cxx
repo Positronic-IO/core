@@ -74,14 +74,12 @@
 #include <editeng/autokernitem.hxx>
 #include <editeng/wrlmitem.hxx>
 #include <editeng/contouritem.hxx>
-#include <editeng/prszitem.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/charsetcoloritem.hxx>
 #include <editeng/kernitem.hxx>
 #include <editeng/cmapitem.hxx>
 #include <editeng/escapementitem.hxx>
 #include <editeng/langitem.hxx>
-#include <editeng/nlbkitem.hxx>
 #include <editeng/nhypitem.hxx>
 #include <editeng/blinkitem.hxx>
 #include <editeng/emphasismarkitem.hxx>
@@ -1597,32 +1595,6 @@ bool SvxContourItem::GetPresentation
     return true;
 }
 
-// class SvxPropSizeItem -------------------------------------------------
-
-SvxPropSizeItem::SvxPropSizeItem( const sal_uInt16 nPercent, const sal_uInt16 nId ) :
-    SfxUInt16Item( nId, nPercent )
-{
-}
-
-
-SfxPoolItem* SvxPropSizeItem::Clone( SfxItemPool * ) const
-{
-    return new SvxPropSizeItem( *this );
-}
-
-
-bool SvxPropSizeItem::GetPresentation
-(
-    SfxItemPresentation /*ePres*/,
-    MapUnit             /*eCoreUnit*/,
-    MapUnit             /*ePresUnit*/,
-    OUString&           rText, const IntlWrapper& /*rIntl*/
-)   const
-{
-    rText.clear();
-    return false;
-}
-
 // class SvxBackgroundColorItem -----------------------------------------
 
 SvxBackgroundColorItem::SvxBackgroundColorItem( const sal_uInt16 nId ) :
@@ -1741,7 +1713,7 @@ bool SvxColorItem::PutValue( const uno::Any& rVal, sal_uInt8 /*nMemberId*/ )
     if(!(rVal >>= nColor))
         return false;
 
-    mColor.SetColor( nColor );
+    mColor = nColor;
     return true;
 }
 
@@ -1754,7 +1726,7 @@ SvStream& SvxColorItem::Store( SvStream& rStrm , sal_uInt16 nItemVersion ) const
 {
     if( VERSION_USEAUTOCOLOR == nItemVersion &&
         COL_AUTO == mColor.GetColor() )
-        WriteColor( rStrm, Color( COL_BLACK ) );
+        WriteColor( rStrm, COL_BLACK );
     else
         WriteColor( rStrm, mColor );
     return rStrm;
@@ -1939,10 +1911,10 @@ OUString SvxCaseMapItem::GetValueTextByPos( sal_uInt16 nPos ) const
     static const char* RID_SVXITEMS_CASEMAP[] =
     {
         RID_SVXITEMS_CASEMAP_NONE,
-        RID_SVXITEMS_CASEMAP_VERSALIEN,
-        RID_SVXITEMS_CASEMAP_GEMEINE,
-        RID_SVXITEMS_CASEMAP_TITEL,
-        RID_SVXITEMS_CASEMAP_KAPITAELCHEN
+        RID_SVXITEMS_CASEMAP_UPPERCASE,
+        RID_SVXITEMS_CASEMAP_LOWERCASE,
+        RID_SVXITEMS_CASEMAP_TITLE,
+        RID_SVXITEMS_CASEMAP_SMALLCAPS
     };
 
     static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_CASEMAP) == size_t(SvxCaseMap::End), "must match");
@@ -2226,31 +2198,6 @@ bool SvxLanguageItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
         break;
     }
     return true;
-}
-
-// class SvxNoLinebreakItem ----------------------------------------------
-SvxNoLinebreakItem::SvxNoLinebreakItem( const bool bBreak, const sal_uInt16 nId ) :
-      SfxBoolItem( nId, bBreak )
-{
-}
-
-
-SfxPoolItem* SvxNoLinebreakItem::Clone( SfxItemPool* ) const
-{
-    return new SvxNoLinebreakItem( *this );
-}
-
-
-bool SvxNoLinebreakItem::GetPresentation
-(
-    SfxItemPresentation /*ePres*/,
-    MapUnit             /*eCoreUnit*/,
-    MapUnit             /*ePresUnit*/,
-    OUString&           rText, const IntlWrapper& /*rIntl*/
-)   const
-{
-    rText.clear();
-    return false;
 }
 
 // class SvxNoHyphenItem -------------------------------------------------

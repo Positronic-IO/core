@@ -102,8 +102,7 @@ void SpinButton::Resize()
     Control::Resize();
 
     Size aSize(GetOutputSizePixel());
-    Point aTmpPoint;
-    tools::Rectangle aRect(aTmpPoint, aSize);
+    tools::Rectangle aRect(Point(), aSize);
     if (mbHorz)
     {
         maLowerRect = tools::Rectangle(0, 0, aSize.Width() / 2, aSize.Height() - 1);
@@ -419,10 +418,10 @@ void SpinButton::ImplCalcFocusRect( bool _bUpper )
 {
     maFocusRect = _bUpper ? maUpperRect : maLowerRect;
     // inflate by some pixels
-    maFocusRect.Left() += 2;
-    maFocusRect.Top() += 2;
-    maFocusRect.Right() -= 2;
-    maFocusRect.Bottom() -= 2;
+    maFocusRect.AdjustLeft(2 );
+    maFocusRect.AdjustTop(2 );
+    maFocusRect.AdjustRight( -2 );
+    maFocusRect.AdjustBottom( -2 );
     mbUpperIsFocused = _bUpper;
 }
 

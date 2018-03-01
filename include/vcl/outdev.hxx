@@ -722,8 +722,8 @@ public:
                                     const Point& rPos,
                                     const Size& rSize,
                                     sal_uInt32 nLen = 8,
-                                    Color aStart = Color(COL_WHITE),
-                                    Color aEnd = Color(COL_BLACK));
+                                    Color aStart = COL_WHITE,
+                                    Color aEnd = COL_BLACK);
 
     void                        DrawGrid( const tools::Rectangle& rRect, const Size& rDist, DrawGridFlags nFlags );
 
@@ -1152,7 +1152,7 @@ public:
                                               vcl::TextLayoutCache const* = nullptr,
                                               SalLayout const*const pLayoutCache = nullptr) const;
 
-    bool                        GetCaretPositions( const OUString&, long* pCaretXArray,
+    void                        GetCaretPositions( const OUString&, long* pCaretXArray,
                                               sal_Int32 nIndex, sal_Int32 nLen ) const;
     void                        DrawStretchText( const Point& rStartPt, sal_uLong nWidth,
                                                  const OUString& rStr,
@@ -1512,7 +1512,7 @@ private:
                                 Size& aOutSz, Point& aOutPt);
 
 
-    SAL_DLLPRIVATE bool         BlendBitmap(
+    SAL_DLLPRIVATE void         BlendBitmap(
                                     const SalTwoRect&   rPosAry,
                                     const Bitmap&       rBmp );
 
@@ -1581,7 +1581,7 @@ public:
                                     bool bReduceTransparency,
                                     bool bTransparencyAutoMode,
                                     bool bDownsampleBitmaps,
-                                    const Color& rBackground = Color( COL_TRANSPARENT ) );
+                                    const Color& rBackground = COL_TRANSPARENT );
 
     SAL_DLLPRIVATE void         ImplPrintTransparent (
                                     const Bitmap& rBmp, const Bitmap& rMask,
@@ -1903,7 +1903,7 @@ private:
 
     /** Convert a line in logical units to a line in physical device pixel units.
 
-     @param         rLineInfo   Const refernece to a line in logical units
+     @param         rLineInfo   Const reference to a line in logical units
 
      @returns Line based on physical device pixel coordinates and units.
      */

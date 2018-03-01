@@ -171,7 +171,7 @@ enum class WorkingDocType { SOURCE, TARGET, COPY };
 static SfxObjectShell* lcl_CreateWorkingDocument(
     const WorkingDocType aType, const SwWrtShell &rSourceWrtShell,
     const vcl::Window *pSourceWindow,
-    SwDBManager** const pDBManager,
+    SwDBManager** const ppDBManager,
     SwView** const pView, SwWrtShell** const pWrtShell, SwDoc** const pDoc );
 
 static bool lcl_getCountFromResultSet( sal_Int32& rCount, const SwDSParam* pParam )
@@ -611,8 +611,8 @@ static OUString  lcl_FindColumn(const OUString& sFormatStr,sal_uInt16  &nUsedPos
     nSeparator = 0xff;
     while(nUsedPos < nLen && nSeparator == 0xff)
     {
-        sal_Unicode cAkt = sFormatStr[nUsedPos];
-        switch(cAkt)
+        sal_Unicode cCurrent = sFormatStr[nUsedPos];
+        switch(cCurrent)
         {
             case ',':
                 nSeparator = DB_SEP_SPACE;
@@ -627,7 +627,7 @@ static OUString  lcl_FindColumn(const OUString& sFormatStr,sal_uInt16  &nUsedPos
                 nSeparator = DB_SEP_NEWLINE;
             break;
             default:
-                sReturn += OUStringLiteral1(cAkt);
+                sReturn += OUStringLiteral1(cCurrent);
         }
         nUsedPos++;
 
@@ -962,7 +962,7 @@ static SfxObjectShell* lcl_CreateWorkingDocument(
     // optional input
     const vcl::Window *pSourceWindow,
     // optional in and output to swap the DB manager
-    SwDBManager** const pDBManager,
+    SwDBManager** const ppDBManager,
     // optional output
     SwView** const pView, SwWrtShell** const pWrtShell, SwDoc** const pDoc )
 {
@@ -987,17 +987,17 @@ static SfxObjectShell* lcl_CreateWorkingDocument(
 
     if( aType == WorkingDocType::TARGET )
     {
-        assert( !pDBManager );
+        assert( !ppDBManager );
         pWorkDoc->SetInMailMerge( true );
         pWorkWrtShell->SetLabelDoc( false );
     }
     else
     {
         // We have to swap the DBmanager of the new doc, so we also need input
-        assert( pDBManager && *pDBManager );
+        assert(ppDBManager && *ppDBManager);
         SwDBManager *pWorkDBManager = pWorkDoc->GetDBManager();
-        pWorkDoc->SetDBManager( *pDBManager );
-        *pDBManager = pWorkDBManager;
+        pWorkDoc->SetDBManager( *ppDBManager );
+        *ppDBManager = pWorkDBManager;
 
         if( aType == WorkingDocType::SOURCE )
         {
@@ -1696,7 +1696,8 @@ sal_uLong SwDBManager::GetColumnFormat( const OUString& rDBName,
         uno::Reference< sdbcx::XColumnsSupplier> xColsSupp;
         bool bDisposeConnection = false;
         if(pImpl->pMergeData &&
-            pImpl->pMergeData->sDataSource == rDBName && pImpl->pMergeData->sCommand == rTableName)
+            ((pImpl->pMergeData->sDataSource == rDBName && pImpl->pMergeData->sCommand == rTableName) ||
+            (rDBName.isEmpty() && rTableName.isEmpty())))
         {
             xConnection = pImpl->pMergeData->xConnection;
             xSource = SwDBManager::getDataSourceAsParent(xConnection,rDBName);
@@ -2201,7 +2202,7 @@ bool SwDBManager::FillCalcWithMergeData( SvNumberFormatter *pDocFormatter,
     return true;
 }
 
-bool SwDBManager::ToNextRecord(
+void SwDBManager::ToNextRecord(
     const OUString& rDataSource, const OUString& rCommand)
 {
     SwDSParam* pFound = nullptr;
@@ -2219,7 +2220,7 @@ bool SwDBManager::ToNextRecord(
         aData.nCommandType = -1;
         pFound = FindDSData(aData, false);
     }
-    return lcl_ToNextRecord( pFound );
+    lcl_ToNextRecord( pFound );
 }
 
 static bool lcl_ToNextRecord( SwDSParam* pParam, const SwDBNextRecord action )
@@ -2400,11 +2401,15 @@ sal_uInt32      SwDBManager::GetSelectedRecordId(
 {
     sal_uInt32 nRet = 0xffffffff;
     //check for merge data source first
-    if(pImpl->pMergeData && rDataSource == pImpl->pMergeData->sDataSource &&
-                    rTableOrQuery == pImpl->pMergeData->sCommand &&
-                    (nCommandType == -1 || nCommandType == pImpl->pMergeData->nCommandType) &&
-                    pImpl->pMergeData->xResultSet.is())
+    if(pImpl->pMergeData &&
+        ((rDataSource == pImpl->pMergeData->sDataSource &&
+        rTableOrQuery == pImpl->pMergeData->sCommand) ||
+        (rDataSource.isEmpty() && rTableOrQuery.isEmpty())) &&
+        (nCommandType == -1 || nCommandType == pImpl->pMergeData->nCommandType) &&
+        pImpl->pMergeData->xResultSet.is())
+    {
         nRet = GetSelectedRecordId();
+    }
     else
     {
         SwDBData aData;
@@ -2460,8 +2465,10 @@ void    SwDBManager::CloseAll(bool bIncludingMerge)
 SwDSParam* SwDBManager::FindDSData(const SwDBData& rData, bool bCreate)
 {
     //prefer merge data if available
-    if(pImpl->pMergeData && rData.sDataSource == pImpl->pMergeData->sDataSource &&
-        rData.sCommand == pImpl->pMergeData->sCommand &&
+    if(pImpl->pMergeData &&
+        ((rData.sDataSource == pImpl->pMergeData->sDataSource &&
+        rData.sCommand == pImpl->pMergeData->sCommand) ||
+        (rData.sDataSource.isEmpty() && rData.sCommand.isEmpty())) &&
         (rData.nCommandType == -1 || rData.nCommandType == pImpl->pMergeData->nCommandType ||
         (bCreate && pImpl->pMergeData->nCommandType == -1)))
     {

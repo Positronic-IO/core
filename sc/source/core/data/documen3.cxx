@@ -208,6 +208,30 @@ void ScDocument::SetRangeName( ScRangeName* pNewRangeName )
     pRangeName = pNewRangeName;
 }
 
+bool ScDocument::IsAddressInRangeName( RangeNameScope eScope, ScAddress& rAddress )
+{
+    ScRangeName* pRangeNames;
+    ScRange aNameRange;
+
+    if (eScope == RangeNameScope::GLOBAL)
+        pRangeNames= GetRangeName();
+    else
+        pRangeNames= GetRangeName(rAddress.Tab());
+
+    ScRangeName::iterator itrBegin = pRangeNames->begin(), itrEnd = pRangeNames->end();
+
+    for (ScRangeName::iterator itr = itrBegin; itr != itrEnd; ++itr)
+    {
+        if (itr->second->IsValidReference(aNameRange))
+        {
+            if (aNameRange.In(rAddress))
+                return true;
+        }
+    }
+
+    return false;
+}
+
 bool ScDocument::InsertNewRangeName( const OUString& rName, const ScAddress& rPos, const OUString& rExpr )
 {
     ScRangeName* pGlobalNames = GetRangeName();
@@ -427,7 +451,7 @@ Color ScDocument::GetTabBgColor( SCTAB nTab ) const
 {
     if (ValidTab(nTab) && nTab < static_cast<SCTAB>(maTabs.size()) && maTabs[nTab])
         return maTabs[nTab]->GetTabBgColor();
-    return Color(COL_AUTO);
+    return COL_AUTO;
 }
 
 void ScDocument::SetTabBgColor( SCTAB nTab, const Color& rColor )
@@ -1462,9 +1486,7 @@ bool ScDocument::HasAutoFilter( SCCOL nCurCol, SCROW nCurRow, SCTAB nCurTab )
 
             for ( nCol=aParam.nCol1; nCol<=aParam.nCol2 && bHasAutoFilter; nCol++ )
             {
-                nFlag = static_cast<const ScMergeFlagAttr*>(
-                            GetAttr( nCol, nRow, nCurTab, ATTR_MERGE_FLAG ))->
-                                GetValue();
+                nFlag = GetAttr( nCol, nRow, nCurTab, ATTR_MERGE_FLAG )->GetValue();
 
                 if ( !(nFlag & ScMF::Auto) )
                     bHasAutoFilter = false;
@@ -1579,7 +1601,7 @@ void ScDocument::GetDataEntries(
         /*  Try to generate the list from list validation. This part is skipped,
             if bLimit==true, because in that case this function is called to get
             cell values for auto completion on input. */
-        sal_uInt32 nValidation = static_cast< const SfxUInt32Item* >( GetAttr( nCol, nRow, nTab, ATTR_VALIDDATA ) )->GetValue();
+        sal_uInt32 nValidation = GetAttr( nCol, nRow, nTab, ATTR_VALIDDATA )->GetValue();
         if( nValidation )
         {
             const ScValidationData* pData = GetValidationEntry( nValidation );
@@ -1676,18 +1698,18 @@ tools::Rectangle ScDocument::GetEmbeddedRect() const // 1/100 mm
         SCCOL i;
 
         for (i=0; i<aEmbedRange.aStart.Col(); i++)
-            aRect.Left() += pTable->GetColWidth(i);
-        aRect.Top() += pTable->GetRowHeight( 0, aEmbedRange.aStart.Row() - 1);
-        aRect.Right() = aRect.Left();
+            aRect.AdjustLeft(pTable->GetColWidth(i) );
+        aRect.AdjustTop(pTable->GetRowHeight( 0, aEmbedRange.aStart.Row() - 1) );
+        aRect.SetRight( aRect.Left() );
         for (i=aEmbedRange.aStart.Col(); i<=aEmbedRange.aEnd.Col(); i++)
-            aRect.Right() += pTable->GetColWidth(i);
-        aRect.Bottom() = aRect.Top();
-        aRect.Bottom() += pTable->GetRowHeight( aEmbedRange.aStart.Row(), aEmbedRange.aEnd.Row());
+            aRect.AdjustRight(pTable->GetColWidth(i) );
+        aRect.SetBottom( aRect.Top() );
+        aRect.AdjustBottom(pTable->GetRowHeight( aEmbedRange.aStart.Row(), aEmbedRange.aEnd.Row()) );
 
-        aRect.Left()   = static_cast<long>( aRect.Left()   * HMM_PER_TWIPS );
-        aRect.Right()  = static_cast<long>( aRect.Right()  * HMM_PER_TWIPS );
-        aRect.Top()    = static_cast<long>( aRect.Top()    * HMM_PER_TWIPS );
-        aRect.Bottom() = static_cast<long>( aRect.Bottom() * HMM_PER_TWIPS );
+        aRect.SetLeft( static_cast<long>( aRect.Left()   * HMM_PER_TWIPS ) );
+        aRect.SetRight( static_cast<long>( aRect.Right()  * HMM_PER_TWIPS ) );
+        aRect.SetTop( static_cast<long>( aRect.Top()    * HMM_PER_TWIPS ) );
+        aRect.SetBottom( static_cast<long>( aRect.Bottom() * HMM_PER_TWIPS ) );
     }
     return aRect;
 }
@@ -1948,20 +1970,20 @@ tools::Rectangle ScDocument::GetMMRect( SCCOL nStartCol, SCROW nStartRow, SCCOL 
     tools::Rectangle aRect;
 
     for (i=0; i<nStartCol; i++)
-        aRect.Left() += GetColWidth(i,nTab, bHiddenAsZero );
-    aRect.Top() += GetRowHeight( 0, nStartRow-1, nTab, bHiddenAsZero );
+        aRect.AdjustLeft(GetColWidth(i,nTab, bHiddenAsZero ) );
+    aRect.AdjustTop(GetRowHeight( 0, nStartRow-1, nTab, bHiddenAsZero ) );
 
-    aRect.Right()  = aRect.Left();
-    aRect.Bottom() = aRect.Top();
+    aRect.SetRight( aRect.Left() );
+    aRect.SetBottom( aRect.Top() );
 
     for (i=nStartCol; i<=nEndCol; i++)
-        aRect.Right() += GetColWidth(i,nTab, bHiddenAsZero);
-    aRect.Bottom() += GetRowHeight( nStartRow, nEndRow, nTab, bHiddenAsZero );
+        aRect.AdjustRight(GetColWidth(i,nTab, bHiddenAsZero) );
+    aRect.AdjustBottom(GetRowHeight( nStartRow, nEndRow, nTab, bHiddenAsZero ) );
 
-    aRect.Left()    = static_cast<long>(aRect.Left()   * HMM_PER_TWIPS);
-    aRect.Right()   = static_cast<long>(aRect.Right()  * HMM_PER_TWIPS);
-    aRect.Top()     = static_cast<long>(aRect.Top()    * HMM_PER_TWIPS);
-    aRect.Bottom()  = static_cast<long>(aRect.Bottom() * HMM_PER_TWIPS);
+    aRect.SetLeft( static_cast<long>(aRect.Left()   * HMM_PER_TWIPS) );
+    aRect.SetRight( static_cast<long>(aRect.Right()  * HMM_PER_TWIPS) );
+    aRect.SetTop( static_cast<long>(aRect.Top()    * HMM_PER_TWIPS) );
+    aRect.SetBottom( static_cast<long>(aRect.Bottom() * HMM_PER_TWIPS) );
 
     if ( IsNegativePage( nTab ) )
         ScDrawLayer::MirrorRectRTL( aRect );
@@ -2036,8 +2058,7 @@ void ScDocument::DoMerge( SCTAB nTab, SCCOL nStartCol, SCROW nStartRow,
 
 void ScDocument::RemoveMerge( SCCOL nCol, SCROW nRow, SCTAB nTab )
 {
-    const ScMergeAttr* pAttr = static_cast<const ScMergeAttr*>(
-                                    GetAttr( nCol, nRow, nTab, ATTR_MERGE ));
+    const ScMergeAttr* pAttr = GetAttr( nCol, nRow, nTab, ATTR_MERGE );
 
     if ( pAttr->GetColMerge() <= 1 && pAttr->GetRowMerge() <= 1 )
         return;

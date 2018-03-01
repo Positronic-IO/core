@@ -108,7 +108,7 @@ OLEObjCache::OLEObjCache()
         nSize = officecfg::Office::Common::Cache::DrawingEngine::OLE_Objects::get();
     else
         nSize = 100;
-    pTimer = new AutoTimer( "svx OLEObjCache pTimer UnloadCheck" );
+    pTimer.reset( new AutoTimer( "svx OLEObjCache pTimer UnloadCheck" ) );
     pTimer->SetInvokeHandler( LINK(this, OLEObjCache, UnloadCheckHdl) );
     pTimer->SetTimeout(20000);
     pTimer->SetStatic();
@@ -117,7 +117,6 @@ OLEObjCache::OLEObjCache()
 OLEObjCache::~OLEObjCache()
 {
     pTimer->Stop();
-    delete pTimer;
 }
 
 IMPL_LINK_NOARG(OLEObjCache, UnloadCheckHdl, Timer*, void)
@@ -344,6 +343,7 @@ SdrOutliner* SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrModel& rModel)
     pOutl->SetAsianCompressionMode(rModel.GetCharCompressType());
     pOutl->SetKernAsianPunctuation(rModel.IsKernAsianPunctuation());
     pOutl->SetAddExtLeading(rModel.IsAddExtLeading());
+    pOutl->SetHoriAlignIgnoreTrailingWhitespace(rModel.IsHoriAlignIgnoreTrailingWhitespace());
     return pOutl;
 }
 
@@ -648,8 +648,8 @@ namespace
                     {
                         // TopLeft-Spot
                         aSpotPos[i] = rArea.TopLeft();
-                        aSpotPos[i].X() += nWidth14;
-                        aSpotPos[i].Y() += nHeight14;
+                        aSpotPos[i].AdjustX(nWidth14 );
+                        aSpotPos[i].AdjustY(nHeight14 );
                     }
                     break;
 
@@ -657,8 +657,8 @@ namespace
                     {
                         // TopRight-Spot
                         aSpotPos[i] = rArea.TopLeft();
-                        aSpotPos[i].X() += nWidth34;
-                        aSpotPos[i].Y() += nHeight14;
+                        aSpotPos[i].AdjustX(nWidth34 );
+                        aSpotPos[i].AdjustY(nHeight14 );
                     }
                     break;
 
@@ -666,8 +666,8 @@ namespace
                     {
                         // BottomLeft-Spot
                         aSpotPos[i] = rArea.TopLeft();
-                        aSpotPos[i].X() += nWidth14;
-                        aSpotPos[i].Y() += nHeight34;
+                        aSpotPos[i].AdjustX(nWidth14 );
+                        aSpotPos[i].AdjustY(nHeight34 );
                     }
                     break;
 
@@ -675,14 +675,14 @@ namespace
                     {
                         // BottomRight-Spot
                         aSpotPos[i] = rArea.TopLeft();
-                        aSpotPos[i].X() += nWidth34;
-                        aSpotPos[i].Y() += nHeight34;
+                        aSpotPos[i].AdjustX(nWidth34 );
+                        aSpotPos[i].AdjustY(nHeight34 );
                     }
                     break;
 
                 }
 
-                aSpotColor[i] = Color( COL_WHITE );
+                aSpotColor[i] = COL_WHITE;
                 impGetSdrPageFillColor(rPage, aSpotPos[i], rTextEditPV, rTextEditPV.GetVisibleLayers(), aSpotColor[i], false);
             }
 
@@ -736,7 +736,7 @@ Color GetTextEditBackgroundColor(const SdrObjEditView& rView)
     if(!rStyleSettings.GetHighContrastMode())
     {
         bool bFound(false);
-        SdrTextObj* pText = dynamic_cast< SdrTextObj * >(rView.GetTextEditObject());
+        SdrTextObj* pText = rView.GetTextEditObject();
 
         if(pText && pText->IsClosedObj())
         {

@@ -513,7 +513,7 @@ OString HTMLOutFuncs::ConvertStringToHTML( const OUString& rSrc,
     return aDest.makeStringAndClear();
 }
 
-SvStream& HTMLOutFuncs::Out_AsciiTag( SvStream& rStream, const sal_Char *pStr,
+SvStream& HTMLOutFuncs::Out_AsciiTag( SvStream& rStream, const OString& rStr,
                                       bool bOn )
 {
     if(bOn)
@@ -521,7 +521,7 @@ SvStream& HTMLOutFuncs::Out_AsciiTag( SvStream& rStream, const sal_Char *pStr,
     else
         rStream.WriteCharPtr("</");
 
-    rStream.WriteCharPtr(pStr).WriteChar('>');
+    rStream.WriteOString(rStr).WriteChar('>');
 
     return rStream;
 }
@@ -583,7 +583,7 @@ SvStream& HTMLOutFuncs::Out_Hex( SvStream& rStream, sal_uLong nHex, sal_uInt8 nL
 SvStream& HTMLOutFuncs::Out_Color( SvStream& rStream, const Color& rColor )
 {
     rStream.WriteCharPtr( "\"#" );
-    if( rColor.GetColor() == COL_AUTO )
+    if( rColor == COL_AUTO )
     {
         rStream.WriteCharPtr( "000000" );
     }
@@ -992,7 +992,7 @@ void HtmlWriterHelper::applyColor(HtmlWriter& rHtmlWriter, const OString &aAttri
 {
     OStringBuffer sBuffer;
 
-    if( rColor.GetColor() == COL_AUTO )
+    if( rColor == COL_AUTO )
     {
         sBuffer.append("#000000");
     }
@@ -1005,7 +1005,7 @@ void HtmlWriterHelper::applyColor(HtmlWriter& rHtmlWriter, const OString &aAttri
             << std::setfill('0')
             << std::setw(6)
             << std::hex
-            << rColor.GetRGBColor();
+            << sal_uInt32(rColor.GetRGBColor());
         sBuffer.append(sStringStream.str().c_str());
     }
 

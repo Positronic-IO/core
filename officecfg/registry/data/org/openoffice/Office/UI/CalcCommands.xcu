@@ -179,14 +179,6 @@
           <value>1</value>
         </prop>
       </node>
-      <node oor:name=".uno:ProtectTraceChangeMode" oor:op="replace">
-        <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">~Protect Records...</value>
-        </prop>
-        <prop oor:name="Properties" oor:type="xs:int">
-          <value>1</value>
-        </prop>
-      </node>
       <node oor:name=".uno:InsertExternalDataSource" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Link to E~xternal Data...</value>
@@ -503,7 +495,14 @@
         <prop oor:name="ContextLabel" oor:type="xs:string">
           <value xml:lang="en-US">Condition...</value>
         </prop>
-
+        <prop oor:name="Properties" oor:type="xs:int">
+          <value>1</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CurrentConditionalFormatDialog" oor:op="replace">
+        <prop oor:name="ContextLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Conditional Formatting...</value>
+        </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
         </prop>
@@ -555,6 +554,11 @@
       <node oor:name=".uno:ConditionalFormatManagerDialog" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Manage...</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CurrentConditionalFormatManagerDialog" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Manage Conditional Formatting...</value>
         </prop>
       </node>
       <node oor:name=".uno:Deselect" oor:op="replace">
@@ -893,6 +897,11 @@
           <value xml:lang="en-US">~Validity...</value>
         </prop>
       </node>
+      <node oor:name=".uno:CurrentValidation" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Data ~Validation...</value>
+        </prop>
+      </node>
       <node oor:name=".uno:DeleteRows" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Delete Rows</value>
@@ -927,7 +936,10 @@
       </node>
       <node oor:name=".uno:TraceChangeMode" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">~Record Changes</value>
+          <value xml:lang="en-US">~Record</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Record Track Changes</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -935,7 +947,10 @@
       </node>
       <node oor:name=".uno:ShowChanges" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">~Show Changes...</value>
+          <value xml:lang="en-US">~Show...</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Show Track Changes</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -1063,7 +1078,10 @@
       </node>
       <node oor:name=".uno:AcceptChanges" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">~Manage Changes...</value>
+          <value xml:lang="en-US">~Manage...</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Manage Track Changes</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -1071,7 +1089,10 @@
       </node>
       <node oor:name=".uno:CommentChange" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">~Comment on Change...</value>
+          <value xml:lang="en-US">~Comment...</value>
+        </prop>
+        <prop oor:name="TooltipLabel" oor:type="xs:string">
+          <value xml:lang="en-US">Insert Track Change Comment</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
@@ -1282,6 +1303,11 @@
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:DefineCurrentName" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Manage Names...</value>
         </prop>
       </node>
       <node oor:name=".uno:InsertName" oor:op="replace">

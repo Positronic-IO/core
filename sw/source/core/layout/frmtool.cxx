@@ -1134,11 +1134,11 @@ static void lcl_SetPos( SwFrame&             _rNewFrame,
     // notifications for a new calculated position after its formatting.
     if ( aRectFnSet.IsVert() )
     {
-        aFrm.Pos().X() -= 1;
+        aFrm.Pos().AdjustX( -1 );
     }
     else
     {
-        aFrm.Pos().Y() += 1;
+        aFrm.Pos().AdjustY(1 );
     }
 }
 
@@ -3155,8 +3155,12 @@ static SwTwips lcl_CalcCellRstHeight( SwLayoutFrame *pCell )
 
 SwTwips CalcRowRstHeight( SwLayoutFrame *pRow )
 {
-    SwTwips nRstHeight = LONG_MAX;
     SwFrame *pLow = pRow->Lower();
+    if (!(pLow && pLow->IsLayoutFrame()))
+    {
+        return 0;
+    }
+    SwTwips nRstHeight = LONG_MAX;
     while (pLow && pLow->IsLayoutFrame())
     {
         nRstHeight = std::min(nRstHeight, ::lcl_CalcCellRstHeight(static_cast<SwLayoutFrame*>(pLow)));

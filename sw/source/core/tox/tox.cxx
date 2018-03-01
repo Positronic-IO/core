@@ -733,42 +733,37 @@ OUString SwFormToken::GetString() const
    Returns the type of a token.
 
    @param sToken     the string representation of the token
-   @param pTokenLen  return parameter the length of the head of the token
-
-   If pTokenLen is non-NULL the length of the token's head is
-   written to *pTokenLen
+   @param rTokenLen  return parameter the length of the head of the token
 
    @return the type of the token
 */
 static FormTokenType lcl_GetTokenType(const OUString & sToken,
-                                      sal_Int32 *const pTokenLen)
+                                      sal_Int32 & rTokenLen)
 {
     static struct
     {
-        OUString sNm;
-        sal_uInt16 nOffset;
-        FormTokenType eToken;
+        OUString sTokenStart;
+        sal_Int16 nTokenLength;
+        FormTokenType eTokenType;
     } const aTokenArr[] = {
-        { SwForm::GetFormTab(),         1, TOKEN_TAB_STOP },
-        { SwForm::GetFormPageNums(),    1, TOKEN_PAGE_NUMS },
-        { SwForm::GetFormLinkStt(),     1, TOKEN_LINK_START },
-        { SwForm::GetFormLinkEnd(),     1, TOKEN_LINK_END },
-        { SwForm::GetFormEntryNum(),    1, TOKEN_ENTRY_NO },
-        { SwForm::GetFormEntryText(),    1, TOKEN_ENTRY_TEXT },
-        { SwForm::GetFormChapterMark(), 1, TOKEN_CHAPTER_INFO },
-        { SwForm::GetFormText(),        1, TOKEN_TEXT },
-        { SwForm::GetFormEntry(),       1, TOKEN_ENTRY },
-        { SwForm::GetFormAuth(),        3, TOKEN_AUTHORITY }
+        { SwForm::GetFormTab().copy(0, 2),         3, TOKEN_TAB_STOP },
+        { SwForm::GetFormPageNums().copy(0, 2),    3, TOKEN_PAGE_NUMS },
+        { SwForm::GetFormLinkStt().copy(0, 3),     4, TOKEN_LINK_START },
+        { SwForm::GetFormLinkEnd().copy(0, 3),     4, TOKEN_LINK_END },
+        { SwForm::GetFormEntryNum().copy(0, 3),    4, TOKEN_ENTRY_NO },
+        { SwForm::GetFormEntryText().copy(0, 3),   4, TOKEN_ENTRY_TEXT },
+        { SwForm::GetFormChapterMark().copy(0, 2), 3, TOKEN_CHAPTER_INFO },
+        { SwForm::GetFormText().copy(0, 2),        3, TOKEN_TEXT },
+        { SwForm::GetFormEntry().copy(0, 2),       3, TOKEN_ENTRY },
+        { SwForm::GetFormAuth().copy(0, 2),        5, TOKEN_AUTHORITY }
     };
 
     for(const auto & i : aTokenArr)
     {
-        const sal_Int32 nLen(i.sNm.getLength());
-        if( sToken.startsWith( i.sNm.copy(0, nLen - i.nOffset) ))
+        if( sToken.startsWith( i.sTokenStart ) )
         {
-            if (pTokenLen)
-                *pTokenLen = nLen;
-            return i.eToken;
+            rTokenLen = i.nTokenLength;
+            return i.eTokenType;
         }
     }
 
@@ -828,7 +823,7 @@ lcl_BuildToken(const OUString & sPattern, sal_Int32 & nCurPatternPos)
     OUString sToken( lcl_SearchNextToken(sPattern, nCurPatternPos) );
     nCurPatternPos += sToken.getLength();
     sal_Int32 nTokenLen = 0;
-    FormTokenType const eTokenType = lcl_GetTokenType(sToken, &nTokenLen);
+    FormTokenType const eTokenType = lcl_GetTokenType(sToken, nTokenLen);
     if (TOKEN_END == eTokenType) // invalid input? skip it
     {
         nCurPatternPos = sPattern.getLength();

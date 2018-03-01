@@ -48,6 +48,7 @@
 #include <com/sun/star/document/XExporter.hpp>
 #include <com/sun/star/document/XGraphicObjectResolver.hpp>
 #include <com/sun/star/document/XEmbeddedObjectResolver.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/lang/XEventListener.hpp>
@@ -140,10 +141,10 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
     OUString     msEmbeddedObjectProtocol;
     OUString     msFilterName;
     OUString     msImgFilterName;
-    SvXMLNamespaceMap           *mpNamespaceMap;    // the namepspace map
+    std::unique_ptr<SvXMLNamespaceMap> mpNamespaceMap;    // the namepspace map
     SvXMLUnitConverter          maUnitConv;        // the unit converter
-    SvXMLNumFmtExport           *mpNumExport;
-    ProgressBarHelper           *mpProgressBarHelper;
+    std::unique_ptr<SvXMLNumFmtExport> mpNumExport;
+    std::unique_ptr<ProgressBarHelper> mpProgressBarHelper;
 
     rtl::Reference< XMLTextParagraphExport > mxTextParagraphExport;
     rtl::Reference< XMLShapeExport > mxShapeExport;
@@ -152,9 +153,9 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
     rtl::Reference< XMLPageExport > mxPageExport;
     rtl::Reference< XMLFontAutoStylePool > mxFontAutoStylePool;
     rtl::Reference< xmloff::OFormLayerXMLExport > mxFormExport;
-    XMLEventExport* mpEventExport;
-    XMLImageMapExport* mpImageMapExport;
-    XMLErrors*  mpXMLErrors;
+    std::unique_ptr<XMLEventExport> mpEventExport;
+    std::unique_ptr<XMLImageMapExport> mpImageMapExport;
+    std::unique_ptr<XMLErrors>  mpXMLErrors;
 
     const enum ::xmloff::token::XMLTokenEnum meClass;
     SAL_DLLPRIVATE void InitCtor_();
@@ -420,7 +421,7 @@ public:
     {
         mxNumberFormatsSupplier = _xNumberFormatSupplier;
         if ( mxNumberFormatsSupplier.is() && mxHandler.is() )
-            mpNumExport = new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier);
+            mpNumExport.reset( new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier) );
     }
 
     // get export helper for text
@@ -461,6 +462,11 @@ public:
 
     OUString AddEmbeddedGraphicObject(
                             const OUString& rGraphicObjectURL );
+
+    OUString AddEmbeddedXGraphic(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType, OUString const & rRequestedName = OUString());
+    bool AddEmbeddedXGraphicAsBase64(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
+    bool GetGraphicMimeTypeFromStream(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType);
+
     css::uno::Reference<css::io::XInputStream> GetEmbeddedGraphicObjectStream(
         const OUString& rGraphicObjectURL);
     bool AddEmbeddedGraphicObjectAsBase64(

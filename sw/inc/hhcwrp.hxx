@@ -20,6 +20,7 @@
 #define INCLUDED_SW_INC_HHCWRP_HXX
 
 #include <editeng/hangulhanja.hxx>
+#include "swdllapi.h"
 
 class SwView;
 namespace vcl { class Window; }
@@ -53,7 +54,7 @@ class SW_DLLPUBLIC SwHHCWrapper : public editeng::HangulHanjaConversion
 
     /// from SvxSpellWrapper copied and modified
     bool        ConvNext_impl();        ///< former SpellNext
-    bool        FindConvText_impl();    ///< former FindSpellError
+    void        FindConvText_impl();    ///< former FindSpellError
 
     void        ConvStart_impl( SwConversionArgs *pConvArgs, SvxSpellArea eSpell );   ///< former SpellStart
     void        ConvEnd_impl( SwConversionArgs const *pConvArgs );                          ///< former SpellEnd

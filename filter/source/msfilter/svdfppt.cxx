@@ -248,11 +248,6 @@ SvStream& ReadPptExOleObjAtom( SvStream& rIn, PptExOleObjAtom& rAtom )
     return rIn;
 }
 
-const Size& PptDocumentAtom::GetPageSize(const Size& rSiz)
-{
-    return rSiz;
-}
-
 SvStream& ReadPptDocumentAtom(SvStream& rIn, PptDocumentAtom& rAtom)
 {
 // Actual format:
@@ -286,11 +281,13 @@ SvStream& ReadPptDocumentAtom(SvStream& rIn, PptDocumentAtom& rAtom)
        .ReadSChar( nTitlePlaceHoldersOmitted )
        .ReadSChar( nRightToLeft )
        .ReadSChar( nShowComments );
-    rAtom.aSlidesPageSize.Width() = nSlideX;
-    rAtom.aSlidesPageSize.Height() = nSlideY;
     // clamp dodgy data to avoid overflow in later calculations
-    rAtom.aNotesPageSize.Width() = std::min<sal_Int32>(nNoticeX, 65536);
-    rAtom.aNotesPageSize.Height() = std::min<sal_Int32>(nNoticeY, 65536);
+    const sal_Int32 nPageClamp = SAL_MAX_INT32/5;
+    rAtom.aSlidesPageSize.setWidth( basegfx::clamp<sal_Int32>(nSlideX, -nPageClamp, nPageClamp) );
+    rAtom.aSlidesPageSize.setHeight( basegfx::clamp<sal_Int32>(nSlideY, -nPageClamp, nPageClamp) );
+    const sal_Int32 nNoteClamp = 65536;
+    rAtom.aNotesPageSize.setWidth( basegfx::clamp<sal_Int32>(nNoticeX, -nNoteClamp, nNoteClamp) );
+    rAtom.aNotesPageSize.setHeight( basegfx::clamp<sal_Int32>(nNoticeY, -nNoteClamp, nNoteClamp) );
     rAtom.eSlidesPageFormat = static_cast<PptPageFormat>(nSlidePageFormat);
     rAtom.bEmbeddedTrueType = nEmbeddedTrueType;
     rAtom.bTitlePlaceholdersOmitted = nTitlePlaceHoldersOmitted;
@@ -1146,8 +1143,8 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
                                 if ( eTVA == SDRTEXTVERTADJUST_BLOCK )
                                 {
                                     Size aTextSize( pText->GetTextSize() );
-                                    aTextSize.Width() += nTextLeft + nTextRight;
-                                    aTextSize.Height() += nTextTop + nTextBottom;
+                                    aTextSize.AdjustWidth(nTextLeft + nTextRight );
+                                    aTextSize.AdjustHeight(nTextTop + nTextBottom );
                                     if ( rTextRect.GetHeight() < aTextSize.Height() )
                                         pTObj->SetMergedItem( SdrTextVertAdjustItem( SDRTEXTVERTADJUST_CENTER ) );
                                 }
@@ -1157,8 +1154,8 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
                                 if ( eTHA == SDRTEXTHORZADJUST_BLOCK )
                                 {
                                     Size aTextSize( pText->GetTextSize() );
-                                    aTextSize.Width() += nTextLeft + nTextRight;
-                                    aTextSize.Height() += nTextTop + nTextBottom;
+                                    aTextSize.AdjustWidth(nTextLeft + nTextRight );
+                                    aTextSize.AdjustHeight(nTextTop + nTextBottom );
                                     if ( rTextRect.GetWidth() < aTextSize.Width() )
                                         pTObj->SetMergedItem( SdrTextHorzAdjustItem( SDRTEXTHORZADJUST_CENTER ) );
                                 }
@@ -1240,7 +1237,7 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
         }
         if (rPersistEntry.xSolverContainer)
         {
-            for (SvxMSDffConnectorRule* pPtr : rPersistEntry.xSolverContainer->aCList)
+            for (auto & pPtr : rPersistEntry.xSolverContainer->aCList)
             {
                 if ( rObjData.nShapeId == pPtr->nShapeC )
                     pPtr->pCObj = pRet;
@@ -2503,15 +2500,15 @@ Size SdrPowerPointImport::GetPageSize() const
             Fraction aFact(GetMapFactor(eMap,MapUnit::Map100thMM).X());
             nInchMul = aFact.GetNumerator();
             nInchDiv = aFact.GetDenominator();
-            aRet.Width() = BigMulDiv( aRet.Width(), nInchMul, nInchDiv );
-            aRet.Height() = BigMulDiv( aRet.Height(), nInchMul, nInchDiv );
+            aRet.setWidth( BigMulDiv( aRet.Width(), nInchMul, nInchDiv ) );
+            aRet.setHeight( BigMulDiv( aRet.Height(), nInchMul, nInchDiv ) );
         }
-        aRet.Width() += 5; aRet.Width() /= 10; aRet.Width()*=10;
-        aRet.Height() += 5; aRet.Height() /= 10; aRet.Height()*=10;
+        aRet.AdjustWidth(5 ); aRet.setWidth( aRet.Width() / 10 ); aRet.setWidth( aRet.Width() * 10 );
+        aRet.AdjustHeight(5 ); aRet.setHeight( aRet.Height() / 10 ); aRet.setHeight( aRet.Height() * 10 );
         if ( bInch )
         {
-            aRet.Width() = BigMulDiv( aRet.Width(), nInchDiv, nInchMul );
-            aRet.Height() = BigMulDiv( aRet.Height(), nInchDiv, nInchMul );
+            aRet.setWidth( BigMulDiv( aRet.Width(), nInchDiv, nInchMul ) );
+            aRet.setHeight( BigMulDiv( aRet.Height(), nInchDiv, nInchMul ) );
         }
     }
     return aRet;
@@ -2909,7 +2906,7 @@ void SdrPowerPointImport::ImportPage( SdrPage* pRet, const PptSlidePersistEntry*
                                         // one: default to white.
                                         SfxItemSet aNewSet(*pObject->GetMergedItemSet().GetPool());
                                         aNewSet.Put(XFillStyleItem(css::drawing::FillStyle_SOLID));
-                                        aNewSet.Put(XFillColorItem(OUString(), Color(COL_WHITE)));
+                                        aNewSet.Put(XFillColorItem(OUString(), COL_WHITE));
                                         pObject->SetMergedItemSet(aNewSet);
                                     }
                                 }
@@ -2924,7 +2921,7 @@ void SdrPowerPointImport::ImportPage( SdrPage* pRet, const PptSlidePersistEntry*
                             pRet->getSdrPageProperties().PutItemSet(rSlidePersist.pBObj->GetMergedItemSet());
                             if (rSlidePersist.xSolverContainer)
                             {
-                                for (SvxMSDffConnectorRule* pPtr : rSlidePersist.xSolverContainer->aCList)
+                                for (auto & pPtr : rSlidePersist.xSolverContainer->aCList)
                                 {
                                     // check connections to the group object
                                     if (pPtr->pAObj == rSlidePersist.pBObj)
@@ -3764,10 +3761,10 @@ void PPTNumberFormatCreator::ImplGetNumberFormat( SdrPowerPointImport const & rM
     rNumberFormat.SetBulletChar( nBuChar );
     rNumberFormat.SetBulletRelSize( static_cast<sal_uInt16>(nBulletHeight) );
     rNumberFormat.SetBulletColor( aCol );
-    sal_uInt16 nAbsLSpace = static_cast<sal_uInt16>( ( nTextOfs * 2540 ) / 576 );
-    sal_uInt16 nFirstLineOffset = nAbsLSpace - static_cast<sal_uInt16>( ( nBulletOfs * 2540 ) / 576 );
+    sal_uInt32 nAbsLSpace = ( nTextOfs * 2540 ) / 576;
+    sal_uInt32 nFirstLineOffset = nAbsLSpace - ( nBulletOfs * 2540 ) / 576;
     rNumberFormat.SetAbsLSpace( nAbsLSpace );
-    rNumberFormat.SetFirstLineOffset( -nFirstLineOffset );
+    rNumberFormat.SetFirstLineOffset( -static_cast<sal_Int32>(nFirstLineOffset) );
 }
 
 PPTCharSheet::PPTCharSheet( TSS_Type nInstance )
@@ -5674,9 +5671,9 @@ void PPTPortionObj::ApplyTo(  SfxItemSet& rSet, SdrPowerPointImport& rManager, T
                     if ( aSize.Width() && aSize.Height() )
                     {
                         if ( aSize.Width () > 64 )
-                            aSize.Width () = 64;
+                            aSize.setWidth( 64 );
                         if ( aSize.Height() > 64 )
-                            aSize.Height() = 64;
+                            aSize.setHeight( 64 );
 
                         Bitmap::ScopedReadAccess pAcc(aBmp);
                         if( pAcc )
@@ -5689,9 +5686,10 @@ void PPTPortionObj::ApplyTo(  SfxItemSet& rSet, SdrPowerPointImport& rManager, T
                             {
                                 for( long nY = 0; nY < nHeight; nY++ )
                                 {
+                                    Scanline pScanline = pAcc->GetScanline( nY );
                                     for( long nX = 0; nX < nWidth; nX++ )
                                     {
-                                        const BitmapColor& rCol = pAcc->GetPaletteColor( pAcc->GetPixelIndex( nY, nX ) );
+                                        const BitmapColor& rCol = pAcc->GetPaletteColor( pAcc->GetIndexFromData( pScanline, nX ) );
                                         nRt+=rCol.GetRed(); nGn+=rCol.GetGreen(); nBl+=rCol.GetBlue();
                                     }
                                 }
@@ -5700,9 +5698,10 @@ void PPTPortionObj::ApplyTo(  SfxItemSet& rSet, SdrPowerPointImport& rManager, T
                             {
                                 for( long nY = 0; nY < nHeight; nY++ )
                                 {
+                                    Scanline pScanline = pAcc->GetScanline( nY );
                                     for( long nX = 0; nX < nWidth; nX++ )
                                     {
-                                        const BitmapColor aCol( pAcc->GetPixel( nY, nX ) );
+                                        const BitmapColor aCol( pAcc->GetPixelFromData( pScanline, nX ) );
                                         nRt+=aCol.GetRed(); nGn+=aCol.GetGreen(); nBl+=aCol.GetBlue();
                                     }
                                 }
@@ -5750,7 +5749,7 @@ void PPTPortionObj::ApplyTo(  SfxItemSet& rSet, SdrPowerPointImport& rManager, T
                                 break;
                                 case drawing::FillStyle_HATCH :
                                 case drawing::FillStyle_BITMAP :
-                                    aDefColor = Color( COL_WHITE );
+                                    aDefColor = COL_WHITE;
                                 break;
                                 default: break;
                             }
@@ -7660,7 +7659,7 @@ SdrObject* SdrPowerPointImport::CreateTable( SdrObject* pGroup, const sal_uInt32
         // possibly connections to the group object have to be removed.
         if ( pSolverContainer )
         {
-            for (SvxMSDffConnectorRule* pPtr : pSolverContainer->aCList)
+            for (auto & pPtr : pSolverContainer->aCList)
             {
                 // check connections to the group object
                 if ( pPtr->pAObj == pGroup )

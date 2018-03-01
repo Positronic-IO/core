@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <basic/basmgr.hxx>
 #include <basic/sbmeth.hxx>
 #include <unotools/moduleoptions.hxx>
@@ -44,7 +44,7 @@ using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::container;
 
 extern "C" {
-    SAL_DLLPUBLIC_EXPORT long basicide_handle_basic_error( void * pPtr )
+    SAL_DLLPUBLIC_EXPORT long basicide_handle_basic_error( void const * pPtr )
     {
         return HandleBasicError( static_cast<StarBASIC const *>(pPtr) );
     }
@@ -128,7 +128,7 @@ SbMethod* CreateMacro( SbModule* pModule, const OUString& rMacroName )
 }
 
 bool RenameDialog (
-    vcl::Window* pErrorParent,
+    weld::Widget* pErrorParent,
     ScriptDocument const& rDocument,
     OUString const& rLibName,
     OUString const& rOldName,
@@ -143,16 +143,18 @@ bool RenameDialog (
 
     if ( rDocument.hasDialog( rLibName, rNewName ) )
     {
-        ScopedVclPtrInstance< MessageDialog > aError(pErrorParent, IDEResId(RID_STR_SBXNAMEALLREADYUSED2));
-        aError->Execute();
+        std::unique_ptr<weld::MessageDialog> xError(Application::CreateMessageDialog(pErrorParent,
+                                                    VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_SBXNAMEALLREADYUSED2)));
+        xError->run();
         return false;
     }
 
     // #i74440
     if ( rNewName.isEmpty() )
     {
-        ScopedVclPtrInstance< MessageDialog > aError(pErrorParent, IDEResId(RID_STR_BADSBXNAME));
-        aError->Execute();
+        std::unique_ptr<weld::MessageDialog> xError(Application::CreateMessageDialog(pErrorParent,
+                                                    VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_BADSBXNAME)));
+        xError->run();
         return false;
     }
 
@@ -215,17 +217,14 @@ StarBASIC* FindBasic( const SbxVariable* pVar )
 BasicManager* FindBasicManager( StarBASIC const * pLib )
 {
     ScriptDocuments aDocuments( ScriptDocument::getAllScriptDocuments( ScriptDocument::AllWithApplication ) );
-    for (   ScriptDocuments::const_iterator doc = aDocuments.begin();
-            doc != aDocuments.end();
-            ++doc
-        )
+    for (auto const& doc : aDocuments)
     {
-        BasicManager* pBasicMgr = doc->getBasicManager();
+        BasicManager* pBasicMgr = doc.getBasicManager();
         OSL_ENSURE( pBasicMgr, "basctl::FindBasicManager: no basic manager for the document!" );
         if ( !pBasicMgr )
             continue;
 
-        Sequence< OUString > aLibNames( doc->getLibraryNames() );
+        Sequence< OUString > aLibNames( doc.getLibraryNames() );
         sal_Int32 nLibCount = aLibNames.getLength();
         const OUString* pLibNames = aLibNames.getConstArray();
 
@@ -276,9 +275,9 @@ void StopBasic()
     if (Shell* pShell = GetShell())
     {
         Shell::WindowTable& rWindows = pShell->GetWindowTable();
-        for (Shell::WindowTableIt it = rWindows.begin(); it != rWindows.end(); ++it )
+        for (auto const& window : rWindows)
         {
-            BaseWindow* pWin = it->second;
+            BaseWindow* pWin = window.second;
             // call BasicStopped manually because the Stop-Notify
             // might not get through otherwise
             pWin->BasicStopped();

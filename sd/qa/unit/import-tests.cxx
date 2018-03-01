@@ -56,6 +56,7 @@
 #include <com/sun/star/animations/XAnimationNode.hpp>
 #include <com/sun/star/animations/XAnimate.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/chart/DataLabelPlacement.hpp>
 #include <com/sun/star/chart/XChartDocument.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
@@ -67,6 +68,8 @@
 #include <com/sun/star/table/BorderLineStyle.hpp>
 #include <com/sun/star/table/BorderLine2.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
+#include <com/sun/star/style/LineSpacing.hpp>
+#include <com/sun/star/style/LineSpacingMode.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
 #include <com/sun/star/table/XTableRows.hpp>
 #include <com/sun/star/style/NumberingType.hpp>
@@ -171,6 +174,12 @@ public:
     void testTdf100065();
     void testTdf90626();
     void testTdf114488();
+    void testTdf114913();
+    void testTdf114821();
+    void testTdf115394();
+    void testTdf115394PPT();
+    void testTdf51340();
+    void testTdf115639();
 
     bool checkPattern(sd::DrawDocShellRef const & rDocRef, int nShapeNumber, std::vector<sal_uInt8>& rExpected);
     void testPatternImport();
@@ -246,6 +255,12 @@ public:
     CPPUNIT_TEST(testTdf100065);
     CPPUNIT_TEST(testTdf90626);
     CPPUNIT_TEST(testTdf114488);
+    CPPUNIT_TEST(testTdf114913);
+    CPPUNIT_TEST(testTdf114821);
+    CPPUNIT_TEST(testTdf115394);
+    CPPUNIT_TEST(testTdf115394PPT);
+    CPPUNIT_TEST(testTdf51340);
+    CPPUNIT_TEST(testTdf115639);
 
     CPPUNIT_TEST_SUITE_END();
 };
@@ -607,7 +622,7 @@ void SdImportTest::testFdo68594()
     const SvxColorItem *pC = &pTxtObj->GetMergedItem(EE_CHAR_COLOR);
     CPPUNIT_ASSERT_MESSAGE( "no color item", pC != nullptr);
     // Color should be black
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Placeholder color mismatch", static_cast<ColorData>(0), pC->GetValue().GetColor());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Placeholder color mismatch", sal_uInt32(0), sal_uInt32(pC->GetValue()) );
 
     xDocShRef->DoClose();
 }
@@ -1004,7 +1019,7 @@ void SdImportTest::testBnc904423()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
                 pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x00CC99), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x00CC99), sal_uInt32(rColorItem.GetColorValue()));
     }
 
     // Second shape's background color is defined by theme
@@ -1017,7 +1032,7 @@ void SdImportTest::testBnc904423()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
                 pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x3333CC), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x3333CC), sal_uInt32(rColorItem.GetColorValue()));
     }
 
     // Third shape's background color is defined by direct formatting
@@ -1030,7 +1045,7 @@ void SdImportTest::testBnc904423()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
                 pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0xFF0000), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0xFF0000), sal_uInt32(rColorItem.GetColorValue()));
     }
 
     xDocShRef->DoClose();
@@ -1054,7 +1069,7 @@ void SdImportTest::testShapeLineStyle()
 
         const XLineColorItem& rColorItem = dynamic_cast<const XLineColorItem&>(
                 pObj->GetMergedItem(XATTR_LINECOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0xFF0000), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0xFF0000), sal_uInt32(rColorItem.GetColorValue()));
 
         const XLineWidthItem& rWidthItem = dynamic_cast<const XLineWidthItem&>(
                 pObj->GetMergedItem(XATTR_LINEWIDTH));
@@ -1072,7 +1087,7 @@ void SdImportTest::testShapeLineStyle()
 
         const XLineColorItem& rColorItem = dynamic_cast<const XLineColorItem&>(
                 pObj->GetMergedItem(XATTR_LINECOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x3333CC), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x3333CC), sal_uInt32(rColorItem.GetColorValue()));
 
         const XLineWidthItem& rWidthItem = dynamic_cast<const XLineWidthItem&>(
                 pObj->GetMergedItem(XATTR_LINEWIDTH));
@@ -1090,7 +1105,7 @@ void SdImportTest::testShapeLineStyle()
 
         const XLineColorItem& rColorItem = dynamic_cast<const XLineColorItem&>(
                 pObj->GetMergedItem(XATTR_LINECOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x7030A0), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x7030A0), sal_uInt32(rColorItem.GetColorValue()));
 
         const XLineWidthItem& rWidthItem = dynamic_cast<const XLineWidthItem&>(
                 pObj->GetMergedItem(XATTR_LINEWIDTH));
@@ -1371,7 +1386,7 @@ void SdImportTest::testTdf93124()
         {
             for (long nX = 34; nX < (34 + 43); ++nX)
             {
-                const Color aColor = pReadAccess->GetColor(nY, nX);
+                const Color aColor = pReadAccess->GetColor(nY, nX).GetColor();
                 if ((aColor.GetRed() != 0xff) || (aColor.GetGreen() != 0xff) || (aColor.GetBlue() != 0xff))
                     ++nNonWhiteCount;
             }
@@ -1430,7 +1445,7 @@ void SdImportTest::testTdf99729()
         {
             for (long nY = 16; nY < (16 + 96); ++nY)
             {
-                const Color aColor = pRead->GetColor(nY, nX);
+                const Color aColor = pRead->GetColor(nY, nX).GetColor();
                 if ((aColor.GetRed() != 0xff) || (aColor.GetGreen() != 0xff) || (aColor.GetBlue() != 0xff))
                     ++nonwhitecounts[i];
             }
@@ -1484,7 +1499,7 @@ void SdImportTest::testTdf95932()
     CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
     const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
         pObj->GetMergedItem(XATTR_FILLCOLOR));
-    CPPUNIT_ASSERT_EQUAL(ColorData(0x76bf3d), rColorItem.GetColorValue().GetColor());
+    CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x76bf3d), sal_uInt32(rColorItem.GetColorValue()));
 
     xDocShRef->DoClose();
 }
@@ -1693,7 +1708,7 @@ void SdImportTest::testTdf104015()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
                 pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0xFF0000), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0xFF0000), sal_uInt32(rColorItem.GetColorValue()));
     }
     // Should have a blue line
     {
@@ -1703,7 +1718,7 @@ void SdImportTest::testTdf104015()
 
         const XLineColorItem& rColorItem = dynamic_cast<const XLineColorItem&>(
                 pObj->GetMergedItem(XATTR_LINECOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x0000FF), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x0000FF), sal_uInt32(rColorItem.GetColorValue()));
     }
     // Should have some shadow
     {
@@ -1732,7 +1747,7 @@ void SdImportTest::testTdf104201()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
             pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x00FF00), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x00FF00), sal_uInt32(rColorItem.GetColorValue()));
     }
     // Second shape has blue fill, but this should be overwritten by green group fill
     {
@@ -1743,7 +1758,7 @@ void SdImportTest::testTdf104201()
         CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_SOLID, rStyleItem.GetValue());
         const XFillColorItem& rColorItem = dynamic_cast<const XFillColorItem&>(
             pObj->GetMergedItem(XATTR_FILLCOLOR));
-        CPPUNIT_ASSERT_EQUAL(ColorData(0x00FF00), rColorItem.GetColorValue().GetColor());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x00FF00), sal_uInt32(rColorItem.GetColorValue()));
     }
 }
 
@@ -1851,9 +1866,10 @@ bool checkPatternValues(std::vector<sal_uInt8>& rExpected, Bitmap& rBitmap)
     Bitmap::ScopedReadAccess pAccess(rBitmap);
     for (long y = 0; y < pAccess->Height(); ++y)
     {
+        Scanline pScanline = pAccess->GetScanline( y );
         for (long x = 0; x < pAccess->Width(); ++x)
         {
-            Color aColor = pAccess->GetPixel(y, x);
+            Color aColor = pAccess->GetPixelFromData(pScanline, x).GetColor();
             sal_uInt8 aValue = rExpected[y*8+x];
 
             if (aValue == 1 && aColor != aFGColor)
@@ -2307,13 +2323,197 @@ void SdImportTest::testTdf90626()
 void SdImportTest::testTdf114488()
 {
     // This doc has two images - one WMF and the other PNG (fallback image).
-    // When loading this doc, the WMF image should be prefered over the PNG image.
+    // When loading this doc, the WMF image should be preferred over the PNG image.
     sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odg/tdf114488.fodg"), FODG);
-    uno::Reference< beans::XPropertySet > xShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    OUString sGraphicUrl;
-    xShape->getPropertyValue("GraphicURL") >>= sGraphicUrl;
-    OUString sMimeType(comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageUrl(sGraphicUrl));
+    uno::Reference<beans::XPropertySet> xShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xShape->getPropertyValue("Graphic") >>= xGraphic;
+    CPPUNIT_ASSERT(xGraphic.is());
+    Graphic aGraphic(xGraphic);
+    OUString sMimeType(comphelper::GraphicMimeTypeHelper::GetMimeTypeForXGraphic(xGraphic));
     CPPUNIT_ASSERT_EQUAL(OUString("image/x-wmf"), sMimeType);
+}
+
+void SdImportTest::testTdf114913()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf114913.pptx"), PPTX);
+    SdrTextObj *pTxtObj = dynamic_cast<SdrTextObj *>(GetPage(1, xDocShRef)->GetObj(1));
+    CPPUNIT_ASSERT_MESSAGE("No text object", pTxtObj != nullptr);
+    const SvxNumBulletItem *pItem = pTxtObj->GetOutlinerParaObject()->GetTextObject().GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
+    CPPUNIT_ASSERT(pItem);
+    CPPUNIT_ASSERT_EQUAL(long(691), pItem->GetNumRule()->GetLevel(0).GetGraphicSize().getHeight());
+
+    xDocShRef->DoClose();
+}
+
+void SdImportTest::testTdf114821()
+{
+    css::uno::Any aAny;
+    sd::DrawDocShellRef xDocShRef = loadURL( m_directories.getURLFromSrc( "/sd/qa/unit/data/pptx/tdf114821.pptx" ), PPTX );
+
+    uno::Reference< beans::XPropertySet > xPropSet( getShapeFromPage( 0, 0, xDocShRef ) );
+    aAny = xPropSet->getPropertyValue( "Model" );
+    CPPUNIT_ASSERT_MESSAGE( "The shape doesn't have the property", aAny.hasValue() );
+
+    uno::Reference< chart::XChartDocument > xChartDoc;
+    aAny >>= xChartDoc;
+    CPPUNIT_ASSERT_MESSAGE( "failed to load chart", xChartDoc.is() );
+    uno::Reference< chart2::XChartDocument > xChart2Doc( xChartDoc, uno::UNO_QUERY );
+    CPPUNIT_ASSERT_MESSAGE( "failed to load chart", xChart2Doc.is() );
+
+    uno::Reference< chart2::XCoordinateSystemContainer > xBCooSysCnt( xChart2Doc->getFirstDiagram(), uno::UNO_QUERY );
+    uno::Sequence< uno::Reference< chart2::XCoordinateSystem > > aCooSysSeq( xBCooSysCnt->getCoordinateSystems() );
+    uno::Reference< chart2::XChartTypeContainer > xCTCnt( aCooSysSeq[0], uno::UNO_QUERY );
+
+    uno::Reference< chart2::XDataSeriesContainer > xDSCnt( xCTCnt->getChartTypes()[0], uno::UNO_QUERY );
+    CPPUNIT_ASSERT_MESSAGE( "failed to load data series", xDSCnt.is() );
+    uno::Sequence< uno::Reference< chart2::XDataSeries > > aSeriesSeq( xDSCnt->getDataSeries() );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Invalid Series count", static_cast<sal_Int32>( 1 ), aSeriesSeq.getLength() );
+
+    // Check the first label
+    const css::uno::Reference< css::beans::XPropertySet >& rPropSet0( aSeriesSeq[0]->getDataPointByIndex( 0 ) );
+    CPPUNIT_ASSERT( rPropSet0.is() );
+    sal_Int32 aPlacement;
+    rPropSet0->getPropertyValue( "LabelPlacement" ) >>= aPlacement;
+    CPPUNIT_ASSERT_EQUAL( css::chart::DataLabelPlacement::TOP, aPlacement );
+
+    // Check the second label
+    const css::uno::Reference< css::beans::XPropertySet >& rPropSet1( aSeriesSeq[0]->getDataPointByIndex( 1 ) );
+    CPPUNIT_ASSERT( rPropSet1.is() );
+    rPropSet1->getPropertyValue( "LabelPlacement" ) >>= aPlacement;
+    CPPUNIT_ASSERT_EQUAL( css::chart::DataLabelPlacement::CENTER, aPlacement );
+
+    // Check the third label
+    const css::uno::Reference< css::beans::XPropertySet >& rPropSet2( aSeriesSeq[0]->getDataPointByIndex( 2 ) );
+    CPPUNIT_ASSERT( rPropSet2.is() );
+    rPropSet2->getPropertyValue( "LabelPlacement") >>= aPlacement;
+    CPPUNIT_ASSERT_EQUAL( css::chart::DataLabelPlacement::TOP, aPlacement );
+
+    xDocShRef->DoClose();
+}
+
+void SdImportTest::testTdf115394()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/tdf115394.pptx"), PPTX);
+    double fTransitionDuration;
+
+    // Slow in MS formats
+    SdPage* pPage1 = xDocShRef->GetDoc()->GetSdPage(0, PageKind::Standard);
+    fTransitionDuration = pPage1->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(1.0, fTransitionDuration);
+
+    // Medium in MS formats
+    SdPage* pPage2 = xDocShRef->GetDoc()->GetSdPage(1, PageKind::Standard);
+    fTransitionDuration = pPage2->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.75, fTransitionDuration);
+
+    // Fast in MS formats
+    SdPage* pPage3 = xDocShRef->GetDoc()->GetSdPage(2, PageKind::Standard);
+    fTransitionDuration = pPage3->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.5, fTransitionDuration);
+
+    // Custom values
+    SdPage* pPage4 = xDocShRef->GetDoc()->GetSdPage(3, PageKind::Standard);
+    fTransitionDuration = pPage4->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.25, fTransitionDuration);
+
+    SdPage* pPage5 = xDocShRef->GetDoc()->GetSdPage(4, PageKind::Standard);
+    fTransitionDuration = pPage5->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(4.25, fTransitionDuration);
+
+    xDocShRef->DoClose();
+}
+
+void SdImportTest::testTdf115394PPT()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/ppt/tdf115394.ppt"), PPT);
+    double fTransitionDuration;
+
+    // Fast
+    SdPage* pPage1 = xDocShRef->GetDoc()->GetSdPage(0, PageKind::Standard);
+    fTransitionDuration = pPage1->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.5, fTransitionDuration);
+
+    // Medium
+    SdPage* pPage2 = xDocShRef->GetDoc()->GetSdPage(1, PageKind::Standard);
+    fTransitionDuration = pPage2->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.75, fTransitionDuration);
+
+    // Slow
+    SdPage* pPage3 = xDocShRef->GetDoc()->GetSdPage(2, PageKind::Standard);
+    fTransitionDuration = pPage3->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(1.0, fTransitionDuration);
+
+    xDocShRef->DoClose();
+}
+
+void SdImportTest::testTdf51340()
+{
+    // Line spacing was not inherited from upper levels (slide layout, master slide)
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/tdf51340.pptx"), PPTX);
+    uno::Reference< beans::XPropertySet > xShape( getShapeFromPage( 1, 0, xDocShRef ) );
+
+    // First paragraph has a 90% line spacing set on master slide
+    uno::Reference<text::XTextRange> xParagraph( getParagraphFromShape( 0, xShape ) );
+    uno::Reference< beans::XPropertySet > xPropSet( xParagraph, uno::UNO_QUERY_THROW );
+    css::style::LineSpacing aSpacing;
+    xPropSet->getPropertyValue( "ParaLineSpacing" ) >>= aSpacing;
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(css::style::LineSpacingMode::PROP), aSpacing.Mode );
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(90), aSpacing.Height );
+
+    // Second paragraph has a 125% line spacing set on slide layout
+    xParagraph.set( getParagraphFromShape( 1, xShape ) );
+    xPropSet.set( xParagraph, uno::UNO_QUERY_THROW );
+    xPropSet->getPropertyValue( "ParaLineSpacing" ) >>= aSpacing;
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(css::style::LineSpacingMode::PROP), aSpacing.Mode );
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(125), aSpacing.Height );
+
+    // Third paragraph has a 70% line spacing set directly on normal slide (master slide property is overridden)
+    xParagraph.set( getParagraphFromShape( 2, xShape ) );
+    xPropSet.set( xParagraph, uno::UNO_QUERY_THROW );
+    xPropSet->getPropertyValue( "ParaLineSpacing" ) >>= aSpacing;
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(css::style::LineSpacingMode::PROP), aSpacing.Mode );
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(70), aSpacing.Height );
+
+    // Fourth paragraph has a 190% line spacing set directly on normal slide (slide layout property is overridden)
+    xParagraph.set( getParagraphFromShape( 3, xShape ) );
+    xPropSet.set( xParagraph, uno::UNO_QUERY_THROW );
+    xPropSet->getPropertyValue( "ParaLineSpacing" ) >>= aSpacing;
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(css::style::LineSpacingMode::PROP), aSpacing.Mode );
+    CPPUNIT_ASSERT_EQUAL( static_cast<sal_Int16>(190), aSpacing.Height );
+
+    xDocShRef->DoClose();
+}
+
+
+void SdImportTest::testTdf115639()
+{
+    // Check whether the new compatibility option is loaded correctly
+    // For PPTX we have the flag enabled by default
+    {
+        sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/tdf115639.pptx"), PPTX);
+        SdDrawDocument *pDoc = xDocShRef->GetDoc();
+        CPPUNIT_ASSERT_MESSAGE( "no document", pDoc != nullptr );
+        CPPUNIT_ASSERT( pDoc->IsHoriAlignIgnoreTrailingWhitespace() );
+    }
+
+    // For PPT we have the flag enabled by default
+    {
+        sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/ppt/tdf115639.ppt"), PPT);
+        SdDrawDocument *pDoc = xDocShRef->GetDoc();
+        CPPUNIT_ASSERT_MESSAGE( "no document", pDoc != nullptr );
+        CPPUNIT_ASSERT( pDoc->IsHoriAlignIgnoreTrailingWhitespace() );
+        xDocShRef->DoClose();
+    }
+
+    // For ODP we have the flag disabled by default
+    {
+        sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/odp/tdf115639.odp"), ODP);
+        SdDrawDocument *pDoc = xDocShRef->GetDoc();
+        CPPUNIT_ASSERT_MESSAGE( "no document", pDoc != nullptr );
+        CPPUNIT_ASSERT( !pDoc->IsHoriAlignIgnoreTrailingWhitespace() );
+        xDocShRef->DoClose();
+    }
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdImportTest);

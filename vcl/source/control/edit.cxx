@@ -26,7 +26,7 @@
 #include <vcl/virdev.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/edit.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/uitest/uiobject.hxx>
@@ -536,7 +536,7 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
 
     bool bDrawSelection = maSelection.Len() && (HasFocus() || (GetStyle() & WB_NOHIDESELECTION) || mbActivePopup);
 
-    aPos.X() = mnXOffset + ImplGetExtraXOffset();
+    aPos.setX( mnXOffset + ImplGetExtraXOffset() );
     if (bPaintPlaceholderText)
     {
         rRenderContext.DrawText(aPos, maPlaceholderText);
@@ -558,8 +558,8 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
         for(sal_Int32 i = 0; i < nLen; ++i)
         {
             tools::Rectangle aRect(aPos, Size(10, nTH));
-            aRect.Left() = pDX[2 * i] + mnXOffset + ImplGetExtraXOffset();
-            aRect.Right() = pDX[2 * i + 1] + mnXOffset + ImplGetExtraXOffset();
+            aRect.SetLeft( pDX[2 * i] + mnXOffset + ImplGetExtraXOffset() );
+            aRect.SetRight( pDX[2 * i + 1] + mnXOffset + ImplGetExtraXOffset() );
             aRect.Justify();
             bool bHighlight = false;
             if (i >= aTmpSel.Min() && i < aTmpSel.Max())
@@ -636,8 +636,8 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
                     while (nIndex < mpIMEInfos->nLen && mpIMEInfos->pAttribs[nIndex] == nAttr)  // #112631# check nIndex before using it
                     {
                         tools::Rectangle aRect( aPos, Size( 10, nTH ) );
-                        aRect.Left() = pDX[2 * (nIndex + mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset();
-                        aRect.Right() = pDX[2 * (nIndex + mpIMEInfos->nPos) + 1] + mnXOffset + ImplGetExtraXOffset();
+                        aRect.SetLeft( pDX[2 * (nIndex + mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset() );
+                        aRect.SetRight( pDX[2 * (nIndex + mpIMEInfos->nPos) + 1] + mnXOffset + ImplGetExtraXOffset() );
                         aRect.Justify();
                         aClip.Union(aRect);
                         nIndex++;
@@ -658,14 +658,14 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
                         else if (nAttr & ExtTextInputAttr::GrayWaveline)
                         {
                             aFont.SetUnderline(LINESTYLE_WAVE);
-                            rRenderContext.SetTextLineColor(Color(COL_LIGHTGRAY));
+                            rRenderContext.SetTextLineColor(COL_LIGHTGRAY);
                         }
                         rRenderContext.SetFont(aFont);
 
                         if (nAttr & ExtTextInputAttr::RedText)
-                            rRenderContext.SetTextColor(Color(COL_RED));
+                            rRenderContext.SetTextColor(COL_RED);
                         else if (nAttr & ExtTextInputAttr::HalfToneText)
-                            rRenderContext.SetTextColor(Color(COL_LIGHTGRAY));
+                            rRenderContext.SetTextColor(COL_LIGHTGRAY);
 
                         rRenderContext.SetClipRegion(aClip);
                         rRenderContext.DrawText(aPos, aText, 0, nLen);
@@ -777,10 +777,11 @@ uno::Reference < i18n::XExtendedInputSequenceChecker > const & Edit::ImplGetInpu
     return mxISC;
 }
 
-void Edit::ShowTruncationWarning( vcl::Window* pParent )
+void Edit::ShowTruncationWarning(weld::Widget* pParent)
 {
-    ScopedVclPtrInstance< MessageDialog > aBox(pParent, VclResId(SV_EDIT_WARNING_STR), VclMessageType::Warning);
-    aBox->Execute();
+    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent, VclMessageType::Warning,
+                                              VclButtonsType::Ok, VclResId(SV_EDIT_WARNING_STR)));
+    xBox->run();
 }
 
 bool Edit::ImplTruncateToMaxLen( OUString& rStr, sal_Int32 nSelectionLen ) const
@@ -984,10 +985,9 @@ void Edit::ImplClearBackground(vcl::RenderContext& rRenderContext, const tools::
     /*
     * note: at this point the cursor must be switched off already
     */
-    Point aTmpPoint;
-    tools::Rectangle aRect(aTmpPoint, GetOutputSizePixel());
-    aRect.Left() = nXStart;
-    aRect.Right() = nXEnd;
+    tools::Rectangle aRect(Point(), GetOutputSizePixel());
+    aRect.SetLeft( nXStart );
+    aRect.SetRight( nXEnd );
 
     if( !(ImplUseNativeBorder(rRenderContext, GetStyle()) || IsPaintTransparent()))
         rRenderContext.Erase(aRect);
@@ -1006,10 +1006,9 @@ void Edit::ImplPaintBorder(vcl::RenderContext const & rRenderContext, long nXSta
     if (SupportsDoubleBuffering())
         return;
 
-    Point aTmpPoint;
-    tools::Rectangle aRect(aTmpPoint, GetOutputSizePixel());
-    aRect.Left() = nXStart;
-    aRect.Right() = nXEnd;
+    tools::Rectangle aRect(Point(), GetOutputSizePixel());
+    aRect.SetLeft( nXStart );
+    aRect.SetRight( nXEnd );
 
     if (ImplUseNativeBorder(rRenderContext, GetStyle()) || IsPaintTransparent())
     {
@@ -1125,7 +1124,7 @@ void Edit::ImplShowCursor( bool bOnlyIfVisible )
             {
                 long nMaxNegX = (aOutSize.Width()-ImplGetExtraXOffset()) - GetTextWidth( aText );
                 mnXOffset -= aOutSize.Width() / 5;
-                if ( mnXOffset < nMaxNegX )  // both negativ...
+                if ( mnXOffset < nMaxNegX )  // both negative...
                     mnXOffset = nMaxNegX;
             }
         }
@@ -1306,7 +1305,7 @@ void Edit::ImplPaste( uno::Reference< datatransfer::clipboard::XClipboard > cons
                 OUString aText;
                 aData >>= aText;
                 if( ImplTruncateToMaxLen( aText, maSelection.Len() ) )
-                    ShowTruncationWarning( this );
+                    ShowTruncationWarning(GetFrameWeld());
                 ReplaceSelected( aText );
             }
             catch( const css::uno::Exception& )
@@ -1774,7 +1773,7 @@ void Edit::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize, DrawF
 
     // Content
     if ( ( nFlags & DrawFlags::Mono ) || ( eOutDevType == OUTDEV_PRINTER ) )
-        pDev->SetTextColor( Color( COL_BLACK ) );
+        pDev->SetTextColor( COL_BLACK );
     else
     {
         if ( !(nFlags & DrawFlags::NoDisable ) && !IsEnabled() )
@@ -1800,8 +1799,8 @@ void Edit::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize, DrawF
     else
         nTextStyle |= DrawTextFlags::Left;
 
-    aTextRect.Left() += nOffX;
-    aTextRect.Right() -= nOffX;
+    aTextRect.AdjustLeft(nOffX );
+    aTextRect.AdjustRight( -nOffX );
 
     OUString    aText = ImplGetText();
     long        nTextHeight = pDev->GetTextHeight();
@@ -1815,7 +1814,7 @@ void Edit::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize, DrawF
     {
         tools::Rectangle aClip( aPos, aSize );
         if ( nTextHeight > aSize.Height() )
-            aClip.Bottom() += nTextHeight-aSize.Height()+1;  // prevent HP printers from 'optimizing'
+            aClip.AdjustBottom(nTextHeight-aSize.Height()+1 );  // prevent HP printers from 'optimizing'
         pDev->IntersectClipRegion( aClip );
     }
 
@@ -1978,7 +1977,7 @@ void Edit::Command( const CommandEvent& rCEvt )
         pPopup->EnableItem(pPopup->GetItemId("undo"), maUndoText != maText.getStr());
         bool bAllSelected = maSelection.Min() == 0 && maSelection.Max() == maText.getLength();
         pPopup->EnableItem(pPopup->GetItemId("selectall"), !bAllSelected);
-        pPopup->ShowItem(pPopup->GetItemId("specialchar"), pImplFncGetSpecialChars);
+        pPopup->ShowItem(pPopup->GetItemId("specialchar"), pImplFncGetSpecialChars != nullptr);
 
         mbActivePopup = true;
         Selection aSaveSel = GetSelection(); // if someone changes selection in Get/LoseFocus, e.g. URL bar
@@ -2151,7 +2150,7 @@ void Edit::Command( const CommandEvent& rCEvt )
             for ( int nIndex = 0; nIndex < mpIMEInfos->nLen; ++nIndex )
             {
                 tools::Rectangle aRect( aPos, Size( 10, nTH ) );
-                aRect.Left() = pDX[2*(nIndex+mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset();
+                aRect.SetLeft( pDX[2*(nIndex+mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset() );
                 aRects[ nIndex ] = aRect;
             }
             SetCompositionCharRect( aRects.get(), mpIMEInfos->nLen );
@@ -2706,9 +2705,9 @@ Size Edit::CalcMinimumSizeForText(const OUString &rString) const
         else
             aString = rString;
 
-        aSize.Height() = GetTextHeight();
-        aSize.Width() = GetTextWidth(aString);
-        aSize.Width() += ImplGetExtraXOffset() * 2;
+        aSize.setHeight( GetTextHeight() );
+        aSize.setWidth( GetTextWidth(aString) );
+        aSize.AdjustWidth(ImplGetExtraXOffset() * 2 );
 
         // do not create edit fields in which one cannot enter anything
         // a default minimum width should exist for at least 3 characters
@@ -2717,10 +2716,10 @@ Size Edit::CalcMinimumSizeForText(const OUString &rString) const
         //function, so undo the first one with CalcOutputSize
         Size aMinSize(CalcOutputSize(CalcSize(3)));
         if (aSize.Width() < aMinSize.Width())
-            aSize.Width() = aMinSize.Width();
+            aSize.setWidth( aMinSize.Width() );
     }
 
-    aSize.Height() += ImplGetExtraYOffset() * 2;
+    aSize.AdjustHeight(ImplGetExtraYOffset() * 2 );
 
     aSize = CalcWindowSize( aSize );
 
@@ -2732,7 +2731,7 @@ Size Edit::CalcMinimumSizeForText(const OUString &rString) const
                                aControlValue, aBound, aContent))
     {
         if (aBound.GetHeight() > aSize.Height())
-            aSize.Height() = aBound.GetHeight();
+            aSize.setHeight( aBound.GetHeight() );
     }
     return aSize;
 }
@@ -2760,8 +2759,8 @@ Size Edit::CalcSize(sal_Int32 nChars) const
     // width for N characters, independent from content.
     // works only correct for fixed fonts, average otherwise
     Size aSz( GetTextWidth( "x" ), GetTextHeight() );
-    aSz.Width() *= nChars;
-    aSz.Width() += ImplGetExtraXOffset() * 2;
+    aSz.setWidth( aSz.Width() * nChars );
+    aSz.AdjustWidth(ImplGetExtraXOffset() * 2 );
     aSz = CalcWindowSize( aSz );
     return aSz;
 }

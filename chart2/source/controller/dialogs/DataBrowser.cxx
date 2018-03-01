@@ -36,7 +36,7 @@
 #include <vcl/fixed.hxx>
 #include <vcl/image.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include <rtl/math.hxx>
 
@@ -130,8 +130,12 @@ void SeriesHeaderEdit::MouseButtonDown( const MouseEvent& rMEvt )
     Edit::MouseButtonDown( rMEvt );
 
     if( m_bShowWarningBox )
-        ScopedVclPtrInstance<WarningBox>(this, MessBoxStyle::Ok,
-                   SchResId(STR_INVALID_NUMBER))->Execute();
+    {
+        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Warning, VclButtonsType::Ok,
+                                                   SchResId(STR_INVALID_NUMBER)));
+        xWarn->run();
+    }
 }
 
 class SeriesHeader
@@ -751,15 +755,18 @@ void DataBrowser::MouseButtonDown( const BrowserMouseEvent& rEvt )
 
 void DataBrowser::ShowWarningBox()
 {
-    ScopedVclPtrInstance<WarningBox>(this, MessBoxStyle::Ok,
-                                     SchResId(STR_INVALID_NUMBER))->Execute();
+    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                               VclMessageType::Warning, VclButtonsType::Ok,
+                                               SchResId(STR_INVALID_NUMBER)));
+    xWarn->run();
 }
 
 bool DataBrowser::ShowQueryBox()
 {
-    ScopedVclPtrInstance<QueryBox> pQueryBox(this, MessBoxStyle::YesNo, SchResId(STR_DATA_EDITOR_INCORRECT_INPUT));
-
-    return pQueryBox->Execute() == RET_YES;
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                   SchResId(STR_DATA_EDITOR_INCORRECT_INPUT)));
+    return xQueryBox->run() == RET_YES;
 }
 
 bool DataBrowser::IsDataValid()
@@ -1006,7 +1013,7 @@ void DataBrowser::PaintCell(
     OutputDevice& rDev, const tools::Rectangle& rRect, sal_uInt16 nColumnId ) const
 {
     Point aPos( rRect.TopLeft());
-    aPos.X() += 1;
+    aPos.AdjustX(1 );
 
     OUString aText = GetCellText( m_nSeekRow, nColumnId );
     Size TxtSize( GetDataWindow().GetTextWidth( aText ), GetDataWindow().GetTextHeight());

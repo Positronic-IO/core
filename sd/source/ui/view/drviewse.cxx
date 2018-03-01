@@ -33,7 +33,7 @@
 #include <vcl/waitobj.hxx>
 #include <svl/aeitem.hxx>
 #include <editeng/editstat.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/urlbmk.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/fmshell.hxx>
@@ -57,7 +57,6 @@
 #include <tools/urlobj.hxx>
 #include <svl/slstitm.hxx>
 #include <sfx2/ipclient.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <avmedia/mediawindow.hxx>
 #include <svl/urihelper.hxx>
 #include <sfx2/docfile.hxx>
@@ -280,8 +279,8 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                         ::tools::Rectangle aVisArea = GetActiveWindow()->PixelToLogic(::tools::Rectangle(Point(0,0), GetActiveWindow()->GetOutputSizePixel()));
                         Point aObjPos(aVisArea.Center());
                         Size aObjSize(pNewDBField->GetLogicRect().GetSize());
-                        aObjPos.X() -= aObjSize.Width() / 2;
-                        aObjPos.Y() -= aObjSize.Height() / 2;
+                        aObjPos.AdjustX( -(aObjSize.Width() / 2) );
+                        aObjPos.AdjustY( -(aObjSize.Height() / 2) );
                         ::tools::Rectangle aNewObjectRectangle(aObjPos, aObjSize);
 
                         pNewDBField->SetLogicRect(aNewObjectRectangle);
@@ -325,18 +324,25 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 if ( mpDrawView->GetMarkedObjectList().GetMarkCount() > 0 &&
                     !mpDrawView->IsCrookAllowed( mpDrawView->IsCrookNoContortion() ) )
                 {
+                    ::sd::Window* pWindow = GetActiveWindow();
                     if ( mpDrawView->IsPresObjSelected() )
                     {
-                        ::sd::Window* pWindow = GetActiveWindow();
-                        ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE) )->Execute();
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                                      SdResId(STR_ACTION_NOTPOSSIBLE)));
+                        xInfoBox->run();
                     }
-                    else if ( ScopedVclPtrInstance<QueryBox>(GetActiveWindow(), MessBoxStyle::YesNo,
-                                      SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)
-                                      )->Execute() == RET_YES )
+                    else
                     {
-                        // implicit transformation into bezier
-                        WaitObject aWait( GetActiveWindow() );
-                        mpDrawView->ConvertMarkedToPathObj(false);
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)));
+                        if (xQueryBox->run() == RET_YES )
+                        {
+                            // implicit transformation into bezier
+                            WaitObject aWait( GetActiveWindow() );
+                            mpDrawView->ConvertMarkedToPathObj(false);
+                        }
                     }
                 }
             }
@@ -362,18 +368,25 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 if ( nMarkCnt > 0 && !b3DObjMarked &&
                      (!mpDrawView->IsShearAllowed() || !mpDrawView->IsDistortAllowed()) )
                 {
+                    ::sd::Window* pWindow = GetActiveWindow();
                     if ( mpDrawView->IsPresObjSelected() )
                     {
-                        ::sd::Window* pWindow = GetActiveWindow();
-                        ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE) )->Execute();
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                                      SdResId(STR_ACTION_NOTPOSSIBLE)));
+                        xInfoBox->run();
                     }
-                    else if ( ScopedVclPtrInstance<QueryBox>(GetActiveWindow(), MessBoxStyle::YesNo,
-                                      SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)
-                                      )->Execute() == RET_YES )
+                    else
                     {
-                        // implicit transformation into bezier
-                        WaitObject aWait( GetActiveWindow() );
-                        mpDrawView->ConvertMarkedToPathObj(false);
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                                       SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)));
+                        if (xQueryBox->run() == RET_YES)
+                        {
+                            // implicit transformation into bezier
+                            WaitObject aWait( GetActiveWindow() );
+                            mpDrawView->ConvertMarkedToPathObj(false);
+                        }
                     }
                 }
             }
@@ -592,8 +605,8 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         // calc position and size
         ::tools::Rectangle aVisArea = GetActiveWindow()->PixelToLogic(::tools::Rectangle(Point(0,0), GetActiveWindow()->GetOutputSizePixel()));
         Point aPagePos = aVisArea.Center();
-        aPagePos.X() -= nDefaultObjectSizeWidth / 2;
-        aPagePos.Y() -= nDefaultObjectSizeHeight / 2;
+        aPagePos.AdjustX( -sal_Int32(nDefaultObjectSizeWidth / 2) );
+        aPagePos.AdjustY( -sal_Int32(nDefaultObjectSizeHeight / 2) );
         ::tools::Rectangle aNewObjectRectangle(aPagePos, Size(nDefaultObjectSizeWidth, nDefaultObjectSizeHeight));
         SdrPageView* pPageView = mpDrawView->GetSdrPageView();
 
@@ -671,7 +684,10 @@ void DrawViewShell::FuDeleteSelectedObjects()
     if (mpDrawView->IsPresObjSelected(false, true, false, true))
     {
         ::sd::Window* pWindow = GetActiveWindow();
-        ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE) )->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      SdResId(STR_ACTION_NOTPOSSIBLE)));
+        xInfoBox->run();
         bConsumed = true;
     }
 
@@ -785,7 +801,10 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected(false, true, false, true) )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -807,7 +826,10 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
             if ( mpDrawView->IsPresObjSelected(false, true, false, true) )
             {
                 ::sd::Window* pWindow = GetActiveWindow();
-                ScopedVclPtrInstance<InfoBox>(pWindow, SdResId(STR_ACTION_NOTPOSSIBLE))->Execute();
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              SdResId(STR_ACTION_NOTPOSSIBLE)));
+                xInfoBox->run();
             }
             else
             {
@@ -1089,23 +1111,23 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
                 Point aPagePos(0, 0); // = pPageView->GetOffset();
                 Size aPageSize = pPageView->GetPage()->GetSize();
 
-                aPagePos.X() += aPageSize.Width()  / 2;
-                aPageSize.Width() = static_cast<long>(aPageSize.Width() * 1.03);
+                aPagePos.AdjustX(aPageSize.Width()  / 2 );
+                aPageSize.setWidth( static_cast<long>(aPageSize.Width() * 1.03) );
 
                 if( rReq.GetSlot() == SID_SIZE_PAGE )
                 {
-                    aPagePos.Y() += aPageSize.Height() / 2;
-                    aPageSize.Height() = static_cast<long>(aPageSize.Height() * 1.03);
-                    aPagePos.Y() -= aPageSize.Height() / 2;
+                    aPagePos.AdjustY(aPageSize.Height() / 2 );
+                    aPageSize.setHeight( static_cast<long>(aPageSize.Height() * 1.03) );
+                    aPagePos.AdjustY( -(aPageSize.Height() / 2) );
                 }
                 else
                 {
                     Point aPt = GetActiveWindow()->PixelToLogic( Point( 0, GetActiveWindow()->GetSizePixel().Height() / 2 ) );
-                    aPagePos.Y() += aPt.Y();
-                    aPageSize.Height() = 2;
+                    aPagePos.AdjustY(aPt.Y() );
+                    aPageSize.setHeight( 2 );
                 }
 
-                aPagePos.X() -= aPageSize.Width()  / 2;
+                aPagePos.AdjustX( -(aPageSize.Width()  / 2) );
 
                 SetZoomRect( ::tools::Rectangle( aPagePos, aPageSize ) );
 
@@ -1189,8 +1211,8 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
                 long nW = static_cast<long>(maMarkRect.GetWidth()  * 1.03);
                 long nH = static_cast<long>(maMarkRect.GetHeight() * 1.03);
                 Point aPos = maMarkRect.Center();
-                aPos.X() -= nW / 2;
-                aPos.Y() -= nH / 2;
+                aPos.AdjustX( -(nW / 2) );
+                aPos.AdjustY( -(nH / 2) );
                 if ( nW && nH )
                 {
                     SetZoomRect(::tools::Rectangle(aPos, Size(nW, nH)));
@@ -1221,8 +1243,8 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
                 long nW = static_cast<long>(aBoundRect.GetWidth() * 1.03);
                 long nH = static_cast<long>(aBoundRect.GetHeight() * 1.03);
                 Point aPos = aBoundRect.Center();
-                aPos.X() -= nW / 2;
-                aPos.Y() -= nH / 2;
+                aPos.AdjustX( -(nW / 2) );
+                aPos.AdjustY( -(nH / 2) );
                 if ( nW && nH )
                 {
                     SetZoomRect( ::tools::Rectangle( aPos, Size( nW, nH ) ) );
@@ -1458,8 +1480,8 @@ void DrawViewShell::InsertURLField(const OUString& rURL, const OUString& rText,
         ::tools::Rectangle aRect(aPos, GetActiveWindow()->GetOutputSizePixel() );
         aPos = aRect.Center();
         aPos = GetActiveWindow()->PixelToLogic(aPos);
-        aPos.X() -= aSize.Width() / 2;
-        aPos.Y() -= aSize.Height() / 2;
+        aPos.AdjustX( -(aSize.Width() / 2) );
+        aPos.AdjustY( -(aSize.Height() / 2) );
 
         ::tools::Rectangle aLogicRect(aPos, aSize);
         pRectObj->SetLogicRect(aLogicRect);
@@ -1554,8 +1576,8 @@ void DrawViewShell::InsertURLButton(const OUString& rURL, const OUString& rText,
         }
 
         Size aSize(4000, 1000);
-        aPos.X() -= aSize.Width() / 2;
-        aPos.Y() -= aSize.Height() / 2;
+        aPos.AdjustX( -(aSize.Width() / 2) );
+        aPos.AdjustY( -(aSize.Height() / 2) );
         pUnoCtrl->SetLogicRect(::tools::Rectangle(aPos, aSize));
 
         SdrInsertFlags nOptions = SdrInsertFlags::SETDEFLAYER;

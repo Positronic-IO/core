@@ -707,12 +707,12 @@ void PlcDrawObj::WritePlc( WW8Export& rWrt ) const
                     // #i22673#
                     sal_Int16 eOri = rVOr.GetRelationOrient();
                     if (eOri == text::RelOrientation::CHAR || eOri == text::RelOrientation::TEXT_LINE)
-                        aObjPos.Y() = -rVOr.GetPos();
+                        aObjPos.setY( -rVOr.GetPos() );
                     else
-                        aObjPos.Y() = rVOr.GetPos();
+                        aObjPos.setY( rVOr.GetPos() );
                 }
                 if (text::HoriOrientation::NONE == rHOr.GetHoriOrient())
-                    aObjPos.X() = rHOr.GetPos();
+                    aObjPos.setX( rHOr.GetPos() );
                 aRect.SetPos( aObjPos );
             }
 
@@ -1341,6 +1341,16 @@ void WW8Export::WriteOutliner(const OutlinerParaObject& rParaObj, sal_uInt8 nTyp
         OUString aStr( rEditObj.GetText( n ));
         sal_Int32 nAktPos = 0;
         const sal_Int32 nEnd = aStr.getLength();
+
+        const SfxItemSet aSet(rEditObj.GetParaAttribs(n));
+        bool bIsRTLPara = false;
+        const SfxPoolItem *pItem;
+        if(SfxItemState::SET == aSet.GetItemState(EE_PARA_WRITINGDIR, true, &pItem))
+        {
+            SvxFrameDirection nDir = static_cast<const SvxFrameDirectionItem*>(pItem)->GetValue();
+            bIsRTLPara = SvxFrameDirection::Horizontal_RL_TB == nDir;
+        }
+
         do {
             const sal_Int32 nNextAttr = std::min(aAttrIter.WhereNext(), nEnd);
 
@@ -1355,6 +1365,17 @@ void WW8Export::WriteOutliner(const OutlinerParaObject& rParaObj, sal_uInt8 nTyp
 
                                             // output of character attributes
             aAttrIter.OutAttr( nAktPos );   // nAktPos - 1 ??
+
+            if (bIsRTLPara)
+            {
+                // This is necessary to make word order correct in MS Word.
+                // In theory we should do this for complex-script runs only,
+                // but Outliner does not split runs like Writer core did.
+                // Fortunately, both MS Word and Writer seems to tolerate
+                // that we turn it on for non complex-script runs.
+                AttrOutput().OutputItem(SfxInt16Item(RES_CHRATR_BIDIRTL, 1));
+            }
+
             m_pChpPlc->AppendFkpEntry( Strm().Tell(),
                                             pO->size(), pO->data() );
             pO->clear();
@@ -1544,7 +1565,7 @@ void SwBasicEscherEx::WriteGrfBullet(const Graphic& rGrf)
         {
             aSize = OutputDevice::LogicToLogic( aSize,rGrf.GetPrefMapMode(), aMap100mm );
         }
-        sal_uInt32 nBlibId = mxGlobal->GetBlibID( *(mxGlobal->QueryPictureStream()), aUniqueId );
+        sal_uInt32 nBlibId = mxGlobal->GetBlibID( *(mxGlobal->QueryPictureStream()), aGraphicObject );
         if (nBlibId)
             aPropOpt.AddOpt(ESCHER_Prop_pib, nBlibId, true);
     }
@@ -1631,8 +1652,7 @@ sal_Int32 SwBasicEscherEx::WriteGrfFlyFrame(const SwFrameFormat& rFormat, sal_uI
                     aGraphic.GetPrefMapMode(), aMap100mm );
             }
 
-            sal_uInt32 nBlibId = mxGlobal->GetBlibID( *QueryPictureStream(),
-                aUniqueId );
+            sal_uInt32 nBlibId = mxGlobal->GetBlibID( *QueryPictureStream(), aGraphicObject);
             if (nBlibId)
                 aPropOpt.AddOpt(ESCHER_Prop_pib, nBlibId, true);
         }
@@ -1855,8 +1875,7 @@ void SwBasicEscherEx::WriteBrushAttr(const SvxBrushItem &rBrush,
                     rGraphic.GetPrefMapMode(), aMap100mm);
             }
 
-            sal_uInt32 nBlibId = mxGlobal->GetBlibID( *QueryPictureStream(),
-                aUniqueId);
+            sal_uInt32 nBlibId = mxGlobal->GetBlibID(*QueryPictureStream(), *pGraphicObject);
             if (nBlibId)
                 rPropOpt.AddOpt(ESCHER_Prop_fillBlip,nBlibId,true);
         }
@@ -2923,12 +2942,8 @@ void SwBasicEscherEx::WriteOLEPicture(EscherPropertyContainer &rPropOpt,
     OString aId = aGraphicObject.GetUniqueID();
     if (!aId.isEmpty())
     {
-        tools::Rectangle aRect = rObj.GetLogicRect();
-        aRect.SetPos(Point(0,0));
-        aRect.Right() = DrawModelToEmu(aRect.Right());
-        aRect.Bottom() = DrawModelToEmu(aRect.Bottom());
-        sal_uInt32 nBlibId = mxGlobal->GetBlibID( *QueryPictureStream(),
-            aId, pVisArea);    // SJ: the fourth parameter (VisArea) should be set..
+        // SJ: the fourth parameter (VisArea) should be set..
+        sal_uInt32 nBlibId = mxGlobal->GetBlibID( *QueryPictureStream(), aGraphicObject, pVisArea);
         if (nBlibId)
             rPropOpt.AddOpt(ESCHER_Prop_pib, nBlibId, true);
     }

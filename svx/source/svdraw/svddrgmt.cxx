@@ -552,13 +552,13 @@ void SdrDragMethod::createSdrDragEntries_GlueDrag()
 
 void SdrDragMethod::ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr) const
 {
-    ImpTakeDescriptionOptions nOpt=ImpTakeDescriptionOptions::NONE;
+    ImpGetDescriptionOptions nOpt=ImpGetDescriptionOptions::NONE;
     if (IsDraggingPoints()) {
-        nOpt=ImpTakeDescriptionOptions::POINTS;
+        nOpt=ImpGetDescriptionOptions::POINTS;
     } else if (IsDraggingGluePoints()) {
-        nOpt=ImpTakeDescriptionOptions::GLUEPOINTS;
+        nOpt=ImpGetDescriptionOptions::GLUEPOINTS;
     }
-    getSdrDragView().ImpTakeDescriptionStr(pStrCacheID,rStr,nOpt);
+    rStr = getSdrDragView().ImpGetDescriptionString(pStrCacheID, nOpt);
 }
 
 SdrObject* SdrDragMethod::GetDragObj() const
@@ -997,8 +997,8 @@ void SdrDragMovHdl::MoveSdrDrag(const Point& rNoSnapPnt)
                 Point aDif(aPnt-DragStat().GetStart());
                 getSdrDragView().CheckSnap(Ref1()+aDif,nBestXSnap,nBestYSnap,bXSnapped,bYSnapped);
                 getSdrDragView().CheckSnap(Ref2()+aDif,nBestXSnap,nBestYSnap,bXSnapped,bYSnapped);
-                aPnt.X()+=nBestXSnap;
-                aPnt.Y()+=nBestYSnap;
+                aPnt.AdjustX(nBestXSnap );
+                aPnt.AdjustY(nBestYSnap );
             }
 
             if (aPnt!=DragStat().GetNow())
@@ -1061,8 +1061,8 @@ void SdrDragMovHdl::MoveSdrDrag(const Point& rNoSnapPnt)
                     // eliminate rounding errors for certain values
                     if (nSA==9000)
                     {
-                        if (nNewAngle==0    || nNewAngle==18000) aPnt.Y()=aRef.Y();
-                        if (nNewAngle==9000 || nNewAngle==27000) aPnt.X()=aRef.X();
+                        if (nNewAngle==0    || nNewAngle==18000) aPnt.setY(aRef.Y() );
+                        if (nNewAngle==9000 || nNewAngle==27000) aPnt.setX(aRef.X() );
                     }
 
                     if (nSA==4500)
@@ -1482,14 +1482,12 @@ SdrDragMove::SdrDragMove(SdrDragView& rNewView)
 
 void SdrDragMove::TakeSdrDragComment(OUString& rStr) const
 {
-    OUString aStr;
-
     ImpTakeDescriptionStr(STR_DragMethMove, rStr);
-    rStr += " (x=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDX(), aStr);
-    rStr += aStr + " y=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDY(), aStr);
-    rStr += aStr + ")";
+    rStr += " (x="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDX())
+            + " y="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDY())
+            + ")";
 
     if(getSdrDragView().IsDragWithCopy())
     {
@@ -1562,8 +1560,8 @@ void SdrDragMove::MoveSdrDrag(const Point& rNoSnapPnt_)
     const tools::Rectangle& aSR=GetMarkedRect();
     long nMovedx=aNoSnapPnt.X()-DragStat().GetStart().X();
     long nMovedy=aNoSnapPnt.Y()-DragStat().GetStart().Y();
-    Point aLO(aSR.TopLeft());      aLO.X()+=nMovedx; aLO.Y()+=nMovedy;
-    Point aRU(aSR.BottomRight());  aRU.X()+=nMovedx; aRU.Y()+=nMovedy;
+    Point aLO(aSR.TopLeft());      aLO.AdjustX(nMovedx ); aLO.AdjustY(nMovedy );
+    Point aRU(aSR.BottomRight());  aRU.AdjustX(nMovedx ); aRU.AdjustY(nMovedy );
     Point aLU(aLO.X(),aRU.Y());
     Point aRO(aRU.X(),aLO.Y());
     ImpCheckSnap(aLO);
@@ -1609,15 +1607,15 @@ void SdrDragMove::MoveSdrDrag(const Point& rNoSnapPnt_)
 
                 if (aSR2.Left()<aLR.Left())
                 {
-                    aPt1.X()-=aSR2.Left()-aLR.Left();
+                    aPt1.AdjustX( -(aSR2.Left()-aLR.Left()) );
                 }
                 else if (aSR2.Right()>aLR.Right())
                 {
-                    aPt1.X()-=aSR2.Right()-aLR.Right();
+                    aPt1.AdjustX( -(aSR2.Right()-aLR.Right()) );
                 }
             }
             else
-                aPt1.X()=DragStat().GetStart().X(); // no space to move to
+                aPt1.setX(DragStat().GetStart().X() ); // no space to move to
 
             if (aSR2.Top()>aLR.Top() || aSR2.Bottom()<aLR.Bottom())
             { // any space to move to?
@@ -1625,15 +1623,15 @@ void SdrDragMove::MoveSdrDrag(const Point& rNoSnapPnt_)
 
                 if (aSR2.Top()<aLR.Top())
                 {
-                    aPt1.Y()-=aSR2.Top()-aLR.Top();
+                    aPt1.AdjustY( -(aSR2.Top()-aLR.Top()) );
                 }
                 else if (aSR2.Bottom()>aLR.Bottom())
                 {
-                    aPt1.Y()-=aSR2.Bottom()-aLR.Bottom();
+                    aPt1.AdjustY( -(aSR2.Bottom()-aLR.Bottom()) );
                 }
             }
             else
-                aPt1.Y()=DragStat().GetStart().Y(); // no space to move to
+                aPt1.setY(DragStat().GetStart().Y() ); // no space to move to
         }
 
         if (getSdrDragView().IsDraggingGluePoints())
@@ -1662,10 +1660,10 @@ void SdrDragMove::MoveSdrDrag(const Point& rNoSnapPnt_)
                         {
                             Point aPt((*pGPL)[nGlueNum].GetAbsolutePos(*pObj));
                             aPt+=aPt1; // move by this much
-                            if (aPt.X()<aBound.Left()  ) aPt1.X()-=aPt.X()-aBound.Left()  ;
-                            if (aPt.X()>aBound.Right() ) aPt1.X()-=aPt.X()-aBound.Right() ;
-                            if (aPt.Y()<aBound.Top()   ) aPt1.Y()-=aPt.Y()-aBound.Top()   ;
-                            if (aPt.Y()>aBound.Bottom()) aPt1.Y()-=aPt.Y()-aBound.Bottom();
+                            if (aPt.X()<aBound.Left()  ) aPt1.AdjustX( -(aPt.X()-aBound.Left()) )  ;
+                            if (aPt.X()>aBound.Right() ) aPt1.AdjustX( -(aPt.X()-aBound.Right()) ) ;
+                            if (aPt.Y()<aBound.Top()   ) aPt1.AdjustY( -(aPt.Y()-aBound.Top()) )   ;
+                            if (aPt.Y()>aBound.Bottom()) aPt1.AdjustY( -(aPt.Y()-aBound.Bottom()) );
                         }
                     }
                 }
@@ -1753,8 +1751,6 @@ void SdrDragResize::TakeSdrDragComment(OUString& rStr) const
 
     if(bX || bY)
     {
-        OUString aStr;
-
         rStr += " (";
 
         bool bEqual(aXFact == aYFact);
@@ -1763,8 +1759,7 @@ void SdrDragResize::TakeSdrDragComment(OUString& rStr) const
             if(!bEqual)
                 rStr += "x=";
 
-            SdrModel::TakePercentStr(aXFact, aStr);
-            rStr += aStr;
+            rStr += SdrModel::GetPercentString(aXFact);
         }
 
         if(bY && !bEqual)
@@ -1772,9 +1767,7 @@ void SdrDragResize::TakeSdrDragComment(OUString& rStr) const
             if(bX)
                 rStr += " ";
 
-            rStr += "y=";
-            SdrModel::TakePercentStr(aYFact, aStr);
-            rStr += aStr;
+            rStr += "y=" + SdrModel::GetPercentString(aYFact);
         }
 
         rStr += ")";
@@ -1865,14 +1858,14 @@ void SdrDragResize::MoveSdrDrag(const Point& rNoSnapPnt)
         }
 
         if (aPnt.X()<aLR.Left())
-            aPnt.X()=aLR.Left();
+            aPnt.setX(aLR.Left() );
         else if (aPnt.X()>aLR.Right())
-            aPnt.X()=aLR.Right();
+            aPnt.setX(aLR.Right() );
 
         if (aPnt.Y()<aLR.Top())
-            aPnt.Y()=aLR.Top();
+            aPnt.setY(aLR.Top() );
         else if (aPnt.Y()>aLR.Bottom())
-            aPnt.Y()=aLR.Bottom();
+            aPnt.setY(aLR.Bottom() );
 
         if (aRef.X()>aSR.Left())
         {
@@ -2085,9 +2078,7 @@ void SdrDragRotate::TakeSdrDragComment(OUString& rStr) const
         nTmpAngle -= 36000;
     }
 
-    OUString aStr;
-    SdrModel::TakeAngleStr(nTmpAngle, aStr);
-    rStr += aStr + ")";
+    rStr += SdrModel::GetAngleString(nTmpAngle) + ")";
 
     if(getSdrDragView().IsDragWithCopy())
         rStr += ImpGetResStr(STR_EditWithCopy);
@@ -2228,9 +2219,7 @@ void SdrDragShear::TakeSdrDragComment(OUString& rStr) const
 
     nTmpAngle = NormAngle180(nTmpAngle);
 
-    OUString aStr;
-    SdrModel::TakeAngleStr(nTmpAngle, aStr);
-    rStr += aStr + ")";
+    rStr += SdrModel::GetAngleString(nTmpAngle) + ")";
 
     if(getSdrDragView().IsDragWithCopy())
         rStr += ImpGetResStr(STR_EditWithCopy);
@@ -2314,9 +2303,9 @@ void SdrDragShear::MoveSdrDrag(const Point& rPnt)
     if (!bSlant && !bResize)
     { // shear, but no resize
         if (bVertical)
-            aPnt.X()=aP0.X();
+            aPnt.setX(aP0.X() );
         else
-            aPnt.Y()=aP0.Y();
+            aPnt.setY(aP0.Y() );
     }
 
     Point aRef(DragStat().GetRef1());
@@ -2804,9 +2793,7 @@ void SdrDragCrook::TakeSdrDragComment(OUString& rStr) const
             nVal *= 2;
 
         nVal = std::abs(nVal);
-        OUString aStr;
-        SdrModel::TakeAngleStr(nVal, aStr);
-        rStr += aStr + ")";
+        rStr += SdrModel::GetAngleString(nVal) + ")";
     }
 
     if(getSdrDragView().IsDragWithCopy())
@@ -3113,22 +3100,22 @@ void SdrDragCrook::MoveSdrDrag(const Point& rPnt)
 
     if (bVertical)
     {
-        aNeuCenter.X()=aStart.X();
-        aNeuCenter.Y()=aMarkCenter.Y();
+        aNeuCenter.setX(aStart.X() );
+        aNeuCenter.setY(aMarkCenter.Y() );
     }
 
     if (!getSdrDragView().IsCrookAtCenter())
     {
         switch (GetDragHdlKind())
         {
-            case SdrHdlKind::UpperLeft: aNeuCenter.X()=aMarkRect.Right();  bLft=true; break;
-            case SdrHdlKind::Upper: aNeuCenter.Y()=aMarkRect.Bottom(); bUpr=true; break;
-            case SdrHdlKind::UpperRight: aNeuCenter.X()=aMarkRect.Left();   bRgt=true; break;
-            case SdrHdlKind::Left : aNeuCenter.X()=aMarkRect.Right();  bLft=true; break;
-            case SdrHdlKind::Right: aNeuCenter.X()=aMarkRect.Left();   bRgt=true; break;
-            case SdrHdlKind::LowerLeft: aNeuCenter.X()=aMarkRect.Right();  bLft=true; break;
-            case SdrHdlKind::Lower: aNeuCenter.Y()=aMarkRect.Top();    bLwr=true; break;
-            case SdrHdlKind::LowerRight: aNeuCenter.X()=aMarkRect.Left();   bRgt=true; break;
+            case SdrHdlKind::UpperLeft: aNeuCenter.setX(aMarkRect.Right() );  bLft=true; break;
+            case SdrHdlKind::Upper: aNeuCenter.setY(aMarkRect.Bottom() ); bUpr=true; break;
+            case SdrHdlKind::UpperRight: aNeuCenter.setX(aMarkRect.Left() );   bRgt=true; break;
+            case SdrHdlKind::Left : aNeuCenter.setX(aMarkRect.Right() );  bLft=true; break;
+            case SdrHdlKind::Right: aNeuCenter.setX(aMarkRect.Left() );   bRgt=true; break;
+            case SdrHdlKind::LowerLeft: aNeuCenter.setX(aMarkRect.Right() );  bLft=true; break;
+            case SdrHdlKind::Lower: aNeuCenter.setY(aMarkRect.Top() );    bLwr=true; break;
+            case SdrHdlKind::LowerRight: aNeuCenter.setX(aMarkRect.Left() );   bRgt=true; break;
             default: bAtCenter=true;
         }
     }
@@ -3160,14 +3147,14 @@ void SdrDragCrook::MoveSdrDrag(const Point& rPnt)
         {
             a=static_cast<double>(dy1)/static_cast<double>(dx1); // slope of the radius
             nNeuRad=(static_cast<long>(dy1*a)+dx1) /2;
-            aNeuCenter.X()+=nNeuRad;
+            aNeuCenter.AdjustX(nNeuRad );
             nPntWink=GetAngle(aPnt-aNeuCenter);
         }
         else
         {
             a=static_cast<double>(dx1)/static_cast<double>(dy1); // slope of the radius
             nNeuRad=(static_cast<long>(dx1*a)+dy1) /2;
-            aNeuCenter.Y()+=nNeuRad;
+            aNeuCenter.AdjustY(nNeuRad );
             nPntWink=GetAngle(aPnt-aNeuCenter)-9000;
         }
 
@@ -3414,13 +3401,11 @@ void SdrDragDistort::TakeSdrDragComment(OUString& rStr) const
 {
     ImpTakeDescriptionStr(STR_DragMethDistort, rStr);
 
-    OUString aStr;
-
-    rStr += " (x=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDX(), aStr);
-    rStr += aStr + " y=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDY(), aStr);
-    rStr += aStr + ")";
+    rStr += " (x="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDX())
+            + " y="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDY())
+            + ")";
 
     if(getSdrDragView().IsDragWithCopy())
         rStr += ImpGetResStr(STR_EditWithCopy);
@@ -3564,13 +3549,11 @@ void SdrDragCrop::TakeSdrDragComment(OUString& rStr) const
 {
     ImpTakeDescriptionStr(STR_DragMethCrop, rStr);
 
-    OUString aStr;
-
-    rStr += " (x=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDX(), aStr);
-    rStr += aStr + " y=";
-    getSdrDragView().GetModel()->TakeMetricStr(DragStat().GetDY(), aStr);
-    rStr += aStr + ")";
+    rStr += " (x="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDX())
+            + " y="
+            + getSdrDragView().GetModel()->GetMetricString(DragStat().GetDY())
+            + ")";
 
     if(getSdrDragView().IsDragWithCopy())
         rStr += ImpGetResStr(STR_EditWithCopy);

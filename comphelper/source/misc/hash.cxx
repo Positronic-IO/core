@@ -8,6 +8,9 @@
  */
 
 #include <comphelper/hash.hxx>
+#include <rtl/ustring.hxx>
+#include <rtl/alloc.h>
+#include <osl/endian.h>
 #include <config_oox.h>
 
 #if USE_TLS_NSS
@@ -148,6 +151,100 @@ std::vector<unsigned char> Hash::calculateHash(const unsigned char* pInput, size
     Hash aHash(eType);
     aHash.update(pInput, length);
     return aHash.finalize();
+}
+
+std::vector<unsigned char> Hash::calculateHash(
+        const unsigned char* pInput, size_t nLength,
+        const unsigned char* pSalt, size_t nSaltLen,
+        sal_uInt32 nSpinCount,
+        IterCount eIterCount,
+        HashType eType)
+{
+    if (!pSalt)
+        nSaltLen = 0;
+
+    if (!nSaltLen && !nSpinCount)
+        return calculateHash( pInput, nLength, eType);
+
+    Hash aHash(eType);
+    if (nSaltLen)
+    {
+        std::vector<unsigned char> initialData( nSaltLen + nLength);
+        std::copy( pSalt, pSalt + nSaltLen, initialData.begin());
+        std::copy( pInput, pInput + nLength, initialData.begin() + nSaltLen);
+        aHash.update( initialData.data(), initialData.size());
+        rtl_secureZeroMemory( initialData.data(), initialData.size());
+    }
+    else
+    {
+        aHash.update( pInput, nLength);
+    }
+    std::vector<unsigned char> hash( aHash.finalize());
+
+    if (nSpinCount)
+    {
+        // https://msdn.microsoft.com/en-us/library/dd920692
+        // says the iteration is concatenated after the hash.
+        // https://msdn.microsoft.com/en-us/library/dd924776 and
+        // https://msdn.microsoft.com/en-us/library/dd925430
+        // say the iteration is prepended to the hash.
+        const size_t nAddIter = (eIterCount == IterCount::NONE ? 0 : 4);
+        const size_t nIterPos = (eIterCount == IterCount::APPEND ? hash.size() : 0);
+        const size_t nHashPos = (eIterCount == IterCount::PREPEND ? nAddIter : 0);
+        std::vector<unsigned char> data( hash.size() + nAddIter, 0);
+        for (sal_uInt32 i = 0; i < nSpinCount; ++i)
+        {
+            std::copy( hash.begin(), hash.end(), data.begin() + nHashPos);
+            if (nAddIter)
+            {
+#ifdef OSL_BIGENDIAN
+                sal_uInt32 be = i;
+                sal_uInt8* p = reinterpret_cast<sal_uInt8*>(&be);
+                std::swap( p[0], p[3] );
+                std::swap( p[1], p[2] );
+                memcpy( data.data() + nIterPos, &be, nAddIter);
+#else
+                memcpy( data.data() + nIterPos, &i, nAddIter);
+#endif
+            }
+            /* TODO: isn't there something better than
+             * creating/finalizing/destroying on each iteration? */
+            Hash aReHash(eType);
+            aReHash.update( data.data(), data.size());
+            hash = aReHash.finalize();
+        }
+    }
+
+    return hash;
+}
+
+std::vector<unsigned char> Hash::calculateHash(
+        const OUString& rPassword,
+        const std::vector<unsigned char>& rSaltValue,
+        sal_uInt32 nSpinCount,
+        IterCount eIterCount,
+        HashType eType)
+{
+    const unsigned char* pPassBytes = reinterpret_cast<const unsigned char*>(rPassword.getStr());
+    const size_t nPassBytesLen = rPassword.getLength() * 2;
+#ifdef OSL_BIGENDIAN
+    // Swap UTF16-BE to UTF16-LE
+    std::vector<unsigned char> vPass;
+    if (nPassBytesLen)
+    {
+        vPass.resize( nPassBytesLen);
+        std::copy( pPassBytes, pPassBytes + nPassBytesLen, vPass.begin());
+        unsigned char* p = vPass.data();
+        unsigned char const * const pEnd = p + nPassBytesLen;
+        for ( ; p < pEnd; p += 2 )
+        {
+            std::swap( p[0], p[1] );
+        }
+        pPassBytes = vPass.data();
+    }
+#endif
+    return calculateHash( pPassBytes, nPassBytesLen, rSaltValue.data(), rSaltValue.size(), nSpinCount,
+            eIterCount, eType);
 }
 
 }

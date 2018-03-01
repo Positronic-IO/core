@@ -55,6 +55,7 @@ SheetSettingsModel::SheetSettingsModel() :
 }
 
 SheetProtectionModel::SheetProtectionModel() :
+    mnSpinCount( 0 ),
     mnPasswordHash( 0 ),
     mbSheet( false ),
     mbObjects( false ),
@@ -106,6 +107,10 @@ void WorksheetSettings::importOutlinePr( const AttributeList& rAttribs )
 
 void WorksheetSettings::importSheetProtection( const AttributeList& rAttribs )
 {
+    maSheetProt.maAlgorithmName    = rAttribs.getString( XML_algorithmName, OUString());
+    maSheetProt.maHashValue        = rAttribs.getString( XML_hashValue, OUString());
+    maSheetProt.maSaltValue        = rAttribs.getString( XML_saltValue, OUString());
+    maSheetProt.mnSpinCount        = rAttribs.getUnsigned( XML_spinCount, 0);
     maSheetProt.mnPasswordHash     = oox::core::CodecHelper::getPasswordHash( rAttribs, XML_password );
     maSheetProt.mbSheet            = rAttribs.getBool( XML_sheet, false );
     maSheetProt.mbObjects          = rAttribs.getBool( XML_objects, false );
@@ -139,10 +144,10 @@ void WorksheetSettings::importProtectedRange( const AttributeList& rAttribs )
      * 'saltValue' and 'spinCount' that are written if the protection was newly
      * created. */
     aProt.mnPasswordVerifier = rAttribs.getIntegerHex( XML_password, 0);
-    aProt.maAlgorithmName = rAttribs.getString( XML_algorithmName, OUString());
-    aProt.maHashValue = rAttribs.getString( XML_hashValue, OUString());
-    aProt.maSaltValue = rAttribs.getString( XML_saltValue, OUString());
-    aProt.mnSpinCount = rAttribs.getUnsigned( XML_spinCount, 0);
+    aProt.maPasswordHash.maAlgorithmName = rAttribs.getString( XML_algorithmName, OUString());
+    aProt.maPasswordHash.maHashValue = rAttribs.getString( XML_hashValue, OUString());
+    aProt.maPasswordHash.maSaltValue = rAttribs.getString( XML_saltValue, OUString());
+    aProt.maPasswordHash.mnSpinCount = rAttribs.getUnsigned( XML_spinCount, 0);
     OUString aRefs( rAttribs.getString( XML_sqref, OUString()));
     if (!aRefs.isEmpty())
     {
@@ -236,6 +241,12 @@ void WorksheetSettings::finalizeImport()
     {
         ScTableProtection aProtect;
         aProtect.setProtected(true);
+        aProtect.setPasswordHash( maSheetProt.maAlgorithmName, maSheetProt.maHashValue,
+                maSheetProt.maSaltValue, maSheetProt.mnSpinCount);
+        // Set the simple hash after the proper hash because setting the proper
+        // hash resets the simple hash, yet if the simple hash is present we
+        // may as well use it and more important want to keep it for saving the
+        // document again.
         if (maSheetProt.mnPasswordHash)
         {
             Sequence<sal_Int8> aPass(2);

@@ -21,7 +21,6 @@
 #include <svl/itempool.hxx>
 #include <sfx2/objsh.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
 #include <zoom.hxx>
 #include <sfx2/zoomitem.hxx>
 #include <svx/viewlayoutitem.hxx>
@@ -179,7 +178,7 @@ SvxZoomDialog::SvxZoomDialog( vcl::Window* pParent, const SfxItemSet& rCoreSet )
     SfxObjectShell* pShell = SfxObjectShell::Current();
 
     if (pShell)
-        pOldUserItem = static_cast<const SfxUInt16Item*>(pShell->GetItem(SID_ATTR_ZOOM_USER));
+        pOldUserItem = pShell->GetItem(SID_ATTR_ZOOM_USER);
 
     if (pOldUserItem)
         nValue = pOldUserItem->GetValue();

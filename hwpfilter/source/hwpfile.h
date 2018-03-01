@@ -72,11 +72,10 @@ class   HStream;
 struct ColumnInfo{
     int start_page;
     bool bIsSet;
-    ColumnDef *coldef;
+    std::shared_ptr<ColumnDef> xColdef;
     explicit ColumnInfo(int num){
         start_page = num;
         bIsSet = false;
-        coldef = nullptr;
     }
 };
 
@@ -127,6 +126,7 @@ class DLLEXPORT HWPFile
 /**
  * Reads one byte from HIODev
  */
+        bool Read1b(unsigned char &out);
         bool Read1b(char &out);
 /**
  * Reads two byte from HIODev
@@ -137,10 +137,6 @@ class DLLEXPORT HWPFile
  */
         bool Read4b(unsigned int &out);
         bool Read4b(int &out);
-/**
- * Reads nmemb byte array from HIODev
- */
-        size_t Read1b(void *ptr, size_t nmemb);
 /**
  * Reads nmemb short type array from HIODev
  */
@@ -162,7 +158,7 @@ class DLLEXPORT HWPFile
  * Reads main paragraph list
  */
         bool ReadParaList(std::vector<std::unique_ptr<HWPPara>> &aplist, unsigned char flag = 0);
-        bool ReadParaList(std::vector<HWPPara*> &aplist);
+        void ReadParaList(std::vector<HWPPara*> &aplist);
 /**
  * Sets if the stream is compressed
  */
@@ -214,7 +210,7 @@ class DLLEXPORT HWPFile
         void AddBox(FBox *);
         void AddPage(){ m_nCurrentPage++;}
         void AddColumnInfo();
-        void SetColumnDef(ColumnDef *coldef);
+        void SetColumnDef(std::shared_ptr<ColumnDef> const &);
         void AddParaShape(std::shared_ptr<ParaShape> const &);
         void AddCharShape(std::shared_ptr<CharShape> const &);
         void AddFBoxStyle(FBoxStyle *);
@@ -230,7 +226,7 @@ class DLLEXPORT HWPFile
         HWPInfo& GetHWPInfo(void) { return _hwpInfo; }
         HWPFont& GetHWPFont(void) { return _hwpFont; }
         HWPStyle& GetHWPStyle(void) { return _hwpStyle; }
-        HWPPara *GetFirstPara(void) { return plist.front().get(); }
+        HWPPara *GetFirstPara(void) { return !plist.empty() ? plist.front().get() : nullptr; }
 
         EmPicture *GetEmPicture(Picture *pic);
         EmPicture *GetEmPictureByName(char * name);

@@ -134,11 +134,11 @@ void SfxEmptySplitWin_Impl::Actualize()
     {
         case WindowAlign::Left:
         case WindowAlign::Right:
-            aSize.Width() = GetFadeInSize();
+            aSize.setWidth( GetFadeInSize() );
             break;
         case WindowAlign::Top:
         case WindowAlign::Bottom:
-            aSize.Height() = GetFadeInSize();
+            aSize.setHeight( GetFadeInSize() );
             break;
     }
 
@@ -397,13 +397,13 @@ void SfxSplitWindow::Split()
 
             if ( IsHorizontal() )
             {
-                aSize.Width()  = nSize;
-                aSize.Height() = nSetSize;
+                aSize.setWidth( nSize );
+                aSize.setHeight( nSetSize );
             }
             else
             {
-                aSize.Width()  = nSetSize;
-                aSize.Height() = nSize;
+                aSize.setWidth( nSetSize );
+                aSize.setHeight( nSize );
             }
 
             rD.pWin->SetItemSize_Impl( aSize );
@@ -412,7 +412,7 @@ void SfxSplitWindow::Split()
         }
     }
 
-    // workaround insuffiency of <SplitWindow> regarding dock layouting:
+    // workaround insufficiency of <SplitWindow> regarding dock layouting:
     // apply FIXED item size as 'original' item size to improve layouting of undock-dock-cycle of a window
     {
         DeactivateUpdateMode aDeactivateUpdateMode( *this );
@@ -731,7 +731,7 @@ void SfxSplitWindow::InsertWindow_Impl( SfxDock_Impl const * pDock,
 
     delete pDeactivateUpdateMode;
 
-    // workaround insuffiency of <SplitWindow> regarding dock layouting:
+    // workaround insufficiency of <SplitWindow> regarding dock layouting:
     // apply FIXED item size as 'original' item size to improve layouting of undock-dock-cycle of a window
     {
         std::vector< std::pair< sal_uInt16, long > > aNewOrgSizes;
@@ -986,10 +986,10 @@ bool SfxSplitWindow::CursorIsOverRect() const
         Size aVisSize = GetSizePixel();
 
         // Extend with +/- a few pixels, otherwise it is too nervous
-        aVisPos.X() -= nPixel;
-        aVisPos.Y() -= nPixel;
-        aVisSize.Width() += 2 * nPixel;
-        aVisSize.Height() += 2 * nPixel;
+        aVisPos.AdjustX( -(nPixel) );
+        aVisPos.AdjustY( -(nPixel) );
+        aVisSize.AdjustWidth(2 * nPixel );
+        aVisSize.AdjustHeight(2 * nPixel );
 
         tools::Rectangle aVisRect( aVisPos, aVisSize );
         aRect = aRect.GetUnion( aVisRect );

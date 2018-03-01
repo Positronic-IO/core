@@ -26,7 +26,7 @@
 #include <sfx2/docfilt.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/docfile.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <svl/urlbmk.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/xfillit.hxx>
@@ -193,8 +193,8 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
         pNewGrafObj = new SdrGrafObj( rGraphic, ::tools::Rectangle( rPos, aSize ) );
         SdrPage* pPage = pPV->GetPage();
         Size aPageSize( pPage->GetSize() );
-        aPageSize.Width()  -= pPage->GetLeftBorder() + pPage->GetRightBorder();
-        aPageSize.Height() -= pPage->GetUpperBorder() + pPage->GetLowerBorder();
+        aPageSize.AdjustWidth( -(pPage->GetLeftBorder() + pPage->GetRightBorder()) );
+        aPageSize.AdjustHeight( -(pPage->GetUpperBorder() + pPage->GetLowerBorder()) );
         pNewGrafObj->AdjustToMaxRect( ::tools::Rectangle( Point(), aPageSize ), true );
 
         SdrInsertFlags nOptions = SdrInsertFlags::SETDEFLAYER;
@@ -377,7 +377,8 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
     if( !mpViewSh )
         return;
 
-    SfxErrorContext aEc( ERRCTX_ERROR, mpViewSh->GetActiveWindow(), RID_SO_ERRCTX );
+    vcl::Window* pWindow = mpViewSh->GetActiveWindow();
+    SfxErrorContext aEc( ERRCTX_ERROR, pWindow ? pWindow->GetFrameWeld() : nullptr, RID_SO_ERRCTX );
     ErrCode nError = ERRCODE_NONE;
 
     ::std::vector< OUString >::const_iterator aIter( maDropFileVector.begin() );
@@ -524,8 +525,8 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
 
                             if (!aSize.Width() || !aSize.Height())
                             {
-                                aSize.Width()   = 1410;
-                                aSize.Height()  = 1000;
+                                aSize.setWidth( 1410 );
+                                aSize.setHeight( 1000 );
                             }
 
                             aRect = ::tools::Rectangle( maDropPos, aSize );
@@ -570,7 +571,11 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
  */
 IMPL_LINK_NOARG(View, DropErrorHdl, Timer *, void)
 {
-    ScopedVclPtrInstance<InfoBox>( mpViewSh ? mpViewSh->GetActiveWindow() : nullptr, SdResId(STR_ACTION_NOTPOSSIBLE) )->Execute();
+    vcl::Window* pWin = mpViewSh ? mpViewSh->GetActiveWindow() : nullptr;
+    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                  SdResId(STR_ACTION_NOTPOSSIBLE)));
+    xInfoBox->run();
 }
 
 /**

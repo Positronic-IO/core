@@ -262,7 +262,7 @@ void ColorConfig_Impl::ImplCommit()
     {
         pPropValues[nIndex].Name = pColorNames[nIndex];
         //save automatic colors as void value
-        if(COL_AUTO != sal::static_int_cast<ColorData>(m_aConfigValues[i].nColor))
+        if(m_aConfigValues[i].nColor != COL_AUTO)
             pPropValues[nIndex].Value <<= m_aConfigValues[i].nColor;
 
         nIndex++;
@@ -353,7 +353,7 @@ void ColorConfig_Impl::ImplUpdateApplicationSettings()
     StyleSettings aStyleSettings( aSettings.GetStyleSettings() );
 
     ColorConfigValue aRet = GetColorConfigValue(svtools::FONTCOLOR);
-    if(COL_AUTO == sal::static_int_cast<ColorData>(aRet.nColor))
+    if(aRet.nColor == COL_AUTO)
         aRet.nColor = ColorConfig::GetDefaultColor(svtools::FONTCOLOR).GetColor();
 
     Color aFontColor(aRet.nColor);
@@ -396,7 +396,7 @@ ColorConfig::~ColorConfig()
 
 Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
 {
-    static const sal_Int32 aAutoColors[] =
+    static const Color aAutoColors[] =
     {
         COL_WHITE, // DOCCOLOR
         COL_LIGHTGRAY, // DOCBOUNDARIES
@@ -490,7 +490,7 @@ ColorConfigValue ColorConfig::GetColorValue(ColorConfigEntry eEntry, bool bSmart
 
     if (bSmart)
     {
-        if(COL_AUTO == sal::static_int_cast<ColorData>(aRet.nColor))
+        if(aRet.nColor == COL_AUTO)
             aRet.nColor = ColorConfig::GetDefaultColor(eEntry).GetColor();
     }
 

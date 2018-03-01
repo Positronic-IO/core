@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <vcl/wrkwin.hxx>
-#include <vcl/msgbox.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/pathoptions.hxx>
@@ -32,11 +31,11 @@
 #include <svx/dialmgr.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/weld.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/strings.hrc>
 
 #include <strings.hrc>
-#include <helpids.h>
 #include <svx/xattr.hxx>
 #include <svx/xpool.hxx>
 #include <svx/xtable.hxx>
@@ -61,7 +60,7 @@ class SvxBitmapCtl
 {
 private:
     Color           aPixelColor, aBackgroundColor;
-    const sal_uInt16*   pBmpArray;
+    std::array<sal_uInt8,64> const * pBmpArray;
 
 public:
     // Constructor: BitmapCtl for SvxPixelCtl
@@ -73,12 +72,12 @@ public:
     // BitmapCtl: Returns the Bitmap
     BitmapEx GetBitmapEx()
     {
-        const Bitmap aRetval(createHistorical8x8FromArray(pBmpArray, aPixelColor, aBackgroundColor));
-
-        return (pBmpArray != nullptr) ? BitmapEx(aRetval) : BitmapEx();
+        if (!pBmpArray)
+            return BitmapEx();
+        return createHistorical8x8FromArray(*pBmpArray, aPixelColor, aBackgroundColor);
     }
 
-    void SetBmpArray( const sal_uInt16* pPixel ) { pBmpArray = pPixel; }
+    void SetBmpArray( std::array<sal_uInt8,64> const & pPixel ) { pBmpArray = &pPixel; }
     void SetPixelColor( Color aColor ) { aPixelColor = aColor; }
     void SetBackgroundColor( Color aColor ) { aBackgroundColor = aColor; }
 };
@@ -314,8 +313,8 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ChangePatternHdl_Impl, ValueSet*, void)
 
             m_pCtlPixel->SetXBitmap(pGraphicObject->GetGraphic().GetBitmapEx());
 
-            Color aPixelColor = aFront;
-            Color aBackColor = aBack;
+            Color aPixelColor = aFront.GetColor();
+            Color aBackColor = aBack.GetColor();
 
             m_pLbColor->SelectEntry( aPixelColor );
             m_pLbBackgroundColor->SelectEntry( aBackColor );
@@ -361,7 +360,6 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickAddHdl_Impl, Button*, void)
     assert(pFact && "Dialog creation failed!");
     ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
     assert(pDlg && "Dialog creation failed!");
-    ScopedVclPtr<MessageDialog> pWarnBox;
     sal_uInt16         nError(1);
 
     while( pDlg->Execute() == RET_OK )
@@ -375,19 +373,13 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickAddHdl_Impl, Button*, void)
             break;
         }
 
-        if( !pWarnBox )
-        {
-            pWarnBox.disposeAndReset(VclPtr<MessageDialog>::Create( GetParentDialog()
-                                        ,"DuplicateNameDialog"
-                                        ,"cui/ui/queryduplicatedialog.ui"));
-        }
-
-        if( pWarnBox->Execute() != RET_OK )
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xWarnBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+        if (xWarnBox->run() != RET_OK)
             break;
     }
 
     pDlg.disposeAndClear();
-    pWarnBox.disposeAndClear();
 
     if( !nError )
     {
@@ -497,16 +489,13 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void)
             }
             else
             {
-                ScopedVclPtrInstance<MessageDialog> aBox(
-                                   GetParentDialog()
-                                   ,"DuplicateNameDialog"
-                                   ,"cui/ui/queryduplicatedialog.ui");
-                aBox->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xWarnBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+                xWarnBox->run();
             }
         }
     }
 }
-
 
 IMPL_LINK_NOARG(SvxPatternTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 {
@@ -515,9 +504,9 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
     {
-        ScopedVclPtrInstance< MessageDialog > aQueryBox( GetParentDialog(),"AskDelBitmapDialog","cui/ui/querydeletebitmapdialog.ui" );
-
-        if( aQueryBox->Execute() == RET_YES )
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querydeletebitmapdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("AskDelBitmapDialog"));
+        if (xQueryBox->run() == RET_YES)
         {
             m_pPatternList->Remove(nPos);
             m_pPatternLB->RemoveItem( nId );

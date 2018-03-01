@@ -112,15 +112,8 @@ void SAL_CALL OStatement_Base::disposing()
 
 void OStatement_BASE2::disposing()
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
-
-    dispose_ChildImpl();
+    ::osl::MutexGuard aGuard1(m_aMutex);
     OStatement_Base::disposing();
-}
-
-void SAL_CALL OStatement_BASE2::release() throw()
-{
-    release_ChildImpl();
 }
 
 Any SAL_CALL OStatement_Base::queryInterface( const Type & rType )
@@ -484,10 +477,11 @@ Sequence< sal_Int32 > SAL_CALL OStatement::executeBatch(  )
 
 
     OString aBatchSql;
-    sal_Int32 nLen = 0;
-    for(std::vector< OUString>::const_iterator i=m_aBatchVector.begin();i != m_aBatchVector.end();++i,++nLen)
+    sal_Int32 nLen = m_aBatchVector.size();
+
+    for (auto const& elem : m_aBatchVector)
     {
-        aBatchSql += OUStringToOString(*i,getOwnConnection()->getTextEncoding());
+        aBatchSql += OUStringToOString(elem,getOwnConnection()->getTextEncoding());
         aBatchSql += ";";
     }
 

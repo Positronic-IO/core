@@ -744,10 +744,10 @@ The following structure describes the permissions used in PDF security
     void               SetDigitLanguage( LanguageType eLang );
 
     void               SetLineColor( const Color& rColor );
-    void               SetLineColor() { SetLineColor( Color( COL_TRANSPARENT ) ); }
+    void               SetLineColor() { SetLineColor( COL_TRANSPARENT ); }
 
     void               SetFillColor( const Color& rColor );
-    void               SetFillColor() { SetFillColor( Color( COL_TRANSPARENT ) ); }
+    void               SetFillColor() { SetFillColor( COL_TRANSPARENT ); }
 
     void               SetFont( const vcl::Font& rNewFont );
     void               SetTextColor( const Color& rColor );
@@ -782,7 +782,7 @@ The following structure describes the permissions used in PDF security
 
     void                DrawPixel( const Point& rPt, const Color& rColor );
     void                DrawPixel( const Point& rPt )
-    { DrawPixel( rPt, Color( COL_TRANSPARENT ) ); }
+    { DrawPixel( rPt, COL_TRANSPARENT ); }
 
     void                DrawLine( const Point& rStartPt, const Point& rEndPt );
     void                DrawLine( const Point& rStartPt, const Point& rEndPt,
@@ -1103,13 +1103,8 @@ The following structure describes the permissions used in PDF security
 
     @param nElement
     the id of the new current structure element
-
-    @returns
-    True if the current structure element could be set successfully
-    False if the current structure element could not be changed
-    (e.g. if the passed element id is invalid)
      */
-    bool SetCurrentStructureElement( sal_Int32 nElement );
+    void SetCurrentStructureElement( sal_Int32 nElement );
 
     /** set a structure attribute on the current structural element
 
@@ -1123,12 +1118,8 @@ The following structure describes the permissions used in PDF security
 
     @param eVal
     the value to set the attribute to
-
-    @returns
-    True if the value was valid and the change has been performed,
-    False if the attribute or value was invalid; attribute remains unchanged
      */
-    bool SetStructureAttribute( enum StructAttribute eAttr, enum StructAttributeValue eVal );
+    void SetStructureAttribute( enum StructAttribute eAttr, enum StructAttributeValue eVal );
     /** set a structure attribute on the current structural element
 
     SetStructureAttributeNumerical sets an attribute of the current structural element
@@ -1141,12 +1132,8 @@ The following structure describes the permissions used in PDF security
 
     @param nValue
     the value to set the attribute to
-
-    @returns
-    True if the value was valid and the change has been performed,
-    False if the attribute or value was invalid; attribute remains unchanged
      */
-    bool SetStructureAttributeNumerical( enum StructAttribute eAttr, sal_Int32 nValue );
+    void SetStructureAttributeNumerical( enum StructAttribute eAttr, sal_Int32 nValue );
     /** set the bounding box of a structural element
 
     SetStructureBoundingBox sets the BBox attribute to a new value. Since the BBox

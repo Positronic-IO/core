@@ -305,7 +305,7 @@ css::awt::Rectangle SvxShowCharSetAcc::implGetBounds(  )
     if ( m_pParent->getCharSetControl()->getScrollBar().IsVisible() )
     {
         const Size aScrollBar = m_pParent->getCharSetControl()->getScrollBar().GetOutputSizePixel();
-        aOutSize.Width() -= aScrollBar.Width();
+        aOutSize.AdjustWidth( -(aScrollBar.Width()) );
     }
 
     awt::Rectangle aRet;
@@ -738,8 +738,7 @@ awt::Rectangle SvxShowCharSetItemAcc::implGetBounds(  )
     if( mpParent )
     {
         tools::Rectangle   aRect( mpParent->maRect );
-        Point       aOrigin;
-        tools::Rectangle   aParentRect( aOrigin, mpParent->mrParent.GetOutputSizePixel() );
+        tools::Rectangle   aParentRect( Point(), mpParent->mrParent.GetOutputSizePixel() );
 
         aRect.Intersection( aParentRect );
 

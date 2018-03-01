@@ -42,7 +42,6 @@
 #include <sdxfer.hxx>
 
 #include <app.hrc>
-#include <helpids.h>
 
 #include <OutlineView.hxx>
 #include <Client.hxx>
@@ -512,45 +511,6 @@ void ViewShell::MouseButtonDown(const MouseEvent& rMEvt, ::sd::Window* pWin)
             }
         }
     }
-}
-
-void ViewShell::LogicMouseButtonDown(const MouseEvent& rMouseEvent)
-{
-    // When we're not doing tiled rendering, then positions must be passed as pixels.
-    assert(comphelper::LibreOfficeKit::isActive());
-
-    Point aPoint = mpActiveWindow->GetPointerPosPixel();
-    mpActiveWindow->SetLastMousePos(rMouseEvent.GetPosPixel());
-
-    MouseButtonDown(rMouseEvent, mpActiveWindow);
-
-    mpActiveWindow->SetPointerPosPixel(aPoint);
-}
-
-void ViewShell::LogicMouseButtonUp(const MouseEvent& rMouseEvent)
-{
-    // When we're not doing tiled rendering, then positions must be passed as pixels.
-    assert(comphelper::LibreOfficeKit::isActive());
-
-    Point aPoint = mpActiveWindow->GetPointerPosPixel();
-    mpActiveWindow->SetLastMousePos(rMouseEvent.GetPosPixel());
-
-    MouseButtonUp(rMouseEvent, mpActiveWindow);
-
-    mpActiveWindow->SetPointerPosPixel(aPoint);
-}
-
-void ViewShell::LogicMouseMove(const MouseEvent& rMouseEvent)
-{
-    // When we're not doing tiled rendering, then positions must be passed as pixels.
-    assert(comphelper::LibreOfficeKit::isActive());
-
-    Point aPoint = mpActiveWindow->GetPointerPosPixel();
-    mpActiveWindow->SetLastMousePos(rMouseEvent.GetPosPixel());
-
-    MouseMove(rMouseEvent, mpActiveWindow);
-
-    mpActiveWindow->SetPointerPosPixel(aPoint);
 }
 
 void ViewShell::SetCursorMm100Position(const Point& rPosition, bool bPoint, bool bClearMark)
@@ -1077,7 +1037,7 @@ void ViewShell::ArrangeGUIElements()
         if (mpHorizontalRuler.get() != nullptr)
         {
             Size aRulerSize = mpHorizontalRuler->GetSizePixel();
-            aRulerSize.Width() = nRight - nLeft;
+            aRulerSize.setWidth( nRight - nLeft );
             mpHorizontalRuler->SetPosSizePixel (
                 Point(nLeft,nTop), aRulerSize);
             if (mpVerticalRuler.get() != nullptr)
@@ -1088,7 +1048,7 @@ void ViewShell::ArrangeGUIElements()
         if (mpVerticalRuler.get() != nullptr)
         {
             Size aRulerSize = mpVerticalRuler->GetSizePixel();
-            aRulerSize.Height() = nBottom  - nTop;
+            aRulerSize.setHeight( nBottom  - nTop );
             mpVerticalRuler->SetPosSizePixel (
                 Point (nLeft,nTop), aRulerSize);
             nLeft += aRulerSize.Width();
@@ -1654,6 +1614,11 @@ void ViewShell::fireSwitchCurrentPage(sal_Int32 pageIndex)
 void ViewShell::NotifyAccUpdate( )
 {
     GetViewShellBase().GetDrawController().NotifyAccUpdate();
+}
+
+weld::Window* ViewShell::GetFrameWeld() const
+{
+    return mpActiveWindow ? mpActiveWindow->GetFrameWeld() : nullptr;
 }
 
 sd::Window* ViewShell::GetContentWindow() const

@@ -348,6 +348,13 @@ void EPUBExportTest::testEPUBFixedLayoutImplicitBreak()
     // This was missing, implicit page break (as calculated by the layout) was lost on export.
     CPPUNIT_ASSERT(mxZipFile->hasByName("OEBPS/sections/section0002.xhtml"));
     CPPUNIT_ASSERT(!mxZipFile->hasByName("OEBPS/sections/section0003.xhtml"));
+
+    // Make sure that fixed layout has chapter names in the navigation
+    // document.
+    mpXmlDoc = parseExport("OEBPS/toc.xhtml");
+    // This was 'Page 1' instead.
+    assertXPathContent(mpXmlDoc, "//xhtml:li[1]/xhtml:a", "First chapter");
+    assertXPathContent(mpXmlDoc, "//xhtml:li[2]/xhtml:a", "Second chapter");
 }
 
 void EPUBExportTest::testPageBreakSplit()
@@ -867,6 +874,11 @@ void EPUBExportTest::testSVG()
     // one, causing a validation error.
     OString aActual(static_cast<const char *>(aMemoryStream.GetBuffer()), aExpected.getLength());
     CPPUNIT_ASSERT_EQUAL(aExpected, aActual);
+
+    // This failed, we used the xlink attribute namespace, but we did not
+    // define its URL.
+    mpXmlDoc = parseExport("OEBPS/images/image0001.svg");
+    assertXPathNSDef(mpXmlDoc, "/svg:svg", "xlink", "http://www.w3.org/1999/xlink");
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(EPUBExportTest);

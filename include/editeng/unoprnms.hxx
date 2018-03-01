@@ -36,7 +36,6 @@
 #define UNO_NAME_FILLHATCHNAME                  "FillHatchName"
 #define UNO_NAME_FILLBITMAP                     "FillBitmap"
 #define UNO_NAME_FILLBITMAPNAME                 "FillBitmapName"
-#define UNO_NAME_FILLBITMAPURL                  "FillBitmapURL"
 #define UNO_NAME_FILLGRADIENTSTEPCOUNT          "FillGradientStepCount"
 #define UNO_NAME_FILLBACKGROUND                 "FillBackground"
 #define UNO_NAME_FILLCOLOR_2                    "FillColor2"
@@ -162,7 +161,7 @@
 
 #define UNO_NAME_GRAPHOBJ_FILLBITMAP            "GraphicObjectFillBitmap"
 #define UNO_NAME_GRAPHOBJ_GRAFURL               "GraphicURL"
-#define UNO_NAME_GRAPHOBJ_REPLACEMENTGRAFURL    "ReplacementGraphicURL"
+#define UNO_NAME_GRAPHOBJ_REPLACEMENT_GRAPHIC   "ReplacementGraphic"
 #define UNO_NAME_GRAPHOBJ_GRAFSTREAMURL         "GraphicStreamURL"
 #define UNO_NAME_GRAPHOBJ_URLPREFIX             "vnd.sun.star.GraphicObject:"
 #define UNO_NAME_GRAPHOBJ_URLPKGPREFIX          "vnd.sun.star.Package:"

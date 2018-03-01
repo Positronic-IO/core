@@ -601,7 +601,7 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
         SfxItemSet aTmpSet( *m_pDlg->GetOutputItemSet() );
         if( SfxStyleFamily::Char == m_nFamily )
         {
-            ::ConvertAttrGenToChar(aTmpSet, m_xTmp->GetItemSet(), CONV_ATTR_STD);
+            ::ConvertAttrGenToChar(aTmpSet, m_xTmp->GetItemSet());
         }
 
         m_xTmp->SetItemSet( aTmpSet );
@@ -784,7 +784,7 @@ void SwDocShell::Edit(
     }
     else if( SfxStyleFamily::Char == nFamily )
     {
-        ::ConvertAttrCharToGen(xTmp->GetItemSet(), CONV_ATTR_STD);
+        ::ConvertAttrCharToGen(xTmp->GetItemSet());
     }
 
     if(SfxStyleFamily::Page == nFamily || SfxStyleFamily::Para == nFamily)
@@ -820,8 +820,7 @@ void SwDocShell::Edit(
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
         assert( pFact );
         ScopedVclPtr<SfxAbstractApplyTabDialog> pDlg(pFact->CreateTemplateDialog(&GetView()->GetViewFrame()->GetWindow(),
-                                                    *(xTmp.get()), nFamily, sPage,
-                                                    pActShell ? pActShell : m_pWrtShell, bNew));
+                                                    *(xTmp.get()), nFamily, sPage, pCurrShell, bNew));
         assert( pDlg );
         std::shared_ptr<ApplyStyle> pApplyStyleHelper(new ApplyStyle(*this, bNew, xTmp, nFamily, pDlg.get(), m_xBasePool, bModified));
         pDlg->SetApplyHdl(LINK(pApplyStyleHelper.get(), ApplyStyle, ApplyHdl));
@@ -868,7 +867,7 @@ void SwDocShell::Edit(
 
             if (pRequest)
                 pRequest->Done();
-        }, pDlg);
+        });
     }
     else
     {
@@ -881,7 +880,7 @@ void SwDocShell::Edit(
             ::SfxToSwPageDescAttr( *GetWrtShell(), xTmp->GetItemSet() );
         else
         {
-            ::ConvertAttrGenToChar(xTmp->GetItemSet(), xTmp->GetItemSet(), CONV_ATTR_STD);
+            ::ConvertAttrGenToChar(xTmp->GetItemSet(), xTmp->GetItemSet());
         }
         if(SfxStyleFamily::Page == nFamily)
             m_pView->InvalidateRulerPos();

@@ -2306,7 +2306,7 @@ void SwBaseShell::ExecBckCol(SfxRequest& rReq)
             else
             {
                 aBrushItem.SetColor(COL_TRANSPARENT);
-                rReq.AppendItem(SvxColorItem(Color(COL_TRANSPARENT),nSlot));
+                rReq.AppendItem(SvxColorItem(COL_TRANSPARENT,nSlot));
             }
             break;
         }
@@ -2711,6 +2711,8 @@ void SwBaseShell::InsertTable( SfxRequest& _rRequest )
 
                 if( pTAFormat == nullptr )
                     rSh.SetTableStyle( SwStyleNameMapper::GetUIName( RES_POOLTABSTYLE_DEFAULT, OUString() ) );
+                else
+                    rSh.SetTableStyle( aAutoName );
 
                 rSh.EndAllAction();
                 rTempView.AutoCaption(TABLE_CAP);

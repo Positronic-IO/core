@@ -46,7 +46,6 @@
 #include <sdresid.hxx>
 #include <EventMultiplexer.hxx>
 #include <ViewShellManager.hxx>
-#include <helpids.h>
 #include <sdpage.hxx>
 #include <drawdoc.hxx>
 #include <smarttag.hxx>
@@ -130,7 +129,7 @@ protected:
     virtual void addCustomHandles( SdrHdlList& rHandlerList ) override;
 
 private:
-    SdrObjectWeakRef    mxPlaceholderObj;
+    ::tools::WeakReference<SdrObject>    mxPlaceholderObj;
 };
 
 class ImageButtonHdl : public SmartHdl
@@ -151,7 +150,7 @@ public:
     static void HideTip();
 
 private:
-    rtl::Reference< ChangePlaceholderTag > mxTag;
+    rtl::Reference< ChangePlaceholderTag > mxChangePlaceholderTag;
 
     int mnHighlightId;
     Size maImageSize;
@@ -159,7 +158,7 @@ private:
 
 ImageButtonHdl::ImageButtonHdl( const SmartTagReference& xTag /*, sal_uInt16 nSID, const Image& rImage, const Image& rImageMO*/, const Point& rPnt )
 : SmartHdl( xTag, rPnt, SdrHdlKind::SmartTag )
-, mxTag( dynamic_cast< ChangePlaceholderTag* >( xTag.get() ) )
+, mxChangePlaceholderTag( dynamic_cast< ChangePlaceholderTag* >( xTag.get() ) )
 , mnHighlightId( -1 )
 , maImageSize( 42, 42 )
 {
@@ -222,10 +221,10 @@ void ImageButtonHdl::CreateB2dIAObject()
     const Point aTagPos( GetPos() );
     basegfx::B2DPoint aPosition( aTagPos.X(), aTagPos.Y() );
 
-    BitmapEx aBitmapEx( mxTag->createOverlayImage( mnHighlightId ) ); // maImageMO.GetBitmapEx() : maImage.GetBitmapEx() );
+    BitmapEx aBitmapEx( mxChangePlaceholderTag->createOverlayImage( mnHighlightId ) ); // maImageMO.GetBitmapEx() : maImage.GetBitmapEx() );
     maImageSize = aBitmapEx.GetSizePixel();
-    maImageSize.Width() >>= 1;
-    maImageSize.Height() >>= 1;
+    maImageSize.setWidth( maImageSize.Width() >> 1 );
+    maImageSize.setHeight( maImageSize.Height() >> 1 );
 
     if(pHdlList)
     {
@@ -385,8 +384,8 @@ void ChangePlaceholderTag::addCustomHandles( SdrHdlList& rHandlerList )
         long all_height = nRows * aButtonSize.Height();
 
         Point aPos( rSnapRect.Center() );
-        aPos.X() -= all_width >> 1;
-        aPos.Y() -= all_height >> 1;
+        aPos.AdjustX( -(all_width >> 1) );
+        aPos.AdjustY( -(all_height >> 1) );
 
         ImageButtonHdl* pHdl = new ImageButtonHdl( xThis, aPoint );
         pHdl->SetObjHdlNum( SMART_TAG_HDL_NUM );

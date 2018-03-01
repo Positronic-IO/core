@@ -21,7 +21,7 @@
 #include <mailmergewizard.hxx>
 #include <swtypes.hxx>
 #include "addresslistdialog.hxx"
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/txtattr.hxx>
 #include <vcl/xtextedt.hxx>
 #include <vcl/builderfactory.hxx>
@@ -50,7 +50,7 @@ using namespace ::com::sun::star::sdbcx;
 static void lcl_Move(Control* pCtrl, long nYOffset)
 {
     Point aPos(pCtrl->GetPosPixel());
-    aPos.Y() += nYOffset;
+    aPos.AdjustY(nYOffset );
     pCtrl->SetPosPixel(aPos);
 }
 
@@ -183,7 +183,9 @@ IMPL_LINK_NOARG(SwMailMergeAddressBlockPage, AddressListHdl_Impl, Button*, void)
     catch (const uno::Exception& e)
     {
         SAL_WARN("sw", e);
-        ScopedVclPtrInstance<MessageDialog>(this, e.Message)->Execute();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                  VclMessageType::Warning, VclButtonsType::Ok, e.Message));
+        xBox->run();
     }
 }
 
@@ -218,8 +220,9 @@ IMPL_LINK(SwMailMergeAddressBlockPage, AssignHdl_Impl, Button*, pButton, void)
     SwMailMergeConfigItem& rConfigItem = m_pWizard->GetConfigItem();
     const sal_uInt16 nSel = m_pSettingsWIN->GetSelectedAddress();
     const uno::Sequence< OUString> aBlocks = rConfigItem.GetAddressBlocks();
-    VclPtr<SwAssignFieldsDialog> pDlg(
-            VclPtr<SwAssignFieldsDialog>::Create(pButton, m_pWizard->GetConfigItem(), aBlocks[nSel], true));
+    ScopedVclPtr<SwAssignFieldsDialog> pDlg(
+        VclPtr<SwAssignFieldsDialog>::Create(
+            pButton, m_pWizard->GetConfigItem(), aBlocks[nSel], true));
     if(RET_OK == pDlg->Execute())
     {
         //preview update
@@ -447,8 +450,9 @@ IMPL_LINK(SwSelectAddressBlockDialog, NewCustomizeHdl_Impl, Button*, pButton, vo
     SwCustomizeAddressBlockDialog::DialogType nType = bCustomize ?
         SwCustomizeAddressBlockDialog::ADDRESSBLOCK_EDIT :
         SwCustomizeAddressBlockDialog::ADDRESSBLOCK_NEW;
-    VclPtr<SwCustomizeAddressBlockDialog> pDlg(
-        VclPtr<SwCustomizeAddressBlockDialog>::Create(pButton,m_rConfig,nType));
+    ScopedVclPtr<SwCustomizeAddressBlockDialog> pDlg(
+        VclPtr<SwCustomizeAddressBlockDialog>::Create(
+            pButton,m_rConfig,nType));
     if(bCustomize)
     {
         pDlg->SetAddress(m_aAddressBlocks[m_pPreview->GetSelectedAddress()]);

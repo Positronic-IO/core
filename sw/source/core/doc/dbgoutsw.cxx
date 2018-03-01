@@ -19,7 +19,6 @@
 
 #ifdef DBG_UTIL
 
-#include <editeng/nlbkitem.hxx>
 #include <rtl/ustring.hxx>
 #include <svl/poolitem.hxx>
 #include <svl/itemiter.hxx>
@@ -613,8 +612,7 @@ static OUString lcl_dbg_out(const SwNode & rNode)
             }
 
             const SwNumRuleItem & rItem =
-                static_cast<const SwNumRuleItem &>
-                (pColl->GetFormatAttr(RES_PARATR_NUMRULE));
+                pColl->GetFormatAttr(RES_PARATR_NUMRULE);
             const OUString& sNumruleName = rItem.GetValue();
 
             if (!sNumruleName.isEmpty())

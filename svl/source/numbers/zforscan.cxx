@@ -39,6 +39,8 @@ using namespace svt;
 const sal_Unicode cNoBreakSpace = 0xA0;
 const sal_Unicode cNarrowNoBreakSpace = 0x202F;
 
+const int MaxCntPost = 20; //max dec places allow by rtl_math_round
+
 const NfKeywordTable ImpSvNumberformatScan::sEnglishKeyword =
 {             // Syntax keywords in English (USA)
     //! All keywords MUST be UPPERCASE! In same order as NfKeywordIndex
@@ -127,16 +129,16 @@ ImpSvNumberformatScan::ImpSvNumberformatScan( SvNumberFormatter* pFormatterP )
     if ( bStandardColorNeedInitialization )
     {
         bStandardColorNeedInitialization = false;
-        StandardColor.push_back( Color(COL_BLACK) );
-        StandardColor.push_back( Color(COL_LIGHTBLUE) );
-        StandardColor.push_back( Color(COL_LIGHTGREEN) );
-        StandardColor.push_back( Color(COL_LIGHTCYAN) );
-        StandardColor.push_back( Color(COL_LIGHTRED) );
-        StandardColor.push_back( Color(COL_LIGHTMAGENTA) );
-        StandardColor.push_back( Color(COL_BROWN) );
-        StandardColor.push_back( Color(COL_GRAY) );
-        StandardColor.push_back( Color(COL_YELLOW) );
-        StandardColor.push_back( Color(COL_WHITE) );
+        StandardColor.push_back( COL_BLACK );
+        StandardColor.push_back( COL_LIGHTBLUE );
+        StandardColor.push_back( COL_LIGHTGREEN );
+        StandardColor.push_back( COL_LIGHTCYAN );
+        StandardColor.push_back( COL_LIGHTRED );
+        StandardColor.push_back( COL_LIGHTMAGENTA );
+        StandardColor.push_back( COL_BROWN );
+        StandardColor.push_back( COL_GRAY );
+        StandardColor.push_back( COL_YELLOW );
+        StandardColor.push_back( COL_WHITE );
 
         static_assert( NF_KEY_BLACK - NF_KEY_COLOR == 1,        "bad FARBE(COLOR), SCHWARZ(BLACK) sequence");
         static_assert( NF_KEY_FIRSTCOLOR - NF_KEY_COLOR == 1,   "bad color sequence");
@@ -2722,7 +2724,7 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                     switch( sStrArray[i][0] )
                     {
                     case '0':
-                        if ( bTimePart && Is100SecZero( i, bDecSep ) )
+                        if (bTimePart && Is100SecZero(i, bDecSep) && nCounter < MaxCntPost)
                         {
                             bDecSep = true;
                             nTypeArray[i] = NF_SYMBOLTYPE_DIGIT;
@@ -2730,7 +2732,7 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                             nCounter++;
                             i++;
                             while (i < nStringsCnt &&
-                                   sStrArray[i][0] == '0')
+                                   sStrArray[i][0] == '0' && nCounter < MaxCntPost)
                             {
                                 rStr += sStrArray[i];
                                 nTypeArray[i] = NF_SYMBOLTYPE_EMPTY;

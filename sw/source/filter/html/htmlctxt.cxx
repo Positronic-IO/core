@@ -131,6 +131,9 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
         m_aParaAttrs.clear();
 
     const SwNodeIndex* pOldEndPara = &m_pPam->GetPoint()->nNode;
+#ifndef NDEBUG
+    auto const nOld(pOldEndPara->GetIndex());
+#endif
     sal_Int32 nOldEndCnt = m_pPam->GetPoint()->nContent.GetIndex();
 
     const SwNodeIndex& rNewSttPara = rNewPos.nNode;
@@ -215,6 +218,7 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
     if( bMoveBack )
         m_pPam->Move( fnMoveForward );
 
+    assert(m_pPam->GetPoint()->nNode.GetIndex() == nOld);
 }
 
 void SwHTMLParser::SaveDocContext( HTMLAttrContext *pCntxt,
@@ -383,6 +387,20 @@ void SwHTMLParser::ClearContext( HTMLAttrContext *pContext )
 
     OSL_ENSURE( !pContext->HasSaveDocContext(),
             "Frame can no longer be exited" );
+
+    // like RestoreDocContext reset enough of this to not catastrophically
+    // fail if we still have a SaveDocContext here
+    if (HTMLAttrContext_SaveDoc *pSave = pContext->GetSaveDocContext())
+    {
+        if (SIZE_MAX != pSave->GetContextStMin())
+        {
+            m_nContextStMin = pSave->GetContextStMin();
+            if (SIZE_MAX != pSave->GetContextStAttrMin())
+                m_nContextStAttrMin = pSave->GetContextStAttrMin();
+        }
+
+        pContext->ClearSaveDocContext();
+    }
 
     // Restart PRE/LISTING/XMP environments
     if( pContext->IsFinishPREListingXMP() )

@@ -230,7 +230,10 @@ SvxShadowItem ShadowControlsWrapper::GetControlValue() const
     SvxShadowItem aItem( GetDefaultValue() );
     if( !maPosWrp.IsControlDontKnow() )
         aItem.SetLocation( maPosWrp.GetControlValue() );
-    if( !maSizeWrp.IsControlDontKnow() )
+    // Default value was saved; so don't change the aItem's width if the control
+    // has not changed its value, to avoid round-trip errors (like twip->cm->twip)
+    // E.g., initial 100 twip will become 0.18 cm, which will return as 102 twip
+    if( !maSizeWrp.IsControlDontKnow() && maSizeWrp.IsControlValueChanged() )
         aItem.SetWidth( maSizeWrp.GetControlValue() );
     if( !maColorWrp.IsControlDontKnow() )
         aItem.SetColor( maColorWrp.GetControlValue() );
@@ -239,8 +242,10 @@ SvxShadowItem ShadowControlsWrapper::GetControlValue() const
 
 void ShadowControlsWrapper::SetControlValue( SvxShadowItem aItem )
 {
+    SetDefaultValue(aItem);
     maPosWrp.SetControlValue( aItem.GetLocation() );
     maSizeWrp.SetControlValue( aItem.GetWidth() );
+    maSizeWrp.GetControl().SaveValue();
     maColorWrp.SetControlValue( aItem.GetColor() );
 }
 
@@ -249,13 +254,13 @@ void ShadowControlsWrapper::SetControlValue( SvxShadowItem aItem )
 class ShadowConnection : public sfx::ItemControlConnection< ShadowItemWrapper, ShadowControlsWrapper >
 {
 public:
-    explicit            ShadowConnection( const SfxItemSet& rItemSet,
+    explicit ShadowConnection( sal_uInt16 nSlot, const SfxItemSet& rItemSet,
                                 ValueSet& rVsPos, MetricField& rMfSize, SvxColorListBox& rLbColor );
 };
 
-ShadowConnection::ShadowConnection( const SfxItemSet& rItemSet,
+ShadowConnection::ShadowConnection( sal_uInt16 nSlot, const SfxItemSet& rItemSet,
         ValueSet& rVsPos, MetricField& rMfSize, SvxColorListBox& rLbColor ) :
-    ItemControlConnectionType( SID_ATTR_BORDER_SHADOW, new ShadowControlsWrapper( rVsPos, rMfSize, rLbColor ), ItemConnFlags::NONE )
+    ItemControlConnectionType( nSlot, new ShadowControlsWrapper( rVsPos, rMfSize, rLbColor ), ItemConnFlags::NONE )
 {
     mxCtrlWrp->SetDefaultValue( maItemWrp.GetDefaultItem( rItemSet ) );
 }
@@ -274,10 +279,10 @@ sfx::ItemConnectionBase* CreateMarginConnection( const SfxItemSet& rItemSet,
     return new MarginConnection( rItemSet, rMfLeft, rMfRight, rMfTop, rMfBottom );
 }
 
-sfx::ItemConnectionBase* CreateShadowConnection( const SfxItemSet& rItemSet,
+sfx::ItemConnectionBase* CreateShadowConnection( sal_uInt16 nSlot, const SfxItemSet& rItemSet,
         ValueSet& rVsPos, MetricField& rMfSize, SvxColorListBox& rLbColor )
 {
-    return new ShadowConnection( rItemSet, rVsPos, rMfSize, rLbColor );
+    return new ShadowConnection( nSlot, rItemSet, rVsPos, rMfSize, rLbColor );
 }
 
 

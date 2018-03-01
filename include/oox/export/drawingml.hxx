@@ -38,6 +38,8 @@
 #include <sax/fshelper.hxx>
 #include <svx/msdffdef.hxx>
 #include <vcl/checksum.hxx>
+#include <tools/gen.hxx>
+#include <vcl/mapmod.hxx>
 
 #ifndef OOX_DRAWINGML_EXPORT_ROTATE_CLOCKWISIFY
 // Our rotation is counter-clockwise and is in 100ths of a degree.
@@ -62,6 +64,9 @@ namespace drawing {
     class XShape;
     struct EnhancedCustomShapeParameterPair;
     struct EnhancedCustomShapeParameter;
+}
+namespace graphic {
+    class XGraphic;
 }
 namespace style {
     struct LineSpacing;
@@ -187,17 +192,43 @@ public:
             const OUString& sURLPropName );
     void WriteBlipFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
                          const OUString& sURLPropName, sal_Int32 nXmlNamespace );
+
+    void WriteXGraphicBlipFill(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
+                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic,
+                               sal_Int32 nXmlNamespace, bool bWriteMode, bool bRelPathToMedia = false);
+
     void WritePattFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WritePattFill(const css::uno::Reference<css::beans::XPropertySet>& rXPropSet,
             const css::drawing::Hatch& rHatch);
+
+    void WriteGraphicCropProperties(css::uno::Reference<css::beans::XPropertySet> const & rxPropertySet,
+                                    Size const & rOriginalSize, MapMode const & rMapMode);
+
     void WriteSrcRect( const css::uno::Reference< css::beans::XPropertySet >&, const OUString& );
+    void WriteSrcRectXGraphic(css::uno::Reference<css::beans::XPropertySet> const & rxPropertySet,
+                              css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
+
     void WriteOutline( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WriteStretch( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, const OUString& rURL );
+
+    void WriteXGraphicStretch(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
+                              css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
+
     void WriteLinespacing( const css::style::LineSpacing& rLineSpacing );
 
     OUString WriteBlip( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
             const OUString& rURL, bool bRelPathToMedia, const Graphic *pGraphic=nullptr );
+
+    OUString WriteXGraphicBlip(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
+                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic,
+                               bool bRelPathToMedia);
+
+    void WriteImageBrightnessContrastTransparence(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet);
+
     void WriteBlipMode( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, const OUString& rURL );
+
+    void WriteXGraphicBlipMode(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
+                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
 
     void WriteShapeTransformation(const css::uno::Reference< css::drawing::XShape >& rXShape,
                   sal_Int32 nXmlNamespace, bool bFlipH = false, bool bFlipV = false, bool bSuppressRotation = false, bool bSuppressFlipping = false, bool bFlippedBeforeRotation = false);

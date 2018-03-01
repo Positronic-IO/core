@@ -9,12 +9,7 @@
 
 $(eval $(call gb_Library_Library,$(gb_CPPU_ENV)_uno))
 
-ifeq ($(OS),IOS)
-bridges_SELECTED_BRIDGE := gcc3_ios
-bridge_noopt_objects := cpp2uno cpp2uno-simulator except uno2cpp uno2cpp-simulator callvirtualmethod abi call
-bridge_asm_objects := ios64_helper
-
-else ifeq ($(CPUNAME),ARM)
+ifeq ($(CPUNAME),ARM)
 
 ifneq ($(filter ANDROID DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_linux_arm
@@ -25,6 +20,29 @@ $(call gb_LinkTarget_get_target,$(call gb_Library_get_linktarget,gcc3_uno)) : \
 $(call gb_LinkTarget_get_target,$(call gb_Library_get_linktarget,gcc3_uno)) : \
 	EXTRAOBJECTLISTS += $(call gb_CustomTarget_get_workdir,bridges/source/cpp_uno/gcc3_linux_arm)/armhelper.objectlist
 endif
+
+else ifeq ($(CPUNAME),ARM64)
+bridges_SELECTED_BRIDGE := gcc3_ios
+bridge_noopt_objects := cpp2uno except uno2cpp
+bridge_asm_objects := ios64_helper
+
+#HACK
+$(eval $(call gb_Library_set_include,$(gb_CPPU_ENV)_uno,\
+    $$(INCLUDE) \
+    -I $(call gb_CustomTarget_get_workdir,bridges/source/cpp_uno/gcc3_ios) \
+))
+
+$(SRCDIR)/bridges/source/cpp_uno/gcc3_ios/ios64_helper.s: \
+	$(call gb_CustomTarget_get_workdir,bridges/source/cpp_uno/gcc3_ios)/codesnippets.S
+
+$(call gb_CustomTarget_get_workdir,bridges/source/cpp_uno/gcc3_ios)/codesnippets.S: \
+	$(SRCDIR)/bridges/source/cpp_uno/gcc3_ios/generate-snippets.pl \
+        | $(call gb_CustomTarget_get_workdir,bridges/source/cpp_uno/gcc3_ios)/.dir
+	$(PERL) $< > $@
+
+$(call gb_Library_get_clean_target,$(gb_CPPU_ENV)_uno) :
+	rm -f $(WORKDIR)/CustomTarget/bridges/source/cpp_uno/gcc3_ios/codesnippets.S
+
 
 else ifeq ($(CPUNAME),AARCH64)
 
@@ -64,7 +82,7 @@ endif
 
 else ifeq ($(CPUNAME),INTEL)
 
-ifneq ($(filter ANDROID DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
+ifneq ($(filter ANDROID DRAGONFLY FREEBSD LINUX NETBSD OPENBSD HAIKU,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_linux_intel
 bridge_asm_objects := call
 bridge_exception_objects := cpp2uno except uno2cpp
@@ -159,12 +177,12 @@ bridge_exception_objects := except
 
 else ifeq ($(CPUNAME),X86_64)
 
-ifneq ($(filter DRAGONFLY FREEBSD LINUX NETBSD OPENBSD,$(OS)),)
+ifneq ($(filter DRAGONFLY FREEBSD LINUX NETBSD OPENBSD HAIKU,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_linux_x86-64
 bridge_asm_objects := call
 bridge_noncallexception_noopt_objects := callvirtualmethod
 bridge_exception_objects := abi cpp2uno except rtti uno2cpp
-else ifeq ($(OS),MACOSX)
+else ifneq ($(filter MACOSX IOS,$(OS)),)
 bridges_SELECTED_BRIDGE := gcc3_macosx_x86-64
 bridge_exception_objects := abi call cpp2uno except uno2cpp
 bridge_noncallexception_noopt_objects := callvirtualmethod
@@ -206,7 +224,7 @@ $(eval $(call gb_Library_add_cxxflags,gcc3_uno,\
 	$(if $(filter TRUE,$(HAVE_GCC_AVX)),-mno-avx) \
 ))
 
-ifeq ($(filter ANDROID WNT DRAGONFLY FREEBSD NETBSD OPENBSD MACOSX,$(OS)),)
+ifeq ($(filter ANDROID WNT DRAGONFLY FREEBSD NETBSD OPENBSD MACOSX IOS HAIKU,$(OS)),)
 $(eval $(call gb_Library_add_libs,gcc3_uno,\
 	-ldl \
 ))
@@ -236,36 +254,36 @@ $(foreach obj,$(bridge_noncallexception_objects),\
 	, $(bridges_NON_CALL_EXCEPTIONS_FLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) $(bridges_DEBUGINFO_FLAGS))) \
 )
 $(foreach obj,$(bridge_noopt_objects),\
-	$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj) \
-	, $(gb_COMPILERNOOPTFLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) $(bridges_DEBUGINFO_FLAGS))) \
-)
+		$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
+				bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj) \
+				, $(gb_COMPILERNOOPTFLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) $(bridges_DEBUGINFO_FLAGS))) \
+ )
 $(foreach obj,$(bridge_noncallexception_noopt_objects),\
-	$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj) \
-	, $(gb_COMPILERNOOPTFLAGS) $(bridges_NON_CALL_EXCEPTIONS_FLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) $(bridges_DEBUGINFO_FLAGS))) \
-)
+		$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
+				bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj) \
+				, $(gb_COMPILERNOOPTFLAGS) $(bridges_NON_CALL_EXCEPTIONS_FLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) $(bridges_DEBUGINFO_FLAGS))) \
+ )
 $(foreach obj,$(bridge_cxx_objects),\
-	$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj))) \
-)
+		$(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
+				bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj))) \
+ )
 $(foreach obj,$(bridge_asm_objects),\
-$(eval $(call gb_Library_add_asmobjects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj))) \
-)
+		$(eval $(call gb_Library_add_asmobjects,$(gb_CPPU_ENV)_uno,\
+				bridges/source/cpp_uno/$(bridges_SELECTED_BRIDGE)/$(obj))) \
+ )
 
 $(eval $(call gb_Library_add_exception_objects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/shared/bridge \
-	bridges/source/cpp_uno/shared/component \
-	bridges/source/cpp_uno/shared/types \
-	bridges/source/cpp_uno/shared/unointerfaceproxy \
-	bridges/source/cpp_uno/shared/vtablefactory \
-	bridges/source/cpp_uno/shared/vtables \
-))
+			bridges/source/cpp_uno/shared/bridge \
+			bridges/source/cpp_uno/shared/component \
+			bridges/source/cpp_uno/shared/types \
+			bridges/source/cpp_uno/shared/unointerfaceproxy \
+			bridges/source/cpp_uno/shared/vtablefactory \
+			bridges/source/cpp_uno/shared/vtables \
+	))
 
 $(eval $(call gb_Library_add_cxxobjects,$(gb_CPPU_ENV)_uno,\
-	bridges/source/cpp_uno/shared/cppinterfaceproxy \
-	, $(gb_COMPILERNOOPTFLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) \
-))
+			bridges/source/cpp_uno/shared/cppinterfaceproxy \
+			, $(gb_COMPILERNOOPTFLAGS) $(gb_LinkTarget_EXCEPTIONFLAGS) \
+	))
 
 # vim: set noet sw=4 ts=4:

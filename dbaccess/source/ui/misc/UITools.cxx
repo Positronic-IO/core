@@ -438,7 +438,7 @@ void fillTypeInfo(  const Reference< css::sdbc::XConnection>& _rxConnection,
         Reference<XResultSetMetaData> xResultSetMetaData = Reference<XResultSetMetaDataSupplier>(xRs,UNO_QUERY)->getMetaData();
         ::connectivity::ORowSetValue aValue;
         std::vector<sal_Int32> aTypes;
-        std::vector<sal_Bool> aNullable;
+        std::vector<bool> aNullable;
         // Loop on the result set until we reach end of file
         while (xRs->next())
         {
@@ -965,9 +965,9 @@ void adjustToolBoxSize(ToolBox* _pToolBox)
     Size aOldSize = _pToolBox->GetSizePixel();
     Size aSize = _pToolBox->CalcWindowSizePixel();
     if ( !aSize.Width() )
-        aSize.Width() = aOldSize.Width();
+        aSize.setWidth( aOldSize.Width() );
     else if ( !aSize.Height() )
-        aSize.Height() = aOldSize.Height();
+        aSize.setHeight( aOldSize.Height() );
 
     Size aTbSize = _pToolBox->GetSizePixel();
     if ( (aSize.Width() && aSize.Width() != aTbSize.Width()) ||

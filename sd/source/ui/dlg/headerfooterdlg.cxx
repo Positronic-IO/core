@@ -34,7 +34,6 @@
 #include <vcl/fixed.hxx>
 #include <vcl/layout.hxx>
 
-#include <helpids.h>
 #include <Outliner.hxx>
 #include <headerfooterdlg.hxx>
 #include <DrawDocShell.hxx>
@@ -754,7 +753,7 @@ void PresLayoutPreview::Paint(vcl::RenderContext& rRenderContext, SdrTextObj con
     svtools::ColorConfigValue aColor( aColorConfig.GetColorValue( bVisible ? svtools::FONTCOLOR : svtools::OBJECTBOUNDARIES ) );
 
     // paint at OutDev
-    rRenderContext.SetLineColor(Color(aColor.nColor));
+    rRenderContext.SetLineColor(aColor.nColor);
     rRenderContext.SetFillColor();
 
     for (sal_uInt32 a(0); a < aGeometry.count(); a++)
@@ -782,17 +781,17 @@ void PresLayoutPreview::Paint(vcl::RenderContext& rRenderContext, const ::tools:
         nWidth = maPageSize.Height() == 0 ? 0 : long( static_cast<double>(nHeight * maPageSize.Width()) / static_cast<double>(maPageSize.Height()) );
     }
 
-    maOutRect.Left() += (maOutRect.GetWidth() - nWidth) >> 1;
-    maOutRect.Right() = maOutRect.Left() + nWidth - 1;
-    maOutRect.Top() += (maOutRect.GetHeight() - nHeight) >> 1;
-    maOutRect.Bottom() = maOutRect.Top() + nHeight - 1;
+    maOutRect.AdjustLeft((maOutRect.GetWidth() - nWidth) >> 1 );
+    maOutRect.SetRight( maOutRect.Left() + nWidth - 1 );
+    maOutRect.AdjustTop((maOutRect.GetHeight() - nHeight) >> 1 );
+    maOutRect.SetBottom( maOutRect.Top() + nHeight - 1 );
 
     // draw decoration frame
     DecorationView aDecoView(&rRenderContext);
     maOutRect = aDecoView.DrawFrame(maOutRect, DrawFrameStyle::In);
 
     // draw page background
-    rRenderContext.SetFillColor(Color(COL_WHITE));
+    rRenderContext.SetFillColor(COL_WHITE);
     rRenderContext.DrawRect(maOutRect);
 
     // paint presentation objects from masterpage

@@ -83,9 +83,6 @@
 
 #define SV_STDTEXT_SERVICENOTAVAILABLE               NC_("SV_STDTEXT_SERVICENOTAVAILABLE", "The component (%s) could not be loaded.\nPlease start setup with the repair option.")
 
-#define SV_STDTEXT_DONTASKAGAIN                      NC_("SV_STDTEXT_DONTASKAGAIN", "Do not show this question again.")
-#define SV_STDTEXT_DONTWARNAGAIN                     NC_("SV_STDTEXT_DONTWARNAGAIN", "Do not show warning again.")
-
 #define SV_STDTEXT_ABOUT                             NC_("SV_STDTEXT_ABOUT", "About %PRODUCTNAME")
 #define SV_STDTEXT_PREFERENCES                       NC_("SV_STDTEXT_PREFERENCES", "Preferences...")
 #define SV_STDTEXT_ALLFILETYPES                      NC_("SV_STDTEXT_ALLFILETYPES", "Any type")
@@ -102,6 +99,7 @@
 #define STR_FPICKER_VERSION                          NC_("STR_FPICKER_VERSION", "~Version:")
 #define STR_FPICKER_TEMPLATES                        NC_("STR_FPICKER_TEMPLATES", "S~tyles:")
 #define STR_FPICKER_IMAGE_TEMPLATE                   NC_("STR_FPICKER_IMAGE_TEMPLATE", "Frame Style: ")
+#define STR_FPICKER_IMAGE_ANCHOR                     NC_("STR_FPICKER_IMAGE_ANCHOR", "A~nchor: ")
 #define STR_FPICKER_SELECTION                        NC_("STR_FPICKER_SELECTION", "~Selection")
 #define STR_FPICKER_FOLDER_DEFAULT_TITLE             NC_("STR_FPICKER_FOLDER_DEFAULT_TITLE", "Select Path")
 #define STR_FPICKER_FOLDER_DEFAULT_DESCRIPTION       NC_("STR_FPICKER_FOLDER_DEFAULT_DESCRIPTION", "Please select a folder.")

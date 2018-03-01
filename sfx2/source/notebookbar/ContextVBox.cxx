@@ -17,11 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <vcl/NotebookbarContextControl.hxx>
 #include <vcl/builderfactory.hxx>
 #include <vcl/layout.hxx>
 #include <sfx2/dllapi.h>
 #include <sfx2/viewfrm.hxx>
-#include <sfx2/notebookbar/NotebookbarContextControl.hxx>
 
 /*
  * ContextVBox is a VclVBox which shows own children depending on current context.
@@ -53,7 +55,7 @@ public:
                 if ( pChild->HasContext( eContext ) || pChild->HasContext( vcl::EnumContext::Context::Any ) )
                 {
                     Size aSize( pChild->GetOptimalSize() );
-                    aSize.Height() += 6;
+                    aSize.AdjustHeight(6 );
                     pChild->Show();
                     pChild->SetSizePixel( aSize );
                 }
@@ -65,7 +67,7 @@ public:
             }
         }
         Size aSize( GetOptimalSize() );
-        aSize.Width() += 6;
+        aSize.AdjustWidth(6 );
         SetSizePixel( aSize );
     }
 };

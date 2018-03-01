@@ -1384,12 +1384,12 @@ bool SwLayAction::FormatLayout( OutputDevice *pRenderContext, SwLayoutFrame *pLa
     return bChanged || bTabChanged;
 }
 
-bool SwLayAction::FormatLayoutFly( SwFlyFrame* pFly )
+void SwLayAction::FormatLayoutFly( SwFlyFrame* pFly )
 {
     vcl::RenderContext* pRenderContext = m_pImp->GetShell()->GetOut();
     OSL_ENSURE( !IsAgain(), "Attention to the invalid page." );
     if ( IsAgain() )
-        return false;
+        return;
 
     bool bChanged = false;
     bool bAddRect = true;
@@ -1415,7 +1415,7 @@ bool SwLayAction::FormatLayoutFly( SwFlyFrame* pFly )
     }
 
     if ( IsAgain() )
-        return false;
+        return;
 
     // Now, deal with the lowers that are LayoutFrames
     bool bTabChanged = false;
@@ -1431,7 +1431,6 @@ bool SwLayAction::FormatLayoutFly( SwFlyFrame* pFly )
         }
         pLow = pLow->GetNext();
     }
-    return bChanged || bTabChanged;
 }
 
 // Implement vertical layout support
@@ -1796,9 +1795,7 @@ void SwLayAction::FormatContent_( const SwContentFrame *pContent, const SwPageFr
     }
 }
 
-// Returns true if all Contents of the Fly have been processed completely.
-// Returns false if processing has been interrupted prematurely.
-bool SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
+void SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
 {
     const SwContentFrame *pContent = pFly->ContainsContent();
 
@@ -1828,7 +1825,7 @@ bool SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
         }
 
         if ( IsAgain() )
-            return false;
+            return;
 
         // If there's input, we interrupt processing.
         if ( !pFly->IsFlyInContentFrame() )
@@ -1836,13 +1833,11 @@ bool SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
             CheckIdleEnd();
             // consider interrupt formatting.
             if ( IsInterrupt() && !mbFormatContentOnInterrupt )
-                return false;
+                return;
         }
         pContent = pContent->GetNextContentFrame();
     }
     CheckWaitCursor();
-    // consider interrupt formatting.
-    return !(IsInterrupt() && !mbFormatContentOnInterrupt);
 }
 
 bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
@@ -2052,7 +2047,7 @@ bool SwLayIdle::DoIdleJob( IdleJobType eJob, bool bVisAreaOnly )
 }
 
 #if HAVE_FEATURE_DESKTOP && defined DBG_UTIL
-void SwLayIdle::ShowIdle( ColorData eColorData )
+void SwLayIdle::ShowIdle( Color eColor )
 {
     if ( !m_bIndicator )
     {
@@ -2064,16 +2059,16 @@ void SwLayIdle::ShowIdle( ColorData eColorData )
             aRect = pWin->PixelToLogic( aRect );
             // Depending on if idle layout is in progress or not, draw a "red square" or a "green square".
             pWin->Push( PushFlags::FILLCOLOR|PushFlags::LINECOLOR );
-            pWin->SetFillColor( eColorData );
+            pWin->SetFillColor( eColor );
             pWin->SetLineColor();
             pWin->DrawRect( aRect );
             pWin->Pop();
         }
     }
 }
-#define SHOW_IDLE( ColorData ) ShowIdle( ColorData )
+#define SHOW_IDLE( Color ) ShowIdle( Color )
 #else
-#define SHOW_IDLE( ColorData )
+#define SHOW_IDLE( Color )
 #endif // DBG_UTIL
 
 SwLayIdle::SwLayIdle( SwRootFrame *pRt, SwViewShellImp *pI ) :

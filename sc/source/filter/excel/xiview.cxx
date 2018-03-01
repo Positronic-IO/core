@@ -257,13 +257,13 @@ void XclImpTabViewSettings::Finalize()
     else
     {
         // split window: position is in twips
-        rTabSett.maSplitPos.X() = static_cast< long >( maData.mnSplitX );
-        rTabSett.maSplitPos.Y() = static_cast< long >( maData.mnSplitY );
+        rTabSett.maSplitPos.setX( static_cast< long >( maData.mnSplitX ) );
+        rTabSett.maSplitPos.setY( static_cast< long >( maData.mnSplitY ) );
     }
 
     // grid color
     if( maData.mbDefGridColor )
-        rTabSett.maGridColor.SetColor( COL_AUTO );
+        rTabSett.maGridColor = COL_AUTO;
     else
         rTabSett.maGridColor = maData.maGridColor;
 

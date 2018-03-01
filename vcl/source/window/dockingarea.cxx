@@ -226,23 +226,22 @@ void DockingAreaWindow::Paint(vcl::RenderContext& rRenderContext, const tools::R
             }
 
             // draw multiple toolbar backgrounds, i.e., one for each toolbar line
-            std::map<int, int>::const_iterator it;
-            for (it = ranges.begin(); it != ranges.end(); ++it)
+            for (auto const& range : ranges)
             {
                 tools::Rectangle aTBRect;
                 if (IsHorizontal())
                 {
-                    aTBRect.Left()   = 0;
-                    aTBRect.Right()  = aOutSz.Width() - 1;
-                    aTBRect.Top()    = it->first;
-                    aTBRect.Bottom() = it->first + it->second - 1;
+                    aTBRect.SetLeft( 0 );
+                    aTBRect.SetRight( aOutSz.Width() - 1 );
+                    aTBRect.SetTop( range.first );
+                    aTBRect.SetBottom( range.first + range.second - 1 );
                 }
                 else
                 {
-                    aTBRect.Left()   = it->first;
-                    aTBRect.Right()  = it->first + it->second - 1;
-                    aTBRect.Top()    = 0;
-                    aTBRect.Bottom() = aOutSz.Height() - 1;
+                    aTBRect.SetLeft( range.first );
+                    aTBRect.SetRight( range.first + range.second - 1 );
+                    aTBRect.SetTop( 0 );
+                    aTBRect.SetBottom( aOutSz.Height() - 1 );
                 }
                 rRenderContext.DrawNativeControl(ControlType::Toolbar, IsHorizontal() ? ControlPart::DrawBackgroundHorz : ControlPart::DrawBackgroundVert,
                                                  aTBRect, nState, aControlValue, OUString());

@@ -54,8 +54,6 @@ namespace svx
     inline long Round(double a) { return a>0.0 ? static_cast<long>(a+0.5) : -static_cast<long>((-a)+0.5); }
 }
 
-inline void MoveRect(tools::Rectangle& rRect, const Size& S)    { rRect.Move(S.Width(),S.Height()); }
-inline void MovePoint(Point& rPnt, const Size& S)        { rPnt.X()+=S.Width(); rPnt.Y()+=S.Height(); }
 inline void MovePoly(tools::Polygon& rPoly, const Size& S)      { rPoly.Move(S.Width(),S.Height()); }
 void MoveXPoly(XPolygon& rPoly, const Size& S);
 
@@ -115,27 +113,27 @@ inline void ResizePoint(Point& rPnt, const Point& rRef, const Fraction& xFract, 
 {
     double nxFract = xFract.IsValid() ? static_cast<double>(xFract) : 1.0;
     double nyFract = yFract.IsValid() ? static_cast<double>(yFract) : 1.0;
-    rPnt.X() = rRef.X() + svx::Round( (rPnt.X() - rRef.X()) * nxFract );
-    rPnt.Y() = rRef.Y() + svx::Round( (rPnt.Y() - rRef.Y()) * nyFract );
+    rPnt.setX(rRef.X() + svx::Round( (rPnt.X() - rRef.X()) * nxFract ));
+    rPnt.setY(rRef.Y() + svx::Round( (rPnt.Y() - rRef.Y()) * nyFract ));
 }
 
 inline void RotatePoint(Point& rPnt, const Point& rRef, double sn, double cs)
 {
     long dx=rPnt.X()-rRef.X();
     long dy=rPnt.Y()-rRef.Y();
-    rPnt.X()=svx::Round(rRef.X()+dx*cs+dy*sn);
-    rPnt.Y()=svx::Round(rRef.Y()+dy*cs-dx*sn);
+    rPnt.setX(svx::Round(rRef.X()+dx*cs+dy*sn));
+    rPnt.setY(svx::Round(rRef.Y()+dy*cs-dx*sn));
 }
 
 inline void ShearPoint(Point& rPnt, const Point& rRef, double tn, bool bVShear)
 {
     if (!bVShear) { // Horizontal
         if (rPnt.Y()!=rRef.Y()) { // else not needed
-            rPnt.X()-=svx::Round((rPnt.Y()-rRef.Y())*tn);
+            rPnt.AdjustX(-svx::Round((rPnt.Y()-rRef.Y())*tn));
         }
     } else { // or else vertical
         if (rPnt.X()!=rRef.X()) { // else not needed
-            rPnt.Y()-=svx::Round((rPnt.X()-rRef.X())*tn);
+            rPnt.AdjustY(-svx::Round((rPnt.X()-rRef.X())*tn));
         }
     }
 }
@@ -146,11 +144,11 @@ inline double GetCrookAngle(Point& rPnt, const Point& rCenter, const Point& rRad
     if (bVertical) {
         long dy=rPnt.Y()-rCenter.Y();
         nAngle=static_cast<double>(dy)/static_cast<double>(rRad.Y());
-        rPnt.Y()=rCenter.Y();
+        rPnt.setY(rCenter.Y());
     } else {
         long dx=rCenter.X()-rPnt.X();
         nAngle=static_cast<double>(dx)/static_cast<double>(rRad.X());
-        rPnt.X()=rCenter.X();
+        rPnt.setX(rCenter.X());
     }
     return nAngle;
 }

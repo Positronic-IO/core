@@ -83,7 +83,7 @@ sal_uInt32 SwWriteTable::GetBoxWidth( const SwTableBox *pBox )
 {
     const SwFrameFormat *pFormat = pBox->GetFrameFormat();
     const SwFormatFrameSize& aFrameSize=
-        static_cast<const SwFormatFrameSize&>(pFormat->GetFormatAttr( RES_FRM_SIZE ));
+        pFormat->GetFormatAttr( RES_FRM_SIZE );
 
     return sal::static_int_cast<sal_uInt32>(aFrameSize.GetSize().Width());
 }
@@ -193,8 +193,7 @@ void SwWriteTable::MergeBorders( const SvxBorderLine* pBorderLine,
 {
     if( sal_uInt32(-1) == m_nBorderColor )
     {
-        Color aGrayColor( COL_GRAY );
-        if( !pBorderLine->GetColor().IsRGBEqual( aGrayColor ) )
+        if( !pBorderLine->GetColor().IsRGBEqual( COL_GRAY ) )
             m_nBorderColor = pBorderLine->GetColor().GetColor();
     }
 
@@ -228,7 +227,7 @@ sal_uInt16 SwWriteTable::MergeBoxBorders( const SwTableBox *pBox,
     sal_uInt16 nBorderMask = 0;
 
     const SwFrameFormat *pFrameFormat = pBox->GetFrameFormat();
-    const SvxBoxItem& rBoxItem = static_cast<const SvxBoxItem&>(pFrameFormat->GetFormatAttr( RES_BOX ));
+    const SvxBoxItem& rBoxItem = pFrameFormat->GetFormatAttr( RES_BOX );
 
     if( rBoxItem.GetTop() )
     {

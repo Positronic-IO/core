@@ -43,7 +43,6 @@
 #include <tools/urlobj.hxx>
 #include <dbui.hrc>
 #include <strings.hrc>
-#include <helpids.h>
 #include <unomid.h>
 
 using namespace ::com::sun::star;
@@ -230,7 +229,7 @@ void SwAddressControl_Impl::SetData(SwCSVData& rDBData)
             m_pScrollBar->DoScroll(0);
         }
         Size aWinOutputSize(m_aWinOutputSize);
-        aWinOutputSize.Height() = nContentHeight;
+        aWinOutputSize.setHeight( nContentHeight );
         m_pWindow->SetOutputSizePixel(aWinOutputSize);
 
     }

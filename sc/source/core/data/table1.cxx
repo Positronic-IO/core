@@ -925,7 +925,7 @@ void ScTable::GetDataArea( SCCOL& rStartCol, SCROW& rStartRow, SCCOL& rEndCol, S
 
 bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rStartRow,
         SCCOL& rEndCol, SCROW& rEndRow, bool bColumnsOnly, bool bStickyTopRow, bool bStickyLeftCol,
-        bool bConsiderCellNotes ) const
+        bool bConsiderCellNotes, bool bConsiderCellDrawObjects ) const
 {
     rStartCol = std::min<SCCOL>( rStartCol, aCol.size()-1 );
     // check for rEndCol is done below.
@@ -961,6 +961,10 @@ bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rS
         {
             if (bConsiderCellNotes && !aCol[rEndCol].IsNotesEmptyBlock( rStartRow, rEndRow ))
                 break;
+
+            if (bConsiderCellDrawObjects && !aCol[rEndCol].IsDrawObjectsEmptyBlock( rStartRow, rEndRow ))
+                break;
+
             --rEndCol;
             o_bShrunk = true;
         }
@@ -975,6 +979,9 @@ bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rS
             if (aCol[rStartCol].IsEmptyBlock( rStartRow, rEndRow))
             {
                 if (bConsiderCellNotes && !aCol[rStartCol].IsNotesEmptyBlock( rStartRow, rEndRow ))
+                    break;
+
+                if (bConsiderCellDrawObjects && !aCol[rStartCol].IsDrawObjectsEmptyBlock( rStartRow, rEndRow ))
                     break;
 
                 ++rStartCol;
@@ -994,7 +1001,7 @@ bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rS
                 bool bFound = false;
                 for (SCCOL i=rStartCol; i<=rEndCol && !bFound; i++)
                 {
-                    if (aCol[i].HasDataAt( rStartRow))
+                    if (aCol[i].HasDataAt( rStartRow, bConsiderCellNotes, bConsiderCellDrawObjects))
                         bFound = true;
                 }
                 if (!bFound)
@@ -1009,7 +1016,8 @@ bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rS
 
         while (rStartRow < rEndRow)
         {
-            SCROW nLastDataRow = GetLastDataRow( rStartCol, rEndCol, rEndRow);
+            SCROW nLastDataRow = GetLastDataRow( rStartCol, rEndCol, rEndRow,
+                                                 bConsiderCellNotes, bConsiderCellDrawObjects);
             if (0 <= nLastDataRow && nLastDataRow < rEndRow)
             {
                 rEndRow = std::max( rStartRow, nLastDataRow);
@@ -1022,10 +1030,12 @@ bool ScTable::ShrinkToUsedDataArea( bool& o_bShrunk, SCCOL& rStartCol, SCROW& rS
 
     return rStartCol != rEndCol || (bColumnsOnly ?
             !aCol[rStartCol].IsEmptyBlock( rStartRow, rEndRow) :
-            (rStartRow != rEndRow || aCol[rStartCol].HasDataAt( rStartRow)));
+            (rStartRow != rEndRow ||
+                aCol[rStartCol].HasDataAt( rStartRow, bConsiderCellNotes, bConsiderCellDrawObjects)));
 }
 
-SCROW ScTable::GetLastDataRow( SCCOL nCol1, SCCOL nCol2, SCROW nLastRow ) const
+SCROW ScTable::GetLastDataRow( SCCOL nCol1, SCCOL nCol2, SCROW nLastRow,
+                               bool bConsiderCellNotes, bool bConsiderCellDrawObjects ) const
 {
     if ( !IsColValid( nCol1 ) || !ValidCol( nCol2 ) )
         return -1;
@@ -1035,7 +1045,7 @@ SCROW ScTable::GetLastDataRow( SCCOL nCol1, SCCOL nCol2, SCROW nLastRow ) const
     SCROW nNewLastRow = 0;
     for (SCCOL i = nCol1; i <= nCol2; ++i)
     {
-        SCROW nThis = aCol[i].GetLastDataPos(nLastRow);
+        SCROW nThis = aCol[i].GetLastDataPos(nLastRow, bConsiderCellNotes, bConsiderCellDrawObjects);
         if (nNewLastRow < nThis)
             nNewLastRow = nThis;
     }
@@ -1289,8 +1299,7 @@ bool ScTable::ValidNextPos( SCCOL nCol, SCROW nRow, const ScMarkData& rMark,
     if (bMarked && !rMark.IsCellMarked(nCol,nRow))
         return false;
 
-    if (bUnprotected && static_cast<const ScProtectionAttr*>(
-                        GetAttr(nCol,nRow,ATTR_PROTECTION))->GetProtection())
+    if (bUnprotected && GetAttr(nCol,nRow,ATTR_PROTECTION)->GetProtection())
         return false;
 
     if (bMarked || bUnprotected)        //TODO: also in other case ???
@@ -2396,9 +2405,28 @@ const ScConditionalFormatList* ScTable::GetCondFormList() const
 
 ScColumnsRange ScTable::GetColumnsRange(SCCOL nColBegin, SCCOL nColEnd) const
 {
-    // because the range is inclusive, some code will pass nColEnd<nColBegin to indicate an empty range
-    return ScColumnsRange(ScColumnsRange::Iterator(aCol.begin() + nColBegin),
-                          ScColumnsRange::Iterator(nColEnd < nColBegin ? (aCol.begin() + nColBegin) : (aCol.begin() + nColEnd + 1)));
+    // Because the range is inclusive, some code will pass nColEnd<nColBegin to
+    // indicate an empty range. Ensure that we create only valid iterators for
+    // the range, limit columns to bounds.
+    SCCOL nEffBegin, nEffEnd;
+    if (nColBegin <= nColEnd)
+    {
+        if (nColBegin < 0)
+            nEffBegin = 0;
+        else
+            nEffBegin = std::min<SCCOL>( nColBegin, aCol.size());
+        if (nColEnd < 0)
+            nEffEnd = 0;
+        else
+            nEffEnd = std::min<SCCOL>( nColEnd + 1, aCol.size());
+    }
+    else
+    {
+        // Any empty will do.
+        nEffBegin = nEffEnd = 0;
+    }
+    return ScColumnsRange( ScColumnsRange::Iterator( aCol.begin() + nEffBegin),
+                           ScColumnsRange::Iterator( aCol.begin() + nEffEnd));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

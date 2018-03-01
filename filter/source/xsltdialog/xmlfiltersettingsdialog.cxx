@@ -30,9 +30,9 @@
 #include <unotools/pathoptions.hxx>
 #include <osl/file.hxx>
 #include <o3tl/enumrange.hxx>
-#include <vcl/msgbox.hxx>
-#include <vcl/svapp.hxx>
 #include <vcl/builderfactory.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <svtools/treelistentry.hxx>
 
@@ -774,8 +774,11 @@ void XMLFilterSettingsDialog::onDelete()
         OUString aMessage(XsltResId(STR_WARN_DELETE));
         aMessage = aMessage.replaceFirst( "%s", pInfo->maFilterName );
 
-        ScopedVclPtrInstance< WarningBox > aWarnBox(this, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, aMessage );
-        if( aWarnBox->Execute() == RET_YES )
+        std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
+                                                   VclMessageType::Warning, VclButtonsType::YesNo,
+                                                   aMessage));
+        xWarn->set_default_response(RET_YES);
+        if (xWarn->run() == RET_YES)
         {
             try
             {
@@ -902,8 +905,10 @@ void XMLFilterSettingsDialog::onSave()
             aMsg = aMsg.replaceFirst( sPlaceholder, aURL.GetName() );
         }
 
-        ScopedVclPtrInstance< InfoBox > aBox(this, aMsg );
-        aBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      aMsg));
+        xInfoBox->run();
     }
 }
 
@@ -967,8 +972,10 @@ void XMLFilterSettingsDialog::onOpen()
             aMsg = aMsg.replaceFirst( sPlaceholder, OUString::number( nFilters ) );
         }
 
-        ScopedVclPtrInstance< InfoBox > aBox(this, aMsg );
-        aBox->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      aMsg));
+        xInfoBox->run();
     }
 }
 
@@ -1339,8 +1346,8 @@ Size SvxPathControl::GetOptimalSize() const
     Size aDefSize(LogicToPixel(Size(150, 0), MapMode(MapUnit::MapAppFont)));
     Size aOptSize(m_pVBox->GetOptimalSize());
     long nRowHeight(GetTextHeight());
-    aOptSize.Height() = nRowHeight * 10;
-    aOptSize.Width() = std::max(aDefSize.Width(), aOptSize.Width());
+    aOptSize.setHeight( nRowHeight * 10 );
+    aOptSize.setWidth( std::max(aDefSize.Width(), aOptSize.Width()) );
     return aOptSize;
 }
 
@@ -1434,7 +1441,7 @@ IMPL_LINK( XMLFilterListBox, HeaderEndDrag_Impl, HeaderBar*, pBar, void )
         for ( sal_uInt16 i = 1; i <= nTabs; ++i )
         {
             long nW = m_pHeaderBar->GetItemSize(i);
-            aSz.Width() =  nW + nTmpSz;
+            aSz.setWidth(  nW + nTmpSz );
             nTmpSz += nW;
             SetTab( i, PixelToLogic( aSz, MapMode(MapUnit::MapAppFont) ).Width() );
         }

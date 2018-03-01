@@ -537,6 +537,19 @@ public:
         mpDoc->pClass->setViewLanguage(mpDoc, nId, language);
     }
 
+    /**
+     * Post the text input from external input window, like IME, to given windowId
+     *
+     * @param nWindowId Specify the window id to post the input event to. If
+     * nWindow is 0, the event is posted into the document
+     * @param nType see LibreOfficeKitExtTextInputType
+     * @param pText Text for LOK_EXT_TEXTINPUT
+     */
+    void postWindowExtTextInputEvent(unsigned nWindowId, int nType, const char* pText)
+    {
+        mpDoc->pClass->postWindowExtTextInputEvent(mpDoc, nWindowId, nType, pText);
+    }
+
 #endif // defined LOK_USE_UNSTABLE_API || defined LIBO_INTERNAL_ONLY
 };
 
@@ -583,11 +596,6 @@ public:
     }
 
     /// Returns the last error as a string, the returned pointer has to be freed by the caller.
-
-    /// Exact semantics somewhat unclear (sometimes the code clears the string that the next call to
-    /// getError() will return if no error happens in another function, sometimes not), and
-    /// unfortunately cleaning up that is harder than it seems, because of lovely global variables
-    /// and a unit test that uses the LibreOfficeKit API in an untypical manner.
     char* getError()
     {
         return mpThis->pClass->getError(mpThis);

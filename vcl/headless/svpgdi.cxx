@@ -123,7 +123,7 @@ namespace
 
     void Toggle1BitTransparency(const BitmapBuffer& rBuf)
     {
-        assert(rBuf.maPalette.GetBestIndex(BitmapColor(Color(COL_BLACK))) == 0);
+        assert(rBuf.maPalette.GetBestIndex(BitmapColor(COL_BLACK)) == 0);
         // TODO: make upper layers use standard alpha
         if (getCairoFormat(rBuf) == CAIRO_FORMAT_A1)
         {
@@ -329,7 +329,7 @@ namespace
                 pAlphaBits.reset( new unsigned char[nImageSize] );
                 memcpy(pAlphaBits.get(), pMaskBuf->mpBits, nImageSize);
 
-                const sal_Int32 nBlackIndex = pMaskBuf->maPalette.GetBestIndex(BitmapColor(Color(COL_BLACK)));
+                const sal_Int32 nBlackIndex = pMaskBuf->maPalette.GetBestIndex(BitmapColor(COL_BLACK));
                 if (nBlackIndex == 0)
                 {
                     // TODO: make upper layers use standard alpha
@@ -501,9 +501,9 @@ void SvpSalGraphics::clipRegion(cairo_t* cr)
     }
     if (!aRectangles.empty())
     {
-        for (RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+        for (auto const& rectangle : aRectangles)
         {
-            cairo_rectangle(cr, aRectIter->Left(), aRectIter->Top(), aRectIter->GetWidth(), aRectIter->GetHeight());
+            cairo_rectangle(cr, rectangle.Left(), rectangle.Top(), rectangle.GetWidth(), rectangle.GetHeight());
         }
         cairo_clip(cr);
     }
@@ -1073,7 +1073,7 @@ void SvpSalGraphics::applyColor(cairo_t *cr, SalColor aColor)
     }
     else
     {
-        double fSet = aColor == COL_BLACK ? 1.0 : 0.0;
+        double fSet = aColor == sal_uInt32(COL_BLACK) ? 1.0 : 0.0;
         cairo_set_source_rgba(cr, 1, 1, 1, fSet);
         cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
     }
@@ -1200,10 +1200,33 @@ void SvpSalGraphics::copyBits( const SalTwoRect& rTR,
         cairo_surface_destroy(pCopy);
 }
 
+namespace
+{
+    bool isBlackWhite(const SalBitmap& rBitmap)
+    {
+        const SvpSalBitmap& rSrcBmp = static_cast<const SvpSalBitmap&>(rBitmap);
+        const BitmapBuffer * pSourceBuffer = rSrcBmp.GetBuffer();
+        const BitmapPalette & rPalette = pSourceBuffer->maPalette;
+
+        return (
+            rPalette.GetEntryCount() < 2 ||
+
+            (rPalette.GetEntryCount() == 2 &&
+            rPalette[0] == COL_BLACK &&
+            rPalette[1] == COL_WHITE ) ||
+
+            (rPalette.GetEntryCount() == 2 &&
+            rPalette[1] == COL_BLACK &&
+            rPalette[0] == COL_WHITE )
+            );
+    }
+}
+
 void SvpSalGraphics::drawBitmap(const SalTwoRect& rTR, const SalBitmap& rSourceBitmap)
 {
-    if (rSourceBitmap.GetBitCount() == 1)
+    if (rSourceBitmap.GetBitCount() == 1 && isBlackWhite(rSourceBitmap))
     {
+        // This way we draw only monochrome b/w bitmaps
         MaskHelper aMask(rSourceBitmap);
         cairo_surface_t* source = aMask.getMask();
         copySource(rTR, source);
@@ -1301,8 +1324,8 @@ SalBitmap* SvpSalGraphics::getBitmap( long nX, long nY, long nWidth, long nHeigh
     if (GetBitCount() == 1)
     {
         aPal.SetEntryCount(2);
-        aPal[0] = Color(COL_BLACK);
-        aPal[1] = Color(COL_WHITE);
+        aPal[0] = COL_BLACK;
+        aPal[1] = COL_WHITE;
     }
 
     if (!pBitmap->Create(Size(nWidth, nHeight), GetBitCount(), aPal))

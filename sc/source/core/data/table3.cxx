@@ -22,6 +22,7 @@
 #include <unotools/textsearch.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
+#include <svx/svdobj.hxx>
 #include <unotools/charclass.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <stdlib.h>
@@ -63,6 +64,7 @@
 #include <listenerquery.hxx>
 #include <bcaslot.hxx>
 #include <reordermap.hxx>
+#include <drwlayer.hxx>
 
 #include <svl/sharedstringpool.hxx>
 
@@ -85,13 +87,16 @@ using namespace ::com::sun::star::i18n;
     Original string to be split into pieces
 
     @param sPrefix
-    Prefix string that consists of the part before the first number token
+    Prefix string that consists of the part before the first number token.
+    If no number was found, sPrefix is unchanged.
 
     @param sSuffix
     String after the last number token.  This may still contain number strings.
+    If no number was found, sSuffix is unchanged.
 
     @param fNum
     Number converted from the middle number string
+    If no number was found, fNum is unchanged.
 
     @return Returns TRUE if a numeral element is found in a given string, or
     FALSE if no numeral element is found.
@@ -99,28 +104,34 @@ using namespace ::com::sun::star::i18n;
 bool SplitString( const OUString &sWhole,
     OUString &sPrefix, OUString &sSuffix, double &fNum )
 {
-    i18n::LocaleDataItem2 aLocaleItem = ScGlobal::pLocaleData->getLocaleItem();
-
-    // Get prefix element
-    OUString sUser = "-";
-    ParseResult aPRPre = ScGlobal::pCharClass->parsePredefinedToken(
-        KParseType::IDENTNAME, sWhole, 0,
-        KParseTokens::ANY_LETTER, sUser, KParseTokens::ANY_LETTER, sUser );
-    sPrefix = sWhole.copy( 0, aPRPre.EndPos );
+    // Get prefix element, search for any digit and stop.
+    sal_Int32 nPos = 0;
+    while (nPos < sWhole.getLength())
+    {
+        const sal_uInt16 nType = ScGlobal::pCharClass->getCharacterType( sWhole, nPos);
+        if (nType & KCharacterType::DIGIT)
+            break;
+        sWhole.iterateCodePoints( &nPos );
+    }
 
     // Return FALSE if no numeral element is found
-    if ( aPRPre.EndPos == sWhole.getLength() )
+    if ( nPos == sWhole.getLength() )
         return false;
 
     // Get numeral element
-    sUser = aLocaleItem.decimalSeparator;
+    OUString sUser = ScGlobal::pLocaleData->getNumDecimalSep();
     ParseResult aPRNum = ScGlobal::pCharClass->parsePredefinedToken(
-        KParseType::ANY_NUMBER, sWhole, aPRPre.EndPos,
+        KParseType::ANY_NUMBER, sWhole, nPos,
         KParseTokens::ANY_NUMBER, "", KParseTokens::ANY_NUMBER, sUser );
 
-    if ( aPRNum.EndPos == aPRPre.EndPos )
+    if ( aPRNum.EndPos == nPos )
+    {
+        SAL_WARN("sc.core","naturalsort::SplitString - digit found but no number parsed, pos " <<
+                nPos << " : " << sWhole);
         return false;
+    }
 
+    sPrefix = sWhole.copy( 0, nPos );
     fNum = aPRNum.Value;
     sSuffix = sWhole.copy( aPRNum.EndPos );
 
@@ -226,9 +237,10 @@ public:
         ScRefCellValue maCell;
         const sc::CellTextAttr* mpAttr;
         const ScPostIt* mpNote;
+        std::vector<SdrObject*> maDrawObjects;
         const ScPatternAttr* mpPattern;
 
-        Cell() : mpAttr(nullptr), mpNote(nullptr), mpPattern(nullptr) {}
+        Cell() : mpAttr(nullptr), mpNote(nullptr), maDrawObjects(), mpPattern(nullptr) {}
     };
 
     struct Row
@@ -414,7 +426,7 @@ public:
 namespace {
 
 void initDataRows(
-    ScSortInfoArray& rArray, const ScTable& rTab, ScColContainer& rCols,
+    ScSortInfoArray& rArray, ScTable& rTab, ScColContainer& rCols,
     SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
     bool bPattern, bool bHiddenFiltered )
 {
@@ -430,6 +442,13 @@ void initDataRows(
 
         sc::ColumnBlockConstPosition aBlockPos;
         rCol.InitBlockPosition(aBlockPos);
+        std::map<SCROW, std::vector<SdrObject*>> aRowDrawObjects;
+        ScDrawLayer* pDrawLayer = rTab.GetDoc().GetDrawLayer();
+        if (pDrawLayer)
+            aRowDrawObjects = pDrawLayer->GetObjectsAnchoredToRange(rTab.GetTab(), nCol, nRow1, nRow2);
+        else
+            SAL_WARN("sc", "Could not retrieve anchored images, no DrawLayer available");
+
         for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
         {
             ScSortInfoArray::Row& rRow = *rRows[nRow-nRow1];
@@ -437,6 +456,8 @@ void initDataRows(
             rCell.maCell = rCol.GetCellValue(aBlockPos, nRow);
             rCell.mpAttr = rCol.GetCellTextAttr(aBlockPos, nRow);
             rCell.mpNote = rCol.GetCellNote(aBlockPos, nRow);
+            if (pDrawLayer)
+                rCell.maDrawObjects = aRowDrawObjects[nRow];
 
             if (!bUniformPattern && bPattern)
                 rCell.mpPattern = rCol.GetPattern(nRow);
@@ -547,6 +568,7 @@ struct SortedColumn
     sc::CellTextAttrStoreType maCellTextAttrs;
     sc::BroadcasterStoreType maBroadcasters;
     sc::CellNoteStoreType maCellNotes;
+    std::vector<std::vector<SdrObject*>> maCellDrawObjects;
 
     PatRangeType maPatterns;
     PatRangeType::const_iterator miPatternPos;
@@ -559,6 +581,7 @@ struct SortedColumn
         maCellTextAttrs(nTopEmptyRows),
         maBroadcasters(nTopEmptyRows),
         maCellNotes(nTopEmptyRows),
+        maCellDrawObjects(),
         maPatterns(0, MAXROWCOUNT, nullptr),
         miPatternPos(maPatterns.begin()) {}
 
@@ -789,6 +812,9 @@ void fillSortedColumnArray(
                 rNoteStore.push_back(const_cast<ScPostIt*>(rCell.mpNote));
             else
                 rNoteStore.push_back_empty();
+
+            // Add cell anchored images
+            aSortedCols.at(j).get()->maCellDrawObjects.push_back(rCell.maDrawObjects);
 
             if (rCell.mpPattern)
                 aSortedCols.at(j).get()->setPattern(aCellPos.Row(), rCell.mpPattern);
@@ -1102,6 +1128,9 @@ void ScTable::SortReorderByRow(
             aCol[nThisCol].UpdateNoteCaptions(nRow1, nRow2);
         }
 
+        // Update draw object positions
+        aCol[nThisCol].UpdateDrawObjects(aSortedCols[i].get()->maCellDrawObjects, nRow1, nRow2);
+
         {
             // Get all row spans where the pattern is not NULL.
             std::vector<PatternSpan> aSpans =
@@ -1300,6 +1329,9 @@ void ScTable::SortReorderByRowRefUpdate(
             rSrc.transfer(nRow1, nRow2, rDest, nRow1);
             aCol[nThisCol].UpdateNoteCaptions(nRow1, nRow2);
         }
+
+        // Update draw object positions
+        aCol[nThisCol].UpdateDrawObjects(aSortedCols[i].get()->maCellDrawObjects, nRow1, nRow2);
 
         {
             // Get all row spans where the pattern is not NULL.

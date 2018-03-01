@@ -198,19 +198,19 @@ uno::Reference< ::graphic::XGraphic > GraphicProvider::implLoadStandardImage( co
         OUString sImageName( rResourceURL.copy( nIndex ) );
         if ( sImageName == "info" )
         {
-            xRet = Graphic(InfoBox::GetStandardImage().GetBitmapEx()).GetXGraphic();
+            xRet = Graphic(GetStandardInfoBoxImage().GetBitmapEx()).GetXGraphic();
         }
         else if ( sImageName == "warning" )
         {
-            xRet = Graphic(WarningBox::GetStandardImage().GetBitmapEx()).GetXGraphic();
+            xRet = Graphic(GetStandardWarningBoxImage().GetBitmapEx()).GetXGraphic();
         }
         else if ( sImageName == "error" )
         {
-            xRet = Graphic(ErrorBox::GetStandardImage().GetBitmapEx()).GetXGraphic();
+            xRet = Graphic(GetStandardErrorBoxImage().GetBitmapEx()).GetXGraphic();
         }
         else if ( sImageName == "query" )
         {
-            xRet = Graphic(QueryBox::GetStandardImage().GetBitmapEx()).GetXGraphic();
+            xRet = Graphic(GetStandardQueryBoxImage().GetBitmapEx()).GetXGraphic();
         }
     }
     return xRet;
@@ -514,10 +514,10 @@ void ImplCalculateCropRect( ::Graphic const & rGraphic, const text::GraphicCrop&
     {
         double fSourceSizePixelWidth = static_cast<double>(aSourceSizePixel.Width());
         double fSourceSizePixelHeight= static_cast<double>(aSourceSizePixel.Height());
-        rGraphicCropPixel.Left() = static_cast< sal_Int32 >((fSourceSizePixelWidth * rGraphicCropLogic.Left ) / aSize100thMM.Width());
-        rGraphicCropPixel.Top() = static_cast< sal_Int32 >((fSourceSizePixelHeight * rGraphicCropLogic.Top ) / aSize100thMM.Height());
-        rGraphicCropPixel.Right() = static_cast< sal_Int32 >(( fSourceSizePixelWidth * ( aSize100thMM.Width() - rGraphicCropLogic.Right ) ) / aSize100thMM.Width() );
-        rGraphicCropPixel.Bottom() = static_cast< sal_Int32 >(( fSourceSizePixelHeight * ( aSize100thMM.Height() - rGraphicCropLogic.Bottom ) ) / aSize100thMM.Height() );
+        rGraphicCropPixel.SetLeft( static_cast< sal_Int32 >((fSourceSizePixelWidth * rGraphicCropLogic.Left ) / aSize100thMM.Width()) );
+        rGraphicCropPixel.SetTop( static_cast< sal_Int32 >((fSourceSizePixelHeight * rGraphicCropLogic.Top ) / aSize100thMM.Height()) );
+        rGraphicCropPixel.SetRight( static_cast< sal_Int32 >(( fSourceSizePixelWidth * ( aSize100thMM.Width() - rGraphicCropLogic.Right ) ) / aSize100thMM.Width() ) );
+        rGraphicCropPixel.SetBottom( static_cast< sal_Int32 >(( fSourceSizePixelHeight * ( aSize100thMM.Height() - rGraphicCropLogic.Bottom ) ) / aSize100thMM.Height() ) );
     }
 }
 

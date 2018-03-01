@@ -257,8 +257,8 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
         nTextStyle &= ~DrawTextFlags::Mnemonic;
     }
 
-    aImageSize.Width()  = CalcZoom( aImageSize.Width() );
-    aImageSize.Height() = CalcZoom( aImageSize.Height() );
+    aImageSize.setWidth( CalcZoom( aImageSize.Width() ) );
+    aImageSize.setHeight( CalcZoom( aImageSize.Height() ) );
 
     // Drawing text or symbol only is simple, use style and output rectangle
     if (bHasSymbol && !bDrawImage && !bDrawText)
@@ -308,16 +308,16 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
 
                 aSymbol = tools::Rectangle(Point(), Size(nSymbolHeight, nSymbolHeight));
                 ImplCalcSymbolRect(aSymbol);
-                aRect.Left() += 3 * nSymbolHeight / 2;
-                aTSSize.Width() = 3 * nSymbolHeight / 2;
+                aRect.AdjustLeft(3 * nSymbolHeight / 2 );
+                aTSSize.setWidth( 3 * nSymbolHeight / 2 );
             }
             else
             {
                 aSymbol = tools::Rectangle(Point(), rSize);
                 ImplCalcSymbolRect(aSymbol);
-                aTSSize.Width() = aSymbol.GetWidth();
+                aTSSize.setWidth( aSymbol.GetWidth() );
             }
-            aTSSize.Height() = aSymbol.GetHeight();
+            aTSSize.setHeight( aSymbol.GetHeight() );
             aSymbolSize = aSymbol.GetSize();
         }
 
@@ -330,7 +330,7 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
                 (eImageAlign == ImageAlign::Right)        ||
                 (eImageAlign == ImageAlign::RightBottom))
             {
-                aRect.Right() -= (aImageSize.Width() + nImageSep);
+                aRect.AdjustRight( -sal_Int32(aImageSize.Width() + nImageSep) );
             }
             else if ((eImageAlign == ImageAlign::TopLeft)    ||
                      (eImageAlign == ImageAlign::Top)         ||
@@ -339,16 +339,16 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
                      (eImageAlign == ImageAlign::Bottom)      ||
                      (eImageAlign == ImageAlign::BottomRight))
             {
-                aRect.Bottom() -= (aImageSize.Height() + nImageSep);
+                aRect.AdjustBottom( -sal_Int32(aImageSize.Height() + nImageSep) );
             }
 
             aRect = GetControlTextRect(*pDev, aRect, aText, nTextStyle, &aDeviceTextSize);
             aTextSize = aRect.GetSize();
 
-            aTSSize.Width()  += aTextSize.Width();
+            aTSSize.AdjustWidth(aTextSize.Width() );
 
             if (aTSSize.Height() < aTextSize.Height())
-                aTSSize.Height() = aTextSize.Height();
+                aTSSize.setHeight( aTextSize.Height() );
 
             if (bAddImageSep && bDrawImage)
             {
@@ -358,66 +358,66 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
             }
         }
 
-        aMax.Width()  = std::max(aTSSize.Width(), aImageSize.Width());
-        aMax.Height() = std::max(aTSSize.Height(), aImageSize.Height());
+        aMax.setWidth( std::max(aTSSize.Width(), aImageSize.Width()) );
+        aMax.setHeight( std::max(aTSSize.Height(), aImageSize.Height()) );
 
         // Now calculate the output area for the image and the text according to the image align flags
 
         if ((eImageAlign == ImageAlign::Left) ||
             (eImageAlign == ImageAlign::Right))
         {
-            aImagePos.Y() = rPos.Y() + (aMax.Height() - aImageSize.Height()) / 2;
-            aTextPos.Y()  = rPos.Y() + (aMax.Height() - aTSSize.Height()) / 2;
+            aImagePos.setY( rPos.Y() + (aMax.Height() - aImageSize.Height()) / 2 );
+            aTextPos.setY( rPos.Y() + (aMax.Height() - aTSSize.Height()) / 2 );
         }
         else if ((eImageAlign == ImageAlign::LeftBottom) ||
                  (eImageAlign == ImageAlign::RightBottom))
         {
-            aImagePos.Y() = rPos.Y() + aMax.Height() - aImageSize.Height();
-            aTextPos.Y()  = rPos.Y() + aMax.Height() - aTSSize.Height();
+            aImagePos.setY( rPos.Y() + aMax.Height() - aImageSize.Height() );
+            aTextPos.setY( rPos.Y() + aMax.Height() - aTSSize.Height() );
         }
         else if ((eImageAlign == ImageAlign::Top) ||
                  (eImageAlign == ImageAlign::Bottom))
         {
-            aImagePos.X() = rPos.X() + (aMax.Width() - aImageSize.Width()) / 2;
-            aTextPos.X()  = rPos.X() + (aMax.Width() - aTSSize.Width()) / 2;
+            aImagePos.setX( rPos.X() + (aMax.Width() - aImageSize.Width()) / 2 );
+            aTextPos.setX( rPos.X() + (aMax.Width() - aTSSize.Width()) / 2 );
         }
         else if ((eImageAlign == ImageAlign::TopRight) ||
                  (eImageAlign == ImageAlign::BottomRight))
         {
-            aImagePos.X() = rPos.X() + aMax.Width() - aImageSize.Width();
-            aTextPos.X()  = rPos.X() + aMax.Width() - aTSSize.Width();
+            aImagePos.setX( rPos.X() + aMax.Width() - aImageSize.Width() );
+            aTextPos.setX( rPos.X() + aMax.Width() - aTSSize.Width() );
         }
 
         if ((eImageAlign == ImageAlign::LeftTop) ||
             (eImageAlign == ImageAlign::Left)     ||
             (eImageAlign == ImageAlign::LeftBottom))
         {
-            aTextPos.X() = rPos.X() + aImageSize.Width() + nImageSep;
+            aTextPos.setX( rPos.X() + aImageSize.Width() + nImageSep );
         }
         else if ((eImageAlign == ImageAlign::RightTop) ||
                  (eImageAlign == ImageAlign::Right)     ||
                  (eImageAlign == ImageAlign::RightBottom))
         {
-            aImagePos.X() = rPos.X() + aTSSize.Width() + nImageSep;
+            aImagePos.setX( rPos.X() + aTSSize.Width() + nImageSep );
         }
         else if ((eImageAlign == ImageAlign::TopLeft) ||
                  (eImageAlign == ImageAlign::Top)      ||
                  (eImageAlign == ImageAlign::TopRight))
         {
-            aTextPos.Y() = rPos.Y() + aImageSize.Height() + nImageSep;
+            aTextPos.setY( rPos.Y() + aImageSize.Height() + nImageSep );
         }
         else if ((eImageAlign == ImageAlign::BottomLeft) ||
                  (eImageAlign == ImageAlign::Bottom)      ||
                  (eImageAlign == ImageAlign::BottomRight))
         {
-            aImagePos.Y() = rPos.Y() + aTSSize.Height() + nImageSep;
+            aImagePos.setY( rPos.Y() + aTSSize.Height() + nImageSep );
         }
         else if (eImageAlign == ImageAlign::Center)
         {
-            aImagePos.X() = rPos.X() + (aMax.Width()  - aImageSize.Width()) / 2;
-            aImagePos.Y() = rPos.Y() + (aMax.Height() - aImageSize.Height()) / 2;
-            aTextPos.X()  = rPos.X() + (aMax.Width()  - aTSSize.Width()) / 2;
-            aTextPos.Y()  = rPos.Y() + (aMax.Height() - aTSSize.Height()) / 2;
+            aImagePos.setX( rPos.X() + (aMax.Width()  - aImageSize.Width()) / 2 );
+            aImagePos.setY( rPos.Y() + (aMax.Height() - aImageSize.Height()) / 2 );
+            aTextPos.setX( rPos.X() + (aMax.Width()  - aTSSize.Width()) / 2 );
+            aTextPos.setY( rPos.Y() + (aMax.Height() - aTSSize.Height()) / 2 );
         }
         aUnion = tools::Rectangle(aImagePos, aImageSize);
         aUnion.Union(tools::Rectangle(aTextPos, aTSSize));
@@ -450,15 +450,15 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
     if (nXOffset < 0) nXOffset = 0;
     if (nYOffset < 0) nYOffset = 0;
 
-    aImagePos.X() += nXOffset;
-    aImagePos.Y() += nYOffset;
-    aTextPos.X() += nXOffset;
-    aTextPos.Y() += nYOffset;
+    aImagePos.AdjustX(nXOffset );
+    aImagePos.AdjustY(nYOffset );
+    aTextPos.AdjustX(nXOffset );
+    aTextPos.AdjustY(nYOffset );
 
     // set rPos and rSize to the union
     rSize = aUnion.GetSize();
-    rPos.X() += nXOffset;
-    rPos.Y() += nYOffset;
+    rPos.AdjustX(nXOffset );
+    rPos.AdjustY(nYOffset );
 
     if (bHasSymbol)
     {
@@ -470,7 +470,7 @@ void Button::ImplDrawAlignedImage(OutputDevice* pDev, Point& rPos,
         else
         {
             *pSymbolRect = tools::Rectangle(aTextPos, aSymbolSize);
-            aTextPos.X() += 3 * nSymbolHeight / 2;
+            aTextPos.AdjustX(3 * nSymbolHeight / 2 );
         }
         if (mpButtonData->mbSmallSymbol)
         {
@@ -511,20 +511,20 @@ void Button::ImplSetFocusRect(const tools::Rectangle &rFocusRect)
 
     if (!aFocusRect.IsEmpty())
     {
-        aFocusRect.Left()--;
-        aFocusRect.Top()--;
-        aFocusRect.Right()++;
-        aFocusRect.Bottom()++;
+        aFocusRect.AdjustLeft( -1 );
+        aFocusRect.AdjustTop( -1 );
+        aFocusRect.AdjustRight( 1 );
+        aFocusRect.AdjustBottom( 1 );
     }
 
     if (aFocusRect.Left()   < aOutputRect.Left())
-        aFocusRect.Left()   = aOutputRect.Left();
+        aFocusRect.SetLeft( aOutputRect.Left() );
     if (aFocusRect.Top()    < aOutputRect.Top())
-        aFocusRect.Top()    = aOutputRect.Top();
+        aFocusRect.SetTop( aOutputRect.Top() );
     if (aFocusRect.Right()  > aOutputRect.Right())
-        aFocusRect.Right()  = aOutputRect.Right();
+        aFocusRect.SetRight( aOutputRect.Right() );
     if (aFocusRect.Bottom() > aOutputRect.Bottom())
-        aFocusRect.Bottom() = aOutputRect.Bottom();
+        aFocusRect.SetBottom( aOutputRect.Bottom() );
 
     mpButtonData->maFocusRect = aFocusRect;
 }
@@ -593,6 +593,14 @@ bool Button::set_property(const OString &rKey, const OUString &rValue)
         else if (rValue == "bottom")
             eAlign = ImageAlign::Bottom;
         SetImageAlign(eAlign);
+    }
+    else if (rKey == "focus-on-click")
+    {
+        WinBits nBits = GetStyle();
+        nBits &= ~WB_NOPOINTERFOCUS;
+        if (!toBool(rValue))
+            nBits |= WB_NOPOINTERFOCUS;
+        SetStyle(nBits);
     }
     else
         return Control::set_property(rKey, rValue);
@@ -742,8 +750,7 @@ void PushButton::ImplDrawPushButtonFrame(vcl::RenderContext& rRenderContext,
 bool PushButton::ImplHitTestPushButton( vcl::Window const * pDev,
                                         const Point& rPos )
 {
-    Point       aTempPoint;
-    tools::Rectangle   aTestRect( aTempPoint, pDev->GetOutputSizePixel() );
+    tools::Rectangle   aTestRect( Point(), pDev->GetOutputSizePixel() );
 
     return aTestRect.IsInside( rPos );
 }
@@ -792,7 +799,7 @@ static void ImplDrawBtnDropDownArrow( OutputDevice* pDev,
 
     pDev->SetLineColor();
     if ( bBlack )
-        pDev->SetFillColor( Color( COL_BLACK ) );
+        pDev->SetFillColor( COL_BLACK );
     else
         pDev->SetFillColor( rColor );
     pDev->DrawRect( tools::Rectangle( nX+0, nY+0, nX+6, nY+0 ) );
@@ -826,7 +833,7 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
     pDev->IntersectClipRegion( aInRect );
 
     if ( nDrawFlags & DrawFlags::Mono )
-        aColor = Color( COL_BLACK );
+        aColor = COL_BLACK;
     else if( (nDrawFlags & DrawFlags::NoRollover) && IsNativeControlSupported(ControlType::Pushbutton, ControlPart::Entire) )
         aColor = rStyleSettings.GetButtonRolloverTextColor();
     else if ( IsControlForeground() )
@@ -860,11 +867,11 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
             long nSymbolSize    = pDev->GetTextHeight() / 2 + 1;
 
             nSeparatorX = aInRect.Right() - 2*nSymbolSize;
-            aSize.Width() -= 2*nSymbolSize;
+            aSize.AdjustWidth( -(2*nSymbolSize) );
 
             // center symbol rectangle in the separated area
-            aSymbolRect.Right() -= nSymbolSize/2;
-            aSymbolRect.Left()  = aSymbolRect.Right() - nSymbolSize;
+            aSymbolRect.AdjustRight( -(nSymbolSize/2) );
+            aSymbolRect.SetLeft( aSymbolRect.Right() - nSymbolSize );
 
             ImplDrawAlignedImage( pDev, aPos, aSize, nImageSep,
                                   nDrawFlags, nTextStyle, nullptr, true );
@@ -908,7 +915,7 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
                     aArrowColor = rStyleSettings.GetShadowColor();
                 else
                 {
-                    aArrowColor = Color( COL_LIGHTGREEN );
+                    aArrowColor = COL_LIGHTGREEN;
                     bBlack = true;
                 }
             }
@@ -926,9 +933,8 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
     HideFocus();
 
     DrawButtonFlags nButtonStyle = ImplGetButtonState();
-    Point aPoint;
     Size aOutSz(GetOutputSizePixel());
-    tools::Rectangle aRect(aPoint, aOutSz);
+    tools::Rectangle aRect(Point(), aOutSz);
     tools::Rectangle aInRect = aRect;
     bool bNativeOK = false;
 
@@ -1056,10 +1062,10 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
         //ImplDrawPushButtonFrame( &aWin, aInRect, nButtonStyle & ~DrawButtonFlags::Pressed );
 
         // looks better this way as symbols were displaced slightly using the above approach
-        aInRect.Top()+=4;
-        aInRect.Bottom()-=4;
-        aInRect.Left()+=4;
-        aInRect.Right()-=4;
+        aInRect.AdjustTop(4 );
+        aInRect.AdjustBottom( -4 );
+        aInRect.AdjustLeft(4 );
+        aInRect.AdjustRight( -4 );
 
         // prepare single line hint (needed on mac to decide between normal push button and
         // rectangular bevel button look)
@@ -1094,10 +1100,10 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
             tools::Rectangle aTempRect(aInRect);
             if (bRollOver)
                 ImplDrawPushButtonFrame(rRenderContext, aTempRect, nButtonStyle);
-            aInRect.Left()   += 2;
-            aInRect.Top()    += 2;
-            aInRect.Right()  -= 2;
-            aInRect.Bottom() -= 2;
+            aInRect.AdjustLeft(2 );
+            aInRect.AdjustTop(2 );
+            aInRect.AdjustRight( -2 );
+            aInRect.AdjustBottom( -2 );
         }
         else
         {
@@ -1149,8 +1155,8 @@ void PushButton::ImplSetDefButton( bool bSet )
         {
             // adjust pos/size when toggling from non-default to default
             aPos.Move(-dLeft, -dTop);
-            aSize.Width() += dLeft + dRight;
-            aSize.Height() += dTop + dBottom;
+            aSize.AdjustWidth(dLeft + dRight );
+            aSize.AdjustHeight(dTop + dBottom );
         }
         ImplGetButtonState() |= DrawButtonFlags::Default;
     }
@@ -1160,8 +1166,8 @@ void PushButton::ImplSetDefButton( bool bSet )
         {
             // adjust pos/size when toggling from default to non-default
             aPos.Move(dLeft, dTop);
-            aSize.Width() -= dLeft + dRight;
-            aSize.Height() -= dTop + dBottom;
+            aSize.AdjustWidth( -(dLeft + dRight) );
+            aSize.AdjustHeight( -(dTop + dBottom) );
         }
         ImplGetButtonState() &= ~DrawButtonFlags::Default;
     }
@@ -1355,7 +1361,7 @@ void PushButton::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
     pDev->SetFont( aFont );
     if ( nFlags & DrawFlags::Mono )
     {
-        pDev->SetTextColor( Color( COL_BLACK ) );
+        pDev->SetTextColor( COL_BLACK );
     }
     else
     {
@@ -1509,8 +1515,7 @@ bool PushButton::PreNotify( NotifyEvent& rNEvt )
                 if(aCtrlType == ControlType::Combobox)
                 {
                     // only paint the button part to avoid flickering of the combobox text
-                    Point aPt;
-                    tools::Rectangle aClipRect( aPt, GetOutputSizePixel() );
+                    tools::Rectangle aClipRect( Point(), GetOutputSizePixel() );
                     aClipRect.SetPos(pBorder->ScreenToOutputPixel(OutputToScreenPixel(aClipRect.TopLeft())));
                     pBorder->Invalidate( aClipRect );
                 }
@@ -1627,21 +1632,21 @@ Size PushButton::CalcMinimumSize() const
         mnDDStyle == PushButtonDropdownStyle::SplitMenuButton )
     {
         long nSymbolSize = GetTextHeight() / 2 + 1;
-        aSize.Width() += 2*nSymbolSize;
+        aSize.AdjustWidth(2*nSymbolSize );
     }
     if ( !PushButton::GetText().isEmpty() && ! (ImplGetButtonState() & DrawButtonFlags::NoText) )
     {
         Size textSize = GetTextRect( tools::Rectangle( Point(), Size( 0x7fffffff, 0x7fffffff ) ),
                                      PushButton::GetText(), ImplGetTextStyle( DrawFlags::NONE ) ).GetSize();
-        aSize.Width() += textSize.Width();
-        aSize.Height() = std::max( aSize.Height(), long( textSize.Height() * 1.15 ) );
+        aSize.AdjustWidth(textSize.Width() );
+        aSize.setHeight( std::max( aSize.Height(), long( textSize.Height() * 1.15 ) ) );
     }
 
     // cf. ImplDrawPushButton ...
     if( (GetStyle() & WB_SMALLSTYLE) == 0 )
     {
-        aSize.Width() += 24;
-        aSize.Height() += 12;
+        aSize.AdjustWidth(24 );
+        aSize.AdjustHeight(12 );
     }
 
     return CalcWindowSize( aSize );
@@ -1935,13 +1940,13 @@ void RadioButton::ImplDrawRadioButtonState(vcl::RenderContext& rRenderContext)
             Size aImageSize = maImage.GetSizePixel();
             bool bEnabled = IsEnabled();
 
-            aImageSize.Width()  = CalcZoom(aImageSize.Width());
-            aImageSize.Height() = CalcZoom(aImageSize.Height());
+            aImageSize.setWidth( CalcZoom(aImageSize.Width()) );
+            aImageSize.setHeight( CalcZoom(aImageSize.Height()) );
 
-            aImageRect.Left()++;
-            aImageRect.Top()++;
-            aImageRect.Right()--;
-            aImageRect.Bottom()--;
+            aImageRect.AdjustLeft( 1 );
+            aImageRect.AdjustTop( 1 );
+            aImageRect.AdjustRight( -1 );
+            aImageRect.AdjustBottom( -1 );
 
             // display border and selection status
             aImageRect = aDecoView.DrawFrame(aImageRect, DrawFrameStyle::DoubleIn);
@@ -1960,17 +1965,17 @@ void RadioButton::ImplDrawRadioButtonState(vcl::RenderContext& rRenderContext)
             Image* pImage = &maImage;
 
             Point aImagePos(aImageRect.TopLeft());
-            aImagePos.X() += (aImageRect.GetWidth() - aImageSize.Width()) / 2;
-            aImagePos.Y() += (aImageRect.GetHeight() - aImageSize.Height()) / 2;
+            aImagePos.AdjustX((aImageRect.GetWidth() - aImageSize.Width()) / 2 );
+            aImagePos.AdjustY((aImageRect.GetHeight() - aImageSize.Height()) / 2 );
             if (IsZoom())
                 rRenderContext.DrawImage(aImagePos, aImageSize, *pImage, nImageStyle);
             else
                 rRenderContext.DrawImage(aImagePos, *pImage, nImageStyle);
 
-            aImageRect.Left()++;
-            aImageRect.Top()++;
-            aImageRect.Right()--;
-            aImageRect.Bottom()--;
+            aImageRect.AdjustLeft( 1 );
+            aImageRect.AdjustTop( 1 );
+            aImageRect.AdjustRight( -1 );
+            aImageRect.AdjustBottom( -1 );
 
             ImplSetFocusRect(aImageRect);
 
@@ -1980,16 +1985,16 @@ void RadioButton::ImplDrawRadioButtonState(vcl::RenderContext& rRenderContext)
                 rRenderContext.SetFillColor();
                 if ((aImageSize.Width() >= 20) || (aImageSize.Height() >= 20))
                 {
-                    aImageRect.Left()++;
-                    aImageRect.Top()++;
-                    aImageRect.Right()--;
-                    aImageRect.Bottom()--;
+                    aImageRect.AdjustLeft( 1 );
+                    aImageRect.AdjustTop( 1 );
+                    aImageRect.AdjustRight( -1 );
+                    aImageRect.AdjustBottom( -1 );
                 }
                 rRenderContext.DrawRect(aImageRect);
-                aImageRect.Left()++;
-                aImageRect.Top()++;
-                aImageRect.Right()--;
-                aImageRect.Bottom()--;
+                aImageRect.AdjustLeft( 1 );
+                aImageRect.AdjustTop( 1 );
+                aImageRect.AdjustRight( -1 );
+                aImageRect.AdjustBottom( -1 );
                 rRenderContext.DrawRect(aImageRect);
             }
 
@@ -2021,8 +2026,8 @@ void RadioButton::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
             const long nImageSep = GetDrawPixel( pDev, ImplGetImageToTextDistance() );
             Size aSize( rSize );
             Point aPos( rPos );
-            aPos.X() += rImageSize.Width() + nImageSep;
-            aSize.Width() -= rImageSize.Width() + nImageSep;
+            aPos.AdjustX(rImageSize.Width() + nImageSep );
+            aSize.AdjustWidth( -(rImageSize.Width() + nImageSep) );
 
             // if the text rect height is smaller than the height of the image
             // then for single lines the default should be centered text
@@ -2031,43 +2036,43 @@ void RadioButton::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
             {
                 nTextStyle &= ~DrawTextFlags(DrawTextFlags::Top|DrawTextFlags::Bottom);
                 nTextStyle |= DrawTextFlags::VCenter;
-                aSize.Height() = rImageSize.Height();
+                aSize.setHeight( rImageSize.Height() );
             }
 
             ImplDrawAlignedImage( pDev, aPos, aSize, 1, nDrawFlags, nTextStyle );
 
             rMouseRect          = tools::Rectangle( aPos, aSize );
-            rMouseRect.Left()   = rPos.X();
+            rMouseRect.SetLeft( rPos.X() );
 
-            rStateRect.Left()   = rPos.X();
-            rStateRect.Top()    = rMouseRect.Top();
+            rStateRect.SetLeft( rPos.X() );
+            rStateRect.SetTop( rMouseRect.Top() );
 
             if ( aSize.Height() > rImageSize.Height() )
-                rStateRect.Top() += ( aSize.Height() - rImageSize.Height() ) / 2;
+                rStateRect.AdjustTop(( aSize.Height() - rImageSize.Height() ) / 2 );
             else
             {
-                rStateRect.Top() -= ( rImageSize.Height() - aSize.Height() ) / 2;
+                rStateRect.AdjustTop( -(( rImageSize.Height() - aSize.Height() ) / 2) );
                 if( rStateRect.Top() < 0 )
-                    rStateRect.Top() = 0;
+                    rStateRect.SetTop( 0 );
             }
 
-            rStateRect.Right()  = rStateRect.Left() + rImageSize.Width()-1;
-            rStateRect.Bottom() = rStateRect.Top() + rImageSize.Height()-1;
+            rStateRect.SetRight( rStateRect.Left() + rImageSize.Width()-1 );
+            rStateRect.SetBottom( rStateRect.Top() + rImageSize.Height()-1 );
 
             if ( rStateRect.Bottom() > rMouseRect.Bottom() )
-                rMouseRect.Bottom() = rStateRect.Bottom();
+                rMouseRect.SetBottom( rStateRect.Bottom() );
         }
         else
         {
-            rStateRect.Left() = rPos.X();
+            rStateRect.SetLeft( rPos.X() );
             if ( nWinStyle & WB_VCENTER )
-                rStateRect.Top() = rPos.Y()+((rSize.Height()-rImageSize.Height())/2);
+                rStateRect.SetTop( rPos.Y()+((rSize.Height()-rImageSize.Height())/2) );
             else if ( nWinStyle & WB_BOTTOM )
-                rStateRect.Top() = rPos.Y()+rSize.Height()-rImageSize.Height(); //-1;
+                rStateRect.SetTop( rPos.Y()+rSize.Height()-rImageSize.Height() ); //-1;
             else
-                rStateRect.Top() = rPos.Y();
-            rStateRect.Right()  = rStateRect.Left()+rImageSize.Width()-1;
-            rStateRect.Bottom() = rStateRect.Top()+rImageSize.Height()-1;
+                rStateRect.SetTop( rPos.Y() );
+            rStateRect.SetRight( rStateRect.Left()+rImageSize.Width()-1 );
+            rStateRect.SetBottom( rStateRect.Top()+rImageSize.Height()-1 );
             rMouseRect          = rStateRect;
 
             ImplSetFocusRect( rStateRect );
@@ -2087,26 +2092,26 @@ void RadioButton::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
             Size aTmpSize( (aImageSize.Width()+8), (aImageSize.Height()+8) );
             if ( bTopImage )
             {
-                aImageRect.Left() = (rSize.Width()-aTmpSize.Width())/2;
-                aImageRect.Top()  = (rSize.Height()-(aTmpSize.Height()+nTextHeight+6))/2;
+                aImageRect.SetLeft( (rSize.Width()-aTmpSize.Width())/2 );
+                aImageRect.SetTop( (rSize.Height()-(aTmpSize.Height()+nTextHeight+6))/2 );
             }
             else
-                aImageRect.Top()  = (rSize.Height()-aTmpSize.Height())/2;
+                aImageRect.SetTop( (rSize.Height()-aTmpSize.Height())/2 );
 
-            aImageRect.Right()  = aImageRect.Left()+aTmpSize.Width();
-            aImageRect.Bottom() = aImageRect.Top()+aTmpSize.Height();
+            aImageRect.SetRight( aImageRect.Left()+aTmpSize.Width() );
+            aImageRect.SetBottom( aImageRect.Top()+aTmpSize.Height() );
 
             // display text
             Point aTxtPos = rPos;
             if ( bTopImage )
             {
-                aTxtPos.X() += (rSize.Width()-nTextWidth)/2;
-                aTxtPos.Y() += aImageRect.Bottom()+6;
+                aTxtPos.AdjustX((rSize.Width()-nTextWidth)/2 );
+                aTxtPos.AdjustY(aImageRect.Bottom()+6 );
             }
             else
             {
-                aTxtPos.X() += aImageRect.Right()+8;
-                aTxtPos.Y() += (rSize.Height()-nTextHeight)/2;
+                aTxtPos.AdjustX(aImageRect.Right()+8 );
+                aTxtPos.AdjustY((rSize.Height()-nTextHeight)/2 );
             }
             pDev->DrawCtrlText( aTxtPos, aText, 0, aText.getLength() );
         }
@@ -2128,8 +2133,8 @@ void RadioButton::ImplDrawRadioButton(vcl::RenderContext& rRenderContext)
     else
         aImageSize  = maImage.GetSizePixel();
 
-    aImageSize.Width()  = CalcZoom(aImageSize.Width());
-    aImageSize.Height() = CalcZoom(aImageSize.Height());
+    aImageSize.setWidth( CalcZoom(aImageSize.Width()) );
+    aImageSize.setHeight( CalcZoom(aImageSize.Height()) );
 
     // Draw control text
     ImplDraw(&rRenderContext, DrawFlags::NONE, Point(), GetOutputSizePixel(),
@@ -2161,11 +2166,11 @@ void RadioButton::group(RadioButton &rOther)
         {
             std::vector< VclPtr<RadioButton> > aOthers(rOther.GetRadioButtonGroup(false));
             //make all members of the group share the same button group
-            for (auto aI = aOthers.begin(), aEnd = aOthers.end(); aI != aEnd; ++aI)
+            for (auto const& elem : aOthers)
             {
-                aFind = std::find(m_xGroup->begin(), m_xGroup->end(), *aI);
+                aFind = std::find(m_xGroup->begin(), m_xGroup->end(), elem);
                 if (aFind == m_xGroup->end())
-                    m_xGroup->push_back(*aI);
+                    m_xGroup->push_back(elem);
             }
         }
 
@@ -2230,9 +2235,9 @@ void RadioButton::ImplUncheckAllOther()
 
     std::vector<VclPtr<RadioButton> > aGroup(GetRadioButtonGroup(false));
     // iterate over radio button group and checked buttons
-    for (auto aI = aGroup.begin(), aEnd = aGroup.end(); aI != aEnd; ++aI)
+    for (auto const& elem : aGroup)
     {
-        VclPtr<RadioButton> pWindow = *aI;
+        VclPtr<RadioButton> pWindow = elem;
         if ( pWindow->IsChecked() )
         {
             pWindow->SetState( false );
@@ -2414,27 +2419,27 @@ void RadioButton::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize
         tools::Rectangle   aStateRect;
         tools::Rectangle   aMouseRect;
 
-        aImageSize.Width()  = CalcZoom( aImageSize.Width() );
-        aImageSize.Height() = CalcZoom( aImageSize.Height() );
-        aBrd1Size.Width()   = CalcZoom( aBrd1Size.Width() );
-        aBrd1Size.Height()  = CalcZoom( aBrd1Size.Height() );
-        aBrd2Size.Width()   = CalcZoom( aBrd2Size.Width() );
-        aBrd2Size.Height()  = CalcZoom( aBrd2Size.Height() );
+        aImageSize.setWidth( CalcZoom( aImageSize.Width() ) );
+        aImageSize.setHeight( CalcZoom( aImageSize.Height() ) );
+        aBrd1Size.setWidth( CalcZoom( aBrd1Size.Width() ) );
+        aBrd1Size.setHeight( CalcZoom( aBrd1Size.Height() ) );
+        aBrd2Size.setWidth( CalcZoom( aBrd2Size.Width() ) );
+        aBrd2Size.setHeight( CalcZoom( aBrd2Size.Height() ) );
 
         if ( !aBrd1Size.Width() )
-            aBrd1Size.Width() = 1;
+            aBrd1Size.setWidth( 1 );
         if ( !aBrd1Size.Height() )
-            aBrd1Size.Height() = 1;
+            aBrd1Size.setHeight( 1 );
         if ( !aBrd2Size.Width() )
-            aBrd2Size.Width() = 1;
+            aBrd2Size.setWidth( 1 );
         if ( !aBrd2Size.Height() )
-            aBrd2Size.Height() = 1;
+            aBrd2Size.setHeight( 1 );
 
         pDev->Push();
         pDev->SetMapMode();
         pDev->SetFont( aFont );
         if ( nFlags & DrawFlags::Mono )
-            pDev->SetTextColor( Color( COL_BLACK ) );
+            pDev->SetTextColor( COL_BLACK );
         else
             pDev->SetTextColor( GetTextColor() );
         pDev->SetTextFillColor();
@@ -2447,11 +2452,11 @@ void RadioButton::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize
         long    nRadY = aImageSize.Height()/2;
 
         pDev->SetLineColor();
-        pDev->SetFillColor( Color( COL_BLACK ) );
+        pDev->SetFillColor( COL_BLACK );
         pDev->DrawPolygon( tools::Polygon( aCenterPos, nRadX, nRadY ) );
         nRadX -= aBrd1Size.Width();
         nRadY -= aBrd1Size.Height();
-        pDev->SetFillColor( Color( COL_WHITE ) );
+        pDev->SetFillColor( COL_WHITE );
         pDev->DrawPolygon( tools::Polygon( aCenterPos, nRadX, nRadY ) );
         if ( mbChecked )
         {
@@ -2461,7 +2466,7 @@ void RadioButton::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize
                 nRadX = 1;
             if ( !nRadY )
                 nRadY = 1;
-            pDev->SetFillColor( Color( COL_BLACK ) );
+            pDev->SetFillColor( COL_BLACK );
             pDev->DrawPolygon( tools::Polygon( aCenterPos, nRadX, nRadY ) );
         }
 
@@ -2828,7 +2833,7 @@ void RadioButton::ImplSetMinimumNWFSize()
 
         if( aSize.Height() > aCurSize.Height() )
         {
-            aCurSize.Height() = aSize.Height();
+            aCurSize.setHeight( aSize.Height() );
             SetSizePixel( aCurSize );
         }
     }
@@ -2844,8 +2849,8 @@ Size RadioButton::CalcMinimumSize() const
     else
     {
         aSize = maImage.GetSizePixel();
-        aSize.Width() += 8;
-        aSize.Height() += 8;
+        aSize.AdjustWidth(8 );
+        aSize.AdjustHeight(8 );
     }
 
     OUString aText = GetText();
@@ -2856,21 +2861,21 @@ Size RadioButton::CalcMinimumSize() const
         Size aTextSize = GetTextRect( tools::Rectangle( Point(), Size( 0x7fffffff, 0x7fffffff ) ),
                                       aText, FixedText::ImplGetTextStyle( GetStyle() ) ).GetSize();
 
-        aSize.Width()+=2;   // for focus rect
+        aSize.AdjustWidth(2 );   // for focus rect
 
         if (!bTopImage)
         {
-            aSize.Width() += ImplGetImageToTextDistance();
-            aSize.Width() += aTextSize.Width();
+            aSize.AdjustWidth(ImplGetImageToTextDistance() );
+            aSize.AdjustWidth(aTextSize.Width() );
             if ( aSize.Height() < aTextSize.Height() )
-                aSize.Height() = aTextSize.Height();
+                aSize.setHeight( aTextSize.Height() );
         }
         else
         {
-            aSize.Height() += 6;
-            aSize.Height() += GetTextHeight();
+            aSize.AdjustHeight(6 );
+            aSize.AdjustHeight(GetTextHeight() );
             if ( aSize.Width() < aTextSize.Width() )
-                aSize.Width() = aTextSize.Width();
+                aSize.setWidth( aTextSize.Width() );
         }
     }
 
@@ -2889,13 +2894,13 @@ void RadioButton::ShowFocus(const tools::Rectangle& rRect)
         ImplControlValue aControlValue;
         tools::Rectangle aInRect(Point(0, 0), GetSizePixel());
 
-        aInRect.Left() = rRect.Left();  // exclude the radio element itself from the focusrect
+        aInRect.SetLeft( rRect.Left() );  // exclude the radio element itself from the focusrect
 
         //to-do, figure out a better solution here
-        aInRect.Left()-=2;
-        aInRect.Right()+=2;
-        aInRect.Top()-=2;
-        aInRect.Bottom()+=2;
+        aInRect.AdjustLeft( -2 );
+        aInRect.AdjustRight(2 );
+        aInRect.AdjustTop( -2 );
+        aInRect.AdjustBottom(2 );
 
         DrawNativeControl(ControlType::Radiobutton, ControlPart::Focus, aInRect,
                           ControlState::FOCUSED, aControlValue, OUString());
@@ -3040,8 +3045,8 @@ void CheckBox::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
         const long nImageSep = GetDrawPixel( pDev, ImplGetImageToTextDistance() );
         Size aSize( rSize );
         Point aPos( rPos );
-        aPos.X() += rImageSize.Width() + nImageSep;
-        aSize.Width() -= rImageSize.Width() + nImageSep;
+        aPos.AdjustX(rImageSize.Width() + nImageSep );
+        aSize.AdjustWidth( -(rImageSize.Width() + nImageSep) );
 
         // if the text rect height is smaller than the height of the image
         // then for single lines the default should be centered text
@@ -3050,46 +3055,46 @@ void CheckBox::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
         {
             nTextStyle &= ~DrawTextFlags(DrawTextFlags::Top|DrawTextFlags::Bottom);
             nTextStyle |= DrawTextFlags::VCenter;
-            aSize.Height() = rImageSize.Height();
+            aSize.setHeight( rImageSize.Height() );
         }
 
         ImplDrawAlignedImage( pDev, aPos, aSize, 1, nDrawFlags, nTextStyle );
 
         rMouseRect          = tools::Rectangle( aPos, aSize );
-        rMouseRect.Left()   = rPos.X();
-        rStateRect.Left()   = rPos.X();
-        rStateRect.Top()    = rMouseRect.Top();
+        rMouseRect.SetLeft( rPos.X() );
+        rStateRect.SetLeft( rPos.X() );
+        rStateRect.SetTop( rMouseRect.Top() );
 
         if ( aSize.Height() > rImageSize.Height() )
-            rStateRect.Top() += ( aSize.Height() - rImageSize.Height() ) / 2;
+            rStateRect.AdjustTop(( aSize.Height() - rImageSize.Height() ) / 2 );
         else
         {
-            rStateRect.Top() -= ( rImageSize.Height() - aSize.Height() ) / 2;
+            rStateRect.AdjustTop( -(( rImageSize.Height() - aSize.Height() ) / 2) );
             if( rStateRect.Top() < 0 )
-                rStateRect.Top() = 0;
+                rStateRect.SetTop( 0 );
         }
 
-        rStateRect.Right()  = rStateRect.Left()+rImageSize.Width()-1;
-        rStateRect.Bottom() = rStateRect.Top()+rImageSize.Height()-1;
+        rStateRect.SetRight( rStateRect.Left()+rImageSize.Width()-1 );
+        rStateRect.SetBottom( rStateRect.Top()+rImageSize.Height()-1 );
         if ( rStateRect.Bottom() > rMouseRect.Bottom() )
-            rMouseRect.Bottom() = rStateRect.Bottom();
+            rMouseRect.SetBottom( rStateRect.Bottom() );
     }
     else
     {
         if ( mbLegacyNoTextAlign && ( nWinStyle & WB_CENTER ) )
-            rStateRect.Left() = rPos.X()+((rSize.Width()-rImageSize.Width())/2);
+            rStateRect.SetLeft( rPos.X()+((rSize.Width()-rImageSize.Width())/2) );
         else if ( mbLegacyNoTextAlign && ( nWinStyle & WB_RIGHT ) )
-            rStateRect.Left() = rPos.X()+rSize.Width()-rImageSize.Width();
+            rStateRect.SetLeft( rPos.X()+rSize.Width()-rImageSize.Width() );
         else
-            rStateRect.Left() = rPos.X();
+            rStateRect.SetLeft( rPos.X() );
         if ( nWinStyle & WB_VCENTER )
-            rStateRect.Top() = rPos.Y()+((rSize.Height()-rImageSize.Height())/2);
+            rStateRect.SetTop( rPos.Y()+((rSize.Height()-rImageSize.Height())/2) );
         else if ( nWinStyle & WB_BOTTOM )
-            rStateRect.Top() = rPos.Y()+rSize.Height()-rImageSize.Height();
+            rStateRect.SetTop( rPos.Y()+rSize.Height()-rImageSize.Height() );
         else
-            rStateRect.Top() = rPos.Y();
-        rStateRect.Right()  = rStateRect.Left()+rImageSize.Width()-1;
-        rStateRect.Bottom() = rStateRect.Top()+rImageSize.Height()-1;
+            rStateRect.SetTop( rPos.Y() );
+        rStateRect.SetRight( rStateRect.Left()+rImageSize.Width()-1 );
+        rStateRect.SetBottom( rStateRect.Top()+rImageSize.Height()-1 );
         // provide space for focusrect
         // note: this assumes that the control's size was adjusted
         // accordingly in Get/LoseFocus, so the onscreen position won't change
@@ -3106,8 +3111,8 @@ void CheckBox::ImplDraw( OutputDevice* pDev, DrawFlags nDrawFlags,
 void CheckBox::ImplDrawCheckBox(vcl::RenderContext& rRenderContext)
 {
     Size aImageSize = ImplGetCheckImageSize();
-    aImageSize.Width()  = CalcZoom( aImageSize.Width() );
-    aImageSize.Height() = CalcZoom( aImageSize.Height() );
+    aImageSize.setWidth( CalcZoom( aImageSize.Width() ) );
+    aImageSize.setHeight( CalcZoom( aImageSize.Height() ) );
 
     HideFocus();
 
@@ -3270,21 +3275,21 @@ void CheckBox::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
     tools::Rectangle   aStateRect;
     tools::Rectangle   aMouseRect;
 
-    aImageSize.Width()  = CalcZoom( aImageSize.Width() );
-    aImageSize.Height() = CalcZoom( aImageSize.Height() );
-    aBrd1Size.Width()   = CalcZoom( aBrd1Size.Width() );
-    aBrd1Size.Height()  = CalcZoom( aBrd1Size.Height() );
-    aBrd2Size.Width()   = CalcZoom( aBrd2Size.Width() );
-    aBrd2Size.Height()  = CalcZoom( aBrd2Size.Height() );
+    aImageSize.setWidth( CalcZoom( aImageSize.Width() ) );
+    aImageSize.setHeight( CalcZoom( aImageSize.Height() ) );
+    aBrd1Size.setWidth( CalcZoom( aBrd1Size.Width() ) );
+    aBrd1Size.setHeight( CalcZoom( aBrd1Size.Height() ) );
+    aBrd2Size.setWidth( CalcZoom( aBrd2Size.Width() ) );
+    aBrd2Size.setHeight( CalcZoom( aBrd2Size.Height() ) );
 
     if ( !aBrd1Size.Width() )
-        aBrd1Size.Width() = 1;
+        aBrd1Size.setWidth( 1 );
     if ( !aBrd1Size.Height() )
-        aBrd1Size.Height() = 1;
+        aBrd1Size.setHeight( 1 );
     if ( !aBrd2Size.Width() )
-        aBrd2Size.Width() = 1;
+        aBrd2Size.setWidth( 1 );
     if ( !aBrd2Size.Height() )
-        aBrd2Size.Height() = 1;
+        aBrd2Size.setHeight( 1 );
     if ( !nCheckWidth )
         nCheckWidth = 1;
 
@@ -3292,7 +3297,7 @@ void CheckBox::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
     pDev->SetMapMode();
     pDev->SetFont( aFont );
     if ( nFlags & DrawFlags::Mono )
-        pDev->SetTextColor( Color( COL_BLACK ) );
+        pDev->SetTextColor( COL_BLACK );
     else
         pDev->SetTextColor( GetTextColor() );
     pDev->SetTextFillColor();
@@ -3301,24 +3306,24 @@ void CheckBox::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
               aImageSize, aStateRect, aMouseRect );
 
     pDev->SetLineColor();
-    pDev->SetFillColor( Color( COL_BLACK ) );
+    pDev->SetFillColor( COL_BLACK );
     pDev->DrawRect( aStateRect );
-    aStateRect.Left()   += aBrd1Size.Width();
-    aStateRect.Top()    += aBrd1Size.Height();
-    aStateRect.Right()  -= aBrd1Size.Width();
-    aStateRect.Bottom() -= aBrd1Size.Height();
+    aStateRect.AdjustLeft(aBrd1Size.Width() );
+    aStateRect.AdjustTop(aBrd1Size.Height() );
+    aStateRect.AdjustRight( -(aBrd1Size.Width()) );
+    aStateRect.AdjustBottom( -(aBrd1Size.Height()) );
     if ( meState == TRISTATE_INDET )
-        pDev->SetFillColor( Color( COL_LIGHTGRAY ) );
+        pDev->SetFillColor( COL_LIGHTGRAY );
     else
-        pDev->SetFillColor( Color( COL_WHITE ) );
+        pDev->SetFillColor( COL_WHITE );
     pDev->DrawRect( aStateRect );
 
     if ( meState == TRISTATE_TRUE )
     {
-        aStateRect.Left()   += aBrd2Size.Width();
-        aStateRect.Top()    += aBrd2Size.Height();
-        aStateRect.Right()  -= aBrd2Size.Width();
-        aStateRect.Bottom() -= aBrd2Size.Height();
+        aStateRect.AdjustLeft(aBrd2Size.Width() );
+        aStateRect.AdjustTop(aBrd2Size.Height() );
+        aStateRect.AdjustRight( -(aBrd2Size.Width()) );
+        aStateRect.AdjustBottom( -(aBrd2Size.Height()) );
         Point   aPos11( aStateRect.TopLeft() );
         Point   aPos12( aStateRect.BottomRight() );
         Point   aPos21( aStateRect.TopRight() );
@@ -3327,24 +3332,24 @@ void CheckBox::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
         Point   aTempPos12( aPos12 );
         Point   aTempPos21( aPos21 );
         Point   aTempPos22( aPos22 );
-        pDev->SetLineColor( Color( COL_BLACK ) );
+        pDev->SetLineColor( COL_BLACK );
         long nDX = 0;
         for ( long i = 0; i < nCheckWidth; i++ )
         {
             if ( !(i % 2) )
             {
-                aTempPos11.X() = aPos11.X()+nDX;
-                aTempPos12.X() = aPos12.X()+nDX;
-                aTempPos21.X() = aPos21.X()+nDX;
-                aTempPos22.X() = aPos22.X()+nDX;
+                aTempPos11.setX( aPos11.X()+nDX );
+                aTempPos12.setX( aPos12.X()+nDX );
+                aTempPos21.setX( aPos21.X()+nDX );
+                aTempPos22.setX( aPos22.X()+nDX );
             }
             else
             {
                 nDX++;
-                aTempPos11.X() = aPos11.X()-nDX;
-                aTempPos12.X() = aPos12.X()-nDX;
-                aTempPos21.X() = aPos21.X()-nDX;
-                aTempPos22.X() = aPos22.X()-nDX;
+                aTempPos11.setX( aPos11.X()-nDX );
+                aTempPos12.setX( aPos12.X()-nDX );
+                aTempPos21.setX( aPos21.X()-nDX );
+                aTempPos22.setX( aPos22.X()-nDX );
             }
             pDev->DrawLine( aTempPos11, aTempPos12 );
             pDev->DrawLine( aTempPos21, aTempPos22 );
@@ -3370,8 +3375,8 @@ void CheckBox::GetFocus()
         Point aPos( GetPosPixel() );
         Size aSize( GetSizePixel() );
         aPos.Move(-1,-1);
-        aSize.Height() += 2;
-        aSize.Width() += 2;
+        aSize.AdjustHeight(2 );
+        aSize.AdjustWidth(2 );
         setPosSizePixel( aPos.X(), aPos.Y(), aSize.Width(), aSize.Height() );
         Invalidate();
     }
@@ -3401,8 +3406,8 @@ void CheckBox::LoseFocus()
         Point aPos( GetPosPixel() );
         Size aSize( GetSizePixel() );
         aPos.Move(1,1);
-        aSize.Height() -= 2;
-        aSize.Width() -= 2;
+        aSize.AdjustHeight( -2 );
+        aSize.AdjustWidth( -2 );
         setPosSizePixel( aPos.X(), aPos.Y(), aSize.Width(), aSize.Height() );
         Invalidate();
     }
@@ -3664,7 +3669,7 @@ void CheckBox::ImplSetMinimumNWFSize()
 
         if( aSize.Height() > aCurSize.Height() )
         {
-            aCurSize.Height() = aSize.Height();
+            aCurSize.setHeight( aSize.Height() );
             SetSizePixel( aCurSize );
         }
     }
@@ -3686,11 +3691,11 @@ Size CheckBox::CalcMinimumSize( long nMaxWidth ) const
 
         Size aTextSize = GetTextRect( tools::Rectangle( Point(), Size( nMaxWidth > 0 ? nMaxWidth : 0x7fffffff, 0x7fffffff ) ),
                                       aText, FixedText::ImplGetTextStyle( GetStyle() ) ).GetSize();
-        aSize.Width()+=2;    // for focus rect
-        aSize.Width() += ImplGetImageToTextDistance();
-        aSize.Width() += aTextSize.Width();
+        aSize.AdjustWidth(2 );    // for focus rect
+        aSize.AdjustWidth(ImplGetImageToTextDistance() );
+        aSize.AdjustWidth(aTextSize.Width() );
         if ( aSize.Height() < aTextSize.Height() )
-            aSize.Height() = aTextSize.Height();
+            aSize.setHeight( aTextSize.Height() );
     }
     else
     {
@@ -3717,13 +3722,13 @@ void CheckBox::ShowFocus(const tools::Rectangle& rRect)
         ImplControlValue aControlValue;
         tools::Rectangle aInRect(Point(0, 0), GetSizePixel());
 
-        aInRect.Left() = rRect.Left();  // exclude the checkbox itself from the focusrect
+        aInRect.SetLeft( rRect.Left() );  // exclude the checkbox itself from the focusrect
 
         //to-do, figure out a better solution here
-        aInRect.Left()-=2;
-        aInRect.Right()+=2;
-        aInRect.Top()-=2;
-        aInRect.Bottom()+=2;
+        aInRect.AdjustLeft( -2 );
+        aInRect.AdjustRight(2 );
+        aInRect.AdjustTop( -2 );
+        aInRect.AdjustBottom(2 );
 
         DrawNativeControl(ControlType::Checkbox, ControlPart::Focus, aInRect,
                           ControlState::FOCUSED, aControlValue, OUString());

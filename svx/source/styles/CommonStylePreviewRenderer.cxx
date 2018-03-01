@@ -113,7 +113,7 @@ bool CommonStylePreviewRenderer::recalculate()
     }
     if ((pItem = pItemSet->GetItem(SID_ATTR_CHAR_COLOR)) != nullptr)
     {
-        maFontColor = Color(static_cast<const SvxColorItem*>(pItem)->GetValue());
+        maFontColor = static_cast<const SvxColorItem*>(pItem)->GetValue();
     }
 
     if (mpStyle->GetFamily() == SfxStyleFamily::Para)
@@ -125,7 +125,7 @@ bool CommonStylePreviewRenderer::recalculate()
             {
                 if ((pItem = pItemSet->GetItem(XATTR_FILLCOLOR)) != nullptr)
                 {
-                    maBackgroundColor = Color(static_cast<const XFillColorItem*>(pItem)->GetColorValue());
+                    maBackgroundColor = static_cast<const XFillColorItem*>(pItem)->GetColorValue();
                 }
             }
         }
@@ -159,8 +159,8 @@ bool CommonStylePreviewRenderer::recalculate()
         if (aTextRect.Bottom() > mnMaxHeight)
         {
             double ratio = double(mnMaxHeight) / aTextRect.Bottom();
-            maPixelSize.Width() *= ratio;
-            maPixelSize.Height() *= ratio;
+            maPixelSize.setWidth( maPixelSize.Width() * ratio );
+            maPixelSize.setHeight( maPixelSize.Height() * ratio );
             pFont->SetFontSize(maPixelSize);
         }
         mrOutputDev.SetFont(aOldFont);
@@ -179,7 +179,7 @@ Size CommonStylePreviewRenderer::getRenderSize()
     assert(m_pFont);
     maPixelSize = m_pFont->GetTextSize(&mrOutputDev, maStyleName);
     if (maPixelSize.Height() > mnMaxHeight)
-        maPixelSize.Height() = mnMaxHeight;
+        maPixelSize.setHeight( mnMaxHeight );
     return maPixelSize;
 }
 
@@ -211,7 +211,7 @@ bool CommonStylePreviewRenderer::render(const tools::Rectangle& aRectangle, Rend
     if (eRenderAlign == RenderAlign::CENTER)
     {
         if (aRectangle.GetHeight() > aPixelSize.Height())
-            aFontDrawPosition.Y() += (aRectangle.GetHeight() - aPixelSize.Height()) / 2;
+            aFontDrawPosition.AdjustY((aRectangle.GetHeight() - aPixelSize.Height()) / 2 );
     }
 
     mrOutputDev.DrawText(aFontDrawPosition, rText);

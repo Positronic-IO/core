@@ -20,6 +20,7 @@
 #undef SC_DLLIMPLEMENTATION
 
 #include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <svtools/collatorres.hxx>
 #include <unotools/collatorwrapper.hxx>
@@ -505,6 +506,7 @@ ScTabPageSortOptions::ScTabPageSortOptions( vcl::Window*             pParent,
     get(m_pBtnFormats, "formats");
     get(m_pBtnNaturalSort, "naturalsort");
     get(m_pBtnIncComments, "includenotes");
+    get(m_pBtnIncImages, "includeimages");
     get(m_pBtnCopyResult, "copyresult");
     get(m_pLbOutPos, "outarealb");
     get(m_pEdOutPos, "outareaed");
@@ -538,6 +540,7 @@ void ScTabPageSortOptions::dispose()
     m_pBtnFormats.clear();
     m_pBtnNaturalSort.clear();
     m_pBtnIncComments.clear();
+    m_pBtnIncImages.clear();
     m_pBtnCopyResult.clear();
     m_pLbOutPos.clear();
     m_pEdOutPos.clear();
@@ -660,6 +663,7 @@ void ScTabPageSortOptions::Reset( const SfxItemSet* /* rArgSet */ )
     m_pBtnHeader->Check        ( aSortData.bHasHeader );
     m_pBtnNaturalSort->Check   ( aSortData.bNaturalSort );
     m_pBtnIncComments->Check   ( aSortData.bIncludeComments );
+    m_pBtnIncImages->Check     ( aSortData.bIncludeGraphicObjects );
 
     if ( aSortData.bByRow )
     {
@@ -725,6 +729,7 @@ bool ScTabPageSortOptions::FillItemSet( SfxItemSet* rArgSet )
     aNewSortData.bCaseSens       = m_pBtnCase->IsChecked();
     aNewSortData.bNaturalSort    = m_pBtnNaturalSort->IsChecked();
     aNewSortData.bIncludeComments= m_pBtnIncComments->IsChecked();
+    aNewSortData.bIncludeGraphicObjects = m_pBtnIncImages->IsChecked();
     aNewSortData.bIncludePattern = m_pBtnFormats->IsChecked();
     aNewSortData.bInplace        = !m_pBtnCopyResult->IsChecked();
     aNewSortData.nDestCol        = theOutPos.Col();
@@ -806,7 +811,10 @@ DeactivateRC ScTabPageSortOptions::DeactivatePage( SfxItemSet* pSetP )
 
         if ( !bPosInputOk )
         {
-            ScopedVclPtrInstance<MessageDialog>(this, ScGlobal::GetRscString( STR_INVALID_TABREF))->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok,
+                                                      ScGlobal::GetRscString(STR_INVALID_TABREF)));
+            xBox->run();
             m_pEdOutPos->GrabFocus();
             m_pEdOutPos->SetSelection( Selection( 0, SELECTION_MAX ) );
             theOutPos.Set(0,0,0);

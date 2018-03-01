@@ -50,95 +50,17 @@ namespace o3tl {
     template<> struct typed_flags<MessBoxStyle> : is_typed_flags<MessBoxStyle, 0x3fff> {};
 }
 
+VCL_DLLPUBLIC Image const & GetStandardInfoBoxImage();
+VCL_DLLPUBLIC OUString GetStandardInfoBoxText();
 
-class VCL_DLLPUBLIC MessBox : public ButtonDialog
-{
-    VclPtr<VclMultiLineEdit>   mpVCLMultiLineEdit;
-    VclPtr<FixedImage>         mpFixedImage;
-    Image                      maImage;
-    bool                       mbHelpBtn;
-    bool                       mbCheck;
-    MessBoxStyle               mnMessBoxStyle;
+VCL_DLLPUBLIC Image const & GetStandardWarningBoxImage();
+VCL_DLLPUBLIC OUString GetStandardWarningBoxText();
 
-protected:
-    OUString                   maMessText;
-    VclPtr<CheckBox>           mpCheckBox;
-    OUString                   maCheckBoxText;
+VCL_DLLPUBLIC Image const & GetStandardErrorBoxImage();
+VCL_DLLPUBLIC OUString GetStandardErrorBoxText();
 
-    SAL_DLLPRIVATE void ImplInitButtons();
-    SAL_DLLPRIVATE void ImplPosControls();
-
-public:
-                        MessBox(vcl::Window* pParent, MessBoxStyle nMessBoxStyle, WinBits n,
-                                const OUString& rTitle, const OUString& rMessage);
-    virtual             ~MessBox() override;
-    virtual void        dispose() override;
-
-    virtual void        StateChanged( StateChangedType nStateChange ) override;
-
-    void                SetMessText( const OUString& rText ) { maMessText = rText; }
-    const OUString&     GetMessText() const { return maMessText; }
-
-    void                SetImage( const Image& rImage ) { maImage = rImage; }
-
-    void                SetCheckBoxText( const OUString& rText ) { maCheckBoxText = rText;}
-    void                SetCheckBoxState( bool bCheck );
-    bool                GetCheckBoxState() const;
-
-    virtual Size        GetOptimalSize() const override;
-};
-
-class VCL_DLLPUBLIC InfoBox : public MessBox
-{
-public:
-                        InfoBox( vcl::Window* pParent, const OUString& rMessage );
-                        InfoBox( vcl::Window* pParent, MessBoxStyle nStyle,
-                                const OUString& rMessage );
-
-    static Image const & GetStandardImage();
-    static OUString     GetStandardText();
-};
-
-class VCL_DLLPUBLIC WarningBox : public MessBox
-{
-public:
-                        WarningBox( vcl::Window* pParent, MessBoxStyle nStyle,
-                                    const OUString& rMessage );
-                        WarningBox( vcl::Window* pParent, MessBoxStyle nStyle, WinBits n,
-                                    const OUString& rMessage );
-
-    void                SetDefaultCheckBoxText();
-
-    static Image const & GetStandardImage();
-    static OUString     GetStandardText();
-};
-
-class VCL_DLLPUBLIC ErrorBox : public MessBox
-{
-public:
-                        ErrorBox( vcl::Window* pParent, const OUString& rMessage );
-                        ErrorBox( vcl::Window* pParent, MessBoxStyle nStyle,
-                                  const OUString& rMessage );
-                        ErrorBox( vcl::Window* pParent, MessBoxStyle nStyle, WinBits n,
-                                  const OUString& rMessage );
-
-    static Image        GetStandardImage();
-    static OUString     GetStandardText();
-};
-
-class VCL_DLLPUBLIC QueryBox : public MessBox
-{
-public:
-                        QueryBox( vcl::Window* pParent, MessBoxStyle nStyle,
-                                  const OUString& rMessage );
-                        QueryBox( vcl::Window* pParent, MessBoxStyle nStyle, WinBits n,
-                                  const OUString& rMessage );
-
-    void                SetDefaultCheckBoxText();
-
-    static Image const & GetStandardImage();
-    static OUString     GetStandardText();
-};
+VCL_DLLPUBLIC Image const & GetStandardQueryBoxImage();
+VCL_DLLPUBLIC OUString GetStandardQueryBoxText();
 
 #endif // INCLUDED_VCL_MSGBOX_HXX
 

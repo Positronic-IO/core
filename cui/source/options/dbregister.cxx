@@ -27,7 +27,7 @@
 #include <strings.hrc>
 #include <bitmaps.hlst>
 #include <vcl/field.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <svl/eitem.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/uno/Exception.hpp>
@@ -35,7 +35,6 @@
 #include <com/sun/star/ui/dialogs/XFilePicker.hpp>
 #include <com/sun/star/ui/dialogs/XFilterManager.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
-#include <vcl/msgbox.hxx>
 #include <svtools/svtabbx.hxx>
 #include <svl/itemset.hxx>
 #include "doclinkdialog.hxx"
@@ -133,11 +132,11 @@ DbRegistrationOptionsPage::DbRegistrationOptionsPage( vcl::Window* pParent, cons
     rBar.SetSelectHdl( LINK( this, DbRegistrationOptionsPage, HeaderSelect_Impl ) );
     rBar.SetEndDragHdl( LINK( this, DbRegistrationOptionsPage, HeaderEndDrag_Impl ) );
     Size aSz;
-    aSz.Width() = TAB_WIDTH1;
+    aSz.setWidth( TAB_WIDTH1 );
     rBar.InsertItem( ITEMID_TYPE, m_aTypeText,
                             LogicToPixel( aSz, MapMode( MapUnit::MapAppFont ) ).Width(),
                             HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER | HeaderBarItemBits::CLICKABLE | HeaderBarItemBits::UPARROW );
-    aSz.Width() = TAB_WIDTH2;
+    aSz.setWidth( TAB_WIDTH2 );
     rBar.InsertItem( ITEMID_PATH, m_aPathText,
                             LogicToPixel( aSz, MapMode( MapUnit::MapAppFont ) ).Width(),
                             HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER );
@@ -224,12 +223,10 @@ void DbRegistrationOptionsPage::Reset( const SfxItemSet* rSet )
 
     const DatabaseRegistrations& rRegistrations = pRegistrations->getRegistrations();
     m_nOldCount = rRegistrations.size();
-    DatabaseRegistrations::const_iterator aIter = rRegistrations.begin();
-    DatabaseRegistrations::const_iterator aEnd = rRegistrations.end();
-    for ( ; aIter != aEnd; ++aIter )
+    for (auto const& elem : rRegistrations)
     {
-        OFileNotation aTransformer( aIter->second.sLocation );
-        insertNewEntry( aIter->first, aTransformer.get( OFileNotation::N_SYSTEM ), aIter->second.bReadOnly );
+        OFileNotation aTransformer( elem.second.sLocation );
+        insertNewEntry( elem.first, aTransformer.get( OFileNotation::N_SYSTEM ), elem.second.bReadOnly );
     }
 
     OUString aUserData = GetUserData();
@@ -275,8 +272,9 @@ IMPL_LINK_NOARG(DbRegistrationOptionsPage, DeleteHdl, Button*, void)
     SvTreeListEntry* pEntry = m_pPathBox->FirstSelected();
     if ( pEntry )
     {
-        ScopedVclPtrInstance< MessageDialog > aQuery(this, CuiResId(RID_SVXSTR_QUERY_DELETE_CONFIRM), VclMessageType::Question, VclButtonsType::YesNo);
-        if ( aQuery->Execute() == RET_YES )
+        std::unique_ptr<weld::MessageDialog> xQuery(Application::CreateMessageDialog(GetFrameWeld(),
+                                                    VclMessageType::Question, VclButtonsType::YesNo, CuiResId(RID_SVXSTR_QUERY_DELETE_CONFIRM)));
+        if (xQuery->run() == RET_YES)
             m_pPathBox->GetModel()->Remove(pEntry);
     }
 }
@@ -362,7 +360,7 @@ IMPL_LINK( DbRegistrationOptionsPage, HeaderEndDrag_Impl, HeaderBar*, pBar, void
         for ( sal_uInt16 i = 1; i <= nTabs; ++i )
         {
             long _nWidth = pBar->GetItemSize(i);
-            aSz.Width() =  _nWidth + nTmpSz;
+            aSz.setWidth(  _nWidth + nTmpSz );
             nTmpSz += _nWidth;
             m_pPathBox->SetTab( i, PixelToLogic( aSz, MapMode(MapUnit::MapAppFont) ).Width() );
         }

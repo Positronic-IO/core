@@ -37,7 +37,7 @@ using namespace ::com::sun::star;
 
 - (void)onNotification:(NSNotification*)pNotification
 {
-    NSString* pNoteName = (NSString*)[pNotification name];
+    NSString* pNoteName = [pNotification name];
     HandlersForObject::iterator it = maHandlersForObject.find( [pNotification object]);
     if( it != maHandlersForObject.end() )
         (*it).second->handleObservation( pNoteName );
@@ -286,7 +286,7 @@ sal_Int16 SAL_CALL Player::getVolumeDB()
     //   0dB <-> AVPlayer volume 1.0
     const int nVolumeDB = (fVolume <= 0) ? -40 : lrint( 20.0*log10(fVolume));
 
-    return (sal_Int16)nVolumeDB;
+    return static_cast<sal_Int16>(nVolumeDB);
 }
 
 
@@ -298,7 +298,7 @@ awt::Size SAL_CALL Player::getPreferredPlayerWindowSize()
     NSArray* pVideoTracks = [pMovie tracksWithMediaType:AVMediaTypeVideo];
     if ([pVideoTracks count] > 0)
     {
-        AVAssetTrack* pFirstVideoTrack = (AVAssetTrack*) [pVideoTracks objectAtIndex:0];
+        AVAssetTrack* pFirstVideoTrack = static_cast<AVAssetTrack*>([pVideoTracks objectAtIndex:0]);
         const CGSize aPrefSize = [pFirstVideoTrack naturalSize];
         aSize = awt::Size( aPrefSize.width, aPrefSize.height );
     }

@@ -300,7 +300,7 @@ void MenuBarWindow::ImplCreatePopup( bool bPreSelectFirst )
             pData = pMenu->pItemList->GetDataFromPos( nHighlightedItem );
             Point aItemTopLeft( nX, 0 );
             Point aItemBottomRight( aItemTopLeft );
-            aItemBottomRight.X() += pData->aSz.Width();
+            aItemBottomRight.AdjustX(pData->aSz.Width() );
 
             if (pData->bHiddenOnGUI)
             {
@@ -330,7 +330,7 @@ void MenuBarWindow::ImplCreatePopup( bool bPreSelectFirst )
             if ( GetSizePixel().Height() )
             {
                 // #107747# give menuitems the height of the menubar
-                aItemBottomRight.Y() += GetOutputSizePixel().Height()-1;
+                aItemBottomRight.AdjustY(GetOutputSizePixel().Height()-1 );
             }
 
             // ImplExecute is not modal...
@@ -517,7 +517,14 @@ void MenuBarWindow::ChangeHighlightItem( sal_uInt16 n, bool bSelectEntry, bool b
             VclPtr<vcl::Window> xTempFocusId = xSaveFocusId;
             xSaveFocusId = nullptr;
             if (bAllowRestoreFocus)
+            {
+                // tdf#115227 the popup is already killed, so temporarily set us as the
+                // focus window, so we could avoid sending superfluous activate events
+                // to top window listeners.
+                ImplGetSVData()->maWinData.mpFocusWin = this;
                 Window::EndSaveFocus(xTempFocusId);
+                assert(xTempFocusId == nullptr || ImplGetSVData()->maWinData.mpFocusWin != this);
+            }
             // #105406# restore focus to document if we could not save focus before
             if (bDefaultToDocument && xTempFocusId == nullptr && bAllowRestoreFocus)
                 GrabFocusToDocument();
@@ -595,8 +602,7 @@ static void ImplAddNWFSeparator(vcl::RenderContext& rRenderContext, const Size& 
         // note: the menubar only provides the upper (dark) half of it, the rest (bright part) is drawn by the docking area
 
         rRenderContext.SetLineColor(rRenderContext.GetSettings().GetStyleSettings().GetSeparatorColor());
-        Point aPt;
-        tools::Rectangle aRect(aPt, rSize);
+        tools::Rectangle aRect(Point(), rSize);
         rRenderContext.DrawLine(aRect.BottomLeft(), aRect.BottomRight());
     }
 }
@@ -610,7 +616,7 @@ void MenuBarWindow::HighlightItem(vcl::RenderContext& rRenderContext, sal_uInt16
     size_t nCount = pMenu->pItemList->size();
 
     Size aOutputSize = GetOutputSizePixel();
-    aOutputSize.Width() -= aCloseBtn->GetSizePixel().Width();
+    aOutputSize.AdjustWidth( -(aCloseBtn->GetSizePixel().Width()) );
 
     for (size_t n = 0; n < nCount; n++)
     {
@@ -913,8 +919,7 @@ void MenuBarWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
             Erase(rRenderContext);
         else
         {
-            Point aPt;
-            tools::Rectangle aCtrlRegion( aPt, aOutputSize );
+            tools::Rectangle aCtrlRegion( Point(), aOutputSize );
 
             rRenderContext.DrawNativeControl(ControlType::Menubar, ControlPart::Entire, aCtrlRegion,
                                              ControlState::ENABLED, aMenubarValue, OUString());
@@ -924,7 +929,7 @@ void MenuBarWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
     }
 
     // shrink the area of the buttons
-    aOutputSize.Width() -= aCloseBtn->GetSizePixel().Width();
+    aOutputSize.AdjustWidth( -(aCloseBtn->GetSizePixel().Width()) );
 
     rRenderContext.SetFillColor(rStyleSettings.GetMenuColor());
     pMenu->ImplPaint(rRenderContext, aOutputSize, 0);
@@ -939,7 +944,7 @@ void MenuBarWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
         rStyleSettings.GetHighContrastMode())
     {
         rRenderContext.Push(PushFlags::LINECOLOR | PushFlags::MAPMODE);
-        rRenderContext.SetLineColor(Color(COL_WHITE));
+        rRenderContext.SetLineColor(COL_WHITE);
         rRenderContext.SetMapMode(MapMode(MapUnit::MapPixel));
         Size aSize = GetSizePixel();
         rRenderContext.DrawLine(Point(0, aSize.Height() - 1),
@@ -1104,7 +1109,7 @@ void MenuBarWindow::ImplInitStyleSettings()
         ImplGetFrame()->UpdateSettings(aSettings); // to update persona
         StyleSettings aStyle(aSettings.GetStyleSettings());
         Color aHighlightTextColor = ImplGetSVData()->maNWFData.maMenuBarHighlightTextColor;
-        if (aHighlightTextColor != Color(COL_TRANSPARENT))
+        if (aHighlightTextColor != COL_TRANSPARENT)
         {
             aStyle.SetMenuHighlightTextColor(aHighlightTextColor);
         }

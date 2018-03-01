@@ -22,6 +22,7 @@
 #include <osl/diagnose.h>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/bitmap.hxx>
+#include <impbmp.hxx>
 
 #define S2(a,b)             { long t; if( ( t = b - a ) < 0 ) { a += t; b -= t; } }
 #define MN3(a,b,c)          S2(a,b); S2(a,c);
@@ -167,6 +168,7 @@ bool Bitmap::ImplConvolute3( const long* pMatrix )
             // do convolution
             for( nY = 0; nY < nHeight; )
             {
+                Scanline pScanline = pWriteAcc->GetScanline(nY);
                 for( nX = 0; nX < nWidth; nX++ )
                 {
                     // first row
@@ -209,9 +211,9 @@ bool Bitmap::ImplConvolute3( const long* pMatrix )
                     nSumB += pTmp[ pColor->GetBlue() ];
 
                     // calculate destination color
-                    pWriteAcc->SetPixel( nY, nX, BitmapColor( static_cast<sal_uInt8>(MinMax( nSumR / nDivisor, 0, 255 )),
-                                                              static_cast<sal_uInt8>(MinMax( nSumG / nDivisor, 0, 255 )),
-                                                              static_cast<sal_uInt8>(MinMax( nSumB / nDivisor, 0, 255 )) ) );
+                    pWriteAcc->SetPixelOnData( pScanline, nX, BitmapColor( static_cast<sal_uInt8>(MinMax( nSumR / nDivisor, 0, 255 )),
+                                                                           static_cast<sal_uInt8>(MinMax( nSumG / nDivisor, 0, 255 )),
+                                                                           static_cast<sal_uInt8>(MinMax( nSumB / nDivisor, 0, 255 )) ) );
                 }
 
                 if( ++nY < nHeight )
@@ -323,6 +325,7 @@ bool Bitmap::ImplMedianFilter()
             // do median filtering
             for( nY = 0; nY < nHeight; )
             {
+                Scanline pScanline = pWriteAcc->GetScanline(nY);
                 for( nX = 0; nX < nWidth; nX++ )
                 {
                     nR1 = ( pColor = pRowTmp1 + nX )->GetRed();
@@ -371,7 +374,7 @@ bool Bitmap::ImplMedianFilter()
                     MNMX3( nB9, nB2, nB3 );
 
                     // set destination color
-                    pWriteAcc->SetPixel( nY, nX, BitmapColor( static_cast<sal_uInt8>(nR2), static_cast<sal_uInt8>(nG2), static_cast<sal_uInt8>(nB2) ) );
+                    pWriteAcc->SetPixelOnData( pScanline, nX, BitmapColor( static_cast<sal_uInt8>(nR2), static_cast<sal_uInt8>(nG2), static_cast<sal_uInt8>(nB2) ) );
                 }
 
                 if( ++nY < nHeight )
@@ -484,6 +487,7 @@ bool Bitmap::ImplSobelGrey()
                     nGrey32 = pReadAcc->GetPixel( pVMap[ nY + 2 ], pHMap[ 1 ] ).GetIndex();
                     nGrey33 = pReadAcc->GetPixel( pVMap[ nY + 2 ], pHMap[ 2 ] ).GetIndex();
 
+                    Scanline pScanline = pWriteAcc->GetScanline(nY);
                     for( nX = 0; nX < nWidth; nX++ )
                     {
                         nSum1 = nSum2 = 0;
@@ -517,7 +521,7 @@ bool Bitmap::ImplSobelGrey()
 
                         nSum1 = static_cast<long>(sqrt( static_cast<double>( nSum1 * nSum1 + nSum2 * nSum2 ) ));
                         aGrey.SetIndex( ~static_cast<sal_uInt8>(SAL_BOUND( nSum1, 0, 255 )) );
-                        pWriteAcc->SetPixel( nY, nX, aGrey );
+                        pWriteAcc->SetPixelOnData( pScanline, nX, aGrey );
 
                         if( nX < ( nWidth - 1 ) )
                         {
@@ -614,6 +618,7 @@ bool Bitmap::ImplEmbossGrey( const BmpFilterParam* pFilterParam )
                     nGrey32 = pReadAcc->GetPixel( pVMap[ nY + 2 ], pHMap[ 1 ] ).GetIndex();
                     nGrey33 = pReadAcc->GetPixel( pVMap[ nY + 2 ], pHMap[ 2 ] ).GetIndex();
 
+                    Scanline pScanline = pWriteAcc->GetScanline(nY);
                     for( nX = 0; nX < nWidth; nX++ )
                     {
                         nNx = nGrey11 + nGrey21 + nGrey31 - nGrey13 - nGrey23 - nGrey33;
@@ -629,7 +634,7 @@ bool Bitmap::ImplEmbossGrey( const BmpFilterParam* pFilterParam )
                             aGrey.SetIndex( static_cast<sal_uInt8>(SAL_BOUND( fGrey, 0, 255 )) );
                         }
 
-                        pWriteAcc->SetPixel( nY, nX, aGrey );
+                        pWriteAcc->SetPixelOnData( pScanline, nX, aGrey );
 
                         if( nX < ( nWidth - 1 ) )
                         {
@@ -697,12 +702,13 @@ bool Bitmap::ImplSolarize( const BmpFilterParam* pFilterParam )
 
             for( long nY = 0; nY < nHeight ; nY++ )
             {
+                Scanline pScanline = pWriteAcc->GetScanline(nY);
                 for( long nX = 0; nX < nWidth; nX++ )
                 {
-                    aCol = pWriteAcc->GetPixel( nY, nX );
+                    aCol = pWriteAcc->GetPixelFromData( pScanline, nX );
 
                     if( aCol.GetLuminance() >= cThreshold )
-                        pWriteAcc->SetPixel( nY, nX, aCol.Invert() );
+                        pWriteAcc->SetPixelOnData( pScanline, nX, aCol.Invert() );
                 }
             }
         }
@@ -747,18 +753,19 @@ bool Bitmap::ImplSepia( const BmpFilterParam* pFilterParam )
 
             if( pReadAcc->HasPalette() )
             {
+                const sal_uInt16             nPalCount = pReadAcc->GetPaletteEntryCount();
+                std::unique_ptr<sal_uInt8[]> pIndexMap( new sal_uInt8[ nPalCount ] );
+                for( sal_uInt16 i = 0; i < nPalCount; i++ )
+                    pIndexMap[ i ] = pReadAcc->GetPaletteColor( i ).GetLuminance();
+
                 for( long nY = 0; nY < nHeight ; nY++ )
                 {
-                    const sal_uInt16             nPalCount = pReadAcc->GetPaletteEntryCount();
-                    std::unique_ptr<sal_uInt8[]> pIndexMap( new sal_uInt8[ nPalCount ] );
-
-                    for( sal_uInt16 i = 0; i < nPalCount; i++ )
-                        pIndexMap[ i ] = pReadAcc->GetPaletteColor( i ).GetLuminance();
-
+                    Scanline pScanline = pWriteAcc->GetScanline(nY);
+                    Scanline pScanlineRead = pReadAcc->GetScanline(nY);
                     for( long nX = 0; nX < nWidth; nX++ )
                     {
-                        aCol.SetIndex( pIndexMap[ pReadAcc->GetPixel( nY, nX ).GetIndex() ] );
-                        pWriteAcc->SetPixel( nY, nX, aCol );
+                        aCol.SetIndex( pIndexMap[ pReadAcc->GetIndexFromData( pScanlineRead, nX ) ] );
+                        pWriteAcc->SetPixelOnData( pScanline, nX, aCol );
                     }
                 }
             }
@@ -766,10 +773,12 @@ bool Bitmap::ImplSepia( const BmpFilterParam* pFilterParam )
             {
                 for( long nY = 0; nY < nHeight ; nY++ )
                 {
+                    Scanline pScanline = pWriteAcc->GetScanline(nY);
+                    Scanline pScanlineRead = pReadAcc->GetScanline(nY);
                     for( long nX = 0; nX < nWidth; nX++ )
                     {
-                        aCol.SetIndex( pReadAcc->GetPixel( nY, nX ).GetLuminance() );
-                        pWriteAcc->SetPixel( nY, nX, aCol );
+                        aCol.SetIndex( pReadAcc->GetPixelFromData( pScanlineRead, nX ).GetLuminance() );
+                        pWriteAcc->SetPixelOnData( pScanline, nX, aCol );
                     }
                 }
             }
@@ -863,9 +872,10 @@ bool Bitmap::ImplMosaic( const BmpFilterParam* pFilterParam )
                     {
                         for( nY = nY1, nSumR = nSumG = nSumB = 0; nY <= nY2; nY++ )
                         {
+                            Scanline pScanlineRead = pReadAcc->GetScanline(nY);
                             for( nX = nX1; nX <= nX2; nX++ )
                             {
-                                aCol = pReadAcc->GetPixel( nY, nX );
+                                aCol = pReadAcc->GetPixelFromData( pScanlineRead, nX );
                                 nSumR += aCol.GetRed();
                                 nSumG += aCol.GetGreen();
                                 nSumB += aCol.GetBlue();
@@ -877,8 +887,11 @@ bool Bitmap::ImplMosaic( const BmpFilterParam* pFilterParam )
                         aCol.SetBlue( static_cast<sal_uInt8>( nSumB * fArea_1 ) );
 
                         for( nY = nY1; nY <= nY2; nY++ )
+                        {
+                            Scanline pScanline = pWriteAcc->GetScanline(nY);
                             for( nX = nX1; nX <= nX2; nX++ )
-                                pWriteAcc->SetPixel( nY, nX, aCol );
+                                pWriteAcc->SetPixelOnData( pScanline, nX, aCol );
+                        }
 
                         nX1 += nTileWidth; nX2 += nTileWidth;
 
@@ -896,9 +909,10 @@ bool Bitmap::ImplMosaic( const BmpFilterParam* pFilterParam )
                     {
                         for( nY = nY1, nSumR = nSumG = nSumB = 0; nY <= nY2; nY++ )
                         {
+                            Scanline pScanlineRead = pReadAcc->GetScanline(nY);
                             for( nX = nX1; nX <= nX2; nX++ )
                             {
-                                const BitmapColor& rCol = pReadAcc->GetPaletteColor( pReadAcc->GetPixelIndex( nY, nX ) );
+                                const BitmapColor& rCol = pReadAcc->GetPaletteColor( pReadAcc->GetIndexFromData( pScanlineRead, nX ) );
                                 nSumR += rCol.GetRed();
                                 nSumG += rCol.GetGreen();
                                 nSumB += rCol.GetBlue();
@@ -910,8 +924,11 @@ bool Bitmap::ImplMosaic( const BmpFilterParam* pFilterParam )
                         aCol.SetBlue( static_cast<sal_uInt8>( nSumB * fArea_1 ) );
 
                         for( nY = nY1; nY <= nY2; nY++ )
+                        {
+                            Scanline pScanline = pWriteAcc->GetScanline(nY);
                             for( nX = nX1; nX <= nX2; nX++ )
-                                pWriteAcc->SetPixel( nY, nX, aCol );
+                                pWriteAcc->SetPixelOnData( pScanline, nX, aCol );
+                        }
 
                         nX1 += nTileWidth; nX2 += nTileWidth;
 
@@ -1009,8 +1026,11 @@ bool Bitmap::ImplPopArt()
 
             // get pixel count for each palette entry
             for( long nY = 0; nY < nHeight ; nY++ )
+            {
+                Scanline pScanline = pWriteAcc->GetScanline(nY);
                 for( long nX = 0; nX < nWidth; nX++ )
-                    pPopArtTable[ pWriteAcc->GetPixel( nY, nX ).GetIndex() ].mnCount++;
+                    pPopArtTable[ pWriteAcc->GetIndexFromData( pScanline, nX ) ].mnCount++;
+            }
 
             // sort table
             qsort( pPopArtTable, nEntryCount, sizeof( PopArtEntry ), ImplPopArtCmpFnc );
@@ -1043,7 +1063,7 @@ bool Bitmap::ImplPopArt()
 }
 
 double* MakeBlurKernel(const double radius, int& rows) {
-    int intRadius = static_cast<int>(radius) + 1.0;
+    int intRadius = static_cast<int>(radius + 1.0);
     rows = intRadius * 2 + 1;
     double* matrix = new double[rows];
 
@@ -1201,9 +1221,10 @@ bool Bitmap::ImplSeparableUnsharpenFilter(const double radius) {
     BitmapColor aColor, aColorBlur;
 
     // For all pixels in original image subtract pixels values from blurred image
-    for( long x = 0; x < nWidth; x++ )
+    for( long y = 0; y < nHeight; y++ )
     {
-        for( long y = 0; y < nHeight; y++ )
+        Scanline pScanline = pWriteAcc->GetScanline(y);
+        for( long x = 0; x < nWidth; x++ )
         {
             aColorBlur = pReadAccBlur->GetColor( y , x );
             aColor = pReadAcc->GetColor( y , x );
@@ -1213,7 +1234,7 @@ bool Bitmap::ImplSeparableUnsharpenFilter(const double radius) {
                 static_cast<sal_uInt8>(MinMax( aColor.GetGreen() + (aColor.GetGreen() - aColorBlur.GetGreen()) * aAmount, 0, 255 )),
                 static_cast<sal_uInt8>(MinMax( aColor.GetBlue()  + (aColor.GetBlue()  - aColorBlur.GetBlue())  * aAmount, 0, 255 )) );
 
-            pWriteAcc->SetPixel( y, x, aResultColor );
+            pWriteAcc->SetPixelOnData( pScanline, x, aResultColor );
         }
     }
 

@@ -63,7 +63,7 @@ sal_uInt16 ScDataTableColView::GetEntrySize(SCCOLROW nPos) const
 
 OUString ScDataTableColView::GetEntryText(SCCOLROW nPos) const
 {
-    return "Col: " + OUString::number(nPos);
+    return "Col: " + OUString::number(nPos + 1);
 }
 
 bool ScDataTableColView::IsLayoutRTL() const
@@ -114,7 +114,7 @@ sal_uInt16 ScDataTableRowView::GetEntrySize(SCCOLROW nPos) const
 
 OUString ScDataTableRowView::GetEntryText(SCCOLROW nPos) const
 {
-    return OUString::number(nPos);
+    return OUString::number(nPos + 1);
 }
 
 bool ScDataTableRowView::IsLayoutRTL() const
@@ -287,6 +287,24 @@ void ScDataTableView::Paint(vcl::RenderContext& rRenderContext, const tools::Rec
 Size ScDataTableView::GetOptimalSize() const
 {
     return Size(600, 200);
+}
+
+void ScDataTableView::getColRange(SCCOL& rStartCol, SCCOL& rEndCol) const
+{
+    SCCOLROW aStart = 0;
+    SCCOLROW aEnd = 0;
+    mpColView->GetMarkRange(aStart, aEnd);
+    rStartCol = static_cast<SCCOL>(aStart);
+    rEndCol = static_cast<SCCOL>(aEnd);
+}
+
+void ScDataTableView::getRowRange(SCROW& rStartCol, SCROW& rEndCol) const
+{
+    SCCOLROW aStart = 0;
+    SCCOLROW aEnd = 0;
+    mpRowView->GetMarkRange(aStart, aEnd);
+    rStartCol = static_cast<SCROW>(aStart);
+    rEndCol = static_cast<SCROW>(aEnd);
 }
 
 IMPL_LINK(ScDataTableView, ScrollHdl, ScrollBar*, pScrollBar, void)

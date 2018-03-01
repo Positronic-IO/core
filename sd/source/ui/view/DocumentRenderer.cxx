@@ -49,7 +49,8 @@
 #include <svx/xlnclit.hxx>
 #include <toolkit/awt/vclxdevice.hxx>
 #include <unotools/localedatawrapper.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <xmloff/autolayout.hxx>
 
@@ -144,7 +145,7 @@ namespace {
             return nQuality;
         }
 
-        bool IsPageSize() const
+        bool IsPaperSize() const
         {
             return GetBoolValue("PageOptions", sal_Int32(1));
         }
@@ -164,10 +165,10 @@ namespace {
             return GetBoolValue("PrintProspect", false);
         }
 
-        bool IsPrinterPreferred(DocumentType eDocType) const
+        bool IsPrinterPreferred() const
         {
-            bool bIsDraw = eDocType == DocumentType::Draw;
-            return IsTilePage() || IsPageSize() || IsBooklet() || (!bIsDraw && !IsNotes());
+            return IsTilePage() || IsPaperSize() || IsBooklet() ||
+                IsNotes() || IsHandout() || IsOutline();
         }
 
         bool IsPrintExcluded() const
@@ -1281,11 +1282,12 @@ public:
                 // Show warning that the orientation could not be set.
                 if (pViewShell)
                 {
-                    ScopedVclPtrInstance<WarningBox> aWarnBox(
-                        pViewShell->GetActiveWindow(),
-                        MessBoxStyle::OkCancel | MessBoxStyle::DefaultCancel,
-                        SdResId(STR_WARN_PRINTFORMAT_FAILURE));
-                    if (aWarnBox->Execute() != RET_OK)
+                    vcl::Window* pWin = pViewShell->GetActiveWindow();
+                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                               VclMessageType::Warning, VclButtonsType::OkCancel,
+                                                               SdResId(STR_WARN_PRINTFORMAT_FAILURE)));
+                    xWarn->set_default_response(RET_CANCEL);
+                    if (xWarn->run() != RET_OK)
                         return;
                 }
             }
@@ -1352,7 +1354,7 @@ private:
 
         // Draw and Notes should usually abide by their specified paper size
         Size aPaperSize;
-        if (!mpOptions->IsPrinterPreferred(pDocument->GetDocumentType()))
+        if (!mpOptions->IsPrinterPreferred())
         {
             aPaperSize.setWidth(rInfo.maPageSize.Width());
             aPaperSize.setHeight(rInfo.maPageSize.Height());
@@ -1365,7 +1367,7 @@ private:
 
         maPrintSize = awt::Size(aPaperSize.Width(), aPaperSize.Height());
 
-        if (mpOptions->IsPrinterPreferred(pDocument->GetDocumentType()))
+        if (mpOptions->IsPrinterPreferred())
         {
             if( (rInfo.meOrientation == Orientation::Landscape &&
                   (aPaperSize.Width() < aPaperSize.Height()))
@@ -1428,7 +1430,7 @@ private:
                 aInfo.msTimeDate += GetSdrGlobalData().GetLocaleData()->getTime( ::tools::Time( ::tools::Time::SYSTEM ), false );
 
             // Draw and Notes should usually use specified paper size when printing
-            if (!mpOptions->IsPrinterPreferred(mrBase.GetDocShell()->GetDocumentType()))
+            if (!mpOptions->IsPrinterPreferred())
             {
                 aInfo.maPrintSize = mrBase.GetDocument()->GetSdPage(0, PageKind::Standard)->GetSize();
                 maPrintSize = awt::Size(aInfo.maPrintSize.Width(),
@@ -1547,7 +1549,7 @@ private:
 
                 SdrPathObj* pPathObj = new SdrPathObj(OBJ_PATHLINE, aPathPoly );
                 pPathObj->SetMergedItem(XLineStyleItem(drawing::LineStyle_SOLID));
-                pPathObj->SetMergedItem(XLineColorItem(OUString(), Color(COL_BLACK)));
+                pPathObj->SetMergedItem(XLineColorItem(OUString(), COL_BLACK));
 
                 pHandout->NbcInsertObject( pPathObj );
             }
@@ -1673,7 +1675,7 @@ private:
                 if (!pTextObj)
                 {
                     bSubTitle = true;
-                    pTextObj = dynamic_cast<SdrTextObj*>(pPage->GetPresObj(PRESOBJ_TEXT));  // Untertitel vorhanden?
+                    pTextObj = dynamic_cast<SdrTextObj*>(pPage->GetPresObj(PRESOBJ_TEXT));  // is there a subtitle?
                 }
 
                 sal_Int32 nParaCount1 = pOutliner->GetParagraphCount();
@@ -1741,7 +1743,7 @@ private:
         OSL_ASSERT(pDocument != nullptr);
         SdPage& rHandoutPage (*pDocument->GetSdPage(0, PageKind::Handout));
 
-        const bool bScalePage (mpOptions->IsPageSize());
+        const bool bScalePage (mpOptions->IsPaperSize());
 
         sal_uInt16 nPaperBin;
         if ( ! mpOptions->IsPaperBin())
@@ -1902,7 +1904,7 @@ private:
             // is it possible that the page size changed?
             const Size aPageSize = pPage->GetSize();
 
-            if (mpOptions->IsPageSize())
+            if (mpOptions->IsPrinterPreferred())
             {
                 const double fHorz (static_cast<double>(rInfo.maPrintSize.Width())  / aPageSize.Width());
                 const double fVert (static_cast<double>(rInfo.maPrintSize.Height()) / aPageSize.Height());
@@ -1939,8 +1941,8 @@ private:
                     && aPageWidth > aPageHeight ) )
             {
                 const sal_Int32 nTmp (rInfo.maPrintSize.Width());
-                rInfo.maPrintSize.Width() = rInfo.maPrintSize.Height();
-                rInfo.maPrintSize.Height() = nTmp;
+                rInfo.maPrintSize.setWidth( rInfo.maPrintSize.Height() );
+                rInfo.maPrintSize.setHeight( nTmp );
             }
 
             if (mpOptions->IsTilePage()
@@ -1970,22 +1972,22 @@ private:
         Size aPageSize_2 (rInfo.maPageSize);
 
         if (rInfo.meOrientation == Orientation::Landscape)
-            aPrintSize_2.Width() >>= 1;
+            aPrintSize_2.setWidth( aPrintSize_2.Width() >> 1 );
         else
-            aPrintSize_2.Height() >>= 1;
+            aPrintSize_2.setHeight( aPrintSize_2.Height() >> 1 );
 
         const double fPageWH = static_cast<double>(aPageSize_2.Width()) / aPageSize_2.Height();
         const double fPrintWH = static_cast<double>(aPrintSize_2.Width()) / aPrintSize_2.Height();
 
         if( fPageWH < fPrintWH )
         {
-            aPageSize_2.Width() = static_cast<long>( aPrintSize_2.Height() * fPageWH );
-            aPageSize_2.Height()= aPrintSize_2.Height();
+            aPageSize_2.setWidth(  static_cast<long>( aPrintSize_2.Height() * fPageWH ) );
+            aPageSize_2.setHeight( aPrintSize_2.Height() );
         }
         else
         {
-            aPageSize_2.Width() = aPrintSize_2.Width();
-            aPageSize_2.Height() = static_cast<long>( aPrintSize_2.Width() / fPageWH );
+            aPageSize_2.setWidth( aPrintSize_2.Width() );
+            aPageSize_2.setHeight( static_cast<long>( aPrintSize_2.Width() / fPageWH ) );
         }
 
         MapMode aMap (rInfo.maMap);
@@ -2000,13 +2002,13 @@ private:
 
         if (rInfo.meOrientation == Orientation::Landscape)
         {
-            aOffset.X() = ( ( aAdjustedPrintSize.Width() >> 1 ) - rInfo.maPageSize.Width() ) >> 1;
-            aOffset.Y() = ( aAdjustedPrintSize.Height() - rInfo.maPageSize.Height() ) >> 1;
+            aOffset.setX( ( ( aAdjustedPrintSize.Width() >> 1 ) - rInfo.maPageSize.Width() ) >> 1 );
+            aOffset.setY( ( aAdjustedPrintSize.Height() - rInfo.maPageSize.Height() ) >> 1 );
         }
         else
         {
-            aOffset.X() = ( aAdjustedPrintSize.Width() - rInfo.maPageSize.Width() ) >> 1;
-            aOffset.Y() = ( ( aAdjustedPrintSize.Height() >> 1 ) - rInfo.maPageSize.Height() ) >> 1;
+            aOffset.setX( ( aAdjustedPrintSize.Width() - rInfo.maPageSize.Width() ) >> 1 );
+            aOffset.setY( ( ( aAdjustedPrintSize.Height() >> 1 ) - rInfo.maPageSize.Height() ) >> 1 );
         }
 
         // create vector of pages to print
@@ -2059,9 +2061,9 @@ private:
                 const std::pair<sal_uInt16, sal_uInt16> aPair (aPairVector[nIndex]);
                 Point aSecondOffset (aOffset);
                 if (rInfo.meOrientation == Orientation::Landscape)
-                    aSecondOffset.X() += aAdjustedPrintSize.Width() / 2;
+                    aSecondOffset.AdjustX( aAdjustedPrintSize.Width() / 2 );
                 else
-                    aSecondOffset.Y() += aAdjustedPrintSize.Height() / 2;
+                    aSecondOffset.AdjustY( aAdjustedPrintSize.Height() / 2 );
                 maPrinterPages.push_back(
                     std::shared_ptr<PrinterPage>(
                         new BookletPrinterPage(
@@ -2133,7 +2135,7 @@ private:
         //    (without the unprintable borders).
         // 3. Split the page into parts of the size of the
         // printable area.
-        const bool bScalePage (mpOptions->IsPageSize());
+        const bool bScalePage (mpOptions->IsPaperSize());
         const bool bCutPage (mpOptions->IsCutPage());
         MapMode aMap (rInfo.maMap);
         if (bScalePage || bCutPage)
@@ -2171,11 +2173,11 @@ private:
 
             for (Point aPageOrigin = aOrigin;
                  -aPageOrigin.Y()<nPageHeight;
-                 aPageOrigin.Y() -= rInfo.maPrintSize.Height())
+                 aPageOrigin.AdjustY( -rInfo.maPrintSize.Height() ))
             {
-                for (aPageOrigin.X()=aOrigin.X();
+                for (aPageOrigin.setX(aOrigin.X());
                      -aPageOrigin.X()<nPageWidth;
-                     aPageOrigin.X() -= rInfo.maPrintSize.Width())
+                     aPageOrigin.AdjustX(-rInfo.maPrintSize.Width()))
                 {
                     aMap.SetOrigin(aPageOrigin);
                     maPrinterPages.push_back(

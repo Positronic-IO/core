@@ -377,12 +377,11 @@ handle_r1c1:
                     pRangeFindList.reset(new ScRangeFindList( pDocSh->GetTitle() ));
                 }
 
-                ColorData nColorData = pRangeFindList->Insert( ScRangeFindData( aRange, nFlags, nStart, nPos ) );
+                Color nColor = pRangeFindList->Insert( ScRangeFindData( aRange, nFlags, nStart, nPos ) );
 
                 ESelection aSel( 0, nStart, 0, nPos );
                 SfxItemSet aSet( mpEditEngine->GetEmptyItemSet() );
-                aSet.Put( SvxColorItem( Color( nColorData ),
-                            EE_CHAR_COLOR ) );
+                aSet.Put( SvxColorItem( nColor, EE_CHAR_COLOR ) );
                 mpEditEngine->QuickSetAttribs( aSet, aSel );
                 ++nCount;
             }
@@ -434,7 +433,7 @@ void ScInputHandler::UpdateRange( sal_uInt16 nIndex, const ScRange& rNew )
         ScRangeFindData& rData = pRangeFindList->GetObject( nIndex );
         sal_Int32 nOldStart = rData.nSelStart;
         sal_Int32 nOldEnd = rData.nSelEnd;
-        ColorData nNewColor = pRangeFindList->FindColor( rNew, nIndex );
+        Color nNewColor = pRangeFindList->FindColor( rNew, nIndex );
 
         ScRange aJustified = rNew;
         aJustified.PutInOrder(); // Always display Ref in the Formula the right way
@@ -448,7 +447,7 @@ void ScInputHandler::UpdateRange( sal_uInt16 nIndex, const ScRange& rNew )
 
         lcl_Replace( pTopView, aNewStr, aOldSel );
         lcl_Replace( pTableView, aNewStr, aOldSel );
-        aSet.Put( SvxColorItem( Color( nNewColor ), EE_CHAR_COLOR ) );
+        aSet.Put( SvxColorItem( nNewColor, EE_CHAR_COLOR ) );
         mpEditEngine->QuickSetAttribs( aSet, aOldSel );
 
         bInRangeUpdate = true;
@@ -459,7 +458,7 @@ void ScInputHandler::UpdateRange( sal_uInt16 nIndex, const ScRange& rNew )
 
         rData.aRef = rNew;
         rData.nSelEnd = rData.nSelEnd + nDiff;
-        rData.nColorData = nNewColor;
+        rData.nColor = nNewColor;
 
         sal_uInt16 nCount = static_cast<sal_uInt16>(pRangeFindList->Count());
         for (sal_uInt16 i=nIndex+1; i<nCount; i++)
@@ -1097,7 +1096,7 @@ void ScInputHandler::ShowTipBelow( const OUString& rText )
         if ( pCur )
         {
             Point aLogicPos = pCur->GetPos();
-            aLogicPos.Y() += pCur->GetHeight();
+            aLogicPos.AdjustY(pCur->GetHeight() );
             aPos = pTipVisibleSecParent->LogicToPixel( aLogicPos );
         }
         aPos = pTipVisibleSecParent->OutputToScreenPixel( aPos );
@@ -2118,7 +2117,7 @@ bool ScInputHandler::StartTable( sal_Unicode cTyped, bool bFromCommand, bool bIn
                 ScModule* pScMod = SC_MOD();
                 if ( aBackCol.GetTransparency() > 0 ||
                         Application::GetSettings().GetStyleSettings().GetHighContrastMode() )
-                    aBackCol.SetColor( pScMod->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor );
+                    aBackCol = pScMod->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
                 mpEditEngine->SetBackgroundColor( aBackCol );
 
                 // Adjustment
@@ -2665,9 +2664,13 @@ void ScInputHandler::EnterHandler( ScEnterMode nBlockMode )
                 if ( pActiveViewSh )                // If it came from MouseButtonDown
                     pActiveViewSh->StopMarking();   // (the InfoBox consumes the MouseButtonUp)
 
-                //FIXME: We still run into problems if the input is triggered by activating another View
-                vcl::Window* pParent = Application::GetDefDialogParent();
-                if ( pData->DoError( pParent, aString, aCursorPos ) )
+                vcl::Window* pParent = nullptr;
+                if (pActiveViewSh)
+                    pParent = &pActiveViewSh->GetViewFrame()->GetWindow();
+                else
+                    pParent = Application::GetDefDialogParent();
+
+                if (pData->DoError(pParent ? pParent->GetFrameWeld() : nullptr, aString, aCursorPos))
                     bForget = true;                 // Do not take over input
             }
         }

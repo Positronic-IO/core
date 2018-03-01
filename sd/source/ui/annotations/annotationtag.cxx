@@ -450,8 +450,7 @@ void AnnotationTag::addCustomHandles( SdrHdlList& rHandlerList )
     if( mxAnnotation.is() )
     {
         SmartTagReference xThis( this );
-        Point aPoint;
-        AnnotationHdl* pHdl = new AnnotationHdl( xThis, mxAnnotation, aPoint );
+        AnnotationHdl* pHdl = new AnnotationHdl( xThis, mxAnnotation, Point() );
         pHdl->SetObjHdlNum( SMART_TAG_HDL_NUM );
         pHdl->SetPageView( mrView.GetSdrPageView() );
 
@@ -568,8 +567,8 @@ void AnnotationTag::OpenPopup( bool bEdit )
             RealPoint2D aPosition( mxAnnotation->getPosition() );
             Point aPos( pWindow->OutputToScreenPixel( pWindow->LogicToPixel( Point( static_cast<long>(aPosition.X * 100.0), static_cast<long>(aPosition.Y * 100.0) ) ) ) );
 
-            aPos.X() += 4; // magic!
-            aPos.Y() += 1;
+            aPos.AdjustX(4 ); // magic!
+            aPos.AdjustY(1 );
 
             ::tools::Rectangle aRect( aPos, maSize );
 

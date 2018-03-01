@@ -19,13 +19,8 @@
 
 #include "system.h"
 #include <string.h>
-#ifdef _MSC_VER
-#pragma warning(push,1) /* disable warnings within system headers */
-#endif
+
 #include <shellapi.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
 #include <cassert>
 #include <memory>
@@ -147,7 +142,7 @@ oslProcess SAL_CALL osl_getProcess(oslProcessIdentifier Ident)
 {
     oslProcessImpl* pProcImpl;
     HANDLE hProcess = OpenProcess(
-        STANDARD_RIGHTS_REQUIRED | PROCESS_QUERY_INFORMATION | SYNCHRONIZE, FALSE, (DWORD)Ident);
+        STANDARD_RIGHTS_REQUIRED | PROCESS_QUERY_INFORMATION | SYNCHRONIZE, FALSE, static_cast<DWORD>(Ident));
 
     if (hProcess)
     {
@@ -222,7 +217,7 @@ oslProcessError SAL_CALL osl_getProcessInfo(oslProcess Process, oslProcessData F
 
             lpAddress = static_cast<LPBYTE>(lpAddress) + Info.RegionSize;
         }
-        while (reinterpret_cast<uintptr_t>(lpAddress) <= (uintptr_t)0x7FFFFFFF); // 2GB address space
+        while (reinterpret_cast<uintptr_t>(lpAddress) <= uintptr_t(0x7FFFFFFF)); // 2GB address space
 
         pInfo->Fields |= osl_Process_HEAPUSAGE;
     }
@@ -237,12 +232,12 @@ oslProcessError SAL_CALL osl_getProcessInfo(oslProcess Process, oslProcessData F
             __int64 Value;
 
             Value = osl::detail::getFiletime(UserTime);
-            pInfo->UserTime.Seconds   = (unsigned long) (Value / 10000000L);
-            pInfo->UserTime.Nanosec   = (unsigned long)((Value % 10000000L) * 100);
+            pInfo->UserTime.Seconds   = static_cast<unsigned long>(Value / 10000000L);
+            pInfo->UserTime.Nanosec   = static_cast<unsigned long>((Value % 10000000L) * 100);
 
             Value = osl::detail::getFiletime(KernelTime);
-            pInfo->SystemTime.Seconds = (unsigned long) (Value / 10000000L);
-            pInfo->SystemTime.Nanosec = (unsigned long)((Value % 10000000L) * 100);
+            pInfo->SystemTime.Seconds = static_cast<unsigned long>(Value / 10000000L);
+            pInfo->SystemTime.Nanosec = static_cast<unsigned long>((Value % 10000000L) * 100);
 
             pInfo->Fields |= osl_Process_CPUTIMES;
         }
@@ -320,10 +315,6 @@ static struct CommandArgs_Impl g_command_args =
     nullptr
 };
 
-#ifdef _MSC_VER
-#pragma warning( push )
-#pragma warning( disable: 4100 )
-#endif
 static rtl_uString ** osl_createCommandArgs_Impl (int argc, char **)
 {
     rtl_uString ** ppArgs =
@@ -369,9 +360,6 @@ static rtl_uString ** osl_createCommandArgs_Impl (int argc, char **)
     return ppArgs;
 
 }
-#ifdef _MSC_VER
-#pragma warning( pop )
-#endif
 
 oslProcessError SAL_CALL osl_getExecutableFile( rtl_uString **ppustrFile )
 {

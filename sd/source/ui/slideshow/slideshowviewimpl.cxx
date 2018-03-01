@@ -31,6 +31,8 @@
 #include <cppcanvas/vclfactory.hxx>
 #include <cppcanvas/basegfxfactory.hxx>
 
+#include <toolkit/helper/vclunohelper.hxx>
+
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::WeakReference;
 using ::com::sun::star::uno::RuntimeException;
@@ -329,8 +331,8 @@ geometry::AffineMatrix2D SAL_CALL SlideShowView::getTransformation(  )
 
     if( meAnimationMode != ANIMATIONMODE_SHOW )
     {
-        aOutputSize.Width() = static_cast<long>( aOutputSize.Width() / 1.03 );
-        aOutputSize.Height() = static_cast<long>( aOutputSize.Height() / 1.03 );
+        aOutputSize.setWidth( static_cast<long>( aOutputSize.Width() / 1.03 ) );
+        aOutputSize.setHeight( static_cast<long>( aOutputSize.Height() / 1.03 ) );
     }
 
     SdPage* pP = mpDoc->GetSdPage( 0, PageKind::Standard );
@@ -341,11 +343,11 @@ geometry::AffineMatrix2D SAL_CALL SlideShowView::getTransformation(  )
 
     if( page_ratio > output_ratio )
     {
-        aOutputSize.Height() = ( aOutputSize.Width() * aPageSize.Height() ) / aPageSize.Width();
+        aOutputSize.setHeight( ( aOutputSize.Width() * aPageSize.Height() ) / aPageSize.Width() );
     }
     else if( page_ratio < output_ratio )
     {
-        aOutputSize.Width() = ( aOutputSize.Height() * aPageSize.Width() ) / aPageSize.Height();
+        aOutputSize.setWidth( ( aOutputSize.Height() * aPageSize.Width() ) / aPageSize.Height() );
     }
 
     Point aOutputOffset( ( aWindowSize.Width() - aOutputSize.Width() ) >> 1,
@@ -354,8 +356,8 @@ geometry::AffineMatrix2D SAL_CALL SlideShowView::getTransformation(  )
     // Reduce available width by one, as the slides might actually
     // render one pixel wider and higher as aPageSize below specifies
     // (when shapes of page size have visible border lines)
-    aOutputSize.Width() --;
-    aOutputSize.Height() --;
+    aOutputSize.AdjustWidth( -1 );
+    aOutputSize.AdjustHeight( -1 );
 
     // Record mTranslationOffset
     mTranslationOffset.Height = aOutputOffset.Y();

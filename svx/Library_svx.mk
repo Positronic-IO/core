@@ -128,7 +128,6 @@ $(eval $(call gb_Library_add_exception_objects,svx,\
     svx/source/dialog/fntctrl \
     svx/source/dialog/fontlb \
     svx/source/dialog/fontwork \
-    svx/source/dialog/framelinkarray \
     svx/source/dialog/frmdirlbox \
     svx/source/dialog/frmsel \
     svx/source/dialog/graphctl \
@@ -144,7 +143,6 @@ $(eval $(call gb_Library_add_exception_objects,svx,\
     svx/source/dialog/pagectrl \
     svx/source/dialog/paraprev \
     svx/source/dialog/passwd \
-    svx/source/dialog/prtqry \
     svx/source/dialog/relfld \
     svx/source/dialog/rlrcitem \
     svx/source/dialog/rubydialog \

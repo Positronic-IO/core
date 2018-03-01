@@ -34,6 +34,7 @@
 #include <vcl/sysdata.hxx>
 #include <vcl/unohelp.hxx>
 #include <vcl/controllayout.hxx>
+#include <vcl/opengl/OpenGLHelper.hxx>
 
 #include <outdata.hxx>
 #include <outdev.h>
@@ -220,7 +221,7 @@ bool OutputDevice::ImplDrawRotateText( SalLayout& rSalLayout )
     aFont.SetOrientation( 0 );
     aFont.SetFontSize( Size( mpFontInstance->maFontSelData.mnWidth, mpFontInstance->maFontSelData.mnHeight ) );
     pVDev->SetFont( aFont );
-    pVDev->SetTextColor( Color( COL_BLACK ) );
+    pVDev->SetTextColor( COL_BLACK );
     pVDev->SetTextFillColor();
     pVDev->ImplNewFont();
     pVDev->InitFont();
@@ -273,13 +274,13 @@ void OutputDevice::ImplDrawTextDirect( SalLayout& rSalLayout,
     {
         long w = meOutDevType == OUTDEV_VIRDEV ? mnOutWidth : mpGraphics->GetGraphicsWidth();
         long x = rSalLayout.DrawBase().X();
-           rSalLayout.DrawBase().X() = w - 1 - x;
+           rSalLayout.DrawBase().setX( w - 1 - x );
         if( !IsRTLEnabled() )
         {
             OutputDevice *pOutDevRef = this;
             // mirror this window back
             long devX = w-pOutDevRef->mnOutWidth-pOutDevRef->mnOutOffX;   // re-mirrored mnOutOffX
-            rSalLayout.DrawBase().X() = devX + ( pOutDevRef->mnOutWidth - 1 - (rSalLayout.DrawBase().X() - devX) ) ;
+            rSalLayout.DrawBase().setX( devX + ( pOutDevRef->mnOutWidth - 1 - (rSalLayout.DrawBase().X() - devX) ) ) ;
         }
     }
     else if( IsRTLEnabled() )
@@ -288,11 +289,11 @@ void OutputDevice::ImplDrawTextDirect( SalLayout& rSalLayout,
 
         // mirror this window back
         long devX = pOutDevRef->mnOutOffX;   // re-mirrored mnOutOffX
-        rSalLayout.DrawBase().X() = pOutDevRef->mnOutWidth - 1 - (rSalLayout.DrawBase().X() - devX) + devX;
+        rSalLayout.DrawBase().setX( pOutDevRef->mnOutWidth - 1 - (rSalLayout.DrawBase().X() - devX) + devX );
     }
 
     rSalLayout.DrawText( *mpGraphics );
-    rSalLayout.DrawBase().X() = nOldX;
+    rSalLayout.DrawBase().setX( nOldX );
 
     if( bTextLines )
         ImplDrawTextLines( rSalLayout,
@@ -321,17 +322,17 @@ void OutputDevice::ImplDrawSpecialText( SalLayout& rSalLayout )
         Color   aOverlineColor( aOldOverlineColor );
 
         // we don't have a automatic color, so black is always drawn on white
-        if ( aTextColor.GetColor() == COL_BLACK )
-            aTextColor = Color( COL_WHITE );
-        if ( aTextLineColor.GetColor() == COL_BLACK )
-            aTextLineColor = Color( COL_WHITE );
-        if ( aOverlineColor.GetColor() == COL_BLACK )
-            aOverlineColor = Color( COL_WHITE );
+        if ( aTextColor == COL_BLACK )
+            aTextColor = COL_WHITE;
+        if ( aTextLineColor == COL_BLACK )
+            aTextLineColor = COL_WHITE;
+        if ( aOverlineColor == COL_BLACK )
+            aOverlineColor = COL_WHITE;
 
         // relief-color is black for white text, in all other cases
         // we set this to LightGray
-        if ( aTextColor.GetColor() == COL_WHITE )
-            aReliefColor = Color( COL_BLACK );
+        if ( aTextColor == COL_WHITE )
+            aReliefColor = COL_BLACK;
         SetTextLineColor( aReliefColor );
         SetOverlineColor( aReliefColor );
         SetTextColor( aReliefColor );
@@ -372,11 +373,11 @@ void OutputDevice::ImplDrawSpecialText( SalLayout& rSalLayout )
                 nOff++;
             SetTextLineColor();
             SetOverlineColor();
-            if ( (GetTextColor().GetColor() == COL_BLACK)
+            if ( (GetTextColor() == COL_BLACK)
             ||   (GetTextColor().GetLuminance() < 8) )
-                SetTextColor( Color( COL_LIGHTGRAY ) );
+                SetTextColor( COL_LIGHTGRAY );
             else
-                SetTextColor( Color( COL_BLACK ) );
+                SetTextColor( COL_BLACK );
             ImplInitTextColor();
             rSalLayout.DrawBase() += Point( nOff, nOff );
             ImplDrawTextDirect( rSalLayout, mbTextLines );
@@ -410,9 +411,9 @@ void OutputDevice::ImplDrawSpecialText( SalLayout& rSalLayout )
             ImplDrawTextDirect( rSalLayout, mbTextLines );
             rSalLayout.DrawBase() = aOrigPos;
 
-            SetTextColor( Color( COL_WHITE ) );
-            SetTextLineColor( Color( COL_WHITE ) );
-            SetOverlineColor( Color( COL_WHITE ) );
+            SetTextColor( COL_WHITE );
+            SetTextLineColor( COL_WHITE );
+            SetOverlineColor( COL_WHITE );
             ImplInitTextColor();
             ImplDrawTextDirect( rSalLayout, mbTextLines );
             SetTextColor( aOldColor );
@@ -661,9 +662,9 @@ void OutputDevice::SetTextColor( const Color& rColor )
                         DrawModeFlags::SettingsText ) )
     {
         if ( mnDrawMode & DrawModeFlags::BlackText )
-            aColor = Color( COL_BLACK );
+            aColor = COL_BLACK;
         else if ( mnDrawMode & DrawModeFlags::WhiteText )
-            aColor = Color( COL_WHITE );
+            aColor = COL_WHITE;
         else if ( mnDrawMode & DrawModeFlags::GrayText )
         {
             const sal_uInt8 cLum = aColor.GetLuminance();
@@ -699,8 +700,8 @@ void OutputDevice::SetTextFillColor()
     if ( mpMetaFile )
         mpMetaFile->AddAction( new MetaTextFillColorAction( Color(), false ) );
 
-    if ( maFont.GetColor() != Color( COL_TRANSPARENT ) ) {
-        maFont.SetFillColor( Color( COL_TRANSPARENT ) );
+    if ( maFont.GetColor() != COL_TRANSPARENT ) {
+        maFont.SetFillColor( COL_TRANSPARENT );
     }
     if ( !maFont.IsTransparent() )
         maFont.SetTransparent( true );
@@ -722,9 +723,9 @@ void OutputDevice::SetTextFillColor( const Color& rColor )
                             DrawModeFlags::GhostedFill | DrawModeFlags::SettingsFill ) )
         {
             if ( mnDrawMode & DrawModeFlags::BlackFill )
-                aColor = Color( COL_BLACK );
+                aColor = COL_BLACK;
             else if ( mnDrawMode & DrawModeFlags::WhiteFill )
-                aColor = Color( COL_WHITE );
+                aColor = COL_WHITE;
             else if ( mnDrawMode & DrawModeFlags::GrayFill )
             {
                 const sal_uInt8 cLum = aColor.GetLuminance();
@@ -734,7 +735,7 @@ void OutputDevice::SetTextFillColor( const Color& rColor )
                 aColor = GetSettings().GetStyleSettings().GetWindowColor();
             else if ( mnDrawMode & DrawModeFlags::NoFill )
             {
-                aColor = Color( COL_TRANSPARENT );
+                aColor = COL_TRANSPARENT;
                 bTransFill = true;
             }
 
@@ -762,7 +763,7 @@ void OutputDevice::SetTextFillColor( const Color& rColor )
 Color OutputDevice::GetTextFillColor() const
 {
     if ( maFont.IsTransparent() )
-        return Color( COL_TRANSPARENT );
+        return COL_TRANSPARENT;
     else
         return maFont.GetFillColor();
 }
@@ -863,6 +864,14 @@ void OutputDevice::DrawText( const Point& rStartPt, const OUString& rStr,
         if(mpFontInstance->mpConversion)
             pLayoutCache = nullptr;
 
+    #ifdef MACOSX
+        // FIXME: tdf#112990
+        // Cache text layout crashes on mac with OpenGL enabled
+        // Force it to not use the cache
+        if(OpenGLHelper::isVCLOpenGLEnabled())
+            pLayoutCache = nullptr;
+    #endif
+
     // without cache
     if(!pLayoutCache)
     {
@@ -886,8 +895,6 @@ void OutputDevice::DrawText( const Point& rStartPt, const OUString& rStr,
         ImplLayoutArgs aLayoutArgs = ImplPrepareLayoutArgs( aStrModifiable, nIndex, nLen,
                 0, nullptr);
 
-        // position, justify, etc. the layout
-        pLayoutCache->AdjustLayout( aLayoutArgs );
         pLayoutCache->DrawBase() = ImplLogicToDevicePixel( rStartPt );
 
         ImplDrawText( *pLayoutCache );
@@ -1079,19 +1086,19 @@ long OutputDevice::GetTextArray( const OUString& rStr, long* pDXAry,
 #endif /* VCL_FLOAT_DEVICE_PIXEL */
 }
 
-bool OutputDevice::GetCaretPositions( const OUString& rStr, long* pCaretXArray,
+void OutputDevice::GetCaretPositions( const OUString& rStr, long* pCaretXArray,
                                       sal_Int32 nIndex, sal_Int32 nLen ) const
 {
 
     if( nIndex >= rStr.getLength() )
-        return false;
+        return;
     if( nIndex+nLen >= rStr.getLength() )
         nLen = rStr.getLength() - nIndex;
 
     // layout complex text
     std::unique_ptr<SalLayout> pSalLayout = ImplLayout( rStr, nIndex, nLen, Point(0,0) );
     if( !pSalLayout )
-        return false;
+        return;
 
     int nWidthFactor = pSalLayout->GetUnitsPerPixel();
     pSalLayout->GetCaretPositions( 2*nLen, pCaretXArray );
@@ -1130,8 +1137,6 @@ bool OutputDevice::GetCaretPositions( const OUString& rStr, long* pCaretXArray,
         for( i = 0; i < 2*nLen; ++i )
             pCaretXArray[i] /= nWidthFactor;
     }
-
-    return true;
 }
 
 void OutputDevice::DrawStretchText( const Point& rStartPt, sal_uLong nWidth,
@@ -1356,7 +1361,7 @@ std::unique_ptr<SalLayout> OutputDevice::ImplLayout(const OUString& rOrigStr,
             nRTLOffset = nPixelWidth;
         else
             nRTLOffset = pSalLayout->GetTextWidth() / pSalLayout->GetUnitsPerPixel();
-        pSalLayout->DrawOffset().X() = 1 - nRTLOffset;
+        pSalLayout->DrawOffset().setX( 1 - nRTLOffset );
     }
 
     return pSalLayout;
@@ -1600,24 +1605,24 @@ void OutputDevice::ImplDrawText( OutputDevice& rTargetDevice, const tools::Recta
 
             // Vertical alignment
             if ( nStyle & DrawTextFlags::Bottom )
-                aPos.Y() += nHeight-(nFormatLines*nTextHeight);
+                aPos.AdjustY(nHeight-(nFormatLines*nTextHeight) );
             else if ( nStyle & DrawTextFlags::VCenter )
-                aPos.Y() += (nHeight-(nFormatLines*nTextHeight))/2;
+                aPos.AdjustY((nHeight-(nFormatLines*nTextHeight))/2 );
 
             // Font alignment
             if ( eAlign == ALIGN_BOTTOM )
-                aPos.Y() += nTextHeight;
+                aPos.AdjustY(nTextHeight );
             else if ( eAlign == ALIGN_BASELINE )
-                aPos.Y() += rTargetDevice.GetFontMetric().GetAscent();
+                aPos.AdjustY(rTargetDevice.GetFontMetric().GetAscent() );
 
             // Output all lines except for the last one
             for ( i = 0; i < nFormatLines; i++ )
             {
                 pLineInfo = aMultiLineInfo.GetLine( i );
                 if ( nStyle & DrawTextFlags::Right )
-                    aPos.X() += nWidth-pLineInfo->GetWidth();
+                    aPos.AdjustX(nWidth-pLineInfo->GetWidth() );
                 else if ( nStyle & DrawTextFlags::Center )
-                    aPos.X() += (nWidth-pLineInfo->GetWidth())/2;
+                    aPos.AdjustX((nWidth-pLineInfo->GetWidth())/2 );
                 sal_Int32 nIndex   = pLineInfo->GetIndex();
                 sal_Int32 nLineLen = pLineInfo->GetLen();
                 _rLayout.DrawText( aPos, aStr, nIndex, nLineLen, pVector, pDisplayText );
@@ -1642,8 +1647,8 @@ void OutputDevice::ImplDrawText( OutputDevice& rTargetDevice, const tools::Recta
                         rTargetDevice.ImplDrawMnemonicLine( nMnemonicX, nMnemonicY, nMnemonicWidth );
                     }
                 }
-                aPos.Y() += nTextHeight;
-                aPos.X() = rRect.Left();
+                aPos.AdjustY(nTextHeight );
+                aPos.setX( rRect.Left() );
             }
 
             // If there still is a last line, we output it left-aligned as the line would be clipped
@@ -1678,20 +1683,20 @@ void OutputDevice::ImplDrawText( OutputDevice& rTargetDevice, const tools::Recta
 
         // horizontal text alignment
         if ( nStyle & DrawTextFlags::Right )
-            aPos.X() += nWidth-nTextWidth;
+            aPos.AdjustX(nWidth-nTextWidth );
         else if ( nStyle & DrawTextFlags::Center )
-            aPos.X() += (nWidth-nTextWidth)/2;
+            aPos.AdjustX((nWidth-nTextWidth)/2 );
 
         // vertical font alignment
         if ( eAlign == ALIGN_BOTTOM )
-            aPos.Y() += nTextHeight;
+            aPos.AdjustY(nTextHeight );
         else if ( eAlign == ALIGN_BASELINE )
-            aPos.Y() += rTargetDevice.GetFontMetric().GetAscent();
+            aPos.AdjustY(rTargetDevice.GetFontMetric().GetAscent() );
 
         if ( nStyle & DrawTextFlags::Bottom )
-            aPos.Y() += nHeight-nTextHeight;
+            aPos.AdjustY(nHeight-nTextHeight );
         else if ( nStyle & DrawTextFlags::VCenter )
-            aPos.Y() += (nHeight-nTextHeight)/2;
+            aPos.AdjustY((nHeight-nTextHeight)/2 );
 
         long nMnemonicX = 0;
         long nMnemonicY = 0;
@@ -1908,30 +1913,30 @@ tools::Rectangle OutputDevice::GetTextRect( const tools::Rectangle& rRect,
     }
 
     if ( nStyle & DrawTextFlags::Right )
-        aRect.Left() = aRect.Right()-nMaxWidth+1;
+        aRect.SetLeft( aRect.Right()-nMaxWidth+1 );
     else if ( nStyle & DrawTextFlags::Center )
     {
-        aRect.Left() += (nWidth-nMaxWidth)/2;
-        aRect.Right() = aRect.Left()+nMaxWidth-1;
+        aRect.AdjustLeft((nWidth-nMaxWidth)/2 );
+        aRect.SetRight( aRect.Left()+nMaxWidth-1 );
     }
     else
-        aRect.Right() = aRect.Left()+nMaxWidth-1;
+        aRect.SetRight( aRect.Left()+nMaxWidth-1 );
 
     if ( nStyle & DrawTextFlags::Bottom )
-        aRect.Top() = aRect.Bottom()-(nTextHeight*nLines)+1;
+        aRect.SetTop( aRect.Bottom()-(nTextHeight*nLines)+1 );
     else if ( nStyle & DrawTextFlags::VCenter )
     {
-        aRect.Top()   += (aRect.GetHeight()-(nTextHeight*nLines))/2;
-        aRect.Bottom() = aRect.Top()+(nTextHeight*nLines)-1;
+        aRect.AdjustTop((aRect.GetHeight()-(nTextHeight*nLines))/2 );
+        aRect.SetBottom( aRect.Top()+(nTextHeight*nLines)-1 );
     }
     else
-        aRect.Bottom() = aRect.Top()+(nTextHeight*nLines)-1;
+        aRect.SetBottom( aRect.Top()+(nTextHeight*nLines)-1 );
 
     // #99188# get rid of rounding problems when using this rect later
     if (nStyle & DrawTextFlags::Right)
-        aRect.Left()--;
+        aRect.AdjustLeft( -1 );
     else
-        aRect.Right()++;
+        aRect.AdjustRight( 1 );
     return aRect;
 }
 
@@ -2475,9 +2480,8 @@ bool OutputDevice::GetTextOutlines( basegfx::B2DPolyPolygonVector& rVector,
 
             if( !aMatrix.isIdentity() )
             {
-                basegfx::B2DPolyPolygonVector::iterator aIt = rVector.begin();
-                for(; aIt != rVector.end(); ++aIt )
-                    (*aIt).transform( aMatrix );
+                for (auto & elem : rVector)
+                    elem.transform( aMatrix );
             }
         }
 
@@ -2509,9 +2513,8 @@ bool OutputDevice::GetTextOutlines( PolyPolyVector& rResultVector,
 
     // convert to a tool polypolygon vector
     rResultVector.reserve( aB2DPolyPolyVector.size() );
-    basegfx::B2DPolyPolygonVector::const_iterator aIt = aB2DPolyPolyVector.begin();
-    for(; aIt != aB2DPolyPolyVector.end(); ++aIt )
-        rResultVector.emplace_back(*aIt); // #i76339#
+    for (auto const& elem : aB2DPolyPolyVector)
+        rResultVector.emplace_back(elem); // #i76339#
 
     return true;
 }
@@ -2529,10 +2532,9 @@ bool OutputDevice::GetTextOutline( tools::PolyPolygon& rPolyPoly, const OUString
         return false;
 
     // convert and merge into a tool polypolygon
-    basegfx::B2DPolyPolygonVector::const_iterator aIt = aB2DPolyPolyVector.begin();
-    for(; aIt != aB2DPolyPolyVector.end(); ++aIt )
-        for( unsigned int i = 0; i < aIt->count(); ++i )
-            rPolyPoly.Insert(tools::Polygon((*aIt).getB2DPolygon( i ))); // #i76339#
+    for (auto const& elem : aB2DPolyPolyVector)
+        for( unsigned int i = 0; i < elem.count(); ++i )
+            rPolyPoly.Insert(tools::Polygon(elem.getB2DPolygon( i ))); // #i76339#
 
     return true;
 }

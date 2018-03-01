@@ -24,7 +24,6 @@
 #include <svx/unoshape.hxx>
 #include <RptModel.hxx>
 #include <RptObjectListener.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <RptPage.hxx>
 #include <dbaccess/dbsubcomponentcontroller.hxx>
@@ -681,7 +680,7 @@ void OUnoObject::NbcMove( const Size& rSize )
             int nNewY = m_xReportComponent->getPositionY() + rSize.Height();
             if (nNewY < 0 && !bUndoMode)
             {
-                aUndoSize.Height() = abs(nNewY);
+                aUndoSize.setHeight( abs(nNewY) );
                 bPositionFixed = true;
                 nNewY = 0;
             }
@@ -961,7 +960,7 @@ void OOle2Obj::NbcMove( const Size& rSize )
             int nNewY = m_xReportComponent->getPositionY() + rSize.Height();
             if (nNewY < 0 && !bUndoMode)
             {
-                aUndoSize.Height() = abs(nNewY);
+                aUndoSize.setHeight( abs(nNewY) );
                 bPositionFixed = true;
                 nNewY = 0;
             }

@@ -326,7 +326,7 @@ void RenderTools::DrawSelectionBackground(vcl::RenderContext& rRenderContext, vc
     Color aSelectionFillColor(aSelectionBorderColor);
 
     bool bDark = rStyles.GetFaceColor().IsDark();
-    bool bBright = ( rStyles.GetFaceColor() == Color( COL_WHITE ) );
+    bool bBright = ( rStyles.GetFaceColor() == COL_WHITE );
 
     int c1 = aSelectionBorderColor.GetLuminance();
     int c2 = rWindow.GetDisplayBackground().GetColor().GetLuminance();
@@ -338,7 +338,7 @@ void RenderTools::DrawSelectionBackground(vcl::RenderContext& rRenderContext, vc
         aSelectionFillColor.RGBtoHSB( h, s, b );
         if( b > 50 )    b -= 40;
         else            b += 40;
-        aSelectionFillColor.SetColor( Color::HSBtoRGB( h, s, b ) );
+        aSelectionFillColor = Color::HSBtoRGB( h, s, b );
         aSelectionBorderColor = aSelectionFillColor;
     }
 
@@ -353,15 +353,15 @@ void RenderTools::DrawSelectionBackground(vcl::RenderContext& rRenderContext, vc
     tools::Rectangle aRect(rRect);
     if (bDrawExtBorderOnly)
     {
-        aRect.Left()   -= 1;
-        aRect.Top()    -= 1;
-        aRect.Right()  += 1;
-        aRect.Bottom() += 1;
+        aRect.AdjustLeft( -1 );
+        aRect.AdjustTop( -1 );
+        aRect.AdjustRight(1 );
+        aRect.AdjustBottom(1 );
     }
     rRenderContext.Push(PushFlags::FILLCOLOR | PushFlags::LINECOLOR);
 
     if (bDrawBorder)
-        rRenderContext.SetLineColor(bDark ? Color(COL_WHITE) : (bBright ? Color(COL_BLACK) : aSelectionBorderColor));
+        rRenderContext.SetLineColor(bDark ? COL_WHITE : (bBright ? COL_BLACK : aSelectionBorderColor));
     else
         rRenderContext.SetLineColor();
 
@@ -1062,13 +1062,13 @@ void Window::SetWindowRegionPixel( const vcl::Region& rRegion )
                 mpWindowImpl->maWinRegion.GetRegionRectangles(aRectangles);
                 mpWindowImpl->mpFrame->BeginSetClipRegion(aRectangles.size());
 
-                for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+                for (auto const& rectangle : aRectangles)
                 {
                     mpWindowImpl->mpFrame->UnionClipRegion(
-                        aRectIter->Left(),
-                        aRectIter->Top(),
-                        aRectIter->GetWidth(),       // orig nWidth was ((R - L) + 1), same as GetWidth does
-                        aRectIter->GetHeight());     // same for height
+                        rectangle.Left(),
+                        rectangle.Top(),
+                        rectangle.GetWidth(),       // orig nWidth was ((R - L) + 1), same as GetWidth does
+                        rectangle.GetHeight());     // same for height
                 }
 
                 mpWindowImpl->mpFrame->EndSetClipRegion();
@@ -1189,7 +1189,7 @@ void Window::Invalidate( const vcl::Region& rRegion, InvalidateFlags nFlags )
 
 void Window::LogicInvalidate(const tools::Rectangle* pRectangle)
 {
-    if (comphelper::LibreOfficeKit::isDialogPainting())
+    if (comphelper::LibreOfficeKit::isDialogPainting() || !comphelper::LibreOfficeKit::isActive())
         return;
 
     if (const vcl::ILibreOfficeKitNotifier* pNotifier = GetLOKNotifier())
@@ -1200,6 +1200,12 @@ void Window::LogicInvalidate(const tools::Rectangle* pRectangle)
             aPayload.push_back(std::make_pair(OString("rectangle"), pRectangle->toString()));
 
         pNotifier->notifyWindow(GetLOKWindowId(), "invalidate", aPayload);
+    }
+    // Added for dialog items. Pass invalidation to the parent window.
+    else if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
+    {
+        const tools::Rectangle aRect(Point(GetOutOffXPixel(), GetOutOffYPixel()), Size(GetOutputWidthPixel(), GetOutputHeightPixel()));
+        pParent->LogicInvalidate(&aRect);
     }
 }
 
@@ -1299,6 +1305,7 @@ void Window::Update()
          }
 
         pUpdateWindow->ImplCallPaint(nullptr, pUpdateWindow->mpWindowImpl->mnPaintFlags);
+        pUpdateWindow->LogicInvalidate(nullptr);
 
         if (xWindow->IsDisposed())
            return;
@@ -1324,9 +1331,29 @@ void Window::ImplPaintToDevice( OutputDevice* i_pTargetOutDev, const Point& i_rP
     bool bOutput = IsOutputEnabled();
     EnableOutput();
 
-    SAL_WARN_IF( GetMapMode().GetMapUnit() != MapUnit::MapPixel, "vcl.window", "MapMode must be PIXEL based" );
-    if ( GetMapMode().GetMapUnit() != MapUnit::MapPixel )
-        return;
+    double fScaleX = 1;
+    double fScaleY = 1;
+    bool bNeedsScaling = false;
+    if(comphelper::LibreOfficeKit::isActive())
+    {
+        if(GetMapMode().GetMapUnit() != MapUnit::MapPixel &&
+        // Some of the preview windows (SvxPreviewBase) uses different painting (drawinglayer primitives)
+        // For these preview we don't need to scale even though the unit is not pixel.
+        GetMapMode().GetMapUnit() != MapUnit::Map100thMM)
+        {
+            bNeedsScaling = true;
+            // 1000.0 is used to reduce rounding imprecision (Size uses integers)
+            Size aLogicSize = PixelToLogic(Size(1000.0, 1000.0));
+            fScaleX = aLogicSize.Width() / 1000.0;
+            fScaleY = aLogicSize.Height() / 1000.0;
+        }
+    }
+    else
+    {   // TODO: Above scaling was added for LOK only, would be good to check how it works in other use cases
+        SAL_WARN_IF( GetMapMode().GetMapUnit() != MapUnit::MapPixel, "vcl.window", "MapMode must be PIXEL based" );
+        if ( GetMapMode().GetMapUnit() != MapUnit::MapPixel )
+            return;
+    }
 
     // preserve graphicsstate
     Push();
@@ -1376,7 +1403,17 @@ void Window::ImplPaintToDevice( OutputDevice* i_pTargetOutDev, const Point& i_rP
         SetRefPoint();
     SetLayoutMode( GetLayoutMode() );
     SetDigitLanguage( GetDigitLanguage() );
-    tools::Rectangle aPaintRect( Point( 0, 0 ), GetOutputSizePixel() );
+
+    tools::Rectangle aPaintRect;
+    if(bNeedsScaling)
+    {
+        aPaintRect = tools::Rectangle( Point( 0, 0 ),
+            Size(GetOutputSizePixel().Width() * fScaleX, GetOutputSizePixel().Height() * fScaleY)  );
+    }
+    else
+    {
+        aPaintRect = tools::Rectangle( Point( 0, 0 ), GetOutputSizePixel() );
+    }
     aClipRegion.Intersect( aPaintRect );
     SetClipRegion( aClipRegion );
 
@@ -1384,7 +1421,11 @@ void Window::ImplPaintToDevice( OutputDevice* i_pTargetOutDev, const Point& i_rP
 
     // background
     if( ! IsPaintTransparent() && IsBackground() && ! (GetParentClipMode() & ParentClipMode::NoClip ) )
+    {
         Erase(*this);
+        if(bNeedsScaling)
+            aMtf.Scale(fScaleX, fScaleY);
+    }
     // foreground
     Paint(*this, aPaintRect);
     // put a pop action to metafile
@@ -1398,11 +1439,14 @@ void Window::ImplPaintToDevice( OutputDevice* i_pTargetOutDev, const Point& i_rP
     VclPtrInstance<VirtualDevice> pMaskedDevice(*i_pTargetOutDev,
                                                 DeviceFormat::DEFAULT,
                                                 DeviceFormat::DEFAULT);
+
+    if(bNeedsScaling)
+        pMaskedDevice->SetMapMode( GetMapMode() );
     pMaskedDevice->SetOutputSizePixel( GetOutputSizePixel() );
     pMaskedDevice->EnableRTL( IsRTLEnabled() );
     aMtf.WindStart();
     aMtf.Play( pMaskedDevice );
-    BitmapEx aBmpEx( pMaskedDevice->GetBitmapEx( Point( 0, 0 ), pMaskedDevice->GetOutputSizePixel() ) );
+    BitmapEx aBmpEx( pMaskedDevice->GetBitmapEx( Point( 0, 0 ), aPaintRect.GetSize() ) );
     i_pTargetOutDev->DrawBitmapEx( i_rPos, aBmpEx );
     // get rid of virtual device now so they don't pile up during recursive calls
     pMaskedDevice.disposeAndClear();
@@ -1435,8 +1479,6 @@ void Window::ImplPaintToDevice( OutputDevice* i_pTargetOutDev, const Point& i_rP
 
 void Window::PaintToDevice( OutputDevice* pDev, const Point& rPos, const Size& /*rSize*/ )
 {
-    // FIXME: scaling: currently this is for pixel copying only
-
     SAL_WARN_IF(  pDev->HasMirroredGraphics(), "vcl.window", "PaintToDevice to mirroring graphics" );
     SAL_WARN_IF(  pDev->IsRTLEnabled(), "vcl.window", "PaintToDevice to mirroring device" );
 

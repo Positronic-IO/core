@@ -44,7 +44,7 @@ Layout::Layout (vcl::Window* pParent) :
 
     vcl::Font aFont = GetFont();
     Size aSz = aFont.GetFontSize();
-    aSz.Height() *= 1.5;
+    aSz.setHeight( aSz.Height() * 1.5 );
     aFont.SetFontSize(aSz);
     aFont.SetWeight(WEIGHT_BOLD);
     aFont.SetColor(GetSettings().GetStyleSettings().GetWindowTextColor());
@@ -175,10 +175,10 @@ Layout::SplittedSide::SplittedSide (Layout* pParent, Side eSide) :
 void Layout::SplittedSide::dispose()
 {
     aSplitter.disposeAndClear();
-    for (auto i = vItems.begin(); i != vItems.end(); ++i)
+    for (auto & item : vItems)
     {
-        i->pSplit.disposeAndClear();
-        i->pWin.clear();
+        item.pSplit.disposeAndClear();
+        item.pWin.clear();
     }
 }
 
@@ -349,7 +349,10 @@ void Layout::SplittedSide::ArrangeIn (tools::Rectangle const& rRect)
     {
         Item& rItem = vItems[iLastWin];
         Size aSize = rItem.pWin->GetDockingSize();
-        (bVertical ? aSize.Height() : aSize.Width()) += nLength - rItem.nEndPos;
+        if (bVertical)
+            aSize.AdjustHeight( nLength - rItem.nEndPos );
+        else
+            aSize.AdjustWidth( nLength - rItem.nEndPos );
         rItem.pWin->ResizeIfDocking(aSize);
         // and hiding the split line after the window
         if (iLastWin < vItems.size() - 1)

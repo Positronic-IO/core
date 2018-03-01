@@ -294,10 +294,11 @@ bool PNGReaderImpl::ReadNextChunk()
             rChunkData.aData.resize( mnChunkLen );
 
             sal_Int32 nBytesRead = 0;
-            do {
-                sal_uInt8* pPtr = &rChunkData.aData[ nBytesRead ];
-                nBytesRead += mrPNGStream.ReadBytes(pPtr, mnChunkLen - nBytesRead);
-            } while ( ( nBytesRead < mnChunkLen ) && ( mrPNGStream.GetError() == ERRCODE_NONE ) );
+            do
+            {
+                sal_uInt8& rPtr = rChunkData.aData[nBytesRead];
+                nBytesRead += mrPNGStream.ReadBytes(&rPtr, mnChunkLen - nBytesRead);
+            } while (nBytesRead < mnChunkLen && mrPNGStream.good());
 
             nCRC32 = rtl_crc32( nCRC32, &rChunkData.aData[ 0 ], mnChunkLen );
             maDataIter = rChunkData.aData.begin();
@@ -406,8 +407,8 @@ BitmapEx PNGReaderImpl::GetBitmapEx( const Size& rPreviewSizeHint )
                         mbpHYs = true;
 
                         // convert into MapUnit::Map100thMM
-                        maPhysSize.Width()  = static_cast<sal_Int32>( (100000.0 * maOrigSize.Width()) / nXPixelPerMeter );
-                        maPhysSize.Height() = static_cast<sal_Int32>( (100000.0 * maOrigSize.Height()) / nYPixelPerMeter );
+                        maPhysSize.setWidth( static_cast<sal_Int32>( (100000.0 * maOrigSize.Width()) / nXPixelPerMeter ) );
+                        maPhysSize.setHeight( static_cast<sal_Int32>( (100000.0 * maOrigSize.Height()) / nYPixelPerMeter ) );
                     }
                 }
             }
@@ -453,8 +454,8 @@ bool PNGReaderImpl::ImplReadHeader( const Size& rPreviewSizeHint )
     if( mnChunkLen < 13 )
         return false;
 
-    maOrigSize.Width()  = ImplReadsal_uInt32();
-    maOrigSize.Height() = ImplReadsal_uInt32();
+    maOrigSize.setWidth( ImplReadsal_uInt32() );
+    maOrigSize.setHeight( ImplReadsal_uInt32() );
 
     if (maOrigSize.Width() <= 0 || maOrigSize.Height() <= 0)
         return false;
@@ -534,19 +535,11 @@ bool PNGReaderImpl::ImplReadHeader( const Size& rPreviewSizeHint )
         {
             switch ( mnPngDepth )
             {
-                case 1 :
-#if defined(UNX) && !defined(MACOSX)
-                    // 1bpp indexed images are so badly mishandled by rest of LO on X11 that we
-                    // don't even bother, and turn them into 8bpp indexed ones with just two palette
-                    // entries instead.
-                    mnTargetDepth = 8;  // we have to expand the bitmap
-#endif
-                    mbPalette = false;
-                    break;
                 case 2 :
                     mnTargetDepth = 4;  // we have to expand the bitmap
                     mbPalette = false;
                     break;
+                case 1 :
                 case 4 :
                 case 8 :
                     mbPalette = false;
@@ -649,8 +642,8 @@ bool PNGReaderImpl::ImplReadHeader( const Size& rPreviewSizeHint )
         }
     }
 
-    maTargetSize.Width()  = (maOrigSize.Width() + mnPreviewMask) >> mnPreviewShift;
-    maTargetSize.Height() = (maOrigSize.Height() + mnPreviewMask) >> mnPreviewShift;
+    maTargetSize.setWidth( (maOrigSize.Width() + mnPreviewMask) >> mnPreviewShift );
+    maTargetSize.setHeight( (maOrigSize.Height() + mnPreviewMask) >> mnPreviewShift );
 
     //round bits up to nearest multiple of 8 and divide by 8 to get num of bytes per pixel
     int nBytesPerPixel = ((mnTargetDepth + 7) & ~7)/8;
@@ -841,44 +834,47 @@ void PNGReaderImpl::ImplGetGamma()
 
 void PNGReaderImpl::ImplGetBackground()
 {
-    switch ( mnColorType )
+    switch (mnColorType)
     {
-        case 3 :
+        case 3:
         {
-            if ( mnChunkLen == 1 )
+            if (mnChunkLen == 1)
             {
                 sal_uInt16 nCol = *maDataIter++;
-                if ( nCol < mxAcc->GetPaletteEntryCount() )
+
+                if (nCol < mxAcc->GetPaletteEntryCount())
                 {
-                    mxAcc->Erase( mxAcc->GetPaletteColor( static_cast<sal_uInt8>(nCol) ) );
+                    BitmapColor aBmpColor = mxAcc->GetPaletteColor(static_cast<sal_uInt8>(nCol));
+                    mxAcc->Erase(aBmpColor.GetColor());
                     break;
                 }
             }
         }
         break;
 
-        case 0 :
-        case 4 :
+        case 0:
+        case 4:
         {
-            if ( mnChunkLen == 2 )
+            if (mnChunkLen == 2)
             {
                 // the color type 0 and 4 is always greyscale,
                 // so the return value can be used as index
                 sal_uInt8 nIndex = ImplScaleColor();
-                mxAcc->Erase( mxAcc->GetPaletteColor( nIndex ) );
+                BitmapColor aBmpColor = mxAcc->GetPaletteColor(nIndex);
+                mxAcc->Erase(aBmpColor.GetColor());
             }
         }
         break;
 
-        case 2 :
-        case 6 :
+        case 2:
+        case 6:
         {
-            if ( mnChunkLen == 6 )
+            if (mnChunkLen == 6)
             {
                 sal_uInt8 nRed = ImplScaleColor();
                 sal_uInt8 nGreen = ImplScaleColor();
                 sal_uInt8 nBlue = ImplScaleColor();
-                mxAcc->Erase( Color( nRed, nGreen, nBlue ) );
+                mxAcc->Erase(Color(nRed, nGreen, nBlue));
             }
         }
         break;

@@ -45,9 +45,6 @@ using namespace std;
 using namespace cppu;
 using namespace com::sun::star::bridge;
 using namespace com::sun::star::script;
-namespace ole_adapter
-{
-
 
 struct hash_IUnknown_Impl
 {
@@ -92,12 +89,6 @@ typedef std::unordered_map
     DISPID,
     MemberInfo
 > IdToMemberInfoMap;
-
-/*****************************************************************************
-
-    class declaration: InterfaceOleWrapper_Impl
-
-*****************************************************************************/
 
 class InterfaceOleWrapper_Impl : public WeakImplHelper<XBridgeSupplier2, XInitialization>,
                                  public IDispatchEx,
@@ -221,8 +212,8 @@ protected:
 
 /*****************************************************************************
 
-    class declaration: UnoObjectWrapperRemoteOpt
-    ( Uno Object Wrapper Remote Optimized)
+    UnoObjectWrapperRemoteOpt = Uno Object Wrapper Remote Optimized
+
     This is the UNO wrapper used in the service com.sun.star.bridge.OleBridgeSupplierVar1.
     Key features:
     DISPIDs are passed out blindly. That is in GetIDsOfNames is no name checking carried out.
@@ -273,8 +264,6 @@ protected:
 
 
 };
-
-} // end namespace
 
 #endif
 

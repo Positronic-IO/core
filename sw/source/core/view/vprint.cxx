@@ -184,7 +184,7 @@ void SetSwVisArea( SwViewShell *pSh, const SwRect &rRect )
     // move the start point of the output operation to a position
     // such that in the output device all pages will be painted
     // at the same position
-    aPt.X() = -aPt.X(); aPt.Y() = -aPt.Y();
+    aPt.setX( -aPt.X() ); aPt.setY( -aPt.Y() );
 
     vcl::RenderContext *pOut = pSh->GetOut();
 
@@ -210,7 +210,10 @@ void SwViewShell::InitPrt( OutputDevice *pOutDev )
         pOutDev->SetFillColor();
     }
     else
-        maPrtOffset.X() = maPrtOffset.Y() = 0;
+    {
+        maPrtOffset.setX(0);
+        maPrtOffset.setY(0);
+    }
 
     if ( !mpWin )
         mpOut = pOutDev;
@@ -278,8 +281,8 @@ void SwViewShell::ChgAllPageSize( Size const &rSz )
                   : aSz.Height() < aSz.Width() )
         {
             SwTwips aTmp = aSz.Height();
-            aSz.Height() = aSz.Width();
-            aSz.Width()  = aTmp;
+            aSz.setHeight( aSz.Width() );
+            aSz.setWidth( aTmp );
         }
 
         SwFormatFrameSize aFrameSz( rPgFormat.GetFrameSize() );
@@ -463,7 +466,12 @@ bool SwViewShell::PrintOrPDFExport(
     GDIMetaFile *pOrigRecorder(nullptr);
     GDIMetaFile *pMetaFile(nullptr);
     SwPostItMode nPostItMode = rPrintData.GetPrintPostIts();
-    if (nPostItMode == SwPostItMode::InMargins)
+
+    // tdf#91680 Reserve space in margin for comments only if there are comments
+    const bool bHasPostItsToPrintInMargins = ( nPostItMode == SwPostItMode::InMargins ) &&
+                                sw_GetPostIts( &GetDoc()->getIDocumentFieldsAccess(), nullptr );
+
+    if ( bHasPostItsToPrintInMargins )
     {
         //get and disable the existing recorder
         pOrigRecorder = pOutDev->GetConnectMetaFile();
@@ -534,8 +542,8 @@ bool SwViewShell::PrintOrPDFExport(
 
         SwPaintQueue::Repaint();
 
-        SwPostItMgr *pPostItManager = (nPostItMode == SwPostItMode::InMargins) ?
-            pShell->GetPostItMgr() : nullptr;
+        SwPostItMgr *pPostItManager = bHasPostItsToPrintInMargins ? pShell->GetPostItMgr() : nullptr;
+
         if (pPostItManager)
         {
             pPostItManager->CalcRects();

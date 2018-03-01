@@ -40,14 +40,7 @@
 #include <vcl/sysdata.hxx>
 #include "scanner.hxx"
 
-#if defined _MSC_VER
-#pragma warning (push,1)
-#pragma warning (disable:4668)
-#endif
 #include <twain/twain.h>
-#if defined _MSC_VER
-#pragma warning (pop)
-#endif
 
 using namespace ::com::sun::star;
 
@@ -58,8 +51,8 @@ using namespace ::com::sun::star;
 
 #define PFUNC                   (*pDSM)
 #define PTWAINMSG               MSG*
-#define FIXTODOUBLE( nFix )     ((double)nFix.Whole+(double)nFix.Frac/65536.)
-#define FIXTOLONG( nFix )       ((long)floor(FIXTODOUBLE(nFix)+0.5))
+#define FIXTODOUBLE( nFix )     (static_cast<double>(nFix.Whole)+static_cast<double>(nFix.Frac)/65536.)
+#define FIXTOLONG( nFix )       (static_cast<long>(floor(FIXTODOUBLE(nFix)+0.5)))
 #define TWAIN_FUNCNAME          "DSM_Entry"
 
 #if defined(TWH_64BIT)

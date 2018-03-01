@@ -32,7 +32,6 @@
 #include <vcl/splitwin.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <tools/globname.hxx>
 #include <com/sun/star/awt/PosSize.hpp>
 #include <comphelper/processfactory.hxx>
@@ -582,15 +581,15 @@ void SfxFrame::SetToolSpaceBorderPixel_Impl( const SvBorder& rBorder )
         Size aSize( GetWindow().GetOutputSizePixel() );
         long nDeltaX = rBorder.Left() + rBorder.Right();
         if ( aSize.Width() > nDeltaX )
-            aSize.Width() -= nDeltaX;
+            aSize.AdjustWidth( -nDeltaX );
         else
-            aSize.Width() = 0;
+            aSize.setWidth( 0 );
 
         long nDeltaY = rBorder.Top() + rBorder.Bottom();
         if ( aSize.Height() > nDeltaY )
-            aSize.Height() -= nDeltaY;
+            aSize.AdjustHeight( -nDeltaY );
         else
-            aSize.Height() = 0;
+            aSize.setHeight( 0 );
 
         pF->GetWindow().SetPosSizePixel( aPos, aSize );
     }
@@ -599,8 +598,7 @@ void SfxFrame::SetToolSpaceBorderPixel_Impl( const SvBorder& rBorder )
 tools::Rectangle SfxFrame::GetTopOuterRectPixel_Impl() const
 {
     Size aSize( GetWindow().GetOutputSizePixel() );
-    Point aPoint;
-    return ( tools::Rectangle ( aPoint, aSize ) );
+    return tools::Rectangle( Point(), aSize );
 }
 
 SfxWorkWindow* SfxFrame::GetWorkWindow_Impl() const

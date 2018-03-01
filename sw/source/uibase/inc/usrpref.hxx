@@ -136,7 +136,7 @@ class SwMasterUsrPref : public SwViewOption
     FieldUnit   m_eVScrollMetric;
     bool    m_bIsVScrollMetricSet;
 
-    sal_Int32   m_nDefTab;            //default tab stop distance
+    sal_Int32   m_nDefTabInMm100;     //default tab stop distance, in 1/100 mm
 
     bool    m_bIsSquaredPageMode; //default page mode for text grid
     bool    m_bIsAlignMathObjectsToBaseline;
@@ -233,16 +233,18 @@ public:
     {
         return m_bApplyCharUnit;
     }
-    void   SetApplyCharUnit(bool bSet)
+    void   SetApplyCharUnit(bool bSet, bool noModify = false)
     {
         m_bApplyCharUnit = bSet;
-        m_aLayoutConfig.SetModified();
+        if (!noModify) {
+            m_aLayoutConfig.SetModified();
+        }
     }
 
-    sal_Int32   GetDefTab() const { return m_nDefTab;}
-    void        SetDefTab( sal_Int32  nSet, bool bNoModify = false )
+    sal_Int32   GetDefTabInMm100() const { return m_nDefTabInMm100;}
+    void        SetDefTabInMm100( sal_Int32  nSet, bool bNoModify = false )
                 {
-                    m_nDefTab = nSet;
+                    m_nDefTabInMm100 = nSet;
                     if(!bNoModify)
                         m_aLayoutConfig.SetModified();
                 }
@@ -257,10 +259,12 @@ public:
                 }
 
     bool        IsAlignMathObjectsToBaseline() const { return m_bIsAlignMathObjectsToBaseline; }
-    void        SetAlignMathObjectsToBaseline( bool bVal )
+    void        SetAlignMathObjectsToBaseline( bool bVal, bool noModify = false )
                 {
                     m_bIsAlignMathObjectsToBaseline = bVal;
-                    m_aLayoutConfig.SetModified();
+                    if (!noModify) {
+                        m_aLayoutConfig.SetModified();
+                    }
                 }
 };
 

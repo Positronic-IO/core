@@ -37,7 +37,8 @@
 #include <interpre.hxx>
 #include <calcconfig.hxx>
 
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 #include <memory>
 #include <utility>
@@ -64,10 +65,10 @@ void ScDocShell::SetVisArea( const tools::Rectangle & rVisArea )
 static void lcl_SetTopRight( tools::Rectangle& rRect, const Point& rPos )
 {
     Size aSize = rRect.GetSize();
-    rRect.Right() = rPos.X();
-    rRect.Left() = rPos.X() - aSize.Width() + 1;
-    rRect.Top() = rPos.Y();
-    rRect.Bottom() = rPos.Y() + aSize.Height() - 1;
+    rRect.SetRight( rPos.X() );
+    rRect.SetLeft( rPos.X() - aSize.Width() + 1 );
+    rRect.SetTop( rPos.Y() );
+    rRect.SetBottom( rPos.Y() + aSize.Height() - 1 );
 }
 
 void ScDocShell::SetVisAreaOrSize( const tools::Rectangle& rVisArea )
@@ -88,12 +89,12 @@ void ScDocShell::SetVisAreaOrSize( const tools::Rectangle& rVisArea )
             Point aNewPos( 0, std::max( aArea.Top(), long(0) ) );
             if ( bNegativePage )
             {
-                aNewPos.X() = std::min( aArea.Right(), long(0) );
+                aNewPos.setX( std::min( aArea.Right(), long(0) ) );
                 lcl_SetTopRight( aArea, aNewPos );
             }
             else
             {
-                aNewPos.X() = std::max( aArea.Left(), long(0) );
+                aNewPos.setX( std::max( aArea.Left(), long(0) ) );
                 aArea.SetPos( aNewPos );
             }
         }
@@ -499,8 +500,10 @@ void ScDocShell::CheckConfigOptions()
         if (pViewShell)
         {
             vcl::Window* pParent = pViewShell->GetFrameWin();
-            ScopedVclPtrInstance< InfoBox > aBox(pParent, ScGlobal::GetRscString(STR_OPTIONS_WARN_SEPARATORS));
-            aBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          ScGlobal::GetRscString(STR_OPTIONS_WARN_SEPARATORS)));
+            xInfoBox->run();
         }
 
         // For now, this is the only option setting that could launch info

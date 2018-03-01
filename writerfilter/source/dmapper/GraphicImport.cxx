@@ -1022,7 +1022,7 @@ void GraphicImport::lcl_sprm(Sprm& rSprm)
             break;
         case NS_ooxml::LN_CT_Anchor_positionH: // 90976;
         {
-            // Use a special handler for the positionning
+            // Use a special handler for the positioning
             PositionHandlerPtr pHandler( new PositionHandler( m_pImpl->m_rPositionOffsets, m_pImpl->m_rAligns ));
             writerfilter::Reference<Properties>::Pointer_t pProperties = rSprm.getProps();
             if( pProperties.get( ) )
@@ -1048,7 +1048,7 @@ void GraphicImport::lcl_sprm(Sprm& rSprm)
         break;
         case NS_ooxml::LN_CT_Anchor_positionV: // 90977;
         {
-            // Use a special handler for the positionning
+            // Use a special handler for the positioning
             PositionHandlerPtr pHandler( new PositionHandler( m_pImpl->m_rPositionOffsets, m_pImpl->m_rAligns));
             writerfilter::Reference<Properties>::Pointer_t pProperties = rSprm.getProps();
             if( pProperties.get( ) )
@@ -1333,6 +1333,17 @@ uno::Reference< text::XTextContent > GraphicImport::createGraphicObject( const b
                         uno::makeAny( awt::Size( m_pImpl->getXSize(), m_pImpl->getYSize() )));
                 m_pImpl->applyMargins(xGraphicObjectProperties);
                 m_pImpl->applyName(xGraphicObjectProperties);
+            }
+
+            // Handle horizontal flip.
+            bool bMirrored = false;
+            xShapeProps->getPropertyValue("IsMirrored") >>= bMirrored;
+            if (bMirrored)
+            {
+                xGraphicObjectProperties->setPropertyValue("HoriMirroredOnEvenPages",
+                                                           uno::makeAny(true));
+                xGraphicObjectProperties->setPropertyValue("HoriMirroredOnOddPages",
+                                                           uno::makeAny(true));
             }
         }
     }

@@ -24,9 +24,17 @@ $(eval $(call gb_Library_use_custom_headers,svgfilter,filter/source/svg))
 $(eval $(call gb_Library_set_componentfile,svgfilter,filter/source/svg/svgfilter))
 
 $(eval $(call gb_Library_add_defs,svgfilter,\
+	-DBOOST_ALL_NO_LIB \
 	-DUSE_MODERN_SPIRIT \
 	-DFILTER_DLLIMPLEMENTATION \
 ))
+
+ifeq ($(COM),MSC)
+$(eval $(call gb_Library_add_defs,svgfilter,\
+	-D_SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING \
+	-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING \
+))
+endif
 
 $(eval $(call gb_Library_set_include,svgfilter,\
     $$(INCLUDE) \

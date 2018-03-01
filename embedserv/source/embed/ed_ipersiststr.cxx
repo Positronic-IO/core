@@ -16,9 +16,6 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-#ifdef _MSC_VER
-#pragma warning(disable : 4917 4555)
-#endif
 
 #include <embeddoc.hxx>
 #include <com/sun/star/uno/Exception.hpp>
@@ -79,7 +76,7 @@ uno::Reference< io::XInputStream > createTempXInStreamFromIStream(
     hr = pStream->Stat( &aStat, STATFLAG_NONAME );
     if ( FAILED( hr ) ) return xResult;
 
-    sal_uInt32 nSize = (sal_uInt32)aStat.cbSize.QuadPart;
+    sal_uInt32 nSize = static_cast<sal_uInt32>(aStat.cbSize.QuadPart);
     sal_uInt32 nCopied = 0;
     uno::Sequence< sal_Int8 > aBuffer( nConstBufferSize );
     try
@@ -423,7 +420,7 @@ STDMETHODIMP EmbedDocument_Impl::InitNew( IStorage *pStg )
                 if ( hr == S_OK )
                 {
                     wchar_t const * aCurType = getStorageTypeFromGUID_Impl( &m_guid ); // ???
-                    CLIPFORMAT cf = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+                    CLIPFORMAT cf = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
                     hr = WriteFmtUserTypeStg( pStg,
                                             cf,                         // ???
                                             const_cast<wchar_t *>(aCurType) );
@@ -743,7 +740,7 @@ STDMETHODIMP EmbedDocument_Impl::Load( LPCOLESTR pszFileName, DWORD /*dwMode*/ )
     if ( FAILED( hr ) || !m_pMasterStorage ) return E_FAIL;
 
     o3tl::u16string_view aCurType = getServiceNameFromGUID_Impl( &m_guid ); // ???
-    CLIPFORMAT cf = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+    CLIPFORMAT cf = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
     hr = WriteFmtUserTypeStg( m_pMasterStorage,
                             cf,                         // ???
                             const_cast<LPOLESTR>( o3tl::toW(aCurType.data())) );
@@ -794,7 +791,7 @@ STDMETHODIMP EmbedDocument_Impl::Load( LPCOLESTR pszFileName, DWORD /*dwMode*/ )
         if ( hr == S_OK )
         {
             aCurType = getServiceNameFromGUID_Impl( &m_guid ); // ???
-            cf = (CLIPFORMAT)RegisterClipboardFormatW( L"Embedded Object" );
+            cf = static_cast<CLIPFORMAT>(RegisterClipboardFormatW( L"Embedded Object" ));
             hr = WriteFmtUserTypeStg( m_pMasterStorage,
                                     cf,                         // ???
                                     const_cast<LPOLESTR>( o3tl::toW(aCurType.data())) );

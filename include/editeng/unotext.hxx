@@ -137,15 +137,15 @@ class SvxItemPropertySet;
 
 #define SVX_UNOEDIT_PARA_PROPERTIES \
     {OUString(UNO_NAME_EDIT_PARA_ADJUST),       EE_PARA_JUST,               ::cppu::UnoType<sal_Int16>::get(),            0, MID_PARA_ADJUST }, \
-    {OUString(UNO_NAME_EDIT_PARA_BMARGIN),      EE_PARA_ULSPACE,            ::cppu::UnoType<sal_Int32>::get(),            0, MID_LO_MARGIN|SFX_METRIC_ITEM }, \
+    {OUString(UNO_NAME_EDIT_PARA_BMARGIN),      EE_PARA_ULSPACE,            ::cppu::UnoType<sal_Int32>::get(),            0, MID_LO_MARGIN, PropertyMoreFlags::METRIC_ITEM }, \
     {OUString(UNO_NAME_EDIT_PARA_IS_HYPHEN),    EE_PARA_HYPHENATE,  ::cppu::UnoType<bool>::get(),                0, 0 }, \
     {OUString(UNO_NAME_EDIT_PARA_LASTLINEADJ),  EE_PARA_JUST,               ::cppu::UnoType<sal_Int16>::get(),            0, MID_LAST_LINE_ADJUST }, \
-    {OUString(UNO_NAME_EDIT_PARA_LMARGIN),      EE_PARA_LRSPACE,    ::cppu::UnoType<sal_Int32>::get(),            0, MID_TXT_LMARGIN|SFX_METRIC_ITEM }, \
+    {OUString(UNO_NAME_EDIT_PARA_LMARGIN),      EE_PARA_LRSPACE,    ::cppu::UnoType<sal_Int32>::get(),            0, MID_TXT_LMARGIN, PropertyMoreFlags::METRIC_ITEM }, \
     {OUString(UNO_NAME_EDIT_PARA_LINESPACING),  EE_PARA_SBL,                cppu::UnoType<css::style::LineSpacing>::get(),     0, CONVERT_TWIPS}, \
-    {OUString(UNO_NAME_EDIT_PARA_RMARGIN),      EE_PARA_LRSPACE,    ::cppu::UnoType<sal_Int32>::get(),            0, MID_R_MARGIN|SFX_METRIC_ITEM }, \
+    {OUString(UNO_NAME_EDIT_PARA_RMARGIN),      EE_PARA_LRSPACE,    ::cppu::UnoType<sal_Int32>::get(),            0, MID_R_MARGIN, PropertyMoreFlags::METRIC_ITEM }, \
     {OUString(UNO_NAME_EDIT_PARA_TAPSTOPS),     EE_PARA_TABS,               cppu::UnoType<css::uno::Sequence< css::style::TabStop >>::get(), 0, 0 }, \
-    {OUString(UNO_NAME_EDIT_PARA_TMARGIN),      EE_PARA_ULSPACE,            ::cppu::UnoType<sal_Int32>::get(),            0, MID_UP_MARGIN|SFX_METRIC_ITEM },\
-    {OUString(UNO_NAME_EDIT_PARA_FIRST_LINE_INDENT),     EE_PARA_LRSPACE,   ::cppu::UnoType<sal_Int32>::get(),            0, MID_FIRST_LINE_INDENT|SFX_METRIC_ITEM}, \
+    {OUString(UNO_NAME_EDIT_PARA_TMARGIN),      EE_PARA_ULSPACE,            ::cppu::UnoType<sal_Int32>::get(),            0, MID_UP_MARGIN, PropertyMoreFlags::METRIC_ITEM },\
+    {OUString(UNO_NAME_EDIT_PARA_FIRST_LINE_INDENT),     EE_PARA_LRSPACE,   ::cppu::UnoType<sal_Int32>::get(),            0, MID_FIRST_LINE_INDENT, PropertyMoreFlags::METRIC_ITEM}, \
     {OUString(UNO_NAME_EDIT_PARA_IS_HANGING_PUNCTUATION),EE_PARA_HANGINGPUNCTUATION,  cppu::UnoType<bool>::get(),                0 ,0 }, \
     {OUString(UNO_NAME_EDIT_PARA_IS_CHARACTER_DISTANCE), EE_PARA_ASIANCJKSPACING,   cppu::UnoType<bool>::get(),                0 ,0 }, \
     {OUString(UNO_NAME_EDIT_PARA_IS_FORBIDDEN_RULES),    EE_PARA_FORBIDDENRULES,     cppu::UnoType<bool>::get(),                0 ,0 },\
@@ -250,11 +250,11 @@ class EDITENG_DLLPUBLIC SvxUnoTextRangeBase : public css::text::XTextRange,
 {
     friend class SvxUnoTextRangeEnumeration;
     friend class ::accessibility::AccessibleEditableTextPara;
+    const SvxItemPropertySet* mpPropSet;
 
 protected:
-    SvxEditSource*          mpEditSource;
+    std::unique_ptr<SvxEditSource> mpEditSource;
     ESelection              maSelection;
-    const SvxItemPropertySet* mpPropSet;
 
     /// @throws css::beans::UnknownPropertyException
     /// @throws css::beans::PropertyVetoException
@@ -327,7 +327,7 @@ public:
 
     //const SfxItemPropertyMapEntry*   getPropertyMapEntries() const throw() { return maPropSet.getPropertyMapEntries(); }
     const SvxItemPropertySet*   getPropertySet() const throw() { return mpPropSet; }
-    SvxEditSource*              GetEditSource() const throw() { return mpEditSource; }
+    SvxEditSource*              GetEditSource() const throw() { return mpEditSource.get(); }
 
     static bool SetPropertyValueHelper( const SfxItemPropertySimpleEntry* pMap, const css::uno::Any& aValue, SfxItemSet& rNewSet, const ESelection* pSelection = nullptr, SvxEditSource* pEditSource = nullptr );
     /// @throws css::uno::RuntimeException

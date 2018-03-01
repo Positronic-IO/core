@@ -299,7 +299,7 @@ void SdActiveXControlsTest::testTextBoxProperties()
     CPPUNIT_ASSERT_EQUAL(false, bVScroll);
 
     xPropertySet->getPropertyValue("ReadOnly") >>= bReadOnly;
-    CPPUNIT_ASSERT_EQUAL(false, bReadOnly); //Bugous, should be true (tdf#111417)
+    CPPUNIT_ASSERT_EQUAL(true, bReadOnly);
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
@@ -886,7 +886,7 @@ void SdActiveXControlsTest::testComboBoxProperties()
     CPPUNIT_ASSERT_EQUAL(sal_Int16(130), nMaxTextLen);
 
     xPropertySet->getPropertyValue("ReadOnly") >>= bReadOnly;
-    CPPUNIT_ASSERT_EQUAL(false, bReadOnly); // Bugous, should be true (tdf#111417)
+    CPPUNIT_ASSERT_EQUAL(false, bReadOnly); // Bogus, should be true (tdf#111417)
 
     xPropertySet->getPropertyValue("Align") >>= nAlign;
     CPPUNIT_ASSERT_EQUAL(sal_Int16(awt::TextAlign::CENTER), nAlign);
@@ -983,7 +983,7 @@ void SdActiveXControlsTest::testListBoxProperties()
     CPPUNIT_ASSERT_EQUAL(true, bMultiSelection);
 
     xPropertySet->getPropertyValue("ReadOnly") >>= bReadOnly;
-    CPPUNIT_ASSERT_EQUAL(false, bReadOnly); // Bugous, should be true (tdf#111417)
+    CPPUNIT_ASSERT_EQUAL(false, bReadOnly); // Bogus, should be true (tdf#111417)
 
     xPropertySet->getPropertyValue("Align") >>= nAlign;
     CPPUNIT_ASSERT_EQUAL(sal_Int16(awt::TextAlign::CENTER), nAlign);
@@ -1119,9 +1119,9 @@ void SdActiveXControlsTest::testPictureProperties()
         CPPUNIT_ASSERT(xControlShape.is());
         uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
-        OUString sImageURL;
-        xPropertySet->getPropertyValue("ImageURL") >>= sImageURL;
-        CPPUNIT_ASSERT(!sImageURL.isEmpty());
+        uno::Reference<graphic::XGraphic> xGraphic;
+        xPropertySet->getPropertyValue("Graphic") >>= xGraphic;
+        CPPUNIT_ASSERT(xGraphic.is());
 
         sal_Int16 nColor;
         xPropertySet->getPropertyValue("ImagePosition") >>= nColor;
@@ -1138,12 +1138,12 @@ void SdActiveXControlsTest::testPictureProperties()
 
         OString sMessage = "The wrong control's index is: " + OString::number(i);
 
-        OUString sImageURL;
-        xPropertySet->getPropertyValue("ImageURL") >>= sImageURL;
+        uno::Reference<graphic::XGraphic> xGraphic;
+        xPropertySet->getPropertyValue("Graphic") >>= xGraphic;
         if (i == 0) // First control has no image specified
-            CPPUNIT_ASSERT_MESSAGE(sMessage.getStr(), sImageURL.isEmpty());
+            CPPUNIT_ASSERT_MESSAGE(sMessage.getStr(), !xGraphic.is());
         else
-            CPPUNIT_ASSERT_MESSAGE(sMessage.getStr(), !sImageURL.isEmpty());
+            CPPUNIT_ASSERT_MESSAGE(sMessage.getStr(), xGraphic.is());
 
         sal_Int16 nScaleMode;
         xPropertySet->getPropertyValue("ScaleMode") >>= nScaleMode;

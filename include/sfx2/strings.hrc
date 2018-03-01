@@ -235,6 +235,9 @@
 #define STR_CANT_CLOSE                          NC_("STR_CANT_CLOSE", "The document cannot be closed because a\n print job is being carried out.")
 #define STR_ERROR_SEND_MAIL                     NC_("STR_ERROR_SEND_MAIL", "An error occurred in sending the message. Possible errors could be a missing user account or a defective setup.\nPlease check the %PRODUCTNAME settings or your e-mail program settings.")
 #define STR_QUERY_OPENASTEMPLATE                NC_("STR_QUERY_OPENASTEMPLATE", "This document cannot be edited, possibly due to missing access rights. Do you want to edit a copy of the document?")
+#define STR_QUERY_OPENASTEMPLATE_ALLOW_IGNORE   NC_("STR_QUERY_OPENASTEMPLATE_ALLOW_IGNORE", "This document cannot be edited, because it is locked in another session. Do you want to edit a copy of the document?\n\nYou can also try to ignore the lock and open the file for editing.")
+#define STR_QUERY_OPENASTEMPLATE_OPENCOPY_BTN   NC_("STR_QUERY_OPENASTEMPLATE_OPENCOPY_BTN", "Open ~Copy")
+#define STR_QUERY_OPENASTEMPLATE_OPEN_BTN       NC_("STR_QUERY_OPENASTEMPLATE_OPEN_BTN", "~Open")
 #define STR_REPAIREDDOCUMENT                    NC_("STR_REPAIREDDOCUMENT", " (repaired document)")
 #define STR_NONCHECKEDOUT_DOCUMENT              NC_("STR_NONCHECKEDOUT_DOCUMENT", "This document is not checked out on the server.")
 #define STR_READONLY_DOCUMENT                   NC_("STR_READONLY_DOCUMENT", "This document is open in read-only mode.")
@@ -301,6 +304,9 @@
 
 #define STR_CLEAR_CHAR                          NC_("STR_CLEAR_CHAR", "Remove")
 #define STR_CLEAR_ALL_CHAR                      NC_("STR_CLEAR_ALL_CHAR", "Clear All")
+
+#define STR_PASSWORD_LEN                        NC_("STR_PASSWORD_LEN", "Password length")
+#define STR_PASSWORD_WARNING                    NC_("STR_PASSWORD_WARNING", "The password you have entered causes interoperability issues. Please enter a password that is shorter than 52 bytes, or longer than 55 bytes.")
 
 #endif
 

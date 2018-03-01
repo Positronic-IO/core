@@ -79,7 +79,7 @@ void FuLine::DoExecute( SfxRequest& rReq )
 
     bool bHasMarked = mpView->AreObjectsMarked();
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    VclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSvxLineTabDialog(nullptr,pNewAttr.get(),mpDoc,pObj,bHasMarked) : nullptr);
+    VclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSvxLineTabDialog(mpViewShell->GetActiveWindow(), pNewAttr.get(), mpDoc, pObj, bHasMarked) : nullptr);
     if (!pDlg)
     {
         mpViewShell->Cancel();
@@ -107,7 +107,7 @@ void FuLine::DoExecute( SfxRequest& rReq )
             mpViewShell->GetViewFrame()->GetBindings().Invalidate( SidArray );
         }
         mpViewShell->Cancel();
-    }, pDlg);
+    });
 }
 
 void FuLine::Activate()

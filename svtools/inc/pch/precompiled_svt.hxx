@@ -98,6 +98,7 @@
 #include <salhelper/timer.hxx>
 #include <vcl/EnumContext.hxx>
 #include <vcl/IContext.hxx>
+#include <vcl/NotebookbarContextControl.hxx>
 #include <vcl/alpha.hxx>
 #include <vcl/bitmap.hxx>
 #include <vcl/bitmapex.hxx>
@@ -132,7 +133,6 @@
 #include <vcl/menu.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/metric.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/notebookbar.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/salnativewidgets.hxx>
@@ -350,7 +350,6 @@
 #include <o3tl/make_unique.hxx>
 #include <o3tl/strong_int.hxx>
 #include <o3tl/typed_flags_set.hxx>
-#include <sfx2/notebookbar/NotebookbarContextControl.hxx>
 #include <sot/exchange.hxx>
 #include <sot/sotdllapi.h>
 #include <svl/SfxBroadcaster.hxx>

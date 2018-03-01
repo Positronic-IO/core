@@ -142,7 +142,7 @@ void Color::RGBtoHSB( sal_uInt16& nHue, sal_uInt16& nSat, sal_uInt16& nBri ) con
     }
 }
 
-ColorData Color::HSBtoRGB( sal_uInt16 nHue, sal_uInt16 nSat, sal_uInt16 nBri )
+Color Color::HSBtoRGB( sal_uInt16 nHue, sal_uInt16 nSat, sal_uInt16 nBri )
 {
     sal_uInt8 cR=0,cG=0,cB=0;
     sal_uInt8 nB = static_cast<sal_uInt8>( nBri * 255 / 100 );
@@ -180,7 +180,7 @@ ColorData Color::HSBtoRGB( sal_uInt16 nHue, sal_uInt16 nSat, sal_uInt16 nBri )
         }
     }
 
-    return RGB_COLORDATA( cR, cG, cB );
+    return Color( cR, cG, cB );
 }
 
 SvStream& Color::Read( SvStream& rIStm )
@@ -198,7 +198,7 @@ SvStream& Color::Write( SvStream& rOStm ) const
 OUString Color::AsRGBHexString() const
 {
     std::stringstream ss;
-    ss << std::hex << std::setfill ('0') << std::setw(6) << GetRGBColor();
+    ss << std::hex << std::setfill ('0') << std::setw(6) << sal_uInt32(GetRGBColor());
     return OUString::createFromAscii(ss.str().c_str());
 }
 
@@ -220,11 +220,11 @@ SvStream& ReadColor( SvStream& rIStream, Color& rColor )
         rIStream.ReadUInt16( nGreen );
         rIStream.ReadUInt16( nBlue );
 
-        rColor.mnColor = RGB_COLORDATA( nRed>>8, nGreen>>8, nBlue>>8 );
+        rColor = Color( nRed>>8, nGreen>>8, nBlue>>8 );
     }
     else
     {
-        static const ColorData aColAry[] =
+        static const Color aColAry[] =
         {
             COL_BLACK,                          // COL_BLACK
             COL_BLUE,                           // COL_BLUE
@@ -260,9 +260,9 @@ SvStream& ReadColor( SvStream& rIStream, Color& rColor )
         };
 
         if ( nColorName < SAL_N_ELEMENTS( aColAry ) )
-            rColor.mnColor = aColAry[nColorName];
+            rColor = aColAry[nColorName];
         else
-            rColor.mnColor = COL_BLACK;
+            rColor = COL_BLACK;
     }
 
     return rIStream;

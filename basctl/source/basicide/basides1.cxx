@@ -48,7 +48,8 @@
 #include <svl/visitem.hxx>
 #include <svl/whiter.hxx>
 #include <vcl/xtextedt.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 namespace basctl
 {
@@ -93,18 +94,28 @@ void Shell::ExecuteCurrent( SfxRequest& rReq )
             if (rSearchItem.GetCommand() == SvxSearchCmd::REPLACE_ALL)
             {
                 sal_uInt16 nActModWindows = 0;
-                for (WindowTableIt it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
+                for (auto const& window : aWindowTable)
                 {
-                    BaseWindow* pWin = it->second;
+                    BaseWindow* pWin = window.second;
                     if (pWin->HasActiveEditor())
                         nActModWindows++;
                 }
 
-                if ( nActModWindows <= 1 || ( !rSearchItem.GetSelection() && ScopedVclPtrInstance<QueryBox>(pCurWin, MessBoxStyle::YesNo|MessBoxStyle::DefaultYes, IDEResId(RID_STR_SEARCHALLMODULES))->Execute() == RET_YES ) )
+                bool bAllModules = nActModWindows <= 1;
+                if (!bAllModules)
                 {
-                    for (WindowTableIt it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
+                    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pCurWin ? pCurWin->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                                   IDEResId(RID_STR_SEARCHALLMODULES)));
+                    xQueryBox->set_default_response(RET_YES);
+                    bAllModules = xQueryBox->run() == RET_YES;
+                }
+
+                if (bAllModules)
+                {
+                    for (auto const& window : aWindowTable)
                     {
-                        BaseWindow* pWin = it->second;
+                        BaseWindow* pWin = window.second;
                         nFound += pWin->StartSearchAndReplace(rSearchItem);
                     }
                 }
@@ -113,7 +124,11 @@ void Shell::ExecuteCurrent( SfxRequest& rReq )
 
                 OUString aReplStr(IDEResId(RID_STR_SEARCHREPLACES));
                 aReplStr = aReplStr.replaceAll("XX", OUString::number(nFound));
-                ScopedVclPtrInstance<InfoBox>(pCurWin, aReplStr)->Execute();
+
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pCurWin->GetFrameWeld(),
+                                                              VclMessageType::Info, VclButtonsType::Ok,
+                                                              aReplStr));
+                xInfoBox->run();
             }
             else
             {
@@ -139,8 +154,12 @@ void Shell::ExecuteCurrent( SfxRequest& rReq )
                             SfxViewFrame* pViewFrame = GetViewFrame();
                             SfxChildWindow* pChildWin = pViewFrame ? pViewFrame->GetChildWindow( SID_SEARCH_DLG ) : nullptr;
                             vcl::Window* pParent = pChildWin ? pChildWin->GetWindow() : nullptr;
-                            ScopedVclPtrInstance< QueryBox > aQuery(pParent, MessBoxStyle::YesNo|MessBoxStyle::DefaultYes, IDEResId(RID_STR_SEARCHFROMSTART));
-                            if ( aQuery->Execute() == RET_YES )
+
+                            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+                                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                                           IDEResId(RID_STR_SEARCHFROMSTART)));
+                            xQueryBox->set_default_response(RET_YES);
+                            if (xQueryBox->run() == RET_YES)
                             {
                                 it = aWindowTable.begin();
                                 if ( it != aWindowTable.end() )
@@ -180,7 +199,12 @@ void Shell::ExecuteCurrent( SfxRequest& rReq )
                         SetCurWindow( pWin, true );
                 }
                 if ( !nFound && !bCanceled )
-                    ScopedVclPtrInstance<InfoBox>(pCurWin, IDEResId(RID_STR_SEARCHNOTFOUND))->Execute();
+                {
+                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pCurWin->GetFrameWeld(),
+                                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                                  IDEResId(RID_STR_SEARCHNOTFOUND)));
+                    xInfoBox->run();
+                }
             }
 
             rReq.Done();
@@ -282,7 +306,7 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
 
             ScriptDocument aDocument( ScriptDocument::getDocumentForBasicManager( pBasMgr ) );
 
-            StartListening( *pBasMgr, true /* log on only once */ );
+            StartListening(*pBasMgr, DuplicateHandling::Prevent /* log on only once */);
             OUString aLibName( rInfo.GetLib() );
             if ( aLibName.isEmpty() )
                 aLibName = "Standard" ;
@@ -358,7 +382,7 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
                         OUString aLibName = pModWin->GetLibName();
                         ScriptDocument aDocument( pWin->GetDocument() );
 
-                        if (RenameModule(pModWin, aDocument, aLibName, aOldName, aNewName))
+                        if (RenameModule(pModWin->GetFrameWeld(), aDocument, aLibName, aOldName, aNewName))
                         {
                             bRenameOk = true;
                             // Because we listen for container events for script
@@ -412,9 +436,9 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
         case SID_BASICIDE_STOREALLMODULESOURCES:
         case SID_BASICIDE_UPDATEALLMODULESOURCES:
         {
-            for (WindowTableIt it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
+            for (auto const& window : aWindowTable)
             {
-                BaseWindow* pWin = it->second;
+                BaseWindow* pWin = window.second;
                 if (!pWin->IsSuspended() && dynamic_cast<ModulWindow*>(pWin))
                 {
                     if ( rReq.GetSlot() == SID_BASICIDE_STOREALLMODULESOURCES )
@@ -1153,9 +1177,9 @@ VclPtr<BaseWindow> Shell::FindWindow(
     ItemType eType, bool bFindSuspended
 )
 {
-    for (WindowTableIt it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
+    for (auto const& window : aWindowTable)
     {
-        BaseWindow* const pWin = it->second;
+        BaseWindow* const pWin = window.second;
         if (pWin->Is(rDocument, rLibName, rName, eType, bFindSuspended))
             return pWin;
     }
@@ -1229,7 +1253,7 @@ VclPtr<ModulWindow> Shell::ShowActiveModuleWindow( StarBASIC const * pBasic )
         else
             SAL_WARN( "basctl.basicide", "No BASIC!");
         if (BasicManager* pBasicMgr = FindBasicManager(pBasic))
-            StartListening( *pBasicMgr, true /* log on only once */ );
+            StartListening(*pBasicMgr, DuplicateHandling::Prevent /* log on only once */);
         return pWin;
     }
     return nullptr;
@@ -1242,16 +1266,16 @@ void Shell::AdjustPosSizePixel( const Point &rPos, const Size &rSize )
         return;
 
     Size aTabBarSize;
-    aTabBarSize.Height() = GetViewFrame()->GetWindow().GetFont().GetFontHeight() + 4;
-    aTabBarSize.Width() = rSize.Width();
+    aTabBarSize.setHeight( GetViewFrame()->GetWindow().GetFont().GetFontHeight() + 4 );
+    aTabBarSize.setWidth( rSize.Width() );
 
     Size aSz( rSize );
     Size aScrollBarBoxSz( aScrollBarBox->GetSizePixel() );
-    aSz.Height() -= aScrollBarBoxSz.Height();
-    aSz.Height() -= aTabBarSize.Height();
+    aSz.AdjustHeight( -(aScrollBarBoxSz.Height()) );
+    aSz.AdjustHeight( -(aTabBarSize.Height()) );
 
     Size aOutSz( aSz );
-    aSz.Width() -= aScrollBarBoxSz.Width();
+    aSz.AdjustWidth( -(aScrollBarBoxSz.Width()) );
     aScrollBarBox->SetPosPixel( Point( rSize.Width() - aScrollBarBoxSz.Width(), rSize.Height() - aScrollBarBoxSz.Height() ) );
     aVScrollBar->SetPosSizePixel( Point( rPos.X()+aSz.Width(), rPos.Y() ), Size( aScrollBarBoxSz.Width(), aSz.Height() ) );
     aHScrollBar->SetPosSizePixel( Point( rPos.X(), rPos.Y()+aSz.Height() ), Size( aSz.Width(), aScrollBarBoxSz.Height() ) );
@@ -1295,9 +1319,9 @@ void Shell::Deactivate( bool bMDI )
 
         // test CanClose to also test during deactivating the BasicIDE whether
         // the sourcecode is too large in one of the modules...
-        for (WindowTableIt it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
+        for (auto const& window : aWindowTable)
         {
-            BaseWindow* pWin = it->second;
+            BaseWindow* pWin = window.second;
             if ( /* !pWin->IsSuspended() && */ !pWin->CanClose() )
             {
                 if ( !m_aCurLibName.isEmpty() && ( pWin->IsDocument( m_aCurDocument ) || pWin->GetLibName() != m_aCurLibName ) )

@@ -21,7 +21,7 @@
 #include <vcl/svapp.hxx>
 #include <svl/solar.hrc>
 #include <tools/debug.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 
 #include <basic/sbstar.hxx>
@@ -97,7 +97,10 @@ void BasicDLL::BasicBreak()
         {
             bJustStopping = true;
             StarBASIC::Stop();
-            ScopedVclPtrInstance<InfoBox>(nullptr, BasResId(IDS_SBERR_TERMINATED))->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          BasResId(IDS_SBERR_TERMINATED)));
+            xInfoBox->run();
             bJustStopping = false;
         }
     }

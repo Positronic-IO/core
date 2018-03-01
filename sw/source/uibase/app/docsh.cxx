@@ -21,7 +21,7 @@
 
 #include <hintids.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/jobset.hxx>
@@ -96,7 +96,6 @@
 #include <fldbas.hxx>
 #include <docary.hxx>
 #include <swerror.h>
-#include <helpids.h>
 #include <cmdid.h>
 #include <globals.hrc>
 #include <strings.hrc>
@@ -178,7 +177,10 @@ Reader* SwDocShell::StartConvertFrom(SfxMedium& rMedium, SwReader** ppRdr,
     {
         if(!bAPICall)
         {
-            ScopedVclPtrInstance<InfoBox>(nullptr, SwResId(STR_CANTOPEN))->Execute();
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                          VclMessageType::Info, VclButtonsType::Ok,
+                                                          SwResId(STR_CANTOPEN)));
+            xInfoBox->run();
         }
         return nullptr;
     }
@@ -551,7 +553,10 @@ bool SwDocShell::ConvertTo( SfxMedium& rMedium )
     SwReaderWriter::GetWriter( pFlt->GetUserData(), rMedium.GetBaseURL( true ), xWriter );
     if( !xWriter.is() )
     {   // Filter not available
-        ScopedVclPtrInstance<InfoBox>(nullptr, SwResId(STR_DLLNOTFOUND))->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      SwResId(STR_DLLNOTFOUND)));
+        xInfoBox->run();
         return false;
     }
 
@@ -858,7 +863,7 @@ void SwDocShell::SetVisArea( const tools::Rectangle &rRect )
     if (m_pView)
     {
         Size aSz( m_pView->GetDocSz() );
-        aSz.Width() += DOCUMENTBORDER; aSz.Height() += DOCUMENTBORDER;
+        aSz.AdjustWidth(DOCUMENTBORDER ); aSz.AdjustHeight(DOCUMENTBORDER );
         long nMoveX = 0, nMoveY = 0;
         if ( aRect.Right() > aSz.Width() )
             nMoveX = aSz.Width() - aRect.Right();

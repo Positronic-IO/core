@@ -33,7 +33,7 @@
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/menu.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 
 #include <sal/macros.h>
 #include <svl/style.hxx>
@@ -78,7 +78,6 @@
 #include <sdresid.hxx>
 #include <EventMultiplexer.hxx>
 #include <ViewShellManager.hxx>
-#include <helpids.h>
 #include <sdpage.hxx>
 #include <drawdoc.hxx>
 #include <textapi.hxx>
@@ -460,10 +459,10 @@ void AnnotationManagerImpl::InsertAnnotation(const OUString& rText)
                 for( AnnotationVector::iterator iter = aAnnotations.begin(); iter != aAnnotations.end(); ++iter )
                 {
                     RealPoint2D aPoint( (*iter)->getPosition() );
-                    aTagRect.Left()   = sal::static_int_cast< long >( aPoint.X * 100.0 );
-                    aTagRect.Top()    = sal::static_int_cast< long >( aPoint.Y * 100.0 );
-                    aTagRect.Right()  = aTagRect.Left() + width - 1;
-                    aTagRect.Bottom() = aTagRect.Top() + height - 1;
+                    aTagRect.SetLeft( sal::static_int_cast< long >( aPoint.X * 100.0 ) );
+                    aTagRect.SetTop( sal::static_int_cast< long >( aPoint.Y * 100.0 ) );
+                    aTagRect.SetRight( aTagRect.Left() + width - 1 );
+                    aTagRect.SetBottom( aTagRect.Top() + height - 1 );
 
                     if( aNewRect.IsOver( aTagRect ) )
                     {
@@ -838,9 +837,11 @@ void AnnotationManagerImpl::SelectNextAnnotation(bool bForeward)
 
         // Pop up question box that asks the user whether to wrap around.
         // The dialog is made modal with respect to the whole application.
-        ScopedVclPtrInstance< QueryBox > aQuestionBox( nullptr, (MessBoxStyle::YesNo | MessBoxStyle::DefaultYes), SdResId(pStringId));
-        aQuestionBox->SetImage( QueryBox::GetStandardImage() );
-        if (aQuestionBox->Execute() != RET_YES)
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+                                                       VclMessageType::Question, VclButtonsType::YesNo,
+                                                       SdResId(pStringId)));
+        xQueryBox->set_default_response(RET_YES);
+        if (xQueryBox->run() != RET_YES)
             break;
     }
     while( true );
@@ -1222,10 +1223,10 @@ Color AnnotationManagerImpl::GetColor(sal_uInt16 aAuthorIndex)
             COL_AUTHOR4_NORMAL,     COL_AUTHOR5_NORMAL,     COL_AUTHOR6_NORMAL,
             COL_AUTHOR7_NORMAL,     COL_AUTHOR8_NORMAL,     COL_AUTHOR9_NORMAL };
 
-        return Color( aArrayNormal[ aAuthorIndex % SAL_N_ELEMENTS( aArrayNormal ) ] );
+        return aArrayNormal[ aAuthorIndex % SAL_N_ELEMENTS( aArrayNormal ) ];
     }
 
-    return Color(COL_WHITE);
+    return COL_WHITE;
 }
 
 Color AnnotationManagerImpl::GetColorLight(sal_uInt16 aAuthorIndex)
@@ -1237,10 +1238,10 @@ Color AnnotationManagerImpl::GetColorLight(sal_uInt16 aAuthorIndex)
             COL_AUTHOR4_LIGHT,      COL_AUTHOR5_LIGHT,      COL_AUTHOR6_LIGHT,
             COL_AUTHOR7_LIGHT,      COL_AUTHOR8_LIGHT,      COL_AUTHOR9_LIGHT };
 
-        return Color( aArrayLight[ aAuthorIndex % SAL_N_ELEMENTS( aArrayLight ) ] );
+        return aArrayLight[ aAuthorIndex % SAL_N_ELEMENTS( aArrayLight ) ];
     }
 
-    return Color(COL_WHITE);
+    return COL_WHITE;
 }
 
 Color AnnotationManagerImpl::GetColorDark(sal_uInt16 aAuthorIndex)
@@ -1252,10 +1253,10 @@ Color AnnotationManagerImpl::GetColorDark(sal_uInt16 aAuthorIndex)
             COL_AUTHOR4_DARK,       COL_AUTHOR5_DARK,       COL_AUTHOR6_DARK,
             COL_AUTHOR7_DARK,       COL_AUTHOR8_DARK,       COL_AUTHOR9_DARK };
 
-        return Color( aArrayAnkor[  aAuthorIndex % SAL_N_ELEMENTS( aArrayAnkor ) ] );
+        return aArrayAnkor[  aAuthorIndex % SAL_N_ELEMENTS( aArrayAnkor ) ];
     }
 
-    return Color(COL_WHITE);
+    return COL_WHITE;
 }
 
 SdPage* AnnotationManagerImpl::GetNextPage( SdPage const * pPage, bool bForward )

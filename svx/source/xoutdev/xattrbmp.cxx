@@ -23,7 +23,6 @@
 #include <vcl/window.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/bitmapex.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <svl/style.hxx>
 #include <editeng/memberids.h>
 #include <svx/strings.hrc>
@@ -38,13 +37,14 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <vcl/salbtype.hxx>
 #include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 #include <vcl/dibtools.hxx>
 
 #include <libxml/xmlwriter.h>
 
 using namespace ::com::sun::star;
 
-XOBitmap::XOBitmap( const Bitmap& rBmp ) :
+XOBitmap::XOBitmap( const BitmapEx& rBmp ) :
     xGraphicObject  (new GraphicObject(rBmp)),
     bGraphicDirty   ( false )
 {
@@ -54,9 +54,9 @@ XOBitmap::~XOBitmap()
 {
 }
 
-Bitmap XOBitmap::GetBitmap() const
+BitmapEx XOBitmap::GetBitmap() const
 {
-    return GetGraphicObject().GetGraphic().GetBitmap();
+    return GetGraphicObject().GetGraphic().GetBitmapEx();
 }
 
 const GraphicObject& XOBitmap::GetGraphicObject() const
@@ -71,14 +71,14 @@ void XOBitmap::Bitmap2Array()
 {
     ScopedVclPtrInstance< VirtualDevice > pVDev;
     bool            bPixelColor = false;
-    const Bitmap    aBitmap( GetBitmap() );
+    const BitmapEx  aBitmap( GetBitmap() );
     const sal_Int32 nLines = 8; // type dependent
 
     if( !pPixelArray )
         pPixelArray.reset( new sal_uInt16[ nLines * nLines ] );
 
     pVDev->SetOutputSizePixel( aBitmap.GetSizePixel() );
-    pVDev->DrawBitmap( Point(), aBitmap );
+    pVDev->DrawBitmapEx( Point(), aBitmap );
     aPixelColor = aBckgrColor = pVDev->GetPixel( Point() );
 
     // create array and determine foreground and background color
@@ -143,37 +143,26 @@ XFillBitmapItem::XFillBitmapItem(const XFillBitmapItem& rItem)
 {
 }
 
-Bitmap createHistorical8x8FromArray(const sal_uInt16* pArray, Color aColorPix, Color aColorBack)
+BitmapEx createHistorical8x8FromArray(std::array<sal_uInt8,64> const & pArray, Color aColorPix, Color aColorBack)
 {
-    BitmapPalette aPalette(2);
+    vcl::bitmap::RawBitmap aBitmap(Size(8, 8), 24);
 
-    aPalette[0] = BitmapColor(aColorBack);
-    aPalette[1] = BitmapColor(aColorPix);
-
-    Bitmap aBitmap(Size(8, 8), 1, &aPalette);
-    Bitmap::ScopedWriteAccess pContent(aBitmap);
-
-    if(pContent)
+    for(sal_uInt16 a(0); a < 8; a++)
     {
-        for(sal_uInt16 a(0); a < 8; a++)
+        for(sal_uInt16 b(0); b < 8; b++)
         {
-            for(sal_uInt16 b(0); b < 8; b++)
+            if(pArray[(a * 8) + b])
             {
-                if(pArray[(a * 8) + b])
-                {
-                    pContent->SetPixelIndex(a, b, 1);
-                }
-                else
-                {
-                    pContent->SetPixelIndex(a, b, 0);
-                }
+                aBitmap.SetPixel(a, b, aColorBack);
+            }
+            else
+            {
+                aBitmap.SetPixel(a, b, aColorPix);
             }
         }
-
-        pContent.reset();
     }
 
-    return aBitmap;
+    return vcl::bitmap::CreateFromData(std::move(aBitmap));
 }
 
 bool isHistorical8x8(const BitmapEx& rBitmapEx, BitmapColor& o_rBack, BitmapColor& o_rFront)
@@ -262,7 +251,6 @@ bool XFillBitmapItem::QueryValue(css::uno::Any& rVal, sal_uInt8 nMemberId) const
     // needed for complete item (MID 0)
     OUString aInternalName;
 
-    OUString aURL;
     css::uno::Reference< css::awt::XBitmap > xBmp;
 
     if( nMemberId == MID_NAME )
@@ -274,38 +262,26 @@ bool XFillBitmapItem::QueryValue(css::uno::Any& rVal, sal_uInt8 nMemberId) const
         aInternalName = GetName();
     }
 
-    if( nMemberId == MID_GRAFURL ||
-        nMemberId == 0 )
-    {
-        aURL = UNO_NAME_GRAPHOBJ_URLPREFIX;
-        aURL += OStringToOUString(
-            GetGraphicObject().GetUniqueID(),
-            RTL_TEXTENCODING_ASCII_US);
-    }
     if( nMemberId == MID_BITMAP ||
         nMemberId == 0  )
     {
-        xBmp.set(VCLUnoHelper::CreateBitmap(GetGraphicObject().GetGraphic().GetBitmapEx()));
+        xBmp.set(GetGraphicObject().GetGraphic().GetXGraphic(), uno::UNO_QUERY);
     }
 
     if( nMemberId == MID_NAME )
         rVal <<= aApiName;
-    else if( nMemberId == MID_GRAFURL )
-        rVal <<= aURL;
     else if( nMemberId == MID_BITMAP )
         rVal <<= xBmp;
     else
     {
         // member-id 0 => complete item (e.g. for toolbars)
         DBG_ASSERT( nMemberId == 0, "invalid member-id" );
-        uno::Sequence< beans::PropertyValue > aPropSeq( 3 );
+        uno::Sequence< beans::PropertyValue > aPropSeq( 2 );
 
         aPropSeq[0].Name  = "Name";
         aPropSeq[0].Value <<= aInternalName;
-        aPropSeq[1].Name  = "FillBitmapURL";
-        aPropSeq[1].Value <<= aURL;
-        aPropSeq[2].Name  = "Bitmap";
-        aPropSeq[2].Value <<= xBmp;
+        aPropSeq[1].Name  = "Bitmap";
+        aPropSeq[1].Value <<= xBmp;
 
         rVal <<= aPropSeq;
     }
@@ -318,18 +294,14 @@ bool XFillBitmapItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
     nMemberId &= ~CONVERT_TWIPS;
 
     OUString aName;
-    OUString aURL;
     css::uno::Reference< css::awt::XBitmap > xBmp;
     css::uno::Reference< css::graphic::XGraphic > xGraphic;
 
     bool bSetName   = false;
-    bool bSetURL    = false;
     bool bSetBitmap = false;
 
     if( nMemberId == MID_NAME )
         bSetName = (rVal >>= aName);
-    else if( nMemberId == MID_GRAFURL )
-        bSetURL = (rVal >>= aURL);
     else if( nMemberId == MID_BITMAP )
     {
         bSetBitmap = (rVal >>= xBmp);
@@ -346,8 +318,6 @@ bool XFillBitmapItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
             {
                 if ( aPropSeq[n].Name == "Name" )
                     bSetName = (aPropSeq[n].Value >>= aName);
-                else if ( aPropSeq[n].Name == "FillBitmapURL" )
-                    bSetURL = (aPropSeq[n].Value >>= aURL);
                 else if ( aPropSeq[n].Name == "Bitmap" )
                     bSetBitmap = (aPropSeq[n].Value >>= xBmp);
             }
@@ -358,31 +328,19 @@ bool XFillBitmapItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
     {
         SetName( aName );
     }
-    if( bSetURL )
-    {
-        GraphicObject aGraphicObject  = GraphicObject::CreateGraphicObjectFromURL(aURL);
-        if( aGraphicObject.GetType() != GraphicType::NONE )
-            maGraphicObject = aGraphicObject;
-
-        // #121194# Prefer GraphicObject over bitmap object if both are provided
-        if(bSetBitmap && GraphicType::NONE != maGraphicObject.GetType())
-        {
-            bSetBitmap = false;
-        }
-    }
     if( bSetBitmap )
     {
-        if(xBmp.is())
+        if (xBmp.is())
         {
-            maGraphicObject.SetGraphic(VCLUnoHelper::GetBitmap(xBmp));
+            xGraphic.set(xBmp, uno::UNO_QUERY);
         }
-        else if(xGraphic.is())
+        if (xGraphic.is())
         {
             maGraphicObject.SetGraphic(xGraphic);
         }
     }
 
-    return (bSetName || bSetURL || bSetBitmap);
+    return (bSetName || bSetBitmap);
 }
 
 bool XFillBitmapItem::CompareValueFunc( const NameOrIndex* p1, const NameOrIndex* p2 )

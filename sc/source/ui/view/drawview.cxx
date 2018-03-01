@@ -264,14 +264,13 @@ void ScDrawView::UpdateWorkArea()
     SdrPage* pPage = GetModel()->GetPage(static_cast<sal_uInt16>(nTab));
     if (pPage)
     {
-        Point aPos;
         Size aPageSize( pPage->GetSize() );
-        tools::Rectangle aNewArea( aPos, aPageSize );
+        tools::Rectangle aNewArea( Point(), aPageSize );
         if ( aPageSize.Width() < 0 )
         {
             //  RTL: from max.negative (left) to zero (right)
-            aNewArea.Right() = 0;
-            aNewArea.Left() = aPageSize.Width() + 1;
+            aNewArea.SetRight( 0 );
+            aNewArea.SetLeft( aPageSize.Width() + 1 );
         }
         SetWorkArea( aNewArea );
     }
@@ -373,7 +372,7 @@ void ScDrawView::MarkListHasChanged()
     ScClient* pClient = static_cast<ScClient*>( pViewSh->GetIPClient() );
     if ( pClient && pClient->IsObjectInPlaceActive() && !bUnoRefDialog )
     {
-        // do not display the handles fot ViewShell::Activate from the Reset2Open
+        // do not display the handles for ViewShell::Activate from the Reset2Open
         pClient->DeactivateObject();
         // replacing image ole graphics is now done in ScClient::UIActivate
     }
@@ -950,8 +949,8 @@ void ScDrawView::SyncForGrid( SdrObject* pObj )
         MapMode aDrawMode = pGridWin->GetDrawMapMode();
         // find pos anchor position
         Point aOldPos( pDoc->GetColOffset( aOldStt.Col(), aOldStt.Tab()  ), pDoc->GetRowOffset( aOldStt.Row(), aOldStt.Tab() ) );
-        aOldPos.X() = sc::TwipsToHMM( aOldPos.X() );
-        aOldPos.Y() = sc::TwipsToHMM( aOldPos.Y() );
+        aOldPos.setX( sc::TwipsToHMM( aOldPos.X() ) );
+        aOldPos.setY( sc::TwipsToHMM( aOldPos.Y() ) );
         // find position of same point on the screen ( e.g. grid )
         Point aCurPos =  pViewData->GetScrPos(  aOldStt.Col(), aOldStt.Row(), eWhich, true );
         Point aCurPosHmm = pGridWin->PixelToLogic(aCurPos, aDrawMode );

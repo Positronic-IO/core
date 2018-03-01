@@ -386,6 +386,8 @@ public:
     bool mbEmbedImages : 1;
     /// If XHTML markup should be written instead of HTML.
     bool mbXHTML = false;
+    /// XML namespace, in case of XHTML.
+    OString maNamespace;
 
 #define sCSS2_P_CLASS_leaders "leaders"
     bool m_bCfgPrintLayout : 1;       // PrintLayout option for TOC dot leaders
@@ -565,6 +567,9 @@ public:
     FieldUnit GetCSS1Unit() const { return m_eCSS1Unit; }
 
     sal_Int32 indexOfDotLeaders( sal_uInt16 nPoolId, const OUString& rText );
+
+    /// Determines the prefix string needed to respect the requested namespace alias.
+    OString GetNamespace() const;
 };
 
 inline bool SwHTMLWriter::IsCSS1Source( sal_uInt16 n ) const

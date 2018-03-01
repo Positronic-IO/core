@@ -21,7 +21,7 @@
 #include <comphelper/lok.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 
 #include <svtools/ctrltool.hxx>
@@ -222,7 +222,7 @@ void EditEngine::Draw( OutputDevice* pOutDev, const Point& rStartPos, short nOri
     Point aStartPos( rStartPos );
     if ( IsVertical() )
     {
-        aStartPos.X() += GetPaperSize().Width();
+        aStartPos.AdjustX(GetPaperSize().Width() );
         aStartPos = Rotate( aStartPos, nOrientation, rStartPos );
     }
     pImpEditEngine->Paint( pOutDev, aBigRect, aStartPos, false, nOrientation );
@@ -250,13 +250,13 @@ void EditEngine::Draw( OutputDevice* pOutDev, const tools::Rectangle& rOutRect, 
     Point aStartPos;
     if ( !IsVertical() )
     {
-        aStartPos.X() = aOutRect.Left() - rStartDocPos.X();
-        aStartPos.Y() = aOutRect.Top() - rStartDocPos.Y();
+        aStartPos.setX( aOutRect.Left() - rStartDocPos.X() );
+        aStartPos.setY( aOutRect.Top() - rStartDocPos.Y() );
     }
     else
     {
-        aStartPos.X() = aOutRect.Right() + rStartDocPos.Y();
-        aStartPos.Y() = aOutRect.Top() - rStartDocPos.X();
+        aStartPos.setX( aOutRect.Right() + rStartDocPos.Y() );
+        aStartPos.setY( aOutRect.Top() - rStartDocPos.X() );
     }
 
     bool bClipRegion = pOutDev->IsClipRegion();
@@ -283,8 +283,8 @@ void EditEngine::Draw( OutputDevice* pOutDev, const tools::Rectangle& rOutRect, 
             {
                 Size aPixSz( 1, 0 );
                 aPixSz = pOutDev->PixelToLogic( aPixSz );
-                aClipRect.Right() += aPixSz.Width();
-                aClipRect.Bottom() += aPixSz.Width();
+                aClipRect.AdjustRight(aPixSz.Width() );
+                aClipRect.AdjustBottom(aPixSz.Width() );
             }
             pOutDev->IntersectClipRegion( aClipRect );
         }
@@ -523,7 +523,7 @@ void EditEngine::SetPolygon(const basegfx::B2DPolyPolygon& rPolyPolygon, const b
     }
 
     TextRanger* pRanger = new TextRanger( rPolyPolygon, pLinePolyPolygon, 30, 2, 2, bSimple, true );
-    pImpEditEngine->SetTextRanger( pRanger );
+    pImpEditEngine->SetTextRanger( std::unique_ptr<TextRanger>(pRanger) );
     pImpEditEngine->SetPaperSize( pRanger->GetBoundRect().GetSize() );
 }
 
@@ -1024,12 +1024,12 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
                         long nH = GetTextHeight( n );
                         Point P1( aViewStart.X() + n20 + n20*(n%2), aViewStart.Y() + aPos.Y() );
                         Point P2( P1 );
-                        P2.X() += n20;
-                        P2.Y() += nH;
+                        P2.AdjustX(n20 );
+                        P2.AdjustY(nH );
                         pEditView->GetWindow()->SetLineColor();
-                        pEditView->GetWindow()->SetFillColor( Color( (n%2) ? COL_YELLOW : COL_LIGHTGREEN ) );
+                        pEditView->GetWindow()->SetFillColor( (n%2) ? COL_YELLOW : COL_LIGHTGREEN );
                         pEditView->GetWindow()->DrawRect( tools::Rectangle( P1, P2 ) );
-                        aPos.Y() += nH;
+                        aPos.AdjustY(nH );
                     }
                 }
                 bDone = false;
@@ -1042,7 +1042,11 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
                     bDebugPaint = !bDebugPaint;
                     OStringBuffer aInfo("DebugPaint: ");
                     aInfo.append(bDebugPaint ? "On" : "Off");
-                    ScopedVclPtrInstance<InfoBox>(nullptr, OStringToOUString(aInfo.makeStringAndClear(), RTL_TEXTENCODING_ASCII_US))->Execute();
+                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                                  VclMessageType::Info, VclButtonsType::Ok,
+                                                                  OStringToOUString(aInfo.makeStringAndClear(), RTL_TEXTENCODING_ASCII_US)));
+                    xInfoBox->run();
+
                 }
                 bDone = false;
             }
@@ -1346,7 +1350,7 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
                                     aPos = pEditView->pImpEditView->GetWindowPos( aPos );
                                     aPos = pEditView->pImpEditView->GetWindow()->LogicToPixel( aPos );
                                     aPos = pEditView->GetWindow()->OutputToScreenPixel( aPos );
-                                    aPos.Y() -= 3;
+                                    aPos.AdjustY( -3 );
                                     Help::ShowQuickHelp( pEditView->GetWindow(), tools::Rectangle( aPos, Size( 1, 1 ) ), aComplete, QuickHelpFlags::Bottom|QuickHelpFlags::Left );
                                 }
                             }
@@ -1738,6 +1742,13 @@ const SfxPoolItem& EditEngine::GetParaAttrib( sal_Int32 nPara, sal_uInt16 nWhich
     return pImpEditEngine->GetParaAttrib( nPara, nWhich );
 }
 
+void EditEngine::SetCharAttribs(sal_Int32 nPara, const SfxItemSet& rSet)
+{
+    EditSelection aSel(pImpEditEngine->ConvertSelection(nPara, 0, nPara, GetTextLen(nPara)));
+    pImpEditEngine->SetAttribs(aSel, rSet);
+    pImpEditEngine->FormatAndUpdate();
+}
+
 void EditEngine::GetCharAttribs( sal_Int32 nPara, std::vector<EECharAttrib>& rLst ) const
 {
     pImpEditEngine->GetCharAttribs( nPara, rLst );
@@ -1784,13 +1795,13 @@ void EditEngine::StripPortions()
     {
         if( IsTopToBottom() )
         {
-            aBigRect.Right() = 0;
-            aBigRect.Left() = -0x7FFFFFFF;
+            aBigRect.SetRight( 0 );
+            aBigRect.SetLeft( -0x7FFFFFFF );
         }
         else
         {
-            aBigRect.Top() = -0x7FFFFFFF;
-            aBigRect.Bottom() = 0;
+            aBigRect.SetTop( -0x7FFFFFFF );
+            aBigRect.SetBottom( 0 );
         }
     }
     pImpEditEngine->Paint( aTmpDev.get(), aBigRect, Point(), true );
@@ -1887,10 +1898,10 @@ void EditEngine::SetControlWord( EEControlBits nWord )
                     pNode->DestroyWrongList();
                     if ( bWrongs )
                     {
-                        pImpEditEngine->aInvalidRect.Left() = 0;
-                        pImpEditEngine->aInvalidRect.Right() = pImpEditEngine->GetPaperSize().Width();
-                        pImpEditEngine->aInvalidRect.Top() = nY+1;
-                        pImpEditEngine->aInvalidRect.Bottom() = nY+pPortion->GetHeight()-1;
+                        pImpEditEngine->aInvalidRect.SetLeft( 0 );
+                        pImpEditEngine->aInvalidRect.SetRight( pImpEditEngine->GetPaperSize().Width() );
+                        pImpEditEngine->aInvalidRect.SetTop( nY+1 );
+                        pImpEditEngine->aInvalidRect.SetBottom( nY+pPortion->GetHeight()-1 );
                         pImpEditEngine->UpdateViews( pImpEditEngine->pActiveView );
                     }
                     nY += pPortion->GetHeight();
@@ -1928,13 +1939,13 @@ Point EditEngine::GetDocPos( const Point& rPaperPos ) const
     {
         if ( IsTopToBottom() )
         {
-            aDocPos.X() = rPaperPos.Y();
-            aDocPos.Y() = GetPaperSize().Width() - rPaperPos.X();
+            aDocPos.setX( rPaperPos.Y() );
+            aDocPos.setY( GetPaperSize().Width() - rPaperPos.X() );
         }
         else
         {
-            aDocPos.X() = rPaperPos.Y();
-            aDocPos.Y() = rPaperPos.X();
+            aDocPos.setX( rPaperPos.Y() );
+            aDocPos.setY( rPaperPos.X() );
         }
     }
     return aDocPos;
@@ -1956,7 +1967,7 @@ Point EditEngine::GetDocPosTopLeft( sal_Int32 nParagraph )
         {
             // Correct it if large Bullet.
             const EditLine& rFirstLine = pPPortion->GetLines()[0];
-            aPoint.X() = rFirstLine.GetStartPosX();
+            aPoint.setX( rFirstLine.GetStartPosX() );
         }
         else
         {
@@ -1967,10 +1978,10 @@ Point EditEngine::GetDocPosTopLeft( sal_Int32 nParagraph )
             short nX = static_cast<short>(rLRItem.GetTextLeft()
                             + rLRItem.GetTextFirstLineOfst()
                             + nSpaceBefore);
-            aPoint.X() = pImpEditEngine->GetXValue( nX
-                             );
+            aPoint.setX( pImpEditEngine->GetXValue( nX
+                             ) );
         }
-        aPoint.Y() = pImpEditEngine->GetParaPortions().GetYOffset( pPPortion );
+        aPoint.setY( pImpEditEngine->GetParaPortions().GetYOffset( pPPortion ) );
     }
     return aPoint;
 }
@@ -2400,7 +2411,7 @@ tools::Rectangle EditEngine::GetCharacterBounds( const EPosition& rPos ) const
         aBounds = pImpEditEngine->PaMtoEditCursor( EditPaM( pNode, rPos.nIndex ), GetCursorFlags::TextOnly );
         tools::Rectangle aR2 = pImpEditEngine->PaMtoEditCursor( EditPaM( pNode, rPos.nIndex+1 ), GetCursorFlags::TextOnly|GetCursorFlags::EndOfLine );
         if ( aR2.Right() > aBounds.Right() )
-            aBounds.Right() = aR2.Right();
+            aBounds.SetRight( aR2.Right() );
     }
     return aBounds;
 }
@@ -2796,6 +2807,16 @@ void EditEngine::ClearOverflowingParaNum() {
 bool EditEngine::IsPageOverflow() {
     pImpEditEngine->CheckPageOverflow();
     return pImpEditEngine->IsPageOverflow();
+}
+
+void EditEngine::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
+{
+    pImpEditEngine->SetHoriAlignIgnoreTrailingWhitespace(bEnabled);
+}
+
+bool EditEngine::IsHoriAlignIgnoreTrailingWhitespace() const
+{
+    return pImpEditEngine->IsHoriAlignIgnoreTrailingWhitespace();
 }
 
 EFieldInfo::EFieldInfo()

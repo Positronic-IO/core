@@ -120,8 +120,8 @@ Point Rotate( const Point& rPoint, short nOrientation, const Point& rOrigin )
     aTranslatedPos -= rOrigin;
 
     // Rotation...
-    aRotatedPos.X() = static_cast<long>( nCos*aTranslatedPos.X() + nSin*aTranslatedPos.Y() );
-    aRotatedPos.Y() = static_cast<long>(- ( nSin*aTranslatedPos.X() - nCos*aTranslatedPos.Y() ));
+    aRotatedPos.setX( static_cast<long>( nCos*aTranslatedPos.X() + nSin*aTranslatedPos.Y() ) );
+    aRotatedPos.setY( static_cast<long>(- ( nSin*aTranslatedPos.X() - nCos*aTranslatedPos.Y() )) );
     aTranslatedPos = aRotatedPos;
 
     // Translation...
@@ -187,8 +187,8 @@ static void lcl_DrawRedLines( OutputDevice* pOutDev,
                 // the positions a little bit in y direction...
                 long nOnePixel = pOutDev->PixelToLogic( Size( 0, 1 ) ).Height();
                 long nCorrect = 2*nOnePixel;
-                aPnt1.Y() -= nCorrect;
-                aPnt1.X() -= nCorrect;
+                aPnt1.AdjustY( -nCorrect );
+                aPnt1.AdjustX( -nCorrect );
             }
             if ( nStart > nIndex )
             {
@@ -197,10 +197,10 @@ static void lcl_DrawRedLines( OutputDevice* pOutDev,
                     // since for RTL portions rPnt is on the visual right end of the portion
                     // (i.e. at the start of the first RTL char) we need to subtract the offset
                     // for RTL portions...
-                    aPnt1.X() += (bIsRightToLeft ? -1 : 1) * pDXArray[ nStart - nIndex - 1 ];
+                    aPnt1.AdjustX((bIsRightToLeft ? -1 : 1) * pDXArray[ nStart - nIndex - 1 ] );
                 }
                 else
-                    aPnt1.Y() += pDXArray[ nStart - nIndex - 1 ];
+                    aPnt1.AdjustY(pDXArray[ nStart - nIndex - 1 ] );
             }
             Point aPnt2( rPnt );
             DBG_ASSERT( nEnd > nIndex, "RedLine: aPnt2?" );
@@ -209,10 +209,10 @@ static void lcl_DrawRedLines( OutputDevice* pOutDev,
                 // since for RTL portions rPnt is on the visual right end of the portion
                 // (i.e. at the start of the first RTL char) we need to subtract the offset
                 // for RTL portions...
-                aPnt2.X() += (bIsRightToLeft ? -1 : 1) * pDXArray[ nEnd - nIndex - 1 ];
+                aPnt2.AdjustX((bIsRightToLeft ? -1 : 1) * pDXArray[ nEnd - nIndex - 1 ] );
             }
             else
-                aPnt2.Y() += pDXArray[ nEnd - nIndex - 1 ];
+                aPnt2.AdjustY(pDXArray[ nEnd - nIndex - 1 ] );
             if ( nOrientation )
             {
                 aPnt1 = Rotate( aPnt1, nOrientation, rOrigin );
@@ -237,8 +237,8 @@ static Point lcl_ImplCalcRotatedPos( Point rPos, Point rOrigin, double nSin, dou
     Point aTranslatedPos( rPos);
     aTranslatedPos -= rOrigin;
 
-    aRotatedPos.X() = static_cast<long>( nCos*aTranslatedPos.X() + nSin*aTranslatedPos.Y() );
-    aRotatedPos.Y() = static_cast<long>(- ( nSin*aTranslatedPos.X() - nCos*aTranslatedPos.Y() ));
+    aRotatedPos.setX( static_cast<long>( nCos*aTranslatedPos.X() + nSin*aTranslatedPos.Y() ) );
+    aRotatedPos.setY( static_cast<long>(- ( nSin*aTranslatedPos.X() - nCos*aTranslatedPos.Y() )) );
     aTranslatedPos = aRotatedPos;
     // Translation...
     aTranslatedPos += rOrigin;
@@ -412,12 +412,12 @@ void ImpEditEngine::FormatDoc()
             }
             else
             {
-                aInvalidRect.Bottom() = nY + pParaPortion->GetHeight();
+                aInvalidRect.SetBottom( nY + pParaPortion->GetHeight() );
             }
         }
         else if ( bGrow )
         {
-            aInvalidRect.Bottom() = nY + pParaPortion->GetHeight();
+            aInvalidRect.SetBottom( nY + pParaPortion->GetHeight() );
         }
         nY += pParaPortion->GetHeight();
     }
@@ -432,13 +432,13 @@ void ImpEditEngine::FormatDoc()
             aStatus.GetStatusWord() |= !IsVertical() ? EditStatusFlags::TextHeightChanged : EditStatusFlags::TEXTWIDTHCHANGED;
         if ( nNewHeight < nCurTextHeight )
         {
-            aInvalidRect.Bottom() = static_cast<long>(std::max( nNewHeight, nCurTextHeight ));
+            aInvalidRect.SetBottom( static_cast<long>(std::max( nNewHeight, nCurTextHeight )) );
             if ( aInvalidRect.IsEmpty() )
             {
-                aInvalidRect.Top() = 0;
+                aInvalidRect.SetTop( 0 );
                 // Left and Right are not evaluated, are however set due to IsEmpty.
-                aInvalidRect.Left() = 0;
-                aInvalidRect.Right() = !IsVertical() ? aPaperSize.Width() : aPaperSize.Height();
+                aInvalidRect.SetLeft( 0 );
+                aInvalidRect.SetRight( !IsVertical() ? aPaperSize.Width() : aPaperSize.Height() );
             }
         }
 
@@ -456,9 +456,9 @@ void ImpEditEngine::FormatDoc()
                 {
                     Size aSz( pImpView->GetOutputArea().GetWidth(), nCurTextHeight );
                     if ( aSz.Height() > aMaxAutoPaperSize.Height() )
-                        aSz.Height() = aMaxAutoPaperSize.Height();
+                        aSz.setHeight( aMaxAutoPaperSize.Height() );
                     else if ( aSz.Height() < aMinAutoPaperSize.Height() )
-                        aSz.Height() = aMinAutoPaperSize.Height();
+                        aSz.setHeight( aMinAutoPaperSize.Height() );
                     pImpView->ResetOutputArea( tools::Rectangle(
                         pImpView->GetOutputArea().TopLeft(), aSz ) );
                 }
@@ -508,9 +508,9 @@ void ImpEditEngine::CheckAutoPageSize()
 {
     Size aPrevPaperSize( GetPaperSize() );
     if ( GetStatus().AutoPageWidth() )
-        aPaperSize.Width() = !IsVertical() ? CalcTextWidth( true ) : GetTextHeight();
+        aPaperSize.setWidth( !IsVertical() ? CalcTextWidth( true ) : GetTextHeight() );
     if ( GetStatus().AutoPageHeight() )
-        aPaperSize.Height() = !IsVertical() ? GetTextHeight() : CalcTextWidth( true );
+        aPaperSize.setHeight( !IsVertical() ? GetTextHeight() : CalcTextWidth( true ) );
 
     SetValidPaperSize( aPaperSize );    // consider Min, Max
 
@@ -537,15 +537,15 @@ void ImpEditEngine::CheckAutoPageSize()
 
         Size aInvSize = aPaperSize;
         if ( aPaperSize.Width() < aPrevPaperSize.Width() )
-            aInvSize.Width() = aPrevPaperSize.Width();
+            aInvSize.setWidth( aPrevPaperSize.Width() );
         if ( aPaperSize.Height() < aPrevPaperSize.Height() )
-            aInvSize.Height() = aPrevPaperSize.Height();
+            aInvSize.setHeight( aPrevPaperSize.Height() );
 
         Size aSz( aInvSize );
         if ( IsVertical() )
         {
-            aSz.Width() = aInvSize.Height();
-            aSz.Height() = aInvSize.Width();
+            aSz.setWidth( aInvSize.Height() );
+            aSz.setHeight( aInvSize.Width() );
         }
         aInvalidRect = tools::Rectangle( Point(), aSz );
 
@@ -934,7 +934,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                     nTmpWidth -= rPrev.GetSize().Width();
                     nTmpPos = nTmpPos - rPrev.GetLen();
                     rPrev.SetLen(rPrev.GetLen() + nTmpLen);
-                    rPrev.GetSize().Width() = -1;
+                    rPrev.GetSize().setWidth( -1 );
                 }
 
                 DBG_ASSERT( nTmpPortion < pParaPortion->GetTextPortions().Count(), "No more Portions left!" );
@@ -997,11 +997,11 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
 
                         pPortion->SetKind(PortionKind::TAB);
                         pPortion->SetExtraValue( aCurrentTab.aTabStop.GetFill() );
-                        pPortion->GetSize().Width() = aCurrentTab.nTabPos - (nTmpWidth+nStartX);
+                        pPortion->GetSize().setWidth( aCurrentTab.nTabPos - (nTmpWidth+nStartX) );
 
                         // Height needed...
                         SeekCursor( pNode, nTmpPos+1, aTmpFont );
-                        pPortion->GetSize().Height() = aTmpFont.QuickGetTextSize( GetRefDevice(), OUString(), 0, 0 ).Height();
+                        pPortion->GetSize().setHeight( aTmpFont.QuickGetTextSize( GetRefDevice(), OUString(), 0, 0 ).Height() );
 
                         DBG_ASSERT( pPortion->GetSize().Width() >= 0, "Tab incorrectly calculated!" );
 
@@ -1013,7 +1013,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                         {
                             // What now?
                             // make the tab fitting
-                            pPortion->GetSize().Width() = nXWidth-nOldTmpWidth;
+                            pPortion->GetSize().setWidth( nXWidth-nOldTmpWidth );
                             nTmpWidth = nXWidth-1;
                             bEOL = true;
                             bBrokenLine = true;
@@ -1027,7 +1027,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                     case EE_FEATURE_LINEBR:
                     {
                         DBG_ASSERT( pPortion, "?!" );
-                        pPortion->GetSize().Width() = 0;
+                        pPortion->GetSize().setWidth( 0 );
                         bEOL = true;
                         bLineBreak = true;
                         pPortion->SetKind( PortionKind::LINEBREAK );
@@ -1159,9 +1159,9 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                     {
                          Size aSize( aTmpFont.QuickGetTextSize( GetRefDevice(),
                                 pParaPortion->GetNode()->GetString(), nTmpPos, nPortionLen, pBuf.get() ));
-                         pPortion->GetSize().Width() += aSize.Width();
+                         pPortion->GetSize().AdjustWidth(aSize.Width() );
                          if (pPortion->GetSize().Height() < aSize.Height())
-                             pPortion->GetSize().Height() = aSize.Height();
+                             pPortion->GetSize().setHeight( aSize.Height() );
                     }
                     else
                     {
@@ -1171,9 +1171,9 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
 
                     // #i9050# Do Kerning also behind portions...
                     if ( ( aTmpFont.GetFixKerning() > 0 ) && ( ( nTmpPos + nPortionLen ) < pNode->Len() ) )
-                        pPortion->GetSize().Width() += aTmpFont.GetFixKerning();
+                        pPortion->GetSize().AdjustWidth(aTmpFont.GetFixKerning() );
                     if ( IsFixedCellHeight() )
-                        pPortion->GetSize().Height() = ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() );
+                        pPortion->GetSize().setHeight( ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() ) );
                 }
                 if ( bCalcCharPositions )
                 {
@@ -1209,7 +1209,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                     {
                         long nExtraSpace = pPortion->GetSize().Height()/5;
                         nExtraSpace = GetXValue( nExtraSpace );
-                        pPortion->GetSize().Width() += nExtraSpace;
+                        pPortion->GetSize().AdjustWidth(nExtraSpace );
                         nTmpWidth += nExtraSpace;
                     }
                 }
@@ -1254,7 +1254,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                     aCurrentTab.bValid = false;
                 }
                 TextPortion& rTabPortion = pParaPortion->GetTextPortions()[aCurrentTab.nTabPortion];
-                rTabPortion.GetSize().Width() = aCurrentTab.nTabPos - aCurrentTab.nStartPosX - nW - nStartX;
+                rTabPortion.GetSize().setWidth( aCurrentTab.nTabPos - aCurrentTab.nStartPosX - nW - nStartX );
                 nTmpWidth = aCurrentTab.nStartPosX + rTabPortion.GetSize().Width() + nWidthAfterTab;
             }
 
@@ -1382,9 +1382,9 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
             ImplInitDigitMode(pRefDev, aTmpFont.GetLanguage());
 
             if ( IsFixedCellHeight() )
-                aTextSize.Height() = ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() );
+                aTextSize.setHeight( ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() ) );
             else
-                aTextSize.Height() = aTmpFont.GetPhysTxtSize( pRefDev ).Height();
+                aTextSize.setHeight( aTmpFont.GetPhysTxtSize( pRefDev ).Height() );
             pLine->SetHeight( static_cast<sal_uInt16>(aTextSize.Height()) );
         }
 
@@ -1505,7 +1505,7 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
             sal_Int32 nPosInArray = pLine->GetEnd()-1-pLine->GetStart();
             long nNewValue = ( nPosInArray ? pLine->GetCharPosArray()[ nPosInArray-1 ] : 0 ) + n;
             pLine->GetCharPosArray()[ nPosInArray ] = nNewValue;
-            rTP.GetSize().Width() += n;
+            rTP.GetSize().AdjustWidth(n );
         }
 
         pLine->SetTextWidth( aTextSize.Width() );
@@ -1513,7 +1513,11 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
         {
             case SvxAdjust::Center:
             {
-                long n = ( nMaxLineWidth - aTextSize.Width() ) / 2;
+                long n;
+                if(IsHoriAlignIgnoreTrailingWhitespace())
+                    n = ( nMaxLineWidth - CalcLineWidth( pParaPortion, pLine, false, true ) ) / 2;
+                else
+                    n = ( nMaxLineWidth - aTextSize.Width() ) / 2;
                 n += nStartX;  // Indentation is kept.
                 pLine->SetStartPosX( n );
             }
@@ -1522,7 +1526,11 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
             {
                 // For automatically wrapped lines, which has a blank at the end
                 // the blank must not be displayed!
-                long n = nMaxLineWidth - aTextSize.Width();
+                long n;
+                if(IsHoriAlignIgnoreTrailingWhitespace())
+                    n = nMaxLineWidth - CalcLineWidth( pParaPortion, pLine, false, true );
+                else
+                    n = nMaxLineWidth - aTextSize.Width();
                 n += nStartX;  // Indentation is kept.
                 pLine->SetStartPosX( n );
             }
@@ -1726,7 +1734,7 @@ void ImpEditEngine::CreateAndInsertEmptyLine( ParaPortion* pParaPortion )
     TextPortion* pDummyPortion = new TextPortion( 0 );
     pDummyPortion->GetSize() = aTmpFont.GetPhysTxtSize( pRefDev );
     if ( IsFixedCellHeight() )
-        pDummyPortion->GetSize().Height() = ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() );
+        pDummyPortion->GetSize().setHeight( ImplCalculateFontIndependentLineSpacing( aTmpFont.GetFontHeight() ) );
     pParaPortion->GetTextPortions().Append(pDummyPortion);
     FormatterFontMetric aFormatterMetrics;
     RecalcFormatterFontMetrics( aFormatterMetrics, aTmpFont );
@@ -2062,7 +2070,7 @@ void ImpEditEngine::ImpBreakLine( ParaPortion* pParaPortion, EditLine* pLine, Te
         DBG_ASSERT( rTP.GetKind() == PortionKind::TEXT, "BlankRubber: No TextPortion!" );
         DBG_ASSERT( nBreakPos > pLine->GetStart(), "SplitTextPortion at the beginning of the line?" );
         sal_Int32 nPosInArray = nBreakPos - 1 - pLine->GetStart();
-        rTP.GetSize().Width() = ( nPosInArray && ( rTP.GetLen() > 1 ) ) ? pLine->GetCharPosArray()[ nPosInArray-1 ] : 0;
+        rTP.GetSize().setWidth( ( nPosInArray && ( rTP.GetLen() > 1 ) ) ? pLine->GetCharPosArray()[ nPosInArray-1 ] : 0 );
         pLine->GetCharPosArray()[ nPosInArray ] = rTP.GetSize().Width();
     }
     else if ( bHyphenated )
@@ -2079,16 +2087,16 @@ void ImpEditEngine::ImpBreakLine( ParaPortion* pParaPortion, EditLine* pLine, Te
             pHyphPortion->SetLen( nAltDelChar );
             if (cAlternateReplChar && !bAltFullLeft) pHyphPortion->SetExtraValue( cAlternateReplChar );
             // Correct width of the portion above:
-            rPrev.GetSize().Width() =
-                pLine->GetCharPosArray()[ nBreakPos-1 - pLine->GetStart() - nAltDelChar ];
+            rPrev.GetSize().setWidth(
+                pLine->GetCharPosArray()[ nBreakPos-1 - pLine->GetStart() - nAltDelChar ] );
         }
 
         // Determine the width of the Hyph-Portion:
         SvxFont aFont;
         SeekCursor( pParaPortion->GetNode(), nBreakPos, aFont );
         aFont.SetPhysFont( GetRefDevice() );
-        pHyphPortion->GetSize().Height() = GetRefDevice()->GetTextHeight();
-        pHyphPortion->GetSize().Width() = GetRefDevice()->GetTextWidth( aHyphText );
+        pHyphPortion->GetSize().setHeight( GetRefDevice()->GetTextHeight() );
+        pHyphPortion->GetSize().setWidth( GetRefDevice()->GetTextWidth( aHyphText ) );
 
         pParaPortion->GetTextPortions().Insert(++nEndPortion, pHyphPortion);
     }
@@ -2169,7 +2177,7 @@ void ImpEditEngine::ImpAdjustBlocks( ParaPortion* pParaPortion, EditLine* pLine,
             // For the last character the portion must stop behind the blank
             // => Simplify correction:
             DBG_ASSERT( ( nPortionStart + rLastPortion.GetLen() ) == ( nLastChar+1 ), "Blank actually not at the end of the portion!?");
-            rLastPortion.GetSize().Width() -= nBlankWidth;
+            rLastPortion.GetSize().AdjustWidth( -nBlankWidth );
             nRemainingSpace += nBlankWidth;
         }
         pLine->GetCharPosArray()[nLastChar-nFirstChar] -= nBlankWidth;
@@ -2194,9 +2202,9 @@ void ImpEditEngine::ImpAdjustBlocks( ParaPortion* pParaPortion, EditLine* pLine,
             TextPortion& rLastPortion = pParaPortion->GetTextPortions()[ nPortion ];
 
             // The width of the portion:
-            rLastPortion.GetSize().Width() += nMore4Everyone;
+            rLastPortion.GetSize().AdjustWidth(nMore4Everyone );
             if ( nSomeExtraSpace )
-                rLastPortion.GetSize().Width()++;
+                rLastPortion.GetSize().AdjustWidth( 1 );
 
             // Correct positions in array
             // Even for kashidas just change positions, VCL will then draw the kashida automatically
@@ -2377,7 +2385,7 @@ sal_Int32 ImpEditEngine::SplitTextPortion( ParaPortion* pPortion, sal_Int32 nPos
     {
         // No new GetTextSize, instead use values from the Array:
         DBG_ASSERT( nPos > pCurLine->GetStart(), "SplitTextPortion at the beginning of the line?" );
-        pTextPortion->GetSize().Width() = pCurLine->GetCharPosArray()[ nPos-pCurLine->GetStart()-1 ];
+        pTextPortion->GetSize().setWidth( pCurLine->GetCharPosArray()[ nPos-pCurLine->GetStart()-1 ] );
 
         if ( pTextPortion->GetExtraInfos() && pTextPortion->GetExtraInfos()->bCompressed )
         {
@@ -2394,7 +2402,7 @@ sal_Int32 ImpEditEngine::SplitTextPortion( ParaPortion* pPortion, sal_Int32 nPos
         }
     }
     else
-        pTextPortion->GetSize().Width() = -1;
+        pTextPortion->GetSize().setWidth( -1 );
 
     return nSplitPortion;
 }
@@ -2533,7 +2541,7 @@ void ImpEditEngine::RecalcTextPortion( ParaPortion* pParaPortion, sal_Int32 nSta
                 FindPortion( nStartPos, nPortionStart );
             TextPortion& rTP = pParaPortion->GetTextPortions()[ nTP ];
             rTP.SetLen( rTP.GetLen() + nNewChars );
-            rTP.GetSize().Width() = -1;
+            rTP.GetSize().setWidth( -1 );
         }
     }
     else
@@ -2599,7 +2607,7 @@ void ImpEditEngine::RecalcTextPortion( ParaPortion* pParaPortion, sal_Int32 nSta
                     TextPortion& rPrev = pParaPortion->GetTextPortions()[nLastPortion - 1];
                     DBG_ASSERT( rPrev.GetKind() == PortionKind::TEXT, "Portion?!" );
                     rPrev.SetLen( rPrev.GetLen() + pTP->GetLen() );
-                    rPrev.GetSize().Width() = -1;
+                    rPrev.GetSize().setWidth( -1 );
                 }
                 pParaPortion->GetTextPortions().Remove( nLastPortion );
             }
@@ -2610,25 +2618,21 @@ void ImpEditEngine::RecalcTextPortion( ParaPortion* pParaPortion, sal_Int32 nSta
 #endif
 }
 
-void ImpEditEngine::SetTextRanger( TextRanger* pRanger )
+void ImpEditEngine::SetTextRanger( std::unique_ptr<TextRanger> pRanger )
 {
-    if ( pTextRanger != pRanger )
+    pTextRanger = std::move(pRanger);
+
+    for ( sal_Int32 nPara = 0; nPara < GetParaPortions().Count(); nPara++ )
     {
-        delete pTextRanger;
-        pTextRanger = pRanger;
-
-        for ( sal_Int32 nPara = 0; nPara < GetParaPortions().Count(); nPara++ )
-        {
-            ParaPortion* pParaPortion = GetParaPortions()[nPara];
-            pParaPortion->MarkSelectionInvalid( 0 );
-            pParaPortion->GetLines().Reset();
-        }
-
-        FormatFullDoc();
-        UpdateViews( GetActiveView() );
-        if ( GetUpdateMode() && GetActiveView() )
-            pActiveView->ShowCursor(false, false);
+        ParaPortion* pParaPortion = GetParaPortions()[nPara];
+        pParaPortion->MarkSelectionInvalid( 0 );
+        pParaPortion->GetLines().Reset();
     }
+
+    FormatFullDoc();
+    UpdateViews( GetActiveView() );
+    if ( GetUpdateMode() && GetActiveView() )
+        pActiveView->ShowCursor(false, false);
 }
 
 void ImpEditEngine::SetVertical( bool bVertical, bool bTopToBottom)
@@ -2684,7 +2688,7 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
         rFont.SetPitch( rFontItem.GetPitch() );
         rFont.SetCharSet( rFontItem.GetCharSet() );
         Size aSz( rFont.GetFontSize() );
-        aSz.Height() = static_cast<const SvxFontHeightItem&>(pNode->GetContentAttribs().GetItem( GetScriptItemId( EE_CHAR_FONTHEIGHT, nScriptType ) ) ).GetHeight();
+        aSz.setHeight( static_cast<const SvxFontHeightItem&>(pNode->GetContentAttribs().GetItem( GetScriptItemId( EE_CHAR_FONTHEIGHT, nScriptType ) ) ).GetHeight() );
         rFont.SetFontSize( aSz );
         rFont.SetWeight( static_cast<const SvxWeightItem&>(pNode->GetContentAttribs().GetItem( GetScriptItemId( EE_CHAR_WEIGHT, nScriptType ))).GetWeight() );
         rFont.SetItalic( static_cast<const SvxPostureItem&>(pNode->GetContentAttribs().GetItem( GetScriptItemId( EE_CHAR_ITALIC, nScriptType ))).GetPosture() );
@@ -2785,20 +2789,20 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
         {
             if ( nStretchY != 100 )
             {
-                aRealSz.Height() *= nStretchY;
-                aRealSz.Height() /= 100;
+                aRealSz.setHeight( aRealSz.Height() * ( nStretchY) );
+                aRealSz.setHeight( aRealSz.Height() / 100 );
             }
             if ( nStretchX != 100 )
             {
                 if ( nStretchX == nStretchY &&
                      nRelWidth == 100 )
                 {
-                    aRealSz.Width() = 0;
+                    aRealSz.setWidth( 0 );
                 }
                 else
                 {
-                    aRealSz.Width() *= nStretchX;
-                    aRealSz.Width() /= 100;
+                    aRealSz.setWidth( aRealSz.Width() * ( nStretchX) );
+                    aRealSz.setWidth( aRealSz.Width() / 100 );
 
                     // Also the Kerning: (long due to handle Interim results)
                     long nKerning = rFont.GetFixKerning();
@@ -2831,8 +2835,8 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
         }
         if ( nRelWidth != 100 )
         {
-            aRealSz.Width() *= nRelWidth;
-            aRealSz.Width() /= 100;
+            aRealSz.setWidth( aRealSz.Width() * nRelWidth );
+            aRealSz.setWidth( aRealSz.Width() / 100 );
         }
         rFont.SetFontSize( aRealSz );
         // Font is not restored ...
@@ -2871,9 +2875,9 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
         else if ( nAttr & ExtTextInputAttr::DashDotUnderline )
             rFont.SetUnderline( LINESTYLE_DOTTED );
         else if ( nAttr & ExtTextInputAttr::RedText )
-            rFont.SetColor( Color( COL_RED ) );
+            rFont.SetColor( COL_RED );
         else if ( nAttr & ExtTextInputAttr::HalfToneText )
-            rFont.SetColor( Color( COL_LIGHTGRAY ) );
+            rFont.SetColor( COL_LIGHTGRAY );
         if ( nAttr & ExtTextInputAttr::Highlight )
         {
             const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
@@ -2885,7 +2889,7 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
         {
             rFont.SetUnderline( LINESTYLE_WAVE );
             if( pOut )
-                pOut->SetTextLineColor( Color( COL_LIGHTGRAY ) );
+                pOut->SetTextLineColor( COL_LIGHTGRAY );
         }
     }
 }
@@ -3027,13 +3031,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
             bool bEndOfParagraphWritten(false);
 
             if ( !IsVertical() )
-                aStartPos.Y() += pPortion->GetFirstLineOffset();
+                aStartPos.AdjustY(pPortion->GetFirstLineOffset() );
             else
             {
                 if( IsTopToBottom() )
-                    aStartPos.X() -= pPortion->GetFirstLineOffset();
+                    aStartPos.AdjustX( -(pPortion->GetFirstLineOffset()) );
                 else
-                    aStartPos.X() += pPortion->GetFirstLineOffset();
+                    aStartPos.AdjustX(pPortion->GetFirstLineOffset() );
             }
 
             Point aParaStart( aStartPos );
@@ -3051,29 +3055,29 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                 aTmpPos = aStartPos;
                 if ( !IsVertical() )
                 {
-                    aTmpPos.X() += pLine->GetStartPosX();
-                    aTmpPos.Y() += pLine->GetMaxAscent();
-                    aStartPos.Y() += pLine->GetHeight();
+                    aTmpPos.AdjustX(pLine->GetStartPosX() );
+                    aTmpPos.AdjustY(pLine->GetMaxAscent() );
+                    aStartPos.AdjustY(pLine->GetHeight() );
                     if (nLine != nLastLine)
-                        aStartPos.Y() += nVertLineSpacing;
+                        aStartPos.AdjustY(nVertLineSpacing );
                 }
                 else
                 {
                     if ( IsTopToBottom() )
                     {
-                        aTmpPos.Y() += pLine->GetStartPosX();
-                        aTmpPos.X() -= pLine->GetMaxAscent();
-                        aStartPos.X() -= pLine->GetHeight();
+                        aTmpPos.AdjustY(pLine->GetStartPosX() );
+                        aTmpPos.AdjustX( -(pLine->GetMaxAscent()) );
+                        aStartPos.AdjustX( -(pLine->GetHeight()) );
                         if (nLine != nLastLine)
-                            aStartPos.X() -= nVertLineSpacing;
+                            aStartPos.AdjustX( -nVertLineSpacing );
                     }
                     else
                     {
-                        aTmpPos.Y() -= pLine->GetStartPosX();
-                        aTmpPos.X() += pLine->GetMaxAscent();
-                        aStartPos.X() += pLine->GetHeight();
+                        aTmpPos.AdjustY( -(pLine->GetStartPosX()) );
+                        aTmpPos.AdjustX(pLine->GetMaxAscent() );
+                        aStartPos.AdjustX(pLine->GetHeight() );
                         if (nLine != nLastLine)
-                            aStartPos.X() += nVertLineSpacing;
+                            aStartPos.AdjustX(nVertLineSpacing );
                     }
                 }
 
@@ -3110,7 +3114,7 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                         long nPortionXOffset = GetPortionXOffset( pPortion, pLine, nPortion );
                         if ( !IsVertical() )
                         {
-                            aTmpPos.X() = aStartPos.X() + nPortionXOffset;
+                            aTmpPos.setX( aStartPos.X() + nPortionXOffset );
                             if ( aTmpPos.X() > aClipRect.Right() )
                                 break;  // No further output in line necessary
                         }
@@ -3118,13 +3122,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                         {
                             if( IsTopToBottom() )
                             {
-                                aTmpPos.Y() = aStartPos.Y() + nPortionXOffset;
+                                aTmpPos.setY( aStartPos.Y() + nPortionXOffset );
                                 if ( aTmpPos.Y() > aClipRect.Bottom() )
                                     break;  // No further output in line necessary
                             }
                             else
                             {
-                                aTmpPos.Y() = aStartPos.Y() - nPortionXOffset;
+                                aTmpPos.setY( aStartPos.Y() - nPortionXOffset );
                                 if (aTmpPos.Y() < aClipRect.Top())
                                     break;  // No further output in line necessary
                             }
@@ -3213,40 +3217,40 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                                 Point aTopLeftRectPos( aTmpPos );
                                                 if ( !IsVertical() )
                                                 {
-                                                    aTopLeftRectPos.X() += nAdvanceX;
-                                                    aTopLeftRectPos.Y() += nAdvanceY;
+                                                    aTopLeftRectPos.AdjustX(nAdvanceX );
+                                                    aTopLeftRectPos.AdjustY(nAdvanceY );
                                                 }
                                                 else
                                                 {
                                                     if( IsTopToBottom() )
                                                     {
-                                                        aTopLeftRectPos.Y() -= nAdvanceX;
-                                                        aTopLeftRectPos.X() += nAdvanceY;
+                                                        aTopLeftRectPos.AdjustY( -nAdvanceX );
+                                                        aTopLeftRectPos.AdjustX(nAdvanceY );
                                                     }
                                                     else
                                                     {
-                                                        aTopLeftRectPos.Y() += nAdvanceX;
-                                                        aTopLeftRectPos.X() -= nAdvanceY;
+                                                        aTopLeftRectPos.AdjustY(nAdvanceX );
+                                                        aTopLeftRectPos.AdjustX( -nAdvanceY );
                                                     }
                                                 }
 
                                                 Point aBottomRightRectPos( aTopLeftRectPos );
                                                 if ( !IsVertical() )
                                                 {
-                                                    aBottomRightRectPos.X() += 2 * nHalfBlankWidth;
-                                                    aBottomRightRectPos.Y() += pLine->GetHeight();
+                                                    aBottomRightRectPos.AdjustX(2 * nHalfBlankWidth );
+                                                    aBottomRightRectPos.AdjustY(pLine->GetHeight() );
                                                 }
                                                 else
                                                 {
                                                     if (IsTopToBottom())
                                                     {
-                                                        aBottomRightRectPos.X() += pLine->GetHeight();
-                                                        aBottomRightRectPos.Y() -= 2 * nHalfBlankWidth;
+                                                        aBottomRightRectPos.AdjustX(pLine->GetHeight() );
+                                                        aBottomRightRectPos.AdjustY( -(2 * nHalfBlankWidth) );
                                                     }
                                                     else
                                                     {
-                                                        aBottomRightRectPos.X() -= pLine->GetHeight();
-                                                        aBottomRightRectPos.Y() += 2 * nHalfBlankWidth;
+                                                        aBottomRightRectPos.AdjustX( -(pLine->GetHeight()) );
+                                                        aBottomRightRectPos.AdjustY(2 * nHalfBlankWidth );
                                                     }
                                                 }
 
@@ -3276,14 +3280,14 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                                     const long nAddX = nHalfBlankWidth - aSlashSize.Width() / 2;
                                                     if ( !IsVertical() )
                                                     {
-                                                        aSlashPos.X() = aTopLeftRectPos.X() + nAddX;
+                                                        aSlashPos.setX( aTopLeftRectPos.X() + nAddX );
                                                     }
                                                     else
                                                     {
                                                         if (IsTopToBottom())
-                                                            aSlashPos.Y() = aTopLeftRectPos.Y() + nAddX;
+                                                            aSlashPos.setY( aTopLeftRectPos.Y() + nAddX );
                                                         else
-                                                            aSlashPos.Y() = aTopLeftRectPos.Y() - nAddX;
+                                                            aSlashPos.setY( aTopLeftRectPos.Y() - nAddX );
                                                     }
 
                                                     aTmpFont.QuickDrawText( pOutDev, aSlashPos, aSlash, 0, 1 );
@@ -3330,20 +3334,20 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
 
                                             if ( !IsVertical() )
                                             {
-                                                aStartPos.Y() += nMaxAscent;
-                                                aTmpPos.Y() += nMaxAscent;
+                                                aStartPos.AdjustY(nMaxAscent );
+                                                aTmpPos.AdjustY(nMaxAscent );
                                             }
                                             else
                                             {
                                                 if (IsTopToBottom())
                                                 {
-                                                    aTmpPos.X() -= nMaxAscent;
-                                                    aStartPos.X() -= nMaxAscent;
+                                                    aTmpPos.AdjustX( -nMaxAscent );
+                                                    aStartPos.AdjustX( -nMaxAscent );
                                                 }
                                                 else
                                                 {
-                                                    aTmpPos.X() += nMaxAscent;
-                                                    aStartPos.X() += nMaxAscent;
+                                                    aTmpPos.AdjustX(nMaxAscent );
+                                                    aStartPos.AdjustX(nMaxAscent );
                                                 }
                                             }
                                         }
@@ -3408,7 +3412,7 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                 // In RTL portions spell markup pos should be at the start of the
                                 // first chara as well. That is on the right end of the portion
                                 if (rTextPortion.IsRightToLeft())
-                                    aRedLineTmpPos.X() += rTextPortion.GetSize().Width();
+                                    aRedLineTmpPos.AdjustX(rTextPortion.GetSize().Width() );
 
                                 if ( bStripOnly )
                                 {
@@ -3519,13 +3523,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                         {
                                             long nDiff = aTmpFont.GetFontSize().Height() * aTmpFont.GetEscapement() / 100L;
                                             if ( !IsVertical() )
-                                                aOutPos.Y() -= nDiff;
+                                                aOutPos.AdjustY( -nDiff );
                                             else
                                             {
                                                 if (IsTopToBottom())
-                                                    aOutPos.X() += nDiff;
+                                                    aOutPos.AdjustX(nDiff );
                                                 else
-                                                    aOutPos.X() -= nDiff;
+                                                    aOutPos.AdjustX( -nDiff );
                                             }
                                             aRedLineTmpPos = aOutPos;
                                             aTmpFont.SetEscapement( 0 );
@@ -3594,7 +3598,7 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                                && rTextPortion.GetExtraInfos() && rTextPortion.GetExtraInfos()->bCompressed
                                                && rTextPortion.GetExtraInfos()->bFirstCharIsRightPunktuation )
                                         {
-                                            aRealOutPos.X() += rTextPortion.GetExtraInfos()->nPortionOffsetX;
+                                            aRealOutPos.AdjustX(rTextPortion.GetExtraInfos()->nPortionOffsetX );
                                         }
 
                                         // RTL portions with (#i37132#)
@@ -3611,7 +3615,7 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                         if ( bDrawFrame )
                                         {
                                             Point aTopLeft( aTmpPos );
-                                            aTopLeft.Y() -= pLine->GetMaxAscent();
+                                            aTopLeft.AdjustY( -(pLine->GetMaxAscent()) );
                                             if ( nOrientation )
                                                 aTopLeft = lcl_ImplCalcRotatedPos( aTopLeft, aOrigin, nSin, nCos );
                                             tools::Rectangle aRect( aTopLeft, rTextPortion.GetSize() );
@@ -3631,7 +3635,7 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                                     if ( auto pUrlField = dynamic_cast< const SvxURLField* >( pFieldData ) )
                                                     {
                                                         Point aTopLeft( aTmpPos );
-                                                        aTopLeft.Y() -= pLine->GetMaxAscent();
+                                                        aTopLeft.AdjustY( -(pLine->GetMaxAscent()) );
 
                                                         tools::Rectangle aRect( aTopLeft, rTextPortion.GetSize() );
                                                         vcl::PDFExtOutDevBookmarkEntry aBookmark;
@@ -3654,16 +3658,16 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                             {
                                                 long nShift = (_nEsc * aTmpFont.GetFontSize().Height()) / 100L;
                                                 if( !IsVertical() )
-                                                    aRedLineTmpPos.Y() -= nShift;
+                                                    aRedLineTmpPos.AdjustY( -nShift );
                                                 else
                                                     if (IsTopToBottom())
-                                                        aRedLineTmpPos.X() += nShift;
+                                                        aRedLineTmpPos.AdjustX(nShift );
                                                     else
-                                                        aRedLineTmpPos.X() -= nShift;
+                                                        aRedLineTmpPos.AdjustX( -nShift );
                                             }
                                         }
                                         Color aOldColor( pOutDev->GetLineColor() );
-                                        pOutDev->SetLineColor( Color( GetColorConfig().GetColorValue( svtools::SPELL ).nColor ) );
+                                        pOutDev->SetLineColor( GetColorConfig().GetColorValue( svtools::SPELL ).nColor );
                                         lcl_DrawRedLines( pOutDev, aTmpFont.GetFontSize().Height(), aRedLineTmpPos, static_cast<size_t>(nIndex), static_cast<size_t>(nIndex) + rTextPortion.GetLen(), pDXArray, pPortion->GetNode()->GetWrongList(), nOrientation, aOrigin, IsVertical(), rTextPortion.IsRightToLeft() );
                                         pOutDev->SetLineColor( aOldColor );
                                     }
@@ -3774,13 +3778,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                 if ( ( nLine != nLastLine ) && !aStatus.IsOutliner() )
                 {
                     if ( !IsVertical() )
-                        aStartPos.Y() += nSBL;
+                        aStartPos.AdjustY(nSBL );
                     else
                     {
                         if( IsTopToBottom() )
-                            aStartPos.X() -= nSBL;
+                            aStartPos.AdjustX( -nSBL );
                         else
-                            aStartPos.X() += nSBL;
+                            aStartPos.AdjustX(nSBL );
                     }
                 }
 
@@ -3798,13 +3802,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                 const SvxULSpaceItem& rULItem = pPortion->GetNode()->GetContentAttribs().GetItem( EE_PARA_ULSPACE );
                 long nUL = GetYValue( rULItem.GetLower() );
                 if ( !IsVertical() )
-                    aStartPos.Y() += nUL;
+                    aStartPos.AdjustY(nUL );
                 else
                 {
                     if (IsTopToBottom())
-                        aStartPos.X() -= nUL;
+                        aStartPos.AdjustX( -nUL );
                     else
-                        aStartPos.X() += nUL;
+                        aStartPos.AdjustX(nUL );
                 }
             }
 
@@ -3832,13 +3836,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
         else
         {
             if ( !IsVertical() )
-                aStartPos.Y() += nParaHeight;
+                aStartPos.AdjustY(nParaHeight );
             else
             {
                 if (IsTopToBottom())
-                    aStartPos.X() -= nParaHeight;
+                    aStartPos.AdjustX( -nParaHeight );
                 else
-                    aStartPos.X() += nParaHeight;
+                    aStartPos.AdjustX(nParaHeight );
             }
         }
 
@@ -3874,22 +3878,22 @@ void ImpEditEngine::Paint( ImpEditView* pView, const tools::Rectangle& rRect, Ou
     if ( !IsVertical() )
     {
         aStartPos = pView->GetOutputArea().TopLeft();
-        aStartPos.X() -= pView->GetVisDocLeft();
-        aStartPos.Y() -= pView->GetVisDocTop();
+        aStartPos.AdjustX( -(pView->GetVisDocLeft()) );
+        aStartPos.AdjustY( -(pView->GetVisDocTop()) );
     }
     else
     {
         if( IsTopToBottom() )
         {
             aStartPos = pView->GetOutputArea().TopRight();
-            aStartPos.X() += pView->GetVisDocTop();
-            aStartPos.Y() -= pView->GetVisDocLeft();
+            aStartPos.AdjustX(pView->GetVisDocTop() );
+            aStartPos.AdjustY( -(pView->GetVisDocLeft()) );
         }
         else
         {
             aStartPos = pView->GetOutputArea().BottomLeft();
-            aStartPos.X() -= pView->GetVisDocTop();
-            aStartPos.Y() += pView->GetVisDocLeft();
+            aStartPos.AdjustX( -(pView->GetVisDocTop()) );
+            aStartPos.AdjustY(pView->GetVisDocLeft() );
         }
     }
 
@@ -3903,7 +3907,7 @@ void ImpEditEngine::Paint( ImpEditView* pView, const tools::Rectangle& rRect, Ou
         if ( aClipRect.Left() > nMaxX )
             return;
         if ( aClipRect.Right() > nMaxX )
-            aClipRect.Right() = nMaxX;
+            aClipRect.SetRight( nMaxX );
     }
 
     bool bClipRegion = pTarget->IsClipRegion();
@@ -4047,10 +4051,10 @@ EditSelection ImpEditEngine::MoveParagraphs( Range aOldPositions, sal_Int32 nNew
         if (pUpperPortion && pLowerPortion)
         {
             aInvalidRect = tools::Rectangle();  // make empty
-            aInvalidRect.Left() = 0;
-            aInvalidRect.Right() = aPaperSize.Width();
-            aInvalidRect.Top() = GetParaPortions().GetYOffset( pUpperPortion );
-            aInvalidRect.Bottom() = GetParaPortions().GetYOffset( pLowerPortion ) + pLowerPortion->GetHeight();
+            aInvalidRect.SetLeft( 0 );
+            aInvalidRect.SetRight( aPaperSize.Width() );
+            aInvalidRect.SetTop( GetParaPortions().GetYOffset( pUpperPortion ) );
+            aInvalidRect.SetBottom( GetParaPortions().GetYOffset( pLowerPortion ) + pLowerPortion->GetHeight() );
 
             UpdateViews( pCurView );
         }
@@ -4187,9 +4191,9 @@ long ImpEditEngine::CalcVertLineSpacing(Point& rStartPos) const
     {
         if( IsTopToBottom() )
             // Shift the text to the right for the asian layout mode.
-            rStartPos.X() += nTotalSpace;
+            rStartPos.AdjustX(nTotalSpace );
         else
-            rStartPos.X() -= nTotalSpace;
+            rStartPos.AdjustX( -nTotalSpace );
     }
 
     return nTotalSpace / (nTotalLineCount-1);
@@ -4353,7 +4357,7 @@ LanguageType ImpEditEngine::ImplCalcDigitLang(LanguageType eCurLang) const
     // #114278# Also setting up digit language from Svt options
     // (cannot reliably inherit the outdev's setting)
     if( !pCTLOptions )
-        pCTLOptions = new SvtCTLOptions;
+        pCTLOptions.reset( new SvtCTLOptions );
 
     LanguageType eLang = eCurLang;
     const SvtCTLOptions::TextNumerals nCTLTextNumerals = pCTLOptions->GetCTLTextNumerals();
@@ -4582,7 +4586,7 @@ bool ImpEditEngine::ImplCalcAsianCompression(ContentNode* pNode,
         if ( bCompressed && ( n100thPercentFromMax == 10000 ) )
             pTextPortion->GetExtraInfos()->nWidthFullCompression = nNewPortionWidth;
 
-        pTextPortion->GetSize().Width() = nNewPortionWidth;
+        pTextPortion->GetSize().setWidth( nNewPortionWidth );
 
         if ( pTextPortion->GetExtraInfos() && ( n100thPercentFromMax != 10000 ) )
         {
@@ -4592,7 +4596,7 @@ bool ImpEditEngine::ImplCalcAsianCompression(ContentNode* pNode,
             nShrink /= 10000;
             long nNewWidth = pTextPortion->GetExtraInfos()->nOrgWidth - nShrink;
             if ( nNewWidth < pTextPortion->GetSize().Width() )
-            pTextPortion->GetSize().Width() = nNewWidth;
+            pTextPortion->GetSize().setWidth( nNewWidth );
         }
     }
     return bCompressed;
@@ -4633,7 +4637,7 @@ void ImpEditEngine::ImplExpandCompressedPortions( EditLine* pLine, ParaPortion* 
         {
             pTP = pTP2;
             pTP->GetExtraInfos()->bCompressed = false;
-            pTP->GetSize().Width() = pTP->GetExtraInfos()->nOrgWidth;
+            pTP->GetSize().setWidth( pTP->GetExtraInfos()->nOrgWidth );
             if ( nCompressPercent )
             {
                 sal_Int32 nTxtPortion = pParaPortion->GetTextPortions().GetPos( pTP );

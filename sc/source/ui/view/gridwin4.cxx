@@ -70,8 +70,8 @@
 
 static void lcl_LimitRect( tools::Rectangle& rRect, const tools::Rectangle& rVisible )
 {
-    if ( rRect.Top()    < rVisible.Top()-1 )    rRect.Top()    = rVisible.Top()-1;
-    if ( rRect.Bottom() > rVisible.Bottom()+1 ) rRect.Bottom() = rVisible.Bottom()+1;
+    if ( rRect.Top()    < rVisible.Top()-1 )    rRect.SetTop( rVisible.Top()-1 );
+    if ( rRect.Bottom() > rVisible.Bottom()+1 ) rRect.SetBottom( rVisible.Bottom()+1 );
 
     // The header row must be drawn also when the inner rectangle is not visible,
     // that is why there is no return value anymore.
@@ -89,8 +89,8 @@ static void lcl_DrawOneFrame( vcl::RenderContext* pDev, const tools::Rectangle& 
     tools::Rectangle aInner = rInnerPixel;
     if ( bLayoutRTL )
     {
-        aInner.Left() = rInnerPixel.Right();
-        aInner.Right() = rInnerPixel.Left();
+        aInner.SetLeft( rInnerPixel.Right() );
+        aInner.SetRight( rInnerPixel.Left() );
     }
 
     tools::Rectangle aVisible( Point(0,0), pDev->GetOutputSizePixel() );
@@ -99,10 +99,10 @@ static void lcl_DrawOneFrame( vcl::RenderContext* pDev, const tools::Rectangle& 
     tools::Rectangle aOuter = aInner;
     long nHor = static_cast<long>( SC_SCENARIO_HSPACE * nPPTX );
     long nVer = static_cast<long>( SC_SCENARIO_VSPACE * nPPTY );
-    aOuter.Left()   -= nHor;
-    aOuter.Right()  += nHor;
-    aOuter.Top()    -= nVer;
-    aOuter.Bottom() += nVer;
+    aOuter.AdjustLeft( -nHor );
+    aOuter.AdjustRight(nHor );
+    aOuter.AdjustTop( -nVer );
+    aOuter.AdjustBottom(nVer );
 
     //  use ScPatternAttr::GetFont only for font size
     vcl::Font aAttrFont;
@@ -119,9 +119,9 @@ static void lcl_DrawOneFrame( vcl::RenderContext* pDev, const tools::Rectangle& 
     Size aTextSize( pDev->GetTextWidth( rTitle ), pDev->GetTextHeight() );
 
     if ( bTextBelow )
-        aOuter.Bottom() += aTextSize.Height();
+        aOuter.AdjustBottom(aTextSize.Height() );
     else
-        aOuter.Top()    -= aTextSize.Height();
+        aOuter.AdjustTop( -(aTextSize.Height()) );
 
     pDev->SetLineColor();
     pDev->SetFillColor( rColor );
@@ -220,10 +220,10 @@ static void lcl_DrawScenarioFrames( OutputDevice* pDev, ScViewData* pViewData, S
                 Point aEndPos = pViewData->GetScrPos(
                                     aRange.aEnd.Col()+1, aRange.aEnd.Row()+1, eWhich, true );
                 //  on the grid:
-                aStartPos.X() -= nLayoutSign;
-                aStartPos.Y() -= 1;
-                aEndPos.X() -= nLayoutSign;
-                aEndPos.Y() -= 1;
+                aStartPos.AdjustX( -nLayoutSign );
+                aStartPos.AdjustY( -1 );
+                aEndPos.AdjustX( -nLayoutSign );
+                aEndPos.AdjustY( -1 );
 
                 bool bTextBelow = ( aRange.aStart.Row() == 0 );
 
@@ -345,8 +345,8 @@ void ScGridWindow::Paint( vcl::RenderContext& /*rRenderContext*/, const tools::R
     {
         //  mirror and swap
         long nWidth = GetSizePixel().Width();
-        aMirroredPixel.Left()  = nWidth - 1 - aPixRect.Right();
-        aMirroredPixel.Right() = nWidth - 1 - aPixRect.Left();
+        aMirroredPixel.SetLeft( nWidth - 1 - aPixRect.Right() );
+        aMirroredPixel.SetRight( nWidth - 1 - aPixRect.Left() );
     }
 
     long nScrX = ScViewData::ToPixel( pDoc->GetColWidth( nX1, nTab ), nPPTX );
@@ -433,7 +433,7 @@ void ScGridWindow::Draw( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, ScUpdateMod
     {
         long nEndPixel = pViewData->GetScrPos( nX2+1, maVisibleRange.mnRow1, eWhich ).X();
         nMirrorWidth = aScrPos.X() - nEndPixel;
-        aScrPos.X() = nEndPixel + 1;
+        aScrPos.setX( nEndPixel + 1 );
     }
 
     long nScrX = aScrPos.X();
@@ -535,7 +535,7 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
 
     const svtools::ColorConfig& rColorCfg = pScMod->GetColorConfig();
     Color aGridColor( rColorCfg.GetColorValue( svtools::CALCGRID, false ).nColor );
-    if ( aGridColor.GetColor() == COL_TRANSPARENT )
+    if ( aGridColor == COL_TRANSPARENT )
     {
         //  use view options' grid color only if color config has "automatic" color
         aGridColor = rOpts.GetGridColor();
@@ -605,18 +605,18 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
         {
             if(bLayoutRTL)
             {
-                aDrawingRectPixel.Left() = 0;
+                aDrawingRectPixel.SetLeft( 0 );
             }
             else
             {
-                aDrawingRectPixel.Right() = GetOutputSizePixel().getWidth();
+                aDrawingRectPixel.SetRight( GetOutputSizePixel().getWidth() );
             }
         }
 
         // correct for border (bottom)
         if(MAXROW == nY2)
         {
-            aDrawingRectPixel.Bottom() = GetOutputSizePixel().getHeight();
+            aDrawingRectPixel.SetBottom( GetOutputSizePixel().getHeight() );
         }
 
         // get logic positions
@@ -670,23 +670,23 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
         {
             tools::Rectangle aDrawRect( aPixRect );
             if ( bLayoutRTL )
-                aDrawRect.Right() = nScrX - 1;
+                aDrawRect.SetRight( nScrX - 1 );
             else
-                aDrawRect.Left() = nScrX + aOutputData.GetScrW();
+                aDrawRect.SetLeft( nScrX + aOutputData.GetScrW() );
             if (aDrawRect.Right() >= aDrawRect.Left())
                 pContentDev->DrawRect( aDrawRect );
         }
         if ( nY2==MAXROW )
         {
             tools::Rectangle aDrawRect( aPixRect );
-            aDrawRect.Top() = nScrY + aOutputData.GetScrH();
+            aDrawRect.SetTop( nScrY + aOutputData.GetScrH() );
             if ( nX2==MAXCOL )
             {
                 // no double painting of the corner
                 if ( bLayoutRTL )
-                    aDrawRect.Left() = nScrX;
+                    aDrawRect.SetLeft( nScrX );
                 else
-                    aDrawRect.Right() = nScrX + aOutputData.GetScrW() - 1;
+                    aDrawRect.SetRight( nScrX + aOutputData.GetScrW() - 1 );
             }
             if (aDrawRect.Bottom() >= aDrawRect.Top())
                 pContentDev->DrawRect( aDrawRect );
@@ -695,10 +695,6 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
         // restore MapMode
         pContentDev->SetMapMode(aCurrentMapMode);
     }
-
-    // check for and set cell rotations at OutputData to have it available
-    // in the svx tooling to render the borders
-    aOutputData.SetCellRotations();
 
     if ( rDoc.HasBackgroundDraw( nTab, aDrawingRectLogic ) )
     {
@@ -852,7 +848,7 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
                 if ( aRef.aStart.Tab() >= nTab && aRef.aEnd.Tab() <= nTab )
                     aOutputData.DrawRefMark( aRef.aStart.Col(), aRef.aStart.Row(),
                                             aRef.aEnd.Col(), aRef.aEnd.Row(),
-                                            Color( rData.nColorData ),
+                                            rData.nColor,
                                             true );
             }
         }
@@ -932,8 +928,8 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
 
                             // don't overwrite grid
                             long nLayoutSign = bLayoutRTL ? -1 : 1;
-                            aEnd.X() -= 2 * nLayoutSign;
-                            aEnd.Y() -= 2;
+                            aEnd.AdjustX( -(2 * nLayoutSign) );
+                            aEnd.AdjustY( -2 );
 
                             tools::Rectangle aBackground(aStart, aEnd);
 
@@ -986,8 +982,8 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
 
         // don't overwrite grid
         long nLayoutSign = bLayoutRTL ? -1 : 1;
-        aEnd.X() -= 2 * nLayoutSign;
-        aEnd.Y() -= 2;
+        aEnd.AdjustX( -(2 * nLayoutSign) );
+        aEnd.AdjustY( -2 );
 
         // toggle the cursor off if its on to ensure the cursor invert
         // background logic remains valid after the background is cleared on
@@ -1354,7 +1350,7 @@ void ScGridWindow::DrawPagePreview( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, 
         {
             //  use single font and call DrawText directly
             rDefPattern.GetFont( aFont, SC_AUTOCOL_BLACK );
-            aFont.SetColor( Color( COL_LIGHTGRAY ) );
+            aFont.SetColor( COL_LIGHTGRAY );
             //  font size is set as needed
         }
         else
@@ -1364,7 +1360,7 @@ void ScGridWindow::DrawPagePreview( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, 
             pEditEng->SetRefMapMode(rRenderContext.GetMapMode());
             SfxItemSet* pEditDefaults = new SfxItemSet( pEditEng->GetEmptyItemSet() );
             rDefPattern.FillEditItemSet( pEditDefaults );
-            pEditDefaults->Put( SvxColorItem( Color( COL_LIGHTGRAY ), EE_CHAR_COLOR ) );
+            pEditDefaults->Put( SvxColorItem( COL_LIGHTGRAY, EE_CHAR_COLOR ) );
             pEditEng->SetDefaults( pEditDefaults );
         }
 
@@ -1389,16 +1385,16 @@ void ScGridWindow::DrawPagePreview( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, 
                                     aRange.aStart.Col(), aRange.aStart.Row(), eWhich, true );
                 Point aEnd = pViewData->GetScrPos(
                                     aRange.aEnd.Col() + 1, aRange.aEnd.Row() + 1, eWhich, true );
-                aStart.X() -= 2;
-                aStart.Y() -= 2;
+                aStart.AdjustX( -2 );
+                aStart.AdjustY( -2 );
 
                 // Prevent overflows:
-                if ( aStart.X() < -10 ) aStart.X() = -10;
-                if ( aStart.Y() < -10 ) aStart.Y() = -10;
+                if ( aStart.X() < -10 ) aStart.setX( -10 );
+                if ( aStart.Y() < -10 ) aStart.setY( -10 );
                 if ( aEnd.X() > aWinSize.Width() + 10 )
-                    aEnd.X() = aWinSize.Width() + 10;
+                    aEnd.setX( aWinSize.Width() + 10 );
                 if ( aEnd.Y() > aWinSize.Height() + 10 )
-                    aEnd.Y() = aWinSize.Height() + 10;
+                    aEnd.setY( aWinSize.Height() + 10 );
 
                 rRenderContext.DrawRect( tools::Rectangle( aStart, Point(aEnd.X(),aStart.Y()+2) ) );
                 rRenderContext.DrawRect( tools::Rectangle( aStart, Point(aStart.X()+2,aEnd.Y()) ) );
@@ -1703,7 +1699,7 @@ tools::Rectangle ScGridWindow::GetListValButtonRect( const ScAddress& rButtonPos
 
     //  left edge of next cell if there is a non-hidden next column
     SCCOL nNextCol = nCol + 1;
-    const ScMergeAttr* pMerge = static_cast<const ScMergeAttr*>(pDoc->GetAttr( nCol,nRow,nTab, ATTR_MERGE ));
+    const ScMergeAttr* pMerge = pDoc->GetAttr( nCol,nRow,nTab, ATTR_MERGE );
     if ( pMerge->GetColMerge() > 1 )
         nNextCol = nCol + pMerge->GetColMerge();    // next cell after the merged area
     while ( nNextCol <= MAXCOL && pDoc->ColHidden(nNextCol, nTab) )
@@ -1713,19 +1709,19 @@ tools::Rectangle ScGridWindow::GetListValButtonRect( const ScAddress& rButtonPos
         nAvailable = ScViewData::ToPixel( pDoc->GetColWidth( nNextCol, nTab ), pViewData->GetPPTX() );
 
     if ( nAvailable < aBtnSize.Width() )
-        aBtnSize.Width() = nAvailable;
+        aBtnSize.setWidth( nAvailable );
     if ( nCellSizeY < aBtnSize.Height() )
-        aBtnSize.Height() = nCellSizeY;
+        aBtnSize.setHeight( nCellSizeY );
 
     Point aPos = pViewData->GetScrPos( nCol, nRow, eWhich, true );
-    aPos.X() += nCellSizeX * nLayoutSign;               // start of next cell
+    aPos.AdjustX(nCellSizeX * nLayoutSign );               // start of next cell
     if (!bNextCell)
-        aPos.X() -= aBtnSize.Width() * nLayoutSign;     // right edge of cell if next cell not available
-    aPos.Y() += nCellSizeY - aBtnSize.Height();
+        aPos.AdjustX( -(aBtnSize.Width() * nLayoutSign) );     // right edge of cell if next cell not available
+    aPos.AdjustY(nCellSizeY - aBtnSize.Height() );
     // X remains at the left edge
 
     if ( bLayoutRTL )
-        aPos.X() -= aBtnSize.Width()-1;     // align right edge of button with cell border
+        aPos.AdjustX( -(aBtnSize.Width()-1) );     // align right edge of button with cell border
 
     return tools::Rectangle( aPos, aBtnSize );
 }
@@ -1874,8 +1870,7 @@ void ScGridWindow::GetSelectionRects( ::std::vector< tools::Rectangle >& rPixelR
             if (nX2 < nX1)                      // the rest of the merge
             {
                 SCCOL nStartX = nX1;
-                while ( static_cast<const ScMergeFlagAttr*>(pDoc->
-                            GetAttr(nStartX,nY,nTab,ATTR_MERGE_FLAG))->IsHorOverlapped() )
+                while ( pDoc->GetAttr(nStartX,nY,nTab,ATTR_MERGE_FLAG)->IsHorOverlapped() )
                     --nStartX;
                 if (nStartX <= nX2)
                     nLoopEndX = nX1;

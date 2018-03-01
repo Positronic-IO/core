@@ -39,7 +39,8 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <svtools/transfer.hxx>
 #include <sot/formats.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <sfx2/docfile.hxx>
 #include <unotools/pathoptions.hxx>
@@ -70,7 +71,8 @@ const char* SvxOpenGrfErr2ResId( ErrCode err )
 
 struct SvxOpenGrf_Impl
 {
-    SvxOpenGrf_Impl(const vcl::Window* pPreferredParent);
+    SvxOpenGrf_Impl(const vcl::Window* pPreferredParent,
+                    sal_Int16 nDialogType);
 
     sfx2::FileDialogHelper                  aFileDlg;
     OUString sDetectedFilter;
@@ -78,9 +80,9 @@ struct SvxOpenGrf_Impl
 };
 
 
-SvxOpenGrf_Impl::SvxOpenGrf_Impl(const vcl::Window* pPreferredParent)
-    : aFileDlg(ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW,
-            FileDialogFlags::Graphic, pPreferredParent)
+SvxOpenGrf_Impl::SvxOpenGrf_Impl(const vcl::Window* pPreferredParent,
+                                 sal_Int16 nDialogType)
+    : aFileDlg(nDialogType, FileDialogFlags::Graphic, pPreferredParent)
 {
     uno::Reference < XFilePicker3 > xFP = aFileDlg.GetFilePicker();
     xCtrlAcc.set(xFP, UNO_QUERY);
@@ -88,7 +90,14 @@ SvxOpenGrf_Impl::SvxOpenGrf_Impl(const vcl::Window* pPreferredParent)
 
 
 SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, const vcl::Window* pPreferredParent)
-    : mpImpl(new SvxOpenGrf_Impl(pPreferredParent))
+    : mpImpl(new SvxOpenGrf_Impl(pPreferredParent, ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW))
+{
+    mpImpl->aFileDlg.SetTitle(rTitle);
+}
+
+SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, const vcl::Window* pPreferredParent,
+                                           sal_Int16 nDialogType)
+    : mpImpl(new SvxOpenGrf_Impl(pPreferredParent, nDialogType))
 {
     mpImpl->aFileDlg.SetTitle(rTitle);
 }
@@ -149,8 +158,12 @@ ErrCode SvxOpenGraphicDialog::Execute()
             // could not load?
             if ( nFound == USHRT_MAX )
             {
-                ScopedVclPtrInstance< WarningBox > aWarningBox(nullptr, MessBoxStyle::RetryCancel, WB_3DLOOK, SfxResId( SvxOpenGrfErr2ResId(nImpRet) ));
-                bQuitLoop = aWarningBox->Execute() != RET_RETRY;
+                std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(nullptr,
+                                                           VclMessageType::Warning, VclButtonsType::NONE,
+                                                           SfxResId(SvxOpenGrfErr2ResId(nImpRet))));
+                xWarn->add_button(Button::GetStandardText(StandardButtonType::Retry), RET_RETRY);
+                xWarn->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
+                bQuitLoop = xWarn->run() != RET_RETRY;
             }
             else
             {
@@ -267,6 +280,11 @@ void SvxOpenGraphicDialog::SetCurrentFilter(const OUString& rStr)
 void SvxOpenGraphicDialog::SetDetectedFilter(const OUString& rStr)
 {
     mpImpl->sDetectedFilter = rStr;
+}
+
+Reference<ui::dialogs::XFilePickerControlAccess> SvxOpenGraphicDialog::GetFilePickerControlAccess()
+{
+    return mpImpl->xCtrlAcc;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

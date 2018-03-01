@@ -21,7 +21,6 @@
 #include <vcl/errinf.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/ucbstreamhelper.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
 #include <svl/eitem.hxx>
@@ -40,6 +39,7 @@
 #include <unotools/localedatawrapper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <svx/imapdlg.hxx>
 #include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
@@ -56,7 +56,6 @@
 #include <memory>
 
 #define SELF_TARGET         "_self"
-#define IMAP_ALL_FILTER     OUString("<Alle>")
 #define IMAP_CERN_FILTER    "MAP - CERN"
 #define IMAP_NCSA_FILTER    "MAP - NCSA"
 #define IMAP_BINARY_FILTER  "SIP - StarView ImageMap"
@@ -243,8 +242,9 @@ bool SvxIMapDlg::Close()
 
     if ( m_pTbxIMapDlg1->IsItemEnabled( mnApplyId ) )
     {
-        ScopedVclPtrInstance< MessageDialog > aQBox(this,"QueryModifyImageMapChangesDialog","svx/ui/querymodifyimagemapchangesdialog.ui");
-        const long  nRet = aQBox->Execute();
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querymodifyimagemapchangesdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QueryModifyImageMapChangesDialog"));
+        const long nRet = xQBox->run();
 
         if( nRet == RET_YES )
         {
@@ -258,8 +258,9 @@ bool SvxIMapDlg::Close()
     }
     else if( pIMapWnd->IsChanged() )
     {
-        ScopedVclPtrInstance< MessageDialog > aQBox(this,"QuerySaveImageMapChangesDialog","svx/ui/querysaveimagemapchangesdialog.ui");
-        const long  nRet = aQBox->Execute();
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querysaveimagemapchangesdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QuerySaveImageMapChangesDialog"));
+        const long nRet = xQBox->run();
 
         if( nRet == RET_YES )
             bRet = DoSave();
@@ -452,7 +453,7 @@ void SvxIMapDlg::DoOpen()
         FileDialogFlags::NONE, this);
 
     ImageMap        aLoadIMap;
-    const OUString  aFilter( IMAP_ALL_FILTER );
+    const OUString  aFilter(SvxResId(RID_SVXSTR_IMAP_ALL_FILTER));
 
     aDlg.AddFilter( aFilter, IMAP_ALL_TYPE );
     aDlg.AddFilter( IMAP_CERN_FILTER, IMAP_CERN_TYPE );
@@ -474,7 +475,7 @@ void SvxIMapDlg::DoOpen()
 
             if( pIStm->GetError() )
             {
-                SfxErrorContext eEC(ERRCTX_ERROR, this);
+                SfxErrorContext eEC(ERRCTX_ERROR, GetFrameWeld());
                 ErrorHandler::HandleError( ERRCODE_IO_GENERAL );
             }
             else
@@ -725,11 +726,14 @@ IMPL_LINK_NOARG(SvxIMapDlg, UpdateHdl, Timer *, void)
 
     if ( pOwnData->pUpdateEditingObject != pCheckObj )
     {
-        if ( pIMapWnd->IsChanged() &&
-             ( ScopedVclPtrInstance<MessageDialog>(this,"QuerySaveImageMapChangesDialog",
-             "svx/ui/querysaveimagemapchangesdialog.ui")->Execute() == RET_YES ) )
+        if (pIMapWnd->IsChanged())
         {
-            DoSave();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "svx/ui/querysaveimagemapchangesdialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xQBox(xBuilder->weld_message_dialog("QuerySaveImageMapChangesDialog"));
+            if (xQBox->run() == RET_YES)
+            {
+                DoSave();
+            }
         }
 
         pIMapWnd->SetGraphic( pOwnData->aUpdateGraphic );

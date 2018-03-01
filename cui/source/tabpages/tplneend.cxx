@@ -18,15 +18,14 @@
  */
 
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/pathoptions.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 
 #include <strings.hrc>
-#include <helpids.h>
 #include <svx/dialmgr.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdopath.hxx>
@@ -201,10 +200,9 @@ void SvxLineEndDefTabPage::CheckChanges_Impl()
 
         if( aString != m_pLbLineEnds->GetSelectedEntry() )
         {
-            ScopedVclPtrInstance<MessageDialog> aQueryBox( GetParentDialog()
-                                                           ,"AskChangeLineEndDialog"
-                                                           ,"cui/ui/querychangelineenddialog.ui" );
-            if ( aQueryBox->Execute() == RET_YES )
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querychangelineenddialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("AskChangeLineEndDialog"));
+            if (xQueryBox->run() == RET_YES)
                 ClickModifyHdl_Impl( nullptr );
         }
     }
@@ -322,10 +320,9 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickModifyHdl_Impl, Button*, void)
         // if yes, repeat and demand a new name
         if ( !bDifferent )
         {
-            ScopedVclPtrInstance<MessageDialog> aWarningBox( GetParentDialog()
-                                                             ,"DuplicateNameDialog"
-                                                             ,"cui/ui/queryduplicatedialog.ui" );
-            aWarningBox->Execute();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xWarningBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+            xWarningBox->run();
 
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
             DBG_ASSERT(pFact, "Dialog creation failed!");
@@ -347,7 +344,7 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickModifyHdl_Impl, Button*, void)
                 if( bDifferent )
                     bLoop = false;
                 else
-                    aWarningBox->Execute();
+                    xWarningBox->run();
             }
         }
 
@@ -467,10 +464,9 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickAddHdl_Impl, Button*, void)
             }
             else
             {
-                ScopedVclPtrInstance<MessageDialog> aBox( GetParentDialog()
-                                                          ,"DuplicateNameDialog"
-                                                          ,"cui/ui/queryduplicatedialog.ui" );
-                aBox->Execute();
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/queryduplicatedialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xWarningBox(xBuilder->weld_message_dialog("DuplicateNameDialog"));
+                xWarningBox->run();
             }
         }
     }
@@ -493,11 +489,10 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickDeleteHdl_Impl, Button*, void)
 
     if( nPos != LISTBOX_ENTRY_NOTFOUND )
     {
-        ScopedVclPtrInstance<MessageDialog> aQueryBox( GetParentDialog()
-                                                       ,"AskDelLineEndDialog"
-                                                       ,"cui/ui/querydeletelineenddialog.ui" );
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querydeletelineenddialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("AskDelLineEndDialog"));
 
-        if ( aQueryBox->Execute() == RET_YES )
+        if (xQueryBox->run() == RET_YES)
         {
             pLineEndList->Remove(nPos);
             m_pLbLineEnds->RemoveEntry( nPos );
@@ -527,9 +522,10 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickLoadHdl_Impl, Button*, void)
 
     if ( *pnLineEndListState & ChangeType::MODIFIED )
     {
-        nReturn = ScopedVclPtrInstance<MessageDialog>(GetParentDialog()
-                                ,"AskSaveList"
-                                ,"cui/ui/querysavelistdialog.ui")->Execute();
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querysavelistdialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("AskSaveList"));
+
+        nReturn = xBox->run();
 
         if ( nReturn == RET_YES )
             pLineEndList->Save();
@@ -581,9 +577,11 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickLoadHdl_Impl, Button*, void)
                 *pnLineEndListState &= ~ChangeType::MODIFIED;
             }
             else
-                ScopedVclPtrInstance<MessageDialog>(GetParentDialog()
-                              ,"NoLoadedFileDialog"
-                              ,"cui/ui/querynoloadedfiledialog.ui")->Execute();
+            {
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querynoloadedfiledialog.ui"));
+                std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("NoLoadedFileDialog"));
+                xBox->run();
+            }
         }
     }
 
@@ -648,9 +646,9 @@ IMPL_LINK_NOARG(SvxLineEndDefTabPage, ClickSaveHdl_Impl, Button*, void)
         }
         else
         {
-            ScopedVclPtrInstance<MessageDialog>(GetParentDialog()
-                          ,"NoSaveFileDialog"
-                          ,"cui/ui/querynosavefiledialog.ui")->Execute();
+            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querynosavefiledialog.ui"));
+            std::unique_ptr<weld::MessageDialog> xBox(xBuilder->weld_message_dialog("NoSaveFileDialog"));
+            xBox->run();
         }
     }
 }

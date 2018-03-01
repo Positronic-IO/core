@@ -32,6 +32,7 @@
 #include <tools/fract.hxx>
 #include <o3tl/make_unique.hxx>
 #include <vcl/bitmapaccess.hxx>
+#include <vcl/BitmapTools.hxx>
 #include <osl/thread.h>
 
 // MS Windows defines
@@ -120,15 +121,15 @@ namespace
     {
         Point aSource(rSource);
         if (nMapMode == MM_HIMETRIC)
-            aSource.Y() = -rSource.Y();
+            aSource.setY( -rSource.Y() );
         if (aSource.X() < rPlaceableBound.Left())
-            rPlaceableBound.Left() = aSource.X();
+            rPlaceableBound.SetLeft( aSource.X() );
         if (aSource.X() > rPlaceableBound.Right())
-            rPlaceableBound.Right() = aSource.X();
+            rPlaceableBound.SetRight( aSource.X() );
         if (aSource.Y() < rPlaceableBound.Top())
-            rPlaceableBound.Top() = aSource.Y();
+            rPlaceableBound.SetTop( aSource.Y() );
         if (aSource.Y() > rPlaceableBound.Bottom())
-            rPlaceableBound.Bottom() = aSource.Y();
+            rPlaceableBound.SetBottom( aSource.Y() );
     }
 
     void GetWinExtMax(const tools::Rectangle& rSource, tools::Rectangle& rPlaceableBound, const sal_Int16 nMapMode)
@@ -160,8 +161,8 @@ namespace emfio
         Point aBR, aTL;
         aBR = ReadYX();
         aTL = ReadYX();
-        aBR.X()--;
-        aBR.Y()--;
+        aBR.AdjustX( -1 );
+        aBR.AdjustY( -1 );
         return tools::Rectangle( aTL, aBR );
     }
 
@@ -511,14 +512,31 @@ namespace emfio
 
             case W_META_TEXTOUT:
             {
-                sal_uInt16 nLength = 0;
-                mpInputStream->ReadUInt16( nLength );
-                if ( nLength )
+                //record is Recordsize, RecordFunction, StringLength, <String>, YStart, XStart
+                const sal_uInt32 nNonStringLen = sizeof(sal_uInt32) + 4 * sizeof(sal_uInt16);
+                const sal_uInt32 nRecSize = mnRecSize * 2;
+
+                if (nRecSize < nNonStringLen)
                 {
-                    std::unique_ptr<char[]> pChar(new char[ ( nLength + 1 ) &~ 1 ]);
-                    nLength = std::min<sal_uInt64>(nLength, mpInputStream->ReadBytes(pChar.get(), (nLength + 1) &~ 1));
-                    OUString aText( pChar.get(), nLength, GetCharSet() );
-                    pChar.reset();
+                    SAL_WARN("vcl.wmf", "W_META_TEXTOUT too short");
+                    break;
+                }
+
+                sal_uInt16 nLength = 0;
+                mpInputStream->ReadUInt16(nLength);
+                sal_uInt16 nStoredLength = (nLength + 1) &~ 1;
+
+                if (nRecSize - nNonStringLen < nStoredLength)
+                {
+                    SAL_WARN("vcl.wmf", "W_META_TEXTOUT too short, truncating string");
+                    nLength = nStoredLength = nRecSize - nNonStringLen;
+                }
+
+                if (nLength)
+                {
+                    std::vector<char> aChars(nStoredLength);
+                    nLength = std::min<sal_uInt16>(nLength, mpInputStream->ReadBytes(aChars.data(), aChars.size()));
+                    OUString aText(aChars.data(), nLength, GetCharSet());
                     Point aPosition( ReadYX() );
                     DrawText( aPosition, aText );
                 }
@@ -527,14 +545,36 @@ namespace emfio
 
             case W_META_EXTTEXTOUT:
             {
-                mpInputStream->SeekRel(-6);
-                auto nRecordPos = mpInputStream->Tell();
-                sal_Int32 nRecordSize = 0;
-                mpInputStream->ReadInt32( nRecordSize );
-                mpInputStream->SeekRel(2);
+                //record is Recordsize, RecordFunction, Y, X, StringLength, options, maybe rectangle, <String>
+                sal_uInt32 nNonStringLen = sizeof(sal_uInt32) + 5 * sizeof(sal_uInt16);
+                const sal_uInt32 nRecSize = mnRecSize * 2;
+
+                if (nRecSize < nNonStringLen)
+                {
+                    SAL_WARN("vcl.wmf", "W_META_EXTTEXTOUT too short");
+                    break;
+                }
+
+                auto nRecordPos = mpInputStream->Tell() - 6;
                 Point aPosition = ReadYX();
                 sal_uInt16 nLen = 0, nOptions = 0;
                 mpInputStream->ReadUInt16( nLen ).ReadUInt16( nOptions );
+
+                tools::Rectangle aRect;
+                if (nOptions & ETO_CLIPPED)
+                {
+                    nNonStringLen += 2 * sizeof(sal_uInt16);
+
+                    if (nRecSize < nNonStringLen)
+                    {
+                        SAL_WARN("vcl.wmf", "W_META_TEXTOUT too short");
+                        break;
+                    }
+
+                    const Point aPt1( ReadPoint() );
+                    const Point aPt2( ReadPoint() );
+                    aRect = tools::Rectangle( aPt1, aPt2 );
+                }
 
                 ComplexTextLayoutFlags nTextLayoutMode = ComplexTextLayoutFlags::Default;
                 if ( nOptions & ETO_RTLREADING )
@@ -543,19 +583,12 @@ namespace emfio
                 SAL_WARN_IF( ( nOptions & ( ETO_PDY | ETO_GLYPH_INDEX ) ) != 0, "vcl.wmf", "SJ: ETO_PDY || ETO_GLYPH_INDEX in WMF" );
 
                 // output only makes sense if the text contains characters
-                if (nLen && nRecordSize >= 0)
+                if (nLen)
                 {
                     sal_Int32 nOriginalTextLen = nLen;
                     sal_Int32 nOriginalBlockLen = ( nOriginalTextLen + 1 ) &~ 1;
-                    tools::Rectangle aRect;
-                    if( nOptions & ETO_CLIPPED )
-                    {
-                        const Point aPt1( ReadPoint() );
-                        const Point aPt2( ReadPoint() );
-                        aRect = tools::Rectangle( aPt1, aPt2 );
-                    }
 
-                    auto nMaxStreamPos = nRecordPos + (nRecordSize << 1);
+                    auto nMaxStreamPos = nRecordPos + nRecSize;
                     auto nRemainingSize = std::min(mpInputStream->remainingSize(), nMaxStreamPos - mpInputStream->Tell());
                     if (nRemainingSize < static_cast<sal_uInt32>(nOriginalBlockLen))
                     {
@@ -675,45 +708,41 @@ namespace emfio
                 Point aPoint( ReadYX() );
                 mpInputStream->ReadUInt16( nDontKnow ).ReadUInt16( nWidth ).ReadUInt16( nHeight ).ReadUInt16( nBytesPerScan ).ReadUChar( nPlanes ).ReadUChar( nBitCount );
 
-                bool bOk = nWidth && nHeight && nPlanes == 1 && nBitCount == 1;
+                bool bOk = nWidth && nHeight && nPlanes == 1 && nBitCount == 1 && nBytesPerScan != 0;
                 if (bOk)
                 {
                     bOk = nBytesPerScan <= mpInputStream->remainingSize() / nHeight;
                 }
                 if (bOk)
                 {
-                    Bitmap aBmp( Size( nWidth, nHeight ), nBitCount );
-                    Bitmap::ScopedWriteAccess pAcc(aBmp);
-                    if ( pAcc )
+                    vcl::bitmap::RawBitmap aBmp( Size( nWidth, nHeight ), 24 );
+                    for (sal_uInt16 y = 0; y < nHeight && mpInputStream->good(); ++y)
                     {
-                        for (sal_uInt16 y = 0; y < nHeight && mpInputStream->good(); ++y)
+                        sal_uInt16 x = 0;
+                        for (sal_uInt16 scan = 0; scan < nBytesPerScan; scan++ )
                         {
-                            sal_uInt16 x = 0;
-                            for (sal_uInt16 scan = 0; scan < nBytesPerScan; scan++ )
+                            sal_Int8 nEightPixels = 0;
+                            mpInputStream->ReadSChar( nEightPixels );
+                            for (sal_Int8 i = 7; i >= 0; i-- )
                             {
-                                sal_Int8 nEightPixels = 0;
-                                mpInputStream->ReadSChar( nEightPixels );
-                                for (sal_Int8 i = 7; i >= 0; i-- )
+                                if ( x < nWidth )
                                 {
-                                    if ( x < nWidth )
-                                    {
-                                        pAcc->SetPixelIndex( y, x, (nEightPixels>>i)&1 );
-                                    }
-                                    x++;
+                                    aBmp.SetPixel( y, x, ((nEightPixels>>i)&1) ? COL_BLACK : COL_WHITE );
                                 }
+                                x++;
                             }
                         }
-                        pAcc.reset();
-                        if ( nSye && nSxe &&
-                             ( nSx + nSxe <= aBmp.GetSizePixel().Width() ) &&
-                             ( nSy + nSye <= aBmp.GetSizePixel().Height() ) )
-                        {
-                            tools::Rectangle aCropRect( Point( nSx, nSy ), Size( nSxe, nSye ) );
-                            aBmp.Crop( aCropRect );
-                        }
-                        tools::Rectangle aDestRect( aPoint, Size( nSxe, nSye ) );
-                        maBmpSaveList.emplace_back(new BSaveStruct(aBmp, aDestRect, nWinROP));
                     }
+                    BitmapEx aBitmap = vcl::bitmap::CreateFromData(std::move(aBmp));
+                    if ( nSye && nSxe &&
+                         ( nSx + nSxe <= nWidth ) &&
+                         ( nSy + nSye <= nHeight ) )
+                    {
+                        tools::Rectangle aCropRect( Point( nSx, nSy ), Size( nSxe, nSye ) );
+                        aBitmap.Crop( aCropRect );
+                    }
+                    tools::Rectangle aDestRect( aPoint, Size( nSxe, nSye ) );
+                    maBmpSaveList.emplace_back(new BSaveStruct(aBitmap, aDestRect, nWinROP));
                 }
             }
             break;
@@ -817,13 +846,13 @@ namespace emfio
 
             case W_META_CREATEBRUSH:
             {
-                CreateObject(o3tl::make_unique<WinMtfFillStyle>( Color( COL_WHITE ), false ));
+                CreateObject(o3tl::make_unique<WinMtfFillStyle>( COL_WHITE, false ));
             }
             break;
 
             case W_META_CREATEPATTERNBRUSH:
             {
-                CreateObject(o3tl::make_unique<WinMtfFillStyle>( Color( COL_WHITE ), false ));
+                CreateObject(o3tl::make_unique<WinMtfFillStyle>( COL_WHITE, false ));
             }
             break;
 
@@ -1078,8 +1107,8 @@ namespace emfio
                                                     aMemoryStream.ReadInt32( nTmpX )
                                                                  .ReadInt32( nTmpY )
                                                                  .ReadUInt32( nStringLen );
-                                                     aPt.X() = nTmpX;
-                                                     aPt.Y() = nTmpY;
+                                                     aPt.setX( nTmpX );
+                                                     aPt.setY( nTmpY );
 
                                                     if ( ( static_cast< sal_uInt64 >( nStringLen ) * sizeof( sal_Unicode ) ) < ( nEscLen - aMemoryStream.Tell() ) )
                                                     {
@@ -1224,13 +1253,13 @@ namespace emfio
 
             // BoundRect
             mpInputStream->ReadInt16( nVal );
-            aPlaceableBound.Left() = nVal;
+            aPlaceableBound.SetLeft( nVal );
             mpInputStream->ReadInt16( nVal );
-            aPlaceableBound.Top() = nVal;
+            aPlaceableBound.SetTop( nVal );
             mpInputStream->ReadInt16( nVal );
-            aPlaceableBound.Right() = nVal;
+            aPlaceableBound.SetRight( nVal );
             mpInputStream->ReadInt16( nVal );
-            aPlaceableBound.Bottom() = nVal;
+            aPlaceableBound.SetBottom( nVal );
 
             // inch
             mpInputStream->ReadUInt16( mnUnitsPerInch );
@@ -1446,10 +1475,10 @@ namespace emfio
         bool bRet = true;
 
         tools::Rectangle aBound;
-        aBound.Left()   = RECT_MAX;
-        aBound.Top()    = RECT_MAX;
-        aBound.Right()  = RECT_MIN;
-        aBound.Bottom() = RECT_MIN;
+        aBound.SetLeft( RECT_MAX );
+        aBound.SetTop( RECT_MAX );
+        aBound.SetRight( RECT_MIN );
+        aBound.SetBottom( RECT_MIN );
         bool bBoundsDetermined = false;
 
         auto nPos = pStm->Tell();
@@ -1806,10 +1835,10 @@ namespace emfio
             }
             else
             {
-                rPlaceableBound.Left() = 0;
-                rPlaceableBound.Top() = 0;
-                rPlaceableBound.Right() = aMaxWidth;
-                rPlaceableBound.Bottom() = aMaxWidth;
+                rPlaceableBound.SetLeft( 0 );
+                rPlaceableBound.SetTop( 0 );
+                rPlaceableBound.SetRight( aMaxWidth );
+                rPlaceableBound.SetBottom( aMaxWidth );
                 SAL_INFO("vcl.wmf", "Default dimension "
                            " t: " << rPlaceableBound.Left()  << " l: " << rPlaceableBound.Top()
                         << " b: " << rPlaceableBound.Right() << " r: " << rPlaceableBound.Bottom());

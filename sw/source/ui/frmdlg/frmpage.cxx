@@ -21,7 +21,6 @@
 #include <com/sun/star/embed/EmbedMisc.hpp>
 
 #include <cmdid.h>
-#include <helpids.h>
 #include <hintids.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/mnemonic.hxx>
@@ -71,6 +70,7 @@
 #include <com/sun/star/ui/dialogs/ExtendedFilePickerElementIds.hpp>
 #include <vcl/graphicfilter.hxx>
 #include <vcl/builderfactory.hxx>
+#include <svtools/embedhlp.hxx>
 #include <memory>
 
 using namespace ::com::sun::star;
@@ -1813,7 +1813,7 @@ void SwFramePage::RangeModifyHdl()
     SwWrtShell* pSh = m_bFormat ? ::GetActiveWrtShell()
                         : getFrameDlgParentShell();
     OSL_ENSURE(pSh , "shell not found");
-    SwFlyFrameAttrMgr aMgr( m_bNew, pSh, static_cast<const SwAttrSet&>(GetItemSet()) );
+    SwFlyFrameAttrMgr aMgr( m_bNew, pSh, GetItemSet() );
     SvxSwFrameValidation        aVal;
 
     aVal.nAnchorType = GetAnchor();
@@ -2708,14 +2708,14 @@ void BmpWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle
                       && (aGrfSize.Height() <= aPntSz.Height()))
         {
             const long nHeight = aPntSz.Height();
-            aPntSz.Width() = aGrfSize.Width();
-            aPntSz.Height() = aGrfSize.Height();
-            aPntPos.Y() += (nHeight - aPntSz.Height()) / 2;
+            aPntSz.setWidth( aGrfSize.Width() );
+            aPntSz.setHeight( aGrfSize.Height() );
+            aPntPos.AdjustY((nHeight - aPntSz.Height()) / 2 );
         }
         else
-            aPntSz.Width() = aPntSz.Height() * nRelGrf /100;
+            aPntSz.setWidth( aPntSz.Height() * nRelGrf /100 );
 
-        aPntPos.X() += nWidth - aPntSz.Width() ;
+        aPntPos.AdjustX(nWidth - aPntSz.Width() ) ;
     }
 
     // #i119307# clear window background, the graphic might have transparency
@@ -2832,7 +2832,7 @@ void SwFrameURLPage::Reset( const SfxItemSet *rSet )
 bool SwFrameURLPage::FillItemSet(SfxItemSet *rSet)
 {
     bool bModified = false;
-    const SwFormatURL* pOldURL = static_cast<const SwFormatURL*>(GetOldItem(*rSet, RES_URL));
+    const SwFormatURL* pOldURL = GetOldItem(*rSet, RES_URL);
     std::unique_ptr<SwFormatURL> pFormatURL;
     if(pOldURL)
         pFormatURL.reset(static_cast<SwFormatURL*>(pOldURL->Clone()));

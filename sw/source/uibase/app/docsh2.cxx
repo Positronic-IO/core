@@ -30,8 +30,9 @@
 #include <tools/urlobj.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/configmgr.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/wrkwin.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/lckbitem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/zforlist.hxx>
@@ -142,7 +143,7 @@ using namespace ::sfx2;
 // create DocInfo (virtual)
 VclPtr<SfxDocumentInfoDialog> SwDocShell::CreateDocumentInfoDialog(const SfxItemSet &rSet)
 {
-    VclPtr<SfxDocumentInfoDialog> pDlg = VclPtr<SfxDocumentInfoDialog>::Create(nullptr, rSet);
+    VclPtr<SfxDocumentInfoDialog> pDlg = VclPtr<SfxDocumentInfoDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), rSet);
     //only with statistics, when this document is being shown, not
     //from within the Doc-Manager
     SwDocShell* pDocSh = static_cast<SwDocShell*>( SfxObjectShell::Current());
@@ -608,10 +609,9 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         std::shared_ptr<const SfxFilter> pFlt = GetMedium()->GetFilter();
                         if(!pFlt || pFlt->GetUserData() != pHtmlFlt->GetUserData())
                         {
-                            ScopedVclPtrInstance<MessageDialog> aQuery(&pViewFrame->GetWindow(),
-                                                                       "SaveAsHTMLDialog", "modules/swriter/ui/saveashtmldialog.ui");
-
-                            if(RET_YES == aQuery->Execute())
+                            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pViewFrame->GetWindow().GetFrameWeld(), "modules/swriter/ui/saveashtmldialog.ui"));
+                            std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("SaveAsHTMLDialog"));
+                            if (RET_YES == xQuery->run())
                                 bLocalHasName = false;
                             else
                                 break;
@@ -689,7 +689,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
             break;
             case SID_GET_COLORLIST:
             {
-                const SvxColorListItem* pColItem = static_cast<const SvxColorListItem*>(GetItem(SID_COLOR_TABLE));
+                const SvxColorListItem* pColItem = GetItem(SID_COLOR_TABLE);
                 XColorListRef pList = pColItem->GetColorList();
                 rReq.SetReturnValue(OfaRefItem<XColorList>(SID_GET_COLORLIST, pList));
             }
@@ -1099,7 +1099,10 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     }
                     if( !bDone && !rReq.IsAPI() )
                     {
-                        ScopedVclPtrInstance<InfoBox>(nullptr, SwResId( STR_CANTCREATE))->Execute();
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                                      SwResId(STR_CANTCREATE)));
+                        xInfoBox->run();
                     }
                 }
             }

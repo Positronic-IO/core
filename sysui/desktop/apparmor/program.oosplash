@@ -14,7 +14,7 @@
 
 #include <tunables/global>
 
-profile libreoffice-oopslash INSTDIR-program/oosplash flags=(complain) {
+profile libreoffice-oopslash INSTDIR-program/oosplash {
   #include <abstractions/base>
   #include <abstractions/X>
 
@@ -23,6 +23,7 @@ profile libreoffice-oopslash INSTDIR-program/oosplash flags=(complain) {
   /etc/passwd                           r,
   /etc/nsswitch.conf                    r,
   /run/nscd/passwd                      r,
+  /sys/devices/{virtual,pci[0-9]*}/**/queue/rotational  r, # for isRotational() in desktop/unx/source/pagein.c
   /usr/lib{,32,64}/ure/bin/javaldx      rmpux,
   /usr/share/libreoffice/program/*      r,
   INSTDIR-program/** 			r,

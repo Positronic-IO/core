@@ -610,8 +610,8 @@ bool SvxStyleBox_Impl::AdjustFontForItemHeight(OutputDevice* pDevice, tools::Rec
         double ratio = static_cast< double >( nHeight ) / rTextRect.Bottom();
         vcl::Font aFont(pDevice->GetFont());
         Size aPixelSize(aFont.GetFontSize());
-        aPixelSize.Width() *= ratio;
-        aPixelSize.Height() *= ratio;
+        aPixelSize.setWidth( aPixelSize.Width() * ratio );
+        aPixelSize.setHeight( aPixelSize.Height() * ratio );
         aFont.SetFontSize(aPixelSize);
         pDevice->SetFont(aFont);
         return true;
@@ -640,10 +640,10 @@ void SvxStyleBox_Impl::UserDrawEntry(const UserDrawEvent& rUDEvt, const OUString
     pDevice->GetTextBoundRect(aTextRect, rStyleName);
 
     Point aPos( rUDEvt.GetRect().TopLeft() );
-    aPos.X() += nLeftDistance;
+    aPos.AdjustX(nLeftDistance );
 
     if (!AdjustFontForItemHeight(pDevice, aTextRect, rUDEvt.GetRect().GetHeight()))
-        aPos.Y() += ( rUDEvt.GetRect().GetHeight() - aTextRect.Bottom() ) / 2;
+        aPos.AdjustY(( rUDEvt.GetRect().GetHeight() - aTextRect.Bottom() ) / 2 );
 
     pDevice->DrawText(aPos, rStyleName);
 }
@@ -742,7 +742,7 @@ void SvxStyleBox_Impl::SetupEntry(vcl::RenderContext& rRenderContext, vcl::Windo
                 pItem = pItemSet->GetItem( SID_ATTR_CHAR_COLOR );
                 // text color, when nothing is selected
                 if ( (nullptr != pItem) && bIsNotSelected)
-                    aFontCol = Color( static_cast< const SvxColorItem* >( pItem )->GetValue() );
+                    aFontCol = static_cast< const SvxColorItem* >( pItem )->GetValue();
 
                 drawing::FillStyle style = drawing::FillStyle_NONE;
                 // which kind of Fill style is selected
@@ -758,7 +758,7 @@ void SvxStyleBox_Impl::SetupEntry(vcl::RenderContext& rRenderContext, vcl::Windo
                         // set background color
                         pItem = pItemSet->GetItem( XATTR_FILLCOLOR );
                         if ( nullptr != pItem )
-                            aBackCol = Color( static_cast< const XFillColorItem* >( pItem )->GetColorValue() );
+                            aBackCol = static_cast< const XFillColorItem* >( pItem )->GetColorValue();
 
                         if ( aBackCol != COL_AUTO )
                         {
@@ -1430,7 +1430,7 @@ namespace
 
     NamedColor GetNoneColor()
     {
-        return std::make_pair(Color(COL_NONE_COLOR), SvxResId(RID_SVXSTR_NONE));
+        return std::make_pair(COL_NONE_COLOR, SvxResId(RID_SVXSTR_NONE));
     }
 }
 
@@ -1948,8 +1948,8 @@ void SvxFrameWindow_Impl::CalcSizeValueSet()
     Size aItemSize( 20 * GetParent()->GetDPIScaleFactor(), 20 * GetParent()->GetDPIScaleFactor() );
     Size aSize = aFrameSet->CalcWindowSizePixel( aItemSize );
     aFrameSet->SetPosSizePixel( Point( 2, 2 ), aSize );
-    aSize.Width()  += 4;
-    aSize.Height() += 4;
+    aSize.AdjustWidth(4 );
+    aSize.AdjustHeight(4 );
     SetOutputSizePixel( aSize );
 }
 
@@ -1968,14 +1968,6 @@ void SvxFrameWindow_Impl::InitImageList()
     aImgVec.emplace_back(RID_SVXBMP_FRAME10);
     aImgVec.emplace_back(RID_SVXBMP_FRAME11);
     aImgVec.emplace_back(RID_SVXBMP_FRAME12);
-
-    if (GetParent()->GetDPIScaleFactor() > 1)
-    {
-        for (size_t i = 0; i < aImgVec.size(); ++i)
-        {
-            aImgVec[i].Scale(GetParent()->GetDPIScaleFactor(), GetParent()->GetDPIScaleFactor());
-        }
-    }
 }
 
 static Color lcl_mediumColor( Color aMain, Color /*aDefault*/ )

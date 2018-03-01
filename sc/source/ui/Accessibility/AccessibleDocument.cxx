@@ -392,7 +392,7 @@ void ScChildrenShapes::SetDrawBroadcaster()
         SfxBroadcaster* pDrawBC = rViewData.GetDocument()->GetDrawBroadcaster();
         if (pDrawBC)
         {
-            StartListening(*pDrawBC, true);
+            StartListening(*pDrawBC, DuplicateHandling::Prevent);
 
             maShapeTreeInfo.SetModelBroadcaster( new ScDrawModelBroadcaster(rViewData.GetDocument()->GetDrawLayer()) );
             maShapeTreeInfo.SetSdrView(rViewData.GetScDrawView());
@@ -2437,14 +2437,14 @@ css::uno::Sequence< css::uno::Any >
 
 sal_Int32 SAL_CALL ScAccessibleDocument::getForeground(  )
 {
-    return COL_BLACK;
+    return sal_Int32(COL_BLACK);
 }
 
 sal_Int32 SAL_CALL ScAccessibleDocument::getBackground(  )
 {
     SolarMutexGuard aGuard;
     IsObjectValid();
-    return SC_MOD()->GetColorConfig().GetColorValue( ::svtools::DOCCOLOR ).nColor;
+    return sal_Int32(SC_MOD()->GetColorConfig().GetColorValue( ::svtools::DOCCOLOR ).nColor);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

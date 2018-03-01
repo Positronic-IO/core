@@ -87,16 +87,15 @@ void CellLineStyleValueSet::UserDraw( const UserDrawEvent& rUDEvt )
 
     vcl::Font aFont(OutputDevice::GetDefaultFont(DefaultFontType::UI_SANS, MsLangId::getSystemLanguage(), GetDefaultFontFlags::OnlyOne));
     Size aSize = aFont.GetFontSize();
-    aSize.Height() = nRectHeight*3/5;
+    aSize.setHeight( nRectHeight*3/5 );
     aFont.SetFontSize( aSize );
 
     if( nSelItem ==  nItemId )
     {
-        Color aBackColor(50,107,197);
         tools::Rectangle aBackRect = aRect;
-        aBackRect.Top() += 3;
-        aBackRect.Bottom() -= 2;
-        pDev->SetFillColor(aBackColor);
+        aBackRect.AdjustTop(3 );
+        aBackRect.AdjustBottom( -2 );
+        pDev->SetFillColor(Color(50,107,197));
         pDev->DrawRect(aBackRect);
     }
     else

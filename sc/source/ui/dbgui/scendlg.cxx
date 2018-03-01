@@ -26,7 +26,7 @@
 #include <svx/xtable.hxx>
 #include <sfx2/objsh.hxx>
 #include <unotools/useroptions.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <unotools/localedatawrapper.hxx>
 
 #include <global.hxx>
@@ -73,7 +73,7 @@ ScNewScenarioDlg::ScNewScenarioDlg( vcl::Window* pParent, const OUString& rName,
     m_pBtnOk->SetClickHdl( LINK( this, ScNewScenarioDlg, OkHdl ) );
     m_pCbShowFrame->SetClickHdl( LINK( this, ScNewScenarioDlg, EnableHdl ) );
 
-    m_pLbColor->SelectEntry( Color( COL_LIGHTGRAY ) );
+    m_pLbColor->SelectEntry( COL_LIGHTGRAY );
     m_pCbShowFrame->Check();
     m_pCbTwoWay->Check();
     m_pCbCopyAll->Check(false);
@@ -151,12 +151,18 @@ IMPL_LINK_NOARG(ScNewScenarioDlg, OkHdl, Button*, void)
 
     if ( !ScDocument::ValidTabName( aName ) )
     {
-        ScopedVclPtrInstance<InfoBox>(this, ScGlobal::GetRscString(STR_INVALIDTABNAME))->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      ScGlobal::GetRscString(STR_INVALIDTABNAME)));
+        xInfoBox->run();
         m_pEdName->GrabFocus();
     }
     else if ( !bIsEdit && !pDoc->ValidNewTabName( aName ) )
     {
-        ScopedVclPtrInstance<InfoBox>(this, ScGlobal::GetRscString(STR_NEWTABNAMENOTUNIQUE))->Execute();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      ScGlobal::GetRscString(STR_NEWTABNAMENOTUNIQUE)));
+        xInfoBox->run();
         m_pEdName->GrabFocus();
     }
     else

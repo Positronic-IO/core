@@ -107,13 +107,13 @@ bool GalleryPreview::ImplGetGraphicCenterRect( const Graphic& rGraphic, tools::R
 
         if ( fGrfWH < fWinWH )
         {
-            aNewSize.Width() = static_cast<long>( aWinSize.Height() * fGrfWH );
-            aNewSize.Height()= aWinSize.Height();
+            aNewSize.setWidth( static_cast<long>( aWinSize.Height() * fGrfWH ) );
+            aNewSize.setHeight( aWinSize.Height() );
         }
         else
         {
-            aNewSize.Width() = aWinSize.Width();
-            aNewSize.Height()= static_cast<long>( aWinSize.Width() / fGrfWH);
+            aNewSize.setWidth( aWinSize.Width() );
+            aNewSize.setHeight( static_cast<long>( aWinSize.Width() / fGrfWH) );
         }
 
         const Point aNewPos( ( aWinSize.Width()  - aNewSize.Width() ) >> 1,
@@ -455,7 +455,7 @@ OUString GalleryListView::GetCellText(long _nRow, sal_uInt16 /*nColumnId*/) cons
 
 tools::Rectangle GalleryListView::GetFieldCharacterBounds(sal_Int32 _nRow,sal_Int32 _nColumnPos,sal_Int32 nIndex)
 {
-    DBG_ASSERT(_nColumnPos >= 0 && _nColumnPos <= USHRT_MAX, "GalleryListView::GetFieldCharacterBounds: _nColumnId overflow");
+    DBG_ASSERT(_nColumnPos >= 0 && _nColumnPos <= SAL_MAX_UINT16, "GalleryListView::GetFieldCharacterBounds: _nColumnId overflow");
     tools::Rectangle aRect;
     if ( SeekRow(_nRow) )
     {
@@ -472,7 +472,7 @@ tools::Rectangle GalleryListView::GetFieldCharacterBounds(sal_Int32 _nRow,sal_In
 
 sal_Int32 GalleryListView::GetFieldIndexAtPoint(sal_Int32 _nRow,sal_Int32 _nColumnPos,const Point& _rPoint)
 {
-    DBG_ASSERT(_nColumnPos >= 0 && _nColumnPos <= USHRT_MAX, "GalleryListView::GetFieldIndexAtPoint: _nColumnId overflow");
+    DBG_ASSERT(_nColumnPos >= 0 && _nColumnPos <= SAL_MAX_UINT16, "GalleryListView::GetFieldIndexAtPoint: _nColumnId overflow");
     sal_Int32 nRet = -1;
     if ( SeekRow(_nRow) )
     {
@@ -590,7 +590,7 @@ sal_Int8 GalleryListView::ExecuteDrop( const BrowserExecuteDropEvent& rEvt )
 {
     ExecuteDropEvent aEvt( rEvt );
 
-    aEvt.maPosPixel.Y() += GetTitleHeight();
+    aEvt.maPosPixel.AdjustY(GetTitleHeight() );
 
     return static_cast<GalleryBrowser2*>( GetParent() )->ExecuteDrop( aEvt );
 }

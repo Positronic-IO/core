@@ -21,7 +21,6 @@
 
 #include <macropg.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
 #include <svtools/svmedit.hxx>
 #include <svtools/svlbitm.hxx>
 #include <svtools/treelistentry.hxx>
@@ -106,7 +105,7 @@ IMPL_LINK( MacroEventListBox, HeaderEndDrag_Impl, HeaderBar*, pBar, void )
             for( sal_uInt16 i = 1 ; i < _nTabs ; ++i )
             {
                 long _nWidth = maHeaderBar->GetItemSize( i );
-                aSz.Width() =  _nWidth + nTmpSz;
+                aSz.setWidth(  _nWidth + nTmpSz );
                 nTmpSz += _nWidth;
                 maListBox->SetTab( i, PixelToLogic( aSz, MapMode( MapUnit::MapAppFont ) ).Width() );
             }
@@ -166,12 +165,12 @@ void MacroEventListBox::Resize()
     Point    aPnt( 0, 0 );
     Size    aSize( maHeaderBar->CalcWindowSizePixel() );
     Size    aCtrlSize( GetOutputSizePixel() );
-    aSize.Width() = aCtrlSize.Width();
+    aSize.setWidth( aCtrlSize.Width() );
     maHeaderBar->SetPosSizePixel( aPnt, aSize );
 
     // calc pos and size of ListBox
-    aPnt.Y() += aSize.Height();
-    aSize.Height() = aCtrlSize.Height() - aSize.Height();
+    aPnt.AdjustY(aSize.Height() );
+    aSize.setHeight( aCtrlSize.Height() - aSize.Height() );
     maListBox->SetPosSizePixel( aPnt, aSize );
 }
 
@@ -327,11 +326,9 @@ bool SvxMacroTabPage_::FillItemSet( SfxItemSet* /*rSet*/ )
         OUString eventName;
         if( m_xAppEvents.is() )
         {
-            EventsHash::iterator h_itEnd =  m_appEventsHash.end();
-            EventsHash::iterator h_it = m_appEventsHash.begin();
-            for ( ; h_it !=  h_itEnd; ++h_it )
+            for (auto const& appEvent : m_appEventsHash)
             {
-                eventName = h_it->first;
+                eventName = appEvent.first;
                 try
                 {
                     m_xAppEvents->replaceByName( eventName, GetPropsByName( eventName, m_appEventsHash ) );
@@ -344,11 +341,9 @@ bool SvxMacroTabPage_::FillItemSet( SfxItemSet* /*rSet*/ )
         }
         if( m_xDocEvents.is() && bDocModified )
         {
-            EventsHash::iterator h_itEnd =  m_docEventsHash.end();
-            EventsHash::iterator h_it = m_docEventsHash.begin();
-            for ( ; h_it !=  h_itEnd; ++h_it )
+            for (auto const& docEvent : m_docEventsHash)
             {
-                eventName = h_it->first;
+                eventName = docEvent.first;
                 try
                 {
                     m_xDocEvents->replaceByName( eventName, GetPropsByName( eventName, m_docEventsHash ) );
@@ -388,20 +383,16 @@ void SvxMacroTabPage_::Reset( const SfxItemSet* )
     {
             if( m_xAppEvents.is() )
             {
-                EventsHash::iterator h_itEnd =  m_appEventsHash.end();
-                EventsHash::iterator h_it = m_appEventsHash.begin();
-                for ( ; h_it !=  h_itEnd; ++h_it )
+                for (auto & appEvent : m_appEventsHash)
                 {
-                    h_it->second.second.clear();
+                    appEvent.second.second.clear();
                 }
             }
             if( m_xDocEvents.is() && bDocModified )
             {
-                EventsHash::iterator h_itEnd =  m_docEventsHash.end();
-                EventsHash::iterator h_it = m_docEventsHash.begin();
-                for ( ; h_it !=  h_itEnd; ++h_it )
+                for (auto & docEvent : m_docEventsHash)
                 {
-                    h_it->second.second.clear();
+                    docEvent.second.second.clear();
                 }
                 // if we have a valid XModifiable (in the case of doc events)
                 // call setModified(true)
@@ -473,7 +464,7 @@ void IconLBoxString::Paint(const Point& aPos, SvTreeListBox& /*aDevice*/, vcl::R
         }
 
         Point aPnt(aPos);
-        aPnt.X() += 20;
+        aPnt.AdjustX(20 );
         rRenderContext.DrawText(aPnt, aPureMethod);
     }
 }
@@ -512,12 +503,9 @@ void SvxMacroTabPage_::DisplayAppEvents( bool appEvents)
         std::insert_iterator< std::set< OUString > >( aEventNamesCache, aEventNamesCache.end() )
     );
 
-    for (   EventDisplayNames::const_iterator displayableEvent = aDisplayNames.begin();
-            displayableEvent != aDisplayNames.end();
-            ++displayableEvent
-        )
+    for (auto const& displayableEvent : aDisplayNames)
     {
-        OUString sEventName( OUString::createFromAscii( displayableEvent->pAsciiEventName ) );
+        OUString sEventName( OUString::createFromAscii( displayableEvent.pAsciiEventName ) );
         if ( !nameReplace->hasByName( sEventName ) )
             continue;
 
@@ -529,7 +517,7 @@ void SvxMacroTabPage_::DisplayAppEvents( bool appEvents)
         }
 
         OUString eventURL = h_it->second.second;
-        OUString displayName(CuiResId(displayableEvent->pEventResourceID));
+        OUString displayName(CuiResId(displayableEvent.pEventResourceID));
 
         displayName += "\t";
 
@@ -713,7 +701,7 @@ void SvxMacroTabPage_::InitAndSetHandler( const Reference< container::XNameRepla
     rListBox.SetTabs( &nTabs[0] );
     Size aSize( nTabs[ 2 ], 0 );
     rHeaderBar.InsertItem( ITEMID_EVENT, mpImpl->sStrEvent, LogicToPixel( aSize, MapMode( MapUnit::MapAppFont ) ).Width() );
-    aSize.Width() = 1764;        // don't know what, so 42^2 is best to use...
+    aSize.setWidth( 1764 );        // don't know what, so 42^2 is best to use...
     rHeaderBar.InsertItem( ITMEID_ASSMACRO, mpImpl->sAssignedMacro, LogicToPixel( aSize, MapMode( MapUnit::MapAppFont ) ).Width() );
     rListBox.SetSpaceBetweenEntries( 0 );
 

@@ -74,6 +74,7 @@
 #include <rtl/strbuf.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentStylePoolAccess.hxx>
+#include <IDocumentMarkAccess.hxx>
 #include <xmloff/odffields.hxx>
 #include <tools/urlobj.hxx>
 
@@ -182,8 +183,21 @@ void SwHTMLWriter::SetupFilterOptions(SfxMedium& rMedium)
     {
         mbEmbedImages = true;
     }
-    else if (sFilterOptions == "XHTML")
-        mbXHTML = true;
+
+    uno::Sequence<OUString> aOptionSeq = comphelper::string::convertCommaSeparated(sFilterOptions);
+    const OUString aXhtmlNsKey("xhtmlns=");
+    for (const auto& rOption : aOptionSeq)
+    {
+        if (rOption == "XHTML")
+            mbXHTML = true;
+        else if (rOption.startsWith(aXhtmlNsKey))
+        {
+            maNamespace = rOption.copy(aXhtmlNsKey.getLength()).toUtf8();
+            if (maNamespace == "reqif-xhtml")
+                // XHTML is always just a fragment inside ReqIF.
+                mbSkipHeaderFooter = true;
+        }
+    }
 }
 
 ErrCode SwHTMLWriter::WriteStream()
@@ -264,7 +278,7 @@ ErrCode SwHTMLWriter::WriteStream()
     SwCharFormats::size_type nOldCharFormatCnt = 0;
 
     OSL_ENSURE( !m_xTemplate.is(), "Where is the HTML template coming from?" );
-    m_xTemplate = static_cast<HTMLReader*>(ReadHTML)->GetTemplateDoc();
+    m_xTemplate = static_cast<HTMLReader*>(ReadHTML)->GetTemplateDoc(*pDoc);
     if( m_xTemplate.is() )
     {
         bOldHTMLMode = m_xTemplate->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE);
@@ -428,9 +442,9 @@ ErrCode SwHTMLWriter::WriteStream()
         OutNewLine();
     if (!mbSkipHeaderFooter)
     {
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_body, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_body, false );
         OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_html, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_html, false );
     }
 
     // delete the table with floating frames
@@ -657,7 +671,7 @@ static void lcl_html_OutSectionEndTag( SwHTMLWriter& rHTMLWrt )
     rHTMLWrt.DecIndentLevel();
     if( rHTMLWrt.m_bLFPossible )
         rHTMLWrt.OutNewLine();
-    HTMLOutFuncs::Out_AsciiTag( rHTMLWrt.Strm(), OOO_STRING_SVTOOLS_HTML_division, false );
+    HTMLOutFuncs::Out_AsciiTag( rHTMLWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division, false );
     rHTMLWrt.m_bLFPossible = true;
 }
 
@@ -853,11 +867,11 @@ static void OutBodyColor( const sal_Char* pTag, const SwFormat *pFormat,
         {
             Color aColor( pCItem->GetValue() );
             if( COL_AUTO == aColor.GetColor() )
-                aColor.SetColor( COL_BLACK );
+                aColor = COL_BLACK;
 
             Color aRefColor( static_cast<const SvxColorItem*>(pRefItem)->GetValue() );
             if( COL_AUTO == aRefColor.GetColor() )
-                aRefColor.SetColor( COL_BLACK );
+                aRefColor = COL_BLACK;
 
             if( !aColor.IsRGBEqual( aRefColor ) )
                 pColorItem = pCItem;
@@ -876,7 +890,7 @@ static void OutBodyColor( const sal_Char* pTag, const SwFormat *pFormat,
         rHWrt.Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
         Color aColor( pColorItem->GetValue() );
         if( COL_AUTO == aColor.GetColor() )
-            aColor.SetColor( COL_BLACK );
+            aColor = COL_BLACK;
         HTMLOutFuncs::Out_Color( rHWrt.Strm(), aColor );
         if( RES_POOLCOLL_STANDARD==pFormat->GetPoolFormatId() )
             rHWrt.m_pDfltColor = new Color( aColor );
@@ -937,14 +951,14 @@ const SwPageDesc *SwHTMLWriter::MakeHeader( sal_uInt16 &rHeaderAttrs )
             sOut.append(OOO_STRING_SVTOOLS_HTML_doctype " " OOO_STRING_SVTOOLS_XHTML_doctype11);
         else
             sOut.append(OOO_STRING_SVTOOLS_HTML_doctype " " OOO_STRING_SVTOOLS_HTML_doctype40);
-        HTMLOutFuncs::Out_AsciiTag( Strm(), sOut.makeStringAndClear().getStr() );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), sOut.makeStringAndClear().getStr() ); // No GetNamespace() here.
 
         // build prelude
         OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_html );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_html );
 
         OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_head );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_head );
 
         IncIndentLevel();   // indent content of <HEAD>
 
@@ -1013,11 +1027,11 @@ const SwPageDesc *SwHTMLWriter::MakeHeader( sal_uInt16 &rHeaderAttrs )
 
         DecIndentLevel();   // indent content of <HEAD>
         OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_head, false );
+        HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_head, false );
 
         // the body won't be indented, because then everything would be indented!
         OutNewLine();
-        sOut.append("<" OOO_STRING_SVTOOLS_HTML_body);
+        sOut.append("<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_body);
         Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
 
         // language
@@ -1066,7 +1080,7 @@ void SwHTMLWriter::OutAnchor( const OUString& rName )
     sOut.append("<" OOO_STRING_SVTOOLS_HTML_anchor " " OOO_STRING_SVTOOLS_HTML_O_name "=\"");
     Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
     HTMLOutFuncs::Out_String( Strm(), rName, m_eDestEnc, &m_aNonConvertableCharacters ).WriteCharPtr( "\">" );
-    HTMLOutFuncs::Out_AsciiTag( Strm(), OOO_STRING_SVTOOLS_HTML_anchor, false );
+    HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor, false );
 }
 
 void SwHTMLWriter::OutBookmarks()
@@ -1207,7 +1221,7 @@ void SwHTMLWriter::OutBackground( const SvxBrushItem *pBrushItem, bool bGraphic 
     const Color &rBackColor = pBrushItem->GetColor();
     /// check, if background color is not "no fill"/"auto fill", instead of
     /// only checking, if transparency is not set.
-    if( rBackColor.GetColor() != COL_TRANSPARENT )
+    if( rBackColor != COL_TRANSPARENT )
     {
         OStringBuffer sOut;
         sOut.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_bgcolor).append('=');
@@ -1411,6 +1425,14 @@ sal_Int32 SwHTMLWriter::indexOfDotLeaders( sal_uInt16 nPoolId, const OUString& r
                  return i;
     }
     return -1;
+}
+
+OString SwHTMLWriter::GetNamespace() const
+{
+    if (maNamespace.isEmpty())
+        return OString();
+
+    return maNamespace + ":";
 }
 
 // Structure caches the current data of the writer to output a

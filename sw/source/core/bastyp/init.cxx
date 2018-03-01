@@ -48,7 +48,6 @@
 #include <editeng/lrspitem.hxx>
 #include <editeng/lspcitem.hxx>
 #include <editeng/nhypitem.hxx>
-#include <editeng/nlbkitem.hxx>
 #include <editeng/opaqitem.hxx>
 #include <editeng/orphitem.hxx>
 #include <editeng/paravertalignitem.hxx>
@@ -56,7 +55,6 @@
 #include <editeng/pgrditem.hxx>
 #include <editeng/prntitem.hxx>
 #include <editeng/protitem.hxx>
-#include <editeng/prszitem.hxx>
 #include <editeng/rsiditem.hxx>
 #include <svl/grabbagitem.hxx>
 #include <editeng/scriptspaceitem.hxx>
@@ -304,8 +302,8 @@ SfxItemInfo aSlotTab[] =
     { SID_ATTR_CHAR_HIDDEN, true },        // RES_CHRATR_HIDDEN
     { SID_ATTR_CHAR_OVERLINE, true },      // RES_CHRATR_OVERLINE
     { 0, true },                           // RES_CHRATR_RSID
-    { 0, true },                           // RES_CHRATR_BOX
-    { 0, true },                           // RES_CHRATR_SHADOW
+    { SID_ATTR_CHAR_BOX, true },           // RES_CHRATR_BOX
+    { SID_ATTR_CHAR_SHADOW, true },        // RES_CHRATR_SHADOW
     { 0, true },                           // RES_CHRATR_HIGHLIGHT
     { SID_ATTR_CHAR_GRABBAG, true },       // RES_CHRATR_GRABBAG
     { 0, true },                           // RES_CHRATR_BIDIRTL

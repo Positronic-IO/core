@@ -18,6 +18,8 @@
  */
 
 #include <stdlib.h>
+
+#include <o3tl/make_unique.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <tools/poly.hxx>
 #include <vcl/gdimtf.hxx>
@@ -95,8 +97,8 @@ static const ChainMove aImplMoveOuter[ 8 ] =  {
 struct ImplColorSet
 {
     BitmapColor maColor;
-    sal_uInt16      mnIndex;
-    bool        mbSet;
+    sal_uInt16      mnIndex = 0;
+    bool        mbSet = false;
 };
 
 extern "C" int ImplColorSetCmpFnc( const void* p1, const void* p2 )
@@ -123,14 +125,13 @@ extern "C" int ImplColorSetCmpFnc( const void* p1, const void* p2 )
 
 class ImplPointArray
 {
-    Point* mpArray;
+    std::unique_ptr<Point[]> mpArray;
     sal_uLong mnSize;
     sal_uLong mnRealSize;
 
 public:
 
     ImplPointArray();
-   ~ImplPointArray();
 
     void ImplSetSize( sal_uLong nSize );
     sal_uLong ImplGetRealSize() const { return mnRealSize; }
@@ -143,17 +144,10 @@ public:
 };
 
 ImplPointArray::ImplPointArray() :
-    mpArray     ( nullptr ),
     mnSize      ( 0 ),
     mnRealSize  ( 0 )
 
 {
-}
-
-ImplPointArray::~ImplPointArray()
-{
-    if( mpArray )
-        rtl_freeMemory( mpArray );
 }
 
 void ImplPointArray::ImplSetSize( sal_uLong nSize )
@@ -163,11 +157,7 @@ void ImplPointArray::ImplSetSize( sal_uLong nSize )
     mnSize = nSize;
     mnRealSize = 0;
 
-    if( mpArray )
-        rtl_freeMemory( mpArray );
-
-    mpArray = static_cast<Point*>(rtl_allocateMemory( nTotal ));
-    memset( mpArray, 0, nTotal );
+    mpArray = o3tl::make_unique<Point[]>( nTotal );
 }
 
 inline Point& ImplPointArray::operator[]( sal_uLong nPos )
@@ -184,7 +174,7 @@ inline const Point& ImplPointArray::operator[]( sal_uLong nPos ) const
 
 void ImplPointArray::ImplCreatePoly( tools::Polygon& rPoly ) const
 {
-    rPoly = tools::Polygon( sal::static_int_cast<sal_uInt16>(mnRealSize), mpArray );
+    rPoly = tools::Polygon( sal::static_int_cast<sal_uInt16>(mnRealSize), mpArray.get() );
 }
 
 class ImplVectMap
@@ -360,79 +350,79 @@ void ImplChain::ImplEndAdd( sal_uLong nFlag )
                     }
                     else if( cMove == 2 && cNextMove == 3 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
                     }
                     else if( cMove == 3 && cNextMove == 0 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
                     }
                     else if( cMove == 0 && cNextMove == 1 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
                     }
                     else if( cMove == 1 && cNextMove == 2 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
                     }
                     else
                         bDone = false;
                 }
                 else if( cMove == 7 && cNextMove == 0 )
                 {
-                    aArr[ nPolyPos ].X() = nLastX - 1;
-                    aArr[ nPolyPos++ ].Y() = nLastY;
+                    aArr[ nPolyPos ].setX( nLastX - 1 );
+                    aArr[ nPolyPos++ ].setY( nLastY );
 
-                    aArr[ nPolyPos ].X() = nLastX;
-                    aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                    aArr[ nPolyPos ].setX( nLastX );
+                    aArr[ nPolyPos++ ].setY( nLastY + 1 );
                 }
                 else if( cMove == 4 && cNextMove == 1 )
                 {
-                    aArr[ nPolyPos ].X() = nLastX;
-                    aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                    aArr[ nPolyPos ].setX( nLastX );
+                    aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                    aArr[ nPolyPos ].X() = nLastX + 1;
-                    aArr[ nPolyPos++ ].Y() = nLastY;
+                    aArr[ nPolyPos ].setX( nLastX + 1 );
+                    aArr[ nPolyPos++ ].setY( nLastY );
                 }
                 else
                     bDone = false;
 
                 if( !bDone )
                 {
-                    aArr[ nPolyPos ].X() = nLastX + rMoveInner.nDX;
-                    aArr[ nPolyPos++ ].Y() = nLastY + rMoveInner.nDY;
+                    aArr[ nPolyPos ].setX( nLastX + rMoveInner.nDX );
+                    aArr[ nPolyPos++ ].setY( nLastY + rMoveInner.nDY );
                 }
             }
 
-            aArr[ nPolyPos ].X() = nFirstX + 1;
-            aArr[ nPolyPos++ ].Y() = nFirstY + 1;
+            aArr[ nPolyPos ].setX( nFirstX + 1 );
+            aArr[ nPolyPos++ ].setY( nFirstY + 1 );
             aArr.ImplSetRealSize( nPolyPos );
         }
         else if( nFlag & VECT_POLY_INLINE_OUTER )
@@ -467,79 +457,79 @@ void ImplChain::ImplEndAdd( sal_uLong nFlag )
                     }
                     else if( cMove == 0 && cNextMove == 3 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
                     }
                     else if( cMove == 3 && cNextMove == 2 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
 
-                        aArr[ nPolyPos ].X() = nLastX + 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX + 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
                     }
                     else if( cMove == 2 && cNextMove == 1 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY + 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
                     }
                     else if( cMove == 1 && cNextMove == 0 )
                     {
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY );
 
-                        aArr[ nPolyPos ].X() = nLastX - 1;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX - 1 );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                        aArr[ nPolyPos ].X() = nLastX;
-                        aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                        aArr[ nPolyPos ].setX( nLastX );
+                        aArr[ nPolyPos++ ].setY( nLastY - 1 );
                     }
                     else
                         bDone = false;
                 }
                 else if( cMove == 7 && cNextMove == 3 )
                 {
-                    aArr[ nPolyPos ].X() = nLastX;
-                    aArr[ nPolyPos++ ].Y() = nLastY - 1;
+                    aArr[ nPolyPos ].setX( nLastX );
+                    aArr[ nPolyPos++ ].setY( nLastY - 1 );
 
-                    aArr[ nPolyPos ].X() = nLastX + 1;
-                    aArr[ nPolyPos++ ].Y() = nLastY;
+                    aArr[ nPolyPos ].setX( nLastX + 1 );
+                    aArr[ nPolyPos++ ].setY( nLastY );
                 }
                 else if( cMove == 6 && cNextMove == 2 )
                 {
-                    aArr[ nPolyPos ].X() = nLastX + 1;
-                    aArr[ nPolyPos++ ].Y() = nLastY;
+                    aArr[ nPolyPos ].setX( nLastX + 1 );
+                    aArr[ nPolyPos++ ].setY( nLastY );
 
-                    aArr[ nPolyPos ].X() = nLastX;
-                    aArr[ nPolyPos++ ].Y() = nLastY + 1;
+                    aArr[ nPolyPos ].setX( nLastX );
+                    aArr[ nPolyPos++ ].setY( nLastY + 1 );
                 }
                 else
                     bDone = false;
 
                 if( !bDone )
                 {
-                    aArr[ nPolyPos ].X() = nLastX + rMoveOuter.nDX;
-                    aArr[ nPolyPos++ ].Y() = nLastY + rMoveOuter.nDY;
+                    aArr[ nPolyPos ].setX( nLastX + rMoveOuter.nDX );
+                    aArr[ nPolyPos++ ].setY( nLastY + rMoveOuter.nDY );
                 }
             }
 
-            aArr[ nPolyPos ].X() = nFirstX - 1;
-            aArr[ nPolyPos++ ].Y() = nFirstY - 1;
+            aArr[ nPolyPos ].setX( nFirstX - 1 );
+            aArr[ nPolyPos++ ].setY( nFirstY - 1 );
             aArr.ImplSetRealSize( nPolyPos );
         }
         else
@@ -577,8 +567,8 @@ void ImplChain::ImplPostProcess( const ImplPointArray& rArr )
     // pass 1
     aNewArr1.ImplSetSize( nCount );
     pLast = &( aNewArr1[ 0 ] );
-    pLast->X() = BACK_MAP( rArr[ 0 ].X() );
-    pLast->Y() = BACK_MAP( rArr[ 0 ].Y() );
+    pLast->setX( BACK_MAP( rArr[ 0 ].X() ) );
+    pLast->setY( BACK_MAP( rArr[ 0 ].Y() ) );
 
     for( n = nNewPos = 1; n < nCount; )
     {
@@ -589,8 +579,8 @@ void ImplChain::ImplPostProcess( const ImplPointArray& rArr )
         if( nX != pLast->X() || nY != pLast->Y() )
         {
             pLast = pLeast = &( aNewArr1[ nNewPos++ ] );
-            pLeast->X() = nX;
-            pLeast->Y() = nY;
+            pLeast->setX( nX );
+            pLeast->setY( nY );
         }
     }
 
@@ -644,9 +634,8 @@ bool ImplVectorize( const Bitmap& rColorBmp, GDIMetaFile& rMtf,
         const long          nHeight = pRAcc->Height();
         const sal_uInt16        nColorCount = pRAcc->GetPaletteEntryCount();
         sal_uInt16              n;
-        ImplColorSet*       pColorSet = reinterpret_cast<ImplColorSet*>(new sal_uInt8[ 256 * sizeof( ImplColorSet ) ]);
+        ImplColorSet*       pColorSet = new ImplColorSet[ 256 ];
 
-        memset( pColorSet, 0, 256 * sizeof( ImplColorSet ) );
         rMtf.Clear();
 
         // get used palette colors and sort them from light to dark colors
@@ -657,8 +646,11 @@ bool ImplVectorize( const Bitmap& rColorBmp, GDIMetaFile& rMtf,
         }
 
         for( long nY = 0; nY < nHeight; nY++ )
+        {
+            Scanline pScanlineRead = pRAcc->GetScanline( nY );
             for( long nX = 0; nX < nWidth; nX++ )
-                pColorSet[ pRAcc->GetPixel( nY, nX ).GetIndex() ].mbSet = true;
+                pColorSet[ pRAcc->GetIndexFromData( pScanlineRead, nX ) ].mbSet = true;
+        }
 
         qsort( pColorSet, 256, sizeof( ImplColorSet ), ImplColorSetCmpFnc );
 
@@ -703,7 +695,7 @@ bool ImplVectorize( const Bitmap& rColorBmp, GDIMetaFile& rMtf,
             VECT_PROGRESS( pProgress, FRound( fPercent += fPercentStep_2 ) );
         }
 
-        delete[] reinterpret_cast<sal_uInt8*>(pColorSet);
+        delete[] pColorSet;
 
         if( rMtf.GetActionSize() )
         {
@@ -780,9 +772,10 @@ ImplVectMap* ImplExpand( BitmapReadAccess* pRAcc, const Color& rColor )
 
         for( nY = 0, nTmpY = 5; nY < nOldHeight; nY++, nTmpY += 4 )
         {
+            Scanline pScanlineRead = pRAcc->GetScanline( nY );
             for( nX = 0; nX < nOldWidth; )
             {
-                if( pRAcc->GetPixel( nY, nX ) == aTest )
+                if( pRAcc->GetPixelFromData( pScanlineRead, nX ) == aTest )
                 {
                     nTmpX = pMapIn[ nX++ ];
                     nTmpY -= 3;
@@ -792,7 +785,7 @@ ImplVectMap* ImplExpand( BitmapReadAccess* pRAcc, const Color& rColor )
                     pMap->Set( nTmpY++, nTmpX, VECT_CONT_INDEX );
                     pMap->Set( nTmpY, nTmpX, VECT_CONT_INDEX );
 
-                    while( nX < nOldWidth && pRAcc->GetPixel( nY, nX ) == aTest )
+                    while( nX < nOldWidth && pRAcc->GetPixelFromData( pScanlineRead, nX ) == aTest )
                          nX++;
 
                     nTmpX = pMapOut[ nX - 1 ];

@@ -19,12 +19,17 @@
 #ifndef INCLUDED_SW_INC_HINTIDS_HXX
 #define INCLUDED_SW_INC_HINTIDS_HXX
 
-#include <tools/solar.h>
 #include <sal/types.h>
 #include <svx/xdef.hxx>
 #include "swdllapi.h"
 #include <svl/typedwhich.hxx>
 #include <vector>
+
+class SfxStringItem;
+class SwFormatChg;
+class SwUpdateAttr;
+class SwAttrSetChg;
+class SwDocPosUpdate;
 
 // For SwTextHints without end index the following char is added:
 
@@ -94,7 +99,7 @@
 #define     RES_CHRATR_OVERLINE                    TypedWhichId<SvxOverlineItem>(38)
 #define     RES_CHRATR_RSID                        TypedWhichId<SvxRsidItem>(39)
 #define     RES_CHRATR_BOX                         TypedWhichId<SvxBoxItem>(40)
-#define     RES_CHRATR_SHADOW                      TypedWhichId<SvxShadowedItem>(41)
+#define     RES_CHRATR_SHADOW                      TypedWhichId<SvxShadowItem>(41)
 #define     RES_CHRATR_HIGHLIGHT                   TypedWhichId<SvxBrushItem>(42)
 #define     RES_CHRATR_GRABBAG                     TypedWhichId<SfxGrabBagItem>(43)
 #define     RES_CHRATR_BIDIRTL                     TypedWhichId<SfxInt16Item>(44)

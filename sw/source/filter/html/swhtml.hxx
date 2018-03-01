@@ -406,6 +406,9 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     HTMLAttrContexts m_aContexts;// the current context of attribute/token
     std::vector<SwFrameFormat *> m_aMoveFlyFrames;// Fly-Frames, the anchor is moved
     std::deque<sal_Int32> m_aMoveFlyCnts;// and the Content-Positions
+    //stray SwTableBoxes which need to be deleted to avoid leaking, but hold
+    //onto them until parsing is done
+    std::vector<std::unique_ptr<SwTableBox>> m_aOrphanedTableBoxes;
 
     SwApplet_Impl *m_pAppletImpl; // current applet
 
@@ -422,7 +425,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     std::shared_ptr<HTMLTable> m_xTable; // current "outermost" table
     SwHTMLForm_Impl *m_pFormImpl;   // current form
     SdrObject       *m_pMarquee;    // current marquee
-    SwField         *m_pField;      // current field
+    std::unique_ptr<SwField> m_xField; // current field
     ImageMap        *m_pImageMap;   // current image map
     ImageMaps       *m_pImageMaps;  ///< all Image-Maps that have been read
     SwHTMLFootEndNote_Impl *m_pFootEndNoteImpl;
@@ -492,6 +495,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
 
     bool m_bBodySeen : 1;
     bool m_bReadingHeaderOrFooter : 1;
+    bool m_isInTableStructure;
 
     sal_Int32 m_nTableDepth;
 
@@ -534,10 +538,10 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     void DeleteAttr( HTMLAttr* pAttr );
 
     void EndContextAttrs( HTMLAttrContext *pContext );
-    void SaveAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab);
+    void SaveAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab);
     void SplitAttrTab( const SwPosition& rNewPos );
-    void SplitAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab, bool bMoveEndBack);
-    void RestoreAttrTab(std::shared_ptr<HTMLAttrTable>& rNewAttrTab);
+    void SplitAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab, bool bMoveEndBack);
+    void RestoreAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab);
     void InsertAttr( const SfxPoolItem& rItem, bool bInsAtStart );
     void InsertAttrs( HTMLAttrs& rAttrs );
 
@@ -586,7 +590,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     // nLimit. If bRemove set then remove it.
     std::unique_ptr<HTMLAttrContext> PopContext(HtmlTokenId nToken = HtmlTokenId::NONE);
 
-    bool GetMarginsFromContext( sal_uInt16 &nLeft, sal_uInt16 &nRight, short& nIndent,
+    void GetMarginsFromContext( sal_uInt16 &nLeft, sal_uInt16 &nRight, short& nIndent,
                                 bool bIgnoreCurrent=false ) const;
     void GetMarginsFromContextWithNumBul( sal_uInt16 &nLeft, sal_uInt16 &nRight,
                                           short& nIndent ) const;
@@ -885,6 +889,9 @@ private:
 
     bool PendingObjectsInPaM(SwPaM& rPam) const;
 
+    /// Parse FilterOptions passed to the importer.
+    void SetupFilterOptions();
+
     class TableDepthGuard
     {
     private:
@@ -895,7 +902,7 @@ private:
         {
             ++m_rParser.m_nTableDepth;
         }
-        bool TooDeep() const { return m_rParser.m_nTableDepth > 2048; }
+        bool TooDeep() const { return m_rParser.m_nTableDepth > 1024; }
         ~TableDepthGuard()
         {
             --m_rParser.m_nTableDepth;
@@ -946,11 +953,7 @@ public:
         m_aTables.push_back(pNew);
     }
 
-    void DeregisterHTMLTable(HTMLTable* pOld)
-    {
-        m_aTables.erase(std::remove(m_aTables.begin(), m_aTables.end(), pOld));
-    }
-
+    void DeregisterHTMLTable(HTMLTable* pOld);
 };
 
 struct SwPendingStackData

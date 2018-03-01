@@ -35,7 +35,8 @@
 #include <svl/zforlist.hxx>
 #include <svx/srchdlg.hxx>
 #include <svx/svdview.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/waitobj.hxx>
 
 #include <basic/sbstar.hxx>
@@ -836,8 +837,8 @@ void ScViewFunc::EnterBlock( const OUString& rString, const EditTextObject* pDat
     if ( PasteFromClip( InsertDeleteFlags::CONTENTS, pInsDoc.get(), ScPasteFunc::NONE, false, false,
             false, INS_NONE, InsertDeleteFlags::ATTRIB ) )
     {
-        const SfxUInt32Item* pItem = static_cast<const SfxUInt32Item*>( pInsDoc->GetAttr(
-            nCol, nRow, nTab, ATTR_VALUE_FORMAT ) );
+        const SfxUInt32Item* pItem = pInsDoc->GetAttr(
+            nCol, nRow, nTab, ATTR_VALUE_FORMAT );
         if ( pItem )
         {   // set number format if incompatible
             // MarkData was already MarkToSimple'ed in PasteFromClip
@@ -2058,12 +2059,12 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
             aMsgStr += ScGlobal::GetRscString( STR_MSSG_SOLVE_4 );
         }
 
-        ScopedVclPtrInstance<MessBox> aBox( GetViewData().GetDialogParent(),
-                        MessBoxStyle::YesNo | MessBoxStyle::DefaultNo, 0,
-                        ScGlobal::GetRscString( STR_MSSG_DOSUBTOTALS_0 ), aMsgStr );
-        sal_uInt16 nRetVal = aBox->Execute();
-
-        if ( RET_YES == nRetVal )
+        vcl::Window* pWin = GetViewData().GetDialogParent();
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                  VclMessageType::Question, VclButtonsType::YesNo, aMsgStr));
+        xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0));
+        xBox->set_default_response(RET_NO);
+        if (xBox->run() == RET_NO)
             EnterValue( nDestCol, nDestRow, nDestTab, nSolveResult );
 
         GetViewData().GetViewShell()->UpdateInputHandler( true );

@@ -116,6 +116,7 @@
 #include <comphelper/propertyvalue.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <svtools/embedhlp.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -866,8 +867,8 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
 
     SfxViewFrame* pViewFrame = GetViewFrame();
 
-    StartListening(*pViewFrame, true);
-    StartListening(rDocSh, true);
+    StartListening(*pViewFrame, DuplicateHandling::Prevent);
+    StartListening(rDocSh, DuplicateHandling::Prevent);
 
     // Set Zoom-factor from HRuler
     Fraction aZoomFract( aUsrPref.GetZoom(), 100 );
@@ -1441,13 +1442,13 @@ void SwView::ReadUserDataSequence ( const uno::Sequence < beans::PropertyValue >
                     const SwTwips lBorder = IsDocumentBorder() ? DOCUMENTBORDER : 2 * DOCUMENTBORDER;
                     SwTwips nEditWidth = GetEditWin().GetOutputSize().Width();
                     if(nEditWidth > (m_aDocSz.Width() + lBorder ))
-                        aTopLeft.X() = ( m_aDocSz.Width() + lBorder - nEditWidth  ) / 2;
+                        aTopLeft.setX( ( m_aDocSz.Width() + lBorder - nEditWidth  ) / 2 );
                     else
                     {
                         //check if the values are possible
                         long nXMax = m_pHScrollbar->GetRangeMax() - m_pHScrollbar->GetVisibleSize();
                         if( aTopLeft.X() > nXMax )
-                            aTopLeft.X() = nXMax < 0 ? 0 : nXMax;
+                            aTopLeft.setX( nXMax < 0 ? 0 : nXMax );
                     }
                     SetVisArea( aTopLeft );
                 }
@@ -1648,7 +1649,7 @@ void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                 break;
             case SfxHintId::RedlineChanged:
                 {
-                    sal_uInt16 aSlotRedLine[] = {
+                    static sal_uInt16 const aSlotRedLine[] = {
                         FN_REDLINE_NEXT_CHANGE,
                         FN_REDLINE_PREV_CHANGE,
                         FN_REDLINE_ACCEPT_DIRECT,

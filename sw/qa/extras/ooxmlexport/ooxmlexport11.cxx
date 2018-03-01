@@ -20,6 +20,8 @@
 #include <com/sun/star/text/XTextEmbeddedObjectsSupplier.hpp>
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/text/RubyAdjust.hpp>
+#include <com/sun/star/text/RubyPosition.hpp>
 
 
 #include <sfx2/docfile.hxx>
@@ -44,7 +46,7 @@ protected:
 DECLARE_OOXMLEXPORT_TEST(testTdf92524_autoColor, "tdf92524_autoColor.doc")
 {
     CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_NONE, getProperty<drawing::FillStyle>(getParagraph(1), "FillStyle"));
-    CPPUNIT_ASSERT_EQUAL(COL_AUTO, getProperty<sal_uInt32>(getParagraph(1), "ParaBackColor"));
+    CPPUNIT_ASSERT_EQUAL(COL_AUTO, Color(getProperty<sal_uInt32>(getParagraph(1), "ParaBackColor")));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf46938_clearTabStop, "tdf46938_clearTabStop.docx")
@@ -73,6 +75,14 @@ DECLARE_OOXMLEXPORT_TEST(testTdf82065_Ind_start_strict, "tdf82065_Ind_start_stri
     CPPUNIT_ASSERT_EQUAL_MESSAGE("IndentAt defined", true, bFoundIndentAt);
 }
 
+DECLARE_OOXMLEXPORT_TEST(testTdf112694, "tdf112694.docx")
+{
+    uno::Any aPageStyle = getStyles("PageStyles")->getByName("Standard");
+    // Header was on when header for file was for explicit first pages only
+    // (marked via <w:titlePg>).
+    CPPUNIT_ASSERT(!getProperty<bool>(aPageStyle, "HeaderIsOn"));
+}
+
 DECLARE_OOXMLEXPORT_TEST(testTdf67207_MERGEFIELD, "mailmerge.docx")
 {
     uno::Reference<beans::XPropertySet> xTextField = getProperty< uno::Reference<beans::XPropertySet> >(getRun(getParagraph(1), 2), "TextField");
@@ -97,6 +107,13 @@ DECLARE_OOXMLEXPORT_TEST(testTdf67207_MERGEFIELD, "mailmerge.docx")
     CPPUNIT_ASSERT_EQUAL(OUString("Name"), sValue);
     CPPUNIT_ASSERT(xFiledMaster->getPropertyValue("InstanceName") >>= sValue);
     CPPUNIT_ASSERT_EQUAL(OUString("com.sun.star.text.fieldmaster.DataBase.Name"), sValue);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf115719, "tdf115719.docx")
+{
+    // This was a single page, instead of pushing the textboxes to the second
+    // page.
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testParagraphSplitOnSectionBorder, "parasplit-on-section-border.odt")
@@ -170,6 +187,12 @@ DECLARE_OOXMLEXPORT_TEST(testTdf113183, "tdf113183.docx")
                                                 "HoriOrientPosition"));
 }
 
+DECLARE_OOXMLEXPORT_TEST(testGraphicObjectFliph, "graphic-object-fliph.docx")
+{
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(1), "HoriMirroredOnEvenPages"));
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(1), "HoriMirroredOnOddPages"));
+}
+
 DECLARE_OOXMLEXPORT_TEST(testTdf113547, "tdf113547.docx")
 {
     uno::Reference<beans::XPropertySet> xPropertySet(
@@ -202,6 +225,23 @@ DECLARE_OOXMLEXPORT_TEST(testTdf114882, "tdf114882.docx")
     // fastserializer must not fail assertion because of mismatching elements
 }
 
+DECLARE_OOXMLEXPORT_TEST(testTdf49073, "tdf49073.docx")
+{
+    // test case for Asisan phontic guide ( ruby text.)
+    sal_Unicode aRuby[3] = {0x304D,0x3082,0x3093};
+    OUString sRuby = OUString(aRuby, SAL_N_ELEMENTS(aRuby));
+    CPPUNIT_ASSERT_EQUAL(sRuby,getProperty<OUString>(getParagraph(1)->getStart(), "RubyText"));
+    OUString sStyle = getProperty<OUString>( getParagraph(1)->getStart(), "RubyCharStyleName");
+    uno::Reference<beans::XPropertySet> xPropertySet(getStyles("CharacterStyles")->getByName(sStyle), uno::UNO_QUERY );
+    CPPUNIT_ASSERT_EQUAL(5.f, getProperty<float>(xPropertySet, "CharHeight"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_CENTER) ,getProperty<sal_Int16>(getParagraph(2)->getStart(),"RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_BLOCK)  ,getProperty<sal_Int16>(getParagraph(3)->getStart(),"RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_INDENT_BLOCK),getProperty<sal_Int16>(getParagraph(4)->getStart(),"RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_LEFT)   ,getProperty<sal_Int16>(getParagraph(5)->getStart(),"RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_RIGHT)  ,getProperty<sal_Int16>(getParagraph(6)->getStart(),"RubyAdjust"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyPosition::INTER_CHARACTER)  ,getProperty<sal_Int16>(getParagraph(7)->getStart(),"RubyPosition"));
+}
+
 DECLARE_OOXMLEXPORT_TEST(testTdf114703, "tdf114703.docx")
 {
     uno::Reference<container::XIndexAccess> xRules
@@ -212,6 +252,15 @@ DECLARE_OOXMLEXPORT_TEST(testTdf114703, "tdf114703.docx")
     CPPUNIT_ASSERT_EQUAL(
         static_cast<sal_Int32>(-1000),
         comphelper::SequenceAsHashMap(xRules->getByIndex(0))["FirstLineIndent"].get<sal_Int32>());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf113258, "tdf113258.docx")
+{
+    uno::Reference<text::XTextRange> xShape(getShape(1), uno::UNO_QUERY);
+    // This was 494, i.e. automatic spacing resulted in non-zero paragraph top
+    // margin for the first paragraph in a shape.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
+                         getProperty<sal_Int32>(xShape->getStart(), "ParaTopMargin"));
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

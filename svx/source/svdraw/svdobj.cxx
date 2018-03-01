@@ -39,6 +39,7 @@
 #include <editeng/editeng.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/outlobj.hxx>
+#include <o3tl/deleter.hxx>
 #include <math.h>
 #include <sfx2/objface.hxx>
 #include <sfx2/objsh.hxx>
@@ -49,6 +50,7 @@
 #include <tools/diagnose_ex.h>
 #include <tools/helpers.hxx>
 #include <tools/line.hxx>
+#include <unotools/configmgr.hxx>
 #include <vcl/graphictools.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
@@ -224,8 +226,8 @@ sdr::properties::BaseProperties& SdrObject::GetProperties() const
 {
     if(!mpProperties)
     {
-        const_cast< SdrObject* >(this)->mpProperties =
-            const_cast< SdrObject* >(this)->CreateObjectSpecificProperties();
+        const_cast< SdrObject* >(this)->mpProperties.reset(
+            const_cast< SdrObject* >(this)->CreateObjectSpecificProperties() );
     }
 
     return *mpProperties;
@@ -261,8 +263,8 @@ sdr::contact::ViewContact& SdrObject::GetViewContact() const
 {
     if(!mpViewContact)
     {
-        const_cast< SdrObject* >(this)->mpViewContact =
-            const_cast< SdrObject* >(this)->CreateObjectSpecificViewContact();
+        const_cast< SdrObject* >(this)->mpViewContact.reset(
+            const_cast< SdrObject* >(this)->CreateObjectSpecificViewContact() );
     }
 
     return *mpViewContact;
@@ -357,21 +359,11 @@ SdrObject::~SdrObject()
     }
 
     SendUserCall(SdrUserCallType::Delete, GetLastBoundRect());
-    delete pPlusData;
+    o3tl::reset_preserve_ptr_during(pPlusData);
 
-    delete pGrabBagItem;
-
-    if(mpProperties)
-    {
-        delete mpProperties;
-        mpProperties = nullptr;
-    }
-
-    if(mpViewContact)
-    {
-        delete mpViewContact;
-        mpViewContact = nullptr;
-    }
+    pGrabBagItem.reset();
+    mpProperties.reset();
+    mpViewContact.reset();
 }
 
 void SdrObject::Free( SdrObject*& _rpObject )
@@ -584,12 +576,12 @@ void SdrObject::SetLayer(SdrLayerID nLayer)
 void SdrObject::AddListener(SfxListener& rListener)
 {
     ImpForcePlusData();
-    if (pPlusData->pBroadcast==nullptr) pPlusData->pBroadcast=new SfxBroadcaster;
+    if (pPlusData->pBroadcast==nullptr) pPlusData->pBroadcast.reset(new SfxBroadcaster);
 
     // SdrEdgeObj may be connected to same SdrObject on both ends so allow it
     // to listen twice
     SdrEdgeObj const*const pEdge(dynamic_cast<SdrEdgeObj const*>(&rListener));
-    rListener.StartListening(*pPlusData->pBroadcast, pEdge != nullptr);
+    rListener.StartListening(*pPlusData->pBroadcast, pEdge ? DuplicateHandling::Allow : DuplicateHandling::Unexpected);
 }
 
 void SdrObject::RemoveListener(SfxListener& rListener)
@@ -597,15 +589,14 @@ void SdrObject::RemoveListener(SfxListener& rListener)
     if (pPlusData!=nullptr && pPlusData->pBroadcast!=nullptr) {
         rListener.EndListening(*pPlusData->pBroadcast);
         if (!pPlusData->pBroadcast->HasListeners()) {
-            delete pPlusData->pBroadcast;
-            pPlusData->pBroadcast=nullptr;
+            pPlusData->pBroadcast.reset();
         }
     }
 }
 
 const SfxBroadcaster* SdrObject::GetBroadcaster() const
 {
-    return pPlusData!=nullptr ? pPlusData->pBroadcast : nullptr;
+    return pPlusData!=nullptr ? pPlusData->pBroadcast.get() : nullptr;
 }
 
 void SdrObject::AddReference(SdrVirtObj& rVrtObj)
@@ -792,7 +783,7 @@ void SdrObject::GetGrabBagItem(css::uno::Any& rVal) const
 void SdrObject::SetGrabBagItem(const css::uno::Any& rVal)
 {
     if (pGrabBagItem == nullptr)
-        pGrabBagItem = new SfxGrabBagItem;
+        pGrabBagItem.reset(new SfxGrabBagItem);
 
     pGrabBagItem->PutValue(rVal, 0);
 
@@ -843,7 +834,7 @@ const tools::Rectangle& SdrObject::GetLastBoundRect() const
 void SdrObject::RecalcBoundRect()
 {
     // #i101680# suppress BoundRect calculations on import(s)
-    if(pModel && pModel->isLocked())
+    if ((pModel && pModel->isLocked()) || utl::ConfigManager::IsFuzzing())
         return;
 
     // central new method which will calculate the BoundRect using primitive geometry
@@ -873,7 +864,7 @@ void SdrObject::RecalcBoundRect()
 
 void SdrObject::BroadcastObjectChange() const
 {
-    if( pModel && pModel->isLocked() )
+    if ((pModel && pModel->isLocked()) || utl::ConfigManager::IsFuzzing())
         return;
 
     if (mbDelayBroadcastObjectChange)
@@ -947,22 +938,13 @@ SdrObject& SdrObject::operator=(const SdrObject& rObj)
     if( this == &rObj )
         return *this;
 
-    if(mpProperties)
-    {
-        delete mpProperties;
-        mpProperties = nullptr;
-    }
-
-    if(mpViewContact)
-    {
-        delete mpViewContact;
-        mpViewContact = nullptr;
-    }
+    mpProperties.reset();
+    mpViewContact.reset();
 
     // The Clone() method uses the local copy constructor from the individual
     // sdr::properties::BaseProperties class. Since the target class maybe for another
     // draw object, an SdrObject needs to be provided, as in the normal constructor.
-    mpProperties = &rObj.GetProperties().Clone(*this);
+    mpProperties.reset( &rObj.GetProperties().Clone(*this) );
 
     pModel  =rObj.pModel;
     pPage = rObj.pPage;
@@ -979,20 +961,17 @@ SdrObject& SdrObject::operator=(const SdrObject& rObj)
     bNotVisibleAsMaster=rObj.bNotVisibleAsMaster;
     bSnapRectDirty=true;
     bNotMasterCachable=rObj.bNotMasterCachable;
-    delete pPlusData;
-    pPlusData=nullptr;
+    pPlusData.reset();
     if (rObj.pPlusData!=nullptr) {
-        pPlusData=rObj.pPlusData->Clone(this);
+        pPlusData.reset(rObj.pPlusData->Clone(this));
     }
     if (pPlusData!=nullptr && pPlusData->pBroadcast!=nullptr) {
-        delete pPlusData->pBroadcast; // broadcaster isn't copied
-        pPlusData->pBroadcast=nullptr;
+        pPlusData->pBroadcast.reset(); // broadcaster isn't copied
     }
 
-    delete pGrabBagItem;
-    pGrabBagItem=nullptr;
+    pGrabBagItem.reset();
     if (rObj.pGrabBagItem!=nullptr)
-        pGrabBagItem=static_cast< SfxGrabBagItem* >( rObj.pGrabBagItem->Clone() );
+        pGrabBagItem.reset(static_cast< SfxGrabBagItem* >( rObj.pGrabBagItem->Clone() ));
 
     aGridOffset = rObj.aGridOffset;
     return *this;
@@ -1038,25 +1017,22 @@ void SdrObject::ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr) c
 void SdrObject::ImpForcePlusData()
 {
     if (!pPlusData)
-        pPlusData = new SdrObjPlusData;
+        pPlusData.reset( new SdrObjPlusData );
 }
 
 OUString SdrObject::GetAngleStr(long nAngle) const
 {
-    OUString aStr;
-    if (pModel!=nullptr) {
-        SdrModel::TakeAngleStr(nAngle,aStr);
-    }
-    return aStr;
+    if (pModel!=nullptr)
+        return SdrModel::GetAngleString(nAngle);
+
+    return OUString();
 }
 
 OUString SdrObject::GetMetrStr(long nVal) const
 {
-    OUString aStr;
-    if (pModel!=nullptr) {
-        pModel->TakeMetricStr(nVal,aStr);
-    }
-    return aStr;
+    if (pModel!=nullptr)
+        return pModel->GetMetricString(nVal);
+    return OUString();
 }
 
 basegfx::B2DPolyPolygon SdrObject::TakeXorPoly() const
@@ -1117,7 +1093,7 @@ basegfx::B2DPolyPolygon SdrObject::TakeContour() const
 
         // solid black lines and no fill
         aNewSet.Put(XLineStyleItem(drawing::LineStyle_SOLID));
-        aNewSet.Put(XLineColorItem(OUString(), Color(COL_BLACK)));
+        aNewSet.Put(XLineColorItem(OUString(), COL_BLACK));
         aNewSet.Put(XFillStyleItem(drawing::FillStyle_NONE));
         pClone->SetMergedItemSet(aNewSet);
 
@@ -1219,10 +1195,10 @@ tools::Rectangle SdrObject::ImpDragCalcRect(const SdrDragStat& rDrag) const
     bool bRgt=(eHdl==SdrHdlKind::UpperRight || eHdl==SdrHdlKind::Right || eHdl==SdrHdlKind::LowerRight);
     bool bTop=(eHdl==SdrHdlKind::UpperRight || eHdl==SdrHdlKind::Upper || eHdl==SdrHdlKind::UpperLeft);
     bool bBtm=(eHdl==SdrHdlKind::LowerRight || eHdl==SdrHdlKind::Lower || eHdl==SdrHdlKind::LowerLeft);
-    if (bLft) aTmpRect.Left()  =aPos.X();
-    if (bRgt) aTmpRect.Right() =aPos.X();
-    if (bTop) aTmpRect.Top()   =aPos.Y();
-    if (bBtm) aTmpRect.Bottom()=aPos.Y();
+    if (bLft) aTmpRect.SetLeft(aPos.X() );
+    if (bRgt) aTmpRect.SetRight(aPos.X() );
+    if (bTop) aTmpRect.SetTop(aPos.Y() );
+    if (bBtm) aTmpRect.SetBottom(aPos.Y() );
     if (bOrtho) { // Ortho
         long nWdt0=aRect.Right() -aRect.Left();
         long nHgt0=aRect.Bottom()-aRect.Top();
@@ -1247,26 +1223,26 @@ tools::Rectangle SdrObject::ImpDragCalcRect(const SdrDragStat& rDrag) const
             if (bUseX) {
                 long nNeed=long(BigInt(nHgt0)*BigInt(nXMul)/BigInt(nXDiv));
                 if (bYNeg) nNeed=-nNeed;
-                if (bTop) aTmpRect.Top()=aTmpRect.Bottom()-nNeed;
-                if (bBtm) aTmpRect.Bottom()=aTmpRect.Top()+nNeed;
+                if (bTop) aTmpRect.SetTop(aTmpRect.Bottom()-nNeed );
+                if (bBtm) aTmpRect.SetBottom(aTmpRect.Top()+nNeed );
             } else {
                 long nNeed=long(BigInt(nWdt0)*BigInt(nYMul)/BigInt(nYDiv));
                 if (bXNeg) nNeed=-nNeed;
-                if (bLft) aTmpRect.Left()=aTmpRect.Right()-nNeed;
-                if (bRgt) aTmpRect.Right()=aTmpRect.Left()+nNeed;
+                if (bLft) aTmpRect.SetLeft(aTmpRect.Right()-nNeed );
+                if (bRgt) aTmpRect.SetRight(aTmpRect.Left()+nNeed );
             }
         } else { // apex handles
             if ((bLft || bRgt) && nXDiv!=0) {
                 long nHgt0b=aRect.Bottom()-aRect.Top();
                 long nNeed=long(BigInt(nHgt0b)*BigInt(nXMul)/BigInt(nXDiv));
-                aTmpRect.Top()-=(nNeed-nHgt0b)/2;
-                aTmpRect.Bottom()=aTmpRect.Top()+nNeed;
+                aTmpRect.AdjustTop( -((nNeed-nHgt0b)/2) );
+                aTmpRect.SetBottom(aTmpRect.Top()+nNeed );
             }
             if ((bTop || bBtm) && nYDiv!=0) {
                 long nWdt0b=aRect.Right()-aRect.Left();
                 long nNeed=long(BigInt(nWdt0b)*BigInt(nYMul)/BigInt(nYDiv));
-                aTmpRect.Left()-=(nNeed-nWdt0b)/2;
-                aTmpRect.Right()=aTmpRect.Left()+nNeed;
+                aTmpRect.AdjustLeft( -((nNeed-nWdt0b)/2) );
+                aTmpRect.SetRight(aTmpRect.Left()+nNeed );
             }
         }
     }
@@ -1383,7 +1359,7 @@ Pointer SdrObject::GetCreatePointer() const
 // transformations
 void SdrObject::NbcMove(const Size& rSiz)
 {
-    MoveRect(aOutRect,rSiz);
+    aOutRect.Move(rSiz);
     SetRectsDirty();
 }
 
@@ -1395,12 +1371,12 @@ void SdrObject::NbcResize(const Point& rRef, const Fraction& xFact, const Fracti
         Point aRef1(GetSnapRect().Center());
         if (bXMirr) {
             Point aRef2(aRef1);
-            aRef2.Y()++;
+            aRef2.AdjustY( 1 );
             NbcMirrorGluePoints(aRef1,aRef2);
         }
         if (bYMirr) {
             Point aRef2(aRef1);
-            aRef2.X()++;
+            aRef2.AdjustX( 1 );
             NbcMirrorGluePoints(aRef1,aRef2);
         }
     }
@@ -1414,20 +1390,20 @@ void SdrObject::NbcRotate(const Point& rRef, long nAngle, double sn, double cs)
     aOutRect.Move(-rRef.X(),-rRef.Y());
     tools::Rectangle R(aOutRect);
     if (sn==1.0 && cs==0.0) { // 90deg
-        aOutRect.Left()  =-R.Bottom();
-        aOutRect.Right() =-R.Top();
-        aOutRect.Top()   =R.Left();
-        aOutRect.Bottom()=R.Right();
+        aOutRect.SetLeft(-R.Bottom() );
+        aOutRect.SetRight(-R.Top() );
+        aOutRect.SetTop(R.Left() );
+        aOutRect.SetBottom(R.Right() );
     } else if (sn==0.0 && cs==-1.0) { // 180deg
-        aOutRect.Left()  =-R.Right();
-        aOutRect.Right() =-R.Left();
-        aOutRect.Top()   =-R.Bottom();
-        aOutRect.Bottom()=-R.Top();
+        aOutRect.SetLeft(-R.Right() );
+        aOutRect.SetRight(-R.Left() );
+        aOutRect.SetTop(-R.Bottom() );
+        aOutRect.SetBottom(-R.Top() );
     } else if (sn==-1.0 && cs==0.0) { // 270deg
-        aOutRect.Left()  =R.Top();
-        aOutRect.Right() =R.Bottom();
-        aOutRect.Top()   =-R.Right();
-        aOutRect.Bottom()=-R.Left();
+        aOutRect.SetLeft(R.Top() );
+        aOutRect.SetRight(R.Bottom() );
+        aOutRect.SetTop(-R.Right() );
+        aOutRect.SetBottom(-R.Left() );
     }
     aOutRect.Move(rRef.X(),rRef.Y());
     aOutRect.Justify(); // just in case
@@ -1444,21 +1420,21 @@ void SdrObject::NbcMirror(const Point& rRef1, const Point& rRef2)
     long dx=rRef2.X()-rRef1.X();
     long dy=rRef2.Y()-rRef1.Y();
     if (dx==0) {          // vertical axis
-        aOutRect.Left() =-R.Right();
-        aOutRect.Right()=-R.Left();
+        aOutRect.SetLeft(-R.Right() );
+        aOutRect.SetRight(-R.Left() );
     } else if (dy==0) {   // horizontal axis
-        aOutRect.Top()   =-R.Bottom();
-        aOutRect.Bottom()=-R.Top();
+        aOutRect.SetTop(-R.Bottom() );
+        aOutRect.SetBottom(-R.Top() );
     } else if (dx==dy) {  // 45deg axis
-        aOutRect.Left()  =R.Top();
-        aOutRect.Right() =R.Bottom();
-        aOutRect.Top()   =R.Left();
-        aOutRect.Bottom()=R.Right();
+        aOutRect.SetLeft(R.Top() );
+        aOutRect.SetRight(R.Bottom() );
+        aOutRect.SetTop(R.Left() );
+        aOutRect.SetBottom(R.Right() );
     } else if (dx==-dy) { // 45deg axis
-        aOutRect.Left()  =-R.Bottom();
-        aOutRect.Right() =-R.Top();
-        aOutRect.Top()   =-R.Right();
-        aOutRect.Bottom()=-R.Left();
+        aOutRect.SetLeft(-R.Bottom() );
+        aOutRect.SetRight(-R.Top() );
+        aOutRect.SetTop(-R.Right() );
+        aOutRect.SetBottom(-R.Left() );
     }
     aOutRect.Move(rRef1.X(),rRef1.Y());
     aOutRect.Justify(); // just in case
@@ -1880,12 +1856,11 @@ void SdrObject::RestGeoData(const SdrObjGeoData& rGeo)
         if (pPlusData->pGluePoints!=nullptr) {
             *pPlusData->pGluePoints=*rGeo.pGPL;
         } else {
-            pPlusData->pGluePoints=new SdrGluePointList(*rGeo.pGPL);
+            pPlusData->pGluePoints.reset(new SdrGluePointList(*rGeo.pGPL));
         }
     } else {
         if (pPlusData!=nullptr && pPlusData->pGluePoints!=nullptr) {
-            delete pPlusData->pGluePoints;
-            pPlusData->pGluePoints=nullptr;
+            pPlusData->pGluePoints.reset();
         }
     }
 }
@@ -1978,19 +1953,19 @@ void SdrObject::NbcApplyNotPersistAttr(const SfxItemSet& rAttr)
     const tools::Rectangle& rSnap=GetSnapRect();
     const tools::Rectangle& rLogic=GetLogicRect();
     Point aRef1(rSnap.Center());
-    Point aRef2(aRef1); aRef2.Y()++;
+    Point aRef2(aRef1); aRef2.AdjustY( 1 );
     const SfxPoolItem *pPoolItem=nullptr;
     if (rAttr.GetItemState(SDRATTR_TRANSFORMREF1X,true,&pPoolItem)==SfxItemState::SET) {
-        aRef1.X()=static_cast<const SdrTransformRef1XItem*>(pPoolItem)->GetValue();
+        aRef1.setX(static_cast<const SdrTransformRef1XItem*>(pPoolItem)->GetValue() );
     }
     if (rAttr.GetItemState(SDRATTR_TRANSFORMREF1Y,true,&pPoolItem)==SfxItemState::SET) {
-        aRef1.Y()=static_cast<const SdrTransformRef1YItem*>(pPoolItem)->GetValue();
+        aRef1.setY(static_cast<const SdrTransformRef1YItem*>(pPoolItem)->GetValue() );
     }
     if (rAttr.GetItemState(SDRATTR_TRANSFORMREF2X,true,&pPoolItem)==SfxItemState::SET) {
-        aRef2.X()=static_cast<const SdrTransformRef2XItem*>(pPoolItem)->GetValue();
+        aRef2.setX(static_cast<const SdrTransformRef2XItem*>(pPoolItem)->GetValue() );
     }
     if (rAttr.GetItemState(SDRATTR_TRANSFORMREF2Y,true,&pPoolItem)==SfxItemState::SET) {
-        aRef2.Y()=static_cast<const SdrTransformRef2YItem*>(pPoolItem)->GetValue();
+        aRef2.setY(static_cast<const SdrTransformRef2YItem*>(pPoolItem)->GetValue() );
     }
 
     tools::Rectangle aNewSnap(rSnap);
@@ -2012,11 +1987,11 @@ void SdrObject::NbcApplyNotPersistAttr(const SfxItemSet& rAttr)
     }
     if (rAttr.GetItemState(SDRATTR_ONESIZEWIDTH,true,&pPoolItem)==SfxItemState::SET) {
         long n=static_cast<const SdrOneSizeWidthItem*>(pPoolItem)->GetValue();
-        aNewSnap.Right()=aNewSnap.Left()+n;
+        aNewSnap.SetRight(aNewSnap.Left()+n );
     }
     if (rAttr.GetItemState(SDRATTR_ONESIZEHEIGHT,true,&pPoolItem)==SfxItemState::SET) {
         long n=static_cast<const SdrOneSizeHeightItem*>(pPoolItem)->GetValue();
-        aNewSnap.Bottom()=aNewSnap.Top()+n;
+        aNewSnap.SetBottom(aNewSnap.Top()+n );
     }
     if (aNewSnap!=rSnap) {
         if (aNewSnap.GetSize()==rSnap.GetSize()) {
@@ -2109,11 +2084,11 @@ void SdrObject::NbcApplyNotPersistAttr(const SfxItemSet& rAttr)
     tools::Rectangle aNewLogic(rLogic);
     if (rAttr.GetItemState(SDRATTR_LOGICSIZEWIDTH,true,&pPoolItem)==SfxItemState::SET) {
         long n=static_cast<const SdrLogicSizeWidthItem*>(pPoolItem)->GetValue();
-        aNewLogic.Right()=aNewLogic.Left()+n;
+        aNewLogic.SetRight(aNewLogic.Left()+n );
     }
     if (rAttr.GetItemState(SDRATTR_LOGICSIZEHEIGHT,true,&pPoolItem)==SfxItemState::SET) {
         long n=static_cast<const SdrLogicSizeHeightItem*>(pPoolItem)->GetValue();
-        aNewLogic.Bottom()=aNewLogic.Top()+n;
+        aNewLogic.SetBottom(aNewLogic.Top()+n );
     }
     if (aNewLogic!=rLogic) {
         NbcSetLogicRect(aNewLogic);
@@ -2167,7 +2142,7 @@ void SdrObject::TakeNotPersistAttr(SfxItemSet& rAttr) const
         }
     }
     Point aRef1(rSnap.Center());
-    Point aRef2(aRef1); aRef2.Y()++;
+    Point aRef2(aRef1); aRef2.AdjustY( 1 );
     rAttr.Put(SdrTransformRef1XItem(aRef1.X()));
     rAttr.Put(SdrTransformRef1YItem(aRef1.Y()));
     rAttr.Put(SdrTransformRef2XItem(aRef2.X()));
@@ -2248,7 +2223,7 @@ SdrGluePoint SdrObject::GetCornerGluePoint(sal_uInt16 nPosNum) const
 
 const SdrGluePointList* SdrObject::GetGluePointList() const
 {
-    if (pPlusData!=nullptr) return pPlusData->pGluePoints;
+    if (pPlusData!=nullptr) return pPlusData->pGluePoints.get();
     return nullptr;
 }
 
@@ -2257,9 +2232,9 @@ SdrGluePointList* SdrObject::ForceGluePointList()
 {
     ImpForcePlusData();
     if (pPlusData->pGluePoints==nullptr) {
-        pPlusData->pGluePoints=new SdrGluePointList;
+        pPlusData->pGluePoints.reset(new SdrGluePointList);
     }
-    return pPlusData->pGluePoints;
+    return pPlusData->pGluePoints.get();
 }
 
 void SdrObject::SetGlueReallyAbsolute(bool bOn)
@@ -2369,7 +2344,7 @@ SdrObject* SdrObject::ImpConvertToContourObj(SdrObject* pRet, bool bForceLineDas
             }
 
             // check for fill rsults
-            if(!aExtractedLineFills.empty())
+            if (!aExtractedLineFills.empty() && !utl::ConfigManager::IsFuzzing())
             {
                 // merge to a single tools::PolyPolygon (OR)
                 aMergedLineFillPolyPolygon = basegfx::utils::mergeToSinglePolyPolygon(aExtractedLineFills);
@@ -2679,7 +2654,7 @@ void SdrObject::AppendUserData(SdrObjUserData* pData)
 
     ImpForcePlusData();
     if (!pPlusData->pUserDataList)
-        pPlusData->pUserDataList = new SdrObjUserDataList;
+        pPlusData->pUserDataList.reset( new SdrObjUserDataList );
 
     pPlusData->pUserDataList->AppendUserData(pData);
 }
@@ -2690,8 +2665,7 @@ void SdrObject::DeleteUserData(sal_uInt16 nNum)
     if (nNum<nCount) {
         pPlusData->pUserDataList->DeleteUserData(nNum);
         if (nCount==1)  {
-            delete pPlusData->pUserDataList;
-            pPlusData->pUserDataList=nullptr;
+            pPlusData->pUserDataList.reset();
         }
     } else {
         OSL_FAIL("SdrObject::DeleteUserData(): Invalid Index.");
@@ -3027,12 +3001,12 @@ bool SdrObject::IsInDestruction() const
 // return if fill is != drawing::FillStyle_NONE
 bool SdrObject::HasFillStyle() const
 {
-    return static_cast<const XFillStyleItem&>(GetObjectItem(XATTR_FILLSTYLE)).GetValue() != drawing::FillStyle_NONE;
+    return GetObjectItem(XATTR_FILLSTYLE).GetValue() != drawing::FillStyle_NONE;
 }
 
 bool SdrObject::HasLineStyle() const
 {
-    return static_cast<const XLineStyleItem&>(GetObjectItem(XATTR_LINESTYLE)).GetValue() != drawing::LineStyle_NONE;
+    return GetObjectItem(XATTR_LINESTYLE).GetValue() != drawing::LineStyle_NONE;
 }
 
 

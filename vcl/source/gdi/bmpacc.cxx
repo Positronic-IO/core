@@ -30,23 +30,6 @@ BitmapInfoAccess::BitmapInfoAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
             mpBuffer        ( nullptr ),
             mnAccessMode    ( nMode )
 {
-    ImplCreate( rBitmap );
-}
-
-BitmapInfoAccess::BitmapInfoAccess( Bitmap& rBitmap ) :
-            mpBuffer        ( nullptr ),
-            mnAccessMode    ( BitmapAccessMode::Info )
-{
-    ImplCreate( rBitmap );
-}
-
-BitmapInfoAccess::~BitmapInfoAccess()
-{
-    ImplDestroy();
-}
-
-void BitmapInfoAccess::ImplCreate( Bitmap& rBitmap )
-{
     std::shared_ptr<ImpBitmap> xImpBmp = rBitmap.ImplGetImpBitmap();
 
     SAL_WARN_IF( !xImpBmp, "vcl", "Forbidden Access to empty bitmap!" );
@@ -83,7 +66,7 @@ void BitmapInfoAccess::ImplCreate( Bitmap& rBitmap )
     }
 }
 
-void BitmapInfoAccess::ImplDestroy()
+BitmapInfoAccess::~BitmapInfoAccess()
 {
     std::shared_ptr<ImpBitmap> xImpBmp = maBitmap.ImplGetImpBitmap();
 
@@ -104,23 +87,6 @@ BitmapReadAccess::BitmapReadAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
             mFncGetPixel    ( nullptr ),
             mFncSetPixel    ( nullptr )
 {
-    ImplInitScanBuffer( rBitmap );
-}
-
-BitmapReadAccess::BitmapReadAccess( Bitmap& rBitmap ) :
-            BitmapInfoAccess( rBitmap, BitmapAccessMode::Read ),
-            mFncGetPixel    ( nullptr ),
-            mFncSetPixel    ( nullptr )
-{
-    ImplInitScanBuffer( rBitmap );
-}
-
-BitmapReadAccess::~BitmapReadAccess()
-{
-}
-
-void BitmapReadAccess::ImplInitScanBuffer( Bitmap const & rBitmap )
-{
     if (!mpBuffer)
         return;
 
@@ -137,6 +103,10 @@ void BitmapReadAccess::ImplInitScanBuffer( Bitmap const & rBitmap )
         xImpBmp->ImplReleaseBuffer( mpBuffer, mnAccessMode );
         mpBuffer = nullptr;
     }
+}
+
+BitmapReadAccess::~BitmapReadAccess()
+{
 }
 
 bool BitmapReadAccess::ImplSetAccessPointers( ScanlineFormat nFormat )
@@ -374,9 +344,13 @@ void BitmapWriteAccess::CopyScanline( long nY, const BitmapReadAccess& rReadAcc 
         memcpy(GetScanline(nY), rReadAcc.GetScanline(nY), rReadAcc.GetScanlineSize());
     }
     else
+    {
         // TODO: use fastbmp infrastructure
+        Scanline pScanline = GetScanline( nY );
+        Scanline pScanlineRead = rReadAcc.GetScanline(nY);
         for( long nX = 0, nWidth = std::min( mpBuffer->mnWidth, rReadAcc.Width() ); nX < nWidth; nX++ )
-            SetPixel( nY, nX, rReadAcc.GetPixel( nY, nX ) );
+            SetPixelOnData( pScanline, nX, rReadAcc.GetPixelFromData( pScanlineRead, nX ) );
+    }
 }
 
 void BitmapWriteAccess::CopyScanline( long nY, ConstScanline aSrcScanline,
@@ -431,9 +405,9 @@ void BitmapWriteAccess::CopyScanline( long nY, ConstScanline aSrcScanline,
             if( pFncGetPixel )
             {
                 const ColorMask aDummyMask;
-
-                for( long nX = 0, nWidth = mpBuffer->mnWidth; nX < nWidth; nX++ )
-                    SetPixel( nY, nX, pFncGetPixel( aSrcScanline, nX, aDummyMask ) );
+                Scanline pScanline = GetScanline(nY);
+                for (long nX = 0, nWidth = mpBuffer->mnWidth; nX < nWidth; ++nX)
+                    SetPixelOnData(pScanline, nX, pFncGetPixel(aSrcScanline, nX, aDummyMask));
             }
         }
     }

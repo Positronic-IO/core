@@ -29,7 +29,6 @@
 #include <svx/svdpage.hxx>
 #include <vcl/bitmapex.hxx>
 #include <vcl/bitmapaccess.hxx>
-#include <vcl/pngwrite.hxx>
 
 namespace sd { namespace slidesorter { namespace view {
 class SlideSorterView;
@@ -57,8 +56,8 @@ Bitmap BitmapFactory::CreateBitmap (
     {
         // Supersampling factor
         int aSuperSamplingFactor = 2;
-        aSize.Width() *= aSuperSamplingFactor;
-        aSize.Height() *= aSuperSamplingFactor;
+        aSize.setWidth( aSize.Width() * aSuperSamplingFactor );
+        aSize.setHeight( aSize.Height() * aSuperSamplingFactor );
     }
 
     Bitmap aPreview (maRenderer.RenderPage (

@@ -18,7 +18,7 @@
  */
 
 #include <sfx2/app.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/waitobj.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <svx/svdpage.hxx>
@@ -516,7 +516,7 @@ bool ScDBDocFunc::Sort( SCTAB nTab, const ScSortParam& rSortParam,
     bool bShrunk = false;
     rDoc.ShrinkToUsedDataArea( bShrunk, nTab, aLocalParam.nCol1, aLocalParam.nRow1,
             aLocalParam.nCol2, aLocalParam.nRow2, false, aLocalParam.bByRow, !aLocalParam.bByRow,
-            aLocalParam.bIncludeComments );
+            aLocalParam.bIncludeComments, aLocalParam.bIncludeGraphicObjects );
 
     SCROW nStartRow = aLocalParam.nRow1;
     if (aLocalParam.bByRow && aLocalParam.bHasHeader && nStartRow < aLocalParam.nRow2)
@@ -1007,14 +1007,17 @@ void ScDBDocFunc::DoSubTotals( SCTAB nTab, const ScSubTotalParam& rParam,
 
     bool bOk = true;
     if (rParam.bReplace)
+    {
         if (rDoc.TestRemoveSubTotals( nTab, rParam ))
         {
-            bOk = ScopedVclPtrInstance<MessBox>( ScDocShell::GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, 0,
-                        // "StarCalc" "Delete Data?"
-                        ScGlobal::GetRscString( STR_MSSG_DOSUBTOTALS_0 ),
-                        ScGlobal::GetRscString( STR_MSSG_DOSUBTOTALS_1 ) )->Execute()
-                   == RET_YES;
+            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                      VclMessageType::Question,
+                                                      VclButtonsType::YesNo, ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_1))); // "Delete Data?"
+            xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
+            bOk = xBox->run() == RET_YES;
         }
+    }
 
     if (bOk)
     {
@@ -1297,9 +1300,12 @@ bool ScDBDocFunc::DataPilotUpdate( ScDPObject* pOldObj, const ScDPObject* pNewOb
         // OutRange of pOldObj (pDestObj) is still old area
         if (!lcl_EmptyExcept(&rDoc, aNewOut, pOldObj->GetOutRange()))
         {
-            ScopedVclPtrInstance<QueryBox> aBox( ScDocShell::GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                             ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY) );
-            if (aBox->Execute() == RET_NO)
+            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+            xQueryBox->set_default_response(RET_YES);
+            if (xQueryBox->run() == RET_NO)
             {
                 //! like above (not editable)
                 *pOldObj = aUndoDPObj;
@@ -1348,10 +1354,12 @@ bool ScDBDocFunc::RemovePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
 
         if (pModel && !aListOfObjects.empty())
         {
-            ScopedVclPtrInstance<QueryBox> aBox(
-                    ScDocShell::GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                    ScGlobal::GetRscString(STR_PIVOT_REMOVE_PIVOTCHART));
-            if (aBox->Execute() == RET_NO)
+            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           ScGlobal::GetRscString(STR_PIVOT_REMOVE_PIVOTCHART)));
+            xQueryBox->set_default_response(RET_YES);
+            if (xQueryBox->run() == RET_NO)
             {
                 return false;
             }
@@ -1492,11 +1500,12 @@ bool ScDBDocFunc::CreatePivotTable(const ScDPObject& rDPObj, bool bRecord, bool 
 
         if (!bEmpty)
         {
-            ScopedVclPtrInstance<QueryBox> aBox(
-                ScDocShell::GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY));
-
-            if (aBox->Execute() == RET_NO)
+            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+            xQueryBox->set_default_response(RET_YES);
+            if (xQueryBox->run() == RET_NO)
             {
                 //! like above (not editable)
                 return false;
@@ -1566,9 +1575,12 @@ bool ScDBDocFunc::UpdatePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
     {
         if (!lcl_EmptyExcept(&rDoc, aNewOut, rDPObj.GetOutRange()))
         {
-            ScopedVclPtrInstance<QueryBox> aBox( ScDocShell::GetActiveDialogParent(), MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,
-                                                 ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY) );
-            if (aBox->Execute() == RET_NO)
+            vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+            xQueryBox->set_default_response(RET_YES);
+            if (xQueryBox->run() == RET_NO)
             {
                 rDPObj = aUndoDPObj;
                 return false;
@@ -1670,9 +1682,11 @@ void ScDBDocFunc::UpdateImport( const OUString& rTarget, const svx::ODataAccessD
     const ScDBData* pData = rDBColl.getNamedDBs().findByUpperName(ScGlobal::pCharClass->uppercase(rTarget));
     if (!pData)
     {
-        ScopedVclPtrInstance<InfoBox> aInfoBox( ScDocShell::GetActiveDialogParent(),
-                                                ScGlobal::GetRscString( STR_TARGETNOTFOUND ) );
-        aInfoBox->Execute();
+        vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                      VclMessageType::Info, VclButtonsType::Ok,
+                                                      ScGlobal::GetRscString(STR_TARGETNOTFOUND)));
+        xInfoBox->run();
         return;
     }
 

@@ -498,13 +498,13 @@ void OFlatTable::refreshColumns()
     ::std::vector< OUString> aVector;
     aVector.reserve(m_aColumns->get().size());
 
-    for(OSQLColumns::Vector::const_iterator aIter = m_aColumns->get().begin();aIter != m_aColumns->get().end();++aIter)
-        aVector.push_back(Reference< XNamed>(*aIter,UNO_QUERY)->getName());
+    for (auto const& column : m_aColumns->get())
+        aVector.push_back(Reference< XNamed>(column,UNO_QUERY)->getName());
 
-    if(m_pColumns)
-        m_pColumns->reFill(aVector);
+    if(m_xColumns)
+        m_xColumns->reFill(aVector);
     else
-        m_pColumns  = new OFlatColumns(this,m_aMutex,aVector);
+        m_xColumns = new OFlatColumns(this,m_aMutex,aVector);
 }
 
 
@@ -647,7 +647,7 @@ bool OFlatTable::fetchRow(OValueRefRow& _rRow, const OSQLColumns & _rCols, bool 
                     {
                         OSL_ENSURE((cDecimalDelimiter && nType != DataType::INTEGER) ||
                                    (!cDecimalDelimiter && nType == DataType::INTEGER),
-                                   "FalscherTyp");
+                                   "Wrong type");
 
                         OUStringBuffer aBuf(aStr.getLength());
                         // convert to Standard-Notation (DecimalPOINT without thousands-comma):

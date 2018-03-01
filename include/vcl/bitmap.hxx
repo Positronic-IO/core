@@ -212,7 +212,7 @@ struct BitmapSystemData
     int mnHeight;
 };
 
-class VCL_DLLPUBLIC Bitmap
+class SAL_WARN_UNUSED VCL_DLLPUBLIC Bitmap
 {
 public:
 
@@ -263,7 +263,7 @@ public:
 
 public:
 
-    bool                    MakeMono( sal_uInt8 cThreshold );
+    bool                    MakeMonochrome(sal_uInt8 cThreshold);
 
 
     /** Convert bitmap format
@@ -590,10 +590,8 @@ public:
 
         @param pProgress
         A callback for showing the progress of the vectorization
-
-        @return true, if the operation was completed successfully.
      */
-    bool                    Vectorize(
+    void                    Vectorize(
                                 GDIMetaFile& rMtf,
                                 sal_uInt8 cReduce,
                                 const Link<long,void>* pProgress );
@@ -671,7 +669,6 @@ public:
                                 int const * pPixels,
                                 const int* pCount );
 
-    SAL_DLLPRIVATE bool     ImplMakeMono( sal_uInt8 cThreshold );
     SAL_DLLPRIVATE bool     ImplMakeGreyscales( sal_uInt16 nGreyscales );
     SAL_DLLPRIVATE bool     ImplConvertUp( sal_uInt16 nBitCount, Color const * pExtColor = nullptr );
     SAL_DLLPRIVATE bool     ImplConvertDown( sal_uInt16 nBitCount, Color const * pExtColor = nullptr );

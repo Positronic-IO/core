@@ -21,7 +21,7 @@
 #include "optchart.hxx"
 #include <dialmgr.hxx>
 #include <vcl/builderfactory.hxx>
-#include <vcl/msgbox.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <svx/svxids.hrc>
 
@@ -271,7 +271,7 @@ IMPL_LINK_NOARG(SvxDefaultColorOptPage, AddChartColor, Button*, void)
 {
     if( pColorConfig )
     {
-        ColorData const black = RGB_COLORDATA( 0x00, 0x00, 0x00 );
+        Color const black( 0x00, 0x00, 0x00 );
 
         pColorConfig->GetColorList().append (XColorEntry ( black, pColorConfig->GetColorList().getDefaultName(pColorConfig->GetColorList().size())));
 
@@ -286,7 +286,7 @@ IMPL_LINK_NOARG(SvxDefaultColorOptPage, AddChartColor, Button*, void)
 // RemoveChartColor
 
 
-IMPL_LINK( SvxDefaultColorOptPage, RemoveChartColor, Button*, pButton, void )
+IMPL_LINK_NOARG( SvxDefaultColorOptPage, RemoveChartColor, Button*, void )
 {
     sal_Int32 nIndex = m_pLbChartColors->GetSelectedEntryPos();
 
@@ -297,9 +297,10 @@ IMPL_LINK( SvxDefaultColorOptPage, RemoveChartColor, Button*, pButton, void )
     {
         OSL_ENSURE(pColorConfig->GetColorList().size() > 1, "don't delete the last chart color");
 
-        ScopedVclPtrInstance<MessageDialog> aQuery(pButton, "QueryDeleteChartColorDialog",
-                                                   "cui/ui/querydeletechartcolordialog.ui");
-        if (RET_YES == aQuery->Execute())
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "cui/ui/querydeletechartcolordialog.ui"));
+        std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryDeleteChartColorDialog"));
+
+        if (RET_YES == xQuery->run())
         {
             pColorConfig->GetColorList().remove( nIndex  );
 

@@ -59,9 +59,12 @@ const char cDataSourceName[]         = "DataSource/DataSourceName";
 const char cDataTableName[]          = "DataSource/DataTableName" ;
 const char cDataCommandType[]        = "DataSource/DataCommandType";
 
-#define SECURE_PORT     465
+#define SECURE_PORT     587
 #define DEFAULT_PORT    25
 #define POP_PORT        110
+#define POP_SECURE_PORT     995
+#define IMAP_PORT           143
+#define IMAP_SECURE_PORT    993
 
 struct DBAddressDataAssignment
 {
@@ -129,7 +132,6 @@ class SwMailMergeConfigItem_Impl : public utl::ConfigItem
 
     sal_Int16                               m_nMailPort;
     bool                                m_bIsMailReplyTo;
-    bool                                m_bIsDefaultPort;
     bool                                m_bIsSecureConnection;
     bool                                m_bIsAuthentication;
 
@@ -191,12 +193,11 @@ SwMailMergeConfigItem_Impl::SwMailMergeConfigItem_Impl() :
         m_bIsGreetingLineInMail(false),
         m_bIsIndividualGreetingLineInMail(false),
         m_bIsSMPTAfterPOP(false),
-        m_nInServerPort( POP_PORT ),
+        m_nInServerPort( POP_SECURE_PORT ),
         m_bInServerPOP( true ),
-        m_nMailPort(0),
+        m_nMailPort(SECURE_PORT),
         m_bIsMailReplyTo(false),
-        m_bIsDefaultPort(false),
-        m_bIsSecureConnection(false),
+        m_bIsSecureConnection(true),
         m_bIsAuthentication(false),
 
         m_bIsEMailSupported(false),
@@ -253,7 +254,7 @@ SwMailMergeConfigItem_Impl::SwMailMergeConfigItem_Impl() :
                 case 16: pValues[nProp] >>= m_bIsMailReplyTo;       break;
                 case 17: pValues[nProp] >>= m_sMailReplyTo;         break;
                 case 18: pValues[nProp] >>= m_sMailServer;          break;
-                case 19: m_bIsDefaultPort = !(pValues[nProp] >>= m_nMailPort); break;
+                case 19: pValues[nProp] >>= m_nMailPort;            break;
                 case 20: pValues[nProp] >>= m_bIsSecureConnection;           break;
                 case 21: pValues[nProp] >>= m_bIsAuthentication;             break;
                 case 22: pValues[nProp] >>= m_sMailUserName;                 break;
@@ -524,9 +525,7 @@ void  SwMailMergeConfigItem_Impl::ImplCommit()
             case 16: pValues[nProp] <<= m_bIsMailReplyTo;        break;
             case 17: pValues[nProp] <<= m_sMailReplyTo;         break;
             case 18: pValues[nProp] <<= m_sMailServer;          break;
-            case 19: if(!m_bIsDefaultPort)
-                        pValues[nProp] <<= m_nMailPort;
-            break;
+            case 19: pValues[nProp] <<= m_nMailPort;            break;
             case 20: pValues[nProp] <<= m_bIsSecureConnection;  break;
             case 21: pValues[nProp] <<= m_bIsAuthentication;    break;
             case 22: pValues[nProp] <<= m_sMailUserName;        break;
@@ -1378,17 +1377,23 @@ void SwMailMergeConfigItem::SetMailServer(const OUString& rAddress)
 
 sal_Int16 SwMailMergeConfigItem::GetMailPort() const
 {
-    return m_pImpl->m_bIsDefaultPort ?
-             (m_pImpl->m_bIsSecureConnection ? SECURE_PORT : DEFAULT_PORT) :
-             m_pImpl->m_nMailPort;
+    // provide appropriate TCP port, based on SSL/STARTTLS status, if current port is one of the defaults
+    switch (m_pImpl->m_nMailPort)
+    {
+    case SECURE_PORT:
+    case DEFAULT_PORT:
+        return m_pImpl->m_bIsSecureConnection ? SECURE_PORT : DEFAULT_PORT;
+        break;
+    default:
+        return m_pImpl->m_nMailPort;
+    }
 }
 
 void     SwMailMergeConfigItem::SetMailPort(sal_Int16 nSet)
 {
-    if(m_pImpl->m_nMailPort != nSet || m_pImpl->m_bIsDefaultPort)
+    if(m_pImpl->m_nMailPort != nSet)
     {
         m_pImpl->m_nMailPort = nSet;
-        m_pImpl->m_bIsDefaultPort = false;
         m_pImpl->SetModified();
     }
 }
@@ -1479,7 +1484,21 @@ void SwMailMergeConfigItem::SetInServerName(const OUString& rServer)
 
 sal_Int16           SwMailMergeConfigItem::GetInServerPort() const
 {
-    return m_pImpl->m_nInServerPort;
+    // provide appropriate TCP port as user toggles between POP/IMAP if current port is one of the defaults
+    switch (m_pImpl->m_nInServerPort)
+    {
+    case POP_SECURE_PORT:
+    case POP_PORT:
+    case IMAP_SECURE_PORT:
+    case IMAP_PORT:
+        if ( m_pImpl->m_bInServerPOP )
+            return m_pImpl->m_bIsSecureConnection ? POP_SECURE_PORT : POP_PORT;
+        else
+            return m_pImpl->m_bIsSecureConnection ? IMAP_SECURE_PORT : IMAP_PORT;
+        break;
+    default:
+        return m_pImpl->m_nInServerPort;
+    }
 }
 
 void SwMailMergeConfigItem::SetInServerPort(sal_Int16 nSet)

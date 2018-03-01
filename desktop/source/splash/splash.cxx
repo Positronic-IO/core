@@ -39,6 +39,7 @@
 #include <vcl/virdev.hxx>
 
 #define NOT_LOADED  (long(-1))
+#define NOT_LOADED_COLOR  (Color(0xffffffff))
 
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::registry;
@@ -148,9 +149,9 @@ void SplashScreenWindow::Redraw()
 
 SplashScreen::SplashScreen()
     : pWindow( VclPtr<SplashScreenWindow>::Create(this) )
-    , _cProgressFrameColor(sal::static_int_cast< ColorData >(NOT_LOADED))
-    , _cProgressBarColor(sal::static_int_cast< ColorData >(NOT_LOADED))
-    , _cProgressTextColor(sal::static_int_cast< ColorData >(NOT_LOADED))
+    , _cProgressFrameColor(NOT_LOADED_COLOR)
+    , _cProgressBarColor(NOT_LOADED_COLOR)
+    , _cProgressTextColor(NOT_LOADED_COLOR)
     , _bNativeProgress(true)
     , _iMax(100)
     , _iProgress(0)
@@ -294,23 +295,20 @@ SplashScreen::initialize( const css::uno::Sequence< css::uno::Any>& aArguments )
         if ( NOT_LOADED == _textBaseline )
             _textBaseline = _height;
 
-        if ( sal::static_int_cast< ColorData >(NOT_LOADED) ==
-             _cProgressFrameColor.GetColor() )
-            _cProgressFrameColor = Color( COL_LIGHTGRAY );
+        if ( NOT_LOADED_COLOR == _cProgressFrameColor )
+            _cProgressFrameColor = COL_LIGHTGRAY;
 
-        if ( sal::static_int_cast< ColorData >(NOT_LOADED) ==
-             _cProgressBarColor.GetColor() )
+        if ( NOT_LOADED_COLOR == _cProgressBarColor )
         {
             // progress bar: new color only for big bitmap format
             if ( _width > 500 )
                 _cProgressBarColor = Color( 157, 202, 18 );
             else
-                _cProgressBarColor = Color( COL_BLUE );
+                _cProgressBarColor = COL_BLUE;
         }
 
-        if ( sal::static_int_cast< ColorData >(NOT_LOADED) ==
-             _cProgressTextColor.GetColor() )
-            _cProgressTextColor = Color( COL_BLACK );
+        if ( NOT_LOADED_COLOR == _cProgressTextColor )
+            _cProgressTextColor = COL_BLACK;
 
         Application::AddEventListener(
             LINK( this, SplashScreen, AppEventListenerHdl ) );
@@ -594,8 +592,8 @@ void SplashScreenWindow::Paint(vcl::RenderContext& rRenderContext, const tools::
                                                   aNativeControlRegion, aNativeContentRegion))
         {
               long nProgressHeight = aNativeControlRegion.GetHeight();
-              aDrawRect.Top() -= (nProgressHeight - pSpl->_barheight)/2;
-              aDrawRect.Bottom() += (nProgressHeight - pSpl->_barheight)/2;
+              aDrawRect.AdjustTop( -((nProgressHeight - pSpl->_barheight)/2) );
+              aDrawRect.AdjustBottom((nProgressHeight - pSpl->_barheight)/2 );
         }
 
         if (rRenderContext.DrawNativeControl(ControlType::IntroProgress, ControlPart::Entire, aDrawRect,

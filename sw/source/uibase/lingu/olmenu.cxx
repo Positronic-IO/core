@@ -59,6 +59,8 @@
 #include <rtl/string.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/graphicfilter.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/sfxdlg.hxx>
@@ -71,7 +73,6 @@
 #include <unotools/linguprops.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/settings.hxx>
-#include <vcl/svapp.hxx>
 #include <sal/macros.h>
 
 #include <map>
@@ -615,7 +616,7 @@ void SwSpellPopup::checkRedline()
             nId = m_nRedlineNextId;
         else if (nWhich == FN_REDLINE_PREV_CHANGE)
             nId = m_nRedlinePrevId;
-        m_xPopupMenu->EnableItem(nId, aSet.Get(nWhich).Which());
+        m_xPopupMenu->EnableItem(nId, aSet.Get(nWhich).Which() != 0);
     }
 }
 
@@ -745,7 +746,7 @@ void SwSpellPopup::Execute( sal_uInt16 nId )
                     sWord, false, OUString() );
             if (linguistic::DictionaryError::NONE != nAddRes && !xDictionary->getEntry(sWord).is())
             {
-                SvxDicError(&m_pSh->GetView().GetViewFrame()->GetWindow(), nAddRes);
+                SvxDicError(m_pSh->GetView().GetViewFrame()->GetWindow().GetFrameWeld(), nAddRes);
             }
         }
     }
@@ -777,7 +778,7 @@ void SwSpellPopup::Execute( sal_uInt16 nId )
 
             if (linguistic::DictionaryError::NONE != nAddRes && !xDic->getEntry(sWord).is())
             {
-                SvxDicError(&m_pSh->GetView().GetViewFrame()->GetWindow(), nAddRes);
+                SvxDicError(m_pSh->GetView().GetViewFrame()->GetWindow().GetFrameWeld(), nAddRes);
             }
         }
     }
@@ -795,9 +796,10 @@ void SwSpellPopup::Execute( sal_uInt16 nId )
             uno::Any exc( ::cppu::getCaughtException() );
             OUString msg( ::comphelper::anyToString( exc ) );
             const SolarMutexGuard guard;
-            ScopedVclPtrInstance< MessageDialog > aErrorBox(nullptr, msg);
-            aErrorBox->SetText( "Explanations" );
-            aErrorBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_pSh->GetView().GetViewFrame()->GetWindow().GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, msg));
+            xBox->set_title("Explanations");
+            xBox->run();
         }
     }
     else if (nId == m_nRedlineAcceptId || nId == m_nRedlineRejectId

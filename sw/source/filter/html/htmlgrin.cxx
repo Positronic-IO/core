@@ -67,6 +67,7 @@
 #include "swhtml.hxx"
 #include <numrule.hxx>
 #include <fmtflcnt.hxx>
+#include <IDocumentMarkAccess.hxx>
 
 #include <vcl/graphicfilter.hxx>
 #include <tools/urlobj.hxx>
@@ -526,7 +527,7 @@ IMAGE_SETEVENT:
         {
             const SvxColorItem& rColorItem = m_xAttrTab->pFontColor ?
               static_cast<const SvxColorItem &>(m_xAttrTab->pFontColor->GetItem()) :
-              static_cast<const SvxColorItem &>(m_xDoc->GetDefault(RES_CHRATR_COLOR));
+              m_xDoc->GetDefault(RES_CHRATR_COLOR);
             aHBorderLine.SetColor( rColorItem.GetValue() );
             aVBorderLine.SetColor( aHBorderLine.GetColor() );
         }
@@ -557,12 +558,12 @@ IMAGE_SETEVENT:
     switch( aPropInfo.m_eWidthType )
     {
         case SVX_CSS1_LTYPE_TWIP:
-            aTwipSz.Width() = aPropInfo.m_nWidth;
+            aTwipSz.setWidth( aPropInfo.m_nWidth );
             nWidth = 1; // != 0
             bPrcWidth = false;
             break;
         case SVX_CSS1_LTYPE_PERCENTAGE:
-            aTwipSz.Width() = 0;
+            aTwipSz.setWidth( 0 );
             nWidth = aPropInfo.m_nWidth;
             bPrcWidth = true;
             break;
@@ -572,12 +573,12 @@ IMAGE_SETEVENT:
     switch( aPropInfo.m_eHeightType )
     {
         case SVX_CSS1_LTYPE_TWIP:
-            aTwipSz.Height() = aPropInfo.m_nHeight;
+            aTwipSz.setHeight( aPropInfo.m_nHeight );
             nHeight = 1;    // != 0
             bPrcHeight = false;
             break;
         case SVX_CSS1_LTYPE_PERCENTAGE:
-            aTwipSz.Height() = 0;
+            aTwipSz.setHeight( 0 );
             nHeight = aPropInfo.m_nHeight;
             bPrcHeight = true;
             break;
@@ -607,8 +608,8 @@ IMAGE_SETEVENT:
         aGrfSz = aTwipSz;
         if( !nWidth && !nHeight )
         {
-            aTwipSz.Width() = HTML_DFLT_IMG_WIDTH;
-            aTwipSz.Height() = HTML_DFLT_IMG_HEIGHT;
+            aTwipSz.setWidth( HTML_DFLT_IMG_WIDTH );
+            aTwipSz.setHeight( HTML_DFLT_IMG_HEIGHT );
         }
         else if( nWidth )
         {
@@ -620,7 +621,7 @@ IMAGE_SETEVENT:
             }
             else
             {
-                aTwipSz.Height() = HTML_DFLT_IMG_HEIGHT;
+                aTwipSz.setHeight( HTML_DFLT_IMG_HEIGHT );
             }
         }
         else if( nHeight )
@@ -632,7 +633,7 @@ IMAGE_SETEVENT:
             }
             else
             {
-                aTwipSz.Width() = HTML_DFLT_IMG_WIDTH;
+                aTwipSz.setWidth( HTML_DFLT_IMG_WIDTH );
             }
         }
     }
@@ -687,27 +688,27 @@ IMAGE_SETEVENT:
     {
         OSL_ENSURE( !aTwipSz.Width(),
                 "Why is a width set if we already have percentage value?" );
-        aTwipSz.Width() = aGrfSz.Width() ? aGrfSz.Width()
-                                         : HTML_DFLT_IMG_WIDTH;
+        aTwipSz.setWidth( aGrfSz.Width() ? aGrfSz.Width()
+                                         : HTML_DFLT_IMG_WIDTH );
     }
     else
     {
-        aTwipSz.Width() += 2*nVBorderWidth;
+        aTwipSz.AdjustWidth(2*nVBorderWidth );
         if( aTwipSz.Width() < MINFLY )
-            aTwipSz.Width() = MINFLY;
+            aTwipSz.setWidth( MINFLY );
     }
     if( nPrcHeight )
     {
         OSL_ENSURE( !aTwipSz.Height(),
                 "Why is a height set if we already have percentage value?" );
-        aTwipSz.Height() = aGrfSz.Height() ? aGrfSz.Height()
-                                           : HTML_DFLT_IMG_HEIGHT;
+        aTwipSz.setHeight( aGrfSz.Height() ? aGrfSz.Height()
+                                           : HTML_DFLT_IMG_HEIGHT );
     }
     else
     {
-        aTwipSz.Height() += 2*nHBorderWidth;
+        aTwipSz.AdjustHeight(2*nHBorderWidth );
         if( aTwipSz.Height() < MINFLY )
-            aTwipSz.Height() = MINFLY;
+            aTwipSz.setHeight( MINFLY );
     }
 
     SwFormatFrameSize aFrameSize( ATT_FIX_SIZE, aTwipSz.Width(), aTwipSz.Height() );

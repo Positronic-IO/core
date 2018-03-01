@@ -72,7 +72,7 @@ bool IsUnderlineBreak( const SwLinePortion& rPor, const SwFont& rFnt )
 
 const Color GetUnderColor( const SwFont *pFont )
 {
-    return pFont->GetUnderColor() == Color( COL_AUTO ) ?
+    return pFont->GetUnderColor() == COL_AUTO ?
         pFont->GetColor() : pFont->GetUnderColor();
 }
 
@@ -226,15 +226,15 @@ void SwTextPainter::DrawTextLine( const SwRect &rPaint, SwSaveClip &rClip,
     OutputDevice* pOut = GetInfo().GetOut();
     Point aPnt1( nTmpLeft, GetInfo().GetPos().Y() );
     if ( aPnt1.X() < rPaint.Left() )
-        aPnt1.X() = rPaint.Left();
+        aPnt1.setX( rPaint.Left() );
     if ( aPnt1.Y() < rPaint.Top() )
-        aPnt1.Y() = rPaint.Top();
+        aPnt1.setY( rPaint.Top() );
     Point aPnt2( GetInfo().GetPos().X() + nMaxRight - GetInfo().X(),
                  GetInfo().GetPos().Y() + nTmpHeight );
     if ( aPnt2.X() > rPaint.Right() )
-        aPnt2.X() = rPaint.Right();
+        aPnt2.setX( rPaint.Right() );
     if ( aPnt2.Y() > rPaint.Bottom() )
-        aPnt2.Y() = rPaint.Bottom();
+        aPnt2.setY( rPaint.Bottom() );
 
     const SwRect aLineRect( aPnt1, aPnt2 );
 
@@ -504,7 +504,7 @@ void SwTextPainter::CheckSpecialUnderline( const SwLinePortion* pPor,
     // Bug 120769:Color of underline display wrongly
     if ( GetInfo().GetUnderFnt() &&
         GetInfo().GetUnderFnt()->GetFont().GetUnderline() == GetFnt()->GetUnderline() &&
-        GetInfo().GetFont() && GetInfo().GetFont()->GetUnderColor() != Color(COL_AUTO) )
+        GetInfo().GetFont() && GetInfo().GetFont()->GetUnderColor() != COL_AUTO )
         return;
     //Bug 120769(End)
 
@@ -521,8 +521,7 @@ void SwTextPainter::CheckSpecialUnderline( const SwLinePortion* pPor,
         {
             SwTextAttr* const pTextAttr = m_pHints->Get( nTmp );
 
-            const SvxUnderlineItem* pItem =
-                    static_cast<const SvxUnderlineItem*>(CharFormat::GetItem( *pTextAttr, RES_CHRATR_UNDERLINE ));
+            const SvxUnderlineItem* pItem = CharFormat::GetItem( *pTextAttr, RES_CHRATR_UNDERLINE );
 
             if ( pItem )
             {
@@ -641,7 +640,7 @@ void SwTextPainter::CheckSpecialUnderline( const SwLinePortion* pPor,
                 pUnderlineFnt->SetWeight( WEIGHT_NORMAL, nActual );
 
             // common base line
-            aCommonBaseLine.Y() = nAdjustBaseLine + nMaxBaseLineOfst;
+            aCommonBaseLine.setY( nAdjustBaseLine + nMaxBaseLineOfst );
         }
     }
 

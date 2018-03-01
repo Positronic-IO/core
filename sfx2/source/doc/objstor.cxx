@@ -23,7 +23,6 @@
 
 #include <cassert>
 
-#include <vcl/msgbox.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
@@ -72,6 +71,7 @@
 #include <comphelper/fileformat.h>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/interaction.hxx>
+#include <svtools/langtab.hxx>
 #include <svtools/sfxecode.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/securityoptions.hxx>
@@ -96,6 +96,8 @@
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/string.hxx>
 #include <vcl/bitmapex.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 #include <svtools/embedhlp.hxx>
 #include <basic/modsizeexceeded.hxx>
 #include <officecfg/Office/Common.hxx>
@@ -643,6 +645,9 @@ bool SfxObjectShell::DoLoad( SfxMedium *pMed )
 
     pImpl->nLoadedFlags = SfxLoadedFlags::NONE;
     pImpl->bModelInitialized = false;
+
+    // initialize static language table so language-related extensions are learned before the document loads
+    (void)SvtLanguageTable::GetLanguageEntryCount();
 
     //TODO/LATER: make a clear strategy how to handle "UsesStorage" etc.
     bool bOwnStorageFormat = IsOwnStorageFormat( *pMedium );
@@ -2864,7 +2869,7 @@ HiddenInformation SfxObjectShell::GetHiddenInformationState( HiddenInformation n
     return nState;
 }
 
-sal_Int16 SfxObjectShell::QueryHiddenInformation( HiddenWarningFact eFact, vcl::Window* pParent )
+sal_Int16 SfxObjectShell::QueryHiddenInformation(HiddenWarningFact eFact, weld::Window* pParent)
 {
     sal_Int16 nRet = RET_YES;
     const char* pResId = nullptr;
@@ -2932,8 +2937,10 @@ sal_Int16 SfxObjectShell::QueryHiddenInformation( HiddenWarningFact eFact, vcl::
         {
             sMessage += "\n";
             sMessage += SfxResId(pResId);
-            ScopedVclPtrInstance< WarningBox > aWBox(pParent, MessBoxStyle::YesNo | MessBoxStyle::DefaultNo, sMessage);
-            nRet = aWBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pParent,
+                                                       VclMessageType::Warning, VclButtonsType::YesNo, sMessage));
+            xWarn->set_default_response(RET_NO);
+            nRet = xWarn->run();
         }
     }
 

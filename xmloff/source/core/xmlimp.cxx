@@ -23,6 +23,7 @@
 #include <tools/diagnose_ex.h>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <tools/urlobj.hxx>
+#include <vcl/graph.hxx>
 #include <xmloff/unointerfacetouniqueidentifiermapper.hxx>
 #include <xmloff/nmspmap.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -44,6 +45,8 @@
 #include <com/sun/star/util/MeasureUnit.hpp>
 #include <com/sun/star/document/XBinaryStreamResolver.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
+#include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/xml/sax/XLocator.hpp>
 #include <com/sun/star/xml/sax/FastParser.hpp>
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
@@ -56,6 +59,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/storagehelper.hxx>
+#include <comphelper/propertysequence.hxx>
 #include <unotools/fontcvt.hxx>
 #include <o3tl/make_unique.hxx>
 #include <xmloff/fasttokenhandler.hxx>
@@ -984,10 +988,9 @@ void SAL_CALL SvXMLImport::setTargetDocument( const uno::Reference< lang::XCompo
 
     try
     {
-        uno::Reference<document::XStorageBasedDocument> const xSBDoc(mxModel,
-                uno::UNO_QUERY_THROW);
-        uno::Reference<embed::XStorage> const xStor(
-                xSBDoc->getDocumentStorage());
+        uno::Reference<document::XStorageBasedDocument> const xSBDoc(mxModel, uno::UNO_QUERY);
+        uno::Reference<embed::XStorage> const xStor(xSBDoc.is() ? xSBDoc->getDocumentStorage()
+                                                                : nullptr);
         if (xStor.is())
         {
             mpImpl->mbIsOOoXML =
@@ -1312,6 +1315,8 @@ bool SvXMLImport::IsPackageURL( const OUString& rURL ) const
     if( (mnImportFlags & nTest) == nTest )
         return false;
 
+    // TODO: from this point extract to own static function
+
     // Some quick tests: Some may rely on the package structure!
     sal_Int32 nLen = rURL.getLength();
     if( nLen > 0 && '/' == rURL[0] )
@@ -1348,6 +1353,51 @@ bool SvXMLImport::IsPackageURL( const OUString& rURL ) const
     }
 
     return true;
+}
+
+uno::Reference<graphic::XGraphic> SvXMLImport::loadGraphicByURL(OUString const & rURL)
+{
+    uno::Reference<graphic::XGraphic> xGraphic;
+    uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
+
+    if (xGraphicStorageHandler.is())
+    {
+        if (IsPackageURL(rURL))
+        {
+            xGraphic = xGraphicStorageHandler->loadGraphic(rURL);
+        }
+        else
+        {
+            uno::Reference<graphic::XGraphicProvider> xProvider(graphic::GraphicProvider::create(GetComponentContext()));
+            OUString const & rAbsoluteURL = GetAbsoluteReference(rURL);
+            uno::Sequence<beans::PropertyValue> aLoadProperties(comphelper::InitPropertySequence(
+            {
+                { "URL", uno::makeAny(rAbsoluteURL) }
+            }));
+
+            xGraphic = xProvider->queryGraphic(aLoadProperties);
+            if (xGraphic.is())
+            {
+                Graphic aGraphic(xGraphic);
+                aGraphic.setOriginURL(rAbsoluteURL);
+            }
+        }
+    }
+
+    return xGraphic;
+}
+
+uno::Reference<graphic::XGraphic> SvXMLImport::loadGraphicFromBase64(uno::Reference<io::XOutputStream> const & rxOutputStream)
+{
+    uno::Reference<graphic::XGraphic> xGraphic;
+    uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
+
+    if (xGraphicStorageHandler.is())
+    {
+        xGraphic = xGraphicStorageHandler->loadGraphicFromOutputStream(rxOutputStream);
+    }
+
+    return xGraphic;
 }
 
 OUString SvXMLImport::ResolveGraphicObjectURL( const OUString& rURL,

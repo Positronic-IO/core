@@ -20,7 +20,7 @@
 #include <sal/types.h>
 #include <sot/formats.hxx>
 #include <sot/storage.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
 #include <svl/urihelper.hxx>
 #include <svx/svditer.hxx>
 #include <sfx2/docfile.hxx>
@@ -58,6 +58,7 @@
 #include <comphelper/processfactory.hxx>
 #include <tools/diagnose_ex.h>
 #include <o3tl/make_unique.hxx>
+#include <comphelper/scopeguard.hxx>
 
 
 using namespace com::sun::star;
@@ -205,6 +206,8 @@ SdPageObjsTLB::SdPageObjsTLB( vcl::Window* pParentWin, WinBits nStyle )
 ,   mbSaveTreeItemState ( false )
 ,   mbShowAllShapes     ( false )
 ,   mbShowAllPages      ( false )
+,   mbSelectionHandlerNavigates(false)
+,   mbNavigationGrabsFocus(true)
 {
     // add lines to Tree-ListBox
     SetStyle( GetStyle() | WB_TABSTOP | WB_BORDER | WB_HASLINES |
@@ -626,6 +629,52 @@ void SdPageObjsTLB::SetShowAllShapes (
     }
 }
 
+bool SdPageObjsTLB::IsEqualToShapeList(SvTreeListEntry*& pEntry, const SdrObjList& rList,
+                                       const OUString& rListName)
+{
+    if (!pEntry)
+        return false;
+    OUString aName = GetEntryText(pEntry);
+
+    if (rListName != aName)
+        return false;
+
+    pEntry = Next(pEntry);
+
+    SdrObjListIter aIter(rList,
+                         !rList.HasObjectNavigationOrder() /* use navigation order, if available */,
+                         SdrIterMode::Flat);
+
+    while (aIter.IsMore())
+    {
+        SdrObject* pObj = aIter.Next();
+
+        const OUString aObjectName(GetObjectName(pObj));
+
+        if (!aObjectName.isEmpty())
+        {
+            if (!pEntry)
+                return false;
+
+            aName = GetEntryText(pEntry);
+
+            if (aObjectName != aName)
+                return false;
+
+            if (pObj->IsGroupObject())
+            {
+                bool bRet = IsEqualToShapeList(pEntry, *pObj->GetSubList(), aObjectName);
+                if (!bRet)
+                    return false;
+            }
+            else
+                pEntry = Next(pEntry);
+        }
+    }
+
+    return true;
+}
+
 /**
  * Checks if the pages (PageKind::Standard) of a doc and the objects on the pages
  * are identical to the TreeLB.
@@ -640,9 +689,7 @@ bool SdPageObjsTLB::IsEqualToDoc( const SdDrawDocument* pInDoc )
     if( !mpDoc )
         return false;
 
-    SdrObject*   pObj = nullptr;
     SvTreeListEntry* pEntry = First();
-    OUString     aName;
 
     // compare all pages including the objects
     sal_uInt16 nPage = 0;
@@ -653,39 +700,9 @@ bool SdPageObjsTLB::IsEqualToDoc( const SdDrawDocument* pInDoc )
         const SdPage* pPage = static_cast<const SdPage*>( mpDoc->GetPage( nPage ) );
         if( pPage->GetPageKind() == PageKind::Standard )
         {
-            if( !pEntry )
+            bool bRet = IsEqualToShapeList(pEntry, *pPage, pPage->GetName());
+            if (!bRet)
                 return false;
-            aName = GetEntryText( pEntry );
-
-            if( pPage->GetName() != aName )
-                return false;
-
-            pEntry = Next( pEntry );
-
-            SdrObjListIter aIter(
-                *pPage,
-                !pPage->HasObjectNavigationOrder() /* use navigation order, if available */,
-                SdrIterMode::DeepWithGroups );
-
-            while( aIter.IsMore() )
-            {
-                pObj = aIter.Next();
-
-                const OUString aObjectName( GetObjectName( pObj ) );
-
-                if( !aObjectName.isEmpty() )
-                {
-                    if( !pEntry )
-                        return false;
-
-                    aName = GetEntryText( pEntry );
-
-                    if( aObjectName != aName )
-                        return false;
-
-                    pEntry = Next( pEntry );
-                }
-            }
         }
         nPage++;
     }
@@ -838,8 +855,9 @@ SdDrawDocument* SdPageObjsTLB::GetBookmarkDoc(SfxMedium* pMed)
 
         if ( !mpBookmarkDoc )
         {
-            ScopedVclPtrInstance< MessageDialog > aErrorBox(this, SdResId(STR_READ_DATA_ERROR));
-            aErrorBox->Execute();
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                           VclMessageType::Warning, VclButtonsType::Ok, SdResId(STR_READ_DATA_ERROR)));
+            xErrorBox->run();
             mpMedium = nullptr; //On failure the SfxMedium is invalid
         }
     }
@@ -895,6 +913,9 @@ void SdPageObjsTLB::SelectHdl()
     }
 
     SvTreeListBox::SelectHdl();
+
+    if (mbSelectionHandlerNavigates)
+        DoubleClickHdl();
 }
 
 /**
@@ -937,6 +958,16 @@ void SdPageObjsTLB::KeyInput( const KeyEvent& rKEvt )
     }
     else
         SvTreeListBox::KeyInput( rKEvt );
+}
+
+void SdPageObjsTLB::MouseButtonDown(const MouseEvent& rMEvt)
+{
+    mbSelectionHandlerNavigates = rMEvt.GetClicks() == 1;
+    comphelper::ScopeGuard aNavigationGuard([this]() { this->mbSelectionHandlerNavigates = false; });
+    mbNavigationGrabsFocus = rMEvt.GetClicks() != 1;
+    comphelper::ScopeGuard aGrabGuard([this]() { this->mbNavigationGrabsFocus = true; });
+
+    SvTreeListBox::MouseButtonDown(rMEvt);
 }
 
 /**

@@ -191,7 +191,7 @@ void SmCaretDrawingVisitor::Visit( SmTextNode* pNode )
     long right_line = pLine->GetRight( ) + maOffset.X( );
 
     //Set color
-    mrDev.SetLineColor( Color( COL_BLACK ) );
+    mrDev.SetLineColor( COL_BLACK );
 
     if ( mbCaretVisible ) {
         //Draw vertical line
@@ -219,7 +219,7 @@ void SmCaretDrawingVisitor::DefaultVisit( SmNode* pNode )
     long right_line = pLine->GetRight( ) + maOffset.X( );
 
     //Set color
-    mrDev.SetLineColor( Color( COL_BLACK ) );
+    mrDev.SetLineColor( COL_BLACK );
 
     if ( mbCaretVisible ) {
         //Draw vertical line
@@ -456,10 +456,10 @@ void SmDrawingVisitor::Visit( SmRectangleNode* pNode )
 
     // get rectangle and remove borderspace
     tools::Rectangle  aTmp ( pNode->AsRectangle( ) + maPosition - pNode->GetTopLeft( ) );
-    aTmp.Left( )   += nTmpBorderWidth;
-    aTmp.Right( )  -= nTmpBorderWidth;
-    aTmp.Top( )    += nTmpBorderWidth;
-    aTmp.Bottom( ) -= nTmpBorderWidth;
+    aTmp.AdjustLeft(nTmpBorderWidth );
+    aTmp.AdjustRight( -sal_Int32(nTmpBorderWidth) );
+    aTmp.AdjustTop(nTmpBorderWidth );
+    aTmp.AdjustBottom( -sal_Int32(nTmpBorderWidth) );
 
     SAL_WARN_IF( aTmp.GetHeight() == 0 || aTmp.GetWidth() == 0,
                 "starmath", "Empty rectangle" );
@@ -483,7 +483,7 @@ void SmDrawingVisitor::DrawTextNode( SmTextNode* pNode )
     aTmpDev.SetFont( pNode->GetFont( ) );
 
     Point  aPos ( maPosition );
-    aPos.Y( ) += pNode->GetBaselineOffset( );
+    aPos.AdjustY(pNode->GetBaselineOffset( ) );
     // round to pixel coordinate
     aPos = mrDev.PixelToLogic( mrDev.LogicToPixel( aPos ) );
 
@@ -1630,7 +1630,7 @@ void SmCloningVisitor::CloneKids( SmStructureNode* pSource, SmStructureNode* pTa
     }
 
     //Set subnodes of pTarget
-    pTarget->SetSubNodes( aNodes );
+    pTarget->SetSubNodes( std::move(aNodes) );
 
     //Restore result as where prior to call
     mpResult = pCurrResult;
@@ -1859,7 +1859,7 @@ SmSelectionDrawingVisitor::SmSelectionDrawingVisitor( OutputDevice& rDevice, SmN
         mrDev.Push( PushFlags::LINECOLOR | PushFlags::FILLCOLOR );
         //Change colors
         mrDev.SetLineColor( );
-        mrDev.SetFillColor( Color( COL_LIGHTGRAY ) );
+        mrDev.SetFillColor( COL_LIGHTGRAY );
 
         //Draw rectangle
         mrDev.DrawRect( maSelectionArea );

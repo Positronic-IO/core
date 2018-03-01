@@ -27,6 +27,7 @@
 #include <xmloff/unointerfacetouniqueidentifiermapper.hxx>
 #include <osl/mutex.hxx>
 #include <tools/urlobj.hxx>
+#include <vcl/graph.hxx>
 #include <comphelper/genericpropertyset.hxx>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -87,10 +88,12 @@
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XMLOasisBasicExporter.hpp>
 #include <com/sun/star/embed/XEncryptionProtectedSource2.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/rdf/XMetadatable.hpp>
 #include <RDFaExportHelper.hxx>
 
 #include <comphelper/xmltools.hxx>
+#include <comphelper/graphicmimetype.hxx>
 
 using namespace ::osl;
 using namespace ::com::sun::star;
@@ -258,7 +261,7 @@ public:
 
     /// stack of backed up namespace maps
     /// long: depth at which namespace map has been backed up into the stack
-    ::std::stack< ::std::pair< SvXMLNamespaceMap *, long > > mNamespaceMaps;
+    ::std::stack< ::std::pair< std::unique_ptr<SvXMLNamespaceMap>, long > > mNamespaceMaps;
     /// counts depth (number of open elements/start tags)
     long mDepth;
 
@@ -480,7 +483,7 @@ SvXMLExport::SvXMLExport(
     InitCtor_();
 
     if (mxNumberFormatsSupplier.is())
-        mpNumExport = new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier);
+        mpNumExport.reset( new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier) );
 }
 
 SvXMLExport::SvXMLExport(
@@ -519,15 +522,15 @@ SvXMLExport::SvXMLExport(
     InitCtor_();
 
     if (mxNumberFormatsSupplier.is())
-        mpNumExport = new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier);
+        mpNumExport.reset( new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier) );
 }
 
 SvXMLExport::~SvXMLExport()
 {
-    delete mpXMLErrors;
-    delete mpImageMapExport;
-    delete mpEventExport;
-    delete mpNamespaceMap;
+    mpXMLErrors.reset();
+    mpImageMapExport.reset();
+    mpEventExport.reset();
+    mpNamespaceMap.reset();
     if (mpProgressBarHelper || mpNumExport)
     {
         if (mxExportInfo.is())
@@ -561,8 +564,8 @@ SvXMLExport::~SvXMLExport()
                 }
             }
         }
-        delete mpProgressBarHelper;
-        delete mpNumExport;
+        mpProgressBarHelper.reset();
+        mpNumExport.reset();
     }
 
     if (mxEventListener.is() && mxModel.is())
@@ -585,7 +588,7 @@ void SAL_CALL SvXMLExport::setSourceDocument( const uno::Reference< lang::XCompo
     {
         mxNumberFormatsSupplier.set(mxModel, css::uno::UNO_QUERY);
         if(mxNumberFormatsSupplier.is() && mxHandler.is())
-            mpNumExport = new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier);
+            mpNumExport.reset( new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier) );
     }
     if (mxExportInfo.is())
     {
@@ -692,7 +695,7 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
             *pAny >>= mxExtHandler;
 
             if (mxNumberFormatsSupplier.is() && mpNumExport == nullptr)
-                mpNumExport = new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier);
+                mpNumExport.reset( new SvXMLNumFmtExport(*this, mxNumberFormatsSupplier) );
         }
 
         // property set to transport data across
@@ -908,9 +911,10 @@ SvXMLExport::EnsureNamespace(OUString const & i_rNamespace)
             || (mpImpl->mNamespaceMaps.top().second != mpImpl->mDepth))
         {
             // top was created for lower depth... need a new namespace map!
+            auto pNew = new SvXMLNamespaceMap( *mpNamespaceMap );
             mpImpl->mNamespaceMaps.push(
-                ::std::make_pair(mpNamespaceMap, mpImpl->mDepth) );
-            mpNamespaceMap = new SvXMLNamespaceMap( *mpNamespaceMap );
+                ::std::make_pair(std::move(mpNamespaceMap), mpImpl->mDepth) );
+            mpNamespaceMap.reset( pNew );
         }
 
         // add the namespace to the map and as attribute
@@ -1452,7 +1456,7 @@ ErrCode SvXMLExport::exportDoc( enum ::xmloff::token::XMLTokenEnum eClass )
 
 void SvXMLExport::ResetNamespaceMap()
 {
-    delete mpNamespaceMap;    mpNamespaceMap = new SvXMLNamespaceMap;
+    mpNamespaceMap.reset( new SvXMLNamespaceMap );
 }
 
 OUString const & SvXMLExport::GetSourceShellID() const
@@ -1880,6 +1884,29 @@ OUString SvXMLExport::AddEmbeddedGraphicObject( const OUString& rGraphicObjectUR
     return sRet;
 }
 
+OUString SvXMLExport::AddEmbeddedXGraphic(uno::Reference<graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType, OUString const & rRequestedName)
+{
+    OUString sURL;
+
+    Graphic aGraphic(rxGraphic);
+    OUString aOriginURL = aGraphic.getOriginURL();
+
+    if (!aOriginURL.isEmpty())
+    {
+        sURL = GetRelativeReference(aOriginURL);
+    }
+    else
+    {
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
+        if (mxGraphicResolver.is() && xGraphicStorageHandler.is())
+        {
+            if (!(getExportFlags() & SvXMLExportFlags::EMBEDDED))
+                sURL = xGraphicStorageHandler->saveGraphicByName(rxGraphic, rOutMimeType, rRequestedName);
+        }
+    }
+    return sURL;
+}
+
 Reference< XInputStream > SvXMLExport::GetEmbeddedGraphicObjectStream( const OUString& rGraphicObjectURL )
 {
     if( (getExportFlags() & SvXMLExportFlags::EMBEDDED) &&
@@ -1896,6 +1923,47 @@ Reference< XInputStream > SvXMLExport::GetEmbeddedGraphicObjectStream( const OUS
     }
 
     return nullptr;
+}
+
+bool SvXMLExport::GetGraphicMimeTypeFromStream(uno::Reference<graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType)
+{
+    if (mxGraphicResolver.is())
+    {
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
+
+        if (xGraphicStorageHandler.is())
+        {
+            Reference<XInputStream> xInputStream(xGraphicStorageHandler->createInputStream(rxGraphic));
+            if (xInputStream.is())
+            {
+                rOutMimeType = comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageStream(xInputStream);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool SvXMLExport::AddEmbeddedXGraphicAsBase64(uno::Reference<graphic::XGraphic> const & rxGraphic)
+{
+    if ((getExportFlags() & SvXMLExportFlags::EMBEDDED) &&
+        mxGraphicResolver.is())
+    {
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
+
+        if (xGraphicStorageHandler.is())
+        {
+            Reference<XInputStream> xInputStream(xGraphicStorageHandler->createInputStream(rxGraphic));
+            if (xInputStream.is())
+            {
+                XMLBase64Export aBase64Exp(*this);
+                return aBase64Exp.exportOfficeBinaryDataElement(xInputStream);
+            }
+        }
+    }
+
+    return false;
 }
 
 bool SvXMLExport::AddEmbeddedGraphicObjectAsBase64( const OUString& rGraphicObjectURL )
@@ -1974,7 +2042,7 @@ ProgressBarHelper*  SvXMLExport::GetProgressBarHelper()
 {
     if (!mpProgressBarHelper)
     {
-        mpProgressBarHelper = new ProgressBarHelper(mxStatusIndicator, true);
+        mpProgressBarHelper.reset( new ProgressBarHelper(mxStatusIndicator, true) );
 
         if (mxExportInfo.is())
         {
@@ -2015,7 +2083,7 @@ ProgressBarHelper*  SvXMLExport::GetProgressBarHelper()
             }
         }
     }
-    return mpProgressBarHelper;
+    return mpProgressBarHelper.get();
 }
 
 XMLEventExport& SvXMLExport::GetEventExport()
@@ -2023,7 +2091,7 @@ XMLEventExport& SvXMLExport::GetEventExport()
     if( nullptr == mpEventExport)
     {
         // create EventExport on demand
-        mpEventExport = new XMLEventExport(*this);
+        mpEventExport.reset( new XMLEventExport(*this) );
 
         // and register standard handlers + names
         mpEventExport->AddHandler("StarBasic", new XMLStarBasicExportHandler());
@@ -2039,7 +2107,7 @@ XMLImageMapExport& SvXMLExport::GetImageMapExport()
     // image map export, create on-demand
     if( nullptr == mpImageMapExport )
     {
-        mpImageMapExport = new XMLImageMapExport(*this);
+        mpImageMapExport.reset( new XMLImageMapExport(*this) );
     }
 
     return *mpImageMapExport;
@@ -2238,8 +2306,7 @@ void SvXMLExport::EndElement(const OUString& rName,
     if (!mpImpl->mNamespaceMaps.empty() &&
         (mpImpl->mNamespaceMaps.top().second == mpImpl->mDepth))
     {
-        delete mpNamespaceMap;
-        mpNamespaceMap = mpImpl->mNamespaceMaps.top().first;
+        mpNamespaceMap = std::move(mpImpl->mNamespaceMaps.top().first);
         mpImpl->mNamespaceMaps.pop();
     }
     SAL_WARN_IF(!mpImpl->mNamespaceMaps.empty() &&
@@ -2302,7 +2369,7 @@ void SvXMLExport::SetError(
 
     // create error list on demand
     if ( mpXMLErrors == nullptr )
-        mpXMLErrors = new XMLErrors();
+        mpXMLErrors.reset( new XMLErrors() );
 
     // save error information
     mpXMLErrors->AddRecord( nId, rMsgParams, rExceptionMessage, rLocator );

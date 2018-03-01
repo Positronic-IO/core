@@ -179,8 +179,8 @@ Point InsertionIndicatorOverlay::PaintRepresentatives (
                 break;
         }
         aPageOffset += aOffset;
-        aPageOffset.X() += gnShadowBorder;
-        aPageOffset.Y() += gnShadowBorder;
+        aPageOffset.AdjustX(gnShadowBorder );
+        aPageOffset.AdjustY(gnShadowBorder );
 
         // Paint the preview.
         Bitmap aPreview (rRepresentatives[nIndex].maBitmap);

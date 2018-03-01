@@ -46,7 +46,6 @@
 #include <com/sun/star/text/XTextFrame.hpp>
 #include <com/sun/star/text/XTextFramesSupplier.hpp>
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
-#include <com/sun/star/text/RubyAdjust.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/text/SizeType.hpp>
 #include <com/sun/star/util/DateTime.hpp>
@@ -62,6 +61,7 @@
 #include <comphelper/propertysequence.hxx>
 #include <com/sun/star/drawing/HomogenMatrix3.hpp>
 #include <com/sun/star/awt/CharSet.hpp>
+#include <com/sun/star/text/WritingMode2.hpp>
 #include <test/mtfxmldump.hxx>
 
 class Test : public SwModelTestBase
@@ -195,7 +195,7 @@ DECLARE_OOXMLIMPORT_TEST(testN757890, "n757890.docx")
     xPara->getPropertyValue("ParaStyleName") >>= aValue;
     CPPUNIT_ASSERT_EQUAL(OUString("Heading 1"), aValue);
 
-    // This wan't centered
+    // This wasn't centered
     uno::Reference<text::XTextFramesSupplier> xTextFramesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextFramesSupplier->getTextFrames(), uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xFrame(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
@@ -684,6 +684,12 @@ DECLARE_OOXMLIMPORT_TEST(testTdf105975formula, "tdf105975.docx")
     CPPUNIT_ASSERT_EQUAL(OUString("25"), xEnumerationAccess->getPresentation(false).trim());
 }
 
+DECLARE_OOXMLIMPORT_TEST(testTdf115883, "tdf115883.docx")
+{
+    // Import failed due to an unhandled exception when getting the Surround
+    // property of a not yet inserted frame.
+}
+
 DECLARE_OOXMLIMPORT_TEST(testTdf75573, "tdf75573_page1frame.docx")
 {
     // the problem was that the frame was discarded
@@ -1042,22 +1048,6 @@ DECLARE_OOXMLIMPORT_TEST(testFdo87488, "fdo87488.docx")
         comphelper::SequenceAsHashMap geom(props->getPropertyValue("CustomShapeGeometry"));
         CPPUNIT_ASSERT_EQUAL(sal_Int32(90), geom["TextPreRotateAngle"].get<sal_Int32>());
     }
-}
-
-DECLARE_OOXMLIMPORT_TEST(testTdf49073, "tdf49073.docx")
-{
-    // test case for Asisan phontic guide ( ruby text.)
-    sal_Unicode aRuby[3] = {0x304D,0x3082,0x3093};
-    OUString sRuby = OUString(aRuby, SAL_N_ELEMENTS(aRuby));
-    CPPUNIT_ASSERT_EQUAL(sRuby,getProperty<OUString>(getParagraph(1)->getStart(), "RubyText"));
-    OUString sStyle = getProperty<OUString>( getParagraph(1)->getStart(), "RubyCharStyleName");
-    uno::Reference<beans::XPropertySet> xPropertySet(getStyles("CharacterStyles")->getByName(sStyle), uno::UNO_QUERY );
-    CPPUNIT_ASSERT_EQUAL(5.f, getProperty<float>(xPropertySet, "CharHeight"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_CENTER) ,getProperty<sal_Int16>(getParagraph(2)->getStart(),"RubyAdjust"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_BLOCK)  ,getProperty<sal_Int16>(getParagraph(3)->getStart(),"RubyAdjust"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_INDENT_BLOCK),getProperty<sal_Int16>(getParagraph(4)->getStart(),"RubyAdjust"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_LEFT)   ,getProperty<sal_Int16>(getParagraph(5)->getStart(),"RubyAdjust"));
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(text::RubyAdjust_RIGHT)  ,getProperty<sal_Int16>(getParagraph(6)->getStart(),"RubyAdjust"));
 }
 
 DECLARE_OOXMLIMPORT_TEST(testTdf85232, "tdf85232.docx")
@@ -1567,6 +1557,21 @@ DECLARE_OOXMLIMPORT_TEST(testTdf112443, "tdf112443.docx")
     CPPUNIT_ASSERT_EQUAL( OUString("30624"), aTop );
 
 }
+
+DECLARE_OOXMLIMPORT_TEST(testTdf113946, "tdf113946.docx")
+{
+    OUString aTop = parseDump("/root/page/body/txt/anchored/SwAnchoredDrawObject/bounds", "top");
+    CPPUNIT_ASSERT_EQUAL( OUString("1696"), aTop );
+}
+
+DECLARE_OOXMLIMPORT_TEST(testTdf114217, "tdf114217.docx")
+{
+    uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<drawing::XDrawPage> xDrawPage = xDrawPageSupplier->getDrawPage();
+    // This was 1, multi-page table was imported as a floating one.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), xDrawPage->getCount());
+}
+
 // tests should only be added to ooxmlIMPORT *if* they fail round-tripping in ooxmlEXPORT
 
 CPPUNIT_PLUGIN_IMPLEMENT();

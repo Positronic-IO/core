@@ -259,24 +259,14 @@ Gallery::Gallery( const OUString& rMultiPath )
 
 Gallery::~Gallery()
 {
-    // erase theme list
-    for (GalleryThemeEntry* p : aThemeList)
-        delete p;
-    aThemeList.clear();
 }
 
 Gallery* Gallery::GetGalleryInstance()
 {
-    static Gallery* s_pGallery = nullptr;
-
-    if (!s_pGallery)
-    {
-        ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-        if (!s_pGallery && !utl::ConfigManager::IsFuzzing())
-        {
-            s_pGallery = new Gallery( SvtPathOptions().GetGalleryPath() );
-        }
-    }
+    // note: this would deadlock if it used osl::Mutex::getGlobalMutex()
+    static Gallery *const s_pGallery(
+        utl::ConfigManager::IsFuzzing() ? nullptr :
+            new Gallery(SvtPathOptions().GetGalleryPath()));
 
     return s_pGallery;
 }
@@ -478,7 +468,7 @@ void Gallery::ImplLoadSubDirs( const INetURLObject& rBaseURL, bool& rbDirIsReadO
                                 GalleryThemeEntry* pEntry = GalleryTheme::CreateThemeEntry( aThmURL, rbDirIsReadOnly || bReadOnly );
 
                                 if( pEntry )
-                                    aThemeList.push_back( pEntry );
+                                    aThemeList.emplace_back( pEntry );
                             }
                         }
                         catch( const ucb::ContentCreationException& )
@@ -508,16 +498,14 @@ void Gallery::ImplLoadSubDirs( const INetURLObject& rBaseURL, bool& rbDirIsReadO
 
 GalleryThemeEntry* Gallery::ImplGetThemeEntry( const OUString& rThemeName )
 {
-    GalleryThemeEntry* pFound = nullptr;
-
     if( !rThemeName.isEmpty() )
     {
-        for ( size_t i = 0, n = aThemeList.size(); i < n && !pFound; ++i )
+        for ( size_t i = 0, n = aThemeList.size(); i < n; ++i )
             if( rThemeName == aThemeList[ i ]->GetThemeName() )
-                pFound = aThemeList[ i ];
+                return aThemeList[ i ].get();
     }
 
-    return pFound;
+    return nullptr;
 }
 
 OUString Gallery::GetThemeName( sal_uInt32 nThemeId ) const
@@ -526,7 +514,7 @@ OUString Gallery::GetThemeName( sal_uInt32 nThemeId ) const
 
     for ( size_t i = 0, n = aThemeList.size(); i < n && !pFound; ++i )
     {
-        GalleryThemeEntry* pEntry = aThemeList[ i ];
+        GalleryThemeEntry* pEntry = aThemeList[ i ].get();
         if( nThemeId == pEntry->GetId() )
             pFound = pEntry;
     }
@@ -616,7 +604,7 @@ bool Gallery::CreateTheme( const OUString& rThemeName )
                 true, aURL, rThemeName,
                 false, true, 0, false );
 
-        aThemeList.push_back( pNewEntry );
+        aThemeList.emplace_back( pNewEntry );
         delete new GalleryTheme( this, pNewEntry );
         Broadcast( GalleryHint( GalleryHintType::THEME_CREATED, rThemeName ) );
         bRet = true;
@@ -673,11 +661,10 @@ bool Gallery::RemoveTheme( const OUString& rThemeName )
             KillFile( aStrURL );
         }
 
-        GalleryThemeList::const_iterator aEnd = aThemeList.end();
-        for ( GalleryThemeList::iterator it = aThemeList.begin(); it != aEnd; ++it )
+        auto aEnd = aThemeList.end();
+        for ( auto it = aThemeList.begin(); it != aEnd; ++it )
         {
-            if ( pThemeEntry == *it ) {
-                delete pThemeEntry;
+            if ( pThemeEntry == it->get() ) {
                 aThemeList.erase( it );
                 break;
             }
@@ -763,7 +750,7 @@ GalleryTheme* Gallery::AcquireTheme( const OUString& rThemeName, SfxListener& rL
     GalleryThemeEntry*      pThemeEntry = ImplGetThemeEntry( rThemeName );
 
     if( pThemeEntry && ( ( pTheme = ImplGetCachedTheme( pThemeEntry ) ) != nullptr ) )
-        rListener.StartListening( *pTheme, true );
+        rListener.StartListening(*pTheme, DuplicateHandling::Prevent);
 
     return pTheme;
 }

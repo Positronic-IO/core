@@ -119,8 +119,8 @@ public:
         long nTextWidth = mrRenderContext.GetTextWidth(aText);
         long nTextHeight = mrRenderContext.GetTextHeight();
         Point aPos = aRect.TopLeft();
-        aPos.X() += (aRect.getWidth()  - nTextWidth) / 2;
-        aPos.Y() += (aRect.getHeight() - nTextHeight) / 2;
+        aPos.AdjustX((aRect.getWidth()  - nTextWidth) / 2 );
+        aPos.AdjustY((aRect.getHeight() - nTextHeight) / 2 );
 
         if (mbEnabled)
             mrRenderContext.DrawText(aPos, aText);
@@ -143,7 +143,7 @@ public:
         mrRenderContext.SetLineColor(maCustomColor);
 
         tools::Rectangle aLineRect(maRect.BottomLeft(), maRect.BottomRight());
-        aLineRect.Top() -= 3;
+        aLineRect.AdjustTop( -3 );
 
         mrRenderContext.DrawRect(aLineRect);
     }
@@ -219,14 +219,14 @@ struct ImplTabBarItem
         , mbShort(false)
         , mbSelect(false)
         , mbProtect(false)
-        , maTabBgColor(Color(COL_AUTO))
-        , maTabTextColor(Color(COL_AUTO))
+        , maTabBgColor(COL_AUTO)
+        , maTabTextColor(COL_AUTO)
     {
     }
 
     bool IsDefaultTabBgColor() const
     {
-        return maTabBgColor == Color(COL_AUTO);
+        return maTabBgColor == COL_AUTO;
     }
 
     bool IsSelected(ImplTabBarItem const * pCurItem) const
@@ -714,20 +714,20 @@ void TabBar::ImplFormat()
             // Slightly before the tab before the first visible page
             // should also be visible
             if (n + 1 == mnFirstPos)
-                pItem->maRect.Left() = x-pItem->mnWidth;
+                pItem->maRect.SetLeft( x-pItem->mnWidth );
             else
             {
-                pItem->maRect.Left() = x;
+                pItem->maRect.SetLeft( x );
                 x += pItem->mnWidth;
             }
-            pItem->maRect.Right() = x;
-            pItem->maRect.Bottom() = maWinSize.Height() - 1;
+            pItem->maRect.SetRight( x );
+            pItem->maRect.SetBottom( maWinSize.Height() - 1 );
 
             if (mbMirrored)
             {
                 long nTmp = mnOffX + mnLastOffX - pItem->maRect.Right();
-                pItem->maRect.Right() = mnOffX + mnLastOffX - pItem->maRect.Left();
-                pItem->maRect.Left() = nTmp;
+                pItem->maRect.SetRight( mnOffX + mnLastOffX - pItem->maRect.Left() );
+                pItem->maRect.SetLeft( nTmp );
             }
         }
 
@@ -1208,7 +1208,7 @@ void TabBar::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& r
 
             if (pItem->mnBits & TabBarPageBits::Blue)
             {
-                rRenderContext.SetTextColor(Color(COL_LIGHTBLUE));
+                rRenderContext.SetTextColor(COL_LIGHTBLUE);
             }
             if (pItem->mnBits & TabBarPageBits::Italic)
             {
@@ -1380,11 +1380,11 @@ void TabBar::RequestHelp(const HelpEvent& rHEvt)
             {
                 tools::Rectangle aItemRect = GetPageRect(nItemId);
                 Point aPt = OutputToScreenPixel(aItemRect.TopLeft());
-                aItemRect.Left()   = aPt.X();
-                aItemRect.Top()    = aPt.Y();
+                aItemRect.SetLeft( aPt.X() );
+                aItemRect.SetTop( aPt.Y() );
                 aPt = OutputToScreenPixel(aItemRect.BottomRight());
-                aItemRect.Right()  = aPt.X();
-                aItemRect.Bottom() = aPt.Y();
+                aItemRect.SetRight( aPt.X() );
+                aItemRect.SetBottom( aPt.Y() );
                 Help::ShowBalloon(this, aItemRect.Center(), aItemRect, aStr);
                 return;
             }
@@ -1412,11 +1412,11 @@ void TabBar::RequestHelp(const HelpEvent& rHEvt)
             {
                 tools::Rectangle aItemRect = GetPageRect(nItemId);
                 Point aPt = OutputToScreenPixel(aItemRect.TopLeft());
-                aItemRect.Left()   = aPt.X();
-                aItemRect.Top()    = aPt.Y();
+                aItemRect.SetLeft( aPt.X() );
+                aItemRect.SetTop( aPt.Y() );
                 aPt = OutputToScreenPixel(aItemRect.BottomRight());
-                aItemRect.Right()  = aPt.X();
-                aItemRect.Bottom() = aPt.Y();
+                aItemRect.SetRight( aPt.X() );
+                aItemRect.SetBottom( aPt.Y() );
                 OUString aStr = mpImpl->mpItemList[nPos]->maText;
                 if (!aStr.isEmpty())
                 {
@@ -1653,7 +1653,7 @@ Color TabBar::GetTabBgColor(sal_uInt16 nPageId) const
     if (nPos != PAGE_NOT_FOUND)
         return mpImpl->mpItemList[nPos]->maTabBgColor;
     else
-        return Color(COL_AUTO);
+        return COL_AUTO;
 }
 
 void TabBar::SetTabBgColor(sal_uInt16 nPageId, const Color& aTabBgColor)
@@ -1663,18 +1663,18 @@ void TabBar::SetTabBgColor(sal_uInt16 nPageId, const Color& aTabBgColor)
         return;
 
     auto& pItem = mpImpl->mpItemList[nPos];
-    if (aTabBgColor != Color(COL_AUTO))
+    if (aTabBgColor != COL_AUTO)
     {
         pItem->maTabBgColor = aTabBgColor;
         if (aTabBgColor.GetLuminance() <= 128) //Do not use aTabBgColor.IsDark(), because that threshold is way too low...
-            pItem->maTabTextColor = Color(COL_WHITE);
+            pItem->maTabTextColor = COL_WHITE;
         else
-            pItem->maTabTextColor = Color(COL_BLACK);
+            pItem->maTabTextColor = COL_BLACK;
     }
     else
     {
-        pItem->maTabBgColor = Color(COL_AUTO);
-        pItem->maTabTextColor = Color(COL_AUTO);
+        pItem->maTabBgColor = COL_AUTO;
+        pItem->maTabTextColor = COL_AUTO;
     }
 }
 
@@ -2112,7 +2112,7 @@ bool TabBar::StartEditMode(sal_uInt16 nPageId)
         }
         if (GetPageBits( mnEditId ) & TabBarPageBits::Blue)
         {
-            aForegroundColor = Color(COL_LIGHTBLUE);
+            aForegroundColor = COL_LIGHTBLUE;
         }
         mpImpl->mpEdit->SetControlFont(aFont);
         mpImpl->mpEdit->SetControlForeground(aForegroundColor);

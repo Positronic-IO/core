@@ -93,6 +93,7 @@ public:
     void testTdf100926();
     void testPageWithTransparentBackground();
     void testTextRotation();
+    void testTdf115394PPT();
 
     CPPUNIT_TEST_SUITE(SdExportTest);
 
@@ -113,6 +114,7 @@ public:
     CPPUNIT_TEST(testTdf100926);
     CPPUNIT_TEST(testPageWithTransparentBackground);
     CPPUNIT_TEST(testTextRotation);
+    CPPUNIT_TEST(testTdf115394PPT);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -144,6 +146,33 @@ public:
 
 };
 
+namespace
+{
+
+uno::Reference<awt::XBitmap> getBitmapFromTable(sd::DrawDocShellRef xDocShRef, OUString const & rName)
+{
+    uno::Reference<awt::XBitmap> xBitmap;
+
+    uno::Reference<lang::XMultiServiceFactory> xFactory(xDocShRef->GetDoc()->getUnoModel(), uno::UNO_QUERY);
+
+    try
+    {
+        uno::Reference<container::XNameAccess> xBitmapTable(xFactory->createInstance("com.sun.star.drawing.BitmapTable"), uno::UNO_QUERY);
+        uno::Any rValue = xBitmapTable->getByName(rName);
+        if (rValue.has<uno::Reference<awt::XBitmap>>())
+        {
+            return rValue.get<uno::Reference<awt::XBitmap>>();
+        }
+    }
+    catch (const uno::Exception & /*rEx*/)
+    {
+    }
+
+    return xBitmap;
+}
+
+}
+
 void SdExportTest::testBackgroundImage()
 {
     // Initial bug: N821567
@@ -168,7 +197,10 @@ void SdExportTest::testBackgroundImage()
             aAny = xBackgroundPropSet->getPropertyValue("FillBitmapName");
             aAny >>= bgImageName;
         }
-        CPPUNIT_ASSERT_MESSAGE("Slide Background is not imported from PPTX correctly", !bgImageName.isEmpty());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Slide Background is not imported from PPTX correctly", OUString("msFillBitmap 1"), bgImageName);
+
+        uno::Reference<awt::XBitmap> xBitmap = getBitmapFromTable(xDocShRef, bgImageName);
+        CPPUNIT_ASSERT_MESSAGE("Slide Background Bitmap is missing when imported from PPTX", xBitmap.is());
     }
 
     // Save as PPTX, reload and check again so we make sure exporting to PPTX is working correctly
@@ -187,7 +219,10 @@ void SdExportTest::testBackgroundImage()
             aAny = xBackgroundPropSet->getPropertyValue("FillBitmapName");
             aAny >>= bgImageName;
         }
-        CPPUNIT_ASSERT_MESSAGE("Slide Background is not exported to PPTX correctly", !bgImageName.isEmpty());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Slide Background is not exported from PPTX correctly", OUString("msFillBitmap 1"), bgImageName);
+
+        uno::Reference<awt::XBitmap> xBitmap = getBitmapFromTable(xDocShRef, bgImageName);
+        CPPUNIT_ASSERT_MESSAGE("Slide Background Bitmap is missing when exported from PPTX", xBitmap.is());
     }
 
     // Save as ODP, reload and check again so we make sure exporting and importing to ODP is working correctly
@@ -206,7 +241,10 @@ void SdExportTest::testBackgroundImage()
             aAny = xBackgroundPropSet->getPropertyValue("FillBitmapName");
             aAny >>= bgImageName;
         }
-        CPPUNIT_ASSERT_MESSAGE("Slide Background is not exported or imported to ODP correctly", !bgImageName.isEmpty());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Slide Background is not exported or imported from ODP correctly", OUString("msFillBitmap 1"), bgImageName);
+
+        uno::Reference<awt::XBitmap> xBitmap = getBitmapFromTable(xDocShRef, bgImageName);
+        CPPUNIT_ASSERT_MESSAGE("Slide Background Bitmap is missing when exported or imported from ODP", xBitmap.is());
     }
 
     xDocShRef->DoClose();
@@ -241,10 +279,10 @@ void SdExportTest::testTransparentBackground()
     const SdrPage *pPage = GetPage( 1, xDocShRef );
 
     const SdrTextObj *pObj1 = dynamic_cast<SdrTextObj *>( pPage->GetObj( 0 ) );
-    checkFontAttributes<Color, SvxBackgroundColorItem>( pObj1, Color(COL_TRANSPARENT) );
+    checkFontAttributes<Color, SvxBackgroundColorItem>( pObj1, COL_TRANSPARENT );
 
     const SdrTextObj *pObj2 = dynamic_cast<SdrTextObj *>( pPage->GetObj( 1 ) );
-    checkFontAttributes<Color, SvxBackgroundColorItem>( pObj2, Color(COL_YELLOW));
+    checkFontAttributes<Color, SvxBackgroundColorItem>( pObj2, COL_YELLOW);
 
     xDocShRef->DoClose();
 }
@@ -511,8 +549,7 @@ void SdExportTest::testLinkedGraphicRT()
     for( size_t nExportFormat = 0; nExportFormat < SAL_N_ELEMENTS(vFormats); ++nExportFormat )
     {
         // Load the original file with one image
-        ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/odp/document_with_linked_graphic.odp"), ODP);
-        const OString sFailedMessage = OString("Failed on filter: ") + OString(aFileFormats[vFormats[nExportFormat]].pFilterName);
+        sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/odp/document_with_linked_graphic.odp"), ODP);
 
         // Export the document and import again for a check
         uno::Reference< lang::XComponent > xComponent(xDocShRef->GetModel(), uno::UNO_QUERY);
@@ -520,6 +557,24 @@ void SdExportTest::testLinkedGraphicRT()
         utl::MediaDescriptor aMediaDescriptor;
         aMediaDescriptor["FilterName"] <<= OStringToOUString(OString(aFileFormats[vFormats[nExportFormat]].pFilterName), RTL_TEXTENCODING_UTF8);
 
+        // Check if the graphic has been imported correctly (before doing the export/import run)
+        {
+            const OString sFailedImportMessage = "Failed to correctly import the document";
+            SdDrawDocument* pDoc = xDocShRef->GetDoc();
+            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), pDoc != nullptr);
+            const SdrPage* pPage = pDoc->GetPage(1);
+            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), pPage != nullptr);
+            SdrGrafObj* pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(2));
+            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), pObject != nullptr );
+            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), pObject->IsLinkedGraphic() );
+
+            const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
+            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), !rGraphicObj.IsSwappedOut());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedImportMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedImportMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+        }
+
+        // Save and reload
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
         xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
@@ -528,18 +583,22 @@ void SdExportTest::testLinkedGraphicRT()
         xDocShRef = loadURL(aTempFile.GetURL(), nExportFormat);
 
         // Check whether graphic imported well after export
-        SdDrawDocument *pDoc = xDocShRef->GetDoc();
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pDoc != nullptr );
-        const SdrPage *pPage = pDoc->GetPage(1);
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pPage != nullptr );
-        SdrGrafObj* pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(2));
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject != nullptr );
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject->IsLinkedGraphic() );
+        {
+            const OString sFailedMessage = OString("Failed on filter: ") + OString(aFileFormats[vFormats[nExportFormat]].pFilterName);
 
-        const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), !rGraphicObj.IsSwappedOut());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-        CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+            SdDrawDocument *pDoc = xDocShRef->GetDoc();
+            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pDoc != nullptr );
+            const SdrPage *pPage = pDoc->GetPage(1);
+            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pPage != nullptr );
+            SdrGrafObj* pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(2));
+            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject != nullptr );
+            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject->IsLinkedGraphic() );
+
+            const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
+            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), !rGraphicObj.IsSwappedOut());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+        }
 
         xDocShRef->DoClose();
     }
@@ -677,9 +736,9 @@ void SdExportTest::testEmbeddedPdf()
     xShell = saveAndReload( xShell.get(), ODP );
     uno::Reference<drawing::XDrawPage> xPage = getPage(0, xShell);
     uno::Reference<beans::XPropertySet> xShape(xPage->getByIndex(0), uno::UNO_QUERY);
-    OUString aReplacementGraphicURL;
-    xShape->getPropertyValue("ReplacementGraphicURL") >>= aReplacementGraphicURL;
-    CPPUNIT_ASSERT(!aReplacementGraphicURL.isEmpty());
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xShape->getPropertyValue("ReplacementGraphic") >>= xGraphic;
+    CPPUNIT_ASSERT(xGraphic.is());
     xShell->DoClose();
 #endif
 }
@@ -803,6 +862,43 @@ void SdExportTest::testTextRotation()
     CPPUNIT_ASSERT(it != aCustomShapeGeometry.end());
 
     CPPUNIT_ASSERT_EQUAL(double(-90), aCustomShapeGeometry["TextRotateAngle"].get<double>());
+
+    xDocShRef->DoClose();
+}
+
+void SdExportTest::testTdf115394PPT()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/ppt/tdf115394.ppt"), PPT);
+
+    // Export the document and import again for a check
+    uno::Reference< lang::XComponent > xComponent(xDocShRef->GetModel(), uno::UNO_QUERY);
+    uno::Reference<frame::XStorable> xStorable(xComponent, uno::UNO_QUERY);
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OStringToOUString(OString(aFileFormats[PPT].pFilterName), RTL_TEXTENCODING_UTF8);
+
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+    xComponent.set(xStorable, uno::UNO_QUERY);
+    xComponent->dispose();
+    xDocShRef = loadURL(aTempFile.GetURL(), PPT);
+
+    double fTransitionDuration;
+
+    // Fast
+    SdPage* pPage1 = xDocShRef->GetDoc()->GetSdPage(0, PageKind::Standard);
+    fTransitionDuration = pPage1->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.5, fTransitionDuration);
+
+    // Medium
+    SdPage* pPage2 = xDocShRef->GetDoc()->GetSdPage(1, PageKind::Standard);
+    fTransitionDuration = pPage2->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(0.75, fTransitionDuration);
+
+    // Slow
+    SdPage* pPage3 = xDocShRef->GetDoc()->GetSdPage(2, PageKind::Standard);
+    fTransitionDuration = pPage3->getTransitionDuration();
+    CPPUNIT_ASSERT_EQUAL(1.0, fTransitionDuration);
 
     xDocShRef->DoClose();
 }

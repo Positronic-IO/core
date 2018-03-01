@@ -145,7 +145,7 @@ void ScCsvRuler::InitColors()
     maBackColor = rSett.GetFaceColor();
     maActiveColor = rSett.GetWindowColor();
     maTextColor = rSett.GetLabelTextColor();
-    maSplitColor = maBackColor.IsDark() ? maTextColor : Color( COL_LIGHTRED );
+    maSplitColor = maBackColor.IsDark() ? maTextColor : COL_LIGHTRED;
     InvalidateGfx();
 }
 
@@ -410,8 +410,7 @@ void ScCsvRuler::MouseMove( const MouseEvent& rMEvt )
         }
         else
         {
-            Point aPoint;
-            tools::Rectangle aRect( aPoint, maWinSize );
+            tools::Rectangle aRect( Point(), maWinSize );
             if( !IsVisibleSplitPos( nPos ) || !aRect.IsInside( rMEvt.GetPosPixel() ) )
                 // if focused, keep old cursor position for key input
                 nPos = HasFocus() ? GetRulerCursorPos() : CSV_POS_INVALID;
@@ -545,8 +544,8 @@ void ScCsvRuler::ImplDrawArea( sal_Int32 nPosX, sal_Int32 nWidth )
     maBackgrDev->DrawRect( aRect );
 
     aRect = maActiveRect;
-    aRect.Left() = std::max( GetFirstX(), nPosX );
-    aRect.Right() = std::min( std::min( GetX( GetPosCount() ), GetLastX() ), nPosX + nWidth - sal_Int32( 1 ) );
+    aRect.SetLeft( std::max( GetFirstX(), nPosX ) );
+    aRect.SetRight( std::min( std::min( GetX( GetPosCount() ), GetLastX() ), nPosX + nWidth - sal_Int32( 1 ) ) );
     if( aRect.Left() <= aRect.Right() )
     {
         maBackgrDev->SetFillColor( maActiveColor );

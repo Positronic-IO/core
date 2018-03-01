@@ -63,6 +63,7 @@ const sal_Int16 API_SHOWMODE_PLACEHOLDER        = 2;        /// Show placeholder
 } // namespace
 
 FileSharingModel::FileSharingModel() :
+    mnSpinCount( 0 ),
     mnPasswordHash( 0 ),
     mbRecommendReadOnly( false )
 {
@@ -108,6 +109,10 @@ WorkbookSettings::WorkbookSettings( const WorkbookHelper& rHelper ) :
 void WorkbookSettings::importFileSharing( const AttributeList& rAttribs )
 {
     maFileSharing.maUserName          = rAttribs.getXString( XML_userName, OUString() );
+    maFileSharing.maAlgorithmName     = rAttribs.getString( XML_algorithmName, OUString());
+    maFileSharing.maHashValue         = rAttribs.getString( XML_hashValue, OUString());
+    maFileSharing.maSaltValue         = rAttribs.getString( XML_saltValue, OUString());
+    maFileSharing.mnSpinCount         = rAttribs.getUnsigned( XML_spinCount, 0);
     maFileSharing.mnPasswordHash      = oox::core::CodecHelper::getPasswordHash( rAttribs, XML_reservationPassword );
     maFileSharing.mbRecommendReadOnly = rAttribs.getBool( XML_readOnlyRecommended, false );
 }
@@ -187,15 +192,31 @@ void WorkbookSettings::finalizeImport()
     aPropSet.setProperty( PROP_Wildcards,           true );     // always in Excel
 
     // write protection
-    if( maFileSharing.mbRecommendReadOnly || (maFileSharing.mnPasswordHash != 0) ) try
+    if (maFileSharing.mbRecommendReadOnly || (maFileSharing.mnPasswordHash != 0) ||
+            !maFileSharing.maHashValue.isEmpty()) try
     {
         getBaseFilter().getMediaDescriptor()[ "ReadOnly" ] <<= true;
 
         Reference< XPropertySet > xDocumentSettings( getBaseFilter().getModelFactory()->createInstance(
             "com.sun.star.document.Settings" ), UNO_QUERY_THROW );
         PropertySet aSettingsProp( xDocumentSettings );
-        if( maFileSharing.mbRecommendReadOnly )
+
+        /* TODO: not setting read-only if only mnPasswordHash ('password'
+         * attribute) is present looks a bit silly, any reason for that?
+         * 'readOnlyRecommended' is defined as "indicates on open, whether the
+         * application alerts the user that the file be marked as read-only",
+         * which sounds silly in itself and seems not to be present if the
+         * 'password' attribute isn't present, but.. */
+        if (maFileSharing.mbRecommendReadOnly || !maFileSharing.maHashValue.isEmpty())
             aSettingsProp.setProperty( PROP_LoadReadonly, true );
+
+        /* TODO: setting ModifyPasswordHash was commented out with commit
+         * 1a842832cd174d5ccfd832fdb94c93ae42e8eacc of which the filter
+         * fragment parts meanwhile contain PASSWORDTOMODIFY again, also for
+         * calc_OOXML.xcu, but setting the property doesn't raise a dialog. If
+         * it worked, a Sequence<PropertyValue> should be used for
+         * algorithmName,hashValue,... see also
+         * SfxObjectShell::SetModifyPasswordInfo() */
 //        if( maFileSharing.mnPasswordHash != 0 )
 //            aSettingsProp.setProperty( PROP_ModifyPasswordHash, static_cast< sal_Int32 >( maFileSharing.mnPasswordHash ) );
     }

@@ -289,7 +289,7 @@ public:
     bool InsNewTable( const SwTable& rCpyTable, const SwSelBoxes&,
                       SwUndoTableCpyTable* pUndo );
     // Copy headline of table (with content!) into an other one.
-    bool CopyHeadlineIntoTable( SwTableNode& rTableNd );
+    void CopyHeadlineIntoTable( SwTableNode& rTableNd );
 
     // Get box, whose start index is set on nBoxStt.
           SwTableBox* GetTableBox( sal_uLong nSttIdx );
@@ -332,9 +332,9 @@ public:
     TableChgMode GetTableChgMode() const        { return m_eTableChgMode; }
     void SetTableChgMode( TableChgMode eMode )  { m_eTableChgMode = eMode; }
 
-    bool SetColWidth( SwTableBox& rAktBox, TableChgWidthHeightType eType,
+    bool SetColWidth( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
                         SwTwips nAbsDiff, SwTwips nRelDiff, SwUndo** ppUndo );
-    bool SetRowHeight( SwTableBox& rAktBox, TableChgWidthHeightType eType,
+    bool SetRowHeight( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
                         SwTwips nAbsDiff, SwTwips nRelDiff, SwUndo** ppUndo );
     void RegisterToFormat( SwFormat& rFormat );
 #ifdef DBG_UTIL
