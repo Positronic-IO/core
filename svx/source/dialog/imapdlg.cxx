@@ -37,7 +37,6 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/docfile.hxx>
 #include <unotools/localedatawrapper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/weld.hxx>
 #include <svx/imapdlg.hxx>
@@ -188,7 +187,7 @@ SvxIMapDlg::SvxIMapDlg(SfxBindings *_pBindings, SfxChildWindow *pCW, vcl::Window
     m_pTbxIMapDlg1->CheckItem( mnSelectId );
     TbxClickHdl( m_pTbxIMapDlg1 );
 
-    SetMinOutputSizePixel( aLastSize = GetOutputSizePixel() );
+    SetMinOutputSizePixel( GetOutputSizePixel() );
 
     m_pStbStatus->InsertItem( 1, 130, StatusBarItemBits::Left | StatusBarItemBits::In | StatusBarItemBits::AutoSize );
     m_pStbStatus->InsertItem( 2, 10 + GetTextWidth( " 9999,99 cm / 9999,99 cm " ) );
@@ -450,7 +449,7 @@ void SvxIMapDlg::DoOpen()
 {
     ::sfx2::FileDialogHelper aDlg(
         css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
-        FileDialogFlags::NONE, this);
+        FileDialogFlags::NONE, GetFrameWeld());
 
     ImageMap        aLoadIMap;
     const OUString  aFilter(SvxResId(RID_SVXSTR_IMAP_ALL_FILTER));
@@ -490,7 +489,7 @@ bool SvxIMapDlg::DoSave()
 {
     ::sfx2::FileDialogHelper aDlg(
         css::ui::dialogs::TemplateDescription::FILESAVE_SIMPLE,
-        FileDialogFlags::NONE, this);
+        FileDialogFlags::NONE, GetFrameWeld());
 
     const OUString    aBinFilter( IMAP_BINARY_FILTER );
     const OUString    aCERNFilter( IMAP_CERN_FILTER );

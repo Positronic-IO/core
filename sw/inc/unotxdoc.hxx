@@ -22,7 +22,6 @@
 #include "swdllapi.h"
 #include <sfx2/sfxbasemodel.hxx>
 
-#include <com/sun/star/beans/PropertyValues.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
 #include <com/sun/star/style/XAutoStylesSupplier.hpp>
 #include <com/sun/star/document/XLinkTargetSupplier.hpp>
@@ -30,7 +29,6 @@
 #include <com/sun/star/text/XNumberingRulesSupplier.hpp>
 #include <com/sun/star/text/XFootnotesSupplier.hpp>
 #include <com/sun/star/text/XEndnotesSupplier.hpp>
-#include <com/sun/star/text/XEndnotesSettingsSupplier.hpp>
 #include <com/sun/star/text/XTextSectionsSupplier.hpp>
 #include <com/sun/star/text/XLineNumberingProperties.hpp>
 #include <com/sun/star/text/XChapterNumberingSupplier.hpp>
@@ -47,29 +45,20 @@
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
 #include <com/sun/star/util/XReplaceable.hpp>
-#include <com/sun/star/util/XReplaceDescriptor.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <com/sun/star/util/XLinkUpdate.hpp>
 #include <com/sun/star/view/XRenderable.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
-#include <com/sun/star/i18n/XForbiddenCharacters.hpp>
-#include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/xforms/XFormsSupplier.hpp>
-#include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/text/XFlatParagraphIteratorProvider.hpp>
 #include <com/sun/star/document/XDocumentLanguages.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <rtl/ref.hxx>
-#include <svl/itemprop.hxx>
 #include <svx/fmdmod.hxx>
-#include <svx/ruler.hxx>
 #include <editeng/UnoForbiddenCharsTable.hxx>
-#include <cppuhelper/weak.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <vcl/event.hxx>
 #include <vcl/ITiledRenderable.hxx>
 #include <com/sun/star/tiledrendering/XTiledRenderable.hpp>
 
@@ -90,6 +79,11 @@ class SwPrintUIOptions;
 class SwPrintData;
 class SwRenderData;
 class SwViewShell;
+class SfxItemPropertySet;
+namespace com { namespace sun { namespace star { namespace container { class XNameContainer; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XController; } } } }
+namespace com { namespace sun { namespace star { namespace lang { struct Locale; } } } }
+namespace com { namespace sun { namespace star { namespace util { class XReplaceDescriptor; } } } }
 
 typedef cppu::WeakImplHelper
 <
@@ -206,6 +200,9 @@ private:
     using SfxBaseModel::removeEventListener;
 
 protected:
+    /** abstract SdrModel provider */
+    virtual SdrModel& getSdrModelFromUnoModel() const override;
+
     virtual ~SwXTextDocument() override;
 public:
     SwXTextDocument(SwDocShell* pShell);
@@ -453,10 +450,6 @@ public:
                                             css::uno::Reference< css::uno::XInterface > const & xLastResult);
 
     SwDocShell*                 GetDocShell() {return pDocShell;}
-
-    void * operator new( size_t ) throw();
-    void operator delete( void * ) throw();
-
 };
 
 class SwXLinkTargetSupplier : public cppu::WeakImplHelper

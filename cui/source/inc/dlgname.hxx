@@ -25,25 +25,24 @@
 #include <vcl/dialog.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/vclmedit.hxx>
+#include <vcl/weld.hxx>
 
 /// Dialog for editing a name
-class SvxNameDialog : public ModalDialog
+class SvxNameDialog : public weld::GenericDialogController
 {
 private:
-    VclPtr<FixedText>      pFtDescription;
-    VclPtr<Edit>           pEdtName;
-    VclPtr<OKButton>       pBtnOK;
+    std::unique_ptr<weld::Entry> m_xEdtName;
+    std::unique_ptr<weld::Label> m_xFtDescription;
+    std::unique_ptr<weld::Button> m_xBtnOK;
 
-    Link<SvxNameDialog&,bool> aCheckNameHdl;
+    Link<SvxNameDialog&,bool> m_aCheckNameHdl;
 
-    DECL_LINK(ModifyHdl, Edit&, void);
+    DECL_LINK(ModifyHdl, weld::Entry&, void);
 
 public:
-    SvxNameDialog( vcl::Window* pWindow, const OUString& rName, const OUString& rDesc );
-    virtual ~SvxNameDialog() override;
-    virtual void dispose() override;
+    SvxNameDialog(weld::Window* pWindow, const OUString& rName, const OUString& rDesc);
 
-    void    GetName( OUString& rName ){rName = pEdtName->GetText();}
+    OUString GetName() const { return m_xEdtName->get_text(); }
 
     /** add a callback Link that is called whenever the content of the edit
         field is changed.  The Link result determines whether the OK
@@ -60,41 +59,39 @@ public:
         @todo Remove the parameter bCheckImmediately and incorporate the 'true'
               behaviour as default.
      */
-    void    SetCheckNameHdl( const Link<SvxNameDialog&,bool>& rLink, bool bCheckImmediately )
+    void SetCheckNameHdl(const Link<SvxNameDialog&,bool>& rLink, bool bCheckImmediately)
     {
-        aCheckNameHdl = rLink;
-        if ( bCheckImmediately )
-            pBtnOK->Enable( rLink.Call( *this ) );
+        m_aCheckNameHdl = rLink;
+        if (bCheckImmediately)
+            m_xBtnOK->set_sensitive(rLink.Call(*this));
     }
 
-    void    SetEditHelpId( const OString& aHelpId) {pEdtName->SetHelpId(aHelpId);}
+    void SetEditHelpId(const OString& aHelpId) { m_xEdtName->set_help_id(aHelpId);}
 };
 
 /** #i68101#
     Dialog for editing Object name
     plus uniqueness-callback-linkHandler */
-class SvxObjectNameDialog : public ModalDialog
+class SvxObjectNameDialog : public weld::GenericDialogController
 {
 private:
     // name
-    VclPtr<Edit>           pEdtName;
+    std::unique_ptr<weld::Entry> m_xEdtName;
 
     // buttons
-    VclPtr<OKButton>       pBtnOK;
+    std::unique_ptr<weld::Button> m_xBtnOK;
 
     // callback link for name uniqueness
     Link<SvxObjectNameDialog&,bool> aCheckNameHdl;
 
-    DECL_LINK(ModifyHdl, Edit&, void);
+    DECL_LINK(ModifyHdl, weld::Entry&, void);
 
 public:
     // constructor
-    SvxObjectNameDialog(vcl::Window* pWindow, const OUString& rName);
-    virtual ~SvxObjectNameDialog() override;
-    virtual void dispose() override;
+    SvxObjectNameDialog(weld::Window* pWindow, const OUString& rName);
 
     // data access
-    void GetName(OUString& rName) {rName = pEdtName->GetText(); }
+    OUString GetName() { return m_xEdtName->get_text(); }
 
     // set handler
     void SetCheckNameHdl(const Link<SvxObjectNameDialog&,bool>& rLink)
@@ -105,50 +102,22 @@ public:
 
 /** #i68101#
     Dialog for editing Object Title and Description */
-class SvxObjectTitleDescDialog : public ModalDialog
+class SvxObjectTitleDescDialog : public weld::GenericDialogController
 {
 private:
     // title
-    VclPtr<Edit>           pEdtTitle;
+    std::unique_ptr<weld::Entry> m_xEdtTitle;
 
     // description
-    VclPtr<VclMultiLineEdit>  pEdtDescription;
+    std::unique_ptr<weld::TextView> m_xEdtDescription;
 
 public:
     // constructor
-    SvxObjectTitleDescDialog(vcl::Window* pWindow, const OUString& rTitle, const OUString& rDesc);
-    virtual ~SvxObjectTitleDescDialog() override;
-    virtual void dispose() override;
+    SvxObjectTitleDescDialog(weld::Window* pWindow, const OUString& rTitle, const OUString& rDesc);
     // data access
-    void GetTitle(OUString& rTitle) {rTitle = pEdtTitle->GetText(); }
-    void GetDescription(OUString& rDescription) {rDescription = pEdtDescription->GetText(); }
+    OUString GetTitle() const { return m_xEdtTitle->get_text(); }
+    OUString GetDescription() const { return m_xEdtDescription->get_text(); }
 };
-
-enum class SvxMessDialogButton {
-    N1, N2
-};
-
-/// Dialog to cancel, save, or add
-class SvxMessDialog : public ModalDialog
-{
-private:
-    VclPtr<FixedText>      pFtDescription;
-    VclPtr<PushButton>     pBtn1;
-    VclPtr<PushButton>     pBtn2;
-    VclPtr<FixedImage>     pFtImage;
-    Image*          pImage;
-
-    DECL_LINK(Button1Hdl, Button*, void);
-    DECL_LINK(Button2Hdl, Button*, void);
-
-public:
-    SvxMessDialog( vcl::Window* pWindow, const OUString& rText, const OUString& rDesc, Image const * pImg );
-    virtual ~SvxMessDialog() override;
-    virtual void dispose() override;
-
-    void    SetButtonText( SvxMessDialogButton nBtnId, const OUString& rNewTxt );
-};
-
 
 #endif // INCLUDED_CUI_SOURCE_INC_DLGNAME_HXX
 

@@ -75,7 +75,7 @@
 #include <unotools/saveopt.hxx>
 #include <xmloff/autolayout.hxx>
 
-// Support creation of GraphicObjectResolver and EmbeddedObjectResolver
+// Support creation of GraphicStorageHandler and EmbeddedObjectResolver
 #include <svx/xmleohlp.hxx>
 #include <svx/xmlgrhlp.hxx>
 #include <DrawDocShell.hxx>
@@ -505,7 +505,7 @@ SdPage* SdXImpressDocument::InsertSdPage( sal_uInt16 nPage, bool bDuplicate )
         * standard page
         **************************************************************/
         if( bDuplicate )
-            pStandardPage = static_cast<SdPage*>( pPreviousStandardPage->Clone() );
+            pStandardPage = static_cast<SdPage*>( pPreviousStandardPage->CloneSdrPage(*mpDoc) );
         else
             pStandardPage = mpDoc->AllocSdPage(false);
 
@@ -540,7 +540,7 @@ SdPage* SdXImpressDocument::InsertSdPage( sal_uInt16 nPage, bool bDuplicate )
         SdPage* pNotesPage = nullptr;
 
         if( bDuplicate )
-            pNotesPage = static_cast<SdPage*>( pPreviousNotesPage->Clone() );
+            pNotesPage = static_cast<SdPage*>( pPreviousNotesPage->CloneSdrPage(*mpDoc) );
         else
             pNotesPage = mpDoc->AllocSdPage(false);
 
@@ -940,13 +940,13 @@ css::uno::Reference<css::uno::XInterface> SdXImpressDocument::create(
         return svx::NamespaceMap_createInstance( aWhichIds, &mpDoc->GetItemPool() );
     }
 
-    // Support creation of GraphicObjectResolver and EmbeddedObjectResolver
-    if( aServiceSpecifier == "com.sun.star.document.ExportGraphicObjectResolver" )
+    // Support creation of GraphicStorageHandler and EmbeddedObjectResolver
+    if (aServiceSpecifier == "com.sun.star.document.ExportGraphicStorageHandler")
     {
         return static_cast<cppu::OWeakObject *>(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Write ));
     }
 
-    if( aServiceSpecifier == "com.sun.star.document.ImportGraphicObjectResolver" )
+    if (aServiceSpecifier == "com.sun.star.document.ImportGraphicStorageHandler")
     {
         return static_cast<cppu::OWeakObject *>(new SvXMLGraphicHelper( SvXMLGraphicHelperMode::Read ));
     }
@@ -1135,9 +1135,9 @@ uno::Sequence< OUString > SAL_CALL SdXImpressDocument::getAvailableServiceNames(
     aSNS[i++] = sUNO_Service_ImageMapPolygonObject;
     aSNS[i++] = "com.sun.star.xml.NamespaceMap";
 
-    // Support creation of GraphicObjectResolver and EmbeddedObjectResolver
-    aSNS[i++] = "com.sun.star.document.ExportGraphicObjectResolver";
-    aSNS[i++] = "com.sun.star.document.ImportGraphicObjectResolver";
+    // Support creation of GraphicStorageHandler and EmbeddedObjectResolver
+    aSNS[i++] = "com.sun.star.document.ExportGraphicStorageHandler";
+    aSNS[i++] = "com.sun.star.document.ImportGraphicStorageHandler";
     aSNS[i++] = "com.sun.star.document.ExportEmbeddedObjectResolver";
     aSNS[i++] = "com.sun.star.document.ImportEmbeddedObjectResolver";
     aSNS[i++] = "com.sun.star.drawing.TableShape";
@@ -2446,11 +2446,21 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
         SdOptions* pOptions = SD_MOD()->GetSdOptions(mpDoc->GetDocumentType());
         pOptions->SetShowComments(comphelper::LibreOfficeKit::isTiledAnnotations());
 
-        // Disable map mode, so that it's possible to send mouse event coordinates
-        // in logic units.
+        pViewShell->SetRuler(false);
+        pViewShell->SetScrollBarsVisible(false);
+
         if (sd::Window* pWindow = pViewShell->GetActiveWindow())
         {
+            // get the full page size in pixels
+            pWindow->EnableMapMode();
+            Size aSize(pWindow->LogicToPixel(pDrawView->GetSdrPageView()->GetPage()->GetSize()));
+            // Disable map mode, so that it's possible to send mouse event
+            // coordinates in logic units
             pWindow->EnableMapMode(false);
+
+            // arrange UI elements again with new view size
+            pViewShell->GetParentWindow()->SetSizePixel(aSize);
+            pViewShell->Resize();
         }
 
         // Forces all images to be swapped in synchronously, this
@@ -2702,6 +2712,12 @@ void SdXImpressDocument::initializeDocument()
         }
         }
     }
+}
+
+SdrModel& SdXImpressDocument::getSdrModelFromUnoModel() const
+{
+    OSL_ENSURE(GetDoc(), "No SdrModel in draw/Impress, should not happen");
+    return *GetDoc(); // TTTT should be reference
 }
 
 void SAL_CALL SdXImpressDocument::dispose()
@@ -3452,26 +3468,23 @@ uno::Sequence< OUString > SAL_CALL SdDocLinkTargets::getSupportedServiceNames()
     return aSeq;
 }
 
-rtl::Reference< SdXImpressDocument > SdXImpressDocument::GetModel( SdDrawDocument const * pDocument )
+rtl::Reference< SdXImpressDocument > SdXImpressDocument::GetModel( SdDrawDocument const & rDocument )
 {
     rtl::Reference< SdXImpressDocument > xRet;
-    if( pDocument )
+    ::sd::DrawDocShell* pDocShell(rDocument.GetDocSh());
+    if( pDocShell )
     {
-        ::sd::DrawDocShell* pDocShell = pDocument->GetDocSh();
-        if( pDocShell )
-        {
-            uno::Reference<frame::XModel> xModel(pDocShell->GetModel());
+        uno::Reference<frame::XModel> xModel(pDocShell->GetModel());
 
-            xRet.set( dynamic_cast< SdXImpressDocument* >( xModel.get() ) );
-        }
+        xRet.set( dynamic_cast< SdXImpressDocument* >( xModel.get() ) );
     }
 
     return xRet;
 }
 
-void NotifyDocumentEvent( SdDrawDocument const * pDocument, const OUString& rEventName )
+void NotifyDocumentEvent( SdDrawDocument const & rDocument, const OUString& rEventName )
 {
-    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( pDocument ) );
+    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( rDocument ) );
 
     if( xModel.is() )
     {
@@ -3481,9 +3494,9 @@ void NotifyDocumentEvent( SdDrawDocument const * pDocument, const OUString& rEve
     }
 }
 
-void NotifyDocumentEvent( SdDrawDocument const * pDocument, const OUString& rEventName, const uno::Reference< uno::XInterface >& xSource )
+void NotifyDocumentEvent( SdDrawDocument const & rDocument, const OUString& rEventName, const uno::Reference< uno::XInterface >& xSource )
 {
-    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( pDocument ) );
+    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( rDocument ) );
 
     if( xModel.is() )
     {

@@ -125,12 +125,18 @@ public:
 
     const list_const_iterator_t end() const
     {
-        return mLruList.end();
+        return mLruList.cend();
     }
 
     size_t size() const
     {
         return mLruList.size();
+    }
+
+    void clear()
+    {
+        mLruMap.clear();
+        mLruList.clear();
     }
 };
 

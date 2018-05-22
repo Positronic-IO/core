@@ -69,7 +69,6 @@
 #include <svdata.hxx>
 #include <strings.hrc>
 #include <bitmaps.hlst>
-#include <impbmp.hxx>
 
 #include <boost/optional.hpp>
 
@@ -334,7 +333,7 @@ static bool lcl_SelectAppIconPixmap( SalDisplay const *pDisplay, SalX11Screen nX
         return false;
 
     X11SalBitmap *pBitmap = dynamic_cast < X11SalBitmap * >
-        (aIcon.ImplGetBitmapImpBitmap()->ImplGetSalBitmap());
+        (aIcon.ImplGetBitmapSalBitmap().get());
     if (!pBitmap) // FIXME: opengl
         return false;
 
@@ -374,7 +373,7 @@ static bool lcl_SelectAppIconPixmap( SalDisplay const *pDisplay, SalX11Screen nX
         aMask.Invert();
 
         X11SalBitmap *pMask = static_cast < X11SalBitmap * >
-            (aMask.ImplGetImpBitmap()->ImplGetSalBitmap());
+            (aMask.ImplGetSalBitmap().get());
 
         pMask->ImplDraw(icon_mask, nXScreen, 1, aRect, aMonoGC);
         XFreeGC( pDisplay->GetDisplay(), aMonoGC );
@@ -1426,18 +1425,14 @@ void X11SalFrame::ToTop( SalFrameToTop nFlags )
         && bMapped_ )
     {
         if( m_bXEmbed )
-        {
             askForXEmbedFocus( 0 );
-            return;
-        }
-
-        if ( nFlags & SalFrameToTop::GrabFocus )
-        {
+        else
+            XSetInputFocus( GetXDisplay(), aToTopWindow, RevertToParent, CurrentTime );
+    }
+    else if( ( nFlags & SalFrameToTop::RestoreWhenMin ) || ( nFlags & SalFrameToTop::ForegroundTask ) )
+    {
             Time nTimestamp = pDisplay_->GetX11ServerTime();
             GetDisplay()->getWMAdaptor()->activateWindow( this, nTimestamp );
-        }
-        else if ( nFlags & SalFrameToTop::GrabFocusOnly )
-            XSetInputFocus( GetXDisplay(), aToTopWindow, RevertToParent, CurrentTime );
     }
 }
 

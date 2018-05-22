@@ -45,7 +45,6 @@
 #include <avmedia/mediawindow.hxx>
 
 #include <comphelper/storagehelper.hxx>
-#include <comphelper/processfactory.hxx>
 
 #include <viewfunc.hxx>
 #include <docsh.hxx>
@@ -53,6 +52,7 @@
 #include <docpool.hxx>
 #include <globstr.hrc>
 #include <global.hxx>
+#include <scresid.hxx>
 #include <undoblk.hxx>
 #include <undocell.hxx>
 #include <formulacell.hxx>
@@ -239,7 +239,7 @@ void ScViewFunc::DoRefConversion()
         SCTAB i = *itr;
         for (size_t j = 0; j < nCount; ++j)
         {
-            ScRange aRange = *(*xRanges)[j];
+            ScRange aRange = (*xRanges)[j];
             aRange.aStart.SetTab(i);
             aRange.aEnd.SetTab(i);
             ScCellIterator aIter( pDoc, aRange );
@@ -398,7 +398,7 @@ void ScViewFunc::DoThesaurus()
     {
         LanguageType eLnge = ScViewUtil::GetEffLanguage( &rDoc, ScAddress( nCol, nRow, nTab ) );
         OUString aErr = SvtLanguageTable::GetLanguageString(eLnge);
-        aErr += ScGlobal::GetRscString( STR_SPELLING_NO_LANG );
+        aErr += ScResId( STR_SPELLING_NO_LANG );
 
         vcl::Window* pWin = GetViewData().GetDialogParent();
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
@@ -413,9 +413,10 @@ void ScViewFunc::DoThesaurus()
         if (aOldText.meType == CELLTYPE_EDIT)
         {
             // The cell will own the text object instance.
-            EditTextObject* pText = pThesaurusEngine->CreateTextObject();
-            if (rDoc.SetEditText(ScAddress(nCol,nRow,nTab), pText))
-                aNewText.set(*pText);
+            std::unique_ptr<EditTextObject> pText = pThesaurusEngine->CreateTextObject();
+            auto tmp = pText.get();
+            if (rDoc.SetEditText(ScAddress(nCol,nRow,nTab), std::move(pText)))
+                aNewText.set(*tmp);
         }
         else
         {

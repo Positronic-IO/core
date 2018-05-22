@@ -21,7 +21,6 @@
 class EditTextObject;
 class ScDocument;
 class ScColumn;
-class ScAddress;
 struct ScAttrEntry;
 class ScTokenArray;
 class ScFormulaCell;
@@ -95,7 +94,7 @@ public:
             const ScSetStringParam* pStringParam = nullptr);
     void setNumericCell(const ScAddress& rPos, double fVal);
     void setStringCell(const ScAddress& rPos, const OUString& rStr);
-    void setEditCell(const ScAddress& rPos, EditTextObject* pEditText);
+    void setEditCell(const ScAddress& rPos, std::unique_ptr<EditTextObject> pEditText);
 
     void setFormulaCell(
         const ScAddress& rPos, const OUString& rFormula, formula::FormulaGrammar::Grammar eGrammar,

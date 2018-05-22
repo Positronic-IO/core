@@ -214,7 +214,7 @@ void OTableTreeListBox::UpdateTableList(
     }
     catch(Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     UpdateTableList( _rxConnection, aTables );
 }
@@ -265,16 +265,13 @@ void OTableTreeListBox::UpdateTableList( const Reference< XConnection >& _rxConn
             return;
 
         // get the table/view names
-        TNames::const_iterator aIter = _rTables.begin();
-        TNames::const_iterator aEnd = _rTables.end();
-
         Reference< XDatabaseMetaData > xMeta( _rxConnection->getMetaData(), UNO_QUERY_THROW );
-        for ( ; aIter != aEnd; ++aIter )
+        for (auto const& table : _rTables)
         {
             // add the entry
             implAddEntry(
                 xMeta,
-                aIter->first,
+                table.first,
                 false
             );
         }
@@ -296,21 +293,18 @@ void OTableTreeListBox::UpdateTableList( const Reference< XConnection >& _rxConn
                 sal_Int32 nFolderType = bCatalogs ? DatabaseObjectContainer::CATALOG : DatabaseObjectContainer::SCHEMA;
 
                 SvTreeListEntry* pRootEntry = getAllObjectsEntry();
-                for (   std::vector< OUString >::const_iterator folder = aFolderNames.begin();
-                        folder != aFolderNames.end();
-                        ++folder
-                    )
+                for (auto const& folderName : aFolderNames)
                 {
-                    SvTreeListEntry* pFolder = GetEntryPosByName( *folder, pRootEntry );
+                    SvTreeListEntry* pFolder = GetEntryPosByName( folderName, pRootEntry );
                     if ( !pFolder )
-                        InsertEntry( *folder, pRootEntry, false, TREELIST_APPEND, reinterpret_cast< void* >( nFolderType ) );
+                        InsertEntry( folderName, pRootEntry, false, TREELIST_APPEND, reinterpret_cast< void* >( nFolderType ) );
                 }
             }
         }
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -474,28 +468,7 @@ NamedDatabaseObject OTableTreeListBox::describeObject( SvTreeListEntry* _pEntry 
             ||  ( nEntryType == DatabaseObjectContainer::SCHEMA )
             )
     {
-        SvTreeListEntry* pParent = GetParent( _pEntry );
-        sal_Int32 nParentEntryType = pParent ? reinterpret_cast< sal_IntPtr >( pParent->GetUserData() ) : -1;
-
-        OUStringBuffer buffer;
-        if  ( nEntryType == DatabaseObjectContainer::CATALOG )
-        {
-            if ( nParentEntryType == DatabaseObjectContainer::SCHEMA )
-            {
-                buffer.append( GetEntryText( pParent ) );
-                buffer.append( '.' );
-            }
-            buffer.append( GetEntryText( _pEntry ) );
-        }
-        else if ( nEntryType == DatabaseObjectContainer::SCHEMA )
-        {
-            if ( nParentEntryType == DatabaseObjectContainer::CATALOG )
-            {
-                buffer.append( GetEntryText( pParent ) );
-                buffer.append( '.' );
-            }
-            buffer.append( GetEntryText( _pEntry ) );
-        }
+        // nothing useful to be done
     }
     else
     {
@@ -516,7 +489,7 @@ SvTreeListEntry* OTableTreeListBox::addedTable( const OUString& _rName )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return nullptr;
 }
@@ -569,7 +542,7 @@ OUString OTableTreeListBox::getQualifiedTableName( SvTreeListEntry* _pEntry ) co
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return OUString();
 }
@@ -607,7 +580,7 @@ SvTreeListEntry* OTableTreeListBox::getEntryByQualifiedName( const OUString& _rN
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return nullptr;
 }
@@ -622,7 +595,7 @@ void OTableTreeListBox::removedTable( const OUString& _rName )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

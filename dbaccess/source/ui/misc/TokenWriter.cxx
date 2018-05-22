@@ -26,8 +26,6 @@
 #include <HtmlReader.hxx>
 #include <stringconstants.hxx>
 #include <strings.hxx>
-#include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <com/sun/star/sdb/DatabaseContext.hpp>
@@ -358,14 +356,17 @@ bool ORTFImportExport::Write()
     }
 
     m_pStream->WriteCharPtr( "{\\fonttbl" );
-    sal_Int32 nTokenCount = comphelper::string::getTokenCount(aFonts, ';');
-    for(sal_Int32 j=0; j<nTokenCount; ++j)
+    if (!aFonts.isEmpty())
     {
-        m_pStream->WriteCharPtr( "\\f" );
-        m_pStream->WriteInt32AsString(j);
-        m_pStream->WriteCharPtr( "\\fcharset0\\fnil " );
-        m_pStream->WriteCharPtr( aFonts.getToken(j, ';').getStr() );
-        m_pStream->WriteChar( ';' );
+        sal_Int32 nIdx{0};
+        sal_Int32 nTok{-1}; // to compensate pre-increment
+        do {
+            m_pStream->WriteCharPtr( "\\f" );
+            m_pStream->WriteInt32AsString(++nTok);
+            m_pStream->WriteCharPtr( "\\fcharset0\\fnil " );
+            m_pStream->WriteCharPtr( aFonts.getToken(0, ';', nIdx).getStr() );
+            m_pStream->WriteChar( ';' );
+        } while (nIdx>=0);
     }
     m_pStream->WriteChar( '}' ) ;
     m_pStream->WriteCharPtr( SAL_NEWLINE_STRING );
@@ -839,7 +840,7 @@ void OHTMLImportExport::WriteTables()
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
                 WriteCell(pFormat[i-1],pColWidth[i-1],nHeight,pHorJustify[i-1],aValue,OOO_STRING_SVTOOLS_HTML_tabledata);
             }

@@ -40,7 +40,6 @@
 #include <svl/itempool.hxx>
 #include <sfx2/docfile.hxx>
 #include <avmedia/mediawindow.hxx>
-#include <svx/dialmgr.hxx>
 #include <svx/svxids.hrc>
 #include <svx/svdograf.hxx>
 #include <svx/fmpage.hxx>
@@ -765,7 +764,7 @@ bool GalleryTheme::GetThumb(sal_uInt32 nPos, BitmapEx& rBmp)
     return bRet;
 }
 
-bool GalleryTheme::GetGraphic(sal_uInt32 nPos, Graphic& rGraphic, bool bProgress)
+bool GalleryTheme::GetGraphic(sal_uInt32 nPos, Graphic& rGraphic)
 {
     const GalleryObject*    pObject = ImplGetGalleryObject( nPos );
     bool                    bRet = false;
@@ -781,7 +780,7 @@ bool GalleryTheme::GetGraphic(sal_uInt32 nPos, Graphic& rGraphic, bool bProgress
             case SgaObjKind::Inet:
             {
                 OUString aFilterDummy;
-                bRet = ( GalleryGraphicImport( aURL, rGraphic, aFilterDummy, bProgress ) != GalleryGraphicImportRet::IMPORT_NONE );
+                bRet = ( GalleryGraphicImport( aURL, rGraphic, aFilterDummy ) != GalleryGraphicImportRet::IMPORT_NONE );
             }
             break;
 
@@ -801,7 +800,7 @@ bool GalleryTheme::GetGraphic(sal_uInt32 nPos, Graphic& rGraphic, bool bProgress
                         {
                             ScopedVclPtrInstance< VirtualDevice > pVDev;
                             pVDev->SetMapMode( MapMode( MapUnit::Map100thMM ) );
-                            FmFormView aView( aModel.GetModel(), pVDev );
+                            FmFormView aView(*aModel.GetModel(), pVDev);
 
                             aView.hideMarkHandles();
                             aView.ShowSdrPage(aView.GetModel()->GetPage(0));
@@ -845,7 +844,7 @@ bool GalleryTheme::InsertGraphic(const Graphic& rGraphic, sal_uInt32 nInsertPos)
     if( rGraphic.GetType() != GraphicType::NONE )
     {
         ConvertDataFormat nExportFormat = ConvertDataFormat::Unknown;
-        const GfxLink     aGfxLink( rGraphic.GetLink() );
+        const GfxLink     aGfxLink( rGraphic.GetGfxLink() );
 
         if( aGfxLink.GetDataSize() )
         {
@@ -1244,9 +1243,9 @@ bool GalleryTheme::InsertTransferable(const uno::Reference< datatransfer::XTrans
                     if( aModel.GetModel() )
                     {
                         SdrPage*    pPage = aModel.GetModel()->GetPage(0);
-                        SdrGrafObj* pGrafObj = new SdrGrafObj( *pGraphic );
+                        SdrGrafObj* pGrafObj = new SdrGrafObj(*aModel.GetModel(), *pGraphic );
 
-                        pGrafObj->AppendUserData( new SgaIMapInfo( aImageMap ) );
+                        pGrafObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new SgaIMapInfo( aImageMap )) );
                         pPage->InsertObject( pGrafObj );
                         bRet = InsertModel( *aModel.GetModel(), nInsertPos );
                     }

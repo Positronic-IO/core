@@ -14,43 +14,35 @@
 
 #include <sal/types.h>
 
-#include <vcl/button.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/lstbox.hxx>
+#include <vcl/weld.hxx>
 
 #include "writerperfectdllapi.h"
 
 namespace writerperfect
 {
-
-class WRITERPERFECT_DLLPUBLIC WPFTEncodingDialog : public ModalDialog
+class WRITERPERFECT_DLLPUBLIC WPFTEncodingDialog : public weld::GenericDialogController
 {
 public:
-    WPFTEncodingDialog(const OUString &title, const OUString &defEncoding);
+    WPFTEncodingDialog(weld::Window* pParent, const OUString& title, const OUString& defEncoding);
 
     virtual ~WPFTEncodingDialog() override;
 
     OUString GetEncoding() const;
-    bool hasUserCalledCancel() const
-    {
-        return m_userHasCancelled;
-    }
-private:
-    VclPtr<ListBox> m_pLbCharset;
-    VclPtr<OKButton>           m_pBtnOk;
-    VclPtr<CancelButton>           m_pBtnCancel;
+    bool hasUserCalledCancel() const { return m_userHasCancelled; }
 
+private:
     bool m_userHasCancelled;
+
+    std::unique_ptr<weld::ComboBoxText> m_xLbCharset;
+    std::unique_ptr<weld::Button> m_xBtnOk;
+    std::unique_ptr<weld::Button> m_xBtnCancel;
+
 private:
-    DECL_LINK(DoubleClickHdl, ListBox &, void);
-    DECL_LINK(CancelHdl, Button *, void);
+    DECL_LINK(CancelHdl, weld::Button&, void);
 
-    void dispose() override;
-
-    WPFTEncodingDialog(WPFTEncodingDialog const &) = delete;
-    WPFTEncodingDialog &operator=(WPFTEncodingDialog const &) = delete;
+    WPFTEncodingDialog(WPFTEncodingDialog const&) = delete;
+    WPFTEncodingDialog& operator=(WPFTEncodingDialog const&) = delete;
 };
-
 }
 
 #endif

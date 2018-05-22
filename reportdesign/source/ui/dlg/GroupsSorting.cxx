@@ -39,7 +39,6 @@
 
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/property.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 
 #include <algorithm>
@@ -232,7 +231,7 @@ uno::Sequence<uno::Any> OFieldExpressionControl::fillSelectedGroups()
     sal_Int32 nCount = xGroups->getCount();
     if ( nCount >= 1 )
     {
-        for( long nIndex=FirstSelectedRow(); nIndex >= 0 ; nIndex=NextSelectedRow() )
+        for( long nIndex=FirstSelectedRow(); nIndex != SFX_ENDOFSELECTION; nIndex=NextSelectedRow() )
         {
             try
             {
@@ -702,7 +701,7 @@ void OFieldExpressionControl::Command(const CommandEvent& rEvt)
             {
                 bool bEnable = false;
                 long nIndex = FirstSelectedRow();
-                while( nIndex >= 0 && !bEnable )
+                while( nIndex != SFX_ENDOFSELECTION && !bEnable )
                 {
                     if ( m_aGroupPositions[nIndex] != NO_GROUP )
                         bEnable = true;
@@ -735,7 +734,7 @@ void OFieldExpressionControl::DeleteRows()
         DeactivateCell();
     }
     long nIndex = FirstSelectedRow();
-    if (nIndex == -1)
+    if (nIndex == SFX_ENDOFSELECTION)
     {
         nIndex = GetCurRow();
     }
@@ -846,7 +845,7 @@ OGroupsSortingDialog::OGroupsSortingDialog(vcl::Window* _pParent, bool _bReadOnl
 
     m_pHelpWindow->SetControlBackground( GetSettings().GetStyleSettings().GetFaceColor() );
 
-    m_pToolBox->SetStyle(m_pToolBox->GetStyle()|WB_LINESPACING);
+    m_pToolBox->SetLineSpacing(true);
     m_pToolBox->SetSelectHdl(LINK(this, OGroupsSortingDialog, OnFormatAction));
 
     checkButtons(0);

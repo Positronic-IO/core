@@ -380,7 +380,7 @@ void SfxPrinterController::jobFinished( css::view::PrintableState nState )
                     pDocPrt->SetJobSetup( getPrinter()->GetJobSetup() );
                 else
                 {
-                    VclPtr<SfxPrinter> pNewPrt = VclPtr<SfxPrinter>::Create( std::unique_ptr<SfxItemSet>(pDocPrt->GetOptions().Clone()), getPrinter()->GetName() );
+                    VclPtr<SfxPrinter> pNewPrt = VclPtr<SfxPrinter>::Create( pDocPrt->GetOptions().Clone(), getPrinter()->GetName() );
                     pNewPrt->SetJobSetup( getPrinter()->GetJobSetup() );
                     mpViewShell->SetPrinter( pNewPrt, SfxPrinterChangeFlags::PRINTER | SfxPrinterChangeFlags::JOBSETUP );
                 }
@@ -407,38 +407,36 @@ class SfxDialogExecutor_Impl
 {
 private:
     SfxViewShell*           _pViewSh;
-    VclPtr<PrinterSetupDialog>  _pSetupParent;
+    PrinterSetupDialog&  _rSetupParent;
     std::unique_ptr<SfxItemSet> _pOptions;
     bool                    _bHelpDisabled;
 
-    DECL_LINK( Execute, Button*, void );
+    DECL_LINK( Execute, weld::Button&, void );
 
 public:
-            SfxDialogExecutor_Impl( SfxViewShell* pViewSh, PrinterSetupDialog* pParent );
+    SfxDialogExecutor_Impl( SfxViewShell* pViewSh, PrinterSetupDialog& rParent );
 
-    Link<Button*, void> GetLink() const { return LINK(const_cast<SfxDialogExecutor_Impl*>(this), SfxDialogExecutor_Impl, Execute); }
+    Link<weld::Button&, void> GetLink() const { return LINK(const_cast<SfxDialogExecutor_Impl*>(this), SfxDialogExecutor_Impl, Execute); }
     const SfxItemSet*   GetOptions() const { return _pOptions.get(); }
     void                DisableHelp() { _bHelpDisabled = true; }
 };
 
-SfxDialogExecutor_Impl::SfxDialogExecutor_Impl( SfxViewShell* pViewSh, PrinterSetupDialog* pParent ) :
+SfxDialogExecutor_Impl::SfxDialogExecutor_Impl( SfxViewShell* pViewSh, PrinterSetupDialog& rParent ) :
 
     _pViewSh        ( pViewSh ),
-    _pSetupParent   ( pParent ),
+    _rSetupParent   ( rParent ),
     _pOptions       ( nullptr ),
     _bHelpDisabled  ( false )
 
 {
 }
 
-IMPL_LINK_NOARG(SfxDialogExecutor_Impl, Execute, Button*, void)
+IMPL_LINK_NOARG(SfxDialogExecutor_Impl, Execute, weld::Button&, void)
 {
     // Options noted locally
     if ( !_pOptions )
     {
-        DBG_ASSERT( _pSetupParent, "no dialog parent" );
-        if( _pSetupParent )
-            _pOptions.reset( static_cast<SfxPrinter*>( _pSetupParent->GetPrinter() )->GetOptions().Clone() );
+        _pOptions = static_cast<SfxPrinter*>( _rSetupParent.GetPrinter() )->GetOptions().Clone();
     }
 
     assert(_pOptions);
@@ -446,13 +444,12 @@ IMPL_LINK_NOARG(SfxDialogExecutor_Impl, Execute, Button*, void)
         return;
 
     // Create Dialog
-    VclPtrInstance<SfxPrintOptionsDialog> pDlg( static_cast<vcl::Window*>(_pSetupParent),
-                                                _pViewSh, _pOptions.get() );
-    if ( _bHelpDisabled )
-        pDlg->DisableHelp();
-    if ( pDlg->Execute() == RET_OK )
+    SfxPrintOptionsDialog aDlg(_rSetupParent.GetFrameWeld(), _pViewSh, _pOptions.get() );
+    if (_bHelpDisabled)
+        aDlg.DisableHelp();
+    if (aDlg.execute() == RET_OK)
     {
-        _pOptions.reset( pDlg->GetOptions().Clone() );
+        _pOptions = aDlg.GetOptions().Clone();
     }
 }
 
@@ -765,7 +762,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
             if ( pPrinterItem )
             {
                 // use PrinterName parameter to create a printer
-                pPrinter = VclPtr<SfxPrinter>::Create( std::unique_ptr<SfxItemSet>(pDocPrinter->GetOptions().Clone()), pPrinterItem->GetValue() );
+                pPrinter = VclPtr<SfxPrinter>::Create( pDocPrinter->GetOptions().Clone(), pPrinterItem->GetValue() );
 
                 // if printer is unknown, it can't be used - now printer from document will be used
                 if ( !pPrinter->IsKnown() )
@@ -824,20 +821,20 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
                 VclPtr<SfxPrinter> pDlgPrinter = pPrinter->Clone();
 
                 // execute PrinterSetupDialog
-                VclPtrInstance<PrinterSetupDialog> pPrintSetupDlg( GetWindow() );
+                PrinterSetupDialog aPrintSetupDlg(GetFrameWeld());
                 std::unique_ptr<SfxDialogExecutor_Impl> pExecutor;
 
                 if (pImpl->m_bHasPrintOptions && HasPrintOptionsPage())
                 {
                     // additional controls for dialog
-                    pExecutor.reset( new SfxDialogExecutor_Impl( this, pPrintSetupDlg ) );
+                    pExecutor.reset( new SfxDialogExecutor_Impl( this, aPrintSetupDlg ) );
                     if ( bPrintOnHelp )
                         pExecutor->DisableHelp();
-                    pPrintSetupDlg->SetOptionsHdl( pExecutor->GetLink() );
+                    aPrintSetupDlg.SetOptionsHdl( pExecutor->GetLink() );
                 }
 
-                pPrintSetupDlg->SetPrinter( pDlgPrinter );
-                nDialogRet = pPrintSetupDlg->Execute();
+                aPrintSetupDlg.SetPrinter( pDlgPrinter );
+                nDialogRet = aPrintSetupDlg.execute();
 
                 if ( pExecutor && pExecutor->GetOptions() )
                 {
@@ -850,8 +847,6 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
                         SetPrinter( pPrinter, SfxPrinterChangeFlags::OPTIONS );
                     }
                 }
-
-                pPrintSetupDlg.disposeAndClear();
 
                 // no recording of PrinterSetup except printer name (is printer dependent)
                 rReq.Ignore();
@@ -897,7 +892,7 @@ sal_uInt16 SfxViewShell::SetPrinter( SfxPrinter* /*pNewPrinter*/, SfxPrinterChan
 
 VclPtr<SfxTabPage> SfxViewShell::CreatePrintOptionsPage
 (
-    vcl::Window*             /*pParent*/,
+    weld::Container* /*pPage*/,
     const SfxItemSet&   /*rOptions*/
 )
 {

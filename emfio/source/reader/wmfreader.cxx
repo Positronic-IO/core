@@ -560,7 +560,6 @@ namespace emfio
                 sal_uInt16 nLen = 0, nOptions = 0;
                 mpInputStream->ReadUInt16( nLen ).ReadUInt16( nOptions );
 
-                tools::Rectangle aRect;
                 if (nOptions & ETO_CLIPPED)
                 {
                     nNonStringLen += 2 * sizeof(sal_uInt16);
@@ -571,9 +570,9 @@ namespace emfio
                         break;
                     }
 
-                    const Point aPt1( ReadPoint() );
-                    const Point aPt2( ReadPoint() );
-                    aRect = tools::Rectangle( aPt1, aPt2 );
+                    ReadPoint();
+                    ReadPoint();
+                    SAL_WARN("vcl.wmf", "clipping unsupported");
                 }
 
                 ComplexTextLayoutFlags nTextLayoutMode = ComplexTextLayoutFlags::Default;
@@ -1387,7 +1386,7 @@ namespace emfio
 
             if( mnEndPos - mnStartPos )
             {
-               bool bEMFAvailable = false;
+                bool bEMFAvailable = false;
                 while( true )
                 {
                     mnCurrentAction++;
@@ -1404,6 +1403,15 @@ namespace emfio
 
                         break;
                     }
+
+                    const sal_uInt32 nAvailableBytes = mnEndPos - nPos;
+                    const sal_uInt32 nMaxPossibleRecordSize = nAvailableBytes/2;
+                    if (mnRecSize > nMaxPossibleRecordSize)
+                    {
+                        mpInputStream->SetError(SVSTREAM_FILEFORMAT_ERROR);
+                        break;
+                    }
+
                     if ( !bEMFAvailable )
                     {
                         if(   !maBmpSaveList.empty()
@@ -1448,16 +1456,8 @@ namespace emfio
                         }
                     }
 
-                    const sal_uInt32 nAvailableBytes = mnEndPos - nPos;
-                    const sal_uInt32 nMaxPossibleRecordSize = nAvailableBytes/2;
-
-                    if (mnRecSize <= nMaxPossibleRecordSize)
-                    {
-                        nPos += mnRecSize * 2;
-                        mpInputStream->Seek(nPos);
-                    }
-                    else
-                        mpInputStream->SetError( SVSTREAM_FILEFORMAT_ERROR );
+                    nPos += mnRecSize * 2;
+                    mpInputStream->Seek(nPos);
                 }
             }
             else

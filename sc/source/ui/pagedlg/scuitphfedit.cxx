@@ -28,7 +28,6 @@
 #include <editeng/flditem.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/objsh.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 
@@ -38,9 +37,7 @@
 #include <global.hxx>
 #include <attrib.hxx>
 #include <patattr.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
-#include <globstr.hrc>
 #include <tabvwsh.hxx>
 #include <prevwsh.hxx>
 #include <textdlgs.hxx>
@@ -217,16 +214,13 @@ void ScHFEditPage::Reset( const SfxItemSet* rCoreSet )
 bool ScHFEditPage::FillItemSet( SfxItemSet* rCoreSet )
 {
     ScPageHFItem    aItem( nWhich );
-    EditTextObject* pLeft   = m_pWndLeft->CreateTextObject();
-    EditTextObject* pCenter = m_pWndCenter->CreateTextObject();
-    EditTextObject* pRight  = m_pWndRight->CreateTextObject();
+    std::unique_ptr<EditTextObject> pLeft   = m_pWndLeft->CreateTextObject();
+    std::unique_ptr<EditTextObject> pCenter = m_pWndCenter->CreateTextObject();
+    std::unique_ptr<EditTextObject> pRight  = m_pWndRight->CreateTextObject();
 
     aItem.SetLeftArea  ( *pLeft );
     aItem.SetCenterArea( *pCenter );
     aItem.SetRightArea ( *pRight );
-    delete pLeft;
-    delete pCenter;
-    delete pRight;
 
     rCoreSet->Put( aItem );
 
@@ -237,8 +231,8 @@ void ScHFEditPage::InitPreDefinedList()
 {
     SvtUserOptions aUserOpt;
 
-    Color* pTxtColour = nullptr;
-    Color* pFldColour = nullptr;
+    boost::optional<Color> pTxtColour;
+    boost::optional<Color> pFldColour;
 
     // Get the all field values at the outset.
     OUString aPageFieldValue(m_pWndLeft->GetEditEngine()->CalcFieldValue(SvxFieldItem(SvxPageField(), EE_FEATURE_FIELD), 0,0, pTxtColour, pFldColour));
@@ -317,9 +311,9 @@ void ScHFEditPage::SetSelectDefinedList()
     OUString aCenterEntry;
     OUString aRightEntry;
 
-    pLeftObj.reset(m_pWndLeft->GetEditEngine()->CreateTextObject());
-    pCenterObj.reset(m_pWndCenter->GetEditEngine()->CreateTextObject());
-    pRightObj.reset(m_pWndRight->GetEditEngine()->CreateTextObject());
+    pLeftObj = m_pWndLeft->GetEditEngine()->CreateTextObject();
+    pCenterObj = m_pWndCenter->GetEditEngine()->CreateTextObject();
+    pRightObj = m_pWndRight->GetEditEngine()->CreateTextObject();
 
     bool bFound = false;
 
@@ -506,8 +500,7 @@ bool ScHFEditPage::IsPageEntry(EditEngine*pEngine, const EditTextObject* pTextOb
             {
                 aSel.nStartPos = aSel.nEndPos;
                 aSel.nEndPos++;
-                std::unique_ptr< EditTextObject > pPageObj;
-                pPageObj.reset(pEngine->CreateTextObject(aSel));
+                std::unique_ptr< EditTextObject > pPageObj = pEngine->CreateTextObject(aSel);
                 if(pPageObj.get() && pPageObj->IsFieldObject() )
                 {
                     const SvxFieldItem* pFieldItem = pPageObj->GetField();
@@ -599,7 +592,7 @@ void ScHFEditPage::ProcessDefinedListSel(ScHFEntryId eSel, bool bTravelling)
             m_pWndCenter->GetEditEngine()->QuickInsertText(aPageOfEntry,ESelection(aSel.nEndPara,aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
             aSel.nEndPos = aSel.nEndPos + aPageOfEntry.getLength();
             m_pWndCenter->GetEditEngine()->QuickInsertField(SvxFieldItem(SvxPagesField(), EE_FEATURE_FIELD), ESelection(aSel.nEndPara,aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
-            pTextObj.reset(m_pWndCenter->GetEditEngine()->CreateTextObject());
+            pTextObj = m_pWndCenter->GetEditEngine()->CreateTextObject();
             m_pWndCenter->SetText(*pTextObj);
             if(!bTravelling)
                 m_pWndCenter->GrabFocus();
@@ -639,7 +632,7 @@ void ScHFEditPage::ProcessDefinedListSel(ScHFEntryId eSel, bool bTravelling)
             aSel.nStartPos = aSel.nEndPos;
             aSel.nEndPos = aSel.nEndPos + aPageEntry.getLength();
             m_pWndCenter->GetEditEngine()->QuickInsertField(SvxFieldItem(SvxPageField(), EE_FEATURE_FIELD), ESelection(aSel.nEndPara,aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
-            pTextObj.reset(m_pWndCenter->GetEditEngine()->CreateTextObject());
+            pTextObj = m_pWndCenter->GetEditEngine()->CreateTextObject();
             m_pWndCenter->SetText(*pTextObj);
             if(!bTravelling)
                 m_pWndCenter->GrabFocus();
@@ -668,7 +661,7 @@ void ScHFEditPage::ProcessDefinedListSel(ScHFEntryId eSel, bool bTravelling)
             m_pWndCenter->GetEditEngine()->QuickInsertText(aCommaSpace,ESelection(aSel.nEndPara, aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
             aSel.nEndPos = aSel.nEndPos + aCommaSpace.getLength();
             m_pWndCenter->GetEditEngine()->QuickInsertField( SvxFieldItem(SvxTableField(), EE_FEATURE_FIELD), ESelection(aSel.nEndPara, aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
-            pTextObj.reset(m_pWndCenter->GetEditEngine()->CreateTextObject());
+            pTextObj = m_pWndCenter->GetEditEngine()->CreateTextObject();
             m_pWndCenter->SetText(*pTextObj);
             if(!bTravelling)
                 m_pWndCenter->GrabFocus();
@@ -688,7 +681,7 @@ void ScHFEditPage::ProcessDefinedListSel(ScHFEntryId eSel, bool bTravelling)
             m_pWndCenter->GetEditEngine()->QuickInsertText(aCommaSpace,ESelection(aSel.nEndPara, aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
             aSel.nEndPos = aSel.nEndPos + aCommaSpace.getLength();
             m_pWndCenter->GetEditEngine()->QuickInsertField( SvxFieldItem(SvxFileField(), EE_FEATURE_FIELD), ESelection(aSel.nEndPara, aSel.nEndPos, aSel.nEndPara, aSel.nEndPos));
-            pTextObj.reset(m_pWndCenter->GetEditEngine()->CreateTextObject());
+            pTextObj = m_pWndCenter->GetEditEngine()->CreateTextObject();
             m_pWndCenter->SetText(*pTextObj);
             if(!bTravelling)
                 m_pWndCenter->GrabFocus();
@@ -838,9 +831,9 @@ ScRightHeaderEditPage::ScRightHeaderEditPage( vcl::Window* pParent, const SfxIte
                     true )
     {}
 
-VclPtr<SfxTabPage> ScRightHeaderEditPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScRightHeaderEditPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScRightHeaderEditPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScRightHeaderEditPage>::Create( pParent.pParent, *rCoreSet );
 }
 
 // class ScLeftHeaderEditPage
@@ -852,9 +845,9 @@ ScLeftHeaderEditPage::ScLeftHeaderEditPage( vcl::Window* pParent, const SfxItemS
                     true )
     {}
 
-VclPtr<SfxTabPage> ScLeftHeaderEditPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScLeftHeaderEditPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScLeftHeaderEditPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScLeftHeaderEditPage>::Create( pParent.pParent, *rCoreSet );
 }
 
 // class ScRightFooterEditPage
@@ -866,9 +859,9 @@ ScRightFooterEditPage::ScRightFooterEditPage( vcl::Window* pParent, const SfxIte
                     false )
     {}
 
-VclPtr<SfxTabPage> ScRightFooterEditPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScRightFooterEditPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScRightFooterEditPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScRightFooterEditPage>::Create( pParent.pParent, *rCoreSet );
 }
 
 // class ScLeftFooterEditPage
@@ -880,9 +873,9 @@ ScLeftFooterEditPage::ScLeftFooterEditPage( vcl::Window* pParent, const SfxItemS
                     false )
     {}
 
-VclPtr<SfxTabPage> ScLeftFooterEditPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScLeftFooterEditPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScLeftFooterEditPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScLeftFooterEditPage>::Create( pParent.pParent, *rCoreSet );
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -33,7 +33,6 @@
 #include <svx/fmmodel.hxx>
 #include <svx/fmview.hxx>
 #include <svx/fmpage.hxx>
-#include <svx/strings.hrc>
 #include <svx/galmisc.hxx>
 #include <galobj.hxx>
 #include <vcl/svapp.hxx>
@@ -118,7 +117,7 @@ bool SgaObject::CreateThumb( const Graphic& rGraphic )
                     else
                         aBmpSize.setHeight( FRound( aBmpSize.Width() / fFactorLog ) );
 
-                    aBmpEx.SetSizePixel( aBmpSize, BmpScaleFlag::BestQuality );
+                    aBmpEx.Scale(aBmpSize, BmpScaleFlag::BestQuality);
                 }
             }
 
@@ -458,7 +457,7 @@ bool SgaObjectSvDraw::CreateThumb( const FmFormModel& rModel )
             if(aObjRect.GetWidth() && aObjRect.GetHeight())
             {
                 ScopedVclPtrInstance< VirtualDevice > pVDev;
-                FmFormView aView(const_cast< FmFormModel* >(&rModel), pVDev);
+                FmFormView aView(const_cast< FmFormModel& >(rModel), pVDev);
 
                 aView.ShowSdrPage(const_cast< FmFormPage* >(pPage));
                 aView.MarkAllObj();

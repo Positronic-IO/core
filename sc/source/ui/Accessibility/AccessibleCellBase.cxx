@@ -25,8 +25,6 @@
 #include <docfunc.hxx>
 #include <docsh.hxx>
 #include <formulacell.hxx>
-#include <scresid.hxx>
-#include <strings.hrc>
 #include <strings.hxx>
 #include <unonames.hxx>
 #include <detfunc.hxx>
@@ -476,10 +474,10 @@ OUString ScAccessibleCellBase::getBorderAttrs()
     bool bIn = mpDoc && mpDoc->IsCellInChangeTrack(maCellAddress,&aColor);
     if (bIn)
     {
-        aTopBorder.Color = aColor.GetColor();
-        aBottomBorder.Color = aColor.GetColor();
-        aLeftBorder.Color = aColor.GetColor();
-        aRightBorder.Color = aColor.GetColor();
+        aTopBorder.Color = sal_Int32(aColor);
+        aBottomBorder.Color = sal_Int32(aColor);
+        aLeftBorder.Color = sal_Int32(aColor);
+        aRightBorder.Color = sal_Int32(aColor);
         aTopBorder.OuterLineWidth = DEFAULT_LINE_WIDTH;
         aBottomBorder.OuterLineWidth = DEFAULT_LINE_WIDTH;
         aLeftBorder.OuterLineWidth = DEFAULT_LINE_WIDTH;

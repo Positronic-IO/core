@@ -271,7 +271,7 @@ void ExtrusionDirectionWindow::SelectHdl(void const * pControl)
     {
         Sequence< PropertyValue > aArgs( 1 );
         aArgs[0].Name = OUString(g_sExtrusionDirection).copy(5);
-        aArgs[0].Value <<= static_cast<sal_Int32>(gSkewList[mpDirectionSet->GetSelectItemId()-1]);
+        aArgs[0].Value <<= static_cast<sal_Int32>(gSkewList[mpDirectionSet->GetSelectedItemId()-1]);
 
         mrController.dispatchCommand( g_sExtrusionDirection, aArgs );
     }
@@ -346,34 +346,25 @@ OUString SAL_CALL ExtrusionDirectionControl::getImplementationName(  )
     return ExtrusionDirectionControl_getImplementationName();
 }
 
-
 Sequence< OUString > SAL_CALL ExtrusionDirectionControl::getSupportedServiceNames(  )
 {
     return ExtrusionDirectionControl_getSupportedServiceNames();
 }
 
-ExtrusionDepthDialog::ExtrusionDepthDialog( vcl::Window* pParent, double fDepth, FieldUnit eDefaultUnit )
-    : ModalDialog( pParent, "ExtrustionDepthDialog", "svx/ui/extrustiondepthdialog.ui" )
+ExtrusionDepthDialog::ExtrusionDepthDialog(weld::Window* pParent, double fDepth, FieldUnit eDefaultUnit)
+    : GenericDialogController(pParent, "svx/ui/extrustiondepthdialog.ui", "ExtrustionDepthDialog")
+    , m_xMtrDepth(m_xBuilder->weld_metric_spin_button("depth", eDefaultUnit))
 {
-    get(m_pMtrDepth, "depth");
-    m_pMtrDepth->SetUnit( eDefaultUnit );
-    m_pMtrDepth->SetValue( static_cast<int>(fDepth) * 100, FUNIT_100TH_MM );
+    m_xMtrDepth->set_value(static_cast<int>(fDepth) * 100, FUNIT_100TH_MM);
 }
 
 ExtrusionDepthDialog::~ExtrusionDepthDialog()
 {
-    disposeOnce();
-}
-
-void ExtrusionDepthDialog::dispose()
-{
-    m_pMtrDepth.clear();
-    ModalDialog::dispose();
 }
 
 double ExtrusionDepthDialog::getDepth() const
 {
-    return static_cast<double>( m_pMtrDepth->GetValue( FUNIT_100TH_MM ) ) / 100.0;
+    return static_cast<double>(m_xMtrDepth->get_value(FUNIT_100TH_MM)) / 100.0;
 }
 
 double const aDepthListInch[] = { 0, 1270,2540,5080,10160 };
@@ -384,12 +375,6 @@ ExtrusionDepthWindow::ExtrusionDepthWindow(
     vcl::Window* pParentWindow
 )   : ToolbarMenu( rController.getFrameInterface(), pParentWindow, WB_STDPOPUP )
     , mrController( rController )
-    , maImgDepth0(BitmapEx(RID_SVXBMP_DEPTH_0))
-    , maImgDepth1(BitmapEx(RID_SVXBMP_DEPTH_1))
-    , maImgDepth2(BitmapEx(RID_SVXBMP_DEPTH_2))
-    , maImgDepth3(BitmapEx(RID_SVXBMP_DEPTH_3))
-    , maImgDepth4(BitmapEx(RID_SVXBMP_DEPTH_4))
-    , maImgDepthInfinity(BitmapEx(RID_SVXBMP_DEPTH_INFINITY))
     , meUnit(FUNIT_NONE)
     , mfDepth( -1.0 )
     , msExtrusionDepth( ".uno:ExtrusionDepth" )
@@ -397,12 +382,19 @@ ExtrusionDepthWindow::ExtrusionDepthWindow(
 {
     SetSelectHdl( LINK( this, ExtrusionDepthWindow, SelectHdl ) );
 
-    appendEntry(0, "", maImgDepth0);
-    appendEntry(1, "", maImgDepth1);
-    appendEntry(2, "", maImgDepth2);
-    appendEntry(3, "", maImgDepth3);
-    appendEntry(4, "", maImgDepth4);
-    appendEntry(5, SvxResId(RID_SVXSTR_INFINITY), maImgDepthInfinity);
+    Image aImgDepth0(BitmapEx(RID_SVXBMP_DEPTH_0));
+    Image aImgDepth1(BitmapEx(RID_SVXBMP_DEPTH_1));
+    Image aImgDepth2(BitmapEx(RID_SVXBMP_DEPTH_2));
+    Image aImgDepth3(BitmapEx(RID_SVXBMP_DEPTH_3));
+    Image aImgDepth4(BitmapEx(RID_SVXBMP_DEPTH_4));
+    Image aImgDepthInfinity(BitmapEx(RID_SVXBMP_DEPTH_INFINITY));
+
+    appendEntry(0, "", aImgDepth0);
+    appendEntry(1, "", aImgDepth1);
+    appendEntry(2, "", aImgDepth2);
+    appendEntry(3, "", aImgDepth3);
+    appendEntry(4, "", aImgDepth4);
+    appendEntry(5, SvxResId(RID_SVXSTR_INFINITY), aImgDepthInfinity);
     appendEntry(6, SvxResId(RID_SVXSTR_CUSTOM));
 
     SetOutputSizePixel( getMenuSize() );
@@ -785,7 +777,7 @@ void ExtrusionLightingWindow::SelectHdl(void const * pControl)
     }
     else
     {
-        sal_Int32 nDirection = mpLightingSet->GetSelectItemId();
+        sal_Int32 nDirection = mpLightingSet->GetSelectedItemId();
 
         if( (nDirection > 0) && (nDirection < 10) )
         {
@@ -872,17 +864,18 @@ ExtrusionSurfaceWindow::ExtrusionSurfaceWindow(
     vcl::Window* pParentWindow)
     : ToolbarMenu(rController.getFrameInterface(), pParentWindow, WB_STDPOPUP)
     , mrController(rController)
-    , maImgSurface1(BitmapEx(RID_SVXBMP_WIRE_FRAME))
-    , maImgSurface2(BitmapEx(RID_SVXBMP_MATTE))
-    , maImgSurface3(BitmapEx(RID_SVXBMP_PLASTIC))
-    , maImgSurface4(BitmapEx(RID_SVXBMP_METAL))
 {
     SetSelectHdl( LINK( this, ExtrusionSurfaceWindow, SelectHdl ) );
 
-    appendEntry(0, SvxResId(RID_SVXSTR_WIREFRAME), maImgSurface1);
-    appendEntry(1, SvxResId(RID_SVXSTR_MATTE), maImgSurface2);
-    appendEntry(2, SvxResId(RID_SVXSTR_PLASTIC), maImgSurface3);
-    appendEntry(3, SvxResId(RID_SVXSTR_METAL), maImgSurface4);
+    Image aImgSurface1(BitmapEx(RID_SVXBMP_WIRE_FRAME));
+    Image aImgSurface2(BitmapEx(RID_SVXBMP_MATTE));
+    Image aImgSurface3(BitmapEx(RID_SVXBMP_PLASTIC));
+    Image aImgSurface4(BitmapEx(RID_SVXBMP_METAL));
+
+    appendEntry(0, SvxResId(RID_SVXSTR_WIREFRAME), aImgSurface1);
+    appendEntry(1, SvxResId(RID_SVXSTR_MATTE), aImgSurface2);
+    appendEntry(2, SvxResId(RID_SVXSTR_PLASTIC), aImgSurface3);
+    appendEntry(3, SvxResId(RID_SVXSTR_METAL), aImgSurface4);
 
     SetOutputSizePixel( getMenuSize() );
 

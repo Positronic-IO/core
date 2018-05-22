@@ -418,10 +418,9 @@ void myparser::traverse( xmlNodePtr parentNode )
                 //TODO: make these asserts and flush out all our broken help ids
                 SAL_WARN_IF(hidstr.empty(), "helpcompiler", "hid='' for text:" << text);
                 SAL_WARN_IF(!hidstr.empty() && extendedHelpText.empty(), "helpcompiler", "hid='.' with no hid bookmark branches in file: " << fileName + " for text: " << text);
-                HashSet::const_iterator aEnd = extendedHelpText.end();
-                for (HashSet::const_iterator iter = extendedHelpText.begin(); iter != aEnd; ++iter)
+                for (auto const& elem : extendedHelpText)
                 {
-                    std::string name = *iter;
+                    std::string name = elem;
                     (*helptexts)[name] = text;
                 }
             }
@@ -477,9 +476,9 @@ bool HelpCompiler::compile()
 
     streamTable.dropappl();
     streamTable.appl_doc = docResolvedDoc;
-    streamTable.appl_hidlist = aparser.hidlist.release();
-    streamTable.appl_helptexts = aparser.helptexts.release();
-    streamTable.appl_keywords = aparser.keywords.release();
+    streamTable.appl_hidlist = std::move(aparser.hidlist);
+    streamTable.appl_helptexts = std::move(aparser.helptexts);
+    streamTable.appl_keywords = std::move(aparser.keywords);
 
     streamTable.document_id = documentId;
     streamTable.document_path = fileName;

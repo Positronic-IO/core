@@ -74,7 +74,6 @@
 #include <sfx2/zoomitem.hxx>
 #include <svx/svxdlg.hxx>
 #include <svx/dialogs.hrc>
-#include <vcl/msgbox.hxx>
 #include <svl/intitem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/itempool.hxx>
@@ -257,8 +256,9 @@ void SlotManager::FuTemporary (SfxRequest& rRequest)
             SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
             if (pFact)
             {
+                vcl::Window* pWin = mrSlideSorter.GetContentWindow();
                 ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSdPhotoAlbumDialog(
-                    mrSlideSorter.GetContentWindow(),
+                    pWin ? pWin->GetFrameWeld() : nullptr,
                     pDocument));
                 pDlg->Execute();
             }
@@ -881,8 +881,9 @@ void SlotManager::RenameSlide(const SfxRequest& rRequest)
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         DBG_ASSERT(pFact, "Dialog creation failed!");
+        vcl::Window* pWin = mrSlideSorter.GetContentWindow();
         ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(
-                mrSlideSorter.GetContentWindow(),
+                pWin ? pWin->GetFrameWeld() : nullptr,
                 aPageName, aDescr));
         DBG_ASSERT(aNameDlg, "Dialog creation failed!");
         aNameDlg->SetText( aTitle );

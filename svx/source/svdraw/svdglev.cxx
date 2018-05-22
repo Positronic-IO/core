@@ -23,22 +23,22 @@
 
 #include <svx/svdundo.hxx>
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdglue.hxx>
 #include <svx/svdtrans.hxx>
 #include <svx/svdobj.hxx>
 
-
-SdrGlueEditView::SdrGlueEditView(SdrModel* pModel1, OutputDevice* pOut):
-    SdrPolyEditView(pModel1,pOut)
+SdrGlueEditView::SdrGlueEditView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrPolyEditView(rSdrModel, pOut)
 {
 }
 
 SdrGlueEditView::~SdrGlueEditView()
 {
 }
-
 
 void SdrGlueEditView::ImpDoMarkedGluePoints(PGlueDoFunc pDoFunc, bool bConst, const void* p1, const void* p2, const void* p3, const void* p4)
 {
@@ -120,7 +120,7 @@ static void ImpSetEscDir(SdrGluePoint& rGP, const SdrObject* /*pObj*/, const voi
 void SdrGlueEditView::SetMarkedGluePointsEscDir(SdrEscapeDirection nThisEsc, bool bOn)
 {
     ForceUndirtyMrkPnt();
-    BegUndo(ImpGetResStr(STR_EditSetGlueEscDir),GetDescriptionOfMarkedGluePoints());
+    BegUndo(SvxResId(STR_EditSetGlueEscDir),GetDescriptionOfMarkedGluePoints());
     ImpDoMarkedGluePoints(ImpSetEscDir,false,&nThisEsc,&bOn);
     EndUndo();
 }
@@ -160,7 +160,7 @@ static void ImpSetPercent(SdrGluePoint& rGP, const SdrObject* pObj, const void* 
 void SdrGlueEditView::SetMarkedGluePointsPercent(bool bOn)
 {
     ForceUndirtyMrkPnt();
-    BegUndo(ImpGetResStr(STR_EditSetGluePercent),GetDescriptionOfMarkedGluePoints());
+    BegUndo(SvxResId(STR_EditSetGluePercent),GetDescriptionOfMarkedGluePoints());
     ImpDoMarkedGluePoints(ImpSetPercent,false,&bOn);
     EndUndo();
 }
@@ -215,7 +215,7 @@ static void ImpSetAlign(SdrGluePoint& rGP, const SdrObject* pObj, const void* pb
 void SdrGlueEditView::SetMarkedGluePointsAlign(bool bVert, SdrAlign nAlign)
 {
     ForceUndirtyMrkPnt();
-    BegUndo(ImpGetResStr(STR_EditSetGlueAlign),GetDescriptionOfMarkedGluePoints());
+    BegUndo(SvxResId(STR_EditSetGlueAlign),GetDescriptionOfMarkedGluePoints());
     ImpDoMarkedGluePoints(ImpSetAlign,false,&bVert,&nAlign);
     EndUndo();
 }
@@ -226,7 +226,7 @@ void SdrGlueEditView::DeleteMarkedGluePoints()
     ForceUndirtyMrkPnt();
     const bool bUndo = IsUndoEnabled();
     if( bUndo )
-        BegUndo(ImpGetResStr(STR_EditDelete),GetDescriptionOfMarkedGluePoints(),SdrRepeatFunc::Delete);
+        BegUndo(SvxResId(STR_EditDelete),GetDescriptionOfMarkedGluePoints(),SdrRepeatFunc::Delete);
 
     const size_t nMarkCount=GetMarkedObjectCount();
     for (size_t nm=0; nm<nMarkCount; ++nm)
@@ -354,8 +354,8 @@ static void ImpMove(Point& rPt, const void* p1, const void* /*p2*/, const void* 
 void SdrGlueEditView::MoveMarkedGluePoints(const Size& rSiz, bool bCopy)
 {
     ForceUndirtyMrkPnt();
-    OUString aStr(ImpGetResStr(STR_EditMove));
-    if (bCopy) aStr += ImpGetResStr(STR_EditWithCopy);
+    OUString aStr(SvxResId(STR_EditMove));
+    if (bCopy) aStr += SvxResId(STR_EditWithCopy);
     BegUndo(aStr,GetDescriptionOfMarkedGluePoints(),SdrRepeatFunc::Move);
     if (bCopy) ImpCopyMarkedGluePoints();
     ImpTransformMarkedGluePoints(ImpMove,&rSiz);
@@ -372,8 +372,8 @@ static void ImpResize(Point& rPt, const void* p1, const void* p2, const void* p3
 void SdrGlueEditView::ResizeMarkedGluePoints(const Point& rRef, const Fraction& xFact, const Fraction& yFact, bool bCopy)
 {
     ForceUndirtyMrkPnt();
-    OUString aStr(ImpGetResStr(STR_EditResize));
-    if (bCopy) aStr+=ImpGetResStr(STR_EditWithCopy);
+    OUString aStr(SvxResId(STR_EditResize));
+    if (bCopy) aStr+=SvxResId(STR_EditWithCopy);
     BegUndo(aStr,GetDescriptionOfMarkedGluePoints(),SdrRepeatFunc::Resize);
     if (bCopy) ImpCopyMarkedGluePoints();
     ImpTransformMarkedGluePoints(ImpResize,&rRef,&xFact,&yFact);
@@ -390,8 +390,8 @@ static void ImpRotate(Point& rPt, const void* p1, const void* /*p2*/, const void
 void SdrGlueEditView::RotateMarkedGluePoints(const Point& rRef, long nAngle, bool bCopy)
 {
     ForceUndirtyMrkPnt();
-    OUString aStr(ImpGetResStr(STR_EditRotate));
-    if (bCopy) aStr+=ImpGetResStr(STR_EditWithCopy);
+    OUString aStr(SvxResId(STR_EditRotate));
+    if (bCopy) aStr+=SvxResId(STR_EditWithCopy);
     BegUndo(aStr,GetDescriptionOfMarkedGluePoints(),SdrRepeatFunc::Rotate);
     if (bCopy) ImpCopyMarkedGluePoints();
     double nSin=sin(nAngle*nPi180);

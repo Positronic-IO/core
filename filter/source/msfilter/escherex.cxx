@@ -90,7 +90,6 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/localfilehelper.hxx>
 #include <comphelper/string.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/virdev.hxx>
 #include <rtl/crc.h>
 #include <rtl/strbuf.hxx>
@@ -342,12 +341,12 @@ sal_uInt32 EscherPropertyContainer::GetGradientColor(
         if ( nStartColor & 1 )
         {
             nIntensity = pGradient->StartIntensity;
-            aColor = pGradient->StartColor;
+            aColor = Color(pGradient->StartColor);
         }
         else
         {
             nIntensity = pGradient->EndIntensity;
-            aColor = pGradient->EndColor;
+            aColor = Color(pGradient->EndColor);
         }
     }
     sal_uInt32  nRed = ( aColor.GetRed() * nIntensity ) / 100;
@@ -1306,16 +1305,14 @@ bool EscherPropertyContainer::CreateMediaGraphicProperties(const uno::Reference<
     return bRetValue;
 }
 
-bool EscherPropertyContainer::ImplCreateEmbeddedBmp( const OString& rUniqueId )
+bool EscherPropertyContainer::ImplCreateEmbeddedBmp(GraphicObject const & rGraphicObject)
 {
-    if( !rUniqueId.isEmpty() )
+    if (rGraphicObject.GetType() != GraphicType::NONE)
     {
         EscherGraphicProvider aProvider;
         SvMemoryStream aMemStrm;
-        // TODO: Get rid of UniqueID
 
-        GraphicObject aGraphicObject(rUniqueId);
-        if ( aProvider.GetBlibID( aMemStrm, aGraphicObject ) )
+        if (aProvider.GetBlibID( aMemStrm, rGraphicObject))
         {
             // grab BLIP from stream and insert directly as complex property
             // ownership of stream memory goes to complex property
@@ -1330,30 +1327,28 @@ bool EscherPropertyContainer::ImplCreateEmbeddedBmp( const OString& rUniqueId )
 }
 
 void EscherPropertyContainer::CreateEmbeddedBitmapProperties(
-    const OUString& rBitmapUrl, drawing::BitmapMode eBitmapMode )
+    uno::Reference<awt::XBitmap> const & rxBitmap, drawing::BitmapMode eBitmapMode )
 {
-    OUString aVndUrl( "vnd.sun.star.GraphicObject:" );
-    sal_Int32 nIndex = rBitmapUrl.indexOf( aVndUrl );
-    if( nIndex != -1 )
+    uno::Reference<graphic::XGraphic> xGraphic(rxBitmap, uno::UNO_QUERY);
+    if (!xGraphic.is())
+        return;
+    const Graphic aGraphic(xGraphic);
+    if (!aGraphic)
+        return;
+    const GraphicObject aGraphicObject(aGraphic);
+    if (aGraphicObject.GetType() == GraphicType::NONE)
+        return;
+    if (ImplCreateEmbeddedBmp(aGraphicObject))
     {
-        nIndex += aVndUrl.getLength();
-        if( rBitmapUrl.getLength() > nIndex )
-        {
-            OString aUniqueId(OUStringToOString(rBitmapUrl.copy(nIndex), RTL_TEXTENCODING_UTF8));
-            bool bRetValue = ImplCreateEmbeddedBmp( aUniqueId );
-            if( bRetValue )
-            {
-                // bitmap mode property
-                bool bRepeat = eBitmapMode == drawing::BitmapMode_REPEAT;
-                AddOpt( ESCHER_Prop_fillType, bRepeat ? ESCHER_FillTexture : ESCHER_FillPicture );
-            }
-        }
+        // bitmap mode property
+        bool bRepeat = eBitmapMode == drawing::BitmapMode_REPEAT;
+        AddOpt( ESCHER_Prop_fillType, bRepeat ? ESCHER_FillTexture : ESCHER_FillPicture );
     }
 }
 
 namespace {
 
-GraphicObject* lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackColor, bool bFillBackground, const tools::Rectangle& rRect )
+Graphic lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackColor, bool bFillBackground, const tools::Rectangle& rRect )
 {
     // #i121183# For hatch, do no longer create a bitmap with the fixed size of 28x28 pixels. Also
     // do not create a bitmap in page size, that would explode file sizes (and have no good quality).
@@ -1376,7 +1371,7 @@ GraphicObject* lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackCol
     aMtf.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
     aMtf.SetPrefSize(rRect.GetSize());
 
-    return new GraphicObject(Graphic(aMtf));
+    return Graphic(aMtf);
 }
 
 } // namespace
@@ -1384,10 +1379,10 @@ GraphicObject* lclDrawHatch( const drawing::Hatch& rHatch, const Color& rBackCol
 void EscherPropertyContainer::CreateEmbeddedHatchProperties(const drawing::Hatch& rHatch, const Color& rBackColor, bool bFillBackground )
 {
     const tools::Rectangle aRect(pShapeBoundRect ? *pShapeBoundRect : tools::Rectangle(Point(0,0), Size(28000, 21000)));
-    std::unique_ptr<GraphicObject> xGraphicObject(lclDrawHatch(rHatch, rBackColor, bFillBackground, aRect));
-    OString aUniqueId = xGraphicObject->GetUniqueID();
-    bool bRetValue = ImplCreateEmbeddedBmp( aUniqueId );
-    if ( bRetValue )
+    Graphic aGraphic(lclDrawHatch(rHatch, rBackColor, bFillBackground, aRect));
+    GraphicObject aGraphicObject(aGraphic);
+
+    if (ImplCreateEmbeddedBmp(aGraphicObject))
         AddOpt( ESCHER_Prop_fillType, ESCHER_FillTexture );
 }
 
@@ -1402,10 +1397,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
     bool        bCreateFillStyles = false;
 
     std::unique_ptr<GraphicAttr> pGraphicAttr;
-    std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject);
-    OUString        aGraphicUrl;
-    OString         aUniqueId;
-
+    OUString aGraphicUrl;
     uno::Reference<graphic::XGraphic> xGraphic;
 
     drawing::BitmapMode eBitmapMode(drawing::BitmapMode_NO_REPEAT);
@@ -1426,45 +1418,33 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
         if ( rSource == "MetaFile" )
         {
             auto & aSeq = *o3tl::doAccess<uno::Sequence<sal_Int8>>(aAny);
-            const sal_Int8*    pAry = aSeq.getConstArray();
-            sal_uInt32          nAryLen = aSeq.getLength();
+            const sal_Int8* pArray = aSeq.getConstArray();
+            sal_uInt32 nArrayLength = aSeq.getLength();
 
             // the metafile is already rotated
             bRotate = false;
 
-            if ( pAry && nAryLen )
+            if (pArray && nArrayLength)
             {
-                Graphic         aGraphic;
-                SvMemoryStream  aTemp( const_cast<sal_Int8 *>(pAry), nAryLen, StreamMode::READ );
-                ErrCode nErrCode = GraphicConverter::Import( aTemp, aGraphic, ConvertDataFormat::WMF );
+                Graphic aGraphic;
+                SvMemoryStream  aStream(const_cast<sal_Int8 *>(pArray), nArrayLength, StreamMode::READ);
+                ErrCode nErrCode = GraphicConverter::Import(aStream, aGraphic, ConvertDataFormat::WMF);
                 if ( nErrCode == ERRCODE_NONE )
                 {
-                    xGraphicObject.reset(new GraphicObject(aGraphic));
-                    aUniqueId = xGraphicObject->GetUniqueID();
-                    bIsGraphicMtf = xGraphicObject->GetType() == GraphicType::GdiMetafile;
+                    xGraphic = aGraphic.GetXGraphic();
+                    bIsGraphicMtf = aGraphic.GetType() == GraphicType::GdiMetafile;
                 }
             }
         }
         else if (rSource == "Bitmap" || rSource == "FillBitmap")
         {
-            uno::Reference<awt::XBitmap> xBitmap(aAny, uno::UNO_QUERY);
+            auto xBitmap = aAny.get<uno::Reference<awt::XBitmap>>();
             if (xBitmap.is())
             {
-                uno::Reference<awt::XBitmap> xBmp;
-                if (aAny >>= xBmp)
-                {
-                    BitmapEx    aBitmapEx( VCLUnoHelper::GetBitmap( xBmp ) );
-                    Graphic     aGraphic( aBitmapEx );
-                    xGraphicObject.reset(new GraphicObject(aGraphic));
-                    aUniqueId = xGraphicObject->GetUniqueID();
-                    bIsGraphicMtf = xGraphicObject->GetType() == GraphicType::GdiMetafile;
-                }
+                xGraphic.set(xBitmap, uno::UNO_QUERY);
+                Graphic aGraphic(xGraphic);
+                bIsGraphicMtf = aGraphic.GetType() == GraphicType::GdiMetafile;
             }
-        }
-        else if ( rSource == "GraphicURL" )
-        {
-            aGraphicUrl = *o3tl::doAccess<OUString>(aAny);
-            bCreateFillStyles = true;
         }
         else if ( rSource == "Graphic" )
         {
@@ -1479,7 +1459,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
                 Color aBackColor;
                 if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "FillColor" ) )
                 {
-                    aBackColor = ImplGetColor( *o3tl::doAccess<sal_uInt32>(aAny), false );
+                    aBackColor = Color(ImplGetColor( *o3tl::doAccess<sal_uInt32>(aAny), false ));
                 }
                 bool bFillBackground = false;
                 if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "FillBackground", true ) )
@@ -1488,10 +1468,10 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
                 }
 
                 const tools::Rectangle aRect(Point(0, 0), pShapeBoundRect ? pShapeBoundRect->GetSize() : Size(28000, 21000));
-                xGraphicObject.reset(lclDrawHatch(aHatch, aBackColor, bFillBackground, aRect));
-                aUniqueId = xGraphicObject->GetUniqueID();
+                Graphic aGraphic(lclDrawHatch(aHatch, aBackColor, bFillBackground, aRect));
+                xGraphic = aGraphic.GetXGraphic();
                 eBitmapMode = drawing::BitmapMode_REPEAT;
-                bIsGraphicMtf = xGraphicObject->GetType() == GraphicType::GdiMetafile;
+                bIsGraphicMtf = aGraphic.GetType() == GraphicType::GdiMetafile;
             }
         }
 
@@ -1543,74 +1523,65 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
             aGraphicUrl = aGraphic.getOriginURL();
         }
 
-        if ( aGraphicUrl.getLength() )
+        if (!aGraphicUrl.isEmpty())
         {
-            OUString aVndUrl( "vnd.sun.star.GraphicObject:" );
-            sal_Int32 nIndex = aGraphicUrl.indexOf( aVndUrl );
-            if ( nIndex != -1 )
-            {
-                nIndex = nIndex + aVndUrl.getLength();
-                if ( aGraphicUrl.getLength() > nIndex  )
-                    aUniqueId = OUStringToOString(aGraphicUrl.copy(nIndex), RTL_TEXTENCODING_UTF8);
-            }
-            else
-            {
-                // externally, linked graphic? convert to embedded
-                // one, if transformations are needed. this is because
-                // everything < msoxp cannot even handle rotated
-                // bitmaps.
-                // And check whether the graphic link target is
-                // actually supported by mso.
-                INetURLObject   aTmp( aGraphicUrl );
-                GraphicDescriptor aDescriptor(aTmp);
-                aDescriptor.Detect();
-                const GraphicFileFormat nFormat = aDescriptor.GetFileFormat();
+            bool bConverted = false;
 
-                // can MSO handle it?
-                if ( bMirrored || nAngle || nTransparency || nRed || nGreen || nBlue || (1.0 != fGamma) ||
-                     (nFormat != GraphicFileFormat::BMP &&
-                      nFormat != GraphicFileFormat::GIF &&
-                      nFormat != GraphicFileFormat::JPG &&
-                      nFormat != GraphicFileFormat::PNG &&
-                      nFormat != GraphicFileFormat::TIF &&
-                      nFormat != GraphicFileFormat::PCT &&
-                      nFormat != GraphicFileFormat::WMF &&
-                      nFormat != GraphicFileFormat::EMF) )
+            // externally, linked graphic? convert to embedded
+            // one, if transformations are needed. this is because
+            // everything < msoxp cannot even handle rotated
+            // bitmaps.
+            // And check whether the graphic link target is
+            // actually supported by mso.
+            INetURLObject   aTmp( aGraphicUrl );
+            GraphicDescriptor aDescriptor(aTmp);
+            aDescriptor.Detect();
+            const GraphicFileFormat nFormat = aDescriptor.GetFileFormat();
+
+            // can MSO handle it?
+            if ( bMirrored || nAngle || nTransparency || nRed || nGreen || nBlue || (1.0 != fGamma) ||
+                 (nFormat != GraphicFileFormat::BMP &&
+                  nFormat != GraphicFileFormat::GIF &&
+                  nFormat != GraphicFileFormat::JPG &&
+                  nFormat != GraphicFileFormat::PNG &&
+                  nFormat != GraphicFileFormat::TIF &&
+                  nFormat != GraphicFileFormat::PCT &&
+                  nFormat != GraphicFileFormat::WMF &&
+                  nFormat != GraphicFileFormat::EMF) )
+            {
+                std::unique_ptr<SvStream> pIn(::utl::UcbStreamHelper::CreateStream(
+                    aTmp.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ ));
+                if ( pIn )
                 {
-                    std::unique_ptr<SvStream> pIn(::utl::UcbStreamHelper::CreateStream(
-                        aTmp.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ ));
-                    if ( pIn )
-                    {
-                        Graphic aGraphic;
-                        ErrCode nErrCode = GraphicConverter::Import( *pIn, aGraphic );
+                    Graphic aGraphic;
+                    ErrCode nErrCode = GraphicConverter::Import( *pIn, aGraphic );
 
-                        if ( nErrCode == ERRCODE_NONE )
-                        {
-                            // no
-                            xGraphicObject.reset(new GraphicObject(aGraphic));
-                            aUniqueId = xGraphicObject->GetUniqueID();
-                        }
-                        // else: simply keep the graphic link
+                    if ( nErrCode == ERRCODE_NONE )
+                    {
+                        xGraphic = aGraphic.GetXGraphic();
+                        bConverted = true;
                     }
+                    // else: simply keep the graphic link
                 }
-                if ( aUniqueId.isEmpty() )
+            }
+
+            if (!bConverted)
+            {
+                if ( pGraphicProvider )
                 {
-                    if ( pGraphicProvider )
+                    const OUString& rBaseURI( pGraphicProvider->GetBaseURI() );
+                    INetURLObject aBaseURI( rBaseURI );
+                    if( aBaseURI.GetProtocol() == aTmp.GetProtocol() )
                     {
-                        const OUString& rBaseURI( pGraphicProvider->GetBaseURI() );
-                        INetURLObject aBaseURI( rBaseURI );
-                        if( aBaseURI.GetProtocol() == aTmp.GetProtocol() )
-                        {
-                            OUString aRelUrl( INetURLObject::GetRelURL( rBaseURI, aGraphicUrl ) );
-                            if ( !aRelUrl.isEmpty() )
-                                aGraphicUrl = aRelUrl;
-                        }
+                        OUString aRelUrl( INetURLObject::GetRelURL( rBaseURI, aGraphicUrl ) );
+                        if ( !aRelUrl.isEmpty() )
+                            aGraphicUrl = aRelUrl;
                     }
                 }
             }
         }
 
-        if ( aGraphicUrl.getLength() || !aUniqueId.isEmpty() || xGraphic.is())
+        if (!aGraphicUrl.isEmpty() || xGraphic.is())
         {
             if(bMirrored || nTransparency || nRed || nGreen || nBlue || (1.0 != fGamma))
             {
@@ -1734,59 +1705,6 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
                         bRetValue = true;
                     }
                 }
-            }
-            else if ( !aUniqueId.isEmpty() )
-            {
-                // write out embedded graphic
-                if ( pGraphicProvider && pPicOutStrm && pShapeBoundRect )
-                {
-                    GraphicObject aGraphicObject(aUniqueId);
-                    const sal_uInt32 nBlibId(pGraphicProvider->GetBlibID(*pPicOutStrm, aGraphicObject, nullptr, pGraphicAttr.get()));
-
-                    if(nBlibId)
-                    {
-                        if(bCreateFillBitmap)
-                        {
-                            AddOpt(ESCHER_Prop_fillBlip, nBlibId, true);
-                        }
-                        else
-                        {
-                            AddOpt( ESCHER_Prop_pib, nBlibId, true );
-                            ImplCreateGraphicAttributes( rXPropSet, nBlibId, bCreateCroppingAttributes );
-                        }
-
-                        bRetValue = true;
-                    }
-                }
-                else
-                {
-                    EscherGraphicProvider aProvider;
-                    SvMemoryStream aMemStrm;
-
-                    GraphicObject aGraphicObject(aUniqueId);
-
-                    if ( aProvider.GetBlibID( aMemStrm, aGraphicObject, nullptr, pGraphicAttr.get(), bOOxmlExport ) )
-                    {
-                        // grab BLIP from stream and insert directly as complex property
-                        // ownership of stream memory goes to complex property
-                        aMemStrm.ObjectOwnsMemory( false );
-                        sal_uInt8 const * pBuf = static_cast<sal_uInt8 const *>(aMemStrm.GetData());
-                        sal_uInt32 nSize = aMemStrm.Seek( STREAM_SEEK_TO_END );
-                        AddOpt( ESCHER_Prop_fillBlip, true, nSize, const_cast<sal_uInt8 *>(pBuf), nSize );
-                        bRetValue = true;
-                    }
-                }
-            }
-            // write out link to graphic
-            else
-            {
-                OSL_ASSERT(aGraphicUrl.getLength());
-
-                AddOpt( ESCHER_Prop_pibName, aGraphicUrl );
-                sal_uInt32  nPibFlags=0;
-                GetOpt( ESCHER_Prop_pibFlags, nPibFlags );
-                AddOpt( ESCHER_Prop_pibFlags,
-                        ESCHER_BlipFlagLinkToFile|ESCHER_BlipFlagFile|ESCHER_BlipFlagDoNotSave | nPibFlags );
             }
         }
     }
@@ -2481,112 +2399,110 @@ bool GetValueForEnhancedCustomShapeHandleParameter( sal_Int32& nRetValue, const 
     return bSpecial;
 }
 
-void ConvertEnhancedCustomShapeEquation( SdrObjCustomShape* pCustoShape,
-        std::vector< EnhancedCustomShapeEquation >& rEquations, std::vector< sal_Int32 >& rEquationOrder )
+void ConvertEnhancedCustomShapeEquation(
+    const SdrObjCustomShape& rSdrObjCustomShape,
+    std::vector< EnhancedCustomShapeEquation >& rEquations,
+    std::vector< sal_Int32 >& rEquationOrder )
 {
-    if ( pCustoShape )
+    uno::Sequence< OUString > sEquationSource;
+    const SdrCustomShapeGeometryItem& rGeometryItem =
+        rSdrObjCustomShape.GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
+    const uno::Any* pAny = rGeometryItem.GetPropertyValueByName( "Equations" );
+    if ( pAny )
+        *pAny >>= sEquationSource;
+    sal_Int32 nEquationSourceCount = sEquationSource.getLength();
+    if ( nEquationSourceCount && (nEquationSourceCount <= 128) )
     {
-        uno::Sequence< OUString > sEquationSource;
-        const SdrCustomShapeGeometryItem& rGeometryItem =
-            pCustoShape->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
-        const uno::Any* pAny = rGeometryItem.GetPropertyValueByName( "Equations" );
-        if ( pAny )
-            *pAny >>= sEquationSource;
-        sal_Int32 nEquationSourceCount = sEquationSource.getLength();
-        if ( nEquationSourceCount && (nEquationSourceCount <= 128) )
+        sal_Int32 i;
+        for ( i = 0; i < nEquationSourceCount; i++ )
         {
-            sal_Int32 i;
-            for ( i = 0; i < nEquationSourceCount; i++ )
+            EnhancedCustomShape2d aCustoShape2d(
+                const_cast< SdrObjCustomShape& >(rSdrObjCustomShape));
+            try
             {
-                EnhancedCustomShape2d aCustoShape2d( pCustoShape );
-                try
+                std::shared_ptr< EnhancedCustomShape::ExpressionNode > aExpressNode(
+                    EnhancedCustomShape::FunctionParser::parseFunction(
+                        sEquationSource[ i ], aCustoShape2d));
+                drawing::EnhancedCustomShapeParameter aPara( aExpressNode->fillNode( rEquations, nullptr, 0 ) );
+                if ( aPara.Type != drawing::EnhancedCustomShapeParameterType::EQUATION )
                 {
-                    std::shared_ptr< EnhancedCustomShape::ExpressionNode > aExpressNode(
-                        EnhancedCustomShape::FunctionParser::parseFunction( sEquationSource[ i ], aCustoShape2d ) );
-                    drawing::EnhancedCustomShapeParameter aPara( aExpressNode->fillNode( rEquations, nullptr, 0 ) );
-                    if ( aPara.Type != drawing::EnhancedCustomShapeParameterType::EQUATION )
-                    {
-                        EnhancedCustomShapeEquation aEquation;
-                        aEquation.nOperation = 0;
-                        EnhancedCustomShape::FillEquationParameter( aPara, 0, aEquation );
-                        rEquations.push_back( aEquation );
-                    }
-                }
-                catch ( const EnhancedCustomShape::ParseError& )
-                {
-                    EnhancedCustomShapeEquation aEquation;      // ups, we should not be here,
-                    aEquation.nOperation = 0;                   // creating a default equation with value 1
-                    aEquation.nPara[ 0 ] = 1;                   // hoping that this will not break anything
+                    EnhancedCustomShapeEquation aEquation;
+                    aEquation.nOperation = 0;
+                    EnhancedCustomShape::FillEquationParameter( aPara, 0, aEquation );
                     rEquations.push_back( aEquation );
                 }
-                catch ( ... )
-                {
-                    EnhancedCustomShapeEquation aEquation;      // #i112309# EnhancedCustomShape::Parse error
-                    aEquation.nOperation = 0;                   // not caught on linux platform
-                    aEquation.nPara[ 0 ] = 1;
-                    rEquations.push_back( aEquation );
-                }
-                rEquationOrder.push_back( rEquations.size() - 1 );
             }
-            // now updating our old equation indices, they are marked with a bit in the hiword of nOperation
-            std::vector< EnhancedCustomShapeEquation >::iterator aIter( rEquations.begin() );
-            std::vector< EnhancedCustomShapeEquation >::iterator aEnd ( rEquations.end() );
-            while( aIter != aEnd )
+            catch ( const EnhancedCustomShape::ParseError& )
             {
-                sal_uInt32 nMask = 0x20000000;
-                for( i = 0; i < 3; i++ )
+                EnhancedCustomShapeEquation aEquation;      // ups, we should not be here,
+                aEquation.nOperation = 0;                   // creating a default equation with value 1
+                aEquation.nPara[ 0 ] = 1;                   // hoping that this will not break anything
+                rEquations.push_back( aEquation );
+            }
+            catch ( ... )
+            {
+                EnhancedCustomShapeEquation aEquation;      // #i112309# EnhancedCustomShape::Parse error
+                aEquation.nOperation = 0;                   // not caught on linux platform
+                aEquation.nPara[ 0 ] = 1;
+                rEquations.push_back( aEquation );
+            }
+            rEquationOrder.push_back( rEquations.size() - 1 );
+        }
+        // now updating our old equation indices, they are marked with a bit in the hiword of nOperation
+        for (auto & equation : rEquations)
+        {
+            sal_uInt32 nMask = 0x20000000;
+            for( i = 0; i < 3; i++ )
+            {
+                if ( equation.nOperation & nMask )
                 {
-                    if ( aIter->nOperation & nMask )
-                    {
-                        aIter->nOperation ^= nMask;
-                        const size_t nIndex(aIter->nPara[ i ] & 0x3ff);
+                    equation.nOperation ^= nMask;
+                    const size_t nIndex(equation.nPara[ i ] & 0x3ff);
 
-                        // #i124661# check index access, there are cases where this is out of bound leading
-                        // to errors up to crashes when executed
-                        if(nIndex < rEquationOrder.size())
-                        {
-                            aIter->nPara[ i ] = rEquationOrder[ nIndex ] | 0x400;
-                        }
-                        else
-                        {
-                            OSL_ENSURE(false, "Attempted out of bound access to rEquationOrder of CustomShape (!)");
-                        }
+                    // #i124661# check index access, there are cases where this is out of bound leading
+                    // to errors up to crashes when executed
+                    if(nIndex < rEquationOrder.size())
+                    {
+                        equation.nPara[ i ] = rEquationOrder[ nIndex ] | 0x400;
                     }
-                    nMask <<= 1;
+                    else
+                    {
+                        OSL_ENSURE(false, "Attempted out of bound access to rEquationOrder of CustomShape (!)");
+                    }
                 }
-                ++aIter;
+                nMask <<= 1;
             }
         }
     }
 }
 
-bool EscherPropertyContainer::IsDefaultObject( SdrObjCustomShape const * pCustoShape , const MSO_SPT eShapeType )
+bool EscherPropertyContainer::IsDefaultObject(
+    const SdrObjCustomShape& rSdrObjCustomShape,
+    const MSO_SPT eShapeType)
 {
-    bool bIsDefaultObject = false;
     switch(eShapeType)
     {
         // if the custom shape is not default shape of ppt, return sal_Fasle;
         case mso_sptTearDrop:
-            return bIsDefaultObject;
+            return false;
 
         default:
             break;
     }
 
-    if ( pCustoShape )
+    if(rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Equations )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Viewbox )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Path )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Gluepoints )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Segments )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchX )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchY )
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::TextFrames ) )
     {
-    if (   pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::Equations )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::Viewbox )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::Path )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::Gluepoints )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::Segments )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchX )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchY )
-           && pCustoShape->IsDefaultGeometry( SdrObjCustomShape::DefaultType::TextFrames ) )
-        bIsDefaultObject = true;
+        return true;
     }
 
-    return bIsDefaultObject;
+    return false;
 }
 
 void EscherPropertyContainer::LookForPolarHandles( const MSO_SPT eShapeType, sal_Int32& nAdjustmentsWhichNeedsToBeConverted )
@@ -2636,8 +2552,12 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
     uno::Reference< beans::XPropertySet > aXPropSet( rXShape, uno::UNO_QUERY );
     if ( aXPropSet.is() )
     {
-        SdrObjCustomShape* pCustoShape = static_cast<SdrObjCustomShape*>(GetSdrObjectFromXShape( rXShape ));
-        if ( !pCustoShape ) return;
+        if(nullptr == dynamic_cast< SdrObjCustomShape* >(GetSdrObjectFromXShape(rXShape)))
+        {
+            return;
+        }
+
+        SdrObjCustomShape& rSdrObjCustomShape(static_cast< SdrObjCustomShape& >(*GetSdrObjectFromXShape(rXShape)));
         const OUString sCustomShapeGeometry( "CustomShapeGeometry"  );
         uno::Any aGeoPropSet = aXPropSet->getPropertyValue( sCustomShapeGeometry );
         uno::Sequence< beans::PropertyValue > aGeoPropSeq;
@@ -2660,12 +2580,18 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
             sal_Int32 nAdjustmentsWhichNeedsToBeConverted = 0;
             uno::Sequence< beans::PropertyValues > aHandlesPropSeq;
             bool bPredefinedHandlesUsed = true;
-            bool bIsDefaultObject = IsDefaultObject( pCustoShape , eShapeType);
+            const bool bIsDefaultObject(
+                IsDefaultObject(
+                    rSdrObjCustomShape,
+                    eShapeType));
 
             // convert property "Equations" into std::vector< EnhancedCustomShapeEquationEquation >
             std::vector< EnhancedCustomShapeEquation >  aEquations;
             std::vector< sal_Int32 >                    aEquationOrder;
-            ConvertEnhancedCustomShapeEquation( pCustoShape, aEquations, aEquationOrder );
+            ConvertEnhancedCustomShapeEquation(
+                rSdrObjCustomShape,
+                aEquations,
+                aEquationOrder);
 
             sal_Int32 i, nCount = aGeoPropSeq.getLength();
             for ( i = 0; i < nCount; i++ )
@@ -3019,15 +2945,12 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                .WriteUInt16( nElements )
                                .WriteUInt16( nElementSize );
 
-                            std::vector< EnhancedCustomShapeEquation >::const_iterator aIter( aEquations.begin() );
-                            std::vector< EnhancedCustomShapeEquation >::const_iterator aEnd ( aEquations.end() );
-                            while( aIter != aEnd )
+                            for (auto const& equation : aEquations)
                             {
-                                aOut.WriteUInt16( aIter->nOperation )
-                                    .WriteInt16( aIter->nPara[ 0 ] )
-                                    .WriteInt16( aIter->nPara[ 1 ] )
-                                    .WriteInt16( aIter->nPara[ 2 ] );
-                                ++aIter;
+                                aOut.WriteUInt16( equation.nOperation )
+                                    .WriteInt16( equation.nPara[ 0 ] )
+                                    .WriteInt16( equation.nPara[ 1 ] )
+                                    .WriteInt16( equation.nPara[ 2 ] );
                             }
                             sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
                             memcpy( pBuf, aOut.GetData(), nStreamSize );
@@ -3508,7 +3431,7 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                 case drawing::TextHorizontalAdjust_BLOCK:
                                     {
                                         drawing::TextFitToSizeType const eFTS(
-                                            pCustoShape->GetMergedItem( SDRATTR_TEXT_FITTOSIZE ).GetValue() );
+                                            rSdrObjCustomShape.GetMergedItem( SDRATTR_TEXT_FITTOSIZE ).GetValue() );
                                         if (eFTS == drawing::TextFitToSizeType_ALLLINES ||
                                             eFTS == drawing::TextFitToSizeType_PROPORTIONAL)
                                         {
@@ -3528,7 +3451,7 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                         }
                         if((nTextPathFlags & 0x4000) != 0)  // Is Font work
                         {
-                            OutlinerParaObject* pOutlinerParaObject = pCustoShape->GetOutlinerParaObject();
+                            OutlinerParaObject* pOutlinerParaObject(rSdrObjCustomShape.GetOutlinerParaObject());
                             if ( pOutlinerParaObject && pOutlinerParaObject->IsVertical() )
                                 nTextPathFlags |= 0x2000;
                         }
@@ -3851,10 +3774,9 @@ bool EscherPropertyContainer::CreateBlipPropertiesforOLEControl(const uno::Refer
     SdrObject* pShape = GetSdrObjectFromXShape( rXShape );
     if ( pShape )
     {
-        SdrModel* pMod = pShape->GetModel();
-        Graphic aGraphic(SdrExchangeView::GetObjGraphic( pMod, pShape));
+        const Graphic aGraphic(SdrExchangeView::GetObjGraphic(*pShape));
+        const GraphicObject aGraphicObject(aGraphic);
 
-        GraphicObject aGraphicObject(aGraphic);
         if (!aGraphicObject.GetUniqueID().isEmpty())
         {
             if ( pGraphicProvider && pPicOutStrm && pShapeBoundRect )
@@ -4239,9 +4161,9 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
 
         const sal_uInt8*    pGraphicAry = nullptr;
 
-        if ( p_EscherBlibEntry->mbIsNativeGraphicPossible && aGraphic.IsLink() )
+        if ( p_EscherBlibEntry->mbIsNativeGraphicPossible && aGraphic.IsGfxLink() )
         {
-            aGraphicLink = aGraphic.GetLink();
+            aGraphicLink = aGraphic.GetGfxLink();
 
             p_EscherBlibEntry->mnSize = aGraphicLink.GetDataSize();
             pGraphicAry = aGraphicLink.GetData();
@@ -4625,11 +4547,13 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
 
         if (aType == "drawing.Custom")
         {
-            SdrObject* pCustoShape(GetSdrObjectFromXShape(aXShape));
-            if (dynamic_cast<const SdrObjCustomShape*>(pCustoShape) !=  nullptr)
+            const bool bIsSdrObjCustomShape(nullptr != dynamic_cast< SdrObjCustomShape* >(GetSdrObjectFromXShape(aXShape)));
+
+            if(bIsSdrObjCustomShape)
             {
+                SdrObjCustomShape& rSdrObjCustomShape(static_cast< SdrObjCustomShape& >(*GetSdrObjectFromXShape(aXShape)));
                 const SdrCustomShapeGeometryItem& rGeometryItem =
-                    pCustoShape->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
+                    rSdrObjCustomShape.GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
 
                 const OUString sPath( "Path"  );
                 const OUString sType( "Type"  );
@@ -4650,7 +4574,7 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
 
                 if ( nGluePointType == drawing::EnhancedCustomShapeGluePointType::CUSTOM )
                 {
-                    const SdrGluePointList* pList = pCustoShape->GetGluePointList();
+                    const SdrGluePointList* pList = rSdrObjCustomShape.GetGluePointList();
                     if ( pList )
                     {
                         tools::Polygon aPoly;
@@ -4660,7 +4584,7 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
                             for ( nNum = 0; nNum < nCnt; nNum++ )
                             {
                                 const SdrGluePoint& rGP = (*pList)[ nNum ];
-                                Point aPt( rGP.GetAbsolutePos( *pCustoShape ) );
+                                Point aPt(rGP.GetAbsolutePos(rSdrObjCustomShape));
                                 aPoly.Insert( POLY_APPEND, aPt );
                             }
                             nRule = GetClosestPoint( aPoly, aRefPoint );
@@ -4670,15 +4594,25 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
                 }
                 else if ( nGluePointType == drawing::EnhancedCustomShapeGluePointType::SEGMENTS )
                 {
-                    SdrObject* pObject = pCustoShape->DoConvertToPolyObj(true, true);
-                    if (auto pSdrPathObj = dynamic_cast<const SdrPathObj*>(pObject))
+                    tools::PolyPolygon aPolyPoly;
+                    SdrObject* pTemporyryConvertResultObject(rSdrObjCustomShape.DoConvertToPolyObj(true, true));
+                    SdrPathObj* pSdrPathObj(dynamic_cast< SdrPathObj* >(pTemporyryConvertResultObject));
+
+                    if(pSdrPathObj)
+                    {
+                        // #i74631# use explicit constructor here. Also XPolyPolygon is not necessary,
+                        // reducing to PolyPolygon
+                        aPolyPoly = tools::PolyPolygon(pSdrPathObj->GetPathPoly());
+                    }
+
+                    // do *not* forget to delete the temporary used SdrObject - possible memory leak (!)
+                    SdrObject::Free(pTemporyryConvertResultObject);
+                    pSdrPathObj = nullptr;
+
+                    if(0 != aPolyPoly.Count())
                     {
                         sal_Int16 a, b, nIndex = 0;
                         sal_uInt32 nDistance = 0xffffffff;
-
-                        // #i74631# use explicit constructor here. Also XPolyPolygon is not necessary,
-                        // reducing to PolyPolygon
-                        const tools::PolyPolygon aPolyPoly(pSdrPathObj->GetPathPoly());
 
                         for ( a = 0; a < aPolyPoly.Count(); a++ )
                         {
@@ -4697,6 +4631,7 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
                                 nIndex++;
                             }
                         }
+
                         if ( nDistance != 0xffffffff )
                             bRectangularConnection = false;
                     }
@@ -4906,10 +4841,10 @@ void EscherExGlobal::WriteDggAtom( SvStream& rStrm ) const
     // calculate and write the fixed DGG data
     sal_uInt32 nShapeCount = 0;
     sal_uInt32 nLastShapeId = 0;
-    for( DrawingInfoVector::const_iterator aIt = maDrawingInfos.begin(), aEnd = maDrawingInfos.end(); aIt != aEnd; ++aIt )
+    for (auto const& drawingInfo : maDrawingInfos)
     {
-        nShapeCount += aIt->mnShapeCount;
-        nLastShapeId = ::std::max( nLastShapeId, aIt->mnLastShapeId );
+        nShapeCount += drawingInfo.mnShapeCount;
+        nLastShapeId = ::std::max( nLastShapeId, drawingInfo.mnLastShapeId );
     }
     // the non-existing cluster with index #0 is counted too
     sal_uInt32 nClusterCount = static_cast< sal_uInt32 >( maClusterTable.size() + 1 );
@@ -4917,8 +4852,8 @@ void EscherExGlobal::WriteDggAtom( SvStream& rStrm ) const
     rStrm.WriteUInt32( nLastShapeId ).WriteUInt32( nClusterCount ).WriteUInt32( nShapeCount ).WriteUInt32( nDrawingCount );
 
     // write the cluster table
-    for( ClusterTable::const_iterator aIt = maClusterTable.begin(), aEnd = maClusterTable.end(); aIt != aEnd; ++aIt )
-        rStrm.WriteUInt32( aIt->mnDrawingId ).WriteUInt32( aIt->mnNextShapeId );
+    for (auto const& elem : maClusterTable)
+        rStrm.WriteUInt32( elem.mnDrawingId ).WriteUInt32( elem.mnNextShapeId );
 }
 
 SvStream* EscherExGlobal::QueryPictureStream()
@@ -5048,10 +4983,10 @@ void EscherEx::InsertAtCurrentPos( sal_uInt32 nBytes )
         else
             mpOutStrm->SeekRel( nSize );
     }
-    for (std::vector< sal_uInt32 >::iterator aIter( mOffsets.begin() ), aEnd( mOffsets.end() ); aIter != aEnd ; ++aIter)
+    for (auto & offset : mOffsets)
     {
-        if ( *aIter > nCurPos )
-            *aIter += nBytes;
+        if ( offset > nCurPos )
+            offset += nBytes;
     }
     mpOutStrm->Seek( STREAM_SEEK_TO_END );
     nSource = mpOutStrm->Tell();

@@ -30,7 +30,6 @@
 #include <svx/dlgutil.hxx>
 #include <svx/xtable.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/printer.hxx>
 #include <svx/svxerr.hxx>
@@ -38,10 +37,8 @@
 #include <svx/svdotable.hxx>
 #include <editeng/unolingu.hxx>
 #include <svx/svditer.hxx>
-#include <comphelper/extract.hxx>
 #include <com/sun/star/linguistic2/XSpellChecker1.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <comphelper/processfactory.hxx>
 #include <editeng/forbiddencharacterstable.hxx>
 #include <svx/srchdlg.hxx>
 #include <unotools/linguprops.hxx>
@@ -159,7 +156,7 @@ SdOutliner::SdOutliner( SdDrawDocument* pDoc, OutlinerMode nMode )
       maMarkListCopy(),
       mpObj(nullptr),
       mpFirstObj(nullptr),
-      mpTextObj(nullptr),
+      mpSearchSpellTextObj(nullptr),
       mnText(0),
       mpParaObj(nullptr),
       meStartViewMode(PageKind::Standard),
@@ -1062,7 +1059,7 @@ void SdOutliner::ProvideNextTextObject()
     }
     catch (const css::uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.view");
     }
     SetUpdateMode(false);
     OutlinerView* pOutlinerView = mpImpl->GetOutlinerView();
@@ -1072,7 +1069,7 @@ void SdOutliner::ProvideNextTextObject()
         SetPaperSize( Size(1, 1) );
     SetText(OUString(), GetParagraph(0));
 
-    mpTextObj = nullptr;
+    mpSearchSpellTextObj = nullptr;
 
     // Iterate until a valid text object has been found or the search ends.
     do
@@ -1263,10 +1260,10 @@ bool SdOutliner::IsValidTextObject (const sd::outliner::IteratorPosition& rPosit
 
 void SdOutliner::PutTextIntoOutliner()
 {
-    mpTextObj = dynamic_cast<SdrTextObj*>( mpObj );
-    if ( mpTextObj && mpTextObj->HasText() && !mpTextObj->IsEmptyPresObj() )
+    mpSearchSpellTextObj = dynamic_cast<SdrTextObj*>( mpObj );
+    if ( mpSearchSpellTextObj && mpSearchSpellTextObj->HasText() && !mpSearchSpellTextObj->IsEmptyPresObj() )
     {
-        SdrText* pText = mpTextObj->getText( maCurrentPosition.mnText );
+        SdrText* pText = mpSearchSpellTextObj->getText( maCurrentPosition.mnText );
         mpParaObj = pText ? pText->GetOutlinerParaObject() : nullptr;
 
         if (mpParaObj != nullptr)
@@ -1278,7 +1275,7 @@ void SdOutliner::PutTextIntoOutliner()
     }
     else
     {
-        mpTextObj = nullptr;
+        mpSearchSpellTextObj = nullptr;
     }
 }
 
@@ -1411,10 +1408,10 @@ void SdOutliner::SetPage (EditMode eEditMode, sal_uInt16 nPageIndex)
 void SdOutliner::EnterEditMode (bool bGrabFocus)
 {
     OutlinerView* pOutlinerView = mpImpl->GetOutlinerView();
-    if (pOutlinerView && mpTextObj)
+    if (pOutlinerView && mpSearchSpellTextObj)
     {
         pOutlinerView->SetOutputArea( ::tools::Rectangle( Point(), Size(1, 1)));
-        SetPaperSize( mpTextObj->GetLogicRect().GetSize() );
+        SetPaperSize( mpSearchSpellTextObj->GetLogicRect().GetSize() );
         SdrPageView* pPV = mpView->GetSdrPageView();
 
         // Make FuText the current function.
@@ -1428,12 +1425,12 @@ void SdOutliner::EnterEditMode (bool bGrabFocus)
         // Starting the text edit mode is not enough so we do it here by
         // hand.
         mpView->UnmarkAllObj (pPV);
-        mpView->MarkObj (mpTextObj, pPV);
+        mpView->MarkObj (mpSearchSpellTextObj, pPV);
 
-        mpTextObj->setActiveText( mnText );
+        mpSearchSpellTextObj->setActiveText( mnText );
 
         // Turn on the edit mode for the text object.
-        mpView->SdrBeginTextEdit(mpTextObj, pPV, mpWindow, true, this, pOutlinerView, true, true, bGrabFocus);
+        mpView->SdrBeginTextEdit(mpSearchSpellTextObj, pPV, mpWindow, true, this, pOutlinerView, true, true, bGrabFocus);
 
         SetUpdateMode(true);
         mbFoundObject = true;

@@ -102,7 +102,6 @@
 #include <rtl/ustrbuf.hxx>
 #include <tools/date.hxx>
 #include <i18nlangtag/lang.h>
-#include <comphelper/extract.hxx>
 #include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star;
@@ -124,8 +123,6 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
     ScXMLImportContext( rImport ),
     mpEditEngine(GetScImport().GetEditEngine()),
     mnCurParagraph(0),
-    pDetectiveObjVec(nullptr),
-    pCellRangeSource(nullptr),
     fValue(0.0),
     nMergedRows(1),
     nMatrixRows(0),
@@ -155,8 +152,8 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
 
     rXMLImport.GetTables().AddColumn(bTempIsCovered);
 
-    std::unique_ptr<OUString> xStyleName;
-    std::unique_ptr<OUString> xCurrencySymbol;
+    boost::optional<OUString> xStyleName;
+    boost::optional<OUString> xCurrencySymbol;
     if ( rAttrList.is() )
     {
         for (auto &it : *rAttrList)
@@ -164,7 +161,7 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
             switch ( it.getToken() )
             {
                 case XML_ELEMENT( TABLE, XML_STYLE_NAME ):
-                    xStyleName.reset( new OUString( it.toString() ) );
+                    xStyleName = it.toString();
                     mbHasStyle = true;
                 break;
                 case XML_ELEMENT( TABLE, XML_CONTENT_VALIDATION_NAME ):
@@ -273,7 +270,7 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
                 }
                 break;
                 case XML_ELEMENT( OFFICE, XML_CURRENCY ):
-                    xCurrencySymbol.reset( new OUString( it.toString() ) );
+                    xCurrencySymbol = it.toString();
                 break;
                 default:
                     ;
@@ -293,13 +290,11 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
         if(bIsEmpty)
             bFormulaTextResult = true;
     }
-    rXMLImport.GetStylesImportHelper()->SetAttributes(xStyleName.release(), xCurrencySymbol.release(), nCellType);
+    rXMLImport.GetStylesImportHelper()->SetAttributes(std::move(xStyleName), std::move(xCurrencySymbol), nCellType);
 }
 
 ScXMLTableRowCellContext::~ScXMLTableRowCellContext()
 {
-    delete pDetectiveObjVec;
-    delete pCellRangeSource;
 }
 
 void ScXMLTableRowCellContext::LockSolarMutex()
@@ -360,6 +355,8 @@ void ScXMLTableRowCellContext::PushFormat(sal_Int32 nBegin, sal_Int32 nEnd, cons
     sal_Int32 nEntryCount = xMapper->GetEntryCount();
 
     SvXMLStylesContext* pAutoStyles = GetImport().GetAutoStyles();
+    if (!pAutoStyles)
+        return;
 
     // Style name for text span corresponds with the name of an automatic style.
     const XMLPropStyleContext* pStyle = dynamic_cast<const XMLPropStyleContext*>(
@@ -722,18 +719,18 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL ScXMLTableRowCellContex
         {
             bIsEmpty = false;
             if (!pDetectiveObjVec)
-                pDetectiveObjVec = new ScMyImpDetectiveObjVec;
+                pDetectiveObjVec.reset( new ScMyImpDetectiveObjVec );
             pContext = new ScXMLDetectiveContext(
-                rXMLImport, pDetectiveObjVec );
+                rXMLImport, pDetectiveObjVec.get() );
         }
         break;
         case XML_ELEMENT( TABLE, XML_CELL_RANGE_SOURCE ):
         {
             bIsEmpty = false;
             if (!pCellRangeSource)
-                pCellRangeSource = new ScMyImpCellRangeSource();
+                pCellRangeSource.reset(new ScMyImpCellRangeSource());
             pContext = new ScXMLCellRangeSourceContext(
-                rXMLImport, pAttribList, pCellRangeSource );
+                rXMLImport, pAttribList, pCellRangeSource.get() );
         }
         break;
     }
@@ -912,8 +909,8 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
             {
                 // create cell note with all data from drawing object
                 pNote = ScNoteUtil::CreateNoteFromObjectData( *pDoc, rPos,
-                    xItemSet.release(), xOutlinerObj.release(),
-                    aCaptionRect, mxAnnotationData->mbShown, false );
+                    std::move(xItemSet), xOutlinerObj.release(),
+                    aCaptionRect, mxAnnotationData->mbShown );
             }
         }
     }

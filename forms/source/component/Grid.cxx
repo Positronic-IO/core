@@ -29,8 +29,6 @@
 #include <com/sun/star/form/XLoadable.hpp>
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <comphelper/basicio.hxx>
-#include <comphelper/container.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <vcl/unohelp.hxx>
 #include <vcl/svapp.hxx>
@@ -137,12 +135,11 @@ void OGridControlModel::cloneColumns( const OGridControlModel* _pOriginalContain
     try
     {
         Reference< XCloneable > xColCloneable;
-        const OInterfaceArray::const_iterator pColumnStart = _pOriginalContainer->m_aItems.begin();
-        const OInterfaceArray::const_iterator pColumnEnd = _pOriginalContainer->m_aItems.end();
-        for ( OInterfaceArray::const_iterator pColumn = pColumnStart; pColumn != pColumnEnd; ++pColumn )
+        sal_Int32 nIndex = 0;
+        for (auto const& column : _pOriginalContainer->m_aItems)
         {
             // ask the col for a factory for the clone
-            xColCloneable.set(*pColumn, css::uno::UNO_QUERY);
+            xColCloneable.set(column, css::uno::UNO_QUERY);
             DBG_ASSERT( xColCloneable.is(), "OGridControlModel::cloneColumns: column is not cloneable!" );
             if ( xColCloneable.is() )
             {
@@ -152,9 +149,10 @@ void OGridControlModel::cloneColumns( const OGridControlModel* _pOriginalContain
                 if ( xColClone.is() )
                 {
                     // insert this clone into our own container
-                    insertByIndex( pColumn - pColumnStart, xColClone->queryInterface( m_aElementType ) );
+                    insertByIndex( nIndex, xColClone->queryInterface( m_aElementType ) );
                 }
             }
+            ++nIndex;
         }
     }
     catch( const Exception& )
@@ -843,7 +841,7 @@ void OGridControlModel::write(const Reference<XObjectOutputStream>& _rxOutStream
         _rxOutStream->writeBoolean(getBOOL(m_aTabStop));
     _rxOutStream->writeBoolean(m_bNavigation);
     if (nAnyMask & TEXTCOLOR)
-        _rxOutStream->writeLong( getTextColor() );
+        _rxOutStream->writeLong( sal_Int32(getTextColor()) );
     // new since version 6
     _rxOutStream << m_sHelpText;
     if (nAnyMask & FONTDESCRIPTOR)
@@ -965,7 +963,7 @@ void OGridControlModel::read(const Reference<XObjectInputStream>& _rxInStream)
     if (nAnyMask & TEXTCOLOR)
     {
         sal_Int32 nValue = _rxInStream->readLong();
-        setTextColor( nValue );
+        setTextColor( ::Color(nValue) );
     }
     // new since version 6
     if (nVersion > 5)

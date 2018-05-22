@@ -3314,40 +3314,6 @@ SfxVoidItem InsertTopicField FN_INSERT_FLD_TOPIC
     GroupId = SfxGroupId::Insert;
 ]
 
-SfxVoidItem InsertSignatureLine FN_INSERT_SIGNATURELINE
-()
-[
-    AutoUpdate = FALSE,
-    FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
-    GroupId = SfxGroupId::Insert;
-]
-
-SfxVoidItem EditSignatureLine FN_EDIT_SIGNATURELINE
-()
-[
-    AutoUpdate = FALSE,
-    FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
-    GroupId = SfxGroupId::Edit;
-]
-
 SfxVoidItem JumpDownThisLevel FN_NUM_BULLET_NEXT
 ()
 [
@@ -5962,23 +5928,6 @@ SfxVoidItem TextWrap FN_DRAW_WRAP_DLG
     GroupId = SfxGroupId::Format;
 ]
 
-SfxVoidItem AnchorMenu FN_TOOL_ANCHOR
-()
-[
-    AutoUpdate = FALSE,
-    FastCall = TRUE,
-    ReadOnlyDoc = FALSE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
-    GroupId = SfxGroupId::Format;
-]
-
 SfxVoidItem ToggleObjectLayer FN_TOOL_HIERARCHIE
 ()
 [
@@ -7683,4 +7632,21 @@ SfxVoidItem NavElement FN_NAV_ELEMENT
     MenuConfig = FALSE,
     ToolBoxConfig = TRUE,
     GroupId = SfxGroupId::Navigator;
+]
+
+SfxBoolItem ShowInlineTooltips FN_SHOW_INLINETOOLTIPS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = TRUE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::View;
 ]

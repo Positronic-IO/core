@@ -33,8 +33,6 @@
 
 #include <svx/sxekitm.hxx>
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
-
 #include <svx/svdmodel.hxx>
 #include "gradtrns.hxx"
 #include <svx/xflgrit.hxx>
@@ -1351,8 +1349,8 @@ void SdrHdlGradient::FromIAOToItem(SdrObject* _pObj, bool bSetItemOnObject, bool
 
     if(bSetItemOnObject)
     {
-        SdrModel* pModel = _pObj->GetModel();
-        SfxItemSet aNewSet(pModel->GetItemPool());
+        SdrModel& rModel(_pObj->getSdrModelFromSdrObject());
+        SfxItemSet aNewSet(rModel.GetItemPool());
 
         if(IsGradient())
         {
@@ -1367,11 +1365,11 @@ void SdrHdlGradient::FromIAOToItem(SdrObject* _pObj, bool bSetItemOnObject, bool
             aNewSet.Put(aNewTransItem);
         }
 
-        if(bUndo && pModel->IsUndoEnabled())
+        if(bUndo && rModel.IsUndoEnabled())
         {
-            pModel->BegUndo(SvxResId(IsGradient() ? SIP_XA_FILLGRADIENT : SIP_XA_FILLTRANSPARENCE));
-            pModel->AddUndo(pModel->GetSdrUndoFactory().CreateUndoAttrObject(*_pObj));
-            pModel->EndUndo();
+            rModel.BegUndo(SvxResId(IsGradient() ? SIP_XA_FILLGRADIENT : SIP_XA_FILLTRANSPARENCE));
+            rModel.AddUndo(rModel.GetSdrUndoFactory().CreateUndoAttrObject(*_pObj));
+            rModel.EndUndo();
         }
 
         pObj->SetMergedItemSetAndBroadcast(aNewSet);

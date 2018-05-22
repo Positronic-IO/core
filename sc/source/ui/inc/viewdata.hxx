@@ -40,9 +40,9 @@ enum class ScFillMode
     MATRIX      = 4,
 };
 
-enum ScSplitMode { SC_SPLIT_NONE = 0, SC_SPLIT_NORMAL, SC_SPLIT_FIX };
+enum ScSplitMode { SC_SPLIT_NONE = 0, SC_SPLIT_NORMAL, SC_SPLIT_FIX, SC_SPLIT_MODE_MAX_ENUM = SC_SPLIT_FIX };
 
-enum ScSplitPos { SC_SPLIT_TOPLEFT, SC_SPLIT_TOPRIGHT, SC_SPLIT_BOTTOMLEFT, SC_SPLIT_BOTTOMRIGHT };
+enum ScSplitPos { SC_SPLIT_TOPLEFT, SC_SPLIT_TOPRIGHT, SC_SPLIT_BOTTOMLEFT, SC_SPLIT_BOTTOMRIGHT, SC_SPLIT_POS_MAX_ENUM = SC_SPLIT_BOTTOMRIGHT };
 enum ScHSplitPos { SC_SPLIT_LEFT, SC_SPLIT_RIGHT };
 enum ScVSplitPos { SC_SPLIT_TOP, SC_SPLIT_BOTTOM };
 
@@ -252,6 +252,18 @@ private:
     void            ReadUserDataSequence(
                         const css::uno::Sequence <css::beans::PropertyValue>& rSettings,
                         ScViewData& rViewData, SCTAB nTab, bool& rHasZoom);
+
+    /** Sanitize the active split range value to not point into a grid window
+        that would never be initialized due to non-matching split modes.
+
+        This is to be done when reading settings from file formats or
+        configurations that could have arbitrary values. The caller is
+        responsible for actually assigning the new value to eWhichActive because
+        we want this function to be const to be able to call the check from
+        anywhere.
+     */
+    SAL_WARN_UNUSED_RESULT ScSplitPos SanitizeWhichActive() const;
+
 public:
     ~ScViewDataTable();
 };

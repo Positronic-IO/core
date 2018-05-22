@@ -127,6 +127,13 @@ class XEmbeddedObject;
 typedef std::map<const css::embed::XEmbeddedObject*, sal_Int32> WW8OleMap;
 struct WW8_PdAttrDesc;
 class SvxBrushItem;
+namespace sw
+{
+namespace mark
+{
+class IFieldmark;
+}
+}
 
 #define GRF_MAGIC_1 0x12    // 3 magic bytes for PicLocFc attribute
 #define GRF_MAGIC_2 0x34
@@ -480,7 +487,7 @@ public:
     /* implicit bookmark vector containing pairs of node indexes and bookmark names */
     std::vector<aBookmarkPair> m_aImplicitBookmarks;
     ww8::Frames m_aFrames;             // The floating frames in this document
-    const SwPageDesc *m_pAktPageDesc;
+    const SwPageDesc *m_pCurrentPageDesc;
     bool m_bPrevTextNodeIsEmpty;
     WW8_WrPlcPn* m_pPapPlc;
     WW8_WrPlcPn* m_pChpPlc;
@@ -556,6 +563,7 @@ public:
     bool m_bExportModeRTF;
     /// Is font size written already as part of the current character properties?
     bool m_bFontSizeWritten;
+    bool m_bAddFootnoteTab;     // only one aesthetic spacing tab per footnote
 
     SwDoc *m_pDoc;
     sal_uLong m_nCurStart, m_nCurEnd;
@@ -677,11 +685,11 @@ public:
     /// has two
     virtual bool CollapseScriptsforWordOk( sal_uInt16 nScript, sal_uInt16 nWhich ) = 0;
 
-    virtual void AppendBookmarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen ) = 0;
+    virtual void AppendBookmarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen ) = 0;
 
     virtual void AppendBookmark( const OUString& rName ) = 0;
 
-    virtual void AppendAnnotationMarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen ) = 0;
+    virtual void AppendAnnotationMarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen ) = 0;
 
     virtual void AppendSmartTags(SwTextNode& /*rTextNode*/) { }
 
@@ -794,10 +802,10 @@ protected:
     virtual void ExportDocument_Impl() = 0;
 
     /// Get the next position in the text node to output
-    sal_Int32 GetNextPos( SwWW8AttrIter const * pAttrIter, const SwTextNode& rNode, sal_Int32 nAktPos );
+    sal_Int32 GetNextPos( SwWW8AttrIter const * pAttrIter, const SwTextNode& rNode, sal_Int32 nCurrentPos );
 
     /// Update the information for GetNextPos().
-    void UpdatePosition( SwWW8AttrIter* pAttrIter, sal_Int32 nAktPos );
+    void UpdatePosition( SwWW8AttrIter* pAttrIter, sal_Int32 nCurrentPos );
 
     /// Output SwTextNode
     virtual void OutputTextNode( SwTextNode& );
@@ -808,7 +816,7 @@ protected:
     void AddLinkTarget( const OUString& rURL );
     void CollectOutlineBookmarks( const SwDoc &rDoc );
 
-    bool SetAktPageDescFromNode(const SwNode &rNd);
+    bool SetCurrentPageDescFromNode(const SwNode &rNd);
     bool ContentContainsChapterField(const SwFormatContent &rContent) const;
     bool FormatHdFtContainsChapterField(const SwFrameFormat &rFormat) const;
 
@@ -849,18 +857,18 @@ protected:
     /// Find the nearest bookmark from the current position.
     ///
     /// Returns false when there is no bookmark.
-    bool NearestBookmark( sal_Int32& rNearest, const sal_Int32 nAktPos, bool bNextPositionOnly );
+    bool NearestBookmark( sal_Int32& rNearest, const sal_Int32 nCurrentPos, bool bNextPositionOnly );
 
-    void GetSortedBookmarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen );
+    void GetSortedBookmarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen );
 
     bool GetBookmarks( const SwTextNode& rNd, sal_Int32 nStt, sal_Int32 nEnd,
             IMarkVector& rArr );
 
     /// Find the nearest annotation mark from the current position.
     ///
-    void NearestAnnotationMark( sal_Int32& rNearest, const sal_Int32 nAktPos, bool bNextPositionOnly );
+    void NearestAnnotationMark( sal_Int32& rNearest, const sal_Int32 nCurrentPos, bool bNextPositionOnly );
 
-    void GetSortedAnnotationMarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen );
+    void GetSortedAnnotationMarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen );
 
     bool GetAnnotationMarks( const SwTextNode& rNd, sal_Int32 nStt, sal_Int32 nEnd,
             IMarkVector& rArr );
@@ -1045,11 +1053,11 @@ public:
     bool TestOleNeedsGraphic(const SwAttrSet& rSet, tools::SvRef<SotStorage> const & xOleStg,
         tools::SvRef<SotStorage> xObjStg, OUString const &rStorageName, SwOLENode *pOLENd);
 
-    virtual void AppendBookmarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen ) override;
+    virtual void AppendBookmarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen ) override;
     virtual void AppendBookmark( const OUString& rName ) override;
     void AppendBookmarkEndWithCorrection( const OUString& rName );
 
-    virtual void AppendAnnotationMarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen ) override;
+    virtual void AppendAnnotationMarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen ) override;
 
     virtual void AppendSmartTags(SwTextNode& rTextNode) override;
 
@@ -1421,7 +1429,7 @@ private:
     std::vector<const EECharAttrib*> aChrTextAtrArr;
     std::vector<rtl_TextEncoding> aChrSetArr;
     sal_Int32 nPara;
-    sal_Int32 nAktSwPos;
+    sal_Int32 nCurrentSwPos;
     sal_Int32 nTmpSwPos;                   // for HasItem()
     rtl_TextEncoding eNdChrSet;
     sal_uInt16 nScript;
@@ -1443,12 +1451,12 @@ public:
 
     bool IsTextAttr(sal_Int32 nSwPos);
 
-    void NextPos() { if ( nAktSwPos < SAL_MAX_INT32 ) nAktSwPos = SearchNext( nAktSwPos + 1 ); }
+    void NextPos() { if ( nCurrentSwPos < SAL_MAX_INT32 ) nCurrentSwPos = SearchNext( nCurrentSwPos + 1 ); }
 
     void OutAttr( sal_Int32 nSwPos );
     virtual const SfxPoolItem* HasTextItem( sal_uInt16 nWhich ) const override;
     virtual const SfxPoolItem& GetItem( sal_uInt16 nWhich ) const override;
-    sal_Int32 WhereNext() const                { return nAktSwPos; }
+    sal_Int32 WhereNext() const                { return nCurrentSwPos; }
     rtl_TextEncoding GetNextCharSet() const;
     rtl_TextEncoding GetNodeCharSet() const     { return eNdChrSet; }
 };
@@ -1473,7 +1481,7 @@ private:
     bool mbCharIsRTL;
 
     const SwRangeRedline* pCurRedline;
-    sal_Int32 nAktSwPos;
+    sal_Int32 nCurrentSwPos;
     SwRedlineTable::size_type nCurRedlinePos;
 
     bool mbParaIsRTL;
@@ -1500,7 +1508,7 @@ public:
     bool IsDropCap( int nSwPos );
     bool RequiresImplicitBookmark();
 
-    void NextPos() { if ( nAktSwPos < SAL_MAX_INT32 ) nAktSwPos = SearchNext( nAktSwPos + 1 ); }
+    void NextPos() { if ( nCurrentSwPos < SAL_MAX_INT32 ) nCurrentSwPos = SearchNext( nCurrentSwPos + 1 ); }
 
     void OutAttr( sal_Int32 nSwPos, bool bRuby = false, bool bWriteCombinedChars = false );
     virtual const SfxPoolItem* HasTextItem( sal_uInt16 nWhich ) const override;
@@ -1510,11 +1518,11 @@ public:
     const SwRedlineData* GetRunLevelRedline( sal_Int32 nPos );
     FlyProcessingState OutFlys(sal_Int32 nSwPos);
 
-    sal_Int32 WhereNext() const { return nAktSwPos; }
+    sal_Int32 WhereNext() const { return nCurrentSwPos; }
     sal_uInt16 GetScript() const { return mnScript; }
     bool IsParaRTL() const { return mbParaIsRTL; }
     rtl_TextEncoding GetCharSet() const { return meChrSet; }
-    OUString GetSnippet(const OUString &rStr, sal_Int32 nAktPos,
+    OUString GetSnippet(const OUString &rStr, sal_Int32 nCurrentPos,
         sal_Int32 nLen) const;
     const SwFormatDrop& GetSwFormatDrop() const { return mrSwFormatDrop; }
 

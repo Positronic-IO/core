@@ -15,16 +15,16 @@
 
 FolderTree::FolderTree( vcl::Window* pParent, WinBits nBits )
     : SvTreeListBox( pParent, nBits | WB_SORT | WB_TABSTOP )
-    , m_aFolderImage(BitmapEx(RID_BMP_FOLDER))
-    , m_aFolderExpandedImage(BitmapEx(RID_BMP_FOLDER_OPEN))
 {
     Reference< XComponentContext > xContext = ::comphelper::getProcessComponentContext();
     Reference< XInteractionHandler > xInteractionHandler(
                 InteractionHandler::createWithParent(xContext, VCLUnoHelper::GetInterface(GetParentDialog())), UNO_QUERY_THROW );
     m_xEnv = new ::ucbhelper::CommandEnvironment( xInteractionHandler, Reference< XProgressHandler >() );
 
-    SetDefaultCollapsedEntryBmp( m_aFolderImage );
-    SetDefaultExpandedEntryBmp( m_aFolderExpandedImage );
+    Image aFolderImage(BitmapEx(RID_BMP_FOLDER));
+    Image aFolderExpandedImage(BitmapEx(RID_BMP_FOLDER_OPEN));
+    SetDefaultCollapsedEntryBmp( aFolderImage );
+    SetDefaultExpandedEntryBmp( aFolderExpandedImage );
 }
 
 void FolderTree::RequestingChildren( SvTreeListEntry* pEntry )
@@ -53,7 +53,7 @@ void FolderTree::FillTreeEntry( SvTreeListEntry* pEntry )
             GetModel()->Remove(pChild);
         }
 
-        ::std::vector< SortingData_Impl* > aContent;
+        ::std::vector< std::unique_ptr<SortingData_Impl> > aContent;
 
         ::rtl::Reference< ::svt::FileViewContentEnumerator >
             xContentEnumerator(new FileViewContentEnumerator(
@@ -66,7 +66,7 @@ void FolderTree::FillTreeEntry( SvTreeListEntry* pEntry )
 
         if ( EnumerationResult::SUCCESS == eResult )
         {
-            for(SortingData_Impl* i : aContent)
+            for(auto & i : aContent)
             {
                 if( i->mbIsFolder )
                 {

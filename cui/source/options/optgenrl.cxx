@@ -35,7 +35,6 @@
 
 #include <unotools/useroptions.hxx>
 #include <cuioptgenrl.hxx>
-#include <dialmgr.hxx>
 #include <svx/dlgutil.hxx>
 #include <svx/svxids.hrc>
 
@@ -350,9 +349,9 @@ void SvxGeneralTabPage::SetLinks ()
 }
 
 
-VclPtr<SfxTabPage> SvxGeneralTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SvxGeneralTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxGeneralTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxGeneralTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SvxGeneralTabPage::FillItemSet( SfxItemSet* )

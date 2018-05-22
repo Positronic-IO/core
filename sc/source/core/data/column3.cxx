@@ -63,6 +63,7 @@
 #include <editeng/editstat.hxx>
 
 #include <cstdio>
+#include <refdata.hxx>
 
 using ::com::sun::star::i18n::LocaleDataItem2;
 
@@ -502,7 +503,7 @@ void ScColumn::BroadcastNewCell( SCROW nRow )
     Broadcast(nRow);
 }
 
-bool ScColumn::UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, const sc::CellStoreType::iterator& itr )
+bool ScColumn::UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, sc::CellStoreType::iterator& itr )
 {
     if (rAttr.mnScriptType != SvtScriptType::UNKNOWN)
         // Already updated. Nothing to do.
@@ -515,9 +516,9 @@ bool ScColumn::UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, const sc::
         return false;
 
     sc::CellStoreType::position_type pos = maCells.position(itr, nRow);
-    sc::CellStoreType::iterator itr2 = pos.first;
+    itr = pos.first;
     size_t nOffset = pos.second;
-    ScRefCellValue aCell = GetCellValue( itr2, nOffset );
+    ScRefCellValue aCell = GetCellValue( itr, nOffset );
     ScAddress aPos(nCol, nRow, nTab);
 
     ScDocument* pDocument = GetDoc();
@@ -1359,7 +1360,7 @@ public:
 
     void operator() (size_t nRow, const EditTextObject* p)
     {
-        miNewCellsPos = maNewCells.set(miNewCellsPos, nRow-mnRowOffset, p->Clone());
+        miNewCellsPos = maNewCells.set(miNewCellsPos, nRow-mnRowOffset, p->Clone().release());
     }
 
     void operator() (size_t nRow, const ScFormulaCell* p)
@@ -1475,7 +1476,7 @@ public:
                 {
                     EditTextObject* pObj = sc::edittext_block::at(*aPos.first->data, aPos.second);
                     miNewCellsPos = maNewCells.set(
-                            miNewCellsPos, nDestRow-mnRowOffset, pObj->Clone());
+                            miNewCellsPos, nDestRow-mnRowOffset, pObj->Clone().release());
                 }
                 break;
                 case sc::element_type_formula:
@@ -1625,7 +1626,7 @@ void ScColumn::MixData(
 
 ScAttrIterator* ScColumn::CreateAttrIterator( SCROW nStartRow, SCROW nEndRow ) const
 {
-    return new ScAttrIterator( pAttrArray, nStartRow, nEndRow, GetDoc()->GetDefPattern() );
+    return new ScAttrIterator( pAttrArray.get(), nStartRow, nEndRow, GetDoc()->GetDefPattern() );
 }
 
 namespace {
@@ -1877,22 +1878,22 @@ bool ScColumn::SetString( SCROW nRow, SCTAB nTabP, const OUString& rString,
     return bNumFmtSet;
 }
 
-void ScColumn::SetEditText( SCROW nRow, EditTextObject* pEditText )
+void ScColumn::SetEditText( SCROW nRow, std::unique_ptr<EditTextObject> pEditText )
 {
     pEditText->NormalizeString(GetDoc()->GetSharedStringPool());
     sc::CellStoreType::iterator it = GetPositionToInsert(nRow);
-    maCells.set(it, nRow, pEditText);
+    maCells.set(it, nRow, pEditText.release());
     maCellTextAttrs.set(nRow, sc::CellTextAttr());
     CellStorageModified();
 
     BroadcastNewCell(nRow);
 }
 
-void ScColumn::SetEditText( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, EditTextObject* pEditText )
+void ScColumn::SetEditText( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, std::unique_ptr<EditTextObject> pEditText )
 {
     pEditText->NormalizeString(GetDoc()->GetSharedStringPool());
     rBlockPos.miCellPos = GetPositionToInsert(rBlockPos.miCellPos, nRow);
-    rBlockPos.miCellPos = maCells.set(rBlockPos.miCellPos, nRow, pEditText);
+    rBlockPos.miCellPos = maCells.set(rBlockPos.miCellPos, nRow, pEditText.release());
     rBlockPos.miCellTextAttrPos = maCellTextAttrs.set(
         rBlockPos.miCellTextAttrPos, nRow, sc::CellTextAttr());
 
@@ -2440,7 +2441,7 @@ void ScColumn::RemoveProtected( SCROW nStartRow, SCROW nEndRow )
     FormulaToValueHandler aFunc;
     sc::CellStoreType::const_iterator itPos = maCells.begin();
 
-    ScAttrIterator aAttrIter( pAttrArray, nStartRow, nEndRow, GetDoc()->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), nStartRow, nEndRow, GetDoc()->GetDefPattern() );
     SCROW nTop = -1;
     SCROW nBottom = -1;
     const ScPatternAttr* pPattern = aAttrIter.Next( nTop, nBottom );
@@ -3096,6 +3097,8 @@ public:
                     xPrevGrp->mnLength += xCurGrp->mnLength;
                     pCur->SetCellGroup(xPrevGrp);
                     sc::formula_block::iterator itGrpEnd = it;
+                    if (xCurGrp->mnLength > std::distance(itGrpEnd, itEnd))
+                        throw css::lang::IllegalArgumentException();
                     std::advance(itGrpEnd, xCurGrp->mnLength);
                     for (++it; it != itGrpEnd; ++it)
                     {
@@ -3118,6 +3121,8 @@ public:
             {
                 // Previous cell is a regular cell and current cell is a group.
                 nRow += xCurGrp->mnLength;
+                if (xCurGrp->mnLength > std::distance(it, itEnd))
+                    throw css::lang::IllegalArgumentException();
                 std::advance(it, xCurGrp->mnLength);
                 pPrev->SetCellGroup(xCurGrp);
                 xCurGrp->mpTopCell = pPrev;

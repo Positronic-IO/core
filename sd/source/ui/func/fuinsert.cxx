@@ -20,9 +20,7 @@
 #include <config_features.h>
 
 #include <fuinsert.hxx>
-
 #include <comphelper/storagehelper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <svx/svxdlg.hxx>
 #include <com/sun/star/embed/EmbedVerbs.hpp>
@@ -39,7 +37,6 @@
 #include <sfx2/docfile.hxx>
 #include <sfx2/msgpool.hxx>
 #include <sfx2/filedlghelper.hxx>
-#include <svtools/strings.hrc>
 #include <svtools/insdlg.hxx>
 #include <sfx2/request.hxx>
 #include <svl/globalnameitem.hxx>
@@ -51,7 +48,6 @@
 #include <svx/linkwarn.hxx>
 #include <svx/svdetc.hxx>
 #include <avmedia/mediawindow.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <sfx2/printer.hxx>
 #include <comphelper/classids.hxx>
 #include <svtools/sfxecode.hxx>
@@ -65,11 +61,9 @@
 #include <sot/storage.hxx>
 #include <sot/formats.hxx>
 #include <svx/svdpagv.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/opengrf.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <svx/charthelper.hxx>
-#include <comphelper/lok.hxx>
 
 #include <app.hrc>
 #include <sdresid.hxx>
@@ -87,6 +81,10 @@
 #include <vcl/svapp.hxx>
 #include <undo/undoobjects.hxx>
 #include <memory>
+#include <vcl/weld.hxx>
+
+#include <vcl/GraphicNativeTransform.hxx>
+#include <vcl/GraphicNativeMetadata.hxx>
 
 using namespace com::sun::star;
 
@@ -140,7 +138,7 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
     }
     else
     {
-        SvxOpenGraphicDialog aDlg(SdResId(STR_INSERTGRAPHIC), mpWindow);
+        SvxOpenGraphicDialog aDlg(SdResId(STR_INSERTGRAPHIC), mpWindow ? mpWindow->GetFrameWeld() : nullptr);
 
         if( aDlg.Execute() != ERRCODE_NONE )
             return; // cancel dialog
@@ -153,6 +151,20 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
 
     if( nError == ERRCODE_NONE )
     {
+        GraphicNativeMetadata aMetadata;
+        if ( aMetadata.read(aGraphic) )
+        {
+            const sal_uInt16 aRotation = aMetadata.getRotation();
+            if (aRotation != 0)
+            {
+                std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr, VclMessageType::Question,VclButtonsType::YesNo,SdResId(STR_QUERYROTATION)));
+                if (xQueryBox->run() == RET_YES)
+                {
+                    GraphicNativeTransform aTransform( aGraphic );
+                    aTransform.rotate( aRotation );
+                }
+            }
+        }
         if( mpViewShell && dynamic_cast< DrawViewShell *>( mpViewShell ) !=  nullptr)
         {
             sal_Int8    nAction = DND_ACTION_COPY;
@@ -170,20 +182,7 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
                 bSelectionReplaced = true;
             }
 
-            Point aPos;
-            // For LOK, set position to center of the page
-            if (comphelper::LibreOfficeKit::isActive())
-                aPos = ::tools::Rectangle(aPos, mpView->GetSdrPageView()->GetPage()->GetSize()).Center();
-            else
-            {
-                ::tools::Rectangle aRect(aPos, mpWindow->GetOutputSizePixel() );
-                aPos = aRect.Center();
-                bool bMapModeWasEnabled(mpWindow->IsMapModeEnabled());
-                mpWindow->EnableMapMode(/*true*/);
-                aPos = mpWindow->PixelToLogic(aPos);
-                mpWindow->EnableMapMode(bMapModeWasEnabled);
-            }
-
+            Point aPos = mpWindow->GetVisibleCenter();
             SdrGrafObj* pGrafObj = mpView->InsertGraphic(aGraphic, nAction, aPos, pPickObj, nullptr);
 
             if(pGrafObj && bAsLink )
@@ -239,7 +238,7 @@ void FuInsertClipboard::DoExecute( SfxRequest&  )
     SotClipboardFormatId                        nFormatId;
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog( mpViewShell->GetActiveWindow() ));
+    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(mpViewShell->GetFrameWeld()));
     if ( pDlg )
     {
         pDlg->Insert( SotClipboardFormatId::EMBED_SOURCE, OUString() );
@@ -380,16 +379,17 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                     aSize = OutputDevice::LogicToLogic(aSize, MapMode(aUnit), MapMode(MapUnit::Map100thMM));
                 }
 
-                Point aPos;
-                ::tools::Rectangle aWinRect(aPos, mpWindow->GetOutputSizePixel() );
-                aPos = aWinRect.Center();
-                aPos = mpWindow->PixelToLogic(aPos);
+                Point aPos = mpWindow->GetVisibleCenter();
                 aPos.AdjustX( -(aSize.Width() / 2) );
                 aPos.AdjustY( -(aSize.Height() / 2) );
                 aRect = ::tools::Rectangle(aPos, aSize);
             }
 
-            SdrOle2Obj* pOleObj = new SdrOle2Obj( svt::EmbeddedObjectRef( xObj, nAspect ), aObjName, aRect );
+            SdrOle2Obj* pOleObj = new SdrOle2Obj(
+                mpView->getSdrModelFromSdrView(),
+                svt::EmbeddedObjectRef( xObj, nAspect ),
+                aObjName,
+                aRect);
             SdrPageView* pPV = mpView->GetSdrPageView();
 
             // if we have a pick obj we need to make this new ole a pres obj replacing the current pick obj
@@ -497,7 +497,7 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                 {
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
-                            pFact->CreateInsertObjectDialog( mpViewShell->GetActiveWindow(), SD_MOD()->GetSlotPool()->GetSlot(nSlotId)->GetCommandString(),
+                            pFact->CreateInsertObjectDialog( mpViewShell->GetFrameWeld(), SD_MOD()->GetSlotPool()->GetSlot(nSlotId)->GetCommandString(),
                             xStorage, &aServerLst ));
                     if ( pDlg )
                     {
@@ -616,8 +616,11 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                     Point aPnt ((aPageSize.Width()  - aSize.Width())  / 2,
                         (aPageSize.Height() - aSize.Height()) / 2);
                     ::tools::Rectangle aRect (aPnt, aSize);
-
-                    SdrOle2Obj* pObj = new SdrOle2Obj( aObjRef, aName, aRect);
+                    SdrOle2Obj* pObj = new SdrOle2Obj(
+                        mpView->getSdrModelFromSdrView(),
+                        aObjRef,
+                        aName,
+                        aRect);
 
                     if( mpView->InsertObjectAtView(pObj, *pPV, SdrInsertFlags::SETDEFLAYER) )
                     {
@@ -710,7 +713,7 @@ void FuInsertAVMedia::DoExecute( SfxRequest& rReq )
     bool bLink(true);
     if (bAPI
 #if HAVE_FEATURE_AVMEDIA
-        || ::avmedia::MediaWindow::executeMediaURLDialog(mpWindow, aURL, & bLink)
+        || ::avmedia::MediaWindow::executeMediaURLDialog(mpWindow ? mpWindow->GetFrameWeld() : nullptr, aURL, & bLink)
 #endif
        )
     {

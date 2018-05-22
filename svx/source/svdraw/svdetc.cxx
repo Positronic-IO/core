@@ -25,7 +25,6 @@
 #include <svx/svdetc.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/svdtrans.hxx>
-#include <svdglob.hxx>
 #include <svx/strings.hrc>
 #include <svx/svdviter.hxx>
 #include <svx/svdview.hxx>
@@ -332,10 +331,10 @@ bool GetDraftFillColor(const SfxItemSet& rSet, Color& rCol)
     return bRetval;
 }
 
-SdrOutliner* SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrModel& rModel)
+std::unique_ptr<SdrOutliner> SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrModel& rModel)
 {
     SfxItemPool* pPool = &rModel.GetItemPool();
-    SdrOutliner* pOutl = new SdrOutliner( pPool, nOutlinerMode );
+    std::unique_ptr<SdrOutliner> pOutl(new SdrOutliner( pPool, nOutlinerMode ));
     pOutl->SetEditTextObjectPool( pPool );
     pOutl->SetStyleSheetPool( static_cast<SfxStyleSheetPool*>(rModel.GetStyleSheetPool()));
     pOutl->SetDefTab(rModel.GetDefaultTabulator());
@@ -351,19 +350,6 @@ std::vector<Link<SdrObjCreatorParams, SdrObject*>>& ImpGetUserMakeObjHdl()
 {
     SdrGlobalData& rGlobalData=GetSdrGlobalData();
     return rGlobalData.aUserMakeObjHdl;
-}
-
-OUString ImpGetResStr(const char* pResID)
-{
-    return SvxResId(pResID);
-}
-
-namespace sdr
-{
-    OUString GetResourceString(const char* pResID)
-    {
-        return ImpGetResStr(pResID);
-    }
 }
 
 bool SearchOutlinerItems(const SfxItemSet& rSet, bool bInklDefaults, bool* pbOnlyEE)
@@ -531,9 +517,6 @@ namespace
         const SdrLayerIDSet& rVisLayers,
         Color& rCol)
     {
-        if(!rList.GetModel())
-            return false;
-
         bool bRet(false);
         bool bMaster(rList.GetPage() && rList.GetPage()->IsMasterPage());
 
@@ -576,9 +559,6 @@ namespace
         Color& rCol,
         bool bSkipBackgroundShape)
     {
-        if(!rPage.GetModel())
-            return false;
-
         bool bRet(impGetSdrObjListFillColor(rPage, rPnt, rTextEditPV, rVisLayers, rCol));
 
         if(!bRet && !rPage.IsMasterPage())

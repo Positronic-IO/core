@@ -8,10 +8,17 @@
  */
 
 #include <test/unoapi_test.hxx>
+#include <test/sheet/spreadsheetdocumentsettings.hxx>
+#include <test/sheet/xcalculatable.hxx>
 #include <test/sheet/xconsolidatable.hxx>
 #include <test/sheet/xgoalseek.hxx>
 
+#include <com/sun/star/container/XIndexAccess.hpp>
+#include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
+#include <com/sun/star/sheet/XSpreadsheet.hpp>
+#include <com/sun/star/sheet/XSpreadsheets.hpp>
 #include <com/sun/star/uno/XInterface.hpp>
 
 #include <com/sun/star/uno/Reference.hxx>
@@ -21,18 +28,30 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-class ScModelObj : public UnoApiTest, public apitest::XConsolidatable,
-                                      public apitest::XGoalSeek
+class ScModelObj : public UnoApiTest,
+                   public apitest::SpreadsheetDocumentSettings,
+                   public apitest::XCalculatable,
+                   public apitest::XConsolidatable,
+                   public apitest::XGoalSeek
 {
 public:
     virtual void setUp() override;
     virtual void tearDown() override;
 
     virtual uno::Reference< uno::XInterface > init() override;
+    virtual uno::Sequence<uno::Reference<table::XCell>> getXCells() override;
 
     ScModelObj();
 
     CPPUNIT_TEST_SUITE(ScModelObj);
+
+    // SpreadsheetDocumentSettings
+    CPPUNIT_TEST(testSpreadsheetDocumentSettingsProperties);
+
+    // XCalculatable
+    CPPUNIT_TEST(testCalculate);
+    CPPUNIT_TEST(testCalculateAll);
+    CPPUNIT_TEST(testEnableAutomaticCaclulation);
 
     // XConsolidatable
     CPPUNIT_TEST(testCreateConsolidationDescriptor);
@@ -45,6 +64,7 @@ public:
 
 private:
     uno::Reference< lang::XComponent > mxComponent;
+    uno::Sequence<uno::Reference<table::XCell>> m_xCells;
 };
 
 ScModelObj::ScModelObj()
@@ -54,9 +74,29 @@ ScModelObj::ScModelObj()
 
 uno::Reference< uno::XInterface > ScModelObj::init()
 {
-    CPPUNIT_ASSERT_MESSAGE("no component loaded", mxComponent.is());
+    uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
-    return mxComponent;
+    uno::Reference<frame::XModel> xModel(xDoc, UNO_QUERY_THROW);
+
+    uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
+    uno::Reference<container::XIndexAccess> xIA(xSheets, UNO_QUERY_THROW);
+    uno::Reference<sheet::XSpreadsheet> xSheet(xIA->getByIndex(0), UNO_QUERY_THROW);
+
+    m_xCells.realloc(3);
+    m_xCells[0] = xSheet->getCellByPosition(4, 5);
+    m_xCells[0]->setValue(15);
+    m_xCells[1] = xSheet->getCellByPosition(5, 5);
+    m_xCells[1]->setValue(10);
+    m_xCells[2] = xSheet->getCellByPosition(6, 5);
+    m_xCells[2]->setFormula("= E6 * F6");
+
+    return xModel;
+}
+
+uno::Sequence<uno::Reference<table::XCell>> ScModelObj::getXCells()
+{
+    return m_xCells;
 }
 
 void ScModelObj::setUp()

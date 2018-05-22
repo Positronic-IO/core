@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="sc">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkDialog" id="PivotTableGroupByDate">
     <property name="can_focus">False</property>
     <property name="border_width">6</property>
@@ -132,7 +132,6 @@
                           <object class="GtkSpinButton" id="start_date:yy:mm:dd">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">●</property>
                           </object>
                           <packing>
                             <property name="left_attach">1</property>
@@ -221,7 +220,6 @@
                           <object class="GtkSpinButton" id="end_date:yy:mm:dd">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">●</property>
                           </object>
                           <packing>
                             <property name="left_attach">1</property>
@@ -311,7 +309,6 @@
                           <object class="GtkSpinButton" id="days_value">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">●</property>
                           </object>
                           <packing>
                             <property name="left_attach">1</property>

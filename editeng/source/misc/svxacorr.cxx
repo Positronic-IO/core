@@ -188,7 +188,7 @@ SvxAutoCorrDoc::~SvxAutoCorrDoc()
 //  - FnCapitalStartSentence
 // after the exchange of characters. Then the words, if necessary, can be inserted
 // into the exception list.
-void SvxAutoCorrDoc::SaveCpltSttWord( sal_uLong, sal_Int32, const OUString&,
+void SvxAutoCorrDoc::SaveCpltSttWord( ACFlags, sal_Int32, const OUString&,
                                         sal_Unicode )
 {
 }
@@ -270,20 +270,20 @@ bool SvxAutoCorrect::NeedsHardspaceAutocorr( sal_Unicode cChar )
         cChar == '/' /*case for the urls exception*/;
 }
 
-long SvxAutoCorrect::GetDefaultFlags()
+ACFlags SvxAutoCorrect::GetDefaultFlags()
 {
-    long nRet = Autocorrect
-                    | CapitalStartSentence
-                    | CapitalStartWord
-                    | ChgOrdinalNumber
-                    | ChgToEnEmDash
-                    | AddNonBrkSpace
-                    | ChgWeightUnderl
-                    | SetINetAttr
-                    | ChgQuotes
-                    | SaveWordCplSttLst
-                    | SaveWordWrdSttLst
-                    | CorrectCapsLock;
+    ACFlags nRet = ACFlags::Autocorrect
+                    | ACFlags::CapitalStartSentence
+                    | ACFlags::CapitalStartWord
+                    | ACFlags::ChgOrdinalNumber
+                    | ACFlags::ChgToEnEmDash
+                    | ACFlags::AddNonBrkSpace
+                    | ACFlags::ChgWeightUnderl
+                    | ACFlags::SetINetAttr
+                    | ACFlags::ChgQuotes
+                    | ACFlags::SaveWordCplSttLst
+                    | ACFlags::SaveWordWrdSttLst
+                    | ACFlags::CorrectCapsLock;
     LanguageType eLang = GetAppLang().getLanguageType();
     if( eLang.anyOf(
         LANGUAGE_ENGLISH,
@@ -296,7 +296,7 @@ long SvxAutoCorrect::GetDefaultFlags()
         LANGUAGE_ENGLISH_SAFRICA,
         LANGUAGE_ENGLISH_JAMAICA,
         LANGUAGE_ENGLISH_CARRIBEAN))
-        nRet &= ~(ChgQuotes|ChgSglQuotes);
+        nRet &= ~ACFlags(ACFlags::ChgQuotes|ACFlags::ChgSglQuotes);
     return nRet;
 }
 
@@ -321,7 +321,7 @@ SvxAutoCorrect::SvxAutoCorrect( const SvxAutoCorrect& rCpy )
     , sUserAutoCorrFile( rCpy.sUserAutoCorrFile )
     , aSwFlags( rCpy.aSwFlags )
     , eCharClassLang(rCpy.eCharClassLang)
-    , nFlags( rCpy.nFlags & ~(ChgWordLstLoad|CplSttLstLoad|WrdSttLstLoad))
+    , nFlags( rCpy.nFlags & ~ACFlags(ACFlags::ChgWordLstLoad|ACFlags::CplSttLstLoad|ACFlags::WrdSttLstLoad))
     , cStartDQuote( rCpy.cStartDQuote )
     , cEndDQuote( rCpy.cEndDQuote )
     , cStartSQuote( rCpy.cStartSQuote )
@@ -342,20 +342,20 @@ void SvxAutoCorrect::GetCharClass_( LanguageType eLang )
     eCharClassLang = eLang;
 }
 
-void SvxAutoCorrect::SetAutoCorrFlag( long nFlag, bool bOn )
+void SvxAutoCorrect::SetAutoCorrFlag( ACFlags nFlag, bool bOn )
 {
-    long nOld = nFlags;
+    ACFlags nOld = nFlags;
     nFlags = bOn ? nFlags | nFlag
                  : nFlags & ~nFlag;
 
     if( !bOn )
     {
-        if( (nOld & CapitalStartSentence) != (nFlags & CapitalStartSentence) )
-            nFlags &= ~CplSttLstLoad;
-        if( (nOld & CapitalStartWord) != (nFlags & CapitalStartWord) )
-            nFlags &= ~WrdSttLstLoad;
-        if( (nOld & Autocorrect) != (nFlags & Autocorrect) )
-            nFlags &= ~ChgWordLstLoad;
+        if( (nOld & ACFlags::CapitalStartSentence) != (nFlags & ACFlags::CapitalStartSentence) )
+            nFlags &= ~ACFlags::CplSttLstLoad;
+        if( (nOld & ACFlags::CapitalStartWord) != (nFlags & ACFlags::CapitalStartWord) )
+            nFlags &= ~ACFlags::WrdSttLstLoad;
+        if( (nOld & ACFlags::Autocorrect) != (nFlags & ACFlags::Autocorrect) )
+            nFlags &= ~ACFlags::ChgWordLstLoad;
     }
 }
 
@@ -437,8 +437,8 @@ void SvxAutoCorrect::FnCapitalStartWord( SvxAutoCorrDoc& rDoc, const OUString& r
                 sChar = rCC.lowercase( sChar );
                 if( sChar[0] != cSave && rDoc.ReplaceRange( nSttPos, 1, sChar ))
                 {
-                    if( SaveWordWrdSttLst & nFlags )
-                        rDoc.SaveCpltSttWord( CapitalStartWord, nSttPos, sWord, cSave );
+                    if( ACFlags::SaveWordWrdSttLst & nFlags )
+                        rDoc.SaveCpltSttWord( ACFlags::CapitalStartWord, nSttPos, sWord, cSave );
                 }
             }
         }
@@ -1089,8 +1089,8 @@ void SvxAutoCorrect::FnCapitalStartSentence( SvxAutoCorrDoc& rDoc,
     bool bRet = sChar[0] != cSave && rDoc.ReplaceRange( nSttPos, 1, sChar );
 
     // Perhaps someone wants to have the word
-    if( bRet && SaveWordCplSttLst & nFlags )
-        rDoc.SaveCpltSttWord( CapitalStartSentence, nSttPos, sWord, cSave );
+    if( bRet && ACFlags::SaveWordCplSttLst & nFlags )
+        rDoc.SaveCpltSttWord( ACFlags::CapitalStartSentence, nSttPos, sWord, cSave );
 }
 
 bool SvxAutoCorrect::FnCorrectCapsLock( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
@@ -1241,7 +1241,7 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
         {
             // Prevent double space
             if( nInsPos && ' ' == cChar &&
-                IsAutoCorrFlag( IgnoreDoubleSpace ) &&
+                IsAutoCorrFlag( ACFlags::IgnoreDoubleSpace ) &&
                 ' ' == rTxt[ nInsPos - 1 ])
             {
                 break;
@@ -1249,8 +1249,8 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
 
             bool bSingle = '\'' == cChar;
             bool bIsReplaceQuote =
-                        (IsAutoCorrFlag( ChgQuotes ) && ('\"' == cChar )) ||
-                        (IsAutoCorrFlag( ChgSglQuotes ) && bSingle );
+                        (IsAutoCorrFlag( ACFlags::ChgQuotes ) && ('\"' == cChar )) ||
+                        (IsAutoCorrFlag( ACFlags::ChgSglQuotes ) && bSingle );
             if( bIsReplaceQuote )
             {
                 sal_Unicode cPrev;
@@ -1270,7 +1270,7 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
                 rDoc.Replace( nInsPos, OUString(cChar) );
 
             // Hardspaces autocorrection
-            if ( IsAutoCorrFlag( AddNonBrkSpace ) )
+            if ( IsAutoCorrFlag( ACFlags::AddNonBrkSpace ) )
             {
                 if ( NeedsHardspaceAutocorr( cChar ) &&
                     FnAddNonBrkSpace( rDoc, rTxt, nInsPos, GetDocLanguage( rDoc, nInsPos ), io_bNbspRunNext ) )
@@ -1314,7 +1314,7 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
         // Set bold or underline automatically?
         if (('*' == cChar || '_' == cChar || '/' == cChar || '-' == cChar) && (nPos+1 < rTxt.getLength()))
         {
-            if( IsAutoCorrFlag( ChgWeightUnderl ) )
+            if( IsAutoCorrFlag( ACFlags::ChgWeightUnderl ) )
             {
                 FnChgWeightUnderl( rDoc, rTxt, nPos+1 );
             }
@@ -1337,13 +1337,13 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
         if( lcl_IsSymbolChar( rCC, rTxt, nCapLttrPos, nInsPos ))
             break;
 
-        if( IsAutoCorrFlag( Autocorrect ) )
+        if( IsAutoCorrFlag( ACFlags::Autocorrect ) )
         {
             // WARNING ATTENTION: rTxt is an alias of the text node's OUString
             // and becomes INVALID if ChgAutoCorrWord returns true!
             // => use aPara/pPara to create a valid copy of the string!
             OUString aPara;
-            OUString* pPara = IsAutoCorrFlag(CapitalStartSentence) ? &aPara : nullptr;
+            OUString* pPara = IsAutoCorrFlag(ACFlags::CapitalStartSentence) ? &aPara : nullptr;
 
             bool bChgWord = rDoc.ChgAutoCorrWord( nCapLttrPos, nInsPos,
                                                     *this, pPara );
@@ -1378,13 +1378,13 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
                         ++nEnd;
 
                     // Capital letter at beginning of paragraph?
-                    if( IsAutoCorrFlag( CapitalStartSentence ) )
+                    if( IsAutoCorrFlag( ACFlags::CapitalStartSentence ) )
                     {
                         FnCapitalStartSentence( rDoc, aPara, false,
                                                 nCapLttrPos, nEnd, eLang );
                     }
 
-                    if( IsAutoCorrFlag( ChgToEnEmDash ) )
+                    if( IsAutoCorrFlag( ACFlags::ChgToEnEmDash ) )
                     {
                         FnChgToEnEmDash( rDoc, aPara, nCapLttrPos, nEnd, eLang );
                     }
@@ -1393,11 +1393,11 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
             }
         }
 
-        if( ( IsAutoCorrFlag( ChgOrdinalNumber ) &&
+        if( ( IsAutoCorrFlag( ACFlags::ChgOrdinalNumber ) &&
                 (nInsPos >= 2 ) &&       // fdo#69762 avoid autocorrect for 2e-3
                 ( '-' != cChar || 'E' != rtl::toAsciiUpperCase(rTxt[nInsPos-1]) || '0' > rTxt[nInsPos-2] || '9' < rTxt[nInsPos-2] ) &&
                 FnChgOrdinalNumber( rDoc, rTxt, nCapLttrPos, nInsPos, eLang ) ) ||
-            ( IsAutoCorrFlag( SetINetAttr ) &&
+            ( IsAutoCorrFlag( ACFlags::SetINetAttr ) &&
                 ( ' ' == cChar || '\t' == cChar || 0x0a == cChar || !cChar ) &&
                 FnSetINetAttr( rDoc, rTxt, nCapLttrPos, nInsPos, eLang ) ) )
             ;
@@ -1406,7 +1406,7 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
             bool bLockKeyOn = pFrameWin && (pFrameWin->GetIndicatorState() & KeyIndicatorState::CAPSLOCK);
             bool bUnsupported = lcl_IsUnsupportedUnicodeChar( rCC, rTxt, nCapLttrPos, nInsPos );
 
-            if ( bLockKeyOn && IsAutoCorrFlag( CorrectCapsLock ) &&
+            if ( bLockKeyOn && IsAutoCorrFlag( ACFlags::CorrectCapsLock ) &&
                  FnCorrectCapsLock( rDoc, rTxt, nCapLttrPos, nInsPos, eLang ) )
             {
                 // Correct accidental use of cAPS LOCK key (do this only when
@@ -1417,19 +1417,19 @@ void SvxAutoCorrect::DoAutoCorrect( SvxAutoCorrDoc& rDoc, const OUString& rTxt,
 
             // Capital letter at beginning of paragraph ?
             if( !bUnsupported &&
-                IsAutoCorrFlag( CapitalStartSentence ) )
+                IsAutoCorrFlag( ACFlags::CapitalStartSentence ) )
             {
                 FnCapitalStartSentence( rDoc, rTxt, true, nCapLttrPos, nInsPos, eLang );
             }
 
             // Two capital letters at beginning of word ??
             if( !bUnsupported &&
-                IsAutoCorrFlag( CapitalStartWord ) )
+                IsAutoCorrFlag( ACFlags::CapitalStartWord ) )
             {
                 FnCapitalStartWord( rDoc, rTxt, nCapLttrPos, nInsPos, eLang );
             }
 
-            if( IsAutoCorrFlag( ChgToEnEmDash ) )
+            if( IsAutoCorrFlag( ACFlags::ChgToEnEmDash ) )
             {
                 FnChgToEnEmDash( rDoc, rTxt, nCapLttrPos, nInsPos, eLang );
             }
@@ -1918,7 +1918,7 @@ SvxAutoCorrectLanguageLists::SvxAutoCorrectLanguageLists(
     pWrdStt_ExcptLst( nullptr ),
     pAutocorr_List( nullptr ),
     rAutoCorrect(rParent),
-    nFlags(0)
+    nFlags(ACFlags::NONE)
 {
 }
 
@@ -1943,19 +1943,19 @@ bool SvxAutoCorrectLanguageLists::IsFileChanged_Imp()
         {
             bRet = true;
             // then remove all the lists fast!
-            if( CplSttLstLoad & nFlags && pCplStt_ExcptLst )
+            if( (ACFlags::CplSttLstLoad & nFlags) && pCplStt_ExcptLst )
             {
                 pCplStt_ExcptLst.reset();
             }
-            if( WrdSttLstLoad & nFlags && pWrdStt_ExcptLst )
+            if( (ACFlags::WrdSttLstLoad & nFlags) && pWrdStt_ExcptLst )
             {
                 pWrdStt_ExcptLst.reset();
             }
-            if( ChgWordLstLoad & nFlags && pAutocorr_List )
+            if( (ACFlags::ChgWordLstLoad & nFlags) && pAutocorr_List )
             {
                 pAutocorr_List.reset();
             }
-            nFlags &= ~(CplSttLstLoad | WrdSttLstLoad | ChgWordLstLoad );
+            nFlags &= ~ACFlags(ACFlags::CplSttLstLoad | ACFlags::WrdSttLstLoad | ACFlags::ChgWordLstLoad );
         }
         aLastCheckTime = tools::Time( tools::Time::SYSTEM );
     }
@@ -2136,7 +2136,7 @@ SvxAutocorrWordList* SvxAutoCorrectLanguageLists::LoadAutocorrWordList()
 
 const SvxAutocorrWordList* SvxAutoCorrectLanguageLists::GetAutocorrWordList()
 {
-    if( !( ChgWordLstLoad & nFlags ) || IsFileChanged_Imp() )
+    if( !( ACFlags::ChgWordLstLoad & nFlags ) || IsFileChanged_Imp() )
     {
         LoadAutocorrWordList();
         if( !pAutocorr_List )
@@ -2144,14 +2144,14 @@ const SvxAutocorrWordList* SvxAutoCorrectLanguageLists::GetAutocorrWordList()
             OSL_ENSURE( false, "No valid list" );
             pAutocorr_List.reset( new SvxAutocorrWordList() );
         }
-        nFlags |= ChgWordLstLoad;
+        nFlags |= ACFlags::ChgWordLstLoad;
     }
     return pAutocorr_List.get();
 }
 
 SvStringsISortDtor* SvxAutoCorrectLanguageLists::GetCplSttExceptList()
 {
-    if( !( CplSttLstLoad & nFlags ) || IsFileChanged_Imp() )
+    if( !( ACFlags::CplSttLstLoad & nFlags ) || IsFileChanged_Imp() )
     {
         LoadCplSttExceptList();
         if( !pCplStt_ExcptLst )
@@ -2159,7 +2159,7 @@ SvStringsISortDtor* SvxAutoCorrectLanguageLists::GetCplSttExceptList()
             OSL_ENSURE( false, "No valid list" );
             pCplStt_ExcptLst.reset( new SvStringsISortDtor );
         }
-        nFlags |= CplSttLstLoad;
+        nFlags |= ACFlags::CplSttLstLoad;
     }
     return pCplStt_ExcptLst.get();
 }
@@ -2267,7 +2267,7 @@ void SvxAutoCorrectLanguageLists::SaveWrdSttExceptList()
 
 SvStringsISortDtor* SvxAutoCorrectLanguageLists::GetWrdSttExceptList()
 {
-    if( !( WrdSttLstLoad & nFlags ) || IsFileChanged_Imp() )
+    if( !( ACFlags::WrdSttLstLoad & nFlags ) || IsFileChanged_Imp() )
     {
         LoadWrdSttExceptList();
         if( !pWrdStt_ExcptLst )
@@ -2275,7 +2275,7 @@ SvStringsISortDtor* SvxAutoCorrectLanguageLists::GetWrdSttExceptList()
             OSL_ENSURE( false, "No valid list" );
             pWrdStt_ExcptLst.reset( new SvStringsISortDtor );
         }
-        nFlags |= WrdSttLstLoad;
+        nFlags |= ACFlags::WrdSttLstLoad;
     }
     return pWrdStt_ExcptLst.get();
 }
@@ -2457,7 +2457,7 @@ bool SvxAutoCorrectLanguageLists::MakeCombinedChanges( std::vector<SvxAutocorrWo
     {
         for (SvxAutocorrWord & aWordToDelete : aDeleteEntries)
         {
-            SvxAutocorrWord *pFoundEntry = pAutocorr_List->FindAndRemove( &aWordToDelete );
+            std::unique_ptr<SvxAutocorrWord> pFoundEntry = pAutocorr_List->FindAndRemove( &aWordToDelete );
             if( pFoundEntry )
             {
                 if( !pFoundEntry->IsTextOnly() )
@@ -2474,14 +2474,13 @@ bool SvxAutoCorrectLanguageLists::MakeCombinedChanges( std::vector<SvxAutocorrWo
                         bRet = xStorage->Commit();
                     }
                 }
-                delete pFoundEntry;
             }
         }
 
         for (SvxAutocorrWord & aNewEntrie : aNewEntries)
         {
-            SvxAutocorrWord *pWordToAdd = new SvxAutocorrWord( aNewEntrie.GetShort(), aNewEntrie.GetLong(), true );
-            SvxAutocorrWord *pRemoved = pAutocorr_List->FindAndRemove( pWordToAdd );
+            std::unique_ptr<SvxAutocorrWord> pWordToAdd(new SvxAutocorrWord( aNewEntrie.GetShort(), aNewEntrie.GetLong(), true ));
+            std::unique_ptr<SvxAutocorrWord> pRemoved = pAutocorr_List->FindAndRemove( pWordToAdd.get() );
             if( pRemoved )
             {
                 if( !pRemoved->IsTextOnly() )
@@ -2496,13 +2495,11 @@ bool SvxAutoCorrectLanguageLists::MakeCombinedChanges( std::vector<SvxAutocorrWo
                     if( xStorage->IsContained( sStorageName ) )
                         xStorage->Remove( sStorageName );
                 }
-                delete pRemoved;
             }
-            bRet = pAutocorr_List->Insert( pWordToAdd );
+            bRet = pAutocorr_List->Insert( std::move(pWordToAdd) );
 
             if ( !bRet )
             {
-                delete pWordToAdd;
                 break;
             }
         }
@@ -2528,8 +2525,8 @@ bool SvxAutoCorrectLanguageLists::PutText( const OUString& rShort, const OUStrin
     // Update the word list
     if( bRet )
     {
-        SvxAutocorrWord* pNew = new SvxAutocorrWord( rShort, rLong, true );
-        SvxAutocorrWord *pRemove = pAutocorr_List->FindAndRemove( pNew );
+        std::unique_ptr<SvxAutocorrWord> pNew(new SvxAutocorrWord( rShort, rLong, true ));
+        std::unique_ptr<SvxAutocorrWord> pRemove = pAutocorr_List->FindAndRemove( pNew.get() );
         if( pRemove )
         {
             if( !pRemove->IsTextOnly() )
@@ -2544,17 +2541,15 @@ bool SvxAutoCorrectLanguageLists::PutText( const OUString& rShort, const OUStrin
                 if( xStg->IsContained( sStgNm ) )
                     xStg->Remove( sStgNm );
             }
-            delete pRemove;
         }
 
-        if( pAutocorr_List->Insert( pNew ) )
+        if( pAutocorr_List->Insert( std::move(pNew) ) )
         {
             bRet = MakeBlocklist_Imp( *xStg );
             xStg = nullptr;
         }
         else
         {
-            delete pNew;
             bRet = false;
         }
     }
@@ -2569,25 +2564,22 @@ void SvxAutoCorrectLanguageLists::PutText( const OUString& rShort,
 
     MakeUserStorage_Impl();
 
-    bool bRet = false;
     OUString sLong;
     try
     {
         uno::Reference < embed::XStorage > xStg = comphelper::OStorageHelper::GetStorageFromURL( sUserAutoCorrFile, embed::ElementModes::READWRITE );
-        bRet = rAutoCorrect.PutText( xStg, sUserAutoCorrFile, rShort, rShell, sLong );
         xStg = nullptr;
 
+        bool bRet = rAutoCorrect.PutText( xStg, sUserAutoCorrFile, rShort, rShell, sLong );
         // Update the word list
         if( bRet )
         {
-            SvxAutocorrWord* pNew = new SvxAutocorrWord( rShort, sLong, false );
-            if( pAutocorr_List->Insert( pNew ) )
+            std::unique_ptr<SvxAutocorrWord> pNew(new SvxAutocorrWord( rShort, sLong, false ));
+            if( pAutocorr_List->Insert( std::move(pNew) ) )
             {
                 tools::SvRef<SotStorage> xStor = new SotStorage( sUserAutoCorrFile, StreamMode::READWRITE );
                 MakeBlocklist_Imp( *xStor );
             }
-            else
-                delete pNew;
         }
     }
     catch ( const uno::Exception& )
@@ -2607,8 +2599,9 @@ struct CompareSvxAutocorrWordList
 
 namespace {
 
+// can't use std::unique_ptr until we have C++14
 typedef std::set<SvxAutocorrWord*, CompareSvxAutocorrWordList> AutocorrWordSetType;
-typedef std::unordered_map<OUString, SvxAutocorrWord*> AutocorrWordHashType;
+typedef std::unordered_map<OUString, std::unique_ptr<SvxAutocorrWord>> AutocorrWordHashType;
 
 }
 
@@ -2621,12 +2614,10 @@ struct SvxAutocorrWordList::Impl
 
     void DeleteAndDestroyAll()
     {
-        for (AutocorrWordHashType::const_iterator it = maHash.begin(); it != maHash.end(); ++it)
-            delete it->second;
         maHash.clear();
 
-        for (AutocorrWordSetType::const_iterator it2 = maSet.begin(); it2 != maSet.end(); ++it2)
-            delete *it2;
+        for (auto const& elem : maSet)
+            delete elem;
         maSet.clear();
     }
 };
@@ -2644,22 +2635,21 @@ void SvxAutocorrWordList::DeleteAndDestroyAll()
 }
 
 // returns true if inserted
-bool SvxAutocorrWordList::Insert(SvxAutocorrWord *pWord) const
+bool SvxAutocorrWordList::Insert(std::unique_ptr<SvxAutocorrWord> pWord) const
 {
     if ( mpImpl->maSet.empty() ) // use the hash
     {
         OUString aShort( pWord->GetShort() );
-        return mpImpl->maHash.insert( std::pair<OUString, SvxAutocorrWord *>( aShort, pWord ) ).second;
+        return mpImpl->maHash.insert( std::pair<OUString, std::unique_ptr<SvxAutocorrWord> >( aShort, std::move(pWord) ) ).second;
     }
     else
-        return mpImpl->maSet.insert( pWord ).second;
+        return mpImpl->maSet.insert( pWord.release() ).second;
 }
 
 void SvxAutocorrWordList::LoadEntry(const OUString& sWrong, const OUString& sRight, bool bOnlyTxt)
 {
-    SvxAutocorrWord* pNew = new SvxAutocorrWord( sWrong, sRight, bOnlyTxt );
-    if( !Insert( pNew ) )
-        delete pNew;
+    std::unique_ptr<SvxAutocorrWord> pNew(new SvxAutocorrWord( sWrong, sRight, bOnlyTxt ));
+    (void)Insert(std::move(pNew));
 }
 
 bool SvxAutocorrWordList::empty() const
@@ -2667,16 +2657,16 @@ bool SvxAutocorrWordList::empty() const
     return mpImpl->maHash.empty() && mpImpl->maSet.empty();
 }
 
-SvxAutocorrWord *SvxAutocorrWordList::FindAndRemove(SvxAutocorrWord *pWord)
+std::unique_ptr<SvxAutocorrWord> SvxAutocorrWordList::FindAndRemove(SvxAutocorrWord *pWord)
 {
-    SvxAutocorrWord *pMatch = nullptr;
+    std::unique_ptr<SvxAutocorrWord> pMatch;
 
     if ( mpImpl->maSet.empty() ) // use the hash
     {
         AutocorrWordHashType::iterator it = mpImpl->maHash.find( pWord->GetShort() );
         if( it != mpImpl->maHash.end() )
         {
-            pMatch = it->second;
+            pMatch = std::move(it->second);
             mpImpl->maHash.erase (it);
         }
     }
@@ -2685,7 +2675,7 @@ SvxAutocorrWord *SvxAutocorrWordList::FindAndRemove(SvxAutocorrWord *pWord)
         AutocorrWordSetType::iterator it = mpImpl->maSet.find( pWord );
         if( it != mpImpl->maSet.end() )
         {
-            pMatch = *it;
+            pMatch = std::unique_ptr<SvxAutocorrWord>(*it);
             mpImpl->maSet.erase (it);
         }
     }
@@ -2701,12 +2691,12 @@ SvxAutocorrWordList::Content SvxAutocorrWordList::getSortedContent() const
     if ( mpImpl->maSet.empty() )
     {
         // This beast has some O(N log(N)) in a terribly slow ICU collate fn.
-        for (AutocorrWordHashType::const_iterator it = mpImpl->maHash.begin(); it != mpImpl->maHash.end(); ++it)
-            mpImpl->maSet.insert( it->second );
+        for (auto & elem : mpImpl->maHash)
+            mpImpl->maSet.insert( elem.second.release() );
         mpImpl->maHash.clear();
     }
-    for (AutocorrWordSetType::const_iterator it = mpImpl->maSet.begin(); it != mpImpl->maSet.end(); ++it)
-        aContent.push_back( *it );
+    for (auto const& elem : mpImpl->maSet)
+        aContent.push_back(elem);
 
     return aContent;
 }
@@ -2756,7 +2746,8 @@ const SvxAutocorrWord* SvxAutocorrWordList::WordMatches(const SvxAutocorrWord *p
                 // avoid double spaces before simple "word" replacement
                 left_pattern += (left_pattern.getLength() == 0 && pFnd->GetLong()[0] == 0x20) ? pFnd->GetLong().copy(1) : pFnd->GetLong();
                 SvxAutocorrWord* pNew = new SvxAutocorrWord(rTxt.copy(rStt, nEndPos - rStt), left_pattern);
-                if( Insert( pNew ) ) return pNew; else delete pNew;
+                if( Insert( std::unique_ptr<SvxAutocorrWord>(pNew) ) )
+                    return pNew;
             }
         } else
         // match "word.*" or ".*word.*" patterns, eg. "i18n.*", ".*---.*", TODO: add transliteration support
@@ -2821,13 +2812,11 @@ const SvxAutocorrWord* SvxAutocorrWordList::WordMatches(const SvxAutocorrWord *p
                     aLong = buf.makeStringAndClear();
                 }
                 SvxAutocorrWord* pNew = new SvxAutocorrWord(aShort, aLong);
-                if ( Insert( pNew ) )
+                if ( Insert( std::unique_ptr<SvxAutocorrWord>(pNew) ) )
                 {
                     if ( (rTxt.getLength() > nEndPos && IsWordDelim(rTxt[nEndPos])) || rTxt.getLength() == nEndPos )
                         return pNew;
                 }
-                else
-                    delete pNew;
             }
         }
     }
@@ -2837,15 +2826,15 @@ const SvxAutocorrWord* SvxAutocorrWordList::WordMatches(const SvxAutocorrWord *p
 const SvxAutocorrWord* SvxAutocorrWordList::SearchWordsInList(const OUString& rTxt, sal_Int32& rStt,
                                                               sal_Int32 nEndPos) const
 {
-    for (AutocorrWordHashType::const_iterator it = mpImpl->maHash.begin(); it != mpImpl->maHash.end(); ++it)
+    for (auto const& elem : mpImpl->maHash)
     {
-        if( const SvxAutocorrWord *aTmp = WordMatches( it->second, rTxt, rStt, nEndPos ) )
+        if( const SvxAutocorrWord *aTmp = WordMatches( elem.second.get(), rTxt, rStt, nEndPos ) )
             return aTmp;
     }
 
-    for (AutocorrWordSetType::const_iterator it2 = mpImpl->maSet.begin(); it2 != mpImpl->maSet.end(); ++it2)
+    for (auto const& elem : mpImpl->maSet)
     {
-        if( const SvxAutocorrWord *aTmp = WordMatches( *it2, rTxt, rStt, nEndPos ) )
+        if( const SvxAutocorrWord *aTmp = WordMatches( elem, rTxt, rStt, nEndPos ) )
             return aTmp;
     }
     return nullptr;

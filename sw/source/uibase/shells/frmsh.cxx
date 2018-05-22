@@ -42,7 +42,6 @@
 #include <vcl/EnumContext.hxx>
 #include <svx/hlnkitem.hxx>
 #include <svx/svdview.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/commandinfoprovider.hxx>
 
 #include <doc.hxx>
@@ -76,12 +75,13 @@
 #include <swabstdlg.hxx>
 
 #include <svx/dialogs.hrc>
+#include <svx/svxdlg.hxx>
 
 #include <docsh.hxx>
 #include <svx/drawitem.hxx>
 #include <memory>
 
-#define SwFrameShell
+#define ShellClass_SwFrameShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 #include <grfatr.hxx>
@@ -636,7 +636,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 assert(pFact);
                 ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(
-                    pFact->CreateSvxObjectNameDialog( aName ));
+                    pFact->CreateSvxObjectNameDialog(GetView().GetFrameWeld(), aName));
 
                 assert(pDlg);
 
@@ -662,8 +662,8 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 assert(pFact);
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(
-                    pFact->CreateSvxObjectTitleDescDialog( aTitle,
-                                                           aDescription ));
+                    pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
+                        aTitle, aDescription ));
                 assert(pDlg);
 
                 if ( pDlg->Execute() == RET_OK )

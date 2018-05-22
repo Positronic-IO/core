@@ -194,13 +194,13 @@ void WW8ReadSTTBF(bool bVer8, SvStream& rStrm, sal_uInt32 nStart, sal_Int32 nLen
 
 struct WW8FieldDesc
 {
-    long nLen;              ///< total length (to skip over text)
+    WW8_CP nLen;            ///< total length (to skip over text)
     WW8_CP nSCode;          ///< start of instructions code
     WW8_CP nLCode;          ///< length
     WW8_CP nSRes;           ///< start of result
     WW8_CP nLRes;           ///< length ( == 0, if no result )
-    sal_uInt16 nId;             ///< WW-id for fields
-    sal_uInt8 nOpt;              ///< WW-Flags ( e.g.: changed by user )
+    sal_uInt16 nId;         ///< WW-id for fields
+    sal_uInt8 nOpt;         ///< WW-Flags ( e.g.: changed by user )
     bool bCodeNest:1;       ///< instruction used recursively
     bool bResNest:1;        ///< instruction inserted into result
 };
@@ -1533,7 +1533,7 @@ public:
     sal_uInt16 m_nFib_actual; // 0x05bc #i56856#
 
     WW8Fib(SvStream& rStrm, sal_uInt8 nWantedVersion,sal_uInt32 nOffset=0);
-    explicit WW8Fib(sal_uInt8 nVersion = 6, bool bDot = false);
+    explicit WW8Fib(sal_uInt8 nVersion, bool bDot = false);
 
     void WriteHeader(SvStream& rStrm);
     void Write(SvStream& rStrm);
@@ -1546,24 +1546,24 @@ public:
 class WW8Style
 {
 protected:
-    WW8Fib& rFib;
-    SvStream& rSt;
+    WW8Fib& m_rFib;
+    SvStream& m_rStream;
 
-    sal_uInt16  cstd;                      // Count of styles in stylesheet
-    sal_uInt16  cbSTDBaseInFile;           // Length of STD Base as stored in a file
-    sal_uInt16  fStdStylenamesWritten : 1; // Are built-in stylenames stored?
+    sal_uInt16  m_cstd;                      // Count of styles in stylesheet
+    sal_uInt16  m_cbSTDBaseInFile;           // Length of STD Base as stored in a file
+    sal_uInt16  m_fStdStylenamesWritten : 1; // Are built-in stylenames stored?
     sal_uInt16  : 15;                      // Spare flags
-    sal_uInt16  stiMaxWhenSaved;           // Max sti known when file was written
-    sal_uInt16  istdMaxFixedWhenSaved;     // How many fixed-index istds are there?
-    sal_uInt16  nVerBuiltInNamesWhenSaved; // Current version of built-in stylenames
+    sal_uInt16  m_stiMaxWhenSaved;           // Max sti known when file was written
+    sal_uInt16  m_istdMaxFixedWhenSaved;     // How many fixed-index istds are there?
+    sal_uInt16  m_nVerBuiltInNamesWhenSaved; // Current version of built-in stylenames
     // ftc used by StandardChpStsh for this document
-    sal_uInt16  ftcAsci;
+    sal_uInt16  m_ftcAsci;
     // CJK ftc used by StandardChpStsh for this document
-    sal_uInt16  ftcFE;
+    sal_uInt16  m_ftcFE;
     // CTL/Other ftc used by StandardChpStsh for this document
-    sal_uInt16  ftcOther;
+    sal_uInt16  m_ftcOther;
     // CTL ftc used by StandardChpStsh for this document
-    sal_uInt16  ftcBi;
+    sal_uInt16  m_ftcBi;
 
     //No copying
     WW8Style(const WW8Style&);
@@ -1573,7 +1573,7 @@ public:
     WW8Style( SvStream& rSt, WW8Fib& rFibPara );
     WW8_STD* Read1STDFixed(sal_uInt16& rSkip);
     WW8_STD* Read1Style(sal_uInt16& rSkip, OUString* pString);
-    sal_uInt16 GetCount() const { return cstd; }
+    sal_uInt16 GetCount() const { return m_cstd; }
 };
 
 class WW8Fonts final

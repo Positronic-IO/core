@@ -30,6 +30,7 @@
 #include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/util/NumberFormat.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
+#include <tools/diagnose_ex.h>
 
 namespace chart
 {
@@ -120,9 +121,9 @@ ExplicitCategoriesProvider::ExplicitCategoriesProvider( const Reference< chart2:
             }
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -153,13 +154,10 @@ sal_Int32 ExplicitCategoriesProvider::getCategoryLevelCount() const
 std::vector<sal_Int32> lcl_getLimitingBorders( const std::vector< ComplexCategory >& rComplexCategories )
 {
     std::vector<sal_Int32> aLimitingBorders;
-    std::vector< ComplexCategory >::const_iterator aIt( rComplexCategories.begin() );
-    std::vector< ComplexCategory >::const_iterator aEnd( rComplexCategories.end() );
     sal_Int32 nBorderIndex = 0; /*border below the index*/
-    for( ; aIt != aEnd; ++aIt )
+    for (auto const& complexCategory : rComplexCategories)
     {
-        ComplexCategory aComplexCategory(*aIt);
-        nBorderIndex += aComplexCategory.Count;
+        nBorderIndex += complexCategory.Count;
         aLimitingBorders.push_back(nBorderIndex);
     }
     return aLimitingBorders;
@@ -181,7 +179,7 @@ void ExplicitCategoriesProvider::convertCategoryAnysToText( uno::Sequence< OUStr
             xAxis, xCooSysModel, uno::Reference<chart2::XChartDocument>(static_cast< ::cppu::OWeakObject* >(&rModel), uno::UNO_QUERY), false );
     }
 
-    sal_Int32 nLabelColor;
+    Color nLabelColor;
     bool bColorChanged = false;
 
     NumberFormatterWrapper aNumberFormatterWrapper( rModel.getNumberFormatsSupplier() );
@@ -294,10 +292,8 @@ std::vector< ComplexCategory > lcl_DataSequenceToComplexCategoryVector(
 sal_Int32 lcl_getCategoryCount( std::vector< ComplexCategory >& rComplexCategories )
 {
     sal_Int32 nCount = 0;
-    std::vector< ComplexCategory >::const_iterator aIt( rComplexCategories.begin() );
-    std::vector< ComplexCategory >::const_iterator aEnd( rComplexCategories.end() );
-    for( ; aIt != aEnd; ++aIt )
-        nCount+=aIt->Count;
+    for (auto const& complexCategory : rComplexCategories)
+        nCount+=complexCategory.Count;
     return nCount;
 }
 
@@ -318,25 +314,22 @@ Sequence< OUString > lcl_getExplicitSimpleCategories(
             rSplitCategoriesProvider.getStringsForLevel(nL), aLimitingBorders, nL==(nLCount-1) ) );
     }
 
-    std::vector< std::vector< ComplexCategory > >::iterator aOuterIt( rComplexCats.begin() );
-    std::vector< std::vector< ComplexCategory > >::const_iterator aOuterEnd( rComplexCats.end() );
-
     //ensure that the category count is the same on each level
     sal_Int32 nMaxCategoryCount = 0;
     {
-        for( aOuterIt=rComplexCats.begin(); aOuterIt != aOuterEnd; ++aOuterIt )
+        for (auto & complexCat : rComplexCats)
         {
-            sal_Int32 nCurrentCount = lcl_getCategoryCount( *aOuterIt );
+            sal_Int32 nCurrentCount = lcl_getCategoryCount(complexCat);
             nMaxCategoryCount = std::max( nCurrentCount, nMaxCategoryCount );
         }
-        for( aOuterIt=rComplexCats.begin(); aOuterIt != aOuterEnd; ++aOuterIt )
+        for (auto & complexCat : rComplexCats)
         {
-            if ( !aOuterIt->empty() )
+            if ( !complexCat.empty() )
             {
-                sal_Int32 nCurrentCount = lcl_getCategoryCount( *aOuterIt );
+                sal_Int32 nCurrentCount = lcl_getCategoryCount(complexCat);
                 if( nCurrentCount< nMaxCategoryCount )
                 {
-                    ComplexCategory& rComplexCategory = aOuterIt->back();
+                    ComplexCategory& rComplexCategory = complexCat.back();
                     rComplexCategory.Count += (nMaxCategoryCount-nCurrentCount);
                 }
             }
@@ -345,17 +338,14 @@ Sequence< OUString > lcl_getExplicitSimpleCategories(
 
     //create a list with an element for every index
     std::vector< std::vector< ComplexCategory > > aComplexCatsPerIndex;
-    for( aOuterIt=rComplexCats.begin() ; aOuterIt != aOuterEnd; ++aOuterIt )
+    for (auto const& complexCat : rComplexCats)
     {
         std::vector< ComplexCategory > aSingleLevel;
-        std::vector< ComplexCategory >::iterator aIt( aOuterIt->begin() );
-        std::vector< ComplexCategory >::const_iterator aEnd( aOuterIt->end() );
-        for( ; aIt != aEnd; ++aIt )
+        for (auto const& elem : complexCat)
         {
-            ComplexCategory aComplexCategory( *aIt );
-            sal_Int32 nCount = aComplexCategory.Count;
+            sal_Int32 nCount = elem.Count;
             while( nCount-- )
-                aSingleLevel.push_back(aComplexCategory);
+                aSingleLevel.push_back(elem);
         }
         aComplexCatsPerIndex.push_back( aSingleLevel );
     }
@@ -363,15 +353,14 @@ Sequence< OUString > lcl_getExplicitSimpleCategories(
     if(nMaxCategoryCount)
     {
         aRet.realloc(nMaxCategoryCount);
-        aOuterEnd = aComplexCatsPerIndex.end();
         for(sal_Int32 nN=0; nN<nMaxCategoryCount; nN++)
         {
             OUString aText;
-            for( aOuterIt=aComplexCatsPerIndex.begin() ; aOuterIt != aOuterEnd; ++aOuterIt )
+            for (auto const& complexCatPerIndex : aComplexCatsPerIndex)
             {
-                if ( static_cast<size_t>(nN) < aOuterIt->size() )
+                if ( static_cast<size_t>(nN) < complexCatPerIndex.size() )
                 {
-                    OUString aAddText = (*aOuterIt)[nN].Text;
+                    OUString aAddText = complexCatPerIndex[nN].Text;
                     if( !aAddText.isEmpty() )
                     {
                         if(!aText.isEmpty())

@@ -68,7 +68,6 @@
 #include <com/sun/star/awt/FontWidth.hpp>
 #include <TypeInfo.hxx>
 #include <FieldDescriptions.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/stl_types.hxx>
 #include <comphelper/propertysequence.hxx>
 
@@ -84,7 +83,6 @@
 #include <svx/numinf.hxx>
 #include <svl/zforlist.hxx>
 #include <dlgattr.hxx>
-#include <vcl/msgbox.hxx>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/util/NumberFormatter.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
@@ -243,7 +241,7 @@ Reference< XDataSource > getDataSourceByName( const OUString& _rDataSourceName,
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     if ( xDatasource.is() )
@@ -407,13 +405,11 @@ TOTypeInfoSP getTypeInfoFromType(const OTypeInfoMap& _rTypeInfo,
     {
         ::comphelper::UStringMixEqual aCase(false);
         // search for typeinfo where the typename is equal _sTypeName
-        OTypeInfoMap::const_iterator typeInfoLoop = _rTypeInfo.begin();
-        OTypeInfoMap::const_iterator typeInfoEnd  = _rTypeInfo.end();
-        for (; typeInfoLoop != typeInfoEnd; ++typeInfoLoop)
+        for (auto const& elem : _rTypeInfo)
         {
-            if ( aCase( typeInfoLoop->second->getDBName() , _sTypeName ) )
+            if ( aCase( elem.second->getDBName() , _sTypeName ) )
             {
-                pTypeInfo = typeInfoLoop->second;
+                pTypeInfo = elem.second;
                 break;
             }
         }
@@ -777,7 +773,7 @@ void callColumnFormatDialog(const Reference<XPropertySet>& xAffectedCol,
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -901,9 +897,9 @@ std::shared_ptr<const SfxFilter> getStandardDatabaseFilter()
 }
 
 bool appendToFilter(const Reference<XConnection>& _xConnection,
-                        const OUString& _sName,
-                        const Reference< XComponentContext >& _rxContext,
-                        vcl::Window* _pParent)
+                    const OUString& _sName,
+                    const Reference< XComponentContext >& _rxContext,
+                    weld::Window* pParent)
 {
     bool bRet = false;
     Reference< XChild> xChild(_xConnection,UNO_QUERY);
@@ -934,7 +930,8 @@ bool appendToFilter(const Reference<XConnection>& _xConnection,
                 if(! ::dbaui::checkDataSourceAvailable(::comphelper::getString(xProp->getPropertyValue(PROPERTY_NAME)),_rxContext))
                 {
                     OUString aMessage(DBA_RES(STR_TABLEDESIGN_DATASOURCE_DELETED));
-                    ScopedVclPtrInstance<OSQLWarningBox>(_pParent, aMessage)->Execute();
+                    OSQLWarningBox aWarning(pParent, aMessage);
+                    aWarning.run();
                     bRet = false;
                 }
                 else
@@ -1071,7 +1068,7 @@ OUString getStrippedDatabaseName(const Reference<XPropertySet>& _xDataSource,OUS
         }
         catch(const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     OUString sName = _rsDatabaseName;
@@ -1104,24 +1101,22 @@ TOTypeInfoSP queryPrimaryKeyType(const OTypeInfoMap& _rTypeInfo)
 {
     TOTypeInfoSP pTypeInfo;
     // first we search for a type which supports autoIncrement
-    OTypeInfoMap::const_iterator aIter = _rTypeInfo.begin();
-    OTypeInfoMap::const_iterator aEnd  = _rTypeInfo.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& elem : _rTypeInfo)
     {
         // OJ: we don't want to set an autoincrement column to be key
         // because we don't have the possibility to know how to create
         // such auto increment column later on
         // so until we know how to do it, we create a column without autoincrement
         // therefore we have searched
-        if ( aIter->second->nType == DataType::INTEGER )
+        if ( elem.second->nType == DataType::INTEGER )
         {
-            pTypeInfo = aIter->second; // alternative
+            pTypeInfo = elem.second; // alternative
             break;
         }
-        else if ( !pTypeInfo.get() && aIter->second->nType == DataType::DOUBLE )
-            pTypeInfo = aIter->second; // alternative
-        else if ( !pTypeInfo.get() && aIter->second->nType == DataType::REAL )
-            pTypeInfo = aIter->second; // alternative
+        else if ( !pTypeInfo.get() && elem.second->nType == DataType::DOUBLE )
+            pTypeInfo = elem.second; // alternative
+        else if ( !pTypeInfo.get() && elem.second->nType == DataType::REAL )
+            pTypeInfo = elem.second; // alternative
     }
     if ( !pTypeInfo.get() ) // just a fallback
         pTypeInfo = queryTypeInfoByType(DataType::VARCHAR,_rTypeInfo);
@@ -1202,18 +1197,17 @@ TOTypeInfoSP queryTypeInfoByType(sal_Int32 _nDataType,const OTypeInfoMap& _rType
     return pTypeInfo;
 }
 
-sal_Int32 askForUserAction(vcl::Window* _pParent, const char* pTitle, const char* pText, bool _bAll, const OUString& _sName)
+sal_Int32 askForUserAction(weld::Window* pParent, const char* pTitle, const char* pText, bool _bAll, const OUString& _sName)
 {
     SolarMutexGuard aGuard;
     OUString aMsg = DBA_RES(pText);
     aMsg = aMsg.replaceFirst("%1", _sName);
-    ScopedVclPtrInstance<OSQLMessageBox> aAsk(_pParent, DBA_RES(pTitle), aMsg,MessBoxStyle::YesNo | MessBoxStyle::DefaultYes,OSQLMessageBox::Query);
+    OSQLMessageBox aAsk(pParent, DBA_RES(pTitle), aMsg, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, MessageType::Query);
     if ( _bAll )
     {
-        aAsk->AddButton(DBA_RES(STR_BUTTON_TEXT_ALL), RET_ALL);
-        aAsk->GetPushButton(RET_ALL)->SetHelpId(HID_CONFIRM_DROP_BUTTON_ALL);
+        aAsk.add_button(DBA_RES(STR_BUTTON_TEXT_ALL), RET_ALL, HID_CONFIRM_DROP_BUTTON_ALL);
     }
-    return aAsk->Execute();
+    return aAsk.run();
 }
 
 namespace
@@ -1230,7 +1224,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         return sSDBCLevelStatement;
     }
@@ -1393,7 +1387,7 @@ bool insertHierachyElement( vcl::Window* _pParent, const Reference< XComponentCo
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         return false;
     }
 
@@ -1418,7 +1412,7 @@ Reference< XNumberFormatter > getNumberFormatter(const Reference< XConnection >&
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return xFormatter;
 }

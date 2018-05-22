@@ -30,7 +30,7 @@
 #include <svx/svdpage.hxx>
 #include <svx/svdpoev.hxx>
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/e3dsceneupdater.hxx>
 #include <rtl/strbuf.hxx>
 #include <svx/svdview.hxx>
@@ -88,8 +88,10 @@ void SdrEditView::ImpClearVars()
     bPossibilitiesDirty=true;   // << Purify didn't like this
 }
 
-SdrEditView::SdrEditView(SdrModel* pModel1, OutputDevice* pOut):
-    SdrMarkView(pModel1,pOut)
+SdrEditView::SdrEditView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrMarkView(rSdrModel, pOut)
 {
     ImpClearVars();
 }
@@ -97,7 +99,6 @@ SdrEditView::SdrEditView(SdrModel* pModel1, OutputDevice* pOut):
 SdrEditView::~SdrEditView()
 {
 }
-
 
 void SdrEditView::InsertNewLayer(const OUString& rName, sal_uInt16 nPos)
 {
@@ -200,7 +201,7 @@ void SdrEditView::DeleteLayer(const OUString& rName)
 
         const bool bUndo = IsUndoEnabled();
         if( bUndo )
-            BegUndo(ImpGetResStr(STR_UndoDelLayer));
+            BegUndo(SvxResId(STR_UndoDelLayer));
 
         bool bMaPg(true);
 
@@ -718,7 +719,7 @@ std::vector<SdrObject*> SdrEditView::DeleteMarkedList(SdrMarkList const& rMark)
                 --nm;
                 SdrMark* pM = rMark.GetMark(nm);
                 SdrObject* pObj = pM->GetMarkedSdrObj();
-                SdrObjList*  pOL = pObj->GetObjList();
+                SdrObjList*  pOL = pObj->getParentOfSdrObject();
                 const size_t nOrdNum(pObj->GetOrdNumDirect());
 
                 bool bIs3D = dynamic_cast< E3dObject* >(pObj);
@@ -771,7 +772,7 @@ void SdrEditView::DeleteMarkedObj()
 
     // moved breaking action and undo start outside loop
     BrkAction();
-    BegUndo(ImpGetResStr(STR_EditDelete),GetDescriptionOfMarkedObjects(),SdrRepeatFunc::Delete);
+    BegUndo(SvxResId(STR_EditDelete),GetDescriptionOfMarkedObjects(),SdrRepeatFunc::Delete);
 
     std::vector<SdrObject*> lazyDeleteObjects;
     // remove as long as something is selected. This allows to schedule objects for
@@ -790,7 +791,7 @@ void SdrEditView::DeleteMarkedObj()
                 // in the first run, add all found parents, but only once
                 SdrMark* pMark = rMarkList.GetMark(a);
                 SdrObject* pObject = pMark->GetMarkedSdrObj();
-                SdrObject* pParent = pObject->GetObjList()->GetOwnerObj();
+                SdrObject* pParent = pObject->getParentOfSdrObject()->GetOwnerObj();
 
                 if(pParent)
                 {
@@ -852,8 +853,8 @@ void SdrEditView::DeleteMarkedObj()
             {
                 // we detected an empty parent, a candidate to leave group/3DScene
                 // if entered
-                if(GetSdrPageView()->GetAktGroup()
-                    && GetSdrPageView()->GetAktGroup() == pParent)
+                if(GetSdrPageView()->GetCurrentGroup()
+                    && GetSdrPageView()->GetCurrentGroup() == pParent)
                 {
                     GetSdrPageView()->LeaveOneGroup();
                 }
@@ -898,7 +899,8 @@ void SdrEditView::CopyMarkedObj()
     const size_t nMarkCount=aSourceObjectsForCopy.GetMarkCount();
     for (size_t nm=0; nm<nMarkCount; ++nm) {
         SdrMark* pM=aSourceObjectsForCopy.GetMark(nm);
-        SdrObject* pO=pM->GetMarkedSdrObj()->Clone();
+        SdrObject* pSource(pM->GetMarkedSdrObj());
+        SdrObject* pO(pSource->CloneSdrObject(pSource->getSdrModelFromSdrObject()));
         if (pO!=nullptr) {
             pM->GetPageView()->GetObjList()->InsertObject(pO, SAL_MAX_SIZE);
 
@@ -1002,7 +1004,7 @@ void SdrEditView::ReplaceObjectAtView(SdrObject* pOldObj, SdrPageView& rPV, SdrO
             pSdrView->SdrEndTextEdit();
     }
 
-    SdrObjList* pOL=pOldObj->GetObjList();
+    SdrObjList* pOL=pOldObj->getParentOfSdrObject();
     const bool bUndo = IsUndoEnabled();
     if( bUndo  )
         AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoReplaceObject(*pOldObj,*pNewObj));

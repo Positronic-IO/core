@@ -33,7 +33,6 @@
 #include <svx/drawitem.hxx>
 #include <cuitabarea.hxx>
 #include <dlgname.hxx>
-#include <dialmgr.hxx>
 #include <svx/dlgutil.hxx>
 #include <svl/intitem.hxx>
 #include <sfx2/request.hxx>
@@ -290,9 +289,9 @@ SvxTransparenceTabPage::SvxTransparenceTabPage(vcl::Window* pParent, const SfxIt
     SetExchangeSupport();
 }
 
-VclPtr<SfxTabPage> SvxTransparenceTabPage::Create(vcl::Window* pWindow, const SfxItemSet* rAttrs)
+VclPtr<SfxTabPage> SvxTransparenceTabPage::Create(TabPageParent pWindow, const SfxItemSet* rAttrs)
 {
-    return VclPtr<SvxTransparenceTabPage>::Create(pWindow, *rAttrs);
+    return VclPtr<SvxTransparenceTabPage>::Create(pWindow.pParent, *rAttrs);
 }
 
 bool SvxTransparenceTabPage::FillItemSet(SfxItemSet* rAttrs)
@@ -488,6 +487,9 @@ void SvxTransparenceTabPage::PointChanged(vcl::Window* , RectPoint )
 {
 }
 
+void SvxTransparenceTabPage::PointChanged(weld::DrawingArea*, RectPoint)
+{
+}
 
 // Preview-Methods
 

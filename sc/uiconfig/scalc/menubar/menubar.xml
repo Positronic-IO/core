@@ -143,7 +143,6 @@
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:ToolbarMode"/>
             <menu:menuitem menu:id=".uno:AvailableToolbars"/>
-            <menu:menuitem menu:id=".uno:Notebookbar"/>
             <menu:menuitem menu:id=".uno:InputLineVisible"/>
             <menu:menuitem menu:id=".uno:StatusBarVisible"/>
             <menu:menuitem menu:id=".uno:ShowImeStatusWindow"/>
@@ -430,6 +429,7 @@
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:Crop"/>
                     <menu:menuitem menu:id=".uno:OriginalSize"/>
+                    <menu:menuitem menu:id=".uno:FitCellSize"/>
                     <menu:menuseparator/>
                     <menu:menuitem menu:id=".uno:ExternalEdit"/>
                     <menu:menuitem menu:id=".uno:ChangePicture"/>

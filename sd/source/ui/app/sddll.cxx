@@ -51,7 +51,6 @@
 #include <OutlineViewShell.hxx>
 #include <OutlineViewShellBase.hxx>
 #include <PaneChildWindows.hxx>
-#include <sdresid.hxx>
 #include <SpellDialogChildWindow.hxx>
 #include <SlideSorterViewShell.hxx>
 #include <SlideSorterViewShellBase.hxx>
@@ -94,7 +93,6 @@
 #include <sfx2/charmappopup.hxx>
 #include <sfx2/sidebar/SidebarChildWindow.hxx>
 #include <vcl/FilterConfigItem.hxx>
-#include <comphelper/processfactory.hxx>
 #include <o3tl/make_unique.hxx>
 #include <sdabstdlg.hxx>
 

@@ -184,18 +184,15 @@ namespace accessibility
         }
     }
 
-    void AccessibleEditableTextPara::implGetParagraphBoundary( css::i18n::Boundary& rBoundary, sal_Int32 /*nIndex*/ )
+    void AccessibleEditableTextPara::implGetParagraphBoundary( const OUString& rText, css::i18n::Boundary& rBoundary, sal_Int32 /*nIndex*/ )
     {
         SAL_INFO( "editeng", "AccessibleEditableTextPara::implGetParagraphBoundary: only a base implementation, ignoring the index" );
 
         rBoundary.startPos = 0;
-        //rBoundary.endPos = GetTextLen();
-        OUString sText( implGetText() );
-        sal_Int32 nLength = sText.getLength();
-        rBoundary.endPos = nLength;
+        rBoundary.endPos = rText.getLength();
     }
 
-    void AccessibleEditableTextPara::implGetLineBoundary( css::i18n::Boundary& rBoundary, sal_Int32 nIndex )
+    void AccessibleEditableTextPara::implGetLineBoundary( const OUString&, css::i18n::Boundary& rBoundary, sal_Int32 nIndex )
     {
         SvxTextForwarder&   rCacheTF = GetTextForwarder();
         const sal_Int32     nParaIndex = GetParagraphIndex();
@@ -1143,12 +1140,12 @@ namespace accessibility
     sal_Int32 SAL_CALL AccessibleEditableTextPara::getBackground(  )
     {
         // #104444# Added to XAccessibleComponent interface
-        Color aColor( Application::GetSettings().GetStyleSettings().GetWindowColor().GetColor() );
+        Color aColor( Application::GetSettings().GetStyleSettings().GetWindowColor() );
 
         // the background is transparent
         aColor.SetTransparency( 0xFF);
 
-        return static_cast<sal_Int32>( aColor.GetColor() );
+        return static_cast<sal_Int32>( aColor );
     }
 
     // XAccessibleText
@@ -1470,7 +1467,7 @@ namespace accessibility
             if (rRes.Name == "CharColor")
             {
                 uno::Any &anyChar = rRes.Value;
-                sal_uInt32 crChar = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
+                Color crChar = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
                 if (COL_AUTO == crChar )
                 {
                     uno::Reference< css::accessibility::XAccessibleComponent > xComponent(mxParent,uno::UNO_QUERY);
@@ -1485,7 +1482,7 @@ namespace accessibility
                         else
                         {
                             Color cr(xComponent->getBackground());
-                            crChar = sal_uInt32(cr.IsDark() ? COL_WHITE : COL_BLACK);
+                            crChar = cr.IsDark() ? COL_WHITE : COL_BLACK;
                             anyChar <<= crChar;
                         }
                     }
@@ -1501,7 +1498,7 @@ namespace accessibility
             if (rRes.Name == "CharUnderlineColor")
             {
                 uno::Any &anyCharUnderLine = rRes.Value;
-                sal_uInt32 crCharUnderLine = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>( anyCharUnderLine.pReserved));
+                Color crCharUnderLine = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>( anyCharUnderLine.pReserved));
                 if (COL_AUTO == crCharUnderLine )
                 {
                     uno::Reference< css::accessibility::XAccessibleComponent > xComponent(mxParent,uno::UNO_QUERY);
@@ -1516,7 +1513,7 @@ namespace accessibility
                         else
                         {
                             Color cr(xComponent->getBackground());
-                            crCharUnderLine = sal_uInt32(cr.IsDark() ? COL_WHITE : COL_BLACK);
+                            crCharUnderLine = cr.IsDark() ? COL_WHITE : COL_BLACK;
                             anyCharUnderLine <<= crCharUnderLine;
                         }
                     }
@@ -1907,7 +1904,7 @@ namespace accessibility
                 sal_Int32 nLength = sText.getLength();
 
                 // get word at index
-                implGetWordBoundary( aBoundary, nIndex );
+                implGetWordBoundary( sText, aBoundary, nIndex );
 
 
                 //sal_Int32 curWordStart = aBoundary.startPos;
@@ -1926,7 +1923,7 @@ namespace accessibility
                 while ( (preWordStart >= 0 && !bWord ) || ( aBoundary.endPos > curWordStart ) )
                     {
                     preWordStart--;
-                    bWord = implGetWordBoundary( aBoundary, preWordStart );
+                    bWord = implGetWordBoundary( sText, aBoundary, preWordStart );
                 }
                 if ( bWord && implIsValidBoundary( aBoundary, nLength ) )
                 {
@@ -2036,7 +2033,7 @@ namespace accessibility
                 sal_Int32 nLength = sText.getLength();
 
                 // get word at index
-                bool bWord = implGetWordBoundary( aBoundary, nIndex );
+                bool bWord = implGetWordBoundary( sText, aBoundary, nIndex );
 
                 // real current world
                 sal_Int32 nextWord = nIndex;
@@ -2045,7 +2042,7 @@ namespace accessibility
                 {
                     nextWord =  aBoundary.endPos;
                     if( sText[nextWord] == u' ' ) nextWord++;
-                    bWord = implGetWordBoundary( aBoundary, nextWord );
+                    bWord = implGetWordBoundary( sText, aBoundary, nextWord );
                 }
 
                 if ( bWord && implIsValidBoundary( aBoundary, nLength ) )
@@ -2651,7 +2648,7 @@ namespace accessibility
                 catch (const lang::IndexOutOfBoundsException&)
                 {
                     // this is not the exception that should be raised in this function ...
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("editeng");
                 }
             }
         }

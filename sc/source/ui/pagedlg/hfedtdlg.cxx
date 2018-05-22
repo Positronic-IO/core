@@ -38,7 +38,7 @@ ScHFEditDlg::ScHFEditDlg( vcl::Window*           pParent,
 
     OUString aTmp = GetText();
 
-    aTmp += " (" + ScGlobal::GetRscString( STR_PAGESTYLE ) + ": " + rPageStyle + ")";
+    aTmp += " (" + ScResId( STR_PAGESTYLE ) + ": " + rPageStyle + ")";
 
     SetText( aTmp );
 }

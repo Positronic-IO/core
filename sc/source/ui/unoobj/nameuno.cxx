@@ -169,7 +169,7 @@ void ScNamedRangeObj::Modify_Impl( const OUString* pNewName, const ScTokenArray*
     if (!pOld)
         return;
 
-    ScRangeName* pNewRanges = new ScRangeName(*pNames);
+    std::unique_ptr<ScRangeName> pNewRanges(new ScRangeName(*pNames));
 
     OUString aInsName = pOld->GetName();
     if (pNewName)
@@ -199,14 +199,13 @@ void ScNamedRangeObj::Modify_Impl( const OUString* pNewName, const ScTokenArray*
     pNewRanges->erase(*pOld);
     if (pNewRanges->insert(pNew))
     {
-        pDocShell->GetDocFunc().SetNewRangeNames(pNewRanges, mxParent->IsModifyAndBroadcast(), nTab);
+        pDocShell->GetDocFunc().SetNewRangeNames(std::move(pNewRanges), mxParent->IsModifyAndBroadcast(), nTab);
 
         aName = aInsName;   //! broadcast?
     }
     else
     {
         pNew = nullptr;        //! uno::Exception/Error or something
-        delete pNewRanges;
     }
 }
 
@@ -492,19 +491,18 @@ void SAL_CALL ScNamedRangesObj::addNewByName( const OUString& aName,
         ScRangeName* pNames = GetRangeName_Impl();
         if (pNames && !pNames->findByUpperName(ScGlobal::pCharClass->uppercase(aName)))
         {
-            ScRangeName* pNewRanges = new ScRangeName( *pNames );
+            std::unique_ptr<ScRangeName> pNewRanges(new ScRangeName( *pNames ));
             // GRAM_API for API compatibility.
             ScRangeData* pNew = new ScRangeData( &rDoc, aName, aContent,
                                                 aPos, nNewType,formula::FormulaGrammar::GRAM_API );
             if ( pNewRanges->insert(pNew) )
             {
-                pDocShell->GetDocFunc().SetNewRangeNames(pNewRanges, mbModifyAndBroadcast, GetTab_Impl());
+                pDocShell->GetDocFunc().SetNewRangeNames(std::move(pNewRanges), mbModifyAndBroadcast, GetTab_Impl());
                 bDone = true;
             }
             else
             {
                 pNew = nullptr;
-                delete pNewRanges;
             }
         }
     }
@@ -549,9 +547,9 @@ void SAL_CALL ScNamedRangesObj::removeByName( const OUString& aName )
             const ScRangeData* pData = pNames->findByUpperName(ScGlobal::pCharClass->uppercase(aName));
             if (pData && lcl_UserVisibleName(*pData))
             {
-                ScRangeName* pNewRanges = new ScRangeName(*pNames);
+                std::unique_ptr<ScRangeName> pNewRanges(new ScRangeName(*pNames));
                 pNewRanges->erase(*pData);
-                pDocShell->GetDocFunc().SetNewRangeNames( pNewRanges, mbModifyAndBroadcast, GetTab_Impl());
+                pDocShell->GetDocFunc().SetNewRangeNames( std::move(pNewRanges), mbModifyAndBroadcast, GetTab_Impl());
                 bDone = true;
             }
         }
@@ -1041,9 +1039,8 @@ ScLabelRangeObj* ScLabelRangesObj::GetObjectByIndex_Impl(size_t nIndex)
         ScRangePairList* pList = bColumn ? rDoc.GetColNameRanges() : rDoc.GetRowNameRanges();
         if ( pList && nIndex < pList->size() )
         {
-            ScRangePair* pData = (*pList)[nIndex];
-            if (pData)
-                return new ScLabelRangeObj( pDocShell, bColumn, pData->GetRange(0) );
+            ScRangePair & rData = (*pList)[nIndex];
+            return new ScLabelRangeObj( pDocShell, bColumn, rData.GetRange(0) );
         }
     }
     return nullptr;
@@ -1094,23 +1091,19 @@ void SAL_CALL ScLabelRangesObj::removeByIndex( sal_Int32 nIndex )
         {
             ScRangePairListRef xNewList(pOldList->Clone());
 
-            ScRangePair* pEntry = (*xNewList)[nIndex];
-            if (pEntry)
-            {
-                xNewList->Remove( pEntry );
+            xNewList->Remove( nIndex );
 
-                if (bColumn)
-                    rDoc.GetColNameRangesRef() = xNewList;
-                else
-                    rDoc.GetRowNameRangesRef() = xNewList;
+            if (bColumn)
+                rDoc.GetColNameRangesRef() = xNewList;
+            else
+                rDoc.GetRowNameRangesRef() = xNewList;
 
-                rDoc.CompileColRowNameFormula();
-                pDocShell->PostPaint( 0,0,0, MAXCOL,MAXROW,MAXTAB, PaintPartFlags::Grid );
-                pDocShell->SetDocumentModified();
-                bDone = true;
+            rDoc.CompileColRowNameFormula();
+            pDocShell->PostPaint( 0,0,0, MAXCOL,MAXROW,MAXTAB, PaintPartFlags::Grid );
+            pDocShell->SetDocumentModified();
+            bDone = true;
 
-                //! Undo ?!?! (here and from dialog)
-            }
+            //! Undo ?!?! (here and from dialog)
         }
     }
     if (!bDone)

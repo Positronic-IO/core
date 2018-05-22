@@ -48,6 +48,7 @@
 #include <tools/time.hxx>
 #include <comphelper/ofopxmlhelper.hxx>
 #include <comphelper/sequence.hxx>
+#include <tools/diagnose_ex.h>
 
 #define NS_DOCUMENTSIGNATURES   "http://openoffice.org/2004/documentsignatures"
 #define NS_DOCUMENTSIGNATURES_ODF_1_2 "urn:oasis:names:tc:opendocument:xmlns:digitalsignature:1.0"
@@ -55,6 +56,7 @@
 #define OOXML_SIGNATURE_SIGNATURE "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/signature"
 
 using namespace ::com::sun::star;
+using namespace ::com::sun::star::graphic;
 using namespace ::com::sun::star::uno;
 
 XMLSignatureHelper::XMLSignatureHelper( const uno::Reference< uno::XComponentContext >& rxCtx)
@@ -108,14 +110,16 @@ void XMLSignatureHelper::SetX509Certificate(
         const OUString& ouX509IssuerName,
         const OUString& ouX509SerialNumber,
         const OUString& ouX509Cert,
-        const OUString& ouX509CertDigest)
+        const OUString& ouX509CertDigest,
+        svl::crypto::SignatureMethodAlgorithm eAlgorithmID)
 {
     mpXSecController->setX509Certificate(
         nSecurityId,
         ouX509IssuerName,
         ouX509SerialNumber,
         ouX509Cert,
-        ouX509CertDigest);
+        ouX509CertDigest,
+        eAlgorithmID);
 }
 
 void XMLSignatureHelper::AddEncapsulatedX509Certificate(const OUString& ouEncapsulatedX509Certificate)
@@ -144,6 +148,23 @@ void XMLSignatureHelper::SetDateTime( sal_Int32 nSecurityId, const ::Date& rDate
 void XMLSignatureHelper::SetDescription(sal_Int32 nSecurityId, const OUString& rDescription)
 {
     mpXSecController->setDescription(nSecurityId, rDescription);
+}
+
+void XMLSignatureHelper::SetSignatureLineId(sal_Int32 nSecurityId, const OUString& rSignatureLineId)
+{
+    mpXSecController->setSignatureLineId(nSecurityId, rSignatureLineId);
+}
+
+void XMLSignatureHelper::SetSignatureLineValidGraphic(
+    sal_Int32 nSecurityId, const css::uno::Reference<XGraphic>& xValidGraphic)
+{
+    mpXSecController->setSignatureLineValidGraphic(nSecurityId, xValidGraphic);
+}
+
+void XMLSignatureHelper::SetSignatureLineInvalidGraphic(
+    sal_Int32 nSecurityId, const css::uno::Reference<XGraphic>& xInvalidGraphic)
+{
+    mpXSecController->setSignatureLineInvalidGraphic(nSecurityId, xInvalidGraphic);
 }
 
 void XMLSignatureHelper::AddForSigning( sal_Int32 nSecurityId, const OUString& uri, bool bBinary, bool bXAdESCompliantIfODF )
@@ -394,9 +415,9 @@ bool XMLSignatureHelper::ReadAndVerifySignatureStorageStream(const css::uno::Ref
     {
         xParser->parseStream(aParserInput);
     }
-    catch(const uno::Exception& rException)
+    catch(const uno::Exception&)
     {
-        SAL_WARN("xmlsecurity.helper", "XMLSignatureHelper::ReadAndVerifySignatureStorageStream: " << rException);
+        DBG_UNHANDLED_EXCEPTION("xmlsecurity.helper");
     }
 
     mpXSecController->releaseSignatureReader();

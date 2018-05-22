@@ -27,12 +27,12 @@
 #include <vcl/fixed.hxx>
 #include <vcl/field.hxx>
 #include <vcl/edit.hxx>
-#include <vcl/messagedialog.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/group.hxx>
 #include <vcl/pdfwriter.hxx>
 #include <vcl/FilterConfigItem.hxx>
+#include <vcl/weld.hxx>
 
 #include "pdffilter.hxx"
 
@@ -43,19 +43,16 @@ class ImpPDFTabViewerPage;
 class ImpPDFTabOpnFtrPage;
 class ImpPDFTabLinksPage;
 
-class ImplErrorDialog : public MessageDialog
+class ImplErrorDialog : public weld::MessageDialogController
 {
 private:
-    VclPtr<ListBox>             m_pErrors;
-    VclPtr<FixedText>           m_pExplanation;
+    std::unique_ptr<weld::TreeView> m_xErrors;
+    std::unique_ptr<weld::Label> m_xExplanation;
 
-    DECL_LINK(SelectHdl, ListBox&, void);
+    DECL_LINK(SelectHdl, weld::TreeView&, void);
 
 public:
-    explicit                    ImplErrorDialog( const std::set< vcl::PDFWriter::ErrorCode >& );
-    virtual                     ~ImplErrorDialog() override;
-
-    virtual void                dispose() override;
+    explicit ImplErrorDialog(weld::Window* pParent, const std::set<vcl::PDFWriter::ErrorCode>& rErrorCodes);
 };
 
 
@@ -250,7 +247,7 @@ public:
     virtual                     ~ImpPDFTabGeneralPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet);
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet);
 
     void                        GetFilterConfigItem(ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem(ImpPDFTabDialog* paParent);
@@ -290,7 +287,7 @@ public:
     virtual                     ~ImpPDFTabOpnFtrPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -323,7 +320,7 @@ public:
     virtual                     ~ImpPDFTabViewerPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -377,7 +374,7 @@ public:
     virtual                     ~ImpPDFTabSecurityPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -408,7 +405,7 @@ public:
     virtual                     ~ImpPDFTabLinksPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -437,7 +434,7 @@ public:
     virtual                     ~ImpPDFTabSigningPage() override;
 
     virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );

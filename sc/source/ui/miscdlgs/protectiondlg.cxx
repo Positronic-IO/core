@@ -18,11 +18,9 @@
  */
 
 #include <protectiondlg.hxx>
-#include <scresid.hxx>
 #include <tabprotection.hxx>
 
 #include <sal/macros.h>
-#include <vcl/msgbox.hxx>
 #include <vector>
 
 namespace {

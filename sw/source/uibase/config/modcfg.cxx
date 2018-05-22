@@ -221,7 +221,7 @@ const Sequence<OUString>& SwRevisionConfig::GetPropertyNames()
     static Sequence<OUString> aNames;
     if(!aNames.getLength())
     {
-        const int nCount = 9;
+        const int nCount = 8;
         aNames.realloc(nCount);
         static const char* aPropNames[] =
         {
@@ -232,8 +232,7 @@ const Sequence<OUString>& SwRevisionConfig::GetPropertyNames()
             "TextDisplay/ChangedAttribute/Attribute",   // 4
             "TextDisplay/ChangedAttribute/Color",       // 5
             "LinesChanged/Mark",                        // 6
-            "LinesChanged/Color",                       // 7
-            "ShowInlineTooltip"                         // 8
+            "LinesChanged/Color"                        // 7
         };
         OUString* pNames = aNames.getArray();
         for(int i = 0; i < nCount; i++)
@@ -255,7 +254,6 @@ SwRevisionConfig::SwRevisionConfig() :
     aFormatAttr.m_nItemId = SID_ATTR_CHAR_WEIGHT;
     aFormatAttr.m_nAttr = WEIGHT_BOLD;
     aFormatAttr.m_nColor = COL_BLACK;
-    bShowInlineTooltip = true;
     Load();
 }
 
@@ -308,8 +306,7 @@ void SwRevisionConfig::ImplCommit()
             case 4 : pValues[nProp] <<= lcl_ConvertAttrToCfg(aFormatAttr); break;
             case 5 : pValues[nProp] <<= aFormatAttr.m_nColor;   break;
             case 6 : pValues[nProp] <<= nMarkAlign;             break;
-            case 7 : pValues[nProp] <<= aMarkColor.GetColor();  break;
-            case 8 : pValues[nProp] <<= bShowInlineTooltip;     break;
+            case 7 : pValues[nProp] <<= aMarkColor;             break;
         }
     }
     PutProperties(aNames, aValues);
@@ -356,14 +353,13 @@ void SwRevisionConfig::Load()
             switch (nProp)
             {
                 case 0 : lcl_ConvertCfgToAttr(nVal, aInsertAttr); break;
-                case 1 : aInsertAttr.m_nColor     = nVal; break;
+                case 1 : aInsertAttr.m_nColor     = Color(nVal); break;
                 case 2 : lcl_ConvertCfgToAttr(nVal, aDeletedAttr, true); break;
-                case 3 : aDeletedAttr.m_nColor    = nVal; break;
+                case 3 : aDeletedAttr.m_nColor    = Color(nVal); break;
                 case 4 : lcl_ConvertCfgToAttr(nVal, aFormatAttr); break;
-                case 5 : aFormatAttr.m_nColor     = nVal; break;
+                case 5 : aFormatAttr.m_nColor     = Color(nVal); break;
                 case 6 : nMarkAlign = sal::static_int_cast< sal_uInt16, sal_Int32>(nVal); break;
-                case 7 : aMarkColor = nVal; break;
-                case 8 : bShowInlineTooltip = *o3tl::doAccess<bool>(pValues[nProp]);
+                case 7 : aMarkColor = Color(nVal); break;
             }
         }
     }
@@ -591,7 +587,7 @@ SwInsertConfig::SwInsertConfig(bool bWeb) :
     pOLEMiscOpt(nullptr),
     bInsWithCaption( false ),
     bCaptionOrderNumberingFirst( false ),
-    aInsTableOpts(0,0),
+    aInsTableOpts(SwInsertTableFlags::NONE,0),
     bIsWeb(bWeb)
 {
     aGlobalNames[GLOB_NAME_CALC   ] = SvGlobalName(SO3_SC_CLASSID);
@@ -660,16 +656,16 @@ void SwInsertConfig::ImplCommit()
         switch(nProp)
         {
             case INS_PROP_TABLE_HEADER:
-                pValues[nProp] <<= 0 != (aInsTableOpts.mnInsMode & tabopts::HEADLINE);
+                pValues[nProp] <<= bool(aInsTableOpts.mnInsMode & SwInsertTableFlags::Headline);
             break;//"Table/Header",
             case INS_PROP_TABLE_REPEATHEADER:
                 pValues[nProp] <<= aInsTableOpts.mnRowsToRepeat > 0;
             break;//"Table/RepeatHeader",
             case INS_PROP_TABLE_BORDER:
-                pValues[nProp] <<= 0 != (aInsTableOpts.mnInsMode & tabopts::DEFAULT_BORDER );
+                pValues[nProp] <<= bool(aInsTableOpts.mnInsMode & SwInsertTableFlags::DefaultBorder);
             break;//"Table/Border",
             case INS_PROP_TABLE_SPLIT:
-                pValues[nProp] <<= 0 != (aInsTableOpts.mnInsMode & tabopts::SPLIT_LAYOUT);
+                pValues[nProp] <<= bool(aInsTableOpts.mnInsMode & SwInsertTableFlags::SplitLayout);
             break;//"Table/Split",
             case INS_PROP_CAP_AUTOMATIC:
                 pValues[nProp] <<= bInsWithCaption;
@@ -894,7 +890,7 @@ void SwInsertConfig::Load()
     else if (!bIsWeb)
         return;
 
-    sal_uInt16 nInsTableFlags = 0;
+    SwInsertTableFlags nInsTableFlags = SwInsertTableFlags::NONE;
     for (sal_Int32 nProp = 0; nProp < aNames.getLength(); ++nProp)
     {
         if (pValues[nProp].hasValue())
@@ -905,7 +901,7 @@ void SwInsertConfig::Load()
                 case INS_PROP_TABLE_HEADER:
                 {
                     if(bBool)
-                        nInsTableFlags|= tabopts::HEADLINE;
+                        nInsTableFlags |= SwInsertTableFlags::Headline;
                 }
                 break;//"Table/Header",
                 case INS_PROP_TABLE_REPEATHEADER:
@@ -917,13 +913,13 @@ void SwInsertConfig::Load()
                 case INS_PROP_TABLE_BORDER:
                 {
                     if(bBool)
-                        nInsTableFlags|= tabopts::DEFAULT_BORDER;
+                        nInsTableFlags |= SwInsertTableFlags::DefaultBorder;
                 }
                 break;//"Table/Border",
                 case INS_PROP_TABLE_SPLIT:
                 {
                     if(bBool)
-                        nInsTableFlags|= tabopts::SPLIT_LAYOUT;
+                        nInsTableFlags |= SwInsertTableFlags::SplitLayout;
                 }
                 break;//"Table/Split",
                 case INS_PROP_CAP_AUTOMATIC:

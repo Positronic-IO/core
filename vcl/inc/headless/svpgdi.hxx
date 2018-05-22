@@ -86,20 +86,21 @@ class VCL_DLLPUBLIC SvpSalGraphics : public SalGraphics
     cairo_surface_t*               m_pSurface;
     basegfx::B2IVector             m_aFrameSize;
     double                         m_fScale;
-    SalColor                       m_aLineColor;
-    SalColor                       m_aFillColor;
+    Color                          m_aLineColor;
+    Color                          m_aFillColor;
     PaintMode                      m_ePaintMode;
 
 public:
     static GlyphCache& getPlatformGlyphCache();
     void setSurface(cairo_surface_t* pSurface, const basegfx::B2IVector& rSize);
+    cairo_surface_t* getSurface() const { return m_pSurface; }
     static cairo_user_data_key_t* getDamageKey();
 
 private:
     void invert(const basegfx::B2DPolygon &rPoly, SalInvert nFlags);
     void copySource(const SalTwoRect& rTR, cairo_surface_t* source);
     void setupPolyPolygon(cairo_t* cr, const basegfx::B2DPolyPolygon& rPolyPoly);
-    void applyColor(cairo_t *cr, SalColor rColor);
+    void applyColor(cairo_t *cr, Color rColor);
     void drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly);
 protected:
     vcl::Region                         m_aClipRegion;
@@ -135,16 +136,16 @@ public:
     virtual bool            setClipRegion( const vcl::Region& ) override;
 
     virtual void            SetLineColor() override;
-    virtual void            SetLineColor( SalColor nSalColor ) override;
+    virtual void            SetLineColor( Color nColor ) override;
     virtual void            SetFillColor() override;
-    virtual void            SetFillColor( SalColor nSalColor ) override;
+    virtual void            SetFillColor( Color nColor ) override;
 
     virtual void            SetXORMode( bool bSet ) override;
 
     virtual void            SetROPLineColor( SalROPColor nROPColor ) override;
     virtual void            SetROPFillColor( SalROPColor nROPColor ) override;
 
-    virtual void            SetTextColor( SalColor nSalColor ) override;
+    virtual void            SetTextColor( Color nColor ) override;
     virtual void            SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
     virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
     virtual const FontCharMapRef GetFontCharMap() const override;
@@ -170,10 +171,10 @@ public:
     virtual bool            GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) override;
     virtual std::unique_ptr<SalLayout>
                             GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;
-    virtual void            DrawTextLayout( const CommonSalLayout& ) override;
+    virtual void            DrawTextLayout( const GenericSalLayout& ) override;
     virtual bool            supportsOperation( OutDevSupportType ) const override;
     virtual void            drawPixel( long nX, long nY ) override;
-    virtual void            drawPixel( long nX, long nY, SalColor nSalColor ) override;
+    virtual void            drawPixel( long nX, long nY, Color nColor ) override;
     virtual void            drawLine( long nX1, long nY1, long nX2, long nY2 ) override;
     virtual void            drawRect( long nX, long nY, long nWidth, long nHeight ) override;
     virtual bool            drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) override;
@@ -216,9 +217,9 @@ public:
                                         const SalBitmap& rTransparentBitmap ) override;
     virtual void            drawMask( const SalTwoRect& rPosAry,
                                       const SalBitmap& rSalBitmap,
-                                      SalColor nMaskColor ) override;
+                                      Color nMaskColor ) override;
     virtual SalBitmap*      getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
-    virtual SalColor        getPixel( long nX, long nY ) override;
+    virtual Color           getPixel( long nX, long nY ) override;
     virtual void            invert( long nX, long nY, long nWidth, long nHeight, SalInvert nFlags ) override;
     virtual void            invert( sal_uInt32 nPoints, const SalPoint* pPtAry, SalInvert nFlags ) override;
 
@@ -238,7 +239,6 @@ public:
     cairo_t*                getCairoContext(bool bXorModeAllowed) const;
     void                    releaseCairoContext(cairo_t* cr, bool bXorModeAllowed, const basegfx::B2DRange& rExtents) const;
     static cairo_surface_t* createCairoSurface(const BitmapBuffer *pBuffer);
-    double                  getScale() const { return m_fScale; }
     void                    clipRegion(cairo_t* cr);
 };
 

@@ -42,6 +42,7 @@
 #include <unotools/charclass.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <comphelper/sequenceashashmap.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <vector>
 #include <algorithm>
@@ -393,9 +394,9 @@ InternalDataProvider::InternalDataProvider(
                 ftor( rxScreen );
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -661,12 +662,9 @@ namespace
 sal_Int32 lcl_getInnerLevelCount( const vector< vector< uno::Any > >& rLabels )
 {
     sal_Int32 nCount = 1;//minimum is 1!
-    vector< vector< uno::Any > >::const_iterator aLevelIt( rLabels.begin() );
-    vector< vector< uno::Any > >::const_iterator aLevelEnd( rLabels.end() );
-    for( ;aLevelIt!=aLevelEnd; ++aLevelIt )
+    for (auto const& elemLabel : rLabels)
     {
-        const vector< uno::Any >& rCurrentLevelLabels = *aLevelIt;
-        nCount = std::max<sal_Int32>( rCurrentLevelLabels.size(), nCount );
+        nCount = std::max<sal_Int32>( elemLabel.size(), nCount );
     }
     return nCount;
 }
@@ -751,12 +749,10 @@ Reference< chart2::data::XDataSource > SAL_CALL InternalDataProvider::createData
     }
 
     //add left over data sequences to result
-    std::vector< Reference< chart2::data::XLabeledDataSequence > >::iterator aIt(aDataVec.begin());
-    const std::vector< Reference< chart2::data::XLabeledDataSequence > >::const_iterator aEndIt(aDataVec.end());
-    for( ;aIt!=aEndIt; ++aIt)
+    for (auto const& elem : aDataVec)
     {
-        if( aIt->is() )
-            aResultLSeqVec.push_back( *aIt );
+        if( elem.is() )
+            aResultLSeqVec.push_back(elem);
     }
 
     return new DataSource( comphelper::containerToSequence(aResultLSeqVec) );
@@ -1355,13 +1351,12 @@ Sequence< double > SAL_CALL InternalDataProvider::getDateCategories()
     vector< vector< uno::Any > > aCategories( m_bDataInColumns ? m_aInternalData.getComplexRowLabels() : m_aInternalData.getComplexColumnLabels());
     sal_Int32 nCount = aCategories.size();
     Sequence< double > aDoubles( nCount );
-    vector< vector< uno::Any > >::iterator aIt( aCategories.begin() );
-    vector< vector< uno::Any > >::const_iterator aEnd( aCategories.end() );
-    for(sal_Int32 nN=0; nN<nCount && aIt!=aEnd; ++nN, ++aIt )
+    sal_Int32 nN=0;
+    for (auto const& category : aCategories)
     {
-        if( !( !aIt->empty() && ((*aIt)[0]>>=fValue) ) )
+        if( !( !category.empty() && (category[0]>>=fValue) ) )
             fValue = fNan;
-        aDoubles[nN]=fValue;
+        aDoubles[nN++]=fValue;
     }
     return aDoubles;
 }

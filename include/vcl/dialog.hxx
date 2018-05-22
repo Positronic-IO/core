@@ -72,6 +72,11 @@ private:
     DECL_DLLPRIVATE_LINK(ImplAsyncCloseHdl, void*, void);
     DECL_DLLPRIVATE_LINK(ResponseHdl, Button*, void);
 
+    // ensureRepaint - triggers Application::Yield until the dialog is
+    // completely repainted. Sometimes needed for dialogs showing progress
+    // during actions
+    void ensureRepaint();
+
 protected:
     using Window::ImplInit;
     void    ImplInit( vcl::Window* pParent, WinBits nStyle, InitFlag eFlag = InitFlag::Default );
@@ -121,11 +126,6 @@ public:
     virtual void PrePaint(vcl::RenderContext& rRenderContext) override;
     virtual void PostPaint(vcl::RenderContext& rRenderContext) override;
 
-    // ensureRepaint - triggers Application::Yield until the dialog is
-    // completely repainted. Sometimes needed for dialogs showing progress
-    // during actions
-    void ensureRepaint();
-
     // Screenshot interface
     virtual std::vector<OString> getAllPageUIXMLDescriptions() const;
     virtual bool selectPageByUIXMLDescription(const OString& rUIXMLDescription);
@@ -149,7 +149,7 @@ private:
 public:
 
     // FIXME: Need to remove old StartExecuteModal in favour of this one.
-    /// Returns true of the dialog successfully starts
+    /// Returns true if the dialog successfully starts
     bool StartExecuteAsync(const std::function<void(sal_Int32)> &rEndDialogFn)
     {
         VclAbstractDialog::AsyncContext aCtx;
@@ -178,6 +178,7 @@ public:
 
     void            add_button(PushButton* pButton, int nResponse, bool bTransferOwnership);
     void            set_default_response(int nResponse);
+    vcl::Window*    get_widget_for_response(int nResponse);
 };
 
 class VCL_DLLPUBLIC ModelessDialog : public Dialog
@@ -194,7 +195,6 @@ public:
 class VCL_DLLPUBLIC ModalDialog : public Dialog
 {
 public:
-    explicit        ModalDialog( vcl::Window* pParent, WinBits nStyle = WB_STDMODAL );
     explicit        ModalDialog( vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, bool bBorder = false );
 
 protected:

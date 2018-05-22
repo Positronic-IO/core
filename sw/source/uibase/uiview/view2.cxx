@@ -27,6 +27,7 @@
 #include <com/sun/star/ui/dialogs/ExtendedFilePickerElementIds.hpp>
 #include <com/sun/star/ui/dialogs/ListboxControlActions.hpp>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
+#include <com/sun/star/linguistic2/XProofreadingIterator.hpp>
 #include <svl/aeitem.hxx>
 #include <SwStyleNameMapper.hxx>
 #include <docary.hxx>
@@ -56,7 +57,6 @@
 #include <unotools/textsearch.hxx>
 #include <editeng/unolingu.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/tstpitem.hxx>
 #include <sfx2/event.hxx>
 #include <sfx2/docfile.hxx>
@@ -115,6 +115,7 @@
 #include <dbconfig.hxx>
 #include <dbmgr.hxx>
 #include <reffld.hxx>
+#include <comphelper/lok.hxx>
 
 #include <PostItMgr.hxx>
 
@@ -228,8 +229,7 @@ ErrCode SwView::InsertGraphic( const OUString &rPath, const OUString &rFilter,
             const sal_uInt16 aRotation = aMetadata.getRotation();
             if (aRotation != 0)
             {
-                vcl::Window* pWin = GetWindow();
-                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr, "modules/swriter/ui/queryrotateintostandarddialog.ui"));
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/queryrotateintostandarddialog.ui"));
                 std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("QueryRotateIntoStandardOrientationDialog"));
                 if (xQueryBox->run() == RET_YES)
                 {
@@ -266,7 +266,7 @@ ErrCode SwView::InsertGraphic( const OUString &rPath, const OUString &rFilter,
 
                 OUString sURL = URIHelper::SmartRel2Abs(
                     aTemp, rPath, URIHelper::GetMaybeFileHdl() );
-
+                aGraphic.setOriginURL(sURL);
                 rShell.Insert( sURL, rFilter, aGraphic, &aFrameManager );
             }
             else
@@ -289,7 +289,7 @@ bool SwView::InsertGraphicDlg( SfxRequest& rReq )
     // when in HTML mode insert only as a link
     std::unique_ptr<FileDialogHelper> pFileDlg(new FileDialogHelper(
         ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW_IMAGE_TEMPLATE,
-        FileDialogFlags::Graphic, GetWindow()));
+        FileDialogFlags::Graphic, GetFrameWeld()));
     pFileDlg->SetTitle(SwResId(STR_INSERT_GRAPHIC ));
     pFileDlg->SetContext( FileDialogHelper::SW_INSERT_GRAPHIC );
     uno::Reference < XFilePicker3 > xFP = pFileDlg->GetFilePicker();
@@ -428,9 +428,8 @@ bool SwView::InsertGraphicDlg( SfxRequest& rReq )
             // really store as link only?
             if( bAsLink && SvtMiscOptions().ShowLinkWarningDialog() )
             {
-                vcl::Window* pWin = GetWindow();
-                SvxLinkWarningDialog aWarnDlg(pWin ? pWin->GetFrameWeld() : nullptr, pFileDlg->GetPath());
-                if(aWarnDlg.run() != RET_OK)
+                SvxLinkWarningDialog aWarnDlg(GetFrameWeld(), pFileDlg->GetPath());
+                if (aWarnDlg.run() != RET_OK)
                     bAsLink=false; // don't store as link
             }
         }
@@ -485,8 +484,7 @@ bool SwView::InsertGraphicDlg( SfxRequest& rReq )
         {
             if( bShowError )
             {
-                vcl::Window* pWin = GetWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SwResId(pResId)));
                 xInfoBox->run();
@@ -563,12 +561,11 @@ void SwView::Execute(SfxRequest &rReq)
                 {
                     OSL_ENSURE( !static_cast<const SfxBoolItem*>(pItem)->GetValue(), "SwView::Execute(): password set an redlining off doesn't match!" );
                     // xmlsec05:    new password dialog
-                    vcl::Window* pParent = &GetViewFrame()->GetWindow();
-                    ScopedVclPtrInstance< SfxPasswordDialog > aPasswdDlg( pParent );
-                    aPasswdDlg->SetMinLen( 1 );
+                    SfxPasswordDialog aPasswdDlg(GetFrameWeld());
+                    aPasswdDlg.SetMinLen(1);
                     //#i69751# the result of Execute() can be ignored
-                    (void)aPasswdDlg->Execute();
-                    OUString sNewPasswd( aPasswdDlg->GetPassword() );
+                    (void)aPasswdDlg.execute();
+                    OUString sNewPasswd(aPasswdDlg.GetPassword());
                     Sequence <sal_Int8> aNewPasswd = rIDRA.GetRedlinePassword();
                     SvPasswordHelper::GetHashPassword( aNewPasswd, sNewPasswd );
                     if(SvPasswordHelper::CompareHashPassword(aPasswd, sNewPasswd))
@@ -604,15 +601,14 @@ void SwView::Execute(SfxRequest &rReq)
 
             // xmlsec05:    new password dialog
             //              message box for wrong password
-            vcl::Window* pParent = &GetViewFrame()->GetWindow();
-            ScopedVclPtrInstance< SfxPasswordDialog > aPasswdDlg( pParent );
-            aPasswdDlg->SetMinLen( 1 );
-            if(!aPasswd.getLength())
-                aPasswdDlg->ShowExtras(SfxShowExtras::CONFIRM);
-            if (aPasswdDlg->Execute())
+            SfxPasswordDialog aPasswdDlg(GetFrameWeld());
+            aPasswdDlg.SetMinLen(1);
+            if (!aPasswd.getLength())
+                aPasswdDlg.ShowExtras(SfxShowExtras::CONFIRM);
+            if (aPasswdDlg.execute())
             {
                 RedlineFlags nOn = RedlineFlags::On;
-                OUString sNewPasswd( aPasswdDlg->GetPassword() );
+                OUString sNewPasswd(aPasswdDlg.GetPassword());
                 Sequence <sal_Int8> aNewPasswd =
                         rIDRA.GetRedlinePassword();
                 SvPasswordHelper::GetHashPassword( aNewPasswd, sNewPasswd );
@@ -888,9 +884,9 @@ void SwView::Execute(SfxRequest &rReq)
         break;
         case FN_GOTO_PAGE:
         {
-            ScopedVclPtrInstance< SwGotoPageDlg > aDlg (&GetViewFrame()->GetWindow(), &GetViewFrame()->GetBindings());
-            if(aDlg->Execute() == RET_OK)
-                GetWrtShell().GotoPage(aDlg->GetPageSelection(), true);
+            SwGotoPageDlg aDlg(GetViewFrame()->GetWindow().GetFrameWeld(), &GetViewFrame()->GetBindings());
+            if (aDlg.run() == RET_OK)
+                GetWrtShell().GotoPage(aDlg.GetPageSelection(), true);
         }
         break;
         case  FN_EDIT_CURRENT_TOX:
@@ -1220,6 +1216,20 @@ void SwView::Execute(SfxRequest &rReq)
     }
     if(!bIgnore)
         rReq.Done();
+}
+
+bool SwView::IsConditionalFastCall( const SfxRequest &rReq )
+{
+    sal_uInt16 nId = rReq.GetSlot();
+    bool bRet = false;
+
+    if (nId == FN_REDLINE_ACCEPT_DIRECT || nId == FN_REDLINE_REJECT_DIRECT)
+    {
+        if (comphelper::LibreOfficeKit::isActive())
+            bRet = true;
+    }
+    return bRet || SfxShell::IsConditionalFastCall(rReq);
+
 }
 
 /// invalidate page numbering field
@@ -1666,7 +1676,7 @@ void SwView::ExecuteStatusLine(SfxRequest &rReq)
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     if(pFact)
                     {
-                        pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(&GetViewFrame()->GetWindow(), aCoreSet));
+                        pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aCoreSet));
                         OSL_ENSURE(pDlg, "Zooming fail!");
                         if (pDlg)
                         {
@@ -2286,7 +2296,7 @@ void SwView::GenerateFormLetter(bool bUseCurrentDocument)
             if ( lcl_NeedAdditionalDataSource( xDBContext ) )
             {
                 // no data sources are available - create a new one
-                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetViewFrame()->GetWindow().GetFrameWeld(), "modules/swriter/ui/datasourcesunavailabledialog.ui"));
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/datasourcesunavailabledialog.ui"));
                 std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("DataSourcesUnavailableDialog"));
                 // no cancel allowed
                 if (RET_OK != xQuery->run())
@@ -2334,7 +2344,7 @@ void SwView::GenerateFormLetter(bool bUseCurrentDocument)
             OUString sSource;
             if(!GetWrtShell().IsFieldDataSourceAvailable(sSource))
             {
-                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetViewFrame()->GetWindow().GetFrameWeld(), "modules/swriter/ui/warndatasourcedialog.ui"));
+                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/warndatasourcedialog.ui"));
                 std::unique_ptr<weld::MessageDialog> xWarning(xBuilder->weld_message_dialog("WarnDataSourceDialog"));
                 OUString sTmp(xWarning->get_primary_text());
                 xWarning->set_primary_text(sTmp.replaceFirst("%1", sSource));

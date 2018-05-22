@@ -20,10 +20,8 @@
 #include <swtypes.hxx>
 #include <globals.hrc>
 
-#include <strings.hrc>
 #include <unoprnms.hxx>
 #include <osl/diagnose.h>
-#include <vcl/msgbox.hxx>
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 #include <com/sun/star/view/XScreenCursor.hpp>
 #include <com/sun/star/view/DocumentZoomType.hpp>
@@ -34,7 +32,6 @@
 #include <com/sun/star/awt/PosSize.hpp>
 #include <com/sun/star/view/XViewSettingsSupplier.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svl/stritem.hxx>
@@ -49,59 +46,52 @@
 
 using namespace ::com::sun::star;
 
-SwRenameXNamedDlg::SwRenameXNamedDlg( vcl::Window* pWin,
+SwRenameXNamedDlg::SwRenameXNamedDlg(weld::Window* pWin,
             uno::Reference< container::XNamed > & xN,
             uno::Reference< container::XNameAccess > & xNA )
-    : ModalDialog(pWin, "RenameObjectDialog",
-        "modules/swriter/ui/renameobjectdialog.ui")
+    : GenericDialogController(pWin, "modules/swriter/ui/renameobjectdialog.ui", "RenameObjectDialog")
     , xNamed(xN)
     , xNameAccess(xNA)
+    , m_xNewNameED(m_xBuilder->weld_entry("entry"))
+    , m_xOk(m_xBuilder->weld_button("ok"))
 {
-    get(m_pNewNameED, "entry");
-    m_pNewNameED->SetTextFilter(&m_aTextFilter);
-    get(m_pOk, "ok");
+    m_xNewNameED->connect_insert_text(LINK(this, SwRenameXNamedDlg, TextFilterHdl));
 
-    OUString sTmp(GetText());
-    m_pNewNameED->SetText(xNamed->getName());
-    m_pNewNameED->SetSelection(Selection(SELECTION_MIN, SELECTION_MAX));
+    OUString sTmp(m_xDialog->get_title());
+    m_xNewNameED->set_text(xNamed->getName());
+    m_xNewNameED->select_region(0, -1);
     sTmp += xNamed->getName();
-    SetText(sTmp);
+    m_xDialog->set_title(sTmp);
 
-    m_pOk->SetClickHdl(LINK(this, SwRenameXNamedDlg, OkHdl));
-    m_pNewNameED->SetModifyHdl(LINK(this, SwRenameXNamedDlg, ModifyHdl));
-    m_pOk->Enable(false);
+    m_xOk->connect_clicked(LINK(this, SwRenameXNamedDlg, OkHdl));
+    m_xNewNameED->connect_changed(LINK(this, SwRenameXNamedDlg, ModifyHdl));
+    m_xOk->set_sensitive(false);
 }
 
-SwRenameXNamedDlg::~SwRenameXNamedDlg()
+IMPL_LINK(SwRenameXNamedDlg, TextFilterHdl, OUString&, rTest, bool)
 {
-    disposeOnce();
+    rTest = m_aTextFilter.filter(rTest);
+    return true;
 }
 
-void SwRenameXNamedDlg::dispose()
-{
-    m_pNewNameED.clear();
-    m_pOk.clear();
-    ModalDialog::dispose();
-}
-
-IMPL_LINK_NOARG(SwRenameXNamedDlg, OkHdl, Button*, void)
+IMPL_LINK_NOARG(SwRenameXNamedDlg, OkHdl, weld::Button&, void)
 {
     try
     {
-        xNamed->setName(m_pNewNameED->GetText());
+        xNamed->setName(m_xNewNameED->get_text());
     }
     catch (const uno::RuntimeException&)
     {
         OSL_FAIL("name wasn't changed");
     }
-    EndDialog(RET_OK);
+    m_xDialog->response(RET_OK);
 }
 
-IMPL_LINK(SwRenameXNamedDlg, ModifyHdl, Edit&, rEdit, void)
+IMPL_LINK(SwRenameXNamedDlg, ModifyHdl, weld::Entry&, rEdit, void)
 {
-    OUString sTmp(rEdit.GetText());
+    OUString sTmp(rEdit.get_text());
 
-    m_pOk->Enable(!sTmp.isEmpty()
+    m_xOk->set_sensitive(!sTmp.isEmpty()
                   && !xNameAccess->hasByName(sTmp)
                   && (!xSecondAccess.is() || !xSecondAccess->hasByName(sTmp))
                   && (!xThirdAccess.is() || !xThirdAccess->hasByName(sTmp))

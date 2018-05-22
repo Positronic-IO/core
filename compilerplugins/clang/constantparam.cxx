@@ -86,7 +86,7 @@ public:
             output += s.returnType + "\t" + s.nameAndParams + "\t" + s.sourceLocation + "\t"
                         + s.paramName + "\t" + s.paramType + "\t" + s.callValue + "\n";
         std::ofstream myfile;
-        myfile.open( SRCDIR "/loplugin.constantparam.log", std::ios::app | std::ios::out);
+        myfile.open( WORKDIR "/loplugin.constantparam.log", std::ios::app | std::ios::out);
         myfile << output;
         myfile.close();
     }
@@ -121,7 +121,7 @@ void ConstantParam::addToCallSet(const FunctionDecl* functionDecl, int paramInde
         return;
     SourceLocation expansionLoc = compiler.getSourceManager().getExpansionLoc( functionDecl->getLocation() );
     StringRef filename = compiler.getSourceManager().getFilename(expansionLoc);
-    if (!loplugin::hasPathnamePrefix(filename, SRCDIR))
+    if (!loplugin::hasPathnamePrefix(filename, SRCDIR "/"))
         return;
     filename = filename.substr(strlen(SRCDIR)+1);
 

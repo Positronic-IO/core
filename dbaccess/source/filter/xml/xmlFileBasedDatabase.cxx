@@ -27,7 +27,6 @@
 #include <strings.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <svl/filenotation.hxx>
 #include <unotools/pathoptions.hxx>
@@ -107,7 +106,7 @@ OXMLFileBasedDatabase::OXMLFileBasedDatabase( ODBFilter& rImport,
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }

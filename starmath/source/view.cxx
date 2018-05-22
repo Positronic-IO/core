@@ -80,7 +80,7 @@
 #define CMD_BOX_PADDING 4
 #define CMD_BOX_PADDING_TOP 10
 
-#define SmViewShell
+#define ShellClass_SmViewShell
 #include <smslots.hxx>
 
 using namespace css;
@@ -875,11 +875,6 @@ SFX_IMPL_NAMED_VIEWFACTORY(SmViewShell, "Default")
     SFX_VIEW_REGISTRATION(SmDocShell);
 }
 
-void SmViewShell::AdjustPosSizePixel(const Point &rPos, const Size &rSize)
-{
-    mpGraphic->SetPosSizePixel(rPos, rSize);
-}
-
 void SmViewShell::InnerResizePixel(const Point &rOfs, const Size &rSize, bool)
 {
     Size aObjSize = GetObjectShell()->GetVisArea().GetSize();
@@ -1265,10 +1260,10 @@ bool SmViewShell::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> SmViewShell::CreatePrintOptionsPage(vcl::Window *pParent,
+VclPtr<SfxTabPage> SmViewShell::CreatePrintOptionsPage(weld::Container* pPage,
                                                        const SfxItemSet &rOptions)
 {
-    return SmPrintOptionsTabPage::Create(pParent, rOptions);
+    return SmPrintOptionsTabPage::Create(pPage, rOptions);
 }
 
 SmEditWindow *SmViewShell::GetEditWindow()
@@ -1575,7 +1570,7 @@ void SmViewShell::Execute(SfxRequest& rReq)
         case SID_IMPORT_FORMULA:
         {
             mpImpl->pRequest.reset(new SfxRequest( rReq ));
-            mpImpl->pDocInserter.reset(new ::sfx2::DocumentInserter(pWin,
+            mpImpl->pDocInserter.reset(new ::sfx2::DocumentInserter(pWin ? pWin->GetFrameWeld() : nullptr,
                               GetDoc()->GetFactory().GetFactoryName()));
             mpImpl->pDocInserter->StartExecuteModal( LINK( this, SmViewShell, DialogClosedHdl ) );
             break;
@@ -1714,7 +1709,7 @@ void SmViewShell::Execute(SfxRequest& rReq)
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     if(pFact)
                     {
-                        ScopedVclPtr<AbstractSvxZoomDialog> xDlg(pFact->CreateSvxZoomDialog(&GetViewFrame()->GetWindow(), aSet));
+                        ScopedVclPtr<AbstractSvxZoomDialog> xDlg(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aSet));
                         assert(xDlg);
                         xDlg->SetLimits( MINZOOM, MAXZOOM );
                         if (xDlg->Execute() != RET_CANCEL)
@@ -1803,7 +1798,8 @@ void SmViewShell::Execute(SfxRequest& rReq)
             SAL_WARN_IF( !pDev, "starmath", "device for font list missing" );
 
             SmModule *pp = SM_MOD();
-            ScopedVclPtrInstance<SmSymbolDialog>( nullptr, pDev, pp->GetSymbolManager(), *this )->Execute();
+            SmSymbolDialog aDialog(pWin ? pWin->GetFrameWeld() : nullptr, pDev, pp->GetSymbolManager(), *this);
+            aDialog.run();
         }
         break;
     }
@@ -2004,7 +2000,7 @@ bool SmViewShell::IsInlineEditEnabled() const
 void SmViewShell::ZoomByItemSet(const SfxItemSet *pSet)
 {
     assert(pSet);
-    const SvxZoomItem &rZoom = static_cast<const SvxZoomItem &>(pSet->Get(SID_ATTR_ZOOM));
+    const SvxZoomItem &rZoom = pSet->Get(SID_ATTR_ZOOM);
     switch( rZoom.GetType() )
     {
         case SvxZoomType::PERCENT:

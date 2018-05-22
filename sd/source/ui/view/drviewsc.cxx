@@ -24,7 +24,6 @@
 #include <svx/svxids.hrc>
 #include <svx/dialogs.hrc>
 #include <svx/imapdlg.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 #include <svx/svdogrp.hxx>
 #include <svx/svdoole2.hxx>
@@ -40,10 +39,8 @@
 #include <sfx2/viewfrm.hxx>
 
 #include <app.hrc>
-#include <strings.hrc>
 #include <Window.hxx>
 #include <imapinfo.hxx>
-#include <sdresid.hxx>
 #include <drawdoc.hxx>
 #include <DrawDocShell.hxx>
 #include <drawview.hxx>

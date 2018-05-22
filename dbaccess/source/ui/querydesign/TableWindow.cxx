@@ -35,10 +35,8 @@
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <querycontroller.hxx>
-#include <strings.hrc>
 #include <stringconstants.hxx>
 #include <bitmaps.hlst>
-#include <comphelper/extract.hxx>
 #include <UITools.hxx>
 #include <TableWindowAccess.hxx>
 #include <browserids.hxx>
@@ -490,6 +488,7 @@ void OTableWindow::Remove()
 {
     // Delete the window
     OJoinTableView* pTabWinCont = getTableView();
+    VclPtr<OTableWindow> aHoldSelf(this); // keep ourselves alive during the RemoveTabWin process
     pTabWinCont->RemoveTabWin( this );
     pTabWinCont->Invalidate();
 }

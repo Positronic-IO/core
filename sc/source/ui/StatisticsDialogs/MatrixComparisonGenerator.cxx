@@ -22,6 +22,7 @@
 #include <docfunc.hxx>
 #include <TableFillingAndNavigationTools.hxx>
 #include <MatrixComparisonGenerator.hxx>
+#include <scresid.hxx>
 #include <strings.hrc>
 
 namespace
@@ -38,8 +39,8 @@ namespace
                 if (j >= i)
                 {
                     aTemplate.setTemplate(aTemplateString);
-                    aTemplate.applyRange("%VAR1%", *aRangeList[i]);
-                    aTemplate.applyRange("%VAR2%", *aRangeList[j]);
+                    aTemplate.applyRange("%VAR1%", aRangeList[i]);
+                    aTemplate.applyRange("%VAR2%", aRangeList[j]);
                     aOutput.writeFormula(aTemplate.getTemplate());
                 }
                 aOutput.nextRow();

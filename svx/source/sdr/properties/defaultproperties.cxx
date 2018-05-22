@@ -25,14 +25,14 @@
 #include <svl/itemset.hxx>
 #include <svl/whiter.hxx>
 #include <vcl/outdev.hxx>
-
 #include <vector>
 #include <svx/svdobj.hxx>
 #include <svx/svddef.hxx>
 #include <svx/svdpool.hxx>
 #include <editeng/eeitem.hxx>
 #include <libxml/xmlwriter.h>
-
+#include <svx/svdmodel.hxx>
+#include <svx/svdtrans.hxx>
 
 namespace sdr
 {
@@ -51,12 +51,33 @@ namespace sdr
         }
 
         DefaultProperties::DefaultProperties(const DefaultProperties& rProps, SdrObject& rObj)
-        :   BaseProperties(rObj),
-            mpItemSet(nullptr)
+        :   BaseProperties(rObj)
         {
             if(rProps.mpItemSet)
             {
-                mpItemSet.reset(rProps.mpItemSet->Clone());
+                // Clone may be to another model and thus another ItemPool.
+                // SfxItemSet supports that thus we are able to Clone all
+                // SfxItemState::SET items to the target pool.
+                mpItemSet =
+                    rProps.mpItemSet->Clone(
+                        true,
+                        &rObj.getSdrModelFromSdrObject().GetItemPool());
+
+                // React on ModelChange: If metric has changed, scale items.
+                // As seen above, clone is supported, but scale is not included,
+                // thus: TTTT maybe add scale to SfxItemSet::Clone() (?)
+                if(&rObj.getSdrModelFromSdrObject() != &GetSdrObject().getSdrModelFromSdrObject())
+                {
+                    const MapUnit aOldUnit(GetSdrObject().getSdrModelFromSdrObject().GetScaleUnit());
+                    const MapUnit aNewUnit(rObj.getSdrModelFromSdrObject().GetScaleUnit());
+                    const bool bScaleUnitChanged(aNewUnit != aOldUnit);
+
+                    if(bScaleUnitChanged)
+                    {
+                        const Fraction aMetricFactor(GetMapFactor(aOldUnit, aNewUnit).X());
+                        Scale(aMetricFactor);
+                    }
+                }
 
                 // do not keep parent info, this may be changed by later constructors.
                 // This class just copies the ItemSet, ignore parent.
@@ -67,9 +88,9 @@ namespace sdr
             }
         }
 
-        BaseProperties& DefaultProperties::Clone(SdrObject& rObj) const
+        std::unique_ptr<BaseProperties> DefaultProperties::Clone(SdrObject& rObj) const
         {
-            return *(new DefaultProperties(*this, rObj));
+            return std::unique_ptr<BaseProperties>(new DefaultProperties(*this, rObj));
         }
 
         DefaultProperties::~DefaultProperties() {}

@@ -18,7 +18,6 @@
  */
 
 #include <comphelper/string.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <conflictsdlg.hxx>
 #include <strings.hrc>
@@ -372,8 +371,6 @@ ScConflictsDlg::ScConflictsDlg( vcl::Window* pParent, ScViewData* pViewData, ScD
     ,m_pLbConflictsContainer  ( get<SvSimpleTableContainer>("container") )
     ,m_pLbConflicts     ( VclPtr<SvxRedlinTable>::Create(*m_pLbConflictsContainer) )
     ,maStrTitleConflict ( ScResId( STR_TITLE_CONFLICT ) )
-    ,maStrTitleAuthor   ( ScResId( STR_TITLE_AUTHOR ) )
-    ,maStrTitleDate     ( ScResId( STR_TITLE_DATE ) )
     ,maStrUnknownUser   ( ScResId( STR_UNKNOWN_USER_CONFLICT ) )
     ,mpViewData         ( pViewData )
     ,mpOwnDoc           ( nullptr )
@@ -381,7 +378,6 @@ ScConflictsDlg::ScConflictsDlg( vcl::Window* pParent, ScViewData* pViewData, ScD
     ,mpSharedDoc        ( pSharedDoc )
     ,mpSharedTrack      ( nullptr )
     ,mrConflictsList    ( rConflictsList )
-    ,maDialogSize       ( GetSizePixel() )
     ,maSelectionIdle    ( "ScConflictsDlg SelectionIdle" )
     ,mbInSelectHdl      ( false )
     ,mbInDeselectHdl    ( false )
@@ -400,17 +396,17 @@ ScConflictsDlg::ScConflictsDlg( vcl::Window* pParent, ScViewData* pViewData, ScD
     mpSharedTrack = ( mpSharedDoc ? mpSharedDoc->GetChangeTrack() : nullptr );
     OSL_ENSURE( mpSharedTrack, "ScConflictsDlg CTOR: mpSharedTrack is null!" );
 
-    SetMinOutputSizePixel( maDialogSize );
+    SetMinOutputSizePixel( GetSizePixel() );
 
-    long const nTabs[] = { 3, 10, 216, 266 };
-    m_pLbConflicts->SetTabs( nTabs );
+    long const nTabs[] = { 10, 216, 266 };
+    m_pLbConflicts->SetTabs( SAL_N_ELEMENTS(nTabs), nTabs );
 
     OUString aTab('\t');
     OUString aHeader( maStrTitleConflict );
     aHeader += aTab;
-    aHeader += maStrTitleAuthor;
+    aHeader += ScResId( STR_TITLE_AUTHOR );
     aHeader += aTab;
-    aHeader += maStrTitleDate;
+    aHeader += ScResId( STR_TITLE_DATE );
     m_pLbConflicts->InsertHeaderEntry( aHeader, HEADERBAR_APPEND, HeaderBarItemBits::LEFT | HeaderBarItemBits::LEFTIMAGE | HeaderBarItemBits::VCENTER );
 
     m_pLbConflicts->SetStyle( m_pLbConflicts->GetStyle() | WB_HASLINES | WB_CLIPCHILDREN | WB_HASBUTTONS | WB_HASBUTTONSATROOT | WB_HSCROLL );

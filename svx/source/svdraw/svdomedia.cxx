@@ -34,7 +34,7 @@
 #include <vcl/svapp.hxx>
 
 #include <svx/svdmodel.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <svx/sdr/contact/viewcontactofsdrmediaobj.hxx>
 #include <avmedia/mediawindow.hxx>
@@ -65,16 +65,17 @@ struct SdrMediaObj::Impl
     OUString m_LastFailedPkgURL;
 };
 
-
-SdrMediaObj::SdrMediaObj()
-    : SdrRectObj()
-    , m_xImpl( new Impl )
+SdrMediaObj::SdrMediaObj(SdrModel& rSdrModel)
+:   SdrRectObj(rSdrModel)
+    ,m_xImpl( new Impl )
 {
 }
 
-SdrMediaObj::SdrMediaObj( const tools::Rectangle& rRect )
-    : SdrRectObj( rRect )
-    , m_xImpl( new Impl )
+SdrMediaObj::SdrMediaObj(
+    SdrModel& rSdrModel,
+    const tools::Rectangle& rRect)
+:   SdrRectObj(rSdrModel, rRect)
+    ,m_xImpl( new Impl )
 {
 }
 
@@ -121,7 +122,7 @@ sal_uInt16 SdrMediaObj::GetObjIdentifier() const
 
 OUString SdrMediaObj::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulMEDIA));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulMEDIA));
 
     OUString aName(GetName());
 
@@ -138,12 +139,12 @@ OUString SdrMediaObj::TakeObjNameSingul() const
 
 OUString SdrMediaObj::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralMEDIA);
+    return SvxResId(STR_ObjNamePluralMEDIA);
 }
 
-SdrMediaObj* SdrMediaObj::Clone() const
+SdrMediaObj* SdrMediaObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrMediaObj >();
+    return CloneHelper< SdrMediaObj >(rTargetModel);
 }
 
 SdrMediaObj& SdrMediaObj::operator=(const SdrMediaObj& rObj)
@@ -315,8 +316,14 @@ void SdrMediaObj::SetInputStream(uno::Reference<io::XInputStream> const& xStream
         SAL_WARN("svx", "this is only intended for embedded media");
         return;
     }
+
     OUString tempFileURL;
-    bool const bSuccess = lcl_CopyToTempFile(xStream, tempFileURL, "");
+    const bool bSuccess(
+        lcl_CopyToTempFile(
+            xStream,
+            tempFileURL,
+            ""));
+
     if (bSuccess)
     {
         m_xImpl->m_pTempFile.reset(new MediaTempFile(tempFileURL));
@@ -331,19 +338,14 @@ void SdrMediaObj::SetInputStream(uno::Reference<io::XInputStream> const& xStream
 /// copy a stream from XStorage to temp file
 #if HAVE_FEATURE_AVMEDIA
 static bool lcl_HandlePackageURL(
-        OUString const & rURL,
-        SdrModel const *const pModel,
-        OUString & o_rTempFileURL)
+    OUString const & rURL,
+    const SdrModel& rModel,
+    OUString & o_rTempFileURL)
 {
-    if (!pModel)
-    {
-        SAL_WARN("svx", "no model");
-        return false;
-    }
     ::comphelper::LifecycleProxy sourceProxy;
     uno::Reference<io::XInputStream> xInStream;
     try {
-        xInStream = pModel->GetDocumentStream(rURL, sourceProxy);
+        xInStream = rModel.GetDocumentStream(rURL, sourceProxy);
     }
     catch (container::NoSuchElementException const&)
     {
@@ -394,8 +396,12 @@ void SdrMediaObj::mediaPropertiesChanged( const ::avmedia::MediaItem& rNewProper
                                 rNewProperties.getTempURL()))
             {
                 OUString tempFileURL;
-                bool bSuccess;
-                    bSuccess = lcl_HandlePackageURL(url, GetModel(), tempFileURL);
+                const bool bSuccess(
+                    lcl_HandlePackageURL(
+                        url,
+                        getSdrModelFromSdrObject(),
+                        tempFileURL));
+
                 if (bSuccess)
                 {
                     m_xImpl->m_pTempFile.reset(

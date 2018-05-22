@@ -197,6 +197,8 @@ public:
 
     bool HasRuler() { return mbHasRulers;}
     void SetRuler(bool bRuler);
+    // Hides horizontal, vertical scrollbar as well as scrollbox
+    void SetScrollBarsVisible(bool bVisible);
 
     /** Set internal values of all scroll bars that determine thumb size and
         position.  The external values like size and position of the scroll
@@ -221,7 +223,7 @@ public:
 
     void    ExecReq( SfxRequest &rReq );
 
-    ZoomList* GetZoomList() { return mpZoomList;}
+    ZoomList* GetZoomList() { return mpZoomList.get();}
 
     FrameView* GetFrameView() { return mpFrameView; }
     /** Setting a frame view triggers ReadFrameViewData() for the new
@@ -461,7 +463,7 @@ protected:
 
     rtl::Reference<FuPoor>   mxCurrentFunction;
     rtl::Reference<FuPoor>   mxOldFunction;
-    ZoomList*   mpZoomList;
+    std::unique_ptr<ZoomList> mpZoomList;
 
     Point       maViewPos;
     Size        maViewSize;

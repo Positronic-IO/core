@@ -18,6 +18,11 @@
 #if ENABLE_CAIRO_CANVAS
 #include <vcl/cairo.hxx>
 #endif
+#include <com/sun/star/geometry/IntegerPoint2D.hpp>
+#include <com/sun/star/geometry/IntegerRectangle2D.hpp>
+#include <basegfx/range/b2drectangle.hxx>
+#include <basegfx/matrix/b2dhommatrix.hxx>
+#include <o3tl/safeint.hxx>
 
 namespace vcl {
 namespace bitmap {
@@ -33,11 +38,17 @@ friend BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap&& rawBitmap );
     sal_uInt8 mnBitCount;
 public:
     RawBitmap(Size const & rSize, sal_uInt8 nBitCount)
-        : mpData(new sal_uInt8[ rSize.getWidth() * nBitCount/8 * rSize.getHeight()]),
-          maSize(rSize),
+        : maSize(rSize),
           mnBitCount(nBitCount)
     {
         assert(nBitCount == 24 || nBitCount == 32);
+        sal_Int32 nRowSize, nDataSize;
+        if (o3tl::checked_multiply<sal_Int32>(rSize.getWidth(), nBitCount/8, nRowSize) ||
+            o3tl::checked_multiply<sal_Int32>(nRowSize, rSize.getHeight(), nDataSize))
+        {
+            throw std::bad_alloc();
+        }
+        mpData.reset(new sal_uInt8[nDataSize]);
     }
     void SetPixel(long nY, long nX, Color nColor)
     {
@@ -82,6 +93,25 @@ BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap && data );
 #if ENABLE_CAIRO_CANVAS
 VCL_DLLPUBLIC BitmapEx* CreateFromCairoSurface(Size size, cairo_surface_t* pSurface);
 #endif
+
+VCL_DLLPUBLIC BitmapEx CanvasTransformBitmap( const BitmapEx& rBitmap,
+                                  const ::basegfx::B2DHomMatrix&  rTransform,
+                                  ::basegfx::B2DRectangle const & rDestRect,
+                                  ::basegfx::B2DHomMatrix const & rLocalTransform );
+
+VCL_DLLPUBLIC void DrawAlphaBitmapAndAlphaGradient(BitmapEx & rBitmapEx, bool bFixedTransparence, float fTransparence, AlphaMask & rNewMask);
+
+VCL_DLLPUBLIC void DrawAndClipBitmap(const Point& rPos, const Size& rSize, const BitmapEx& rBitmap, BitmapEx & aBmpEx, basegfx::B2DPolyPolygon const & rClipPath);
+
+VCL_DLLPUBLIC css::uno::Sequence< sal_Int8 > GetMaskDIB(BitmapEx const & aBmpEx);
+
+/**
+ * @param data will be filled with alpha data, if xBitmap is alpha/transparent image
+ * @param bHasAlpha will be set to true if resulting surface has alpha
+ **/
+VCL_DLLPUBLIC void CanvasCairoExtractBitmapData( BitmapEx const & rBmpEx, Bitmap & rBitmap, unsigned char*& data, bool& bHasAlpha, long& rnWidth, long& rnHeight );
+
+VCL_DLLPUBLIC css::uno::Sequence< sal_Int8 > CanvasExtractBitmapData(BitmapEx const & rBitmapEx, const css::geometry::IntegerRectangle2D& rect);
 
 }} // end vcl::bitmap
 

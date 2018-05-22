@@ -19,6 +19,7 @@
 
 #include <o3tl/make_unique.hxx>
 #include <osl/diagnose.h>
+#include <comphelper/base64.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -659,20 +660,19 @@ void XMLTextFrameContext_Impl::Create()
                     "neither URL nor base64 image data given" );
         rtl::Reference < XMLTextImportHelper > xTxtImport =
             GetImport().GetTextImport();
-        if( !sHRef.isEmpty() )
+        uno::Reference<graphic::XGraphic> xGraphic;
+        if (!sHRef.isEmpty())
         {
-            bool bForceLoad = xTxtImport->IsInsertMode() ||
-                                  xTxtImport->IsBlockMode() ||
-                                  xTxtImport->IsStylesOnlyMode() ||
-                                  xTxtImport->IsOrganizerMode();
-            sHRef = GetImport().ResolveGraphicObjectURL( sHRef, !bForceLoad );
+            xGraphic = GetImport().loadGraphicByURL(sHRef);
         }
-        else if( xBase64Stream.is() )
+        else if (xBase64Stream.is())
         {
-            sHRef = GetImport().ResolveGraphicObjectURLFromBase64( xBase64Stream );
+            xGraphic = GetImport().loadGraphicFromBase64(xBase64Stream);
             xBase64Stream = nullptr;
         }
-        xPropSet->setPropertyValue( "GraphicURL", Any(sHRef) );
+
+        if (xGraphic.is())
+            xPropSet->setPropertyValue("Graphic", Any(xGraphic));
 
         // filter name
         xPropSet->setPropertyValue( "GraphicFilter", Any(sFilterName) );
@@ -762,16 +762,39 @@ void XMLTextFrameContext::removeGraphicFromImportContext(const SvXMLImportContex
     }
 }
 
-OUString XMLTextFrameContext::getGraphicURLFromImportContext(const SvXMLImportContext& rContext) const
+OUString XMLTextFrameContext::getGraphicPackageURLFromImportContext(const SvXMLImportContext& rContext) const
 {
     const XMLTextFrameContext_Impl* pXMLTextFrameContext_Impl = dynamic_cast< const XMLTextFrameContext_Impl* >(&rContext);
 
     if(pXMLTextFrameContext_Impl)
     {
-        return pXMLTextFrameContext_Impl->GetHRef();
+        return "vnd.sun.star.Package:" + pXMLTextFrameContext_Impl->GetHRef();
     }
 
     return OUString();
+}
+
+css::uno::Reference<css::graphic::XGraphic> XMLTextFrameContext::getGraphicFromImportContext(const SvXMLImportContext& rContext) const
+{
+    uno::Reference<graphic::XGraphic> xGraphic;
+
+    const XMLTextFrameContext_Impl* pXMLTextFrameContext_Impl = dynamic_cast<const XMLTextFrameContext_Impl*>(&rContext);
+
+    if (pXMLTextFrameContext_Impl)
+    {
+        try
+        {
+            const uno::Reference<beans::XPropertySet>& xPropertySet = pXMLTextFrameContext_Impl->GetPropSet();
+
+            if (xPropertySet.is())
+            {
+                xPropertySet->getPropertyValue("Graphic") >>= xGraphic;
+            }
+        }
+        catch (uno::Exception&)
+        {}
+    }
+    return xGraphic;
 }
 
 bool XMLTextFrameContext_Impl::CreateIfNotThere()
@@ -1215,7 +1238,7 @@ void XMLTextFrameContext_Impl::Characters( const OUString& rChars )
                 }
                 Sequence< sal_Int8 > aBuffer( (sChars.getLength() / 4) * 3 );
                 sal_Int32 nCharsDecoded =
-                    ::sax::Converter::decodeBase64SomeChars( aBuffer, sChars );
+                    ::comphelper::Base64::decodeSomeChars( aBuffer, sChars );
                 xBase64Stream->writeBytes( aBuffer );
                 if( nCharsDecoded != sChars.getLength() )
                     sBase64CharsLeft = sChars.copy( nCharsDecoded );
@@ -1642,6 +1665,15 @@ SvXMLImportContextRef XMLTextFrameContext::CreateChildContext(
             m_xImplContext = solveMultipleImages();
         }
         xContext = m_xImplContext->CreateChildContext( p_nPrefix, rLocalName, xAttrList );
+    }
+    else if (p_nPrefix == XML_NAMESPACE_LO_EXT && (IsXMLToken(rLocalName, XML_SIGNATURELINE)))
+    {
+        if (getSupportsMultipleContents())
+        {   // tdf#103567 ensure props are set on surviving shape
+            // note: no more draw:image can be added once we get here
+            m_xImplContext = solveMultipleImages();
+        }
+        xContext = m_xImplContext->CreateChildContext(p_nPrefix, rLocalName, xAttrList);
     }
     else
     {

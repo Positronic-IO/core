@@ -659,8 +659,6 @@ void ScEditViewForwarder::SetInvalid()
 ScAccessibleCellTextData::ScAccessibleCellTextData(ScTabViewShell* pViewShell,
         const ScAddress& rP, ScSplitPos eSplitPos, ScAccessibleCell* pAccCell)
     : ScAccessibleCellBaseTextData(GetDocShell(pViewShell), rP),
-    mpViewForwarder(nullptr),
-    mpEditViewForwarder(nullptr),
     mpViewShell(pViewShell),
     meSplitPos(eSplitPos),
     mpAccessibleCell( pAccCell )
@@ -671,8 +669,7 @@ ScAccessibleCellTextData::~ScAccessibleCellTextData()
 {
     if (pEditEngine)
         pEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpViewForwarder;
-    delete mpEditViewForwarder;
+    mpViewForwarder.reset();
 }
 
 void ScAccessibleCellTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
@@ -682,8 +679,6 @@ void ScAccessibleCellTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint
         mpViewShell = nullptr;                     // invalid now
         if (mpViewForwarder)
             mpViewForwarder->SetInvalid();
-        if (mpEditViewForwarder)
-            mpEditViewForwarder->SetInvalid();
     }
     ScAccessibleCellBaseTextData::Notify(rBC, rHint);
 }
@@ -842,8 +837,8 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
 SvxViewForwarder* ScAccessibleCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder = new ScViewForwarder(mpViewShell, meSplitPos, aCellPos);
-    return mpViewForwarder;
+        mpViewForwarder.reset(new ScViewForwarder(mpViewShell, meSplitPos, aCellPos));
+    return mpViewForwarder.get();
 }
 
 SvxEditViewForwarder* ScAccessibleCellTextData::GetEditViewForwarder( bool /* bCreate */ )
@@ -888,9 +883,9 @@ ScAccessibleEditObjectTextData::~ScAccessibleEditObjectTextData()
     // If the object is cloned, do NOT set notify hdl.
     if (mpEditEngine && !mbIsCloned)
         mpEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpViewForwarder;
-    delete mpEditViewForwarder;
-    delete mpForwarder;
+    mpViewForwarder.reset();
+    mpEditViewForwarder.reset();
+    mpForwarder.reset();
 }
 
 void ScAccessibleEditObjectTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
@@ -900,7 +895,7 @@ void ScAccessibleEditObjectTextData::Notify( SfxBroadcaster& rBC, const SfxHint&
         mpWindow = nullptr;
         mpEditView = nullptr;
         mpEditEngine = nullptr;
-        DELETEZ(mpForwarder);
+        mpForwarder.reset();
         if (mpViewForwarder)
             mpViewForwarder->SetInvalid();
         if (mpEditViewForwarder)
@@ -925,9 +920,9 @@ SvxTextForwarder* ScAccessibleEditObjectTextData::GetTextForwarder()
         if (mpEditEngine && !mpEditEngine->GetNotifyHdl().IsSet()&&!mbIsCloned)
             mpEditEngine->SetNotifyHdl( LINK(this, ScAccessibleEditObjectTextData, NotifyHdl) );
         if(!mpForwarder)
-            mpForwarder = new SvxEditEngineForwarder(*mpEditEngine);
+            mpForwarder.reset(new SvxEditEngineForwarder(*mpEditEngine));
     }
-    return mpForwarder;
+    return mpForwarder.get();
 }
 
 SvxViewForwarder* ScAccessibleEditObjectTextData::GetViewForwarder()
@@ -935,23 +930,23 @@ SvxViewForwarder* ScAccessibleEditObjectTextData::GetViewForwarder()
     if (!mpViewForwarder)
     {
         // i#49561 Get right-aligned cell content to be read by screenreader.
-        mpViewForwarder = new ScEditObjectViewForwarder( mpWindow, mpEditView );
+        mpViewForwarder.reset(new ScEditObjectViewForwarder( mpWindow, mpEditView ));
     }
-    return mpViewForwarder;
+    return mpViewForwarder.get();
 }
 
 SvxEditViewForwarder* ScAccessibleEditObjectTextData::GetEditViewForwarder( bool bCreate )
 {
     if (!mpEditViewForwarder && mpEditView)
-        mpEditViewForwarder = new ScEditViewForwarder(mpEditView, mpWindow);
+        mpEditViewForwarder.reset(new ScEditViewForwarder(mpEditView, mpWindow));
     if (bCreate)
     {
         if (!mpEditView && mpEditViewForwarder)
         {
-            DELETEZ(mpEditViewForwarder);
+            mpEditViewForwarder.reset();
         }
     }
-    return mpEditViewForwarder;
+    return mpEditViewForwarder.get();
 }
 
 IMPL_LINK(ScAccessibleEditObjectTextData, NotifyHdl, EENotify&, rNotify, void)
@@ -1048,7 +1043,7 @@ SvxTextForwarder* ScAccessibleEditLineTextData::GetTextForwarder()
                 mbEditEngineCreated = true;
                 mpEditEngine->EnableUndo( false );
                 mpEditEngine->SetRefMapMode(MapMode(MapUnit::Map100thMM));
-                mpForwarder = new SvxEditEngineForwarder(*mpEditEngine);
+                mpForwarder.reset(new SvxEditEngineForwarder(*mpEditEngine));
 
                 mpEditEngine->SetText(pTxtWnd->GetTextString());
 
@@ -1062,7 +1057,7 @@ SvxTextForwarder* ScAccessibleEditLineTextData::GetTextForwarder()
             }
         }
     }
-    return mpForwarder;
+    return mpForwarder.get();
 }
 
 SvxEditViewForwarder* ScAccessibleEditLineTextData::GetEditViewForwarder( bool bCreate )
@@ -1096,9 +1091,9 @@ void ScAccessibleEditLineTextData::ResetEditMode()
         pTxtWnd->GetEditView()->GetEditEngine()->SetNotifyHdl(Link<EENotify&,void>());
     mpEditEngine = nullptr;
 
-    DELETEZ(mpForwarder);
-    DELETEZ(mpEditViewForwarder);
-    DELETEZ(mpViewForwarder);
+    mpForwarder.reset();
+    mpEditViewForwarder.reset();
+    mpViewForwarder.reset();
     mbEditEngineCreated = false;
 }
 
@@ -1147,7 +1142,7 @@ ScAccessiblePreviewCellTextData::~ScAccessiblePreviewCellTextData()
 {
     if (pEditEngine)
         pEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpViewForwarder;
+    mpViewForwarder.reset();
 }
 
 void ScAccessiblePreviewCellTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
@@ -1190,8 +1185,8 @@ SvxTextForwarder* ScAccessiblePreviewCellTextData::GetTextForwarder()
 SvxViewForwarder* ScAccessiblePreviewCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder = new ScPreviewCellViewForwarder(mpViewShell, aCellPos);
-    return mpViewForwarder;
+        mpViewForwarder.reset(new ScPreviewCellViewForwarder(mpViewShell, aCellPos));
+    return mpViewForwarder.get();
 }
 
 ScDocShell* ScAccessiblePreviewCellTextData::GetDocShell(ScPreviewShell* pViewShell)
@@ -1219,7 +1214,7 @@ ScAccessiblePreviewHeaderCellTextData::~ScAccessiblePreviewHeaderCellTextData()
 {
     if (pEditEngine)
         pEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpViewForwarder;
+    mpViewForwarder.reset();
 }
 
 void ScAccessiblePreviewHeaderCellTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
@@ -1251,7 +1246,7 @@ SvxTextForwarder* ScAccessiblePreviewHeaderCellTextData::GetTextForwarder()
         {
             SfxItemPool* pEnginePool = EditEngine::CreatePool();
             pEnginePool->FreezeIdRanges();
-            pEditEngine = new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true);
+            pEditEngine.reset( new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true) );
         }
         pEditEngine->EnableUndo( false );
         if (pDocShell)
@@ -1291,8 +1286,8 @@ SvxTextForwarder* ScAccessiblePreviewHeaderCellTextData::GetTextForwarder()
 SvxViewForwarder* ScAccessiblePreviewHeaderCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder = new ScPreviewHeaderCellViewForwarder(mpViewShell, aCellPos, mbColHeader);
-    return mpViewForwarder;
+        mpViewForwarder.reset(new ScPreviewHeaderCellViewForwarder(mpViewShell, aCellPos, mbColHeader));
+    return mpViewForwarder.get();
 }
 
 ScDocShell* ScAccessiblePreviewHeaderCellTextData::GetDocShell(ScPreviewShell* pViewShell)
@@ -1330,8 +1325,8 @@ ScAccessibleHeaderTextData::~ScAccessibleHeaderTextData()
         mpDocSh->GetDocument().RemoveUnoObject(*this);
     if (mpEditEngine)
         mpEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpEditEngine;
-    delete mpForwarder;
+    mpEditEngine.reset();
+    mpForwarder.reset();
 }
 
 ScAccessibleTextData* ScAccessibleHeaderTextData::Clone() const
@@ -1356,7 +1351,7 @@ SvxTextForwarder* ScAccessibleHeaderTextData::GetTextForwarder()
     {
         SfxItemPool* pEnginePool = EditEngine::CreatePool();
         pEnginePool->FreezeIdRanges();
-        ScHeaderEditEngine* pHdrEngine = new ScHeaderEditEngine( pEnginePool );
+        std::unique_ptr<ScHeaderEditEngine> pHdrEngine(new ScHeaderEditEngine( pEnginePool ));
 
         pHdrEngine->EnableUndo( false );
         pHdrEngine->SetRefMapMode(MapMode(MapUnit::MapTwip));
@@ -1385,12 +1380,12 @@ SvxTextForwarder* ScAccessibleHeaderTextData::GetTextForwarder()
             ScHeaderFooterTextObj::FillDummyFieldData( aData );
         pHdrEngine->SetData( aData );
 
-        mpEditEngine = pHdrEngine;
-        mpForwarder = new SvxEditEngineForwarder(*mpEditEngine);
+        mpEditEngine = std::move(pHdrEngine);
+        mpForwarder.reset(new SvxEditEngineForwarder(*mpEditEngine));
     }
 
     if (mbDataValid)
-        return mpForwarder;
+        return mpForwarder.get();
 
     if ( mpViewShell  )
     {
@@ -1406,7 +1401,7 @@ SvxTextForwarder* ScAccessibleHeaderTextData::GetTextForwarder()
         mpEditEngine->SetText(*mpEditObj);
 
     mbDataValid = true;
-    return mpForwarder;
+    return mpForwarder.get();
 }
 
 SvxViewForwarder* ScAccessibleHeaderTextData::GetViewForwarder()
@@ -1443,7 +1438,7 @@ ScAccessibleNoteTextData::~ScAccessibleNoteTextData()
         mpDocSh->GetDocument().RemoveUnoObject(*this);
     if (mpEditEngine)
         mpEditEngine->SetNotifyHdl(Link<EENotify&,void>());
-    delete mpEditEngine;
+    mpEditEngine.reset();
     delete mpForwarder;
 }
 
@@ -1476,7 +1471,7 @@ SvxTextForwarder* ScAccessibleNoteTextData::GetTextForwarder()
         {
             SfxItemPool* pEnginePool = EditEngine::CreatePool();
             pEnginePool->FreezeIdRanges();
-            mpEditEngine = new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true);
+            mpEditEngine.reset( new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true) );
         }
         mpEditEngine->EnableUndo( false );
         if (mpDocSh)

@@ -418,7 +418,7 @@ void Window::dispose()
         bHasFocussedChild = true;
 #if OSL_DEBUG_LEVEL > 0
         OUString aTempStr = "Window (" + GetText() +
-                ") with focussed child window destroyed ! THIS WILL LEAD TO CRASHES AND MUST BE FIXED !";
+                ") with focused child window destroyed ! THIS WILL LEAD TO CRASHES AND MUST BE FIXED !";
         SAL_WARN( "vcl", aTempStr );
         Application::Abort(aTempStr);   // abort in debug build version, this must be fixed!
 #endif
@@ -751,15 +751,11 @@ WindowImpl::~WindowImpl()
 }
 
 ImplWinData::ImplWinData() :
-    mpExtOldText(nullptr),
     mpExtOldAttrAry(nullptr),
-    mpCursorRect(nullptr),
     mnCursorExtWidth(0),
     mbVertical(false),
     mpCompositionCharRects(nullptr),
     mnCompositionCharRects(0),
-    mpFocusRect(nullptr),
-    mpTrackRect(nullptr),
     mnTrackFlags(ShowTrackFlags::NONE),
     mnIsTopWindow(sal_uInt16(~0)), // not initialized yet, 0/1 will indicate TopWindow (see IsTopWindow())
     mbMouseOver(false),
@@ -769,10 +765,7 @@ ImplWinData::ImplWinData() :
 
 ImplWinData::~ImplWinData()
 {
-    mpCursorRect.reset();
     mpCompositionCharRects.reset();
-    mpFocusRect.reset();
-    mpTrackRect.reset();
 }
 
 ImplFrameData::ImplFrameData( vcl::Window *pWindow )
@@ -1502,7 +1495,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
         OutputDevice *pOutDev = GetOutDev();
         if( pOutDev->HasMirroredGraphics() )
         {
-            mpGraphics->mirror( aPtDev.X(), this );
+            aPtDev.setX( mpGraphics->mirror2( aPtDev.X(), this ) );
 
             // #106948# always mirror our pos if our parent is not mirroring, even
             // if we are also not mirroring
@@ -1763,7 +1756,7 @@ void Window::ImplNewInputContext()
         pFontInstance = pFocusWin->mpFontCache->GetFontInstance( pFocusWin->mpFontCollection,
                          rFont, aSize, static_cast<float>(aSize.Height()) );
         if ( pFontInstance )
-            aNewContext.mpFont = &pFontInstance->maFontSelData;
+            aNewContext.mpFont = pFontInstance;
     }
     aNewContext.meLanguage  = rFont.GetLanguage();
     aNewContext.mnOptions   = rInputContext.GetOptions();
@@ -2111,16 +2104,14 @@ void Window::SetCursorRect( const tools::Rectangle* pRect, long nExtTextInputWid
     if ( pWinData->mpCursorRect )
     {
         if ( pRect )
-            *pWinData->mpCursorRect = *pRect;
+            pWinData->mpCursorRect = *pRect;
         else
-        {
             pWinData->mpCursorRect.reset();
-        }
     }
     else
     {
         if ( pRect )
-            pWinData->mpCursorRect.reset( new tools::Rectangle( *pRect ) );
+            pWinData->mpCursorRect = *pRect;
     }
 
     pWinData->mnCursorExtWidth = nExtTextInputWidth;
@@ -2131,7 +2122,7 @@ const tools::Rectangle* Window::GetCursorRect() const
 {
 
     ImplWinData* pWinData = ImplGetWinData();
-    return pWinData->mpCursorRect.get();
+    return pWinData->mpCursorRect ? &*pWinData->mpCursorRect : nullptr;
 }
 
 long Window::GetCursorExtTextInputWidth() const
@@ -3001,15 +2992,20 @@ void Window::Scroll( long nHorzScroll, long nVertScroll,
 
 void Window::Flush()
 {
-
-    const tools::Rectangle aWinRect( Point( mnOutOffX, mnOutOffY ), Size( mnOutWidth, mnOutHeight ) );
-    mpWindowImpl->mpFrame->Flush( aWinRect );
+    if (mpWindowImpl)
+    {
+        const tools::Rectangle aWinRect( Point( mnOutOffX, mnOutOffY ), Size( mnOutWidth, mnOutHeight ) );
+        mpWindowImpl->mpFrame->Flush( aWinRect );
+    }
 }
 
 void Window::SetUpdateMode( bool bUpdate )
 {
-    mpWindowImpl->mbNoUpdate = !bUpdate;
-    CompatStateChanged( StateChangedType::UpdateMode );
+    if (mpWindowImpl)
+    {
+        mpWindowImpl->mbNoUpdate = !bUpdate;
+        CompatStateChanged( StateChangedType::UpdateMode );
+    }
 }
 
 void Window::GrabFocus()
@@ -3408,7 +3404,7 @@ void Window::DrawSelectionBackground( const tools::Rectangle& rRect,
 
     if( !bDark && !bBright && abs( c2-c1 ) < 75 )
     {
-        // constrast too low
+        // contrast too low
         sal_uInt16 h,s,b;
         aSelectionFillCol.RGBtoHSB( h, s, b );
         if( b > 50 )    b -= 40;
@@ -3522,7 +3518,7 @@ bool Window::IsInModalMode() const
     return (mpWindowImpl->mpFrameWindow->mpWindowImpl->mpFrameData->mnModalMode != 0);
 }
 
-void Window::ImplIncModalCount()
+void Window::IncModalCount()
 {
     vcl::Window* pFrameWindow = mpWindowImpl->mpFrameWindow;
     vcl::Window* pParent = pFrameWindow;
@@ -3536,7 +3532,7 @@ void Window::ImplIncModalCount()
         pFrameWindow = pParent ? pParent->mpWindowImpl->mpFrameWindow.get() : nullptr;
     }
 }
-void Window::ImplDecModalCount()
+void Window::DecModalCount()
 {
     vcl::Window* pFrameWindow = mpWindowImpl->mpFrameWindow;
     vcl::Window* pParent = pFrameWindow;

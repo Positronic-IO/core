@@ -20,16 +20,15 @@
 #undef SC_DLLIMPLEMENTATION
 
 #include <scitems.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <uiitems.hxx>
 #include <docsh.hxx>
 #include <document.hxx>
 #include <docoptio.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <officecfg/Office/Calc.hxx>
 
@@ -110,9 +109,9 @@ void ScTpCalcOptions::Init()
     m_pBtnThread->SetClickHdl( LINK( this, ScTpCalcOptions, CheckClickHdl ) );
 }
 
-VclPtr<SfxTabPage> ScTpCalcOptions::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> ScTpCalcOptions::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<ScTpCalcOptions>::Create( pParent, *rAttrSet );
+    return VclPtr<ScTpCalcOptions>::Create( pParent.pParent, *rAttrSet );
 }
 
 void ScTpCalcOptions::Reset( const SfxItemSet* /* rCoreAttrs */ )
@@ -237,7 +236,7 @@ DeactivateRC ScTpCalcOptions::DeactivatePage( SfxItemSet* pSetP )
     if ( nReturn == DeactivateRC::KeepPage )
     {
         std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(), VclMessageType::Warning,
-                    VclButtonsType::Ok, ScGlobal::GetRscString(STR_INVALID_EPS)));
+                    VclButtonsType::Ok, ScResId(STR_INVALID_EPS)));
         xBox->run();
 
         m_pEdEps->GrabFocus();

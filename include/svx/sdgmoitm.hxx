@@ -20,7 +20,7 @@
 #ifndef INCLUDED_SVX_SDGMOITM_HXX
 #define INCLUDED_SVX_SDGMOITM_HXX
 
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <svl/eitem.hxx>
 #include <svx/svddef.hxx>
 #include <svx/svxdllapi.h>
@@ -40,7 +40,7 @@ public:
     virtual SfxPoolItem*    Clone( SfxItemPool* pPool = nullptr ) const override;
     virtual sal_uInt16      GetValueCount() const override;
 
-    virtual OUString        GetValueTextByPos( sal_uInt16 nPos ) const override;
+    OUString                GetValueTextByPos( sal_uInt16 nPos ) const;
     virtual bool GetPresentation( SfxItemPresentation ePres,
                                   MapUnit eCoreMetric,
                                   MapUnit ePresMetric,

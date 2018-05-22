@@ -25,7 +25,6 @@
 #include <com/sun/star/style/XStyle.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/layout.hxx>
@@ -53,8 +52,6 @@
 #include <ViewShellBase.hxx>
 #include <DrawViewShell.hxx>
 #include <DrawController.hxx>
-#include <strings.hrc>
-#include <sdresid.hxx>
 #include <EventMultiplexer.hxx>
 
 using namespace ::com::sun::star;
@@ -87,25 +84,16 @@ static const OUStringLiteral gPropNames[CB_COUNT] =
     "UseBandingColumnStyle"
 };
 
-TableDesignWidget::TableDesignWidget( VclBuilderContainer* pParent, ViewShellBase& rBase, bool bModal )
+TableDesignWidget::TableDesignWidget( VclBuilderContainer* pParent, ViewShellBase& rBase )
     : mrBase(rBase)
-    , mbModal(bModal)
     , mbStyleSelected(false)
     , mbOptionsChanged(false)
 {
     pParent->get(m_pValueSet, "previews");
     m_pValueSet->SetStyle(m_pValueSet->GetStyle() | WB_NO_DIRECTSELECT | WB_FLATVALUESET | WB_ITEMBORDER);
     m_pValueSet->SetExtraSpacing(8);
-    m_pValueSet->setModal(mbModal);
-    if( !mbModal )
-    {
-        m_pValueSet->SetColor();
-    }
-    else
-    {
-        m_pValueSet->SetColor( COL_WHITE );
-        m_pValueSet->SetBackground( COL_WHITE );
-    }
+    m_pValueSet->setModal(false);
+    m_pValueSet->SetColor();
     m_pValueSet->SetSelectHdl (LINK(this, TableDesignWidget, implValueSetHdl));
 
     for (sal_uInt16 i = CB_HEADER_ROW; i <= CB_BANDED_COLUMNS; ++i)
@@ -159,8 +147,7 @@ static SfxDispatcher* getDispatcher( ViewShellBase const & rBase )
 IMPL_LINK_NOARG(TableDesignWidget, implValueSetHdl, ValueSet*, void)
 {
     mbStyleSelected = true;
-    if( !mbModal )
-        ApplyStyle();
+    ApplyStyle();
 }
 
 void TableDesignWidget::ApplyStyle()
@@ -168,7 +155,7 @@ void TableDesignWidget::ApplyStyle()
     try
     {
         OUString sStyleName;
-        sal_Int32 nIndex = static_cast< sal_Int32 >( m_pValueSet->GetSelectItemId() ) - 1;
+        sal_Int32 nIndex = static_cast< sal_Int32 >( m_pValueSet->GetSelectedItemId() ) - 1;
 
         if( (nIndex >= 0) && (nIndex < mxTableFamily->getCount()) )
         {
@@ -217,8 +204,7 @@ IMPL_LINK_NOARG(TableDesignWidget, implCheckBoxHdl, Button*, void)
 {
     mbOptionsChanged = true;
 
-    if( !mbModal )
-        ApplyOptions();
+    ApplyOptions();
 
     FillDesignPreviewControl();
 }
@@ -715,7 +701,7 @@ const BitmapEx CreateDesignPreview( const Reference< XIndexAccess >& xTableStyle
 
 void TableDesignWidget::FillDesignPreviewControl()
 {
-    sal_uInt16 nSelectedItem = m_pValueSet->GetSelectItemId();
+    sal_uInt16 nSelectedItem = m_pValueSet->GetSelectedItemId();
     m_pValueSet->Clear();
     try
     {
@@ -772,20 +758,6 @@ void TableDesignWidget::FillDesignPreviewControl()
     m_pValueSet->SelectItem(nSelectedItem);
 }
 
-short TableDesignDialog::Execute()
-{
-    if( ModalDialog::Execute() )
-    {
-        if( aImpl.isStyleChanged() )
-            aImpl.ApplyStyle();
-
-        if( aImpl.isOptionsChanged() )
-            aImpl.ApplyOptions();
-        return RET_OK;
-    }
-    return RET_CANCEL;
-}
-
 VclPtr<vcl::Window> createTableDesignPanel( vcl::Window* pParent, ViewShellBase& rBase )
 {
     VclPtr<TableDesignPane> pRet = nullptr;
@@ -797,12 +769,6 @@ VclPtr<vcl::Window> createTableDesignPanel( vcl::Window* pParent, ViewShellBase&
     {
     }
     return pRet;
-}
-
-void showTableDesignDialog( vcl::Window* pParent, ViewShellBase& rBase )
-{
-    ScopedVclPtrInstance< TableDesignDialog > xDialog( pParent, rBase );
-    xDialog->Execute();
 }
 
 }

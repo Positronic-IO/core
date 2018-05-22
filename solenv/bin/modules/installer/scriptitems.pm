@@ -638,20 +638,14 @@ sub replace_setup_variables
 
     # string $buildid, which is used to replace the setup variable <buildid>
 
-    my $localminor = "flat";
-    if ( $installer::globals::minor ne "" ) { $localminor = $installer::globals::minor; }
-    else { $localminor = $installer::globals::lastminor; }
-
     my $localbuild = $installer::globals::build;
 
     if ( $localbuild =~ /^\s*(\w+?)(\d+)\s*$/ ) { $localbuild = $2; }   # using "680" instead of "src680"
 
     my $buildidstring = `cd $ENV{'SRCDIR'} 2>&1 >/dev/null && git log -n 1 --pretty=format:"%H"`;
     if ($? || !$buildidstring) {
-        $buildidstring = $localbuild . $localminor . "(Build:" . $installer::globals::buildid . ")";
+        $buildidstring = $localbuild . "(Build:" . $installer::globals::buildid . ")";
     }
-
-    if ( $localminor =~ /^\s*\w(\d+)\w*\s*$/ ) { $localminor = $1; }
 
     my $updateid = $productname . "_" . $libo_version_major . "_" . $$languagestringref;
     $updateid =~ s/ /_/g;
@@ -1590,7 +1584,10 @@ sub optimize_list
 
 sub collect_directories_from_filesarray
 {
-    my ($filesarrayref) = @_;
+    my ($filesarrayref, $unixlinksarrayref) = @_;
+    my @allfiles;
+    push @allfiles, @{$filesarrayref};
+    push @allfiles, @{$unixlinksarrayref};
 
     my @alldirectories = ();
     my %alldirectoryhash = ();
@@ -1600,9 +1597,9 @@ sub collect_directories_from_filesarray
     # Preparing this already as hash, although the only needed value at the moment is the HostName
     # But also adding: "specificlanguage" and "Dir" (for instance gid_Dir_Program)
 
-    for ( my $i = 0; $i <= $#{$filesarrayref}; $i++ )
+    for ( my $i = 0; $i <= $#allfiles; $i++ )
     {
-        my $onefile = ${$filesarrayref}[$i];
+        my $onefile = $allfiles[$i];
         my $destinationpath = $onefile->{'destination'};
         installer::pathanalyzer::get_path_from_fullqualifiedname(\$destinationpath);
         $destinationpath =~ s/\Q$installer::globals::separator\E\s*$//;     # removing ending slashes or backslashes

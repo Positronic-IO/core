@@ -53,6 +53,7 @@ namespace weld
     class Container;
     class MessageDialog;
     class Widget;
+    class Window;
 }
 class AllSettings;
 class DataChangedEvent;
@@ -85,6 +86,7 @@ namespace ui {
 namespace awt {
     class XToolkit;
     class XDisplayConnection;
+    class XWindow;
 }
 } } }
 
@@ -716,13 +718,12 @@ public:
 
     /** Send event to all VCL application event listeners
 
-     @param     nEvent          Event ID
      @param     pWin            Pointer to window to send event
      @param     pData           Pointer to data to send with event
 
      @see ImplCallEventListeners(VclSimpleEvent* pEvent)
     */
-    static void                 ImplCallEventListeners( VclEventId nEvent, void* pData );
+    static void                 ImplCallEventListenersApplicationDataChanged( void* pData );
 
     /** Send event to all VCL application event listeners
 
@@ -833,7 +834,7 @@ public:
     */
     static WorkWindow*          GetAppWindow();
 
-    /** Get the currently focussed window.
+    /** Get the currently focused window.
 
      @returns Pointer to focused window.
 
@@ -1395,9 +1396,12 @@ public:
     static void setDeInitHook(Link<LinkParamNone*,void> const & hook);
 
     static weld::Builder* CreateBuilder(weld::Widget* pParent, const OUString &rUIFile);
+    static weld::Builder* CreateInterimBuilder(vcl::Window* pParent, const OUString &rUIFile); //for the duration of same SfxTabPages in mixed parent types
 
     static weld::MessageDialog* CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType,
                                                     VclButtonsType eButtonType, const OUString& rPrimaryMessage);
+
+    static weld::Window* GetFrameWeld(const css::uno::Reference<css::awt::XWindow>& rWindow);
 private:
     DECL_STATIC_LINK( Application, PostEventHandler, void*, void );
 };

@@ -23,12 +23,10 @@
 #include <sfx2/tabdlg.hxx>
 #include <dsntypes.hxx>
 #include "IItemSetHelper.hxx"
-#include <comphelper/uno3.hxx>
 #include <tools/urlobj.hxx>
 #include <memory>
 #include <svtools/roadmapwizard.hxx>
 #include <connectivity/dbtools.hxx>
-#include <core_resource.hxx>
 
 namespace com { namespace sun { namespace star {
     namespace beans {

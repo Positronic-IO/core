@@ -24,14 +24,12 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/request.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/EnumContext.hxx>
 
 #include <sc.hrc>
 #include <pivotsh.hxx>
 #include <tabvwsh.hxx>
 #include <docsh.hxx>
-#include <scresid.hxx>
 #include <document.hxx>
 #include <dpobject.hxx>
 #include <dpshttab.hxx>
@@ -39,7 +37,7 @@
 #include <uiitems.hxx>
 #include <scabstdlg.hxx>
 
-#define ScPivotShell
+#define ShellClass_ScPivotShell
 #include <scslots.hxx>
 #include <memory>
 

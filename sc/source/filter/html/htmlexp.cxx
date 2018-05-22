@@ -124,7 +124,7 @@ const sal_Char ScHTMLExport::sIndentSource[nIndentMax+1] =
 
 #define OUT_SP_CSTR_ASS( s )    rStrm.WriteChar( ' ').WriteCharPtr( s ).WriteChar( '=' )
 
-#define GLOBSTR(id) ScGlobal::GetRscString( id )
+#define GLOBSTR(id) ScResId( id )
 
 void ScFormatFilterPluginImpl::ScExportHTML( SvStream& rStrm, const OUString& rBaseURL, ScDocument* pDoc,
         const ScRange& rRange, const rtl_TextEncoding /*eNach*/, bool bAll,
@@ -417,7 +417,7 @@ void ScHTMLExport::WriteOverview()
         OUT_HR();
         IncIndent(1); TAG_ON( OOO_STRING_SVTOOLS_HTML_parabreak ); TAG_ON_LF( OOO_STRING_SVTOOLS_HTML_center );
         TAG_ON( OOO_STRING_SVTOOLS_HTML_head1 );
-        OUT_STR( ScGlobal::GetRscString( STR_OVERVIEW ) );
+        OUT_STR( ScResId( STR_OVERVIEW ) );
         TAG_OFF_LF( OOO_STRING_SVTOOLS_HTML_head1 );
 
         OUString aStr;
@@ -453,7 +453,7 @@ const SfxItemSet& ScHTMLExport::PageDefaults( SCTAB nTab )
     {
         pStylePool->SetSearchMask( SfxStyleFamily::Para );
         pStyleSheet = pStylePool->Find(
-                ScGlobal::GetRscString(STR_STYLENAME_STANDARD),
+                ScResId(STR_STYLENAME_STANDARD),
                 SfxStyleFamily::Para );
         OSL_ENSURE( pStyleSheet, "ParaStyle not found! :-(" );
         if (!pStyleSheet)
@@ -550,7 +550,7 @@ OString ScHTMLExport::BorderToStyle(const char* pBorderName,
 
         // color
         char hex[7];
-        snprintf( hex, 7, "%06x", static_cast<sal_uInt32>( pLine->GetColor().GetRGBColor() ) );
+        snprintf( hex, 7, "%06" SAL_PRIxUINT32, static_cast<sal_uInt32>( pLine->GetColor().GetRGBColor() ) );
         hex[6] = 0;
 
         aOut.append(hex);
@@ -993,7 +993,7 @@ void ScHTMLExport::WriteCell( SCCOL nCol, SCROW nRow, SCTAB nTab )
     bool bItalic        = ( ITALIC_NONE      != rPostureItem.GetPosture() );
     bool bUnderline     = ( LINESTYLE_NONE   != rUnderlineItem.GetLineStyle() );
     bool bCrossedOut    = ( STRIKEOUT_SINGLE <= rCrossedOutItem.GetStrikeout() );
-    bool bSetFontColor  = ( COL_AUTO         != rColorItem.GetValue().GetColor() );  // default is AUTO now
+    bool bSetFontColor  = ( COL_AUTO         != rColorItem.GetValue() );  // default is AUTO now
     bool bSetFontName   = ( aHTMLStyle.aFontFamilyName  != rFontItem.GetFamilyName() );
     sal_uInt16 nSetFontSizeNumber = 0;
     sal_uInt32 nFontHeight = rFontHeightItem.GetHeight();

@@ -46,6 +46,24 @@ interface XDocumentDigitalSignatures : com::sun::star::uno::XInterface
     boolean signDocumentContent( [in] ::com::sun::star::embed::XStorage xStorage,
                                  [in] ::com::sun::star::io::XStream xSignStream);
 
+    /** Signs the content of the document including text and pictures
+        using the given XCertificate.
+
+        Also adds the given Signature Line Id and the signed and unsigned graphics to
+        the signature.
+
+       Macros will not be signed.
+
+       @since LibreOffice 6.1
+     */
+    boolean signSignatureLine( [in] ::com::sun::star::embed::XStorage xStorage,
+                               [in] ::com::sun::star::io::XStream xSignStream,
+                               [in] string signatureLineId,
+                               [in] ::com::sun::star::security::XCertificate xCertificate,
+                               [in] ::com::sun::star::graphic::XGraphic xValidGraphic,
+                               [in] ::com::sun::star::graphic::XGraphic xInvalidGraphic,
+                               [in] string comment);
+
     /** checks for digital signatures and their status.
 
         <p>Only document content will be checked.</p>
@@ -142,6 +160,13 @@ interface XDocumentDigitalSignatures : com::sun::star::uno::XInterface
          @since LibreOffice 6.0
      */
     com::sun::star::security::XCertificate chooseSigningCertificate( [out] string Description );
+
+    /**  This shows the certificate selection dialog and allows to only select the certificate
+         without actually signing the document.
+
+         @since LibreOffice 6.1
+     */
+    com::sun::star::security::XCertificate selectSigningCertificate( [out] string Description );
 
     /**  This method shows the CertificateChooser dialog with all certificates, private and
          other people's. Useful when choosing certificate/key for encryption

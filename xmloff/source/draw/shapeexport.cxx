@@ -82,9 +82,9 @@
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
 
 #include <comphelper/classids.hxx>
-#include <comphelper/graphicmimetype.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
+#include <officecfg/Office/Common.hxx>
 
 #include <o3tl/any.hxx>
 #include <o3tl/make_unique.hxx>
@@ -127,6 +127,8 @@
 using namespace ::com::sun::star;
 using namespace ::xmloff::EnhancedCustomShapeToken;
 using namespace ::xmloff::token;
+
+#define XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE "vnd.sun.star.GraphicObject:"
 
 namespace {
 
@@ -551,7 +553,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
             }
             catch(const uno::Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION_WHEN( "collecting auto styles for a table" );
+                DBG_UNHANDLED_EXCEPTION( "xmloff", "collecting auto styles for a table" );
             }
             break;
         }
@@ -743,7 +745,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
             }
             catch(const uno::Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION_WHEN( "exporting layer name for shape" );
+                DBG_UNHANDLED_EXCEPTION( "xmloff", "exporting layer name for shape" );
             }
         }
     }
@@ -777,7 +779,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
         }
         catch(const uno::Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("xmloff.draw");
         }
     }
 
@@ -1267,39 +1269,39 @@ void XMLShapeExport::ImpExportSignatureLine(const uno::Reference<drawing::XShape
 
     OUString aSignatureLineId;
     xPropSet->getPropertyValue("SignatureLineId") >>= aSignatureLineId;
-    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "id", aSignatureLineId);
+    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_ID, aSignatureLineId);
 
     OUString aSuggestedSignerName;
     xPropSet->getPropertyValue("SignatureLineSuggestedSignerName") >>= aSuggestedSignerName;
     if (!aSuggestedSignerName.isEmpty())
-        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "suggested-signer-name", aSuggestedSignerName);
+        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_SUGGESTED_SIGNER_NAME, aSuggestedSignerName);
 
     OUString aSuggestedSignerTitle;
     xPropSet->getPropertyValue("SignatureLineSuggestedSignerTitle") >>= aSuggestedSignerTitle;
     if (!aSuggestedSignerTitle.isEmpty())
-        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "suggested-signer-title", aSuggestedSignerTitle);
+        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_SUGGESTED_SIGNER_TITLE, aSuggestedSignerTitle);
 
     OUString aSuggestedSignerEmail;
     xPropSet->getPropertyValue("SignatureLineSuggestedSignerEmail") >>= aSuggestedSignerEmail;
     if (!aSuggestedSignerEmail.isEmpty())
-        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "suggested-signer-email", aSuggestedSignerEmail);
+        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_SUGGESTED_SIGNER_EMAIL, aSuggestedSignerEmail);
 
     OUString aSigningInstructions;
     xPropSet->getPropertyValue("SignatureLineSigningInstructions") >>= aSigningInstructions;
     if (!aSigningInstructions.isEmpty())
-        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "signing-instructions", aSigningInstructions);
+        mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_SIGNING_INSTRUCTIONS, aSigningInstructions);
 
     bool bShowSignDate = false;
     xPropSet->getPropertyValue("SignatureLineShowSignDate") >>= bShowSignDate;
-    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "show-sign-date",
-                          bShowSignDate ? OUString("true") : OUString("false"));
+    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_SHOW_SIGN_DATE,
+                          bShowSignDate ? XML_TRUE : XML_FALSE);
 
     bool bCanAddComment = false;
     xPropSet->getPropertyValue("SignatureLineCanAddComment") >>= bCanAddComment;
-    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "can-add-comment",
-                          bCanAddComment ? OUString("true") : OUString("false"));
+    mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, XML_CAN_ADD_COMMENT,
+                          bCanAddComment ? XML_TRUE : XML_FALSE);
 
-    SvXMLElementExport aSignatureLineElement(mrExport, XML_NAMESPACE_LO_EXT, "signatureline", true,
+    SvXMLElementExport aSignatureLineElement(mrExport, XML_NAMESPACE_LO_EXT, XML_SIGNATURELINE, true,
                                              true);
 }
 
@@ -1821,19 +1823,17 @@ void XMLShapeExport::ImpExportEvents( const uno::Reference< drawing::XShape >& x
         if( nFound & Found::MACRO )
         {
             SvXMLElementExport aEventsElemt(mrExport, XML_NAMESPACE_OFFICE, XML_EVENT_LISTENERS, true, true);
-            if ( nFound & Found::MACRO )
-            {
-                mrExport.AddAttribute( XML_NAMESPACE_SCRIPT, XML_LANGUAGE, mrExport.GetNamespaceMap().GetQNameByKey(
-                         XML_NAMESPACE_OOO, GetXMLToken(XML_SCRIPT) ) );
-                OUString aEventQName(
-                    mrExport.GetNamespaceMap().GetQNameByKey(
-                            XML_NAMESPACE_DOM, "click" ) );
-                mrExport.AddAttribute( XML_NAMESPACE_SCRIPT, XML_EVENT_NAME, aEventQName );
-                mrExport.AddAttribute( XML_NAMESPACE_XLINK, XML_HREF, aStrMacro );
-                mrExport.AddAttribute( XML_NAMESPACE_XLINK, XML_TYPE, "simple" );
 
-                SvXMLElementExport aEventElemt(mrExport, XML_NAMESPACE_SCRIPT, XML_EVENT_LISTENER, true, true);
-            }
+            mrExport.AddAttribute( XML_NAMESPACE_SCRIPT, XML_LANGUAGE, mrExport.GetNamespaceMap().GetQNameByKey(
+                     XML_NAMESPACE_OOO, GetXMLToken(XML_SCRIPT) ) );
+            OUString aEventQName(
+                mrExport.GetNamespaceMap().GetQNameByKey(
+                        XML_NAMESPACE_DOM, "click" ) );
+            mrExport.AddAttribute( XML_NAMESPACE_SCRIPT, XML_EVENT_NAME, aEventQName );
+            mrExport.AddAttribute( XML_NAMESPACE_XLINK, XML_HREF, aStrMacro );
+            mrExport.AddAttribute( XML_NAMESPACE_XLINK, XML_TYPE, "simple" );
+
+            SvXMLElementExport aEventElemt(mrExport, XML_NAMESPACE_SCRIPT, XML_EVENT_LISTENER, true, true);
         }
     }
 }
@@ -1864,7 +1864,7 @@ void XMLShapeExport::ImpExportDescription( const uno::Reference< drawing::XShape
     }
     catch( uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION_WHEN( "exporting Title and/or Description for shape" );
+        DBG_UNHANDLED_EXCEPTION( "xmloff", "exporting Title and/or Description for shape" );
     }
 }
 
@@ -2356,56 +2356,38 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
 
     const bool bSaveBackwardsCompatible = bool( mrExport.getExportFlags() & SvXMLExportFlags::SAVEBACKWARDCOMPATIBLE );
 
-    OUString sImageURL;
-    uno::Reference<graphic::XGraphic> xGraphic;
-
-    if( !bIsEmptyPresObj || bSaveBackwardsCompatible )
+    if (!bIsEmptyPresObj || bSaveBackwardsCompatible)
     {
-        if( !bIsEmptyPresObj )
+        uno::Reference<graphic::XGraphic> xGraphic;
+        OUString sOutMimeType;
+
+        if (!bIsEmptyPresObj)
         {
             OUString aStreamURL;
             xPropSet->getPropertyValue("GraphicStreamURL") >>= aStreamURL;
-
             OUString sRequestedName = getNameFromStreamURL(aStreamURL);
 
-            xPropSet->getPropertyValue("GraphicURL") >>= sImageURL;
+            xPropSet->getPropertyValue("Graphic") >>= xGraphic;
 
-            uno::Any aGraphicAny = xPropSet->getPropertyValue("Graphic");
-            if (aGraphicAny.has<uno::Reference<graphic::XGraphic>>())
-                xGraphic = aGraphicAny.get<uno::Reference<graphic::XGraphic>>();
-
-            OUString aStoredURL;
+            OUString sInternalURL;
 
             if (xGraphic.is())
+                sInternalURL = mrExport.AddEmbeddedXGraphic(xGraphic, sOutMimeType, sRequestedName);
+
+            if (!sInternalURL.isEmpty())
             {
-                aStoredURL = mrExport.AddEmbeddedXGraphic(xGraphic, sRequestedName);
-            }
-            else
-            {
-                OUString aResolveURL(sImageURL);
-                if (!sRequestedName.isEmpty())
-                    aResolveURL += "?requestedName=" + sRequestedName;
-
-                aStoredURL = mrExport.AddEmbeddedGraphicObject(aResolveURL);
-            }
-
-            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, aStoredURL);
-
-            if (!aStoredURL.isEmpty())
-            {
-                const OUString sPackageURL("vnd.sun.star.Package:");
-
                 // apply possible changed stream URL to embedded image object
                 if (!sRequestedName.isEmpty())
                 {
+                    const OUString sPackageURL("vnd.sun.star.Package:");
                     OUString newStreamURL = sPackageURL;
-                    if (aStoredURL[0] == '#')
+                    if (sInternalURL[0] == '#')
                     {
-                        newStreamURL += aStoredURL.copy(1, aStoredURL.getLength() - 1);
+                        newStreamURL += sInternalURL.copy(1, sInternalURL.getLength() - 1);
                     }
                     else
                     {
-                        newStreamURL += aStoredURL;
+                        newStreamURL += sInternalURL;
                     }
 
                     if (newStreamURL != aStreamURL)
@@ -2414,45 +2396,48 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
                     }
                 }
 
-                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, XML_SIMPLE );
-                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_SHOW, XML_EMBED );
-                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD );
+                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, sInternalURL);
+                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, XML_SIMPLE);
+                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_SHOW, XML_EMBED);
+                mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD);
             }
         }
         else
         {
-            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, OUString() );
-            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, XML_SIMPLE );
-            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_SHOW, XML_EMBED );
-            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD );
+            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, OUString());
+            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, XML_SIMPLE);
+            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_SHOW, XML_EMBED);
+            mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD);
         }
 
         {
-            // We can't guess the mimetype from sImageURL because the image type might be changed
-            // while creating the stream (by SvXMLGraphicInputStream). So we first need to create
-            // the stream, get the mime type and then write the stream.
-            uno::Reference<io::XInputStream> xInputStream(
-                mrExport.GetEmbeddedGraphicObjectStream(sImageURL));
-            OUString aMimeType(
-                comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageStream(xInputStream));
-            if (!aMimeType.isEmpty())
-                GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, "mime-type", aMimeType);
-
-            ImpExportSignatureLine( xShape );
-            SvXMLElementExport aOBJ(mrExport, XML_NAMESPACE_DRAW, XML_IMAGE, true, true);
-
-            if( !sImageURL.isEmpty() )
+            if (GetExport().getDefaultVersion() > SvtSaveOptions::ODFVER_012)
             {
-                // optional office:binary-data
-                mrExport.AddEmbeddedGraphicObjectAsBase64( sImageURL );
+                if (sOutMimeType.isEmpty())
+                {
+                    GetExport().GetGraphicMimeTypeFromStream(xGraphic, sOutMimeType);
+                }
+                if (!sOutMimeType.isEmpty())
+                {
+                    GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, "mime-type", sOutMimeType);
+                }
             }
-            if( !bIsEmptyPresObj )
-                ImpExportText( xShape );
+
+            SvXMLElementExport aElement(mrExport, XML_NAMESPACE_DRAW, XML_IMAGE, true, true);
+
+            // optional office:binary-data
+            if (xGraphic.is())
+            {
+                mrExport.AddEmbeddedXGraphicAsBase64(xGraphic);
+            }
+            if (!bIsEmptyPresObj)
+                ImpExportText(xShape);
         }
 
         //Resolves: fdo#62461 put preferred image first above, followed by
         //fallback here
-        if( !bIsEmptyPresObj )
+        const bool bAddReplacementImages = officecfg::Office::Common::Save::Graphic::AddReplacementImages::get();
+        if( !bIsEmptyPresObj && bAddReplacementImages)
         {
             uno::Reference<graphic::XGraphic> xReplacementGraphic;
             xPropSet->getPropertyValue("ReplacementGraphic") >>= xReplacementGraphic;
@@ -2474,7 +2459,7 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
                     mrExport.AddAttribute(XML_NAMESPACE_XLINK, XML_ACTUATE, XML_ONLOAD );
                 }
 
-                if (!aMimeType.isEmpty())
+                if (!aMimeType.isEmpty() && GetExport().getDefaultVersion() > SvtSaveOptions::ODFVER_012)
                     mrExport.AddAttribute(XML_NAMESPACE_LO_EXT, "mime-type", aMimeType);
 
                 SvXMLElementExport aElement(mrExport, XML_NAMESPACE_DRAW, XML_IMAGE, true, true);
@@ -2492,6 +2477,9 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
     GetExport().GetImageMapExport().Export( xPropSet );
     ImpExportDescription( xShape ); // #i68101#
 
+    // Signature Line - needs to be after the images!
+    if (GetExport().getDefaultVersion() > SvtSaveOptions::ODFVER_012)
+        ImpExportSignatureLine(xShape);
 }
 
 void XMLShapeExport::ImpExportChartShape(
@@ -2968,7 +2956,7 @@ void XMLShapeExport::ImpExportOLE2Shape(
     }
     if( !bIsEmptyPresObj )
     {
-        OUString sURL(  "vnd.sun.star.GraphicObject:"  );
+        OUString sURL(XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE);
         sURL += sPersistName;
         if( !bExportEmbedded )
         {
@@ -4890,7 +4878,7 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
                             }
                             catch( uno::Exception& )
                             {
-                                DBG_UNHANDLED_EXCEPTION();
+                                DBG_UNHANDLED_EXCEPTION("xmloff.draw");
                             }
                         }
                     }
@@ -4971,9 +4959,9 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
                     aBase64Exp.exportOfficeBinaryDataElement( uno::Reference < io::XInputStream >( xPictureStream, uno::UNO_QUERY_THROW ) );
                 }
             }
-            catch( uno::Exception& )
+            catch( uno::Exception const & )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("xmloff.draw");
             }
         }
 
@@ -4981,9 +4969,9 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
         ImpExportGluePoints( xShape );
         ImpExportDescription( xShape ); // #i68101#
     }
-    catch( uno::Exception& )
+    catch( uno::Exception const & )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("xmloff.draw");
     }
 }
 

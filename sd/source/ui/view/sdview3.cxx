@@ -480,7 +480,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                 for(size_t a = 0; a < pMarkList->GetMarkCount(); ++a)
                                 {
                                     SdrMark* pM = pMarkList->GetMark(a);
-                                    SdrObject* pObj = pM->GetMarkedSdrObj()->Clone();
+                                    SdrObject* pObj(pM->GetMarkedSdrObj()->CloneSdrObject(pPage->getSdrModelFromSdrPage()));
 
                                     if(pObj)
                                     {
@@ -714,7 +714,8 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                         if( ( mnAction & DND_ACTION_MOVE ) && pPickObj2 && pObj )
                         {
                             // replace object
-                            SdrObject*  pNewObj = pObj->Clone();
+                            SdrPage* pWorkPage = GetSdrPageView()->GetPage();
+                            SdrObject* pNewObj(pObj->CloneSdrObject(pWorkPage->getSdrModelFromSdrPage()));
                             ::tools::Rectangle   aPickObjRect( pPickObj2->GetCurrentBoundRect() );
                             Size        aPickObjSize( aPickObjRect.GetSize() );
                             Point       aVec( aPickObjRect.TopLeft() );
@@ -733,7 +734,6 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                             if( bUndo )
                                 BegUndo(SdResId(STR_UNDO_DRAGDROP));
                             pNewObj->NbcSetLayer( pPickObj->GetLayer() );
-                            SdrPage* pWorkPage = GetSdrPageView()->GetPage();
                             pWorkPage->InsertObject( pNewObj );
                             if( bUndo )
                             {
@@ -797,7 +797,11 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                 aNewSet.Put( pObj->GetMergedItemSet() );
 
                                 if( bUndo )
-                                    AddUndo( new E3dAttributesUndoAction( mrDoc, static_cast<E3dObject*>(pPickObj), aNewSet, aOldSet ) );
+                                    AddUndo(
+                                        new E3dAttributesUndoAction(
+                                            *static_cast< E3dObject* >(pPickObj),
+                                            aNewSet,
+                                            aOldSet));
                                 pPickObj->SetMergedItemSetAndBroadcast( aNewSet );
                             }
 
@@ -995,7 +999,11 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     maDropPos.AdjustY( -(std::min( aSize.Height(), aMaxSize.Height() ) >> 1) );
 
                     ::tools::Rectangle       aRect( maDropPos, aSize );
-                    SdrOle2Obj*     pObj = new SdrOle2Obj( aObjRef, aName, aRect );
+                    SdrOle2Obj*     pObj = new SdrOle2Obj(
+                        getSdrModelFromSdrView(),
+                        aObjRef,
+                        aName,
+                        aRect);
                     SdrPageView*    pPV = GetSdrPageView();
                     SdrInsertFlags  nOptions = SdrInsertFlags::SETDEFLAYER;
 
@@ -1011,7 +1019,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     InsertObjectAtView( pObj, *pPV, nOptions );
 
                     if( pImageMap )
-                        pObj->AppendUserData( new SdIMapInfo( *pImageMap ) );
+                        pObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new SdIMapInfo( *pImageMap )) );
 
                     if (pObj->IsChart())
                     {
@@ -1165,7 +1173,11 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     maDropPos.AdjustY( -(std::min( aSize.Height(), aMaxSize.Height() ) >> 1) );
 
                     ::tools::Rectangle       aRect( maDropPos, aSize );
-                    SdrOle2Obj*     pObj = new SdrOle2Obj( aObjRef, aName, aRect );
+                    SdrOle2Obj*     pObj = new SdrOle2Obj(
+                        getSdrModelFromSdrView(),
+                        aObjRef,
+                        aName,
+                        aRect);
                     SdrPageView*    pPV = GetSdrPageView();
                     SdrInsertFlags  nOptions = SdrInsertFlags::SETDEFLAYER;
 
@@ -1181,7 +1193,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     InsertObjectAtView( pObj, *pPV, nOptions );
 
                     if( pImageMap )
-                        pObj->AppendUserData( new SdIMapInfo( *pImageMap ) );
+                        pObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new SdIMapInfo( *pImageMap )) );
 
                     // let the object stay in loaded state after insertion
                     pObj->Unload();

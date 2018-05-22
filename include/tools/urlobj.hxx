@@ -25,6 +25,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/textenc.h>
 #include <sal/types.h>
+#include <o3tl/string_view.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
 #include <memory>
@@ -54,9 +55,6 @@ enum class INetProtocol
     File,
     Mailto,
     VndSunStarWebdav,
-    VndSunStarWebdavs,
-    Webdav,
-    Webdavs,
     PrivSoffice,
     VndSunStarHelp,
     Https,
@@ -383,7 +381,7 @@ public:
 
     bool isSchemeEqualTo(INetProtocol scheme) const { return scheme == m_eScheme; }
 
-    bool isSchemeEqualTo(OUString const & scheme) const;
+    bool isSchemeEqualTo(o3tl::u16string_view scheme) const;
 
     /** Check if the scheme is one of the WebDAV scheme
      *  we know about.
@@ -868,11 +866,11 @@ public:
     static void appendUCS4Escape(OUStringBuffer & rTheText, sal_uInt32 nUCS4);
 
     static void appendUCS4(OUStringBuffer & rTheText, sal_uInt32 nUCS4,
-                           EscapeType eEscapeType, bool bOctets, Part ePart,
+                           EscapeType eEscapeType, Part ePart,
                            rtl_TextEncoding eCharset, bool bKeepVisibleEscapes);
 
     static sal_uInt32 getUTF32(sal_Unicode const *& rBegin,
-                               sal_Unicode const * pEnd, bool bOctets,
+                               sal_Unicode const * pEnd,
                                EncodeMechanism eMechanism,
                                rtl_TextEncoding eCharset,
                                EscapeType & rEscapeType);
@@ -1128,12 +1126,12 @@ private:
         OUStringBuffer & rTheText, sal_uInt32 nOctet);
 
     static OUString encodeText(
-        sal_Unicode const * pBegin, sal_Unicode const * pEnd, bool bOctets,
+        sal_Unicode const * pBegin, sal_Unicode const * pEnd,
         Part ePart, EncodeMechanism eMechanism, rtl_TextEncoding eCharset,
         bool bKeepVisibleEscapes);
 
     static inline OUString encodeText(
-        OUString const & rTheText, bool bOctets, Part ePart,
+        OUString const & rTheText, Part ePart,
         EncodeMechanism eMechanism, rtl_TextEncoding eCharset,
         bool bKeepVisibleEscapes);
 
@@ -1153,13 +1151,13 @@ private:
 
 // static
 inline OUString INetURLObject::encodeText(OUString const & rTheText,
-                                           bool bOctets, Part ePart,
+                                           Part ePart,
                                            EncodeMechanism eMechanism,
                                            rtl_TextEncoding eCharset,
                                            bool bKeepVisibleEscapes)
 {
     return encodeText(rTheText.getStr(),
-                      rTheText.getStr() + rTheText.getLength(), bOctets, ePart,
+                      rTheText.getStr() + rTheText.getLength(), ePart,
                       eMechanism, eCharset, bKeepVisibleEscapes);
 }
 
@@ -1326,7 +1324,7 @@ inline OUString INetURLObject::encode(OUString const & rText, Part ePart,
                                        EncodeMechanism eMechanism,
                                        rtl_TextEncoding eCharset)
 {
-    return encodeText(rText, false, ePart, eMechanism, eCharset, false);
+    return encodeText(rText, ePart, eMechanism, eCharset, false);
 }
 
 // static

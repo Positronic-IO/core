@@ -137,8 +137,10 @@ protected:
     const SvxItemPropertySet* mpPropSet;
     const SfxItemPropertyMapEntry* maPropMapEntries;
 
-    ::tools::WeakReference< SdrObject > mpObj;
-    SdrModel* mpModel;
+private:
+    ::tools::WeakReference< SdrObject > mpSdrObjectWeakReference;
+
+protected:
     // translations for writer, which works in TWIPS
     void ForceMetricToItemPoolMetric(Pair& rPoint) const throw();
     void ForceMetricToItemPoolMetric(Point& rPoint) const throw() { ForceMetricToItemPoolMetric(rPoint.toPair()); }
@@ -146,9 +148,14 @@ protected:
     void ForceMetricTo100th_mm(Pair& rPoint) const throw();
     void ForceMetricTo100th_mm(Point& rPoint) const throw() { ForceMetricTo100th_mm(rPoint.toPair()); }
     void ForceMetricTo100th_mm(Size& rPoint) const throw() { ForceMetricTo100th_mm(rPoint.toPair()); }
-    // Dimension arrows change size/position on save/reload (#i59051#)
+
+    // version for basegfx::B2DPolyPolygon
     void ForceMetricToItemPoolMetric(basegfx::B2DPolyPolygon& rPolyPolygon) const throw();
     void ForceMetricTo100th_mm(basegfx::B2DPolyPolygon& rPolyPolygon) const throw();
+
+    // tdf#117145 version for basegfx::B2DHomMatrix
+    void ForceMetricToItemPoolMetric(basegfx::B2DHomMatrix& rB2DHomMatrix) const throw();
+    void ForceMetricTo100th_mm(basegfx::B2DHomMatrix& rB2DHomMatrix) const throw();
 
     css::uno::Any GetAnyForItem( SfxItemSet const & aSet, const SfxItemPropertySimpleEntry* pMap ) const;
 
@@ -206,10 +213,13 @@ public:
     void TakeSdrObjectOwnership();
     bool HasSdrObjectOwnership() const;
 
-    void ChangeModel( SdrModel* pNewModel );
+    // used exclusively by SdrObject
+    void InvalidateSdrObject();
 
-    void InvalidateSdrObject() { mpObj.reset( nullptr ); };
-    SdrObject* GetSdrObject() const {return mpObj.get();}
+    // Encapsulated access to SdrObject
+    SdrObject* GetSdrObject() const { return mpSdrObjectWeakReference.get(); }
+    bool HasSdrObject() const { return mpSdrObjectWeakReference.is(); }
+
     void SetShapeType( const OUString& ShapeType ) { maShapeType = ShapeType; }
     /// @throws css::uno::RuntimeException
     css::uno::Any GetBitmap( bool bMetaFile = false ) const;
@@ -669,11 +679,8 @@ protected:
     virtual bool getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, css::uno::Any& rValue ) override;
 
 public:
-    SvxGraphicObject(SdrObject* pObj, OUString const & referer);
+    SvxGraphicObject(SdrObject* pObj);
     virtual ~SvxGraphicObject() throw() override;
-
-private:
-    OUString referer_;
 };
 
 /***********************************************************************

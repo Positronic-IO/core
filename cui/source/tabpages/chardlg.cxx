@@ -27,7 +27,6 @@
 #include <sfx2/viewsh.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/viewfrm.hxx>
-#include <svx/dialmgr.hxx>
 #include <svx/dialogs.hrc>
 #include <svtools/unitconv.hxx>
 #include <svl/languageoptions.hxx>
@@ -223,26 +222,16 @@ struct SvxCharNamePage_Impl
 {
     Idle            m_aUpdateIdle;
     OUString        m_aNoStyleText;
-    const FontList* m_pFontList;
+    std::unique_ptr<FontList> m_pFontList;
     sal_Int32           m_nExtraEntryPos;
-    bool            m_bMustDelete;
     bool            m_bInSearchMode;
 
     SvxCharNamePage_Impl() :
-
-        m_pFontList     ( nullptr ),
         m_nExtraEntryPos( COMBOBOX_ENTRY_NOTFOUND ),
-        m_bMustDelete   ( false ),
         m_bInSearchMode ( false )
 
     {
         m_aUpdateIdle.SetPriority( TaskPriority::LOWEST );
-    }
-
-    ~SvxCharNamePage_Impl()
-    {
-        if ( m_bMustDelete )
-            delete m_pFontList;
     }
 };
 
@@ -435,19 +424,16 @@ const FontList* SvxCharNamePage::GetFontList() const
             {
                 DBG_ASSERT(nullptr != static_cast<const SvxFontListItem*>(pItem)->GetFontList(),
                            "Where is the font list?");
-                    m_pImpl->m_pFontList =  static_cast<const SvxFontListItem*>(pItem )->GetFontList()->Clone();
-                m_pImpl->m_bMustDelete = true;
+                    m_pImpl->m_pFontList = static_cast<const SvxFontListItem*>(pItem )->GetFontList()->Clone();
             }
         }
         if(!m_pImpl->m_pFontList)
         {
-            m_pImpl->m_pFontList =
-                new FontList( Application::GetDefaultDevice() );
-            m_pImpl->m_bMustDelete = true;
+            m_pImpl->m_pFontList.reset(new FontList( Application::GetDefaultDevice() ));
         }
     }
 
-    return m_pImpl->m_pFontList;
+    return m_pImpl->m_pFontList.get();
 }
 
 
@@ -506,7 +492,7 @@ namespace
             aSize.setHeight( 200 );   // default 10pt
         aFontMetrics.SetFontSize( aSize );
 
-        _rFont.SetLanguage(_pLanguageLB->GetSelectLanguage());
+        _rFont.SetLanguage(_pLanguageLB->GetSelectedLanguage());
 
         _rFont.SetFamily( aFontMetrics.GetFamilyType() );
         _rFont.SetFamilyName( aFontMetrics.GetFamilyName() );
@@ -527,13 +513,6 @@ void SvxCharNamePage::UpdatePreview_Impl()
     SvxFont& rFont = GetPreviewFont();
     SvxFont& rCJKFont = GetPreviewCJKFont();
     SvxFont& rCTLFont = GetPreviewCTLFont();
-    // Size
-    Size aSize = rFont.GetFontSize();
-    aSize.setWidth( 0 );
-    Size aCJKSize = rCJKFont.GetFontSize();
-    aCJKSize.setWidth( 0 );
-    Size aCTLSize = rCTLFont.GetFontSize();
-    aCTLSize.setWidth( 0 );
     // Font
     const FontList* pFontList = GetFontList();
 
@@ -1121,7 +1100,7 @@ bool SvxCharNamePage::FillItemSet_Impl( SfxItemSet& rSet, LanguageGroup eLangGrp
         }
     }
 
-    sal_Int32 nLangPos = pLangBox->GetSelectEntryPosLBB();
+    sal_Int32 nLangPos = pLangBox->GetSelectedEntryPosLBB();
     LanguageType eLangType = LanguageType(reinterpret_cast<sal_uLong>(pLangBox->GetEntryDataLBB( nLangPos )));
 
     if ( pOld )
@@ -1193,9 +1172,9 @@ DeactivateRC SvxCharNamePage::DeactivatePage( SfxItemSet* _pSet )
 }
 
 
-VclPtr<SfxTabPage> SvxCharNamePage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxCharNamePage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxCharNamePage>::Create( pParent, *rSet );
+    return VclPtr<SvxCharNamePage>::Create( pParent.pParent, *rSet );
 }
 
 
@@ -1235,12 +1214,7 @@ bool SvxCharNamePage::FillItemSet( SfxItemSet* rSet )
 
 void SvxCharNamePage::SetFontList( const SvxFontListItem& rItem )
 {
-    if ( m_pImpl->m_bMustDelete )
-    {
-        delete m_pImpl->m_pFontList;
-    }
     m_pImpl->m_pFontList = rItem.GetFontList()->Clone();
-    m_pImpl->m_bMustDelete = true;
 }
 
 
@@ -1711,9 +1685,9 @@ DeactivateRC SvxCharEffectsPage::DeactivatePage( SfxItemSet* _pSet )
 }
 
 
-VclPtr<SfxTabPage> SvxCharEffectsPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxCharEffectsPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxCharEffectsPage>::Create( pParent, *rSet );
+    return VclPtr<SvxCharEffectsPage>::Create( pParent.pParent, *rSet );
 }
 
 
@@ -2767,9 +2741,9 @@ DeactivateRC SvxCharPositionPage::DeactivatePage( SfxItemSet* _pSet )
 }
 
 
-VclPtr<SfxTabPage> SvxCharPositionPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxCharPositionPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxCharPositionPage>::Create( pParent, *rSet );
+    return VclPtr<SvxCharPositionPage>::Create( pParent.pParent, *rSet );
 }
 
 
@@ -3205,12 +3179,12 @@ void SvxCharTwoLinesPage::Initialize()
 void SvxCharTwoLinesPage::SelectCharacter( ListBox* pBox )
 {
     bool bStart = pBox == m_pStartBracketLB;
-    VclPtrInstance< SvxCharacterMap > aDlg( this, nullptr, false );
-    aDlg->DisableFontSelection();
+    SvxCharacterMap aDlg(GetFrameWeld(), nullptr, false);
+    aDlg.DisableFontSelection();
 
-    if ( aDlg->Execute() == RET_OK )
+    if (aDlg.execute() == RET_OK)
     {
-        sal_Unicode cChar = static_cast<sal_Unicode>(aDlg->GetChar());
+        sal_Unicode cChar = static_cast<sal_Unicode>(aDlg.GetChar());
         SetBracket( cChar, bStart );
     }
     else
@@ -3297,9 +3271,9 @@ DeactivateRC SvxCharTwoLinesPage::DeactivatePage( SfxItemSet* _pSet )
 }
 
 
-VclPtr<SfxTabPage> SvxCharTwoLinesPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxCharTwoLinesPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxCharTwoLinesPage>::Create( pParent, *rSet );
+    return VclPtr<SvxCharTwoLinesPage>::Create( pParent.pParent, *rSet );
 }
 
 void SvxCharTwoLinesPage::Reset( const SfxItemSet* rSet )

@@ -31,7 +31,7 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::awt;
 using namespace ::com::sun::star::container;
 
-namespace unocontrols{
+namespace unocontrols {
 
 //  construct/destruct
 
@@ -167,8 +167,6 @@ void SAL_CALL BaseContainerControl::dispose()
     // remove controls
     Sequence< Reference< XControl > >   seqCtrls    =   getControls();
 
-    for ( auto & i : maControlInfoList )
-        delete i;
     maControlInfoList.clear();
 
     for ( Reference< XControl > const & control : seqCtrls )
@@ -377,7 +375,7 @@ void SAL_CALL BaseContainerControl::setVisible ( sal_Bool bVisible )
 
 WindowDescriptor* BaseContainerControl::impl_getWindowDescriptor ( const Reference< XWindowPeer > & rParentPeer )
 {
-    // - used from "createPeer()" to set the values of an WindowDescriptor!!!
+    // - used from "createPeer()" to set the values of a WindowDescriptor!!!
     // - if you will change the descriptor-values, you must override this virtual function
     // - the caller must release the memory for this dynamical descriptor!!!
 

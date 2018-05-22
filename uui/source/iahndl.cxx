@@ -26,6 +26,7 @@
 #include <com/sun/star/configuration/backend/StratumCreationException.hpp>
 #include <com/sun/star/container/XHierarchicalNameAccess.hpp>
 #include <com/sun/star/document/BrokenPackageRequest.hpp>
+#include <com/sun/star/document/ExoticFileLoadException.hpp>
 #include <com/sun/star/task/DocumentMacroConfirmationRequest.hpp>
 #include <com/sun/star/java/WrongJavaVersionException.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
@@ -71,8 +72,6 @@
 #include <comphelper/propertysequence.hxx>
 #include <svtools/sfxecode.hxx>
 #include <unotools/configmgr.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <typelib/typedescription.hxx>
 #include <unotools/confignode.hxx>
@@ -337,7 +336,7 @@ bool UUIInteractionHelper::handleCustomRequest( const Reference< XInteractionReq
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("uui");
     }
     return false;
 }
@@ -426,6 +425,30 @@ UUIInteractionHelper::handleRequest_impl(
             }
             handleErrorHandlerRequest( task::InteractionClassification_WARNING,
                                        ERRCODE_UUI_IO_MODULESIZEEXCEEDED,
+                                       aArguments,
+                                       rRequest->getContinuations(),
+                                       bObtainErrorStringOnly,
+                                       bHasErrorString,
+                                       rErrorString);
+            return true;
+        }
+
+        document::ExoticFileLoadException aExoticFileLoadException;
+        if (aAnyRequest >>= aExoticFileLoadException)
+        {
+            std::vector< OUString > aArguments;
+
+            if( !aExoticFileLoadException.URL.isEmpty() )
+            {
+                aArguments.push_back( aExoticFileLoadException.URL );
+            }
+            if( !aExoticFileLoadException.FilterUIName.isEmpty() )
+            {
+                aArguments.push_back( aExoticFileLoadException.FilterUIName );
+            }
+
+            handleErrorHandlerRequest( task::InteractionClassification_WARNING,
+                                       ERRCODE_UUI_IO_EXOTICFILEFORMAT,
                                        aArguments,
                                        rRequest->getContinuations(),
                                        bObtainErrorStringOnly,
@@ -837,17 +860,13 @@ UUIInteractionHelper::handleRequest_impl(
         // Not handled.
         return false;
     }
-    catch (std::bad_alloc const &)
-    {
-        throw uno::RuntimeException("out of memory");
-    }
     catch( const uno::RuntimeException& )
     {
         throw;  // allowed to leave here
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("uui");
     }
     return false;
 }
@@ -937,16 +956,6 @@ UUIInteractionHelper::getInteractionHandlerList(
     }
 }
 
-vcl::Window *
-UUIInteractionHelper::getParentProperty()
-{
-    uno::Reference< awt::XWindow > xWindow = getParentXWindow();
-    if ( xWindow.is() )
-        return VCLUnoHelper::GetWindow(xWindow);
-
-    return nullptr;
-}
-
 const uno::Reference< awt::XWindow>&
 UUIInteractionHelper::getParentXWindow() const
 {
@@ -999,18 +1008,18 @@ executeMessageBox(
     return aResult;
 }
 
-NameClashResolveDialogResult executeSimpleNameClashResolveDialog( vcl::Window *pParent,
-                                                                  OUString const & rTargetFolderURL,
-                                                                  OUString const & rClashingName,
-                                                                  OUString & rProposedNewName,
-                                                                  bool bAllowOverwrite )
+NameClashResolveDialogResult executeSimpleNameClashResolveDialog(weld::Window *pParent,
+                                                                 OUString const & rTargetFolderURL,
+                                                                 OUString const & rClashingName,
+                                                                 OUString & rProposedNewName,
+                                                                 bool bAllowOverwrite)
 {
     std::locale aResLocale = Translate::Create("uui");
-    ScopedVclPtrInstance<NameClashDialog> aDialog(pParent, aResLocale, rTargetFolderURL,
-                                                  rClashingName, rProposedNewName, bAllowOverwrite);
+    NameClashDialog aDialog(pParent, aResLocale, rTargetFolderURL,
+                            rClashingName, rProposedNewName, bAllowOverwrite);
 
-    NameClashResolveDialogResult eResult = static_cast<NameClashResolveDialogResult>(aDialog->Execute());
-    rProposedNewName = aDialog->getNewName();
+    NameClashResolveDialogResult eResult = static_cast<NameClashResolveDialogResult>(aDialog.run());
+    rProposedNewName = aDialog.getNewName();
     return eResult;
 }
 
@@ -1043,11 +1052,12 @@ UUIInteractionHelper::handleNameClashResolveRequest(
     NameClashResolveDialogResult eResult = ABORT;
     OUString aProposedNewName( rRequest.ProposedNewName );
 
-    eResult = executeSimpleNameClashResolveDialog( getParentProperty(),
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
+    eResult = executeSimpleNameClashResolveDialog(Application::GetFrameWeld(xParent),
                     rRequest.TargetFolderURL,
                     rRequest.ClashingName,
                     aProposedNewName,
-                    xReplaceExistingData.is() );
+                    xReplaceExistingData.is());
 
     switch ( eResult )
     {
@@ -1116,13 +1126,13 @@ UUIInteractionHelper::handleGenericErrorRequest(
                 aTitle += " - " ;
             aTitle += aErrTitle;
 
-            vcl::Window* pWin = getParentProperty();
-            executeMessageBox(pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aErrorString, VclMessageType::Error);
+            uno::Reference<awt::XWindow> xParent = getParentXWindow();
+            executeMessageBox(Application::GetFrameWeld(xParent), aTitle, aErrorString, VclMessageType::Error);
         }
         else
         {
-            vcl::Window* pParent = getParentProperty();
-            ErrorHandler::HandleError(nErrorCode, pParent ? pParent->GetFrameWeld() : nullptr);
+            uno::Reference<awt::XWindow> xParent = getParentXWindow();
+            ErrorHandler::HandleError(nErrorCode, Application::GetFrameWeld(xParent));
         }
 
         if (xApprove.is() && bWarning)
@@ -1148,20 +1158,20 @@ UUIInteractionHelper::handleMacroConfirmRequest(
     bool bApprove = false;
 
     bool bShowSignatures = aSignInfo.getLength() > 0;
-    ScopedVclPtrInstance<MacroWarning> aWarning(
-        getParentProperty(), bShowSignatures );
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
+    MacroWarning aWarning(Application::GetFrameWeld(xParent), bShowSignatures);
 
-    aWarning->SetDocumentURL( aDocumentURL );
+    aWarning.SetDocumentURL(aDocumentURL);
     if ( aSignInfo.getLength() > 1 )
     {
-        aWarning->SetStorage( xZipStorage, aDocumentVersion, aSignInfo );
+        aWarning.SetStorage(xZipStorage, aDocumentVersion, aSignInfo);
     }
     else if ( aSignInfo.getLength() == 1 )
     {
-        aWarning->SetCertificate( aSignInfo[ 0 ].Signer );
+        aWarning.SetCertificate(aSignInfo[0].Signer);
     }
 
-    bApprove = aWarning->Execute() == RET_OK;
+    bApprove = aWarning.run() == RET_OK;
 
     if ( bApprove && xApprove.is() )
         xApprove->select();
@@ -1231,8 +1241,8 @@ UUIInteractionHelper::handleBrokenPackageRequest(
         " " +
         utl::ConfigManager::getProductVersion() );
 
-    vcl::Window* pWin = getParentProperty();
-    switch (executeMessageBox(pWin ? pWin->GetFrameWeld() : nullptr, title, aMessage, eMessageType))
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
+    switch (executeMessageBox(Application::GetFrameWeld(xParent), title, aMessage, eMessageType))
     {
     case DialogMask::ButtonsOk:
         OSL_ENSURE( xAbort.is(), "unexpected situation" );
@@ -1261,7 +1271,7 @@ bool ErrorResource::getString(ErrCode nErrorCode, OUString &rString) const
 {
     for (const std::pair<const char*, ErrCode>* pStringArray = m_pStringArray; pStringArray->first != nullptr; ++pStringArray)
     {
-        if (nErrorCode.GetRest() == pStringArray->second.GetRest())
+        if (nErrorCode.StripWarningAndDynamic() == pStringArray->second.StripWarningAndDynamic())
         {
             rString = Translate::get(pStringArray->first, m_rResLocale);
             return true;

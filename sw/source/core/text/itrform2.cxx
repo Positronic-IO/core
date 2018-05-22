@@ -486,10 +486,9 @@ void SwTextFormatter::BuildPortions( SwTextFormatInfo &rInf )
         else if ( bHasGrid && pGrid->IsSnapToChars() && ! pGridKernPortion && ! pMulti && ! pPor->InTabGrp() )
         {
             // insert a grid kerning portion
-            if ( ! pGridKernPortion )
-                pGridKernPortion = pPor->IsKernPortion() ?
-                                   static_cast<SwKernPortion*>(pPor) :
-                                   new SwKernPortion( *m_pCurr );
+            pGridKernPortion = pPor->IsKernPortion() ?
+                               static_cast<SwKernPortion*>(pPor) :
+                               new SwKernPortion( *m_pCurr );
 
             // if we have a new GridKernPortion, we initially calculate
             // its size so that its ends on the grid
@@ -533,7 +532,7 @@ void SwTextFormatter::BuildPortions( SwTextFormatInfo &rInf )
         if( pPor->IsDropPortion() )
             MergeCharacterBorder(*static_cast<SwDropPortion*>(pPor));
 
-        // the multi-portion has it's own format function
+        // the multi-portion has its own format function
         if( pPor->IsMultiPortion() && ( !pMulti || pMulti->IsBidi() ) )
             bFull = BuildMultiPortion( rInf, *static_cast<SwMultiPortion*>(pPor) );
         else
@@ -606,7 +605,9 @@ void SwTextFormatter::BuildPortions( SwTextFormatInfo &rInf )
                 // to 20% of the fontheight.
                 sal_Int32 nTmp = rInf.GetIdx() + pPor->GetLen();
                 if( nTmp == m_pScriptInfo->NextScriptChg( nTmp - 1 ) &&
-                    nTmp != rInf.GetText().getLength() )
+                    nTmp != rInf.GetText().getLength() &&
+                    (m_pScriptInfo->ScriptType(nTmp - 1) == css::i18n::ScriptType::ASIAN ||
+                     m_pScriptInfo->ScriptType(nTmp) == css::i18n::ScriptType::ASIAN) )
                 {
                     const sal_uInt16 nDist = static_cast<sal_uInt16>(rInf.GetFont()->GetHeight()/5);
 
@@ -978,7 +979,7 @@ SwTextPortion *SwTextFormatter::NewTextPortion( SwTextFormatInfo &rInf )
                              sal_Int32( pPor->GetAscent() ) ) / 8;
     if ( !nExpect )
         nExpect = 1;
-    nExpect = rInf.GetIdx() + ((rInf.Width() - rInf.X()) / nExpect);
+    nExpect = rInf.GetIdx() + (rInf.GetLineWidth() / nExpect);
     if( nExpect > rInf.GetIdx() && nNextChg > nExpect )
         nNextChg = std::min( nExpect, rInf.GetText().getLength() );
 
@@ -1307,7 +1308,8 @@ SwLinePortion *SwTextFormatter::NewPortion( SwTextFormatInfo &rInf )
                 pPor = new SwSoftHyphPortion; break;
 
             case CHAR_HARDBLANK:                    // no-break space
-                pPor = new SwBlankPortion( ' ' ); break;
+                // Please check tdf#115067 if you want to edit the char
+                pPor = new SwBlankPortion( cChar ); break;
 
             case CHAR_HARDHYPHEN:               // non-breaking hyphen
                 pPor = new SwBlankPortion( '-' ); break;
@@ -2256,12 +2258,12 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
     }
     else
     {
-        nAscent = pLast->GetAscent();
-        nHeight = pLast->Height();
-
         // We make a first guess for the lines real height
         if ( ! m_pCurr->GetRealHeight() )
             CalcRealHeight();
+
+        nAscent = pLast->GetAscent();
+        nHeight = pLast->Height();
 
         if ( m_pCurr->GetRealHeight() > nHeight )
             nTop += m_pCurr->GetRealHeight() - nHeight;
@@ -2276,12 +2278,24 @@ void SwTextFormatter::CalcFlyWidth( SwTextFormatInfo &rInf )
     SwRect aLine( rInf.X() + nLeftMin, nTop, rInf.RealWidth() - rInf.X()
                   + nLeftMar - nLeftMin , nHeight );
 
+    // tdf#116486: consider also the upper margin from getFramePrintArea because intersections
+    //             with this additional space should lead to repositioning of paragraphs
+    //             For compatibility we grab a related compat flag:
+    if ( GetTextFrame()->GetTextNode()->getIDocumentSettingAccess()->get(DocumentSettingId::ADD_VERTICAL_FLY_OFFSETS) )
+    {
+        const long nUpper = m_pFrame->getFramePrintArea().Top();
+        // Increase the rectangle
+        if( nUpper > 0 && nTop >= nUpper  )
+            aLine.SubTop( nUpper );
+    }
     SwRect aLineVert( aLine );
     if ( m_pFrame->IsRightToLeft() )
         m_pFrame->SwitchLTRtoRTL( aLineVert );
 
     if ( m_pFrame->IsVertical() )
         m_pFrame->SwitchHorizontalToVertical( aLineVert );
+
+    // GetFrame(...) determines and returns the intersection rectangle
     SwRect aInter( rTextFly.GetFrame( aLineVert ) );
 
     if ( m_pFrame->IsRightToLeft() )

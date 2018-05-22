@@ -61,7 +61,7 @@ class SwParagraphNumTabPage final : public SfxTabPage
 
     static const sal_uInt16 aPageRg[];
 
-    static bool ExecuteEditNumStyle_Impl( sal_uInt16 nId, const OUString& rStr, const OUString& rRefStr,
+    static bool ExecuteEditNumStyle_Impl( sal_uInt16 nId, const OUString& rStr,
                           SfxStyleFamily nFamily );
 
 public:
@@ -69,7 +69,7 @@ public:
     virtual ~SwParagraphNumTabPage() override;
     virtual void        dispose() override;
 
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent,
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent,
                                       const SfxItemSet* rSet );
     static const sal_uInt16* GetRanges() { return aPageRg; }
 

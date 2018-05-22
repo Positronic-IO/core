@@ -1974,10 +1974,6 @@ void SwTabFrame::MakeAll(vcl::RenderContext* pRenderContext)
                 pPre->GetAttrSet()->GetKeep().GetValue()) )
             {
                 m_bCalcLowers = true;
-                // #i99267#
-                // reset <bSplit> after forward move to assure that follows
-                // can be joined, if further space is available.
-                bSplit = false;
             }
         }
 
@@ -4101,6 +4097,9 @@ static sal_uInt16 lcl_GetBottomLineDist( const SwRowFrame& rRow )
 // on each following page
 static SwTwips lcl_calcHeightOfRowBeforeThisFrame(const SwRowFrame& rRow)
 {
+    // We don't need to account for previous instances of repeated headlines
+    if (rRow.IsRepeatedHeadline())
+        return 0;
     SwRectFnSet aRectFnSet(&rRow);
     const SwTableLine* pLine = rRow.GetTabLine();
     const SwTabFrame* pTab = rRow.FindTabFrame();

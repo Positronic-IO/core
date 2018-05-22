@@ -32,7 +32,7 @@ use installer::windows::language;
 use installer::windows::component;
 
 ##########################################################################
-# Assigning one cabinet file to each file. This is requrired,
+# Assigning one cabinet file to each file. This is required,
 # if cabinet files shall be equivalent to packages.
 ##########################################################################
 
@@ -108,7 +108,7 @@ sub assign_cab_to_files
 }
 
 ##########################################################################
-# Assigning sequencenumbers to files. This is requrired,
+# Assigning sequencenumbers to files. This is required,
 # if cabinet files shall be equivalent to packages.
 ##########################################################################
 
@@ -552,18 +552,19 @@ sub get_fileversion
         }
     }
     # file version for font files (tdf#76239)
-    if ( $onefile->{'Name'} =~ /\.ttf$|\.TTF$/ )
+    if ( $onefile->{'Name'} =~ /\.(otf|ttf|ttc)$/i )
     {
-        open (TTF, "<$onefile->{'sourcepath'}");
-        binmode TTF;
-        {local $/ = undef; $ttfdata = <TTF>;}
-        close TTF;
+        require Font::TTF::Font;
+        Font::TTF::Font->import;
+        my $fnt = Font::TTF::Font->open("<$onefile->{'sourcepath'}");
+        # 5 is pre-defined name ID for version string - see
+        # https://docs.microsoft.com/en-us/typography/opentype/spec/name
+        my $ttfdata = $fnt->{'name'}->read->find_name(5);
+        $fnt->release;
 
-        my $ttfversion = "(Version )([0-9]+[.]*([0-9][.])*[0-9]+)";
-
-        if ($ttfdata =~ /$ttfversion/ms)
+        if ($ttfdata =~ /Version ([0-9]+(\.[0-9]+)*)/i)
         {
-            my ($version, $subversion, $microversion, $vervariant) = split(/\./,$2);
+            my ($version, $subversion, $microversion, $vervariant) = split(/\./,$1);
             $fileversion = int($version) . "." . int($subversion) . "." . int($microversion) . "." . int($vervariant);
         }
         else

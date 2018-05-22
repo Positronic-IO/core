@@ -32,7 +32,6 @@
 
 #include <comphelper/documentconstants.hxx>
 #include <unotools/mediadescriptor.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
@@ -78,7 +77,6 @@
 #include <com/sun/star/document/XUndoManagerSupplier.hpp>
 
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/waitobj.hxx>
 
 #include <svx/fmview.hxx>
@@ -355,7 +353,7 @@ void OReportController::disposing()
         }
         catch(const uno::Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
     }
 
@@ -1556,8 +1554,8 @@ void OReportController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >
             {
                 if ( !aArgs.getLength() )
                 {
-                    ScopedVclPtrInstance< ODateTimeDialog > aDlg(getView(),getDesignView()->getCurrentSection(),this);
-                    aDlg->Execute();
+                    ODateTimeDialog aDlg(getFrameWeld(), getDesignView()->getCurrentSection(), this);
+                    aDlg.execute();
                 }
                 else
                     createDateTime(aArgs);
@@ -1714,7 +1712,7 @@ void OReportController::impl_initialize( )
     }
     catch(const SQLException&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -2033,7 +2031,7 @@ void OReportController::impl_onModifyChanged()
     }
     catch(const uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -2216,7 +2214,7 @@ void SAL_CALL OReportController::propertyChange( const beans::PropertyChangeEven
     }
     catch(const uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -2439,7 +2437,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
                 {
                     const SfxPoolItem* pItem;
                     if ( SfxItemState::SET == pSet->GetItemState( RPTUI_ID_BRUSH,true,&pItem))
-                        _xSection->setBackColor(static_cast<const SvxBrushItem*>(pItem)->GetColor().GetColor());
+                        _xSection->setBackColor(sal_Int32(static_cast<const SvxBrushItem*>(pItem)->GetColor()));
                 }
                 else
                 {
@@ -2482,7 +2480,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
                     {
                         ::Color aBackColor = static_cast<const SvxBrushItem*>(pItem)->GetColor();
                         xProp->setPropertyValue(PROPERTY_BACKTRANSPARENT,uno::makeAny(aBackColor == COL_TRANSPARENT));
-                        xProp->setPropertyValue(PROPERTY_BACKCOLOR,uno::makeAny(aBackColor.GetColor()));
+                        xProp->setPropertyValue(PROPERTY_BACKCOLOR,uno::makeAny(aBackColor));
                     }
                 }
             }
@@ -2490,7 +2488,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
     SfxItemPool::Free(pPool);
 
@@ -2805,7 +2803,7 @@ void SAL_CALL OReportController::restoreViewData(const uno::Any& i_data)
     }
     catch(const IllegalArgumentException&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -2972,7 +2970,7 @@ uno::Reference< sdbc::XRowSet > const & OReportController::getRowSet()
     }
     catch(const uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 
     return m_xRowSet;
@@ -2985,7 +2983,7 @@ void OReportController::insertGraphic()
     try
     {
         uno::Reference< report::XSection> xSection = getDesignView()->getCurrentSection();
-        ::sfx2::FileDialogHelper aDialog(ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW, FileDialogFlags::Graphic, getView());
+        ::sfx2::FileDialogHelper aDialog(ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW, FileDialogFlags::Graphic, getFrameWeld());
         aDialog.SetTitle( sTitle );
 
         uno::Reference< ui::dialogs::XFilePickerControlAccess > xController(aDialog.GetFilePicker(), UNO_QUERY_THROW);
@@ -3006,7 +3004,7 @@ void OReportController::insertGraphic()
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -3109,7 +3107,11 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
     uno::Reference< report::XReportComponent> xShapeProp;
     if ( _nObjectId == OBJ_CUSTOMSHAPE )
     {
-        pNewControl = SdrObjFactory::MakeNewObject( SdrInventor::ReportDesign, _nObjectId, pSectionWindow->getReportSection().getPage(),m_aReportModel.get() );
+        pNewControl = SdrObjFactory::MakeNewObject(
+            *m_aReportModel,
+            SdrInventor::ReportDesign,
+            _nObjectId,
+            pSectionWindow->getReportSection().getPage());
         xShapeProp.set(pNewControl->getUnoShape(),uno::UNO_QUERY);
         OUString sCustomShapeType = getDesignView()->GetInsertObjString();
         if ( sCustomShapeType.isEmpty() )
@@ -3119,7 +3121,11 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
     }
     else if ( _nObjectId == OBJ_OLE2 || OBJ_DLG_SUBREPORT == _nObjectId  )
     {
-        pNewControl = SdrObjFactory::MakeNewObject( SdrInventor::ReportDesign, _nObjectId, pSectionWindow->getReportSection().getPage(),m_aReportModel.get() );
+        pNewControl = SdrObjFactory::MakeNewObject(
+            *m_aReportModel,
+            SdrInventor::ReportDesign,
+            _nObjectId,
+            pSectionWindow->getReportSection().getPage());
 
         pNewControl->SetLogicRect(tools::Rectangle(3000,500,8000,5500)); // switch height and width
         xShapeProp.set(pNewControl->getUnoShape(),uno::UNO_QUERY_THROW);
@@ -3135,10 +3141,13 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
         SdrUnoObj* pControl( nullptr );
         FmFormView::createControlLabelPair( getDesignView()
                             ,nLeftMargin,0
-                            ,nullptr,nullptr,_nObjectId,OUString(),SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
+                            ,nullptr,nullptr,_nObjectId,SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
                          nullptr,pSectionWindow->getReportSection().getPage(),m_aReportModel.get(),
                          pLabel,pControl);
-        delete pLabel;
+
+        // always use SdrObject::Free(...) for SdrObjects (!)
+        SdrObject* pTemp(pLabel);
+        SdrObject::Free(pTemp);
 
         pNewControl = pControl;
         OUnoObject* pObj = dynamic_cast<OUnoObject*>(pControl);
@@ -3372,7 +3381,7 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
                     }
                     catch(const Exception&)
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("reportdesign");
                     }
                 #endif
 
@@ -3430,7 +3439,7 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
             // find this in svx
             FmFormView::createControlLabelPair( getDesignView()
                 ,nLeftMargin,0
-                ,xField,xNumberFormats,nOBJID,OUString(),SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
+                ,xField,xNumberFormats,nOBJID,SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
                 pSectionWindow[1]->getReportSection().getPage(),pSectionWindow[0]->getReportSection().getPage(),m_aReportModel.get(),
                 pControl[0],pControl[1]);
             if ( pControl[0] && pControl[1] )
@@ -3570,13 +3579,17 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
             else
             {
                 for(SdrUnoObj* i : pControl)
-                    delete i;
+                {
+                    // always use SdrObject::Free(...) for SdrObjects (!)
+                    SdrObject* pTemp(i);
+                    SdrObject::Free(pTemp);
+                }
             }
         }
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -3858,7 +3871,7 @@ void OReportController::modifyGroup(const bool _bAppend, const Sequence< Propert
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -4194,7 +4207,7 @@ void OReportController::openZoomDialog()
 
             if ( !bCancel )
             {
-                const SvxZoomItem&  rZoomItem = static_cast<const SvxZoomItem&>(pDlg->GetOutputItemSet()->Get( SID_ATTR_ZOOM ));
+                const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->Get( SID_ATTR_ZOOM );
                 m_eZoomType = rZoomItem.GetType();
                 m_nZoomValue = rZoomItem.GetValue();
                 if ( m_eZoomType != SvxZoomType::PERCENT )
@@ -4205,7 +4218,7 @@ void OReportController::openZoomDialog()
         }
         catch(const uno::Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
         SfxItemPool::Free(pPool);
 

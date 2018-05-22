@@ -100,7 +100,6 @@ ScColumn::ScColumn() :
 ScColumn::~ScColumn() COVERITY_NOEXCEPT_FALSE
 {
     FreeAll();
-    delete pAttrArray;
 }
 
 void ScColumn::Init(SCCOL nNewCol, SCTAB nNewTab, ScDocument* pDoc, bool bEmptyAttrArray)
@@ -108,9 +107,9 @@ void ScColumn::Init(SCCOL nNewCol, SCTAB nNewTab, ScDocument* pDoc, bool bEmptyA
     nCol = nNewCol;
     nTab = nNewTab;
     if ( bEmptyAttrArray )
-        pAttrArray = new ScAttrArray( nCol, nTab, pDoc, nullptr );
+        pAttrArray.reset(new ScAttrArray( nCol, nTab, pDoc, nullptr ));
     else
-        pAttrArray = new ScAttrArray( nCol, nTab, pDoc, &pDoc->maTabs[nTab]->aDefaultColAttrArray );
+        pAttrArray.reset(new ScAttrArray( nCol, nTab, pDoc, &pDoc->maTabs[nTab]->aDefaultColAttrArray ));
 }
 
 SCROW ScColumn::GetNextUnprotected( SCROW nRow, bool bUp ) const
@@ -207,7 +206,7 @@ bool ScColumn::HasSelectionMatrixFragment(const ScMarkData& rMark) const
     ScRangeList aRanges = rMark.GetMarkedRanges();
     for (size_t i = 0, n = aRanges.size(); i < n; ++i)
     {
-        const ScRange& r = *aRanges[i];
+        const ScRange& r = aRanges[i];
         if (nTab < r.aStart.Tab() || r.aEnd.Tab() < nTab)
             continue;
 
@@ -384,7 +383,7 @@ const ScPatternAttr* ScColumn::GetMostUsedPattern( SCROW nStartRow, SCROW nEndRo
     const ScPatternAttr* pMaxPattern = nullptr;
     size_t nMaxCount = 0;
 
-    ScAttrIterator aAttrIter( pAttrArray, nStartRow, nEndRow, GetDoc()->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), nStartRow, nEndRow, GetDoc()->GetDefPattern() );
     const ScPatternAttr* pPattern;
     SCROW nAttrRow1 = 0, nAttrRow2 = 0;
 
@@ -626,7 +625,7 @@ const ScStyleSheet* ScColumn::GetSelectionStyle( const ScMarkData& rMark, bool& 
     SCROW nBottom;
     while (bEqual && aMultiIter.Next( nTop, nBottom ))
     {
-        ScAttrIterator aAttrIter( pAttrArray, nTop, nBottom, pDocument->GetDefPattern() );
+        ScAttrIterator aAttrIter( pAttrArray.get(), nTop, nBottom, pDocument->GetDefPattern() );
         SCROW nRow;
         SCROW nDummy;
         const ScPatternAttr* pPattern;
@@ -652,7 +651,7 @@ const ScStyleSheet* ScColumn::GetAreaStyle( bool& rFound, SCROW nRow1, SCROW nRo
     const ScStyleSheet* pStyle = nullptr;
     const ScStyleSheet* pNewStyle;
 
-    ScAttrIterator aAttrIter( pAttrArray, nRow1, nRow2, GetDoc()->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), nRow1, nRow2, GetDoc()->GetDefPattern() );
     SCROW nRow;
     SCROW nDummy;
     const ScPatternAttr* pPattern;
@@ -937,7 +936,7 @@ public:
                 std::vector<EditTextObject*> aCloned;
                 aCloned.reserve(nDataSize);
                 for (; it != itEnd; ++it)
-                    aCloned.push_back(ScEditUtil::Clone(**it, *mrDestCol.GetDoc()));
+                    aCloned.push_back(ScEditUtil::Clone(**it, *mrDestCol.GetDoc()).release());
 
                 maDestPos.miCellPos = mrDestCol.GetCellStore().set(
                     maDestPos.miCellPos, nTopRow, aCloned.begin(), aCloned.end());
@@ -1183,9 +1182,9 @@ void ScColumn::CopyCellToDocument( SCROW nSrcRow, SCROW nDestRow, ScColumn& rDes
         {
             EditTextObject* p = sc::edittext_block::at(*it->data, aPos.second);
             if (pDocument == rDestCol.GetDoc())
-                rDestCol.maCells.set(nDestRow, p->Clone());
+                rDestCol.maCells.set(nDestRow, p->Clone().release());
             else
-                rDestCol.maCells.set(nDestRow, ScEditUtil::Clone(*p, *rDestCol.GetDoc()));
+                rDestCol.maCells.set(nDestRow, ScEditUtil::Clone(*p, *rDestCol.GetDoc()).release());
         }
         break;
         case sc::element_type_formula:
@@ -1484,7 +1483,7 @@ class CopyByCloneHandler
                 EditEngine& rEngine = mrDestCol.GetDoc()->GetEditEngine();
                 rEngine.SetText(aStr.getString());
                 maDestPos.miCellPos =
-                    mrDestCol.GetCellStore().set(maDestPos.miCellPos, nRow, rEngine.CreateTextObject());
+                    mrDestCol.GetCellStore().set(maDestPos.miCellPos, nRow, rEngine.CreateTextObject().release());
             }
             else
             {
@@ -1628,7 +1627,7 @@ public:
                 std::vector<EditTextObject*> aCloned;
                 aCloned.reserve(nDataSize);
                 for (; it != itEnd; ++it)
-                    aCloned.push_back(ScEditUtil::Clone(**it, *mrDestCol.GetDoc()));
+                    aCloned.push_back(ScEditUtil::Clone(**it, *mrDestCol.GetDoc()).release());
 
                 maDestPos.miCellPos = mrDestCol.GetCellStore().set(
                     maDestPos.miCellPos, nRow, aCloned.begin(), aCloned.end());
@@ -1765,7 +1764,7 @@ void ScColumn::CopyScenarioFrom( const ScColumn& rSrcCol )
 {
     //  This is the scenario table, the data is copied into it
     ScDocument* pDocument = GetDoc();
-    ScAttrIterator aAttrIter( pAttrArray, 0, MAXROW, pDocument->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), 0, MAXROW, pDocument->GetDefPattern() );
     SCROW nStart = -1, nEnd = -1;
     const ScPatternAttr* pPattern = aAttrIter.Next( nStart, nEnd );
     while (pPattern)
@@ -1794,7 +1793,7 @@ void ScColumn::CopyScenarioTo( ScColumn& rDestCol ) const
 {
     //  This is the scenario table, the data is copied to the other
     ScDocument* pDocument = GetDoc();
-    ScAttrIterator aAttrIter( pAttrArray, 0, MAXROW, pDocument->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), 0, MAXROW, pDocument->GetDefPattern() );
     SCROW nStart = -1, nEnd = -1;
     const ScPatternAttr* pPattern = aAttrIter.Next( nStart, nEnd );
     while (pPattern)
@@ -1819,7 +1818,7 @@ void ScColumn::CopyScenarioTo( ScColumn& rDestCol ) const
 bool ScColumn::TestCopyScenarioTo( const ScColumn& rDestCol ) const
 {
     bool bOk = true;
-    ScAttrIterator aAttrIter( pAttrArray, 0, MAXROW, GetDoc()->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), 0, MAXROW, GetDoc()->GetDefPattern() );
     SCROW nStart = 0, nEnd = 0;
     const ScPatternAttr* pPattern = aAttrIter.Next( nStart, nEnd );
     while (pPattern && bOk)
@@ -1837,7 +1836,7 @@ void ScColumn::MarkScenarioIn( ScMarkData& rDestMark ) const
 {
     ScRange aRange( nCol, 0, nTab );
 
-    ScAttrIterator aAttrIter( pAttrArray, 0, MAXROW, GetDoc()->GetDefPattern() );
+    ScAttrIterator aAttrIter( pAttrArray.get(), 0, MAXROW, GetDoc()->GetDefPattern() );
     SCROW nStart = -1, nEnd = -1;
     const ScPatternAttr* pPattern = aAttrIter.Next( nStart, nEnd );
     while (pPattern)
@@ -1945,9 +1944,7 @@ void ScColumn::SwapCol(ScColumn& rCol)
     UpdateNoteCaptions(0, MAXROW);
     rCol.UpdateNoteCaptions(0, MAXROW);
 
-    ScAttrArray* pTempAttr = rCol.pAttrArray;
-    rCol.pAttrArray = pAttrArray;
-    pAttrArray = pTempAttr;
+    std::swap(pAttrArray, rCol.pAttrArray);
 
     // AttrArray needs to have the right column number
     pAttrArray->SetCol(nCol);

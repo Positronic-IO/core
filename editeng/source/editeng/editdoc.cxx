@@ -21,7 +21,6 @@
 #include <comphelper/string.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 
 #include <editeng/tstpitem.hxx>
@@ -1626,7 +1625,7 @@ sal_uLong ContentNode::GetExpandedLen() const
     return nLen;
 }
 
-OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos, bool bResolveFields) const
+OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos) const
 {
     if ( nEndPos < 0 || nEndPos > Len() )
         nEndPos = Len();
@@ -1658,8 +1657,7 @@ OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos, bo
                 case EE_FEATURE_LINEBR: aStr += "\x0A";
                 break;
                 case EE_FEATURE_FIELD:
-                    if ( bResolveFields )
-                        aStr += static_cast<const EditCharAttribField*>(pNextFeature)->GetFieldValue();
+                    aStr += static_cast<const EditCharAttribField*>(pNextFeature)->GetFieldValue();
                 break;
                 default:    OSL_FAIL( "What feature?" );
             }
@@ -2163,7 +2161,7 @@ OUString EditDoc::GetParaAsString( sal_Int32 nNode ) const
 OUString EditDoc::GetParaAsString(
     const ContentNode* pNode, sal_Int32 nStartPos, sal_Int32 nEndPos)
 {
-    return pNode->GetExpandedText(nStartPos, nEndPos, true/*bResolveFields*/);
+    return pNode->GetExpandedText(nStartPos, nEndPos);
 }
 
 EditPaM EditDoc::GetStartPaM() const
@@ -2280,7 +2278,7 @@ EditPaM EditDoc::InsertParaBreak( EditPaM aPaM, bool bKeepEndingAttribs )
         OUString aFollow( pStyle->GetFollow() );
         if ( !aFollow.isEmpty() && ( aFollow != pStyle->GetName() ) )
         {
-            SfxStyleSheetBase* pNext = pStyle->GetPool().Find( aFollow, pStyle->GetFamily() );
+            SfxStyleSheetBase* pNext = pStyle->GetPool()->Find( aFollow, pStyle->GetFamily() );
             pNode->SetStyleSheet( static_cast<SfxStyleSheet*>(pNext) );
         }
     }
@@ -2830,10 +2828,9 @@ EditCharAttrib* CharAttribList::FindAttrib( sal_uInt16 nWhich, sal_Int32 nPos )
 const EditCharAttrib* CharAttribList::FindNextAttrib( sal_uInt16 nWhich, sal_Int32 nFromPos ) const
 {
     assert(nWhich);
-    AttribsType::const_iterator it = aAttribs.begin(), itEnd = aAttribs.end();
-    for (; it != itEnd; ++it)
+    for (auto const& attrib : aAttribs)
     {
-        const EditCharAttrib& rAttr = *it->get();
+        const EditCharAttrib& rAttr = *attrib.get();
         if (rAttr.GetStart() >= nFromPos && rAttr.Which() == nWhich)
             return &rAttr;
     }

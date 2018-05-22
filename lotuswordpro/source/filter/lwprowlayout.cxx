@@ -118,7 +118,7 @@ void LwpRowLayout::SetRowMap()
 void LwpRowLayout::RegisterStyle()
 {
     // register row style
-    XFRowStyle *pRowStyle = new XFRowStyle();
+    std::unique_ptr<XFRowStyle> pRowStyle(new XFRowStyle());
 
     if (m_nDirection & 0x0030)
     {
@@ -129,7 +129,7 @@ void LwpRowLayout::RegisterStyle()
         pRowStyle->SetRowHeight(static_cast<float>(LwpTools::ConvertFromUnitsToMetric(cheight)));
     }
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    m_StyleName = pXFStyleManager->AddStyle(pRowStyle).m_pStyle->GetStyleName();
+    m_StyleName = pXFStyleManager->AddStyle(std::move(pRowStyle)).m_pStyle->GetStyleName();
 
     LwpTableLayout* pTableLayout = GetParentTableLayout();
     if (pTableLayout)
@@ -232,7 +232,7 @@ void LwpRowLayout::ConvertRow(rtl::Reference<XFTable> const & pXFTable,sal_uInt8
         {
             sal_uInt8 nColID = m_ConnCellList[nMarkConnCell]->GetColID()
                     +m_ConnCellList[nMarkConnCell]->GetNumcols()-1;
-            xXFCell = m_ConnCellList[nMarkConnCell]->ConvertCell(
+            xXFCell = m_ConnCellList[nMarkConnCell]->DoConvertCell(
                 pTable->GetObjectID(),
                 crowid+m_ConnCellList[nMarkConnCell]->GetNumrows()-1,
                 m_ConnCellList[nMarkConnCell]->GetColID());
@@ -265,12 +265,11 @@ void LwpRowLayout::RegisterCurRowStyle(XFRow* pXFRow,sal_uInt16 nRowMark)
         return;
     double fHeight = pRowStyle->GetRowHeight();
 
-    XFRowStyle* pNewStyle = new XFRowStyle;
+    std::unique_ptr<XFRowStyle> pNewStyle(new XFRowStyle);
     *pNewStyle = *pRowStyle;
     LwpTableLayout* pTableLayout = GetParentTableLayout();
     if (!pTableLayout)
     {
-        delete pNewStyle;
         return;
     }
     std::map<sal_uInt16,LwpRowLayout*> RowsMap = pTableLayout->GetRowsMap();
@@ -301,7 +300,7 @@ void LwpRowLayout::RegisterCurRowStyle(XFRow* pXFRow,sal_uInt16 nRowMark)
         pNewStyle->SetRowHeight(static_cast<float>(fHeight));
     }
 
-    pXFRow->SetStyleName(pXFStyleManager->AddStyle(pNewStyle).m_pStyle->GetStyleName());
+    pXFRow->SetStyleName(pXFStyleManager->AddStyle(std::move(pNewStyle)).m_pStyle->GetStyleName());
 }
 
 /**
@@ -402,7 +401,7 @@ void LwpRowLayout::ConvertCommonRow(rtl::Reference<XFTable> const & pXFTable, sa
                     nCellEndCol = i+pConnCell->GetNumcols()-1;
                     i = nCellEndCol;
                 }
-                xCell = pCellLayout->ConvertCell(pTable->GetObjectID(),crowid,i);
+                xCell = pCellLayout->DoConvertCell(pTable->GetObjectID(),crowid,i);
                 break;
             }
             rCellID = pCellLayout->GetNext();
@@ -415,7 +414,7 @@ void LwpRowLayout::ConvertCommonRow(rtl::Reference<XFTable> const & pXFTable, sa
             LwpCellLayout * pDefaultCell = pTableLayout->GetDefaultCellLayout();
             if (pDefaultCell)
             {
-                xCell = pDefaultCell->ConvertCell(
+                xCell = pDefaultCell->DoConvertCell(
                     pTable->GetObjectID(),crowid, i);
             }
             else

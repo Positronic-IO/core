@@ -60,7 +60,6 @@
 #include <editutil.hxx>
 #include <inputopt.hxx>
 #include <inputwin.hxx>
-#include <scresid.hxx>
 #include <dbdata.hxx>
 #include <reffact.hxx>
 #include <viewuno.hxx>
@@ -328,11 +327,6 @@ void ScTabViewShell::UpdateOleZoom()
                             Fraction( aWinHMM.Height(),aObjSize.Height() ) );
         }
     }
-}
-
-void ScTabViewShell::AdjustPosSizePixel( const Point &rPos, const Size &rSize )
-{
-    OuterResizePixel( rPos, rSize );
 }
 
 void ScTabViewShell::InnerResizePixel( const Point &rOfs, const Size &rSize, bool inplaceEditModeChange )
@@ -1055,13 +1049,13 @@ bool ScTabViewShell::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> ScTabViewShell::CreatePrintOptionsPage( vcl::Window *pParent, const SfxItemSet &rOptions )
+VclPtr<SfxTabPage> ScTabViewShell::CreatePrintOptionsPage(weld::Container* pPage, const SfxItemSet &rOptions )
 {
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
     OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
     ::CreateTabPage ScTpPrintOptionsCreate = pFact->GetTabPageCreatorFunc(RID_SC_TP_PRINT);
     if ( ScTpPrintOptionsCreate )
-        return ScTpPrintOptionsCreate( pParent, &rOptions );
+        return ScTpPrintOptionsCreate(pPage, &rOptions);
     return VclPtr<SfxTabPage>();
 }
 

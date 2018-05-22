@@ -99,12 +99,12 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/autoformattable \
 	sw/uiconfig/swriter/ui/autotext \
 	sw/uiconfig/swriter/ui/bibliographyentry \
+	sw/uiconfig/swriter/ui/bibliofragment \
 	sw/uiconfig/swriter/ui/bulletsandnumbering \
 	sw/uiconfig/swriter/ui/businessdatapage \
 	sw/uiconfig/swriter/ui/cannotsavelabeldialog \
 	sw/uiconfig/swriter/ui/captiondialog \
 	sw/uiconfig/swriter/ui/captionoptions \
-	sw/uiconfig/swriter/ui/cardformatpage \
 	sw/uiconfig/swriter/ui/cardmediumpage \
 	sw/uiconfig/swriter/ui/ccdialog \
 	sw/uiconfig/swriter/ui/characterproperties \
@@ -239,6 +239,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/rowheight \
 	sw/uiconfig/swriter/ui/saveashtmldialog \
 	sw/uiconfig/swriter/ui/savelabeldialog \
+	sw/uiconfig/swriter/ui/savemonitordialog \
 	sw/uiconfig/swriter/ui/sectionpage \
 	sw/uiconfig/swriter/ui/selectaddressdialog \
 	sw/uiconfig/swriter/ui/selectautotextdialog \
@@ -246,7 +247,6 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/selectindexdialog \
 	sw/uiconfig/swriter/ui/selecttabledialog \
 	sw/uiconfig/swriter/ui/sidebarpage \
-	sw/uiconfig/swriter/ui/signatureline \
 	sw/uiconfig/swriter/ui/pageformatpanel \
 	sw/uiconfig/swriter/ui/pagestylespanel \
 	sw/uiconfig/swriter/ui/pageheaderpanel \

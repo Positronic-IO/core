@@ -33,7 +33,7 @@ $(eval $(call gb_Library_add_defs,vclplug_qt5,\
 $(eval $(call gb_Library_use_sdk_api,vclplug_qt5))
 
 $(eval $(call gb_Library_use_libraries,vclplug_qt5,\
-    vclplug_gen \
+    $(if $(USING_X11),vclplug_gen) \
     vcl \
     tl \
     utl \
@@ -80,8 +80,9 @@ endif
 $(eval $(call gb_Library_add_exception_objects,vclplug_qt5,\
     vcl/qt5/Qt5Bitmap \
     vcl/qt5/Qt5Data \
-    vcl/qt5/Qt5Frame \
+    vcl/qt5/Qt5Font \
     vcl/qt5/Qt5FontFace \
+    vcl/qt5/Qt5Frame \
     vcl/qt5/Qt5Graphics \
     vcl/qt5/Qt5Graphics_Controls \
     vcl/qt5/Qt5Graphics_GDI \

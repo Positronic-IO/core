@@ -103,14 +103,14 @@ private:
 public:
                             FileDialogHelper(sal_Int16 nDialogType,
                                              FileDialogFlags nFlags,
-                                             const vcl::Window* _pPreferredParent);
+                                             weld::Window* pPreferredParent);
 
                             FileDialogHelper(sal_Int16 nDialogType,
                                              FileDialogFlags nFlags,
                                              const OUString& rFactory,
                                              SfxFilterFlags nMust,
                                              SfxFilterFlags nDont,
-                                             const vcl::Window* _pPreferredParent);
+                                             weld::Window* pPreferredParent);
 
                             FileDialogHelper(sal_Int16 nDialogType,
                                              FileDialogFlags nFlags,
@@ -120,7 +120,7 @@ public:
                                              SfxFilterFlags nDont,
                                              const OUString& rStandardDir,
                                              const css::uno::Sequence< OUString >& rBlackList,
-                                             const vcl::Window* _pPreferredParent);
+                                             weld::Window* pPreferredParent);
 
                             FileDialogHelper(sal_Int16 nDialogType,
                                              FileDialogFlags nFlags,
@@ -128,7 +128,7 @@ public:
                                              const OUString& aExtName,
                                              const OUString& rStandardDir,
                                              const css::uno::Sequence< OUString >& rBlackList,
-                                             const vcl::Window* _pPreferredParent);
+                                             weld::Window* pPreferredParent);
 
     virtual                 ~FileDialogHelper();
 
@@ -243,10 +243,9 @@ public:
 #define SFX2_IMPL_DIALOG_OOO 2
 #define SFX2_IMPL_DIALOG_REMOTE 3
 
-ErrCode FileOpenDialog_Impl( const vcl::Window* pParent,
+ErrCode FileOpenDialog_Impl( weld::Window* pParent,
                              sal_Int16 nDialogType,
                              FileDialogFlags nFlags,
-                             const OUString& rFact,
                              std::vector<OUString>& rpURLList,
                              OUString& rFilter,
                              SfxItemSet *& rpSet,
@@ -256,7 +255,7 @@ ErrCode FileOpenDialog_Impl( const vcl::Window* pParent,
                              const css::uno::Sequence< OUString >& rBlackList = css::uno::Sequence< OUString >());
 
 
-ErrCode RequestPassword(const std::shared_ptr<const SfxFilter>& pCurrentFilter, OUString const & aURL, SfxItemSet* pSet);
+ErrCode RequestPassword(const std::shared_ptr<const SfxFilter>& pCurrentFilter, OUString const & aURL, SfxItemSet* pSet, const css::uno::Reference<css::awt::XWindow>& rParent);
 }
 
 #endif

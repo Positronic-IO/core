@@ -433,6 +433,8 @@ sal_Int32 OStatementCommonBase::getStatementChangeCount()
         case isc_info_sql_stmt_delete:
             aDesiredInfoType = isc_info_req_delete_count;
             break;
+        case isc_info_sql_stmt_exec_procedure:
+            return 0; // cannot determine
         default:
             throw SQLException(); // TODO: better error message?
     }
@@ -451,7 +453,7 @@ sal_Int32 OStatementCommonBase::getStatementChangeCount()
 
             if (aToken == aDesiredInfoType)
             {
-                return sal_Int32(isc_vax_integer(pResults + 3, aLength));
+                return isc_vax_integer(pResults + 3, aLength);
             }
 
             pResults += (3 + aLength);

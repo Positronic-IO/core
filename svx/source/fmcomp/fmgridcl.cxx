@@ -53,7 +53,6 @@
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
-#include <comphelper/numbers.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/string.hxx>
@@ -969,7 +968,7 @@ void FmGridHeader::PostExecuteColumnContextMenu(sal_uInt16 nColId, const PopupMe
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1233,7 +1232,7 @@ void FmGridControl::DeleteSelectedRows()
                 // there is a next row to position on
                 if (SeekCursor(nIdx))
                 {
-                    GetSeekRow()->SetState(m_pSeekCursor, true);
+                    GetSeekRow()->SetState(m_pSeekCursor.get(), true);
 
                     bNewPos = true;
                     // if it's not the row for inserting we keep the bookmark
@@ -1247,7 +1246,7 @@ void FmGridControl::DeleteSelectedRows()
                 nIdx = FirstSelectedRow() - 1;
                 if (nIdx >= 0 && SeekCursor(nIdx))
                 {
-                    GetSeekRow()->SetState(m_pSeekCursor, true);
+                    GetSeekRow()->SetState(m_pSeekCursor.get(), true);
 
                     bNewPos = true;
                     aBookmark = m_pSeekCursor->getBookmark();
@@ -1439,7 +1438,7 @@ void FmGridControl::inserted()
         return;
 
     // line has been inserted, then reset the status and mode
-    xRow->SetState(m_pDataCursor, false);
+    xRow->SetState(m_pDataCursor.get(), false);
     xRow->SetNew(false);
 
 }
@@ -1509,7 +1508,7 @@ void FmGridControl::ColumnResized(sal_uInt16 nId)
     DbGridControl::ColumnResized(nId);
 
     // transfer value to the model
-    DbGridColumn* pCol = DbGridControl::GetColumns().at( GetModelColumnPos(nId) );
+    DbGridColumn* pCol = DbGridControl::GetColumns()[ GetModelColumnPos(nId) ].get();
     Reference< css::beans::XPropertySet >  xColModel(pCol->getModel());
     if (xColModel.is())
     {
@@ -1551,7 +1550,7 @@ void FmGridControl::ColumnMoved(sal_uInt16 nId)
     {
         // locate the column and move in the model;
         // get ColumnPos
-        DbGridColumn* pCol = DbGridControl::GetColumns().at( GetModelColumnPos(nId) );
+        DbGridColumn* pCol = DbGridControl::GetColumns()[ GetModelColumnPos(nId) ].get();
         Reference< css::beans::XPropertySet >  xCol;
 
         // inserting must be based on the column positions
@@ -1613,7 +1612,7 @@ void FmGridControl::InitColumnsByModels(const Reference< css::container::XIndexC
             nWidth = LogicToPixel(Point(nWidth, 0), MapMode(MapUnit::Map10thMM)).X();
 
         AppendColumn(aName, static_cast<sal_uInt16>(nWidth));
-        DbGridColumn* pCol = DbGridControl::GetColumns().at( i );
+        DbGridColumn* pCol = DbGridControl::GetColumns()[ i ].get();
         pCol->setModel(xCol);
     }
 
@@ -1717,7 +1716,7 @@ void FmGridControl::InitColumnsByFields(const Reference< css::container::XIndexA
     // inserting must be based on the column positions
     for (sal_Int32 i = 0; i < xColumns->getCount(); i++)
     {
-        DbGridColumn* pCol = GetColumns().at( i );
+        DbGridColumn* pCol = GetColumns()[ i ].get();
         OSL_ENSURE(pCol,"No grid column!");
         if ( pCol )
         {
@@ -1737,7 +1736,7 @@ void FmGridControl::HideColumn(sal_uInt16 nId)
     if (nPos == sal_uInt16(-1))
         return;
 
-    DbGridColumn* pColumn = GetColumns().at( nPos );
+    DbGridColumn* pColumn = GetColumns()[ nPos ].get();
     if (pColumn->IsHidden())
         GetPeer()->columnHidden(pColumn);
 
@@ -1768,7 +1767,7 @@ void FmGridControl::ShowColumn(sal_uInt16 nId)
     if (nPos == sal_uInt16(-1))
         return;
 
-    DbGridColumn* pColumn = GetColumns().at( nPos );
+    DbGridColumn* pColumn = GetColumns()[ nPos ].get();
     if (!pColumn->IsHidden())
         GetPeer()->columnVisible(pColumn);
 
@@ -1863,7 +1862,7 @@ Sequence< Any> FmGridControl::getSelectionBookmarks()
             // first, position the data cursor on the selected block
             if (SeekCursor(nIdx))
             {
-                GetSeekRow()->SetState(m_pSeekCursor, true);
+                GetSeekRow()->SetState(m_pSeekCursor.get(), true);
 
                 pBookmarks[i] = m_pSeekCursor->getBookmark();
             }

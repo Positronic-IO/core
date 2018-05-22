@@ -105,7 +105,6 @@ namespace svt
 
     private:
         INetURLObject           m_aURL;
-        OUString                m_sLocalName;       // redundant - last segment of m_aURL
         util::DateTime          m_aLastModified;    // date of last modification as reported by UCP
         TemplateFolderContent   m_aSubContents;     // sorted (by name) list of the children
 
@@ -143,7 +142,6 @@ namespace svt
         :m_aURL( _rURL )
     {
         DBG_ASSERT( INetProtocol::NotValid != m_aURL.GetProtocol(), "TemplateContent::TemplateContent: invalid URL!" );
-        m_sLocalName = m_aURL.getName();
         implResetDate();
     }
 
@@ -379,7 +377,7 @@ namespace svt
         // will be lazy inited; never access directly; use getOfficeInstDirs().
         uno::Reference< util::XOfficeInstallationDirectories > m_xOfficeInstDirs;
 
-        SvStream*                       m_pCacheStream;
+        std::unique_ptr<SvStream>       m_pCacheStream;
         bool                            m_bNeedsUpdate : 1;
         bool                            m_bKnowState : 1;
         bool                            m_bValidCurrentState : 1;
@@ -518,7 +516,7 @@ namespace svt
 
     void TemplateFolderCacheImpl::closeCacheStream( )
     {
-        DELETEZ( m_pCacheStream );
+        m_pCacheStream.reset();
     }
 
 
@@ -704,12 +702,12 @@ namespace svt
         aStorageURL.Append( ".templdir.cache" );
 
         // open the stream
-        m_pCacheStream = UcbStreamHelper::CreateStream( aStorageURL.GetMainURL( INetURLObject::DecodeMechanism::ToIUri ),
-            _bForRead ? StreamMode::READ | StreamMode::NOCREATE : StreamMode::WRITE | StreamMode::TRUNC );
+        m_pCacheStream.reset( UcbStreamHelper::CreateStream( aStorageURL.GetMainURL( INetURLObject::DecodeMechanism::ToIUri ),
+            _bForRead ? StreamMode::READ | StreamMode::NOCREATE : StreamMode::WRITE | StreamMode::TRUNC ) );
         DBG_ASSERT( m_pCacheStream, "TemplateFolderCacheImpl::openCacheStream: could not open/create the cache stream!" );
         if ( m_pCacheStream && m_pCacheStream->GetErrorCode() )
         {
-            DELETEZ( m_pCacheStream );
+            m_pCacheStream.reset();
         }
 
         if ( m_pCacheStream )

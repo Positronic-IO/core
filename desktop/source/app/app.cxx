@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <config_features.h>
+#include <config_java.h>
 #include <config_folders.h>
 
 #include <sal/config.h>
@@ -1090,10 +1091,9 @@ void restartOnMac(bool passArguments) {
         }
     }
     std::vector< char const * > argPtrs;
-    for (std::vector< OString >::iterator i(args.begin()); i != args.end();
-         ++i)
+    for (auto const& elem : args)
     {
-        argPtrs.push_back(i->getStr());
+        argPtrs.push_back(elem.getStr());
     }
     argPtrs.push_back(nullptr);
     execv(execPath8.getStr(), const_cast< char ** >(&argPtrs[0]));
@@ -1452,7 +1452,7 @@ int Desktop::Main()
         // Check if bundled or shared extensions were added /removed
         // and process those extensions (has to be done before checking
         // the extension dependencies!
-        SynchronizeExtensionRepositories();
+        SynchronizeExtensionRepositories(m_bCleanedExtensionCache, this);
         bool bAbort = CheckExtensionDependencies();
         if ( bAbort )
             return EXIT_FAILURE;
@@ -1586,6 +1586,15 @@ int Desktop::Main()
         // FIXME: move this somewhere sensible.
 #if HAVE_FEATURE_OPENCL
         CheckOpenCLCompute(xDesktop);
+#endif
+
+        // In headless mode, reap the process started by fire_glxtest_process() early in soffice_main
+        // (desktop/source/app/sofficemain.cxx), in a code block that needs to be covered by the same
+        // #if condition as this code block:
+#if defined( UNX ) && !defined MACOSX && !defined IOS && !defined ANDROID && !defined(LIBO_HEADLESS) && HAVE_FEATURE_OPENGL
+        if (rCmdLineArgs.IsHeadless()) {
+            reap_glxtest_process();
+        }
 #endif
 
         // Release solar mutex just before we wait for our client to connect
@@ -1963,10 +1972,6 @@ IMPL_LINK_NOARG(Desktop, OpenClients_Impl, void*, void)
 void Desktop::OpenClients()
 {
 
-    // check if a document has been recovered - if there is one of if a document was loaded by cmdline, no default document
-    // should be created
-    bool bRecovery = false;
-
     const CommandLineArgs& rArgs = GetCommandLineArgs();
 
     if (!rArgs.IsQuickstart())
@@ -2061,7 +2066,7 @@ void Desktop::OpenClients()
         {
             try
             {
-                bRecovery = impl_callRecoveryUI(
+                impl_callRecoveryUI(
                     false          , // false => force recovery instead of emergency save
                     bExistsRecoveryData);
             }
@@ -2070,9 +2075,6 @@ void Desktop::OpenClients()
                 SAL_WARN( "desktop.app", "Error during recovery" << e);
             }
         }
-        else if (bExistsRecoveryData && bDisableRecovery && !rArgs.HasModuleParam())
-            // prevent new Writer doc
-            bRecovery = true;
 
         Reference< XSessionManagerListener2 > xSessionListener;
         try
@@ -2179,14 +2181,7 @@ void Desktop::OpenClients()
         // soffice was started as tray icon ...
         return;
 
-    if ( bRecovery )
-    {
-        ShowBackingComponent(nullptr);
-    }
-    else
-    {
-        OpenDefault();
-    }
+    OpenDefault();
 }
 
 void Desktop::OpenDefault()
@@ -2219,6 +2214,12 @@ void Desktop::OpenDefault()
 
     if ( aName.isEmpty() )
     {
+        if (aOpt.IsModuleInstalled(SvtModuleOptions::EModule::STARTMODULE))
+        {
+            ShowBackingComponent(nullptr);
+            return;
+        }
+
         // Old way to create a default document
         if ( aOpt.IsModuleInstalled( SvtModuleOptions::EModule::WRITER ) )
             aName = aOpt.GetFactoryEmptyDocumentURL( SvtModuleOptions::EFactory::WRITER );
@@ -2244,7 +2245,7 @@ OUString GetURL_Impl(
     const OUString& rName, boost::optional< OUString > const & cwdUrl )
 {
     // if rName is a vnd.sun.star.script URL do not attempt to parse it
-    // as INetURLObj does not handle handle there URLs
+    // as INetURLObj does not handle URLs there
     if (rName.startsWith("vnd.sun.star.script"))
     {
         return rName;

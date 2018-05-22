@@ -40,38 +40,27 @@ class UndoTextAPIChanged : public SdrUndoAction
 {
 public:
     UndoTextAPIChanged( SdrModel& rModel, TextApiObject* pTextObj );
-    virtual ~UndoTextAPIChanged() override;
 
     virtual void Undo() override;
     virtual void Redo() override;
 
 protected:
-    OutlinerParaObject* mpOldText;
-    OutlinerParaObject* mpNewText;
+    std::unique_ptr<OutlinerParaObject> mpOldText;
+    std::unique_ptr<OutlinerParaObject> mpNewText;
     rtl::Reference< TextApiObject > mxTextObj;
 };
 
 UndoTextAPIChanged::UndoTextAPIChanged(SdrModel& rModel, TextApiObject* pTextObj )
 : SdrUndoAction( rModel )
 , mpOldText( pTextObj->CreateText() )
-, mpNewText( nullptr )
 , mxTextObj( pTextObj )
 {
-#if defined __clang__ && defined _MSC_VER // workaround clang-cl ABI bug PR25641
-    css::uno::Sequence<css::beans::PropertyState> dummy; (void) dummy;
-#endif
-}
-
-UndoTextAPIChanged::~UndoTextAPIChanged()
-{
-    delete mpOldText;
-    delete mpNewText;
 }
 
 void UndoTextAPIChanged::Undo()
 {
     if( !mpNewText )
-        mpNewText = mxTextObj->CreateText();
+        mpNewText.reset( mxTextObj->CreateText() );
 
     mxTextObj->SetText( *mpOldText );
 }
@@ -96,7 +85,7 @@ class TextAPIEditSource : public SvxEditSource
     // refcounted
     std::shared_ptr<TextAPIEditSource_Impl> m_xImpl;
 
-    virtual SvxEditSource*      Clone() const override;
+    virtual std::unique_ptr<SvxEditSource> Clone() const override;
     virtual SvxTextForwarder*   GetTextForwarder() override;
     virtual void                UpdateData() override;
     explicit            TextAPIEditSource( const TextAPIEditSource& rSource );
@@ -194,9 +183,9 @@ TextAPIEditSource::TextAPIEditSource(const TextAPIEditSource& rSource)
 {
 }
 
-SvxEditSource* TextAPIEditSource::Clone() const
+std::unique_ptr<SvxEditSource> TextAPIEditSource::Clone() const
 {
-    return new TextAPIEditSource( *this );
+    return std::unique_ptr<SvxEditSource>(new TextAPIEditSource( *this ));
 }
 
 void TextAPIEditSource::UpdateData()

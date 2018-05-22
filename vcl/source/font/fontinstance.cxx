@@ -20,6 +20,9 @@
 
 #include <svdata.hxx>
 #include <fontinstance.hxx>
+#include <impfontcache.hxx>
+
+#include <PhysicalFontFace.hxx>
 
 // extend std namespace to add custom hash needed for LogicalFontInstance
 
@@ -37,9 +40,8 @@ namespace std
 }
 
 
-LogicalFontInstance::LogicalFontInstance( const FontSelectPattern& rFontSelData )
-    : maFontSelData( rFontSelData )
-    , mxFontMetric( new ImplFontMetricData( rFontSelData ))
+LogicalFontInstance::LogicalFontInstance(const PhysicalFontFace& rFontFace, const FontSelectPattern& rFontSelData )
+    : mxFontMetric( new ImplFontMetricData( rFontSelData ))
     , mpConversion( nullptr )
     , mnLineHeight( 0 )
     , mnOwnOrientation( 0 )
@@ -47,8 +49,12 @@ LogicalFontInstance::LogicalFontInstance( const FontSelectPattern& rFontSelData 
     , mbInit( false )
     , mpFontCache( nullptr )
     , mnRefCount( 1 )
+    , m_aFontSelData(rFontSelData)
+    , m_pHbFont(nullptr)
+    , m_nAveWidthFactor(1.0f)
+    , m_pFontFace(&rFontFace)
 {
-    maFontSelData.mpFontInstance = this;
+    const_cast<FontSelectPattern*>(&m_aFontSelData)->mpFontInstance = this;
 }
 
 LogicalFontInstance::~LogicalFontInstance()
@@ -56,6 +62,57 @@ LogicalFontInstance::~LogicalFontInstance()
     mpUnicodeFallbackList.reset();
     mpFontCache = nullptr;
     mxFontMetric = nullptr;
+
+    if (m_pHbFont)
+        hb_font_destroy(m_pHbFont);
+}
+
+hb_font_t* LogicalFontInstance::InitHbFont(hb_face_t* pHbFace) const
+{
+    assert(pHbFace);
+    hb_font_t* pHbFont = hb_font_create(pHbFace);
+    unsigned int nUPEM = hb_face_get_upem(pHbFace);
+    hb_font_set_scale(pHbFont, nUPEM, nUPEM);
+    hb_ot_font_set_funcs(pHbFont);
+    // hb_font_t keeps a reference to hb_face_t, so destroy this one.
+    hb_face_destroy(pHbFace);
+    return pHbFont;
+}
+
+int LogicalFontInstance::GetKashidaWidth()
+{
+    hb_font_t* pHbFont = GetHbFont();
+    hb_position_t nWidth = 0;
+    hb_codepoint_t nIndex = 0;
+
+    if (hb_font_get_glyph(pHbFont, 0x0640, 0, &nIndex))
+    {
+        double nXScale = 0;
+        GetScale(&nXScale, nullptr);
+        nWidth = hb_font_get_glyph_h_advance(pHbFont, nIndex) * nXScale;
+    }
+
+    return nWidth;
+}
+
+void LogicalFontInstance::GetScale(double* nXScale, double* nYScale)
+{
+    hb_face_t* pHbFace = hb_font_get_face(GetHbFont());
+    unsigned int nUPEM = hb_face_get_upem(pHbFace);
+
+    double nHeight(m_aFontSelData.mnHeight);
+
+    // On Windows, mnWidth is relative to average char width not font height,
+    // and we need to keep it that way for GDI to correctly scale the glyphs.
+    // Here we compensate for this so that HarfBuzz gives us the correct glyph
+    // positions.
+    double nWidth(m_aFontSelData.mnWidth ? m_aFontSelData.mnWidth * m_nAveWidthFactor : nHeight);
+
+    if (nYScale)
+        *nYScale = nHeight / nUPEM;
+
+    if (nXScale)
+        *nXScale = nWidth / nUPEM;
 }
 
 void LogicalFontInstance::Acquire()

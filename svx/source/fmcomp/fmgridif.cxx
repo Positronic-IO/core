@@ -44,7 +44,6 @@
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <com/sun/star/sdbcx/XRowLocate.hpp>
 
-#include <comphelper/container.hxx>
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/property.hxx>
@@ -574,7 +573,7 @@ void SAL_CALL FmXGridControl::createPeer(const Reference< css::awt::XToolkit >& 
                                     }
                                     catch( const Exception& )
                                     {
-                                        DBG_UNHANDLED_EXCEPTION();
+                                        DBG_UNHANDLED_EXCEPTION("svx");
                                     }
                                 }
                             }
@@ -596,7 +595,7 @@ void SAL_CALL FmXGridControl::createPeer(const Reference< css::awt::XToolkit >& 
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
 
             Reference< css::awt::XView >  xPeerView(getPeer(), UNO_QUERY);
@@ -1220,7 +1219,7 @@ Sequence< sal_Bool > SAL_CALL FmXGridPeer::queryFieldDataType( const Type& xType
     VclPtr< FmGridControl > pGrid = GetAs< FmGridControl >();
     sal_Int32 nColumns = pGrid->GetViewColCount();
 
-    DbGridColumns aColumns = pGrid->GetColumns();
+    std::vector< std::unique_ptr<DbGridColumn> > const & aColumns = pGrid->GetColumns();
 
     Sequence<sal_Bool> aReturnSequence(nColumns);
     sal_Bool* pReturnArray = aReturnSequence.getArray();
@@ -1243,7 +1242,7 @@ Sequence< sal_Bool > SAL_CALL FmXGridPeer::queryFieldDataType( const Type& xType
         sal_uInt16 nModelPos = pGrid->GetModelColumnPos(pGrid->GetColumnIdFromViewPos(static_cast<sal_uInt16>(i)));
         DBG_ASSERT(nModelPos != sal_uInt16(-1), "FmXGridPeer::queryFieldDataType : no model pos !");
 
-        pCol = aColumns[ nModelPos ];
+        pCol = aColumns[ nModelPos ].get();
         const DbGridRowRef xRow = pGrid->GetSeekRow();
         xFieldContent = (xRow.is() && xRow->HasField(pCol->GetFieldPos())) ? xRow->GetField(pCol->GetFieldPos()).getColumn() : Reference< css::sdb::XColumn > ();
         if (!xFieldContent.is())
@@ -1288,7 +1287,7 @@ Sequence< Any > SAL_CALL FmXGridPeer::queryFieldData( sal_Int32 nRow, const Type
     ENSURE_OR_THROW( xPaintRow.is(), "invalid paint row" );
 
     // I need the columns of the control for GetFieldText
-    DbGridColumns aColumns = pGrid->GetColumns();
+    std::vector< std::unique_ptr<DbGridColumn> > const & aColumns = pGrid->GetColumns();
 
     // and through all the columns
     sal_Int32 nColumnCount = pGrid->GetViewColCount();
@@ -1305,7 +1304,7 @@ Sequence< Any > SAL_CALL FmXGridPeer::queryFieldData( sal_Int32 nRow, const Type
 
         // don't use GetCurrentFieldValue to determine the field content as this isn't affected by the above SeekRow
         // FS - 30.09.99 - 68644
-        DbGridColumn* pCol = aColumns[ nModelPos ];
+        DbGridColumn* pCol = aColumns[ nModelPos ].get();
         xFieldContent = xPaintRow->HasField( pCol->GetFieldPos() )
                     ?   xPaintRow->GetField( pCol->GetFieldPos() ).getColumn()
                     :   Reference< XColumn > ();
@@ -1437,7 +1436,7 @@ void FmXGridPeer::propertyChange(const PropertyChangeEvent& evt)
             // in design mode it doesn't matter
             if (!isDesignMode())
             {
-                DbGridColumn* pCol = pGrid->GetColumns().at( i );
+                DbGridColumn* pCol = pGrid->GetColumns()[i].get();
 
                 pCol->SetAlignmentFromModel(-1);
                 bInvalidateColumn = true;
@@ -1728,7 +1727,7 @@ void FmXGridPeer::elementInserted(const ContainerEvent& evt)
     pGrid->AppendColumn(aName, static_cast<sal_uInt16>(nWidth), static_cast<sal_Int16>(::comphelper::getINT32(evt.Accessor)));
 
     // now set the column
-    DbGridColumn* pCol = pGrid->GetColumns().at( ::comphelper::getINT32(evt.Accessor) );
+    DbGridColumn* pCol = pGrid->GetColumns()[ ::comphelper::getINT32(evt.Accessor) ].get();
     pCol->setModel(xNewColumn);
 
     Any aHidden = xNewColumn->getPropertyValue(FM_PROP_HIDDEN);
@@ -1771,7 +1770,7 @@ void FmXGridPeer::elementReplaced(const ContainerEvent& evt)
     sal_uInt16 nNewPos = pGrid->GetModelColumnPos(nNewId);
 
     // set the model of the new column
-    DbGridColumn* pCol = pGrid->GetColumns().at( nNewPos );
+    DbGridColumn* pCol = pGrid->GetColumns()[ nNewPos ].get();
 
     // for initializing this grid column, we need the fields of the grid's data source
     Reference< XColumnsSupplier > xSuppColumns;
@@ -1821,7 +1820,7 @@ void FmXGridPeer::setProperty( const OUString& PropertyName, const Any& Value)
 
     if ( PropertyName == FM_PROP_TEXTLINECOLOR )
     {
-        ::Color aTextLineColor( bVoid ? COL_TRANSPARENT : ::comphelper::getINT32( Value ) );
+        ::Color aTextLineColor( bVoid ? COL_TRANSPARENT : ::Color(::comphelper::getINT32( Value )) );
         if (bVoid)
         {
             pGrid->SetTextLineColor();
@@ -1834,8 +1833,8 @@ void FmXGridPeer::setProperty( const OUString& PropertyName, const Any& Value)
         }
 
         // need to forward this to the columns
-        DbGridColumns& rColumns = const_cast<DbGridColumns&>(pGrid->GetColumns());
-        for (DbGridColumn* pLoop : rColumns)
+        std::vector< std::unique_ptr<DbGridColumn> > const & rColumns = pGrid->GetColumns();
+        for (auto const & pLoop : rColumns)
         {
             FmXGridCell* pXCell = pLoop->GetCell();
             if (pXCell)
@@ -2038,11 +2037,11 @@ Any FmXGridPeer::getProperty( const OUString& _rPropertyName )
         }
         else if ( _rPropertyName == FM_PROP_TEXTCOLOR )
         {
-            aProp <<= static_cast<sal_Int32>(pDataWindow->GetControlForeground().GetColor());
+            aProp <<= pDataWindow->GetControlForeground();
         }
         else if ( _rPropertyName == FM_PROP_BACKGROUNDCOLOR )
         {
-            aProp <<= static_cast<sal_Int32>(pDataWindow->GetControlBackground().GetColor());
+            aProp <<= pDataWindow->GetControlBackground();
         }
         else if ( _rPropertyName == FM_PROP_ROWHEIGHT )
         {
@@ -2335,7 +2334,7 @@ Any FmXGridPeer::getByIndex(sal_Int32 _nIndex)
     if ( nPos == GRID_COLUMN_NOT_FOUND )
         return aElement;
 
-    DbGridColumn* pCol = pGrid->GetColumns().at( nPos );
+    DbGridColumn* pCol = pGrid->GetColumns()[ nPos ].get();
     Reference< css::awt::XControl >  xControl(pCol->GetCell());
     aElement <<= xControl;
 
@@ -2716,10 +2715,8 @@ void FmXGridPeer::UpdateDispatches()
 
     if (!nDispatchersGot)
     {
-        delete[] m_pStateCache;
-        delete[] m_pDispatchers;
-        m_pStateCache = nullptr;
-        m_pDispatchers = nullptr;
+        m_pStateCache.reset();
+        m_pDispatchers.reset();
     }
 }
 
@@ -2736,8 +2733,8 @@ void FmXGridPeer::ConnectToDispatcher()
     const Sequence< css::util::URL>& aSupportedURLs = getSupportedURLs();
 
     // _before_ adding the status listeners (as the add should result in a statusChanged-call) !
-    m_pStateCache = new bool[aSupportedURLs.getLength()];
-    m_pDispatchers = new Reference< css::frame::XDispatch > [aSupportedURLs.getLength()];
+    m_pStateCache.reset(new bool[aSupportedURLs.getLength()]);
+    m_pDispatchers.reset(new Reference< css::frame::XDispatch > [aSupportedURLs.getLength()]);
 
     sal_uInt16 nDispatchersGot = 0;
     const css::util::URL* pSupportedURLs = aSupportedURLs.getConstArray();
@@ -2754,10 +2751,8 @@ void FmXGridPeer::ConnectToDispatcher()
 
     if (!nDispatchersGot)
     {
-        delete[] m_pStateCache;
-        delete[] m_pDispatchers;
-        m_pStateCache = nullptr;
-        m_pDispatchers = nullptr;
+        m_pStateCache.reset();
+        m_pDispatchers.reset();
     }
 }
 
@@ -2776,10 +2771,8 @@ void FmXGridPeer::DisConnectFromDispatcher()
             m_pDispatchers[i]->removeStatusListener(static_cast<css::frame::XStatusListener*>(this), *pSupportedURLs);
     }
 
-    delete[] m_pStateCache;
-    delete[] m_pDispatchers;
-    m_pStateCache = nullptr;
-    m_pDispatchers = nullptr;
+    m_pStateCache.reset();
+    m_pDispatchers.reset();
 }
 
 

@@ -74,13 +74,13 @@
 #include <svtools/langtab.hxx>
 #include <svtools/sfxecode.hxx>
 #include <unotools/configmgr.hxx>
-#include <unotools/securityoptions.hxx>
 #include <cppuhelper/weak.hxx>
 #include <unotools/streamwrap.hxx>
 
 #include <unotools/saveopt.hxx>
 #include <unotools/useroptions.hxx>
 #include <unotools/pathoptions.hxx>
+#include <unotools/securityoptions.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/diagnose_ex.h>
 #include <unotools/ucbhelper.hxx>
@@ -130,6 +130,7 @@
 #include <appbaslib.hxx>
 #include <appdata.hxx>
 #include "objstor.hxx"
+#include "exoticfileloadexception.hxx"
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::container;
@@ -645,6 +646,16 @@ bool SfxObjectShell::DoLoad( SfxMedium *pMed )
 
     pImpl->nLoadedFlags = SfxLoadedFlags::NONE;
     pImpl->bModelInitialized = false;
+
+    if (pFilter && !pFilter->IsEnabled())
+    {
+        SetError( ERRCODE_IO_FILTERDISABLED );
+    }
+
+    if ( pFilter && pFilter->IsExoticFormat() && !QueryAllowExoticFormat_Impl( getInteractionHandler(), aBaseURL, pMed->GetFilter()->GetUIName() ) )
+    {
+        SetError( ERRCODE_IO_ABORT );
+    }
 
     // initialize static language table so language-related extensions are learned before the document loads
     (void)SvtLanguageTable::GetLanguageEntryCount();
@@ -1228,7 +1239,9 @@ bool SfxObjectShell::SaveTo_Impl
                     //             if the url is not provided ( means the document is based on a stream ) this code is not
                     //             reachable.
                     rMedium.CloseAndRelease();
+                    rMedium.SetHasEmbeddedObjects(GetEmbeddedObjectContainer().HasEmbeddedObjects());
                     rMedium.GetOutputStorage();
+                    rMedium.SetHasEmbeddedObjects(false);
                 }
             }
             else if ( !bStorageBasedSource && !bStorageBasedTarget )
@@ -3041,7 +3054,7 @@ uno::Reference< embed::XStorage > const & SfxObjectShell::GetStorage()
         catch( uno::Exception& )
         {
             // TODO/LATER: error handling?
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sfx.doc");
         }
     }
 
@@ -3510,12 +3523,6 @@ bool SfxObjectShell::InsertGeneratedStream(SfxMedium&,
     return false;
 }
 
-void SfxObjectShell::CheckConfigOptions()
-{
-    // not handled.  Each app's shell needs to overwrite this method to add handler.
-    SetConfigOptionsChecked(true);
-}
-
 bool SfxObjectShell::IsConfigOptionsChecked() const
 {
     return pImpl->m_bConfigOptionsChecked;
@@ -3552,7 +3559,35 @@ bool SfxObjectShell::QuerySaveSizeExceededModules_Impl( const uno::Reference< ta
     return true;
 }
 
-// comphelper::IEmbeddedHelper
+bool SfxObjectShell::QueryAllowExoticFormat_Impl( const uno::Reference< task::XInteractionHandler >& xHandler, const OUString& rURL, const OUString& rFilterUIName )
+{
+    if ( SvtSecurityOptions().isTrustedLocationUri( rURL ) )
+    {
+        // Always load from trusted location
+        return true;
+    }
+    if ( officecfg::Office::Common::Security::LoadExoticFileFormats::get() == 0 )
+    {
+        // Refuse loading without question
+        return false;
+    }
+    else if ( officecfg::Office::Common::Security::LoadExoticFileFormats::get() == 2 )
+    {
+        // Always load without question
+        return true;
+    }
+    else if ( officecfg::Office::Common::Security::LoadExoticFileFormats::get() == 1 && xHandler.is() )
+    {
+        // Display a warning and let the user decide
+        rtl::Reference<ExoticFileLoadException> xException(new ExoticFileLoadException( rURL, rFilterUIName ));
+        uno::Reference< task::XInteractionRequest > xReq( xException.get() );
+        xHandler->handle( xReq );
+        return xException.get()->isApprove();
+    }
+    // No interaction handler, default is to continue to load
+    return true;
+}
+
 uno::Reference< task::XInteractionHandler > SfxObjectShell::getInteractionHandler() const
 {
     uno::Reference< task::XInteractionHandler > xRet;

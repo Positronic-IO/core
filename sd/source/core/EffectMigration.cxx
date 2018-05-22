@@ -406,7 +406,7 @@ EffectSequence::iterator ImplFindEffect( MainSequencePtr const & pMainSequence, 
 
 static bool implIsInsideGroup( SdrObject const * pObj )
 {
-    return pObj && pObj->GetObjList() && pObj->GetObjList()->GetUpList();
+    return pObj && pObj->getParentOfSdrObject() && pObj->getParentOfSdrObject()->GetUpList();
 }
 
 void EffectMigration::SetAnimationEffect( SvxShape* pShape, AnimationEffect eEffect )
@@ -1019,7 +1019,7 @@ void EffectMigration::SetDimPrevious( SvxShape* pShape, bool bDimPrevious )
     Any aColor;
 
     if( bDimPrevious )
-        aColor <<= static_cast<sal_Int32>(COL_LIGHTGRAY);
+        aColor <<= COL_LIGHTGRAY;
 
     sd::MainSequencePtr pMainSequence = static_cast<SdPage*>(pObj->GetPage())->getMainSequence();
 

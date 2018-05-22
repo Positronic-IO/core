@@ -115,7 +115,6 @@
 #include <vcl/mapmod.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/metric.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/region.hxx>
 #include <vcl/salgtype.hxx>
@@ -296,7 +295,6 @@
 #include <svl/svldllapi.h>
 #include <svtools/svtdllapi.h>
 #include <tools/color.hxx>
-#include <tools/colordata.hxx>
 #include <tools/date.hxx>
 #include <tools/datetime.hxx>
 #include <tools/debug.hxx>

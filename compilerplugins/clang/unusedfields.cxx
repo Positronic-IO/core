@@ -13,7 +13,8 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-#include <set>
+#include <unordered_set>
+#include <vector>
 #include <algorithm>
 #include <sys/file.h>
 #include <unistd.h>
@@ -66,6 +67,7 @@ bool operator < (const MyFieldInfo &lhs, const MyFieldInfo &rhs)
 // try to limit the voluminous output a little
 static std::set<MyFieldInfo> touchedFromInsideSet;
 static std::set<MyFieldInfo> touchedFromOutsideSet;
+static std::set<MyFieldInfo> touchedFromOutsideConstructorSet;
 static std::set<MyFieldInfo> readFromSet;
 static std::set<MyFieldInfo> writeToSet;
 static std::set<MyFieldInfo> definitionSet;
@@ -152,6 +154,7 @@ public:
     bool TraverseCXXConstructorDecl( CXXConstructorDecl* );
     bool TraverseCXXMethodDecl( CXXMethodDecl* );
     bool TraverseFunctionDecl( FunctionDecl* );
+    bool TraverseIfStmt( IfStmt* );
 
 private:
     MyFieldInfo niceName(const FieldDecl*);
@@ -168,6 +171,7 @@ private:
     // For reasons I do not understand, parentFunctionDecl() is not reliable, so
     // we store the parent function on the way down the AST.
     FunctionDecl * insideFunctionDecl = nullptr;
+    std::vector<FieldDecl const *> insideConditionalCheckOfMemberSet;
 };
 
 void UnusedFields::run()
@@ -183,6 +187,8 @@ void UnusedFields::run()
             output += "inside:\t" + s.parentClass + "\t" + s.fieldName + "\n";
         for (const MyFieldInfo & s : touchedFromOutsideSet)
             output += "outside:\t" + s.parentClass + "\t" + s.fieldName + "\n";
+        for (const MyFieldInfo & s : touchedFromOutsideConstructorSet)
+            output += "outside-constructor:\t" + s.parentClass + "\t" + s.fieldName + "\n";
         for (const MyFieldInfo & s : readFromSet)
             output += "read:\t" + s.parentClass + "\t" + s.fieldName + "\n";
         for (const MyFieldInfo & s : writeToSet)
@@ -190,7 +196,7 @@ void UnusedFields::run()
         for (const MyFieldInfo & s : definitionSet)
             output += "definition:\t" + s.access + "\t" + s.parentClass + "\t" + s.fieldName + "\t" + s.fieldType + "\t" + s.sourceLocation + "\n";
         std::ofstream myfile;
-        myfile.open( SRCDIR "/loplugin.unusedfields.log", std::ios::app | std::ios::out);
+        myfile.open( WORKDIR "/loplugin.unusedfields.log", std::ios::app | std::ios::out);
         myfile << output;
         myfile.close();
     }
@@ -411,6 +417,21 @@ bool UnusedFields::TraverseFunctionDecl(FunctionDecl* functionDecl)
     bool ret = RecursiveASTVisitor::TraverseFunctionDecl(functionDecl);
     insideStreamOutputOperator = copy1;
     insideFunctionDecl = copy2;
+    return ret;
+}
+
+bool UnusedFields::TraverseIfStmt(IfStmt* ifStmt)
+{
+    FieldDecl const * memberFieldDecl = nullptr;
+    Expr const * cond = ifStmt->getCond()->IgnoreParenImpCasts();
+    if (auto memberExpr = dyn_cast<MemberExpr>(cond))
+    {
+        if ((memberFieldDecl = dyn_cast<FieldDecl>(memberExpr->getMemberDecl())))
+            insideConditionalCheckOfMemberSet.push_back(memberFieldDecl);
+    }
+    bool ret = RecursiveASTVisitor::TraverseIfStmt(ifStmt);
+    if (memberFieldDecl)
+        insideConditionalCheckOfMemberSet.pop_back();
     return ret;
 }
 
@@ -642,6 +663,13 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
         if (cxxRecordDecl1 && (cxxRecordDecl1 == insideMoveOrCopyOrCloneDeclParent))
             return;
     }
+
+    // if we're inside a block that looks like
+    //   if (fieldDecl)
+    //       ....
+    // then writes to this field don't matter, because unless we find another write to this field, this field is dead
+    if (std::find(insideConditionalCheckOfMemberSet.begin(), insideConditionalCheckOfMemberSet.end(), fieldDecl) != insideConditionalCheckOfMemberSet.end())
+        return;
 
     auto parentsRange = compiler.getASTContext().getParents(*memberExpr);
     const Stmt* child = memberExpr;
@@ -964,6 +992,8 @@ void UnusedFields::checkTouchedFromOutside(const FieldDecl* fieldDecl, const Exp
     } else {
         if (memberExprParentFunction->getParent() == fieldDecl->getParent()) {
             touchedFromInsideSet.insert(fieldInfo);
+            if (!constructorDecl)
+                touchedFromOutsideConstructorSet.insert(fieldInfo);
         } else {
             touchedFromOutsideSet.insert(fieldInfo);
         }

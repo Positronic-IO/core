@@ -19,7 +19,6 @@
 
 #include "CellLineStyleControl.hxx"
 #include <sc.hrc>
-#include <scresid.hxx>
 #include "CellLineStyleValueSet.hxx"
 #include <vcl/i18nhelp.hxx>
 #include <vcl/settings.hxx>
@@ -103,7 +102,7 @@ IMPL_LINK(CellLineStylePopup, VSSelectHdl, ValueSet*, pControl, void)
 {
     if(pControl == maCellLineStyleValueSet.get())
     {
-        const sal_uInt16 iPos(maCellLineStyleValueSet->GetSelectItemId());
+        const sal_uInt16 iPos(maCellLineStyleValueSet->GetSelectedItemId());
         SvxLineItem aLineItem(SID_FRAME_LINESTYLE);
         SvxBorderLineStyle nStyle = SvxBorderLineStyle::SOLID;
         sal_uInt16 n1 = 0;

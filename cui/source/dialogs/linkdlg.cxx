@@ -79,12 +79,12 @@ public:
 
 // attention, this array is indexed directly (0, 1, ...) in the code
 static long nTabs[] =
-    {   4, // Number of Tabs
+    {
         0, 77, 144, 209
     };
 
 
-SvBaseLinksDlg::SvBaseLinksDlg( vcl::Window * pParent, LinkManager* pMgr, bool bHtml )
+SvBaseLinksDlg::SvBaseLinksDlg( vcl::Window * pParent, LinkManager* pMgr, bool bHtmlMode )
     : ModalDialog( pParent, "BaseLinksDialog", "cui/ui/baselinksdialog.ui"),
     aStrAutolink( CuiResId( STR_AUTOLINK ) ),
     aStrManuallink( CuiResId( STR_MANUALLINK ) ),
@@ -93,7 +93,6 @@ SvBaseLinksDlg::SvBaseLinksDlg( vcl::Window * pParent, LinkManager* pMgr, bool b
     aStrCloselinkmsgMulti( CuiResId( STR_CLOSELINKMSG_MULTI ) ),
     aStrWaitinglink( CuiResId( STR_WAITINGLINK ) ),
     pLinkMgr( nullptr ),
-    bHtmlMode(bHtml),
     aUpdateIdle("cui SvBaseLinksDlg UpdateIdle")
 {
     get(m_pTbLinks, "TB_LINKS");
@@ -110,13 +109,13 @@ SvBaseLinksDlg::SvBaseLinksDlg( vcl::Window * pParent, LinkManager* pMgr, bool b
     get(m_pPbBreakLink, "BREAK_LINK");
 
     m_pTbLinks->SetSelectionMode( SelectionMode::Multiple );
-    m_pTbLinks->SetTabs( &nTabs[0] );
+    m_pTbLinks->SetTabs( SAL_N_ELEMENTS(nTabs), nTabs );
     FixedText *pFtFiles = get<FixedText>("FILES");
-    pFtFiles->set_width_request(LogicToPixel(Size(nTabs[2] - nTabs[1] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
+    pFtFiles->set_width_request(LogicToPixel(Size(nTabs[1] - nTabs[0] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
     FixedText *pFtLinks = get<FixedText>("LINKS");
-    pFtLinks->set_width_request(LogicToPixel(Size(nTabs[3] - nTabs[2] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
+    pFtLinks->set_width_request(LogicToPixel(Size(nTabs[2] - nTabs[1] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
     FixedText *pFtTypes = get<FixedText>("TYPE");
-    pFtTypes->set_width_request(LogicToPixel(Size(nTabs[4] - nTabs[3] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
+    pFtTypes->set_width_request(LogicToPixel(Size(nTabs[3] - nTabs[2] - 2, 0), MapMode(MapUnit::MapAppFont)).Width());
     m_pTbLinks->Resize();  // OS: hack for correct selection
 
     // UpdateTimer for DDE-/Grf-links, which are waited for
@@ -401,7 +400,7 @@ IMPL_LINK_NOARG( SvBaseLinksDlg, ChangeSourceClickHdl, Button *, void )
         sal_uLong nPos;
         SvBaseLink* pLink = GetSelEntry( &nPos );
         if ( pLink && !pLink->GetLinkSourceName().isEmpty() )
-            pLink->Edit( this, LINK( this, SvBaseLinksDlg, EndEditHdl ) );
+            pLink->Edit( GetFrameWeld(), LINK( this, SvBaseLinksDlg, EndEditHdl ) );
     }
 }
 

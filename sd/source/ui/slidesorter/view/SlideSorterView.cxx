@@ -45,8 +45,6 @@
 #include <drawdoc.hxx>
 #include <sdpage.hxx>
 #include <Window.hxx>
-#include <sdresid.hxx>
-#include <strings.hrc>
 
 #include <svl/itempool.hxx>
 #include <svx/svdpagv.hxx>
@@ -633,9 +631,9 @@ void SlideSorterView::CompleteRedraw (
     gFrameTimeSum += gFrameTimes[gFrameTimeIndex];
     gFrameTimeIndex = (gFrameTimeIndex+1) % gFrameTimeCount;
 
-    mrSlideSorter.GetContentWindow()->SetFillColor(COL_BLUE);
+    mrSlideSorter.GetContentWindow()->SetFillCOL_BLUE);
     mrSlideSorter.GetContentWindow()->DrawRect(gFrameTimeBox);
-    mrSlideSorter.GetContentWindow()->SetTextColor(COL_WHITE);
+    mrSlideSorter.GetContentWindow()->SetTextCOL_WHITE);
     mrSlideSorter.GetContentWindow()->DrawText(
         gFrameTimeBox,
         OUString::number(1 / (gFrameTimeSum / gFrameTimeCount)),

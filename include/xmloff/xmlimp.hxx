@@ -42,7 +42,7 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/document/XImporter.hpp>
 #include <com/sun/star/document/XFilter.hpp>
-#include <com/sun/star/document/XGraphicObjectResolver.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/document/XEmbeddedObjectResolver.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -55,6 +55,8 @@
 #include <xmloff/formlayerimport.hxx>
 #include <comphelper/attributelist.hxx>
 #include <sax/fastattribs.hxx>
+#include <rtl/ustring.hxx>
+#include <unordered_map>
 
 #include <com/sun/star/beans/NamedValue.hpp>
 
@@ -175,7 +177,7 @@ class XMLOFF_DLLPUBLIC SvXMLImport : public cppu::WeakImplHelper<
     css::uno::Reference< css::xml::sax::XLocator > mxLocator;
     css::uno::Reference< css::frame::XModel > mxModel;
     css::uno::Reference< css::util::XNumberFormatsSupplier > mxNumberFormatsSupplier;
-    css::uno::Reference< css::document::XGraphicObjectResolver > mxGraphicResolver;
+    css::uno::Reference< css::document::XGraphicStorageHandler > mxGraphicStorageHandler;
     css::uno::Reference< css::document::XEmbeddedObjectResolver > mxEmbeddedResolver;
     css::uno::Reference< css::beans::XPropertySet > mxImportInfo;
 
@@ -225,6 +227,7 @@ class XMLOFF_DLLPUBLIC SvXMLImport : public cppu::WeakImplHelper<
     css::uno::Reference< css::xml::sax::XFastDocumentHandler > mxFastDocumentHandler;
     static css::uno::Reference< css::xml::sax::XFastTokenHandler > xTokenHandler;
     static std::unordered_map< sal_Int32, std::pair< OUString, OUString > > aNamespaceMap;
+    static std::unordered_map< OUString, OUString, OUStringHash > aNamespaceURIPrefixMap;
     static bool bIsNSMapsInitialized;
 
     static void initializeNamespaceMaps();
@@ -238,7 +241,6 @@ class XMLOFF_DLLPUBLIC SvXMLImport : public cppu::WeakImplHelper<
 protected:
     bool                        mbIsFormsSupported;
     bool                        mbIsTableShapeSupported;
-    bool                        mbIsGraphicLoadOnDemandSupported;
 
     // Create top-level element context.
     // This method is called after the namespace map has been updated, but
@@ -269,9 +271,11 @@ protected:
     const css::uno::Reference< css::document::XEmbeddedObjectResolver >& GetEmbeddedResolver() const { return mxEmbeddedResolver; }
     inline void SetEmbeddedResolver( css::uno::Reference< css::document::XEmbeddedObjectResolver > const & _xEmbeddedResolver );
 
-    const css::uno::Reference< css::document::XGraphicObjectResolver >& GetGraphicResolver() const { return mxGraphicResolver; }
-    void SetGraphicResolver( css::uno::Reference< css::document::XGraphicObjectResolver > const & _xGraphicResolver );
-
+    const css::uno::Reference<css::document::XGraphicStorageHandler> & GetGraphicStorageHandler() const
+    {
+        return mxGraphicStorageHandler;
+    }
+    void SetGraphicStorageHandler(css::uno::Reference<css::document::XGraphicStorageHandler> const & rxGraphicStorageHandler);
 
     void CreateNumberFormatsSupplier_();
     void CreateDataStylesImport_();
@@ -378,7 +382,9 @@ public:
     XMLEventImportHelper& GetEventImport();
 
     static const OUString getNameFromToken( sal_Int32 nToken );
-    static const OUString getNamespacePrefixFromToken( sal_Int32 nToken );
+    static const OUString getNamespacePrefixFromToken(sal_Int32 nToken, const SvXMLNamespaceMap* pMap);
+    static const OUString getNamespaceURIFromToken( sal_Int32 nToken );
+    static const OUString getNamespacePrefixFromURI( const OUString& rURI );
 
     SvXMLNamespaceMap& GetNamespaceMap() { return *mpNamespaceMap; }
     const SvXMLNamespaceMap& GetNamespaceMap() const { return *mpNamespaceMap; }
@@ -403,14 +409,7 @@ public:
     css::uno::Reference<css::graphic::XGraphic> loadGraphicByURL(OUString const & rURL);
     css::uno::Reference<css::graphic::XGraphic> loadGraphicFromBase64(css::uno::Reference<css::io::XOutputStream> const & rxOutputStream);
 
-    // Convert a local package URL into either a graphic manager or a
-    // internal package URL. The later one happens only if bLoadURL is true
-    OUString ResolveGraphicObjectURL( const OUString& rURL, bool bLoadOnDemand );
-
-    css::uno::Reference< css::io::XOutputStream >
-          GetStreamForGraphicObjectURLFromBase64();
-    OUString ResolveGraphicObjectURLFromBase64(
-        const css::uno::Reference< css::io::XOutputStream >& rOut );
+    css::uno::Reference< css::io::XOutputStream > GetStreamForGraphicObjectURLFromBase64();
 
     bool IsPackageURL( const OUString& rURL ) const;
     OUString ResolveEmbeddedObjectURL( const OUString& rURL,
@@ -571,14 +570,6 @@ public:
     */
     sal_uInt16 getGeneratorVersion() const;
 
-    /** If true, the URL for graphic shapes may be stored as a package URL and
-        loaded later (on demand) by the application. Otherwise graphics are
-        loaded immediately and the graphic shape gets the graphic manager URL.
-
-        @see <member>mbIsGraphicLoadOnDemandSupported</member>
-     */
-    bool isGraphicLoadOnDemandSupported() const { return mbIsGraphicLoadOnDemandSupported;}
-
     /**
         Returns true if the embedded font document URL has already been processed.
         Otherwise returns false and consequent calls with the same URL will return true.
@@ -628,10 +619,10 @@ inline void SvXMLImport::SetEmbeddedResolver(
     mxEmbeddedResolver = _xEmbeddedResolver;
 }
 
-inline void SvXMLImport::SetGraphicResolver(
-    css::uno::Reference< css::document::XGraphicObjectResolver > const & _xGraphicResolver )
+inline void SvXMLImport::SetGraphicStorageHandler(
+    css::uno::Reference<css::document::XGraphicStorageHandler> const & rxGraphicStorageHandler)
 {
-    mxGraphicResolver = _xGraphicResolver;
+    mxGraphicStorageHandler = rxGraphicStorageHandler;
 }
 
 inline css::uno::Reference< css::util::XNumberFormatsSupplier > & SvXMLImport::GetNumberFormatsSupplier()

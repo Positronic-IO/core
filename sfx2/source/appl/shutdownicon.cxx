@@ -195,8 +195,7 @@ void ShutdownIcon::deInitSystray()
     pInitSystray = nullptr;
     pDeInitSystray = nullptr;
 
-    delete m_pFileDlg;
-    m_pFileDlg = nullptr;
+    m_pFileDlg.reset();
     m_bInitialized = false;
 }
 
@@ -300,11 +299,6 @@ void ShutdownIcon::FromTemplate()
     }
 }
 
-OUString ShutdownIcon::GetResString(const char* id)
-{
-    return SfxResId(id);
-}
-
 OUString ShutdownIcon::GetUrlDescription( const OUString& aUrl )
 {
     ::SolarMutexGuard aGuard;
@@ -322,14 +316,13 @@ void ShutdownIcon::StartFileDialog()
     {
         // Destroy instance as changing the system file dialog setting
         // forces us to create a new FileDialogHelper instance!
-        delete m_pFileDlg;
-        m_pFileDlg = nullptr;
+        m_pFileDlg.reset();
     }
 
     if ( !m_pFileDlg )
-        m_pFileDlg = new FileDialogHelper(
+        m_pFileDlg.reset( new FileDialogHelper(
                 ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION,
-                FileDialogFlags::MultiSelection, OUString(), SfxFilterFlags::NONE, SfxFilterFlags::NONE, nullptr );
+                FileDialogFlags::MultiSelection, OUString(), SfxFilterFlags::NONE, SfxFilterFlags::NONE, nullptr ) );
     m_pFileDlg->StartExecuteModal( LINK( this, ShutdownIcon, DialogClosedHdl_Impl ) );
 }
 
@@ -463,8 +456,7 @@ IMPL_LINK( ShutdownIcon, DialogClosedHdl_Impl, FileDialogHelper*, /*unused*/, vo
     // the settings.
     if ( SvtMiscOptions().UseSystemFileDialog() )
     {
-        delete m_pFileDlg;
-        m_pFileDlg = nullptr;
+        m_pFileDlg.reset();
     }
 #endif
 

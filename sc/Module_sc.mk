@@ -8,6 +8,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 
+include $(SRCDIR)/sc/common_unoapi_tests.mk
+
 $(eval $(call gb_Module_Module,sc))
 
 $(eval $(call gb_Module_add_targets,sc,\
@@ -151,7 +153,13 @@ $(eval $(call gb_Module_add_subsequentcheck_targets,sc,\
 	CppunitTest_sc_autoformatobj \
 	CppunitTest_sc_importdescriptorbaseobj \
 	CppunitTest_sc_documentconfigurationobj \
+	CppunitTest_sc_spreadsheetsettings \
+	CppunitTest_sc_shapeobj \
+	CppunitTest_sc_sheetlinkobj \
 	CppunitTest_sc_spreadsheetsettingsobj \
+	CppunitTest_sc_ddelinkobj \
+	CppunitTest_sc_functiondescriptionobj \
+	CppunitTest_sc_sortdescriptorbaseobj \
 ))
 
 $(eval $(call gb_Module_add_perfcheck_targets,sc,\

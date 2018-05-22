@@ -61,6 +61,7 @@
 #include <vcl/weld.hxx>
 #include <slideshow.hxx>
 #include <svx/sdrhittesthelper.hxx>
+#include <unotools/securityoptions.hxx>
 
 using namespace ::com::sun::star;
 
@@ -790,6 +791,35 @@ bool FuDraw::SetHelpText(SdrObject* pObj, const Point& rPosPixel, const SdrViewE
             }
         }
     }
+    else if (rVEvt.pURLField)
+    {
+        /**************************************************************
+        * URL-Field
+        **************************************************************/
+        OUString aURL = INetURLObject::decode(rVEvt.pURLField->GetURL(), INetURLObject::DecodeMechanism::WithCharset);
+
+        SvtSecurityOptions aSecOpt;
+        if (aSecOpt.IsOptionSet(SvtSecurityOptions::EOption::CtrlClickHyperlink))
+        {
+            // Hint about Ctrl-click to open hyperlink, but need to detect "Ctrl" key for MacOs
+            vcl::KeyCode aCode(KEY_SPACE);
+            vcl::KeyCode aModifiedCode(KEY_SPACE, KEY_MOD1);
+            OUString aModStr(aModifiedCode.GetName());
+            aModStr = aModStr.replaceFirst(aCode.GetName(), "");
+            aModStr = aModStr.replaceAll("+", "");
+
+            OUString aCtrlClickHlinkStr = SdResId(STR_CTRLCLICKHYPERLINK);
+
+            aCtrlClickHlinkStr = aCtrlClickHlinkStr.replaceAll("%s", aModStr);
+
+            aHelpText = aCtrlClickHlinkStr + aURL;
+        }
+        else
+        {
+            // Hint about just clicking hyperlink
+            aHelpText = SdResId(STR_CLICKHYPERLINK) + aURL;
+        }
+    }
     else if (dynamic_cast< GraphicDocShell *>( mpDocSh ) ==  nullptr && SdDrawDocument::GetAnimationInfo(pObj))
     {
         SdAnimationInfo* pInfo = SdDrawDocument::GetAnimationInfo(pObj);
@@ -896,13 +926,6 @@ bool FuDraw::SetHelpText(SdrObject* pObj, const Point& rPosPixel, const SdrViewE
             default:
                 break;
         }
-    }
-    else if (rVEvt.pURLField)
-    {
-        /**************************************************************
-        * URL-Field
-        **************************************************************/
-        aHelpText = INetURLObject::decode( rVEvt.pURLField->GetURL(), INetURLObject::DecodeMechanism::WithCharset );
     }
 
     if (!aHelpText.isEmpty())

@@ -61,7 +61,6 @@
 #include "eventdlg.hxx"
 #include <dialmgr.hxx>
 
-#include <comphelper/documentinfo.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <unotools/configmgr.hxx>
@@ -117,10 +116,8 @@ SvxMenuConfigPage::SvxMenuConfigPage(vcl::Window *pParent, const SfxItemSet& rSe
     m_pContentsListBox->SetSelectHdl(
         LINK( this, SvxMenuConfigPage, SelectMenuEntry ) );
 
-    m_pPlusBtn->SetClickHdl(
-        LINK( this, SvxMenuConfigPage, AddMenuHdl ) );
-    m_pMinusBtn->SetClickHdl(
-        LINK( this, SvxMenuConfigPage, RemoveMenuHdl ) );
+    m_pGearBtn->SetSelectHdl(
+        LINK( this, SvxMenuConfigPage, GearHdl ) );
 
     m_pCommandCategoryListBox->SetSelectHdl(
         LINK( this, SvxMenuConfigPage, SelectCategory ) );
@@ -145,20 +142,17 @@ SvxMenuConfigPage::SvxMenuConfigPage(vcl::Window *pParent, const SfxItemSet& rSe
     pPopup->EnableItem( pPopup->GetItemId("restoreItem"), false );
     pPopup->RemoveDisabledEntries();
 
+    PopupMenu* pGearMenu = m_pGearBtn->GetPopupMenu();
+    pGearMenu->EnableItem( pGearMenu->GetItemId("gear_iconAndText"), false );
+    pGearMenu->EnableItem( pGearMenu->GetItemId("gear_iconOnly"), false );
+    pGearMenu->EnableItem( pGearMenu->GetItemId("gear_textOnly"), false );
+    pGearMenu->RemoveDisabledEntries();
+
     if ( !bIsMenuBar )
     {
-        // Context menus cannot be added/removed
-        // These height requests are needed to keep the height of
-        // the top level list boxes consistent for all tabs
-        m_pTopLevelListBox->set_height_request(
-            m_pPlusBtn->GetOptimalSize().Height() );
-        m_pCommandCategoryListBox->set_height_request(
-            m_pPlusBtn->GetOptimalSize().Height() );
-
-        m_pPlusBtn->Disable();
-        m_pMinusBtn->Disable();
-        m_pPlusBtn->Hide();
-        m_pMinusBtn->Hide();
+        //TODO: Remove this when the gear button is implemented for context menus
+        m_pGearBtn->Disable();
+        m_pGearBtn->Hide();
     }
     else
     {
@@ -225,6 +219,17 @@ void SvxMenuConfigPage::UpdateButtonStates()
     m_pRemoveCommandButton->Enable( bIsValidSelection );
 
     m_pModifyBtn->Enable( bIsValidSelection && !bIsSeparator);
+
+    //Handle the gear button
+    if (m_bIsMenuBar)
+    {
+        SvxConfigEntry* pMenuData = GetTopLevelSelection();
+        PopupMenu* pGearPopup = m_pGearBtn->GetPopupMenu();
+        // Add option (gear_add) will always be enabled
+        pGearPopup->EnableItem( "gear_delete", pMenuData->IsDeletable() );
+        pGearPopup->EnableItem( "gear_rename", pMenuData->IsRenamable() );
+        pGearPopup->EnableItem( "gear_move", pMenuData->IsMovable() );
+    }
 }
 
 void SvxMenuConfigPage::DeleteSelectedTopLevel()
@@ -298,9 +303,6 @@ IMPL_LINK_NOARG( SvxMenuConfigPage, SelectMenu, ListBox&, void )
 
     if ( pMenuData )
     {
-        // Built-in menus cannot be deleted
-        m_pMinusBtn->Enable( pMenuData->IsDeletable() );
-
         SvxEntries* pEntries = pMenuData->GetEntries();
 
         for (auto const& entry : *pEntries)
@@ -312,22 +314,74 @@ IMPL_LINK_NOARG( SvxMenuConfigPage, SelectMenu, ListBox&, void )
     UpdateButtonStates();
 }
 
-IMPL_LINK_NOARG( SvxMenuConfigPage, AddMenuHdl, Button *, void )
+IMPL_LINK( SvxMenuConfigPage, GearHdl, MenuButton *, pButton, void )
 {
-    VclPtrInstance<SvxMainMenuOrganizerDialog> pDialog(
-        nullptr, GetSaveInData()->GetEntries(), nullptr, true );
+    OString sIdent = pButton->GetCurItemIdent();
 
-    if ( pDialog->Execute() == RET_OK )
+    if (sIdent == "gear_add")
     {
-        GetSaveInData()->SetEntries( pDialog->GetEntries() );
-        ReloadTopLevelListBox( pDialog->GetSelectedEntry() );
-        GetSaveInData()->SetModified();
-    }
-}
+        SvxMainMenuOrganizerDialog aDialog(GetFrameWeld(),
+            GetSaveInData()->GetEntries(), nullptr, true );
 
-IMPL_LINK_NOARG( SvxMenuConfigPage, RemoveMenuHdl, Button *, void )
-{
-    DeleteSelectedTopLevel();
+        if (aDialog.run() == RET_OK)
+        {
+            GetSaveInData()->SetEntries(aDialog.ReleaseEntries());
+            ReloadTopLevelListBox(aDialog.GetSelectedEntry());
+            GetSaveInData()->SetModified();
+        }
+    }
+    else if (sIdent == "gear_delete")
+    {
+        DeleteSelectedTopLevel();
+    }
+    else if (sIdent == "gear_rename")
+    {
+        SvxConfigEntry* pMenuData = GetTopLevelSelection();
+
+        OUString sCurrentName( SvxConfigPageHelper::stripHotKey( pMenuData->GetName() ) );
+        OUString sDesc = CuiResId( RID_SVXSTR_LABEL_NEW_NAME );
+
+        SvxNameDialog aNameDialog( GetFrameWeld(), sCurrentName, sDesc );
+        aNameDialog.set_help_id( HID_SVX_CONFIG_RENAME_MENU );
+        aNameDialog.set_title( CuiResId( RID_SVXSTR_RENAME_MENU ) );
+
+        if ( aNameDialog.run() == RET_OK )
+        {
+            OUString sNewName = aNameDialog.GetName();
+
+            if ( sCurrentName == sNewName )
+                return;
+
+            pMenuData->SetName( sNewName );
+
+            ReloadTopLevelListBox();
+
+            GetSaveInData()->SetModified();
+        }
+    }
+    else if (sIdent == "gear_move")
+    {
+        SvxConfigEntry* pMenuData = GetTopLevelSelection();
+
+        SvxMainMenuOrganizerDialog aDialog(GetFrameWeld(), GetSaveInData()->GetEntries(),
+                pMenuData, false );
+        if (aDialog.run() == RET_OK)
+        {
+            GetSaveInData()->SetEntries(aDialog.ReleaseEntries());
+
+            ReloadTopLevelListBox();
+
+            GetSaveInData()->SetModified();
+        }
+    }
+    else
+    {
+        //This block should never be reached
+        SAL_WARN("cui.customize", "Unknown gear menu option: " << sIdent);
+        return;
+    }
+
+    UpdateButtonStates();
 }
 
 IMPL_LINK_NOARG( SvxMenuConfigPage, SelectCategory, ListBox&, void )
@@ -366,13 +420,13 @@ IMPL_LINK( SvxMenuConfigPage, InsertHdl, MenuButton *, pButton, void )
         OUString aNewName;
         OUString aDesc = CuiResId( RID_SVXSTR_SUBMENU_NAME );
 
-        VclPtrInstance< SvxNameDialog > pNameDialog( this, aNewName, aDesc );
-        pNameDialog->SetHelpId( HID_SVX_CONFIG_NAME_SUBMENU );
-        pNameDialog->SetText( CuiResId( RID_SVXSTR_ADD_SUBMENU ) );
+        SvxNameDialog aNameDialog(GetFrameWeld(), aNewName, aDesc);
+        aNameDialog.set_help_id(HID_SVX_CONFIG_NAME_SUBMENU);
+        aNameDialog.set_title(CuiResId( RID_SVXSTR_ADD_SUBMENU));
 
-        if ( pNameDialog->Execute() == RET_OK )
+        if (aNameDialog.run() == RET_OK)
         {
-            pNameDialog->GetName(aNewName);
+            aNewName = aNameDialog.GetName();
 
             SvxConfigEntry* pNewEntryData =
                 new SvxConfigEntry( aNewName, aNewName, true, /*bParentData*/false );
@@ -415,13 +469,13 @@ IMPL_LINK( SvxMenuConfigPage, ModifyItemHdl, MenuButton *, pButton, void )
         OUString aNewName( SvxConfigPageHelper::stripHotKey( pEntry->GetName() ) );
         OUString aDesc = CuiResId( RID_SVXSTR_LABEL_NEW_NAME );
 
-        VclPtrInstance< SvxNameDialog > pNameDialog( this, aNewName, aDesc );
-        pNameDialog->SetHelpId( HID_SVX_CONFIG_RENAME_MENU_ITEM );
-        pNameDialog->SetText( CuiResId( RID_SVXSTR_RENAME_MENU ) );
+        SvxNameDialog aNameDialog(GetFrameWeld(), aNewName, aDesc);
+        aNameDialog.set_help_id(HID_SVX_CONFIG_RENAME_MENU_ITEM);
+        aNameDialog.set_title(CuiResId(RID_SVXSTR_RENAME_MENU));
 
-        if ( pNameDialog->Execute() == RET_OK )
+        if (aNameDialog.run() == RET_OK)
         {
-            pNameDialog->GetName( aNewName );
+            aNewName = aNameDialog.GetName();
 
             pEntry->SetName( aNewName );
             m_pContentsListBox->SetEntryText( pActEntry, aNewName );

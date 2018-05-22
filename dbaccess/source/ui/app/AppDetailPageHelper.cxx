@@ -18,7 +18,6 @@
  */
 
 #include "AppDetailPageHelper.hxx"
-#include <core_resource.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <connectivity/dbtools.hxx>
@@ -52,7 +51,6 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include "AppView.hxx"
 #include <helpids.h>
-#include <strings.hrc>
 #include <strings.hxx>
 #include <callbacks.hxx>
 #include <dbaccess/IController.hxx>
@@ -1065,7 +1063,7 @@ void OAppDetailPageHelper::showPreview(const Reference< XContent >& _xContent)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }

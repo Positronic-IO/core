@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/lok.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/window.hxx>
 #include <vcl/decoview.hxx>
@@ -62,7 +63,8 @@ void ScDDComboBoxButton::Draw( const Point& rAt,
 
     tools::Rectangle   aBtnRect( rAt, rSize );
 
-    pOut->EnableMapMode( false );
+    if (!comphelper::LibreOfficeKit::isActive())
+        pOut->EnableMapMode(false);
 
     DecorationView aDecoView( pOut);
 
@@ -112,7 +114,7 @@ void ScDDComboBoxButton::ImpDrawArrow( const tools::Rectangle& rRect )
     tools::Rectangle aTempRect = aPixRect;
 
     const StyleSettings& rSett = Application::GetSettings().GetStyleSettings();
-    Color aColor( rSett.GetButtonTextColor().GetColor() );
+    Color aColor( rSett.GetButtonTextColor() );
     pOut->SetFillColor( aColor );
     pOut->SetLineColor( aColor );
 

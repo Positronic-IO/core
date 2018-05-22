@@ -41,6 +41,22 @@ public:
         // encoding of constant value for binary file format
         if (startswith(fn, SRCDIR "/package/source/zipapi/ZipFile.cxx"))
             return;
+        // some auto-generated static data
+        if (startswith(fn, SRCDIR "/sal/textenc/tables.cxx"))
+            return;
+        // nested conditional defines that are not worth cleaning up
+        if (startswith(fn, SRCDIR "/opencl/source/openclwrapper.cxx"))
+            return;
+        // some kind of matrix calculation, the compiler will optimise it out anyway
+        if (startswith(fn, SRCDIR "/vcl/source/gdi/bitmap4.cxx"))
+            return;
+        // code follows a pattern
+        if (startswith(fn, SRCDIR "/svx/source/svdraw/svdhdl.cxx"))
+            return;
+        // looks like some kind of TODO marker
+        if (startswith(fn, SRCDIR "/chart2/source/view/main/PropertyMapper.cxx")
+            || startswith(fn, SRCDIR "/sc/source/core/data/formulacell.cxx"))
+            return;
         TraverseDecl(compiler.getASTContext().getTranslationUnitDecl());
     }
 
@@ -58,17 +74,26 @@ bool ExpressionAlwaysZero::VisitBinaryOperator( BinaryOperator const * binaryOpe
         return true;
     if (binaryOperator->getLocStart().isMacroID())
         return true;
-    if (binaryOperator->getOpcode() != BO_And)
+
+    auto op = binaryOperator->getOpcode();
+    if (!(op == BO_And || op == BO_AndAssign || op == BO_LAnd))
         return true;
+
     auto lhsValue = getExprValue(binaryOperator->getLHS());
     auto rhsValue = getExprValue(binaryOperator->getRHS());
-    if (!lhsValue || !rhsValue || (lhsValue->getExtValue() & rhsValue->getExtValue()) != 0)
+    if (lhsValue && lhsValue->getExtValue() == 0)
+        ; // ok
+    else if (rhsValue && rhsValue->getExtValue() == 0)
+        ; // ok
+    else if (lhsValue && rhsValue && (lhsValue->getExtValue() & rhsValue->getExtValue()) == 0)
+        ; // ok
+    else
         return true;
     report(
         DiagnosticsEngine::Warning, "expression always evaluates to zero, lhs=%0 rhs=%1",
         binaryOperator->getLocStart())
-        << lhsValue->toString(10)
-        << rhsValue->toString(10)
+        << (lhsValue ? lhsValue->toString(10) : "unknown")
+        << (rhsValue ? rhsValue->toString(10) : "unknown")
         << binaryOperator->getSourceRange();
     return true;
 }
@@ -79,19 +104,28 @@ bool ExpressionAlwaysZero::VisitCXXOperatorCallExpr( CXXOperatorCallExpr const *
         return true;
     if (cxxOperatorCallExpr->getLocStart().isMacroID())
         return true;
-    if (cxxOperatorCallExpr->getOperator() != clang::OverloadedOperatorKind::OO_Amp)
+
+    auto op = cxxOperatorCallExpr->getOperator();
+    if ( !(op == OO_Amp || op == OO_AmpEqual || op == OO_AmpAmp))
         return true;
+
     if (cxxOperatorCallExpr->getNumArgs() != 2)
         return true;
     auto lhsValue = getExprValue(cxxOperatorCallExpr->getArg(0));
     auto rhsValue = getExprValue(cxxOperatorCallExpr->getArg(1));
-    if (!lhsValue || !rhsValue || (lhsValue->getExtValue() & rhsValue->getExtValue()) != 0)
+    if (lhsValue && lhsValue->getExtValue() == 0)
+        ; // ok
+    else if (rhsValue && rhsValue->getExtValue() == 0)
+        ; // ok
+    else if (lhsValue && rhsValue && (lhsValue->getExtValue() & rhsValue->getExtValue()) == 0)
+        ; // ok
+    else
         return true;
     report(
         DiagnosticsEngine::Warning, "expression always evaluates to zero, lhs=%0 rhs=%1",
         cxxOperatorCallExpr->getLocStart())
-        << lhsValue->toString(10)
-        << rhsValue->toString(10)
+        << (lhsValue ? lhsValue->toString(10) : "unknown")
+        << (rhsValue ? rhsValue->toString(10) : "unknown")
         << cxxOperatorCallExpr->getSourceRange();
     return true;
 }
@@ -115,7 +149,12 @@ bool ExpressionAlwaysZero::TraverseStaticAssertDecl( StaticAssertDecl * )
     return true;
 }
 
+// on clang-3.8, this plugin can generate OOM
+#if CLANG_VERSION >= 30900
 loplugin::Plugin::Registration< ExpressionAlwaysZero > X("expressionalwayszero");
+#else
+loplugin::Plugin::Registration< ExpressionAlwaysZero > X("expressionalwayszero", false);
+#endif
 
 }
 

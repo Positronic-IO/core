@@ -52,6 +52,7 @@ $(eval $(call gb_Rdb_add_components,services,\
 	lingucomponent/source/languageguessing/guesslang \
 	lingucomponent/source/spellcheck/spell/spell \
 	lingucomponent/source/thesaurus/libnth/lnth \
+	lingucomponent/source/numbertext/numbertext \
 	linguistic/source/lng \
 	$(if $(ENABLE_LWP), \
 	    lotuswordpro/util/lwpfilter \
@@ -106,12 +107,13 @@ $(eval $(call gb_Rdb_add_components,services,\
 	unoxml/source/rdf/unordf \
 	unoxml/source/service/unoxml \
 	uui/util/uui \
+	vcl/vcl.common \
 	xmloff/source/transform/xof \
 	xmloff/util/xo \
 	xmlscript/util/xmlscript \
 	$(if $(ENABLE_NSS), \
 		xmlsecurity/util/xmlsecurity \
-		xmlsecurity/util/xsec_xmlsec$(if $(filter WNT,$(OS)),.windows)) \
+		xmlsecurity/util/xsec_xmlsec) \
 	$(if $(ENABLE_COINMP), \
 		sccomp/source/solver/coinmpsolver \
 	) \
@@ -299,6 +301,9 @@ $(eval $(call gb_Rdb_add_components,services,\
 	$(if $(ENABLE_HEADLESS),,desktop/source/splash/spl) \
 	extensions/source/abpilot/abp \
 	extensions/source/config/ldap/ldapbe2 \
+	$(if $(filter WNT,$(OS)),\
+		extensions/source/config/WinUserInfo/WinUserInfoBe \
+	) \
 	extensions/source/logging/log \
 	extensions/source/scanner/scn \
 	extensions/source/update/feed/updatefeed \

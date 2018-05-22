@@ -98,7 +98,7 @@ void TabControl::ImplInit( vcl::Window* pParent, WinBits nStyle )
     mbFormat                    = true;
     mbRestoreHelpId             = false;
     mbSmallInvalidate           = false;
-    mpTabCtrlData               = new ImplTabCtrlData;
+    mpTabCtrlData.reset(new ImplTabCtrlData);
     mpTabCtrlData->mpListBox    = nullptr;
 
     ImplInitSettings( true );
@@ -198,8 +198,7 @@ void TabControl::dispose()
     // delete TabCtrl data
     if (mpTabCtrlData)
         mpTabCtrlData->mpListBox.disposeAndClear();
-    delete mpTabCtrlData;
-    mpTabCtrlData = nullptr;
+    mpTabCtrlData.reset();
     Control::dispose();
 }
 
@@ -760,7 +759,7 @@ void TabControl::ImplShowFocus()
     ShowFocus( aRect );
 }
 
-void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem* pItem, const tools::Rectangle& rCurRect,
+void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem const * pItem, const tools::Rectangle& rCurRect,
                               bool bFirstInGroup, bool bLastInGroup )
 {
     if (pItem->maRect.IsEmpty())
@@ -817,7 +816,7 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem* p
     if (pItem->mnId == mnCurPageId)
     {
         nState |= ControlState::SELECTED;
-        // only the selected item can be focussed
+        // only the selected item can be focused
         if (HasFocus())
             nState |= ControlState::FOCUSED;
     }
@@ -2200,7 +2199,7 @@ NotebookbarTabControlBase::NotebookbarTabControlBase(vcl::Window* pParent)
 {
     BitmapEx aBitmap(SV_RESID_BITMAP_NOTEBOOKBAR);
 
-    m_pOpenMenu = VclPtr<PushButton>::Create(this);
+    m_pOpenMenu = VclPtr<PushButton>::Create( this , WB_CENTER | WB_VCENTER );
     m_pOpenMenu->SetSizePixel(Size(HAMBURGER_DIM, HAMBURGER_DIM));
     m_pOpenMenu->SetClickHdl(LINK(this, NotebookbarTabControlBase, OpenMenu));
     m_pOpenMenu->SetModeImage(Image(aBitmap));
@@ -2338,6 +2337,8 @@ bool NotebookbarTabControlBase::ImplPlaceTabs( long nWidth )
         return false;
     if ( mpTabCtrlData->maItemList.empty() )
         return false;
+    if (!m_pOpenMenu || m_pOpenMenu->isDisposed())
+        return false;
 
     long nMaxWidth = nWidth - HAMBURGER_DIM;
     long nShortcutsWidth = m_pShortcuts != nullptr ? m_pShortcuts->GetSizePixel().getWidth() + 1 : 0;
@@ -2424,7 +2425,8 @@ bool NotebookbarTabControlBase::ImplPlaceTabs( long nWidth )
     }
 
     // position the shortcutbox
-    m_pShortcuts->SetPosPixel(Point(0, 0));
+    if (m_pShortcuts)
+        m_pShortcuts->SetPosPixel(Point(0, 0));
 
     // position the menu
     m_pOpenMenu->SetPosPixel(Point(nWidth - HAMBURGER_DIM, 0));

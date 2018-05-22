@@ -28,7 +28,6 @@
 #include <editeng/flditem.hxx>
 #include <svx/svdpagv.hxx>
 #include <sfx2/app.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/svdoole2.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/svdotext.hxx>
@@ -59,8 +58,6 @@
 #include <drawview.hxx>
 #include <drawdoc.hxx>
 #include <stlpool.hxx>
-#include <strings.hrc>
-#include <sdresid.hxx>
 #include <imapinfo.hxx>
 #include <sdxfer.hxx>
 #include <unomodel.hxx>
@@ -122,7 +119,7 @@ SdTransferable::~SdTransferable()
     if( mbOwnView )
         delete mpSdViewIntern;
 
-    delete mpOLEDataHelper;
+    mpOLEDataHelper.reset();
 
     if( maDocShellRef.is() )
     {
@@ -136,12 +133,12 @@ SdTransferable::~SdTransferable()
     if( mbOwnDocument )
         delete mpSdDrawDocumentIntern;
 
-    delete mpGraphic;
-    delete mpBookmark;
-    delete mpImageMap;
+    mpGraphic.reset();
+    mpBookmark.reset();
+    mpImageMap.reset();
 
     mpVDev.disposeAndClear();
-    delete mpObjDesc;
+    mpObjDesc.reset();
 
     //call explicitly at end of dtor to be covered by above SolarMutex
     maUserData.clear();
@@ -151,14 +148,10 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
 {
     if( pObj )
     {
-        delete mpOLEDataHelper;
-        mpOLEDataHelper = nullptr;
-        delete mpGraphic;
-        mpGraphic = nullptr;
-        delete mpBookmark;
-        mpBookmark = nullptr;
-        delete mpImageMap;
-        mpImageMap = nullptr;
+        mpOLEDataHelper.reset();
+        mpGraphic.reset();
+        mpBookmark.reset();
+        mpImageMap.reset();
 
         if( nullptr!= dynamic_cast< const SdrOle2Obj* >( pObj ) )
         {
@@ -168,13 +161,13 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                 uno::Reference < embed::XEmbedPersist > xPersist( xObj, uno::UNO_QUERY );
                 if( xObj.is() && xPersist.is() && xPersist->hasEntry() )
                 {
-                    mpOLEDataHelper = new TransferableDataHelper( new SvEmbedTransferHelper( xObj, static_cast< SdrOle2Obj* >( pObj )->GetGraphic(), static_cast< SdrOle2Obj* >( pObj )->GetAspect() ) );
+                    mpOLEDataHelper.reset( new TransferableDataHelper( new SvEmbedTransferHelper( xObj, static_cast< SdrOle2Obj* >( pObj )->GetGraphic(), static_cast< SdrOle2Obj* >( pObj )->GetAspect() ) ) );
 
                     // TODO/LATER: the standalone handling of the graphic should not be used any more in future
                     // The EmbedDataHelper should bring the graphic in future
                     const Graphic* pObjGr = static_cast< SdrOle2Obj* >( pObj )->GetGraphic();
                     if ( pObjGr )
-                        mpGraphic = new Graphic( *pObjGr );
+                        mpGraphic.reset( new Graphic( *pObjGr ) );
                 }
             }
             catch( uno::Exception& )
@@ -182,7 +175,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
         }
         else if( dynamic_cast< const SdrGrafObj *>( pObj ) !=  nullptr && (mpSourceDoc && !SdDrawDocument::GetAnimationInfo( pObj )) )
         {
-            mpGraphic = new Graphic( static_cast< SdrGrafObj* >( pObj )->GetTransformedGraphic() );
+            mpGraphic.reset( new Graphic( static_cast< SdrGrafObj* >( pObj )->GetTransformedGraphic() ) );
         }
         else if( pObj->IsUnoObj() && SdrInventor::FmForm == pObj->GetObjInventor() && ( pObj->GetObjIdentifier() == sal_uInt16(OBJ_FM_BUTTON) ) )
         {
@@ -210,7 +203,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                     xPropSet->getPropertyValue( "Label" ) >>= aLabel;
                     xPropSet->getPropertyValue( "TargetURL" ) >>= aURL;
 
-                    mpBookmark = new INetBookmark( aURL, aLabel );
+                    mpBookmark.reset( new INetBookmark( aURL, aLabel ) );
                 }
             }
         }
@@ -238,7 +231,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                         // when both are unused
                         if(!pObj->HasFillStyle() && !pObj->HasLineStyle())
                         {
-                            mpBookmark = new INetBookmark( pURL->GetURL(), pURL->GetRepresentation() );
+                            mpBookmark.reset( new INetBookmark( pURL->GetURL(), pURL->GetRepresentation() ) );
                         }
                     }
                 }
@@ -248,7 +241,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
         SdIMapInfo* pInfo = SdDrawDocument::GetIMapInfo( pObj );
 
         if( pInfo )
-            mpImageMap = new ImageMap( pInfo->GetImageMap() );
+            mpImageMap.reset( new ImageMap( pInfo->GetImageMap() ) );
     }
 }
 
@@ -688,11 +681,10 @@ void SdTransferable::ObjectReleased()
         SD_MOD()->pTransferSelection = nullptr;
 }
 
-void SdTransferable::SetObjectDescriptor( const TransferableObjectDescriptor& rObjDesc )
+void SdTransferable::SetObjectDescriptor( std::unique_ptr<TransferableObjectDescriptor> pObjDesc )
 {
-    delete mpObjDesc;
-    mpObjDesc = new TransferableObjectDescriptor( rObjDesc );
-    PrepareOLE( rObjDesc );
+    mpObjDesc = std::move(pObjDesc);
+    PrepareOLE( *mpObjDesc );
 }
 
 void SdTransferable::SetPageBookmarks( const std::vector<OUString> &rPageBookmarks, bool bPersistent )

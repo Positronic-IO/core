@@ -168,10 +168,10 @@ void SwLoadOptPage::dispose()
 }
 
 
-VclPtr<SfxTabPage> SwLoadOptPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwLoadOptPage::Create( TabPageParent pParent,
                                           const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SwLoadOptPage>::Create(pParent, *rAttrSet );
+    return VclPtr<SwLoadOptPage>::Create(pParent.pParent, *rAttrSet );
 }
 
 IMPL_LINK_NOARG(SwLoadOptPage, StandardizedPageCountCheckHdl, Button*, void)
@@ -323,7 +323,7 @@ void SwLoadOptPage::Reset( const SfxItemSet* rSet)
     m_pMetricLB->SetNoSelection();
     if ( rSet->GetItemState( SID_ATTR_METRIC ) >= SfxItemState::DEFAULT )
     {
-        const SfxUInt16Item& rItem = static_cast<const SfxUInt16Item&>(rSet->Get( SID_ATTR_METRIC ));
+        const SfxUInt16Item& rItem = rSet->Get( SID_ATTR_METRIC );
         FieldUnit eFieldUnit = static_cast<FieldUnit>(rItem.GetValue());
 
         for ( sal_Int32 i = 0; i < m_pMetricLB->GetEntryCount(); ++i )
@@ -487,6 +487,7 @@ SwCaptionOptPage::SwCaptionOptPage(vcl::Window* pParent, const SfxItemSet& rSet)
     SwStyleNameMapper::FillUIName(RES_POOLCOLL_LABEL_TABLE, m_sTable);
     SwStyleNameMapper::FillUIName(RES_POOLCOLL_LABEL_FRAME, m_sText);
     SwStyleNameMapper::FillUIName(RES_POOLCOLL_LABEL_DRAWING, m_sDrawing);
+    SwStyleNameMapper::FillUIName(RES_POOLCOLL_LABEL_FIGURE, m_sFigure);
 
     SwWrtShell* pSh = ::GetActiveWrtShell();
 
@@ -583,10 +584,10 @@ void SwCaptionOptPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SwCaptionOptPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwCaptionOptPage::Create( TabPageParent pParent,
                                              const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SwCaptionOptPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SwCaptionOptPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SwCaptionOptPage::FillItemSet( SfxItemSet* )

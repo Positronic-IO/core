@@ -18,7 +18,6 @@
  */
 
 #include <scitems.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <comphelper/lok.hxx>
 
@@ -124,7 +123,7 @@ bool ScGridWindow::DoAutoFilterButton( SCCOL nCol, SCROW nRow, const MouseEvent&
     Size aScrSize(nSizeX-1, nSizeY-1);
 
     // Check if the mouse cursor is clicking on the popup arrow box.
-    mpFilterButton.reset(new ScDPFieldButton(this, &GetSettings().GetStyleSettings(), &pViewData->GetZoomX(), &pViewData->GetZoomY(), pDoc));
+    mpFilterButton.reset(new ScDPFieldButton(this, &GetSettings().GetStyleSettings(), &pViewData->GetZoomY(), pDoc));
     mpFilterButton->setBoundingBox(aScrPos, aScrSize, bLayoutRTL);
     mpFilterButton->setPopupLeft(bLayoutRTL);   // #i114944# AutoFilter button is left-aligned in RTL
     Point aPopupPos;
@@ -485,7 +484,7 @@ void ScGridWindow::DPLaunchFieldPopupMenu(const Point& rScrPos, const Size& rScr
             OUString aName = rMem.getDisplayName();
             if (aName.isEmpty())
                 // Use special string for an empty name.
-                mpDPFieldPopup->addMember(ScGlobal::GetRscString(STR_EMPTYDATA), rMem.mbVisible);
+                mpDPFieldPopup->addMember(ScResId(STR_EMPTYDATA), rMem.mbVisible);
             else
                 mpDPFieldPopup->addMember(rMem.getDisplayName(), rMem.mbVisible);
         }
@@ -580,7 +579,7 @@ void ScGridWindow::UpdateDPFromFieldPopupMenu()
         {
             // This is an original member name.  Use it as-is.
             OUString aName = itr->aName;
-            if (aName == ScGlobal::GetRscString(STR_EMPTYDATA))
+            if (aName == ScResId(STR_EMPTYDATA))
                 // Translate the special empty name into an empty string.
                 aName.clear();
 
@@ -972,7 +971,7 @@ void ScGridWindow::PagebreakMove( const MouseEvent& rMEvt, bool bUp )
             {
                 if (bUndo)
                 {
-                    OUString aUndo = ScGlobal::GetRscString( STR_UNDO_DRAG_BREAK );
+                    OUString aUndo = ScResId( STR_UNDO_DRAG_BREAK );
                     pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, pViewData->GetViewShell()->GetViewShellId() );
                 }
 

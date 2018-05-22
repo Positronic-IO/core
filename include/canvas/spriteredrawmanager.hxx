@@ -144,14 +144,6 @@ namespace canvas
         {
             enum class ChangeType { none=0, move, update };
 
-            SpriteChangeRecord() :
-                meChangeType( ChangeType::none ),
-                mpAffectedSprite(),
-                maOldPos(),
-                maUpdateArea()
-            {
-            }
-
             SpriteChangeRecord( const Sprite::Reference&    rSprite,
                                 const ::basegfx::B2DPoint&  rOldPos,
                                 const ::basegfx::B2DPoint&  rNewPos,
@@ -334,17 +326,11 @@ namespace canvas
                         // involved. Have to sort component lists for
                         // sprite prio.
                         VectorOfSprites aSortedUpdateSprites;
-                        SpriteConnectedRanges::ComponentListType::const_iterator aCurr(
-                            rUpdateArea.maComponentList.begin() );
-                        const SpriteConnectedRanges::ComponentListType::const_iterator aEnd(
-                            rUpdateArea.maComponentList.end() );
-                        while( aCurr != aEnd )
+                        for (auto const& elem : rUpdateArea.maComponentList)
                         {
-                            const Sprite::Reference& rSprite( aCurr->second.getSprite() );
+                            const Sprite::Reference& rSprite( elem.second.getSprite() );
                             if( rSprite.is() )
                                 aSortedUpdateSprites.push_back( rSprite );
-
-                            ++aCurr;
                         }
 
                         ::std::sort( aSortedUpdateSprites.begin(),

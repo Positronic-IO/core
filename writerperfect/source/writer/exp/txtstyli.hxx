@@ -18,26 +18,31 @@ namespace writerperfect
 {
 namespace exp
 {
-
 class XMLStylesContext;
 
 /// Handler for <style:style>.
 class XMLStyleContext : public XMLImportContext
 {
 public:
-    XMLStyleContext(XMLImport &rImport, XMLStylesContext &rStyles);
+    XMLStyleContext(XMLImport& rImport, XMLStylesContext& rStyles);
 
-    rtl::Reference<XMLImportContext> CreateChildContext(const OUString &rName, const css::uno::Reference<css::xml::sax::XAttributeList> &xAttribs) override;
-    void SAL_CALL startElement(const OUString &rName, const css::uno::Reference<css::xml::sax::XAttributeList> &xAttribs) override;
-    void SAL_CALL endElement(const OUString &rName) override;
+    rtl::Reference<XMLImportContext>
+    CreateChildContext(const OUString& rName,
+                       const css::uno::Reference<css::xml::sax::XAttributeList>& xAttribs) override;
+    void SAL_CALL
+    startElement(const OUString& rName,
+                 const css::uno::Reference<css::xml::sax::XAttributeList>& xAttribs) override;
+    void SAL_CALL endElement(const OUString& rName) override;
 
-    librevenge::RVNGPropertyList &GetTextPropertyList();
-    librevenge::RVNGPropertyList &GetParagraphPropertyList();
-    librevenge::RVNGPropertyList &GetCellPropertyList();
-    librevenge::RVNGPropertyList &GetColumnPropertyList();
-    librevenge::RVNGPropertyList &GetRowPropertyList();
-    librevenge::RVNGPropertyList &GetTablePropertyList();
-    librevenge::RVNGPropertyList &GetGraphicPropertyList();
+    librevenge::RVNGPropertyList& GetTextPropertyList();
+    librevenge::RVNGPropertyList& GetParagraphPropertyList();
+    librevenge::RVNGPropertyList& GetCellPropertyList();
+    librevenge::RVNGPropertyList& GetColumnPropertyList();
+    librevenge::RVNGPropertyList& GetRowPropertyList();
+    librevenge::RVNGPropertyList& GetTablePropertyList();
+    librevenge::RVNGPropertyList& GetGraphicPropertyList();
+    librevenge::RVNGPropertyList& GetPageLayoutPropertyList();
+    librevenge::RVNGPropertyList& GetMasterPagePropertyList();
 
 private:
     OUString m_aName;
@@ -49,7 +54,9 @@ private:
     librevenge::RVNGPropertyList m_aRowPropertyList;
     librevenge::RVNGPropertyList m_aTablePropertyList;
     librevenge::RVNGPropertyList m_aGraphicPropertyList;
-    XMLStylesContext &m_rStyles;
+    librevenge::RVNGPropertyList m_aPageLayoutPropertyList;
+    librevenge::RVNGPropertyList m_aMasterPagePropertyList;
+    XMLStylesContext& m_rStyles;
 };
 
 } // namespace exp

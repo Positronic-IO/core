@@ -20,7 +20,6 @@
 #define INCLUDED_SW_INC_ACCMAP_HXX
 
 #include <cppuhelper/weakref.hxx>
-#include <com/sun/star/accessibility/XAccessible.hpp>
 #include <rtl/ref.hxx>
 #include <osl/mutex.hxx>
 #include <svx/IAccessibleViewForwarder.hxx>
@@ -29,14 +28,12 @@
 #include <svx/AccessibleControlShape.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
-#include <list>
 #include <vector>
 #include <memory>
 #include <set>
 
 class SwAccessibleParagraph;
 class SwViewShell;
-namespace tools { class Rectangle; }
 class SwFrame;
 class SwTextFrame;
 class SwPageFrame;
@@ -56,6 +53,7 @@ class SwFEShell;
 class Fraction;
 struct PreviewPage;
 namespace vcl { class Window; }
+namespace com { namespace sun { namespace star { namespace accessibility { class XAccessible; } } } }
 
 // The shape list is filled if an accessible shape is destroyed. It
 // simply keeps a reference to the accessible shape's XShape. These
@@ -67,7 +65,7 @@ namespace vcl { class Window; }
 // the XShape at the same time (indirectly by destroying the accessible
 // shape) leads to an assert, because a client of the Modify is destroyed
 // within a Modify call.
-using SwShapeList_Impl = std::list<css::uno::Reference<css::drawing::XShape>>;
+using SwShapeList_Impl = std::vector<css::uno::Reference<css::drawing::XShape>>;
 
 enum class AccessibleStates
 {
@@ -95,7 +93,7 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
     ::osl::Mutex maEventMutex;
     SwAccessibleContextMap_Impl *mpFrameMap;
     SwAccessibleShapeMap_Impl *mpShapeMap;
-    SwShapeList_Impl *mpShapes;
+    SwShapeList_Impl mvShapes;
     SwAccessibleEventList_Impl *mpEvents;
     SwAccessibleEventMap_Impl *mpEventMap;
     // #i27301 data structure to keep information about
@@ -104,7 +102,7 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
     SwViewShell *mpVSh;
     /// for page preview: store preview data, VisArea, and mapping of
     /// preview-to-display coordinates
-    SwAccPreviewData* mpPreview;
+    std::unique_ptr<SwAccPreviewData> mpPreview;
 
     css::uno::WeakReference < css::accessibility::XAccessible > mxCursorContext;
 
@@ -120,7 +118,7 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
     void InvalidateShapeSelection();
 
     //mpSelectedFrameMap contains the old selected objects.
-    SwAccessibleContextMap_Impl *mpSeletedFrameMap;
+    std::unique_ptr<SwAccessibleContextMap_Impl> mpSeletedFrameMap;
 
     OUString maDocName;
 
@@ -136,8 +134,6 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
         which have a selection
 
         Important note: method has to used inside a mutual exclusive section
-
-        @author OD
     */
     SwAccessibleSelectedParas_Impl* BuildSelectedParas();
 
@@ -186,8 +182,6 @@ public:
 
     /** get size of a dedicated preview page
 
-        @author OD
-
         @param _nPreviewPageNum
         input parameter - physical page number of page visible in the page preview
 
@@ -227,8 +221,6 @@ public:
 
     /** invalidation CONTENT_FLOWS_FROM/_TO relation of a paragraph
 
-        @author OD
-
         @param _rTextFrame
         input parameter - reference to paragraph, whose CONTENT_FLOWS_FROM/_TO
         has to be invalidated.
@@ -240,16 +232,10 @@ public:
     void InvalidateParaFlowRelation( const SwTextFrame& _rTextFrame,
                                      const bool _bFrom );
 
-    /** invalidation of text selection of a paragraph
-
-        @author OD
-    */
+    /** invalidation of text selection of a paragraph */
     void InvalidateParaTextSelection( const SwTextFrame& _rTextFrame );
 
-    /** invalidation of text selection of all paragraphs
-
-        @author OD
-    */
+    /** invalidation of text selection of all paragraphs */
     void InvalidateTextSelectionOfAllParas();
 
     sal_Int32 GetChildIndex( const SwFrame& rParentFrame,
@@ -300,8 +286,6 @@ private:
         Necessary, because <PreviewAdjust(..)> changes mapping mode at current
         output device for mapping logic document positions to page preview window
         positions and vice versa and doesn't take care to recover its changes.
-
-        @author OD
 
         @param _rPoint
         input parameter - constant reference to point to determine the mapping

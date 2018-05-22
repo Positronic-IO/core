@@ -63,7 +63,7 @@ Writer::Writer( sal_Int32 nTWIPWidthOutput, sal_Int32 nTWIPHeightOutput, sal_Int
     tools::Rectangle aRect( 0, 0, static_cast<long>( mnDocWidth * mnDocXScale ), static_cast<long>( mnDocHeight * mnDocYScale ) );
     tools::Polygon aPoly( aRect );
     FillStyle aFill = FillStyle( COL_WHITE );
-    mnWhiteBackgroundShapeId = defineShape( aPoly, aFill );
+    sal_uInt16 nWhiteBackgroundShapeId = defineShape( aPoly, aFill );
 
     ::basegfx::B2DHomMatrix m; // #i73264#
     mnPageButtonId = createID();
@@ -72,7 +72,7 @@ Writer::Writer( sal_Int32 nTWIPWidthOutput, sal_Int32 nTWIPHeightOutput, sal_Int
 
     // button records
     mpTag->addUI8( 0x08 );                      // only hit state
-    mpTag->addUI16( mnWhiteBackgroundShapeId ); // shape id of background rectangle
+    mpTag->addUI16( nWhiteBackgroundShapeId );  // shape id of background rectangle
     mpTag->addUI16( 0 );                        // depth for button DANGER!
     mpTag->addMatrix( m );                      // identity matrix
     mpTag->addUI8( 0 );                         // empty color transform
@@ -128,11 +128,10 @@ void ImplCopySvStreamToXOutputStream( SvStream& rIn, Reference< XOutputStream > 
 
 void Writer::storeTo( Reference< XOutputStream > const &xOutStream )
 {
-    for(FontMap::iterator i = maFonts.begin(); i != maFonts.end(); ++i)
+    for (auto const& font : maFonts)
     {
-        FlashFont* pFont = (*i);
-        pFont->write( *mpFontsStream );
-        delete pFont;
+        font->write( *mpFontsStream );
+        delete font;
     }
 
     // Endtag
@@ -249,7 +248,7 @@ void Writer::endTag()
 
     if( mpSprite && ( (nTag == TAG_END) || (nTag == TAG_SHOWFRAME) || (nTag == TAG_DOACTION) || (nTag == TAG_STARTSOUND) || (nTag == TAG_PLACEOBJECT) || (nTag == TAG_PLACEOBJECT2) || (nTag == TAG_REMOVEOBJECT2) || (nTag == TAG_FRAMELABEL) ) )
     {
-        mpSprite->addTag( mpTag.release() );
+        mpSprite->addTag( std::move(mpTag) );
     }
     else
     {
@@ -275,24 +274,17 @@ sal_uInt16 Writer::defineShape( const GDIMetaFile& rMtf )
     Impl_writeActions( rMtf );
 
     sal_uInt16 nId = 0;
+    if (maShapeIds.empty())
+        return nId;
+
     {
-        CharacterIdVector::iterator aIter( maShapeIds.begin() );
-        const CharacterIdVector::iterator aEnd( maShapeIds.end() );
-
-        bool bHaveShapes = aIter != aEnd;
-
-        if (bHaveShapes)
+        nId = startSprite();
+        sal_uInt16 iDepth = 1;
+        for (auto const& shape : maShapeIds)
         {
-            nId = startSprite();
-
-            sal_uInt16 iDepth = 1;
-            for(; aIter != aEnd; ++aIter)
-            {
-                placeShape( *aIter, iDepth++, 0, 0 );
-            }
-
-            endSprite();
+            placeShape( shape, iDepth++, 0, 0 );
         }
+        endSprite();
     }
 
     maShapeIds.clear();

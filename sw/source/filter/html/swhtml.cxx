@@ -21,7 +21,7 @@
 
 #include <algorithm>
 #include <memory>
-#include <config_features.h>
+#include <config_java.h>
 
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XDocumentProperties.hpp>
@@ -114,10 +114,12 @@
 #include <swdll.hxx>
 
 #include <sfx2/viewfrm.hxx>
+#include <svx/svdobj.hxx>
 
-#include <strings.hrc>
 #include <swerror.h>
 #include <hints.hxx>
+#include <ndole.hxx>
+#include <unoframe.hxx>
 #include "css1atr.hxx"
 
 #define FONTSIZE_MASK           7
@@ -156,7 +158,7 @@ static HTMLOptionEnum<sal_uInt16> aHTMLSpacerTypeTable[] =
 
 HTMLReader::HTMLReader()
 {
-    bTmplBrowseMode = true;
+    m_bTemplateBrowseMode = true;
 }
 
 OUString HTMLReader::GetTemplateName(SwDoc& rDoc) const
@@ -187,11 +189,11 @@ OUString HTMLReader::GetTemplateName(SwDoc& rDoc) const
 
 bool HTMLReader::SetStrmStgPtr()
 {
-    OSL_ENSURE( pMedium, "Where is the medium??" );
+    OSL_ENSURE( m_pMedium, "Where is the medium??" );
 
-    if( pMedium->IsRemote() || !pMedium->IsStorage() )
+    if( m_pMedium->IsRemote() || !m_pMedium->IsStorage() )
     {
-        pStrm = pMedium->GetInStream();
+        m_pStream = m_pMedium->GetInStream();
         return true;
     }
     return false;
@@ -201,13 +203,13 @@ bool HTMLReader::SetStrmStgPtr()
 // Call for the general Reader-Interface
 ErrCode HTMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPam, const OUString & rName )
 {
-    if( !pStrm )
+    if( !m_pStream )
     {
-        OSL_ENSURE( pStrm, "HTML-Read without stream" );
+        OSL_ENSURE( m_pStream, "HTML-Read without stream" );
         return ERR_SWG_READ_ERROR;
     }
 
-    if( !bInsertMode )
+    if( !m_bInsertMode )
     {
         Reader::ResetFrameFormats( rDoc );
 
@@ -223,15 +225,15 @@ ErrCode HTMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPam, co
     // so nobody steals the document!
     rtl::Reference<SwDoc> aHoldRef(&rDoc);
     ErrCode nRet = ERRCODE_NONE;
-    tools::SvRef<SwHTMLParser> xParser = new SwHTMLParser( &rDoc, rPam, *pStrm,
-                                            rName, rBaseURL, !bInsertMode, pMedium,
+    tools::SvRef<SwHTMLParser> xParser = new SwHTMLParser( &rDoc, rPam, *m_pStream,
+                                            rName, rBaseURL, !m_bInsertMode, m_pMedium,
                                             IsReadUTF8(),
-                                            bIgnoreHTMLComments );
+                                            m_bIgnoreHTMLComments );
 
     SvParserState eState = xParser->CallParser();
 
     if( SvParserState::Pending == eState )
-        pStrm->ResetError();
+        m_pStream->ResetError();
     else if( SvParserState::Accepted != eState )
     {
         const OUString sErr(OUString::number(static_cast<sal_Int32>(xParser->GetLineNr()))
@@ -768,7 +770,7 @@ if( m_pSttNdIdx->GetIndex()+1 == m_pPam->GetBound( false ).nNode.GetIndex() )
         SwPosition* pPos = m_pPam->GetPoint();
         if( !pPos->nContent.GetIndex() && !bLFStripped )
         {
-            SwTextNode* pAktNd;
+            SwTextNode* pCurrentNd;
             sal_uLong nNodeIdx = pPos->nNode.GetIndex();
 
             bool bHasFlysOrMarks =
@@ -800,16 +802,16 @@ if( m_pSttNdIdx->GetIndex()+1 == m_pPam->GetBound( false ).nNode.GetIndex() )
                     }
                 }
             }
-            else if( nullptr != ( pAktNd = m_xDoc->GetNodes()[ nNodeIdx ]->GetTextNode()) && !bHasFlysOrMarks )
+            else if( nullptr != ( pCurrentNd = m_xDoc->GetNodes()[ nNodeIdx ]->GetTextNode()) && !bHasFlysOrMarks )
             {
-                if( pAktNd->CanJoinNext( &pPos->nNode ))
+                if( pCurrentNd->CanJoinNext( &pPos->nNode ))
                 {
                     SwTextNode* pNextNd = pPos->nNode.GetNode().GetTextNode();
                     pPos->nContent.Assign( pNextNd, 0 );
                     m_pPam->SetMark(); m_pPam->DeleteMark();
                     pNextNd->JoinPrev();
                 }
-                else if (pAktNd->GetText().isEmpty())
+                else if (pCurrentNd->GetText().isEmpty())
                 {
                     pPos->nContent.Assign( nullptr, 0 );
                     m_pPam->SetMark(); m_pPam->DeleteMark();
@@ -1413,10 +1415,21 @@ void SwHTMLParser::NextToken( HtmlTokenId nToken )
         break;
 
     case HtmlTokenId::OBJECT_ON:
+        if (m_bXHTML)
+        {
+            if (!InsertEmbed())
+                InsertImage();
+            break;
+        }
 #if HAVE_FEATURE_JAVA
         NewObject();
         m_bCallNextToken = m_pAppletImpl!=nullptr && m_xTable;
 #endif
+        break;
+
+    case HtmlTokenId::OBJECT_OFF:
+        if (!m_aEmbeds.empty())
+            m_aEmbeds.pop();
         break;
 
     case HtmlTokenId::APPLET_ON:
@@ -1503,6 +1516,23 @@ void SwHTMLParser::NextToken( HtmlTokenId nToken )
         {
             if( !m_bDocInitalized )
                 DocumentDetected();
+
+            if (!m_aEmbeds.empty())
+            {
+                // The text token is inside an OLE object, which means
+                // alternate text.
+                SwOLENode* pOLENode = m_aEmbeds.top();
+                if (SwFlyFrameFormat* pFormat
+                    = dynamic_cast<SwFlyFrameFormat*>(pOLENode->GetFlyFormat()))
+                {
+                    if (SdrObject* pObject = SwXFrame::GetOrCreateSdrObject(*pFormat))
+                    {
+                        pObject->SetTitle(pObject->GetTitle() + aToken);
+                        break;
+                    }
+                }
+            }
+
             m_xDoc->getIDocumentContentOperations().InsertString( *m_pPam, aToken );
 
             // if there are temporary paragraph attributes and the
@@ -4821,7 +4851,6 @@ void SwHTMLParser::NewCharFormat( HtmlTokenId nToken )
 void SwHTMLParser::InsertSpacer()
 {
     // and if applicable change it via the options
-    OUString aId;
     sal_Int16 eVertOri = text::VertOrientation::TOP;
     sal_Int16 eHoriOri = text::HoriOrientation::NONE;
     Size aSize( 0, 0);
@@ -4836,9 +4865,6 @@ void SwHTMLParser::InsertSpacer()
         const HTMLOption& rOption = rHTMLOptions[--i];
         switch( rOption.GetToken() )
         {
-        case HtmlOptionId::ID:
-            aId = rOption.GetString();
-            break;
         case HtmlOptionId::TYPE:
             rOption.GetEnum( nType, aHTMLSpacerTypeTable );
             break;
@@ -5559,7 +5585,10 @@ void SwHTMLParser::SetupFilterOptions()
     OUString aFilterOptions = pItem->GetValue();
     const OUString aXhtmlNsKey("xhtmlns=");
     if (aFilterOptions.startsWith(aXhtmlNsKey))
+    {
         SetNamespace(aFilterOptions.copy(aXhtmlNsKey.getLength()));
+        m_bXHTML = true;
+    }
 }
 
 namespace
@@ -5578,7 +5607,7 @@ bool TestImportHTML(SvStream &rStream)
 {
     FontCacheGuard aFontCacheGuard;
     std::unique_ptr<Reader> xReader(new HTMLReader);
-    xReader->pStrm = &rStream;
+    xReader->m_pStream = &rStream;
 
     SwGlobals::ensure();
 

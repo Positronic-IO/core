@@ -71,10 +71,7 @@
 #include <com/sun/star/sdb/XQueriesSupplier.hpp>
 #include <com/sun/star/container/XContainer.hpp>
 
-#include <comphelper/enumhelper.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/namedvaluecollection.hxx>
-#include <comphelper/numbers.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/exc_hlp.hxx>
@@ -178,7 +175,7 @@ FormViewPageWindowAdapter::FormViewPageWindowAdapter( const css::uno::Reference<
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 }
@@ -212,7 +209,7 @@ void FormViewPageWindowAdapter::dispose()
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -384,7 +381,7 @@ void FormViewPageWindowAdapter::updateTabOrder( const Reference< XForm >& _rxFor
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -510,7 +507,7 @@ void SAL_CALL FmXFormView::elementInserted(const ContainerEvent& evt)
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -849,7 +846,7 @@ bool FmXFormView::isFocusable( const Reference< XControl >& i_rControl )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     return false;
 }
@@ -906,7 +903,7 @@ namespace
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 }
@@ -1003,7 +1000,7 @@ IMPL_LINK_NOARG(FmXFormView, OnAutoFocus, void*, void)
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -1068,7 +1065,7 @@ IMPL_LINK_NOARG( FmXFormView, OnStartControlWizard, void*, void )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     const sal_Char* pWizardAsciiName = nullptr;
@@ -1101,7 +1098,7 @@ IMPL_LINK_NOARG( FmXFormView, OnStartControlWizard, void*, void )
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         if ( !xWizard.is() )
@@ -1117,7 +1114,7 @@ IMPL_LINK_NOARG( FmXFormView, OnStartControlWizard, void*, void )
             }
             catch (const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
     }
@@ -1350,7 +1347,7 @@ SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor
         if ( bCheckbox )
             return pControl;
 
-        SdrObjGroup* pGroup  = new SdrObjGroup();
+        SdrObjGroup* pGroup  = new SdrObjGroup(getView()->getSdrModelFromSdrView());
         SdrObjList* pObjList = pGroup->GetSubList();
         pObjList->InsertObject( pLabel );
         pObjList->InsertObject( pControl );
@@ -1372,7 +1369,7 @@ SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
 
@@ -1462,7 +1459,7 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
 
 
             // group objects
-            SdrObjGroup* pGroup  = new SdrObjGroup();
+            SdrObjGroup* pGroup  = new SdrObjGroup(getView()->getSdrModelFromSdrView());
             SdrObjList* pObjList = pGroup->GetSubList();
             pObjList->InsertObject(pLabel);
             pObjList->InsertObject(pControl);
@@ -1476,7 +1473,11 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
             const MapMode eSourceMode(MapUnit::Map100thMM);
             const sal_uInt16 nObjID = OBJ_FM_BUTTON;
             ::Size controlSize(4000, 500);
-            FmFormObj *pControl = static_cast<FmFormObj*>(SdrObjFactory::MakeNewObject( SdrInventor::FmForm, nObjID, nullptr ));
+            FmFormObj *pControl = static_cast<FmFormObj*>(
+                SdrObjFactory::MakeNewObject(
+                    getView()->getSdrModelFromSdrView(),
+                    SdrInventor::FmForm,
+                    nObjID));
             controlSize.setWidth( long(controlSize.Width() * eTargetMode.GetScaleX()) );
             controlSize.setHeight( long(controlSize.Height() * eTargetMode.GetScaleY()) );
             ::Point controlPos( OutputDevice::LogicToLogic( ::Point( controlSize.Width(), 0 ), eSourceMode, eTargetMode ) );
@@ -1574,13 +1575,20 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
     bool bNeedLabel = ( _nControlObjectID != OBJ_FM_CHECKBOX );
 
     // the label
-    ::std::unique_ptr< SdrUnoObj > pLabel;
+    ::std::unique_ptr< SdrUnoObj, SdrObjectFreeOp > pLabel;
     Reference< XPropertySet > xLabelModel;
+
     if ( bNeedLabel )
     {
         pLabel.reset( dynamic_cast< SdrUnoObj* >(
-            SdrObjFactory::MakeNewObject( _nInventor, _nLabelObjectID, _pLabelPage, _pModel ) ) );
+            SdrObjFactory::MakeNewObject(
+                *_pModel,
+                _nInventor,
+                _nLabelObjectID,
+                _pLabelPage)));
+
         OSL_ENSURE( pLabel.get(), "FmXFormView::createControlLabelPair: could not create the label!" );
+
         if ( !pLabel.get() )
             return false;
 
@@ -1605,9 +1613,15 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
     }
 
     // the control
-    ::std::unique_ptr< SdrUnoObj > pControl( dynamic_cast< SdrUnoObj* >(
-        SdrObjFactory::MakeNewObject( _nInventor, _nControlObjectID, _pControlPage, _pModel ) ) );
+    ::std::unique_ptr< SdrUnoObj, SdrObjectFreeOp > pControl( dynamic_cast< SdrUnoObj* >(
+        SdrObjFactory::MakeNewObject(
+            *_pModel,
+             _nInventor,
+             _nControlObjectID,
+             _pControlPage)));
+
     OSL_ENSURE( pControl.get(), "FmXFormView::createControlLabelPair: could not create the control!" );
+
     if ( !pControl.get() )
         return false;
 
@@ -1673,7 +1687,7 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 

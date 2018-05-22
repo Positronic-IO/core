@@ -251,11 +251,10 @@ protected:
     void InsertFrom(SfxMedium &rMedium);
 
     virtual bool HasPrintOptionsPage() const override;
-    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(vcl::Window    *pParent,
+    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(weld::Container* pPage,
                                                       const SfxItemSet &rOptions) override;
     virtual void Deactivate(bool IsMDIActivate) override;
     virtual void Activate(bool IsMDIActivate) override;
-    virtual void AdjustPosSizePixel(const Point &rPos, const Size &rSize) override;
     virtual void InnerResizePixel(const Point &rOfs, const Size  &rSize, bool inplaceEditModeChange) override;
     virtual void OuterResizePixel(const Point &rOfs, const Size  &rSize) override;
     virtual void QueryObjAreaPixel( tools::Rectangle& rRect ) const override;

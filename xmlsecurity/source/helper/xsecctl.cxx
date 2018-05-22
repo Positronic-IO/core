@@ -40,6 +40,7 @@
 #include <xmloff/attrlist.hxx>
 #include <rtl/math.hxx>
 #include <rtl/ref.hxx>
+#include <svx/xoutbmp.hxx>
 #include <unotools/datetime.hxx>
 #include <comphelper/ofopxmlhelper.hxx>
 #include <sax/tools/converter.hxx>
@@ -68,9 +69,32 @@ OUString getDigestURI(sal_Int32 nID)
             return OUString(ALGO_XMLDSIGSHA1);
     }
 }
-OUString getSignatureURI(sal_Int32 nID)
+OUString getSignatureURI(svl::crypto::SignatureMethodAlgorithm eAlgorithm, sal_Int32 nDigestID)
 {
-    switch( nID )
+    OUString aRet;
+
+    if (eAlgorithm == svl::crypto::SignatureMethodAlgorithm::ECDSA)
+    {
+        switch (nDigestID)
+        {
+            case cssxc::DigestID::SHA1:
+                aRet = ALGO_ECDSASHA1;
+                break;
+            case cssxc::DigestID::SHA256:
+                aRet = ALGO_ECDSASHA256;
+                break;
+            case cssxc::DigestID::SHA512:
+                aRet = ALGO_ECDSASHA512;
+                break;
+            default:
+                aRet = ALGO_ECDSASHA1;
+                break;
+        }
+    }
+    if (!aRet.isEmpty())
+        return aRet;
+
+    switch (nDigestID)
     {
         case cssxc::DigestID::SHA1:
             return OUString(ALGO_RSASHA1);
@@ -608,7 +632,7 @@ void XSecController::exportSignature(
             // SignatureMethod:Algorithm should be the corresponding one.
             pAttributeList->AddAttribute(
                 "Algorithm",
-                getSignatureURI(vReferenceInfors[0].nDigestID));
+                getSignatureURI(signatureInfo.eAlgorithmID, vReferenceInfors[0].nDigestID));
             xDocumentHandler->startElement( "SignatureMethod", cssu::Reference< cssxs::XAttributeList > (pAttributeList) );
             xDocumentHandler->endElement( "SignatureMethod" );
 
@@ -833,6 +857,66 @@ void XSecController::exportSignature(
                         "dc:date");
                 }
                 xDocumentHandler->endElement( "SignatureProperty" );
+
+                if (!signatureInfo.ouSignatureLineId.isEmpty()
+                    && signatureInfo.aValidSignatureImage.is()
+                    && signatureInfo.aInvalidSignatureImage.is())
+                {
+                    pAttributeList = new SvXMLAttributeList();
+                    pAttributeList->AddAttribute(
+                        "xmlns:loext",
+                        "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0");
+                    pAttributeList->AddAttribute("Target", "#" + signatureInfo.ouSignatureId);
+
+                    xDocumentHandler->startElement(
+                        "SignatureProperty",
+                        cssu::Reference<cssxs::XAttributeList>(pAttributeList));
+                    {
+                        xDocumentHandler->startElement(
+                            "loext:SignatureLine",
+                            cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
+
+                        {
+                            // Write SignatureLineId element
+                            xDocumentHandler->startElement(
+                                "loext:SignatureLineId",
+                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
+                            xDocumentHandler->characters(signatureInfo.ouSignatureLineId);
+                            xDocumentHandler->endElement("loext:SignatureLineId");
+                        }
+
+                        {
+                            // Write SignatureLineId element
+                            xDocumentHandler->startElement(
+                                "loext:SignatureLineValidImage",
+                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
+
+                            OUString aGraphicInBase64;
+                            Graphic aGraphic(signatureInfo.aValidSignatureImage);
+                            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
+                                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+
+                            xDocumentHandler->characters(aGraphicInBase64);
+                            xDocumentHandler->endElement("loext:SignatureLineValidImage");
+                        }
+
+                        {
+                            // Write SignatureLineId element
+                            xDocumentHandler->startElement(
+                                "loext:SignatureLineInvalidImage",
+                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
+                            OUString aGraphicInBase64;
+                            Graphic aGraphic(signatureInfo.aInvalidSignatureImage);
+                            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
+                                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+                            xDocumentHandler->characters(aGraphicInBase64);
+                            xDocumentHandler->endElement("loext:SignatureLineInvalidImage");
+                        }
+
+                        xDocumentHandler->endElement("loext:SignatureLine");
+                    }
+                    xDocumentHandler->endElement("SignatureProperty");
+                }
             }
 
             // Write signature description.

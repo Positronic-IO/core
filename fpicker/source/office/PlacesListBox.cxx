@@ -7,13 +7,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#include <strings.hrc>
 #include "PlacesListBox.hxx"
 #include <svtools/PlaceEditDialog.hxx>
 
-#include <vcl/msgbox.hxx>
 #include <svtools/headbar.hxx>
-#include <svtools/svtresid.hxx>
 #include <bitmaps.hlst>
 
 #define COLUMN_NAME     1
@@ -28,8 +25,8 @@ PlacesListBox_Impl::PlacesListBox_Impl( PlacesListBox* pParent, const OUString& 
     mpHeaderBar = VclPtr<HeaderBar>::Create( pParent, WB_BUTTONSTYLE | WB_BOTTOMBORDER );
     mpHeaderBar->SetPosSizePixel( Point( 0, 0 ), Size( 600, 16 ) );
 
-    long pTabs[] = { 2, 20, 600 };
-    SetTabs( &pTabs[0], MapUnit::MapPixel );
+    long aTabPositions[] = { 20, 600 };
+    SetTabs( SAL_N_ELEMENTS(aTabPositions), aTabPositions, MapUnit::MapPixel );
     mpHeaderBar->InsertItem( COLUMN_NAME, rTitle, 600, HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER );
 
     Size aHeadSize = mpHeaderBar->GetSizePixel();
@@ -211,13 +208,13 @@ IMPL_LINK_NOARG( PlacesListBox, DoubleClick, SvTreeListBox*, bool )
     PlacePtr pPlace = maPlaces[nSelected];
     if ( pPlace->IsEditable() && !pPlace->IsLocal( ) )
     {
-        ScopedVclPtrInstance< PlaceEditDialog > aDlg(mpDlg, pPlace);
-        short aRetCode = aDlg->Execute();
+        PlaceEditDialog aDlg(mpDlg->GetFrameWeld(), pPlace);
+        short aRetCode = aDlg.run();
         switch(aRetCode) {
             case RET_OK :
             {
-                pPlace->SetName ( aDlg->GetServerName() );
-                pPlace->SetUrl( aDlg->GetServerUrl() );
+                pPlace->SetName ( aDlg.GetServerName() );
+                pPlace->SetUrl( aDlg.GetServerUrl() );
                 mbUpdated = true;
                 break;
             }

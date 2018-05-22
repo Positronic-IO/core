@@ -32,7 +32,6 @@
 #include <miscuno.hxx>
 #include <scerrors.hxx>
 #include <refupdat.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <attrib.hxx>
 #include <scitems.hxx>
@@ -883,7 +882,7 @@ void ScDPObject::ClearSource()
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sc.core");
         }
     }
     xSource = nullptr;
@@ -1332,7 +1331,7 @@ public:
     bool operator() (const ScDPSaveDimension* pDim) const
     {
         // Layout name takes precedence.
-        const OUString* pLayoutName = pDim->GetLayoutName();
+        const boost::optional<OUString> & pLayoutName = pDim->GetLayoutName();
         if (pLayoutName && ScGlobal::pCharClass->uppercase(*pLayoutName) == maName)
             return true;
 
@@ -2407,7 +2406,7 @@ static void lcl_FillLabelData( ScDPLabelData& rData, const uno::Reference< beans
     }
 }
 
-bool ScDPObject::FillLabelDataForDimension(
+void ScDPObject::FillLabelDataForDimension(
     const uno::Reference<container::XIndexAccess>& xDims, sal_Int32 nDim, ScDPLabelData& rLabelData)
 {
     uno::Reference<uno::XInterface> xIntDim =
@@ -2416,7 +2415,7 @@ bool ScDPObject::FillLabelDataForDimension(
     uno::Reference<beans::XPropertySet> xDimProp( xIntDim, uno::UNO_QUERY );
 
     if (!xDimName.is() || !xDimProp.is())
-        return false;
+        return;
 
     bool bData = ScUnoHelpFunctions::GetBoolProperty(
         xDimProp, SC_UNO_DP_ISDATALAYOUT);
@@ -2466,7 +2465,6 @@ bool ScDPObject::FillLabelDataForDimension(
         rLabelData.mnFlags = ScUnoHelpFunctions::GetLongProperty(
             xDimProp, SC_UNO_DP_FLAGS );
     }
-    return true;
 }
 
 void ScDPObject::FillLabelData(sal_Int32 nDim, ScDPLabelData& rLabels)

@@ -45,7 +45,6 @@
 
 #include <OutlineView.hxx>
 #include <Client.hxx>
-#include <sdresid.hxx>
 #include <DrawDocShell.hxx>
 #include <slideshow.hxx>
 #include <drawdoc.hxx>
@@ -87,7 +86,6 @@
 #include <editeng/editview.hxx>
 #include <editeng/editeng.hxx>
 #include <svl/poolitem.hxx>
-#include <strings.hrc>
 #include <strings.hxx>
 #include <AccessibleDocumentViewBase.hxx>
 
@@ -153,7 +151,7 @@ ViewShell::~ViewShell()
     if (mpContentWindow)
         mpContentWindow->SetViewShell(nullptr);
 
-    delete mpZoomList;
+    mpZoomList.reset();
 
     mpLayerTabBar.disposeAndClear();
 
@@ -199,7 +197,7 @@ void ViewShell::construct()
     if (IsMainViewShell())
         GetDocSh()->Connect (this);
 
-    mpZoomList = new ZoomList( this );
+    mpZoomList.reset( new ZoomList( this ) );
 
     mpContentWindow.reset(VclPtr< ::sd::Window >::Create(GetParentWindow()));
     SetActiveWindow (mpContentWindow.get());

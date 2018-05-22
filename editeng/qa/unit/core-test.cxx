@@ -17,10 +17,8 @@
 
 #include <sfx2/app.hxx>
 #include <svl/itempool.hxx>
-#include <editeng/eerdll.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/eeitem.hxx>
-#include <editeng/editids.hrc>
 #include <editeng/lspcitem.hxx>
 #include <editeng/svxacorr.hxx>
 #include <editeng/unofield.hxx>
@@ -171,63 +169,55 @@ void Test::testLineSpacing()
     CPPUNIT_ASSERT_EQUAL(sal_uLong(aTextLen), rDoc.GetTextLen());
     CPPUNIT_ASSERT_EQUAL(aText, rDoc.GetParaAsString(sal_Int32(0)));
 
-    // Get ItemSet for line spacing - 60%
-    std::unique_ptr<SfxItemSet> pSet(new SfxItemSet(aEditEngine.GetEmptyItemSet()));
-    SvxLineSpacingItem aLineSpacing(LINE_SPACE_DEFAULT_HEIGHT, EE_PARA_SBL);
-    aLineSpacing.SetPropLineSpace(60);
-    pSet->Put(aLineSpacing);
-
-    // Set font
-    SvxFontItem aFont(EE_CHAR_FONTINFO);
-    aFont.SetFamilyName("Liberation Sans");
-    pSet->Put(aFont);
-    SvxFontHeightItem aFontSize(240, 100, EE_CHAR_FONTHEIGHT);
-    pSet->Put(aFontSize);
-
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(3), pSet->Count());
-
-    // Select all paragraphs and set spacing
+    // Select all paragraphs
     ESelection aSelection(0, 0, 0, aTextLen);
-    aEditEngine.QuickSetAttribs(*pSet, aSelection);
+
+    auto doTest = [&](sal_uInt16 nSpace, sal_uInt16 nExpMaxAscent, sal_uInt32 nExpLineHeight)
+    {
+        std::unique_ptr<SfxItemSet> pSet(new SfxItemSet(aEditEngine.GetEmptyItemSet()));
+        SvxLineSpacingItem aLineSpacing(LINE_SPACE_DEFAULT_HEIGHT, EE_PARA_SBL);
+        aLineSpacing.SetPropLineSpace(nSpace);
+        pSet->Put(aLineSpacing);
+
+        // Set font
+        SvxFontItem aFont(EE_CHAR_FONTINFO);
+        aFont.SetFamilyName("Liberation Sans");
+        pSet->Put(aFont);
+        SvxFontHeightItem aFontSize(240, 100, EE_CHAR_FONTHEIGHT);
+        pSet->Put(aFontSize);
+
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(3), pSet->Count());
+
+        aEditEngine.QuickSetAttribs(*pSet, aSelection);
+
+        // Assert changes
+        ParaPortion* pParaPortion = aEditEngine.GetParaPortions()[0];
+        ContentNode* const pNode = pParaPortion->GetNode();
+        const SvxLineSpacingItem& rLSItem = pNode->GetContentAttribs().GetItem(EE_PARA_SBL);
+        CPPUNIT_ASSERT_EQUAL(SvxInterLineSpaceRule::Prop, rLSItem.GetInterLineSpaceRule());
+        CPPUNIT_ASSERT_EQUAL(nSpace, rLSItem.GetPropLineSpace());
+
+        // Check the first line
+        ParagraphInfos aInfo = aEditEngine.GetParagraphInfos(0);
+        CPPUNIT_ASSERT_EQUAL(nExpMaxAscent, aInfo.nFirstLineMaxAscent);
+        CPPUNIT_ASSERT_EQUAL(nExpLineHeight, aEditEngine.GetLineHeight(0));
+    };
+
+    // Test first case - 60%
+    doTest(60, 122, 153);
 
     // Force multiple lines
     aEditEngine.SetPaperSize(Size(1000, 6000));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(4), aEditEngine.GetLineCount(0));
 
-    // Assert changes
-    ParaPortion* pParaPortion = aEditEngine.GetParaPortions()[0];
-    ContentNode* const pNode = pParaPortion->GetNode();
-    const SvxLineSpacingItem& rLSItem = pNode->GetContentAttribs().GetItem(EE_PARA_SBL);
-    CPPUNIT_ASSERT_EQUAL(SvxInterLineSpaceRule::Prop, rLSItem.GetInterLineSpaceRule());
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(60), rLSItem.GetPropLineSpace());
+    // Test second case - 150%
+    doTest(150, 337, 382);
 
-    // Check the first line
-    ParagraphInfos aInfo = aEditEngine.GetParagraphInfos(0);
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(122), aInfo.nFirstLineMaxAscent);
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(153), static_cast<sal_uInt16>(aEditEngine.GetLineHeight(0)));
+    // Test lower Word limit - 6% (factor 0.06)
+    doTest(6, 12, 15);
 
-    // Prepare second case - 150%
-    std::unique_ptr<SfxItemSet> pSet2(new SfxItemSet(aEditEngine.GetEmptyItemSet()));
-    SvxLineSpacingItem aLineSpacing2(LINE_SPACE_DEFAULT_HEIGHT, EE_PARA_SBL);
-    aLineSpacing2.SetPropLineSpace(150);
-    pSet2->Put(aLineSpacing2);
-    pSet2->Put(aFont);
-    pSet2->Put(aFontSize);
-
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(3), pSet2->Count());
-
-    // Select all paragraphs and set spacing
-    aEditEngine.QuickSetAttribs(*pSet2, aSelection);
-
-    // Assert changes
-    const SvxLineSpacingItem& rLSItem2 = pNode->GetContentAttribs().GetItem(EE_PARA_SBL);
-    CPPUNIT_ASSERT_EQUAL(SvxInterLineSpaceRule::Prop, rLSItem2.GetInterLineSpaceRule());
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(150), rLSItem2.GetPropLineSpace());
-
-    // Check the first line
-    ParagraphInfos aInfo2 = aEditEngine.GetParagraphInfos(0);
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(269), aInfo2.nFirstLineMaxAscent);
-    CPPUNIT_ASSERT_EQUAL(sal_uInt16(382), static_cast<sal_uInt16>(aEditEngine.GetLineHeight(0)));
+    // Test upper Word limit - 13200% (factor 132)
+    doTest(13200, 33615, 33660);
 }
 
 void Test::testConstruction()
@@ -517,7 +507,7 @@ void Test::testAutocorrect()
         bool bNbspRunNext = false;
 
         TestAutoCorrDoc aFoo(sInput, LANGUAGE_ENGLISH_US);
-        aAutoCorrect.SetAutoCorrFlag(ChgQuotes, true);
+        aAutoCorrect.SetAutoCorrFlag(ACFlags::ChgQuotes, true);
         aAutoCorrect.DoAutoCorrect(aFoo, sInput, sInput.getLength(), cNextChar, true, bNbspRunNext);
         fprintf(stderr, "text is %x\n", aFoo.getResult()[aFoo.getResult().getLength() - 1]);
 
@@ -815,7 +805,7 @@ class UrlEditEngine : public EditEngine
 public:
     explicit UrlEditEngine(SfxItemPool *pPool) : EditEngine(pPool) {}
 
-    virtual OUString CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, Color*&, Color*& ) override
+    virtual OUString CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, boost::optional<Color>&, boost::optional<Color>& ) override
     {
         return OUString("jim@bob.com"); // a sophisticated view of value:
     }

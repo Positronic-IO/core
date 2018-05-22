@@ -20,9 +20,7 @@
 #include "unodialogabp.hxx"
 #include <cppuhelper/typeprovider.hxx>
 #include "abspilot.hxx"
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
-#include <vcl/msgbox.hxx>
 
 #define PROPERTY_ID_DATASOURCENAME  3
 
@@ -112,9 +110,9 @@ namespace abp
         }
     }
 
-    VclPtr<Dialog> OABSPilotUno::createDialog(vcl::Window* _pParent)
+    svt::OGenericUnoDialog::Dialog OABSPilotUno::createDialog(vcl::Window* _pParent)
     {
-        return VclPtr<OAddressBookSourcePilot>::Create(_pParent, m_aContext );
+        return svt::OGenericUnoDialog::Dialog(VclPtr<OAddressBookSourcePilot>::Create(_pParent, m_aContext));
     }
 
 
@@ -137,7 +135,7 @@ namespace abp
     {
         if ( _nExecutionResult == RET_OK )
         {
-            const AddressSettings& aSettings = static_cast<OAddressBookSourcePilot*>(m_pDialog.get())->getSettings();
+            const AddressSettings& aSettings = static_cast<OAddressBookSourcePilot*>(m_aDialog.m_xVclDialog.get())->getSettings();
             m_sDataSourceName = aSettings.bRegisterDataSource ? aSettings.sRegisteredDataSourceName : aSettings.sDataSourceName;
         }
     }

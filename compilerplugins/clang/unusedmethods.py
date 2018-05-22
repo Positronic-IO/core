@@ -33,7 +33,7 @@ def normalizeTypeParams( line ):
 # primary input loop
 # --------------------------------------------------------------------------------------------
 
-with io.open("loplugin.unusedmethods.log", "rb", buffering=1024*1024) as txt:
+with io.open("workdir/loplugin.unusedmethods.log", "rb", buffering=1024*1024) as txt:
     for line in txt:
         tokens = line.strip().split("\t")
         if tokens[0] == "definition:":
@@ -133,19 +133,10 @@ for d in definitionSet:
     # alone if the other one is in use.
     if d[1] == "begin() const" or d[1] == "begin()" or d[1] == "end()" or d[1] == "end() const":
         continue
-    # There is lots of macro magic going on in SRCDIR/include/sax/fshelper.hxx that should be using C++11 varargs templates
-    if d[1].startswith("sax_fastparser::FastSerializerHelper::"):
-       continue
     # used by Windows build
     if any(x in d[1] for x in ["DdeTopic::", "DdeData::", "DdeService::", "DdeTransaction::", "DdeConnection::", "DdeLink::", "DdeItem::", "DdeGetPutItem::"]):
        continue
     if method == "class tools::SvRef<class FontCharMap> FontCharMap::GetDefaultMap(_Bool)":
-       continue
-    # too much template magic here for my plugin
-    if (   ("cairocanvas::" in d[1])
-        or ("canvas::" in d[1])
-        or ("oglcanvas::" in d[1])
-        or ("vclcanvas::" in d[1])):
        continue
     # these are loaded by dlopen() from somewhere
     if "get_implementation" in d[1]:

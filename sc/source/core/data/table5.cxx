@@ -35,6 +35,7 @@
 #include <brdcst.hxx>
 #include <tabprotection.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <segmenttree.hxx>
 #include <columniterator.hxx>
 #include <globalnames.hxx>
@@ -206,13 +207,16 @@ void ScTable::UpdatePageBreaks( const ScRange* pUserArea )
     {
         bool bStartOfPage = false;
         bool bThisRowHidden = false;
-        aIterHidden.getValue(nY, bThisRowHidden);
+        const bool bHasValue = aIterHidden.getValue(nY, bThisRowHidden);
+        assert(bHasValue); (void)bHasValue;
         long nThisY = 0;
         if (!bThisRowHidden)
         {
             sal_uInt16 nTmp;
-            aIterHeights.getValue(nY, nTmp);
-            nThisY = static_cast<long>(nTmp);
+            const bool bHasHeight = aIterHeights.getValue(nY, nTmp);
+            assert(bHasHeight);
+            if (bHasHeight)
+                nThisY = static_cast<long>(nTmp);
         }
 
         bool bManualBreak = false;
@@ -585,6 +589,16 @@ bool ScTable::SetRowHidden(SCROW nStartRow, SCROW nEndRow, bool bHidden)
         bChanged = mpHiddenRows->setTrue(nStartRow, nEndRow);
     else
         bChanged = mpHiddenRows->setFalse(nStartRow, nEndRow);
+
+    std::vector<SdrObject*> aRowDrawObjects;
+    ScDrawLayer* pDrawLayer = pDocument->GetDrawLayer();
+    if (pDrawLayer) {
+        aRowDrawObjects = pDrawLayer->GetObjectsAnchoredToRows(GetTab(), nStartRow, nEndRow);
+        for (auto aObj : aRowDrawObjects)
+        {
+            aObj->SetVisible(!bHidden);
+        }
+    }
 
     if (bChanged)
     {
@@ -1020,8 +1034,8 @@ void ScTable::SyncColRowFlags()
     }
 
     // Hidden flags.
-    lcl_syncFlags(*mpHiddenCols, *mpHiddenRows, mpColFlags.get(), pRowFlags, CRFlags::Hidden);
-    lcl_syncFlags(*mpFilteredCols, *mpFilteredRows, mpColFlags.get(), pRowFlags, CRFlags::Filtered);
+    lcl_syncFlags(*mpHiddenCols, *mpHiddenRows, mpColFlags.get(), pRowFlags.get(), CRFlags::Hidden);
+    lcl_syncFlags(*mpFilteredCols, *mpFilteredRows, mpColFlags.get(), pRowFlags.get(), CRFlags::Filtered);
 }
 
 void ScTable::SetPageSize( const Size& rSize )
@@ -1120,7 +1134,7 @@ void ScTable::SetPageStyle( const OUString& rName )
 
         if ( !pNewStyle )
         {
-            aStrNew = ScGlobal::GetRscString(STR_STYLENAME_STANDARD);
+            aStrNew = ScResId(STR_STYLENAME_STANDARD);
             pNewStyle = pStylePool->Find( aStrNew, SfxStyleFamily::Page );
         }
 

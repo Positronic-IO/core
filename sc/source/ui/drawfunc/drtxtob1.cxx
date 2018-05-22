@@ -28,14 +28,12 @@
 #include <editeng/spltitem.hxx>
 #include <editeng/widwitem.hxx>
 #include <sot/exchange.hxx>
-#include <vcl/msgbox.hxx>
 #include <svtools/transfer.hxx>
 
 #include <sc.hrc>
 #include <drtxtob.hxx>
 #include <drawview.hxx>
 #include <viewdata.hxx>
-#include <scresid.hxx>
 #include <gridwin.hxx>
 
 #include <scabstdlg.hxx>
@@ -111,7 +109,8 @@ void ScDrawTextObjectBar::ExecutePasteContents( SfxRequest & /* rReq */ )
     SdrView* pView = pViewData->GetScDrawView();
     OutlinerView* pOutView = pView->GetTextEditOutlinerView();
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog( pViewData->GetDialogParent() ));
+    vcl::Window* pWin = pViewData->GetDialogParent();
+    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(pWin ? pWin->GetFrameWeld() : nullptr));
 
     pDlg->Insert( SotClipboardFormatId::STRING, EMPTY_OUSTRING );
     pDlg->Insert( SotClipboardFormatId::RTF,    EMPTY_OUSTRING );

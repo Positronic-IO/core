@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="cui">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">0.050000000000000003</property>
@@ -58,7 +58,6 @@
                           <object class="GtkSpinButton" id="width:0.00cm">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">•</property>
                             <property name="adjustment">adjustment1</property>
                             <property name="digits">2</property>
                           </object>
@@ -96,7 +95,6 @@
                           <object class="GtkSpinButton" id="height:0.00cm">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">•</property>
                             <property name="adjustment">adjustment1</property>
                             <property name="digits">2</property>
                           </object>
@@ -387,7 +385,6 @@
                   <object class="GtkSpinButton" id="byhori:0.00cm">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
-                    <property name="invisible_char">•</property>
                     <property name="adjustment">adjustment2</property>
                     <property name="digits">2</property>
                   </object>
@@ -444,7 +441,6 @@
                   <object class="GtkSpinButton" id="byvert:0.00cm">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
-                    <property name="invisible_char">•</property>
                     <property name="adjustment">adjustment2</property>
                     <property name="digits">2</property>
                   </object>

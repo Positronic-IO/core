@@ -79,7 +79,7 @@ namespace o3tl
     template<> struct typed_flags<SdrSnap> : is_typed_flags<SdrSnap, 3> {};
 }
 
-// SdrCrookMode::Stretch is not implemented yet!
+// TODO SdrCrookMode::Stretch is not implemented yet!
 enum class SdrCrookMode {
     Rotate,
     Slant,
@@ -90,7 +90,7 @@ enum class SdrCrookMode {
 // #114409#-1 Migrate PageOrigin
 class ImplPageOriginOverlay;
 
-class SVX_DLLPUBLIC SdrSnapView: public SdrPaintView
+class SVX_DLLPUBLIC SdrSnapView : public SdrPaintView
 {
 protected:
     // #114409#-1 Migrate PageOrigin
@@ -127,7 +127,10 @@ protected:
 
 protected:
     // #i71538# make constructors of SdrView sub-components protected to avoid incomplete incarnations which may get casted to SdrView
-    SdrSnapView(SdrModel* pModel1, OutputDevice* pOut);
+    SdrSnapView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
+
     virtual ~SdrSnapView() override;
 
 public:
@@ -239,7 +242,7 @@ public:
     //     - circle object angle: nothing
     //     - line keeps while Dragging the angle and is only stretched/ contracted
     // Default value for Ortho is off. persistent.
-    void SetOrtho(bool bOn) { bOrtho=bOn; } // unvollstaendig
+    void SetOrtho(bool bOn) { bOrtho=bOn; } // incomplete
     bool IsOrtho() const { return bOrtho; }
 
     // BigOrtho is only relevant if Ortho is switched on.

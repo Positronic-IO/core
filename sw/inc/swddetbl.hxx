@@ -25,7 +25,8 @@ class SwDDEFieldType;
 
 class SwDDETable : public SwTable
 {
-    SwDepend aDepend;
+    sw::WriterMultiListener m_aDepends;
+    SwDDEFieldType* m_pDDEType;
 public:
 
     // Ctor moves all lines/boxes from SwTable to it.

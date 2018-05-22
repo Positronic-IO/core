@@ -26,7 +26,6 @@
 #include <sot/exchange.hxx>
 #include <filter/msfilter/classids.hxx>
 #include <tools/globname.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/document/XImporter.hpp>
@@ -263,7 +262,10 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportXLS(SvStream& rStream)
     {
         bRet = ScFormatFilter::Get().ScImportExcel(aMedium, &rDoc, EIF_AUTO) == ERRCODE_NONE;
     }
-    catch (const css::ucb::ContentCreationException &)
+    catch (const css::ucb::ContentCreationException&)
+    {
+    }
+    catch (const std::out_of_range&)
     {
     }
     xDocShell->DoClose();

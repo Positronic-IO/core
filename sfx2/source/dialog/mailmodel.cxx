@@ -65,7 +65,6 @@
 #include <ucbhelper/content.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/useroptions.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/storagehelper.hxx>
@@ -750,11 +749,7 @@ SfxMailModel::SendMailResult SfxMailModel::Send( const css::uno::Reference< css:
                     OUString subject(
                         url.getBase(
                             INetURLObject::LAST_SEGMENT, false,
-#ifdef _WIN32
-                            INetURLObject::DecodeMechanism::NONE)); // MAPISendMail does not accept Unicode
-#else
                             INetURLObject::DecodeMechanism::WithCharset));
-#endif
                     if (subject.isEmpty()) {
                         subject = maAttachedDocuments[0];
                     }

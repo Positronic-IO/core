@@ -22,7 +22,6 @@
 #include "xmlfilti.hxx"
 #include "xmlsorti.hxx"
 #include <document.hxx>
-#include <globstr.hrc>
 #include <globalnames.hxx>
 #include <docuno.hxx>
 #include <dbdata.hxx>
@@ -45,7 +44,6 @@
 #include <sax/tools/converter.hxx>
 
 #include <com/sun/star/sheet/DataImportMode.hpp>
-#include <comphelper/extract.hxx>
 
 #include <memory>
 
@@ -417,7 +415,7 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
             pData->GetArea(aRange);
 
             setAutoFilterFlags(*pDoc, *pData);
-            pDoc->SetAnonymousDBData(aRange.aStart.Tab(), pData.release());
+            pDoc->SetAnonymousDBData(aRange.aStart.Tab(), std::move(pData));
         }
         return;
     }
@@ -431,7 +429,7 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
             pData->GetArea(aRange);
 
             if (setAutoFilterFlags(*pDoc, *pData))
-                pDoc->SetAnonymousDBData(aRange.aStart.Tab(), pData.release());
+                pDoc->SetAnonymousDBData(aRange.aStart.Tab(), std::move(pData));
             else
                 pDoc->GetDBCollection()->getAnonDBs().insert(pData.release());
         }
@@ -444,10 +442,7 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
         if (pData.get())
         {
             setAutoFilterFlags(*pDoc, *pData);
-            if (pDoc->GetDBCollection()->getNamedDBs().insert(pData.get()))
-            {
-                pData.release();
-            }
+            (void)pDoc->GetDBCollection()->getNamedDBs().insert(pData.release());
         }
     }
 }

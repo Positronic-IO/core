@@ -38,7 +38,6 @@
 #include <comphelper/sequence.hxx>
 #include <vcl/outdev.hxx>
 
-#include <unotools/ucbstreamhelper.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/image.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -146,7 +145,7 @@ public:
     explicit UnoControlDialogModel( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     UnoControlDialogModel( const UnoControlDialogModel& rModel );
 
-    UnoControlModel*    Clone() const override;
+    rtl::Reference<UnoControlModel> Clone() const override;
     // css::beans::XMultiPropertySet
     css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
 
@@ -217,7 +216,7 @@ UnoControlDialogModel::UnoControlDialogModel( const UnoControlDialogModel& rMode
     setFastPropertyValue_NoBroadcast( BASEPROPERTY_USERFORMCONTAINEES, makeAny( xNameCont ) );
 }
 
-UnoControlModel* UnoControlDialogModel::Clone() const
+rtl::Reference<UnoControlModel> UnoControlDialogModel::Clone() const
 {
     // clone the container itself
     UnoControlDialogModel* pClone = new UnoControlDialogModel( *this );
@@ -413,11 +412,7 @@ void UnoDialogControl::PrepareWindowDescriptor( css::awt::WindowDescriptor& rDes
     if (( ImplGetPropertyValue( PROPERTY_IMAGEURL ) >>= aImageURL ) &&
         ( !aImageURL.isEmpty() ))
     {
-        OUString absoluteUrl = aImageURL;
-        if ( !aImageURL.startsWith( UNO_NAME_GRAPHOBJ_URLPREFIX ) )
-            absoluteUrl = getPhysicalLocation( ImplGetPropertyValue( PROPERTY_DIALOGSOURCEURL ),
-                                 uno::makeAny( aImageURL ) );
-
+        OUString absoluteUrl = getPhysicalLocation(ImplGetPropertyValue(PROPERTY_DIALOGSOURCEURL), uno::makeAny(aImageURL));
         xGraphic = ImageHelper::getGraphicFromURL_nothrow( absoluteUrl );
         ImplSetPropertyValue( PROPERTY_GRAPHIC, uno::makeAny( xGraphic ), true );
     }
@@ -632,12 +627,7 @@ void UnoDialogControl::ImplModelPropertiesChanged( const Sequence< PropertyChang
             if (( ImplGetPropertyValue( GetPropertyName( BASEPROPERTY_IMAGEURL ) ) >>= aImageURL ) &&
                 ( !aImageURL.isEmpty() ))
             {
-                OUString absoluteUrl = aImageURL;
-                if ( !aImageURL.startsWith( UNO_NAME_GRAPHOBJ_URLPREFIX ) )
-
-                    absoluteUrl = getPhysicalLocation( ImplGetPropertyValue( GetPropertyName( BASEPROPERTY_DIALOGSOURCEURL )),
-                                         uno::makeAny(aImageURL));
-
+                OUString absoluteUrl = getPhysicalLocation(ImplGetPropertyValue(GetPropertyName(BASEPROPERTY_DIALOGSOURCEURL)), uno::makeAny(aImageURL));
                 xGraphic = ImageHelper::getGraphicFromURL_nothrow( absoluteUrl );
             }
             ImplSetPropertyValue(  GetPropertyName( BASEPROPERTY_GRAPHIC), uno::makeAny( xGraphic ), true );
@@ -870,8 +860,7 @@ UnoMultiPageModel::~UnoMultiPageModel()
 {
 }
 
-UnoControlModel*
-UnoMultiPageModel::Clone() const
+rtl::Reference<UnoControlModel> UnoMultiPageModel::Clone() const
 {
     // clone the container itself
     UnoMultiPageModel* pClone = new UnoMultiPageModel( *this );
@@ -983,8 +972,7 @@ UnoPageModel::~UnoPageModel()
 {
 }
 
-UnoControlModel*
-UnoPageModel::Clone() const
+rtl::Reference<UnoControlModel> UnoPageModel::Clone() const
 {
     // clone the container itself
     UnoPageModel* pClone = new UnoPageModel( *this );
@@ -1137,8 +1125,7 @@ UnoFrameModel::~UnoFrameModel()
 {
 }
 
-UnoControlModel*
-UnoFrameModel::Clone() const
+rtl::Reference<UnoControlModel> UnoFrameModel::Clone() const
 {
     // clone the container itself
     UnoFrameModel* pClone = new UnoFrameModel( *this );

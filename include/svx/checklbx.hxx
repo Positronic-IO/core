@@ -16,6 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
+
 #ifndef INCLUDED_SVX_CHECKLBX_HXX
 #define INCLUDED_SVX_CHECKLBX_HXX
 
@@ -28,19 +29,18 @@
 #include <tools/wintypes.hxx>
 #include <vcl/event.hxx>
 #include <vcl/window.hxx>
+#include <memory>
 
 class Image;
 class SvLBoxButtonData;
 class SvTreeListEntry;
-
-// class SvxCheckListBox -------------------------------------------------
 
 class SVX_DLLPUBLIC SvxCheckListBox : public SvTreeListBox
 {
     using Window::GetText;
 
 private:
-    SvLBoxButtonData*   pCheckButton;
+    std::unique_ptr<SvLBoxButtonData> pCheckButton;
 
     SVX_DLLPRIVATE void             Init_Impl();
 

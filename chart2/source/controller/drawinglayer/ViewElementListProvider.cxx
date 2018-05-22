@@ -161,11 +161,13 @@ Graphic ViewElementListProvider::GetSymbolGraphic( sal_Int32 nStandardSymbol, co
     SdrPage* pPage = new SdrPage( *pModel, false );
     pPage->SetSize(Size(1000,1000));
     pModel->InsertPage( pPage, 0 );
-    std::unique_ptr<SdrView> pView( new SdrView( pModel.get(), pVDev ) );
+    std::unique_ptr<SdrView> pView( new SdrView( *pModel.get(), pVDev ) );
     pView->hideMarkHandles();
     SdrPageView* pPageView = pView->ShowSdrPage(pPage);
 
-    pObj=pObj->Clone();
+    // directly clone to target SdrModel
+    pObj = pObj->CloneSdrObject(*pModel);
+
     pPage->NbcInsertObject(pObj);
     pView->MarkObj(pObj,pPageView);
     if( pSymbolShapeProperties )

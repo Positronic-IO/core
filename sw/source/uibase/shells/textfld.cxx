@@ -27,7 +27,6 @@
 #include <editeng/outliner.hxx>
 #include <sfx2/lnkbase.hxx>
 #include <fmtfld.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/itempool.hxx>
 #include <unotools/useroptions.hxx>
 #include <svl/whiter.hxx>
@@ -62,6 +61,7 @@
 #include <strings.hrc>
 #include <sfx2/app.hxx>
 #include <svx/dialogs.hrc>
+#include <sfx2/event.hxx>
 #include <swabstdlg.hxx>
 #include <doc.hxx>
 #include <app.hrc>
@@ -198,7 +198,7 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                     }
                     else
                     {
-                        rSh.StartInputFieldDlg( rSh.GetCurField( true ), false, false );
+                        rSh.StartInputFieldDlg(rSh.GetCurField(true), false, false, GetView().GetFrameWeld());
                     }
                     bRet = true;
                 }
@@ -592,7 +592,7 @@ void SwTextShell::ExecField(SfxRequest &rReq)
 
                     SvxAbstractDialogFactory* pFact2 = SvxAbstractDialogFactory::Create();
                     assert(pFact2 && "Dialog creation failed!");
-                    ScopedVclPtr<AbstractSvxPostItDialog> pDlg(pFact2->CreateSvxPostItDialog( pMDI, aSet, bTravel ));
+                    ScopedVclPtr<AbstractSvxPostItDialog> pDlg(pFact2->CreateSvxPostItDialog(GetView().GetFrameWeld(), aSet, bTravel));
                     assert(pDlg && "Dialog creation failed!");
                     pDlg->HideAuthor();
 
@@ -605,7 +605,7 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                         pDlg->SetNextHdl(LINK(this, SwTextShell, RedlineNextHdl));
                     }
 
-                    SwViewShell::SetCareWin(pDlg->GetWindow());
+                    SwViewShell::SetCareDialog(pDlg->GetDialog());
                     g_bNoInterrupt = true;
 
                     if ( pDlg->Execute() == RET_OK )
@@ -651,7 +651,7 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                 {
                     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
                     assert(pFact && "Dialog creation failed!");
-                    ScopedVclPtr<AbstractJavaEditDialog> pDlg(pFact->CreateJavaEditDialog(pMDI, &rSh));
+                    ScopedVclPtr<AbstractJavaEditDialog> pDlg(pFact->CreateJavaEditDialog(GetView().GetFrameWeld(), &rSh));
                     assert(pDlg && "Dialog creation failed!");
                     if ( pDlg->Execute() )
                     {

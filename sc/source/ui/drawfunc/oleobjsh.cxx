@@ -24,7 +24,6 @@
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <oleobjsh.hxx>
 #include <drwlayer.hxx>
@@ -33,11 +32,10 @@
 #include <document.hxx>
 #include <docpool.hxx>
 #include <drawview.hxx>
-#include <scresid.hxx>
 #include <svx/svdobj.hxx>
 #include <vcl/EnumContext.hxx>
 
-#define ScOleObjectShell
+#define ShellClass_ScOleObjectShell
 #include <scslots.hxx>
 
 SFX_IMPL_INTERFACE(ScOleObjectShell, ScDrawShell)

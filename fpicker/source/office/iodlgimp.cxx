@@ -23,7 +23,6 @@
 #include <unotools/resmgr.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/menu.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/eitem.hxx>
@@ -31,7 +30,6 @@
 #include <svtools/fileview.hxx>
 #include <svtools/inettbc.hxx>
 #include "iodlg.hxx"
-#include <strings.hrc>
 #include <bitmaps.hlst>
 #include <svtools/imagemgr.hxx>
 #include <unotools/localfilehelper.hxx>

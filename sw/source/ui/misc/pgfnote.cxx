@@ -20,7 +20,6 @@
 #include <cmdid.h>
 #include <fmtfsize.hxx>
 #include <hintids.hxx>
-#include <svx/dialmgr.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/drawitem.hxx>
 #include <svx/xtable.hxx>
@@ -146,9 +145,9 @@ void SwFootNotePage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SwFootNotePage::Create(vcl::Window *pParent, const SfxItemSet *rSet)
+VclPtr<SfxTabPage> SwFootNotePage::Create(TabPageParent pParent, const SfxItemSet *rSet)
 {
-    return VclPtr<SwFootNotePage>::Create(pParent, *rSet);
+    return VclPtr<SwFootNotePage>::Create(pParent.pParent, *rSet);
 }
 
 void SwFootNotePage::Reset(const SfxItemSet *rSet)

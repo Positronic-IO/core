@@ -284,7 +284,7 @@ void PaletteManager::AddRecentColor(const Color& rRecentColor, const OUString& r
     css::uno::Sequence< OUString > aColorNameList(maRecentColors.size());
     for (size_t i = 0; i < maRecentColors.size(); ++i)
     {
-        aColorList[i] = static_cast<sal_Int32>(maRecentColors[i].first.GetColor());
+        aColorList[i] = static_cast<sal_Int32>(maRecentColors[i].first);
         aColorNameList[i] = maRecentColors[i].second;
     }
     std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create(m_context));
@@ -305,11 +305,11 @@ void PaletteManager::SetColorSelectFunction(const std::function<void(const OUStr
     maColorSelectFunction = aColorSelectFunction;
 }
 
-void PaletteManager::PopupColorPicker(const OUString& aCommand, const Color& rInitialColor)
+void PaletteManager::PopupColorPicker(vcl::Window* pParent, const OUString& aCommand, const Color& rInitialColor)
 {
     // The calling object goes away during aColorDlg.Execute(), so we must copy this
     OUString aCommandCopy = aCommand;
-    SvColorDialog aColorDlg( nullptr );
+    SvColorDialog aColorDlg(pParent);
     aColorDlg.SetColor(rInitialColor);
     aColorDlg.SetMode(svtools::ColorPickerMode::Modify);
     if( aColorDlg.Execute() == RET_OK )
@@ -341,7 +341,7 @@ void PaletteManager::DispatchColorCommand(const OUString& aCommand, const NamedC
 
         Sequence<PropertyValue> aArgs(1);
         aArgs[0].Name = aObj.GetURLPath();
-        aArgs[0].Value <<= sal_Int32(rColor.first.GetColor());
+        aArgs[0].Value <<= sal_Int32(rColor.first);
 
         URL aTargetURL;
         aTargetURL.Complete = aCommand;

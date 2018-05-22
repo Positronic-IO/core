@@ -68,10 +68,10 @@ class SwXMLImport: public SvXMLImport
     SvXMLTokenMap           *m_pDocElemTokenMap;
     SvXMLTokenMap           *m_pTableElemTokenMap;
     SvXMLTokenMap           *m_pTableCellAttrTokenMap;
-    rtl::Reference<SvXMLGraphicHelper>
-                             m_xGraphicResolver;
-    rtl::Reference<SvXMLEmbeddedObjectHelper>
-                            m_xEmbeddedResolver;
+
+    rtl::Reference<SvXMLGraphicHelper> m_xGraphicStorageHandler;
+
+    rtl::Reference<SvXMLEmbeddedObjectHelper> m_xEmbeddedResolver;
 
     SvXMLItemMapEntriesRef  m_xTableItemMap;
     SvXMLItemMapEntriesRef  m_xTableColItemMap;
@@ -107,6 +107,9 @@ protected:
                   const OUString& rLocalName,
                   const css::uno::Reference< css::xml::sax::XAttributeList > & xAttrList ) override;
 
+    virtual SvXMLImportContext *CreateFastContext( sal_Int32 nElement,
+        const ::css::uno::Reference< ::css::xml::sax::XFastAttributeList >& xAttrList ) override;
+
     virtual XMLTextImportHelper* CreateTextImport() override;
 
     virtual XMLShapeImportHelper* CreateShapeImport() override;
@@ -136,7 +139,7 @@ public:
 
     // NB: in contrast to other CreateFooContexts, this particular one handles
     //     the root element (i.e. office:document-meta)
-    SvXMLImportContext *CreateMetaContext( const OUString& rLocalName );
+    SvXMLImportContext *CreateMetaContext( const sal_Int32 nElement );
     SvXMLImportContext *CreateScriptContext( const OUString& rLocalName );
     SvXMLImportContext *CreateStylesContext(
                 const OUString& rLocalName,

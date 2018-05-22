@@ -50,7 +50,6 @@ class PhysicalFontCollection;
 class SalGraphicsImpl;
 class WinOpenGLSalGraphicsImpl;
 class ImplFontMetricData;
-class CommonSalLayout;
 
 #define RGB_TO_PALRGB(nRGB)         ((nRGB)|0x02000000)
 #define PALRGB_TO_RGB(nPalRGB)      ((nPalRGB)&0x00ffffff)
@@ -90,14 +89,9 @@ private:
     BYTE                    mnPitchAndFamily;
     bool                    mbAliasSymbolsHigh;
     bool                    mbAliasSymbolsLow;
-private:
+
     void                    ReadCmapTable( HDC ) const;
     void                    GetFontCapabilities( HDC hDC ) const;
-
-    mutable hb_font_t*      mpHbFont;
-public:
-    hb_font_t*              GetHbFont() const { return mpHbFont; }
-    void                    SetHbFont( hb_font_t* pHbFont ) const { mpHbFont = pHbFont; }
 };
 
 /** Class that creates (and destroys) a compatible Device Context.
@@ -164,8 +158,9 @@ private:
     HWND                    mhWnd;              // Window-Handle, when Window-Graphics
 
     HFONT                   mhFonts[ MAX_FALLBACK ];        // Font + Fallbacks
-    const WinFontFace*  mpWinFontData[ MAX_FALLBACK ];  // pointer to the most recent font face
     WinFontInstance*       mpWinFontEntry[ MAX_FALLBACK ]; // pointer to the most recent font instance
+    float                   mfFontScale[ MAX_FALLBACK ];        // allows metrics emulation of huge font sizes
+    float                   mfCurrentFontScale;
     HRGN                    mhRegion;           // vcl::Region Handle
     HPEN                    mhDefPen;           // DefaultPen
     HBRUSH                  mhDefBrush;         // DefaultBrush
@@ -178,8 +173,8 @@ private:
 
     LogicalFontInstance* GetWinFontEntry(int nFallbackLevel);
 
-    bool CacheGlyphs(const CommonSalLayout& rLayout);
-    bool DrawCachedGlyphs(const CommonSalLayout& rLayout);
+    bool CacheGlyphs(const GenericSalLayout& rLayout);
+    bool DrawCachedGlyphs(const GenericSalLayout& rLayout);
 
 public:
     HDC getHDC() const { return mhLocalDC; }
@@ -205,7 +200,7 @@ public:
 
     HWND gethWnd();
 
-    HFONT                   ImplDoSetFont( FontSelectPattern const * i_pFont, HFONT& o_rOldFont );
+    HFONT                   ImplDoSetFont( FontSelectPattern const * i_pFont, const PhysicalFontFace * i_pFontFace, float& o_rFontScale, HFONT& o_rOldFont );
 
 public:
     explicit WinSalGraphics(WinSalGraphics::Type eType, bool bScreen, HWND hWnd,
@@ -224,7 +219,7 @@ protected:
     virtual bool        setClipRegion( const vcl::Region& ) override;
     // draw --> LineColor and FillColor and RasterOp and ClipRegion
     virtual void        drawPixel( long nX, long nY ) override;
-    virtual void        drawPixel( long nX, long nY, SalColor nSalColor ) override;
+    virtual void        drawPixel( long nX, long nY, Color nColor ) override;
     virtual void        drawLine( long nX1, long nY1, long nX2, long nY2 ) override;
     virtual void        drawRect( long nX, long nY, long nWidth, long nHeight ) override;
     virtual void        drawPolyLine( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
@@ -256,10 +251,10 @@ protected:
                                     const SalBitmap& rTransparentBitmap ) override;
     virtual void        drawMask( const SalTwoRect& rPosAry,
                                   const SalBitmap& rSalBitmap,
-                                  SalColor nMaskColor ) override;
+                                  Color nMaskColor ) override;
 
     virtual SalBitmap*  getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
-    virtual SalColor    getPixel( long nX, long nY ) override;
+    virtual Color       getPixel( long nX, long nY ) override;
 
     // invert --> ClipRegion (only Windows or VirDevs)
     virtual void        invert( long nX, long nY, long nWidth, long nHeight, SalInvert nFlags) override;
@@ -299,7 +294,7 @@ protected:
 private:
     // local helpers
 
-    void                    DrawTextLayout(const CommonSalLayout&, HDC, bool bUseDWrite);
+    void                    DrawTextLayout(const GenericSalLayout&, HDC, bool bUseDWrite);
 
 public:
     // public SalGraphics methods, the interface to the independent vcl part
@@ -317,12 +312,12 @@ public:
     // set the line color to transparent (= don't draw lines)
     virtual void            SetLineColor() override;
     // set the line color to a specific color
-    virtual void            SetLineColor( SalColor nSalColor ) override;
+    virtual void            SetLineColor( Color nColor ) override;
     // set the fill color to transparent (= don't fill)
     virtual void            SetFillColor() override;
     // set the fill color to a specific color, shapes will be
     // filled accordingly
-    virtual void            SetFillColor( SalColor nSalColor ) override;
+    virtual void            SetFillColor( Color nColor ) override;
     // enable/disable XOR drawing
     virtual void            SetXORMode( bool bSet ) override;
     // set line color for raster operations
@@ -330,7 +325,7 @@ public:
     // set fill color for raster operations
     virtual void            SetROPFillColor( SalROPColor nROPColor ) override;
     // set the text color to a specific color
-    virtual void            SetTextColor( SalColor nSalColor ) override;
+    virtual void            SetTextColor( Color nColor ) override;
     // set the font
     virtual void            SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
     // get the current font's metrics
@@ -382,7 +377,7 @@ public:
 
     virtual std::unique_ptr<SalLayout>
                             GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;
-    virtual void            DrawTextLayout( const CommonSalLayout& ) override;
+    virtual void            DrawTextLayout( const GenericSalLayout& ) override;
 
     virtual bool            supportsOperation( OutDevSupportType ) const override;
     // Query the platform layer for control support
@@ -396,9 +391,9 @@ public:
 
 // Init/Deinit Graphics
 void    ImplUpdateSysColorEntries();
-int     ImplIsSysColorEntry( SalColor nSalColor );
+int     ImplIsSysColorEntry( Color nColor );
 void    ImplGetLogFontFromFontSelect( HDC, const FontSelectPattern*,
-            LOGFONTW&, bool bTestVerticalAvail );
+            const PhysicalFontFace*, LOGFONTW& );
 
 #define MAX_64KSALPOINTS    ((((sal_uInt16)0xFFFF)-8)/sizeof(POINTS))
 

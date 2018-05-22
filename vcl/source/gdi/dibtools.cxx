@@ -30,6 +30,7 @@
 #include <vcl/bitmapex.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/outdev.hxx>
+#include <bitmapwriteaccess.hxx>
 #include <memory>
 
 
@@ -385,10 +386,10 @@ bool ImplDecodeRLE(sal_uInt8* pBuffer, DIBV5Header const & rHeader, BitmapWriteA
                         cTmp = *pRLE++;
 
                         if( nX < nWidth )
-                            rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading));
 
                         if( nX < nWidth )
-                            rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp & 0x0f, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp & 0x0f, rPalette, bForceToMonoWhileReading));
                     }
 
                     if( nRunByte & 1 )
@@ -397,7 +398,7 @@ bool ImplDecodeRLE(sal_uInt8* pBuffer, DIBV5Header const & rHeader, BitmapWriteA
                             return false;
 
                         if( nX < nWidth )
-                            rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(*pRLE >> 4, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(*pRLE >> 4, rPalette, bForceToMonoWhileReading));
 
                         pRLE++;
                     }
@@ -418,7 +419,7 @@ bool ImplDecodeRLE(sal_uInt8* pBuffer, DIBV5Header const & rHeader, BitmapWriteA
                             return false;
 
                         if( nX < nWidth )
-                            rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(*pRLE, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(*pRLE, rPalette, bForceToMonoWhileReading));
 
                         pRLE++;
                     }
@@ -466,19 +467,19 @@ bool ImplDecodeRLE(sal_uInt8* pBuffer, DIBV5Header const & rHeader, BitmapWriteA
                 for( sal_uLong i = 0; i < nRunByte; i++ )
                 {
                     if( nX < nWidth )
-                        rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading)));
+                        rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading));
 
                     if( nX < nWidth )
-                        rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp & 0x0f, rPalette, bForceToMonoWhileReading)));
+                        rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp & 0x0f, rPalette, bForceToMonoWhileReading));
                 }
 
                 if( ( nCountByte & 1 ) && ( nX < nWidth ) )
-                    rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading)));
+                    rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp >> 4, rPalette, bForceToMonoWhileReading));
             }
             else
             {
                 for( sal_uLong i = 0; ( i < nCountByte ) && ( nX < nWidth ); i++ )
-                    rAcc.SetPixelOnData(pScanline, nX++, BitmapColor(SanitizePaletteIndex(cTmp, rPalette, bForceToMonoWhileReading)));
+                    rAcc.SetPixelOnData(pScanline, nX++, SanitizePaletteIndex(cTmp, rPalette, bForceToMonoWhileReading));
             }
         }
     }
@@ -592,7 +593,7 @@ bool ImplReadDIBBits(SvStream& rIStm, DIBV5Header& rHeader, BitmapWriteAccess& r
                             }
 
                             auto nIndex = (cTmp >> --nShift) & 1;
-                            rAcc.SetPixelOnData(pScanline, nX, BitmapColor(SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX, SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading));
                         }
                     }
                 }
@@ -619,7 +620,7 @@ bool ImplReadDIBBits(SvStream& rIStm, DIBV5Header& rHeader, BitmapWriteAccess& r
                             }
 
                             auto nIndex = (cTmp >> ( --nShift << 2 ) ) & 0x0f;
-                            rAcc.SetPixelOnData(pScanline, nX, BitmapColor(SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX, SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading));
                         }
                     }
                 }
@@ -640,7 +641,7 @@ bool ImplReadDIBBits(SvStream& rIStm, DIBV5Header& rHeader, BitmapWriteAccess& r
                         for( long nX = 0; nX < nWidth; nX++ )
                         {
                             auto nIndex = *pTmp++;
-                            rAcc.SetPixelOnData(pScanline, nX, BitmapColor(SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading)));
+                            rAcc.SetPixelOnData(pScanline, nX, SanitizePaletteIndex(nIndex, rPalette, bForceToMonoWhileReading));
                         }
                     }
                 }
@@ -955,7 +956,7 @@ bool ImplReadDIBBody(SvStream& rIStm, Bitmap& rBmp, AlphaMask* pBmpAlpha, sal_uL
 
     const Size aSizePixel(aHeader.nWidth, aHeader.nHeight);
     AlphaMask aNewBmpAlpha;
-    AlphaMask::ScopedWriteAccess pAccAlpha;
+    AlphaScopedWriteAccess pAccAlpha;
     bool bAlphaPossible(pBmpAlpha && aHeader.nBitCount == 32);
 
     if (bAlphaPossible)
@@ -977,7 +978,7 @@ bool ImplReadDIBBody(SvStream& rIStm, Bitmap& rBmp, AlphaMask* pBmpAlpha, sal_uL
     if (bAlphaPossible)
     {
         aNewBmpAlpha = AlphaMask(aSizePixel);
-        pAccAlpha = AlphaMask::ScopedWriteAccess(aNewBmpAlpha);
+        pAccAlpha = AlphaScopedWriteAccess(aNewBmpAlpha);
     }
 
     sal_uInt16 nBitCount(discretizeBitcount(aHeader.nBitCount));
@@ -994,7 +995,7 @@ bool ImplReadDIBBody(SvStream& rIStm, Bitmap& rBmp, AlphaMask* pBmpAlpha, sal_uL
     }
 
     Bitmap aNewBmp(aSizePixel, nBitCount, pPal);
-    Bitmap::ScopedWriteAccess pAcc(aNewBmp);
+    BitmapScopedWriteAccess pAcc(aNewBmp);
     if (!pAcc)
         return false;
     if (pAcc->Width() != aHeader.nWidth || pAcc->Height() != aHeader.nHeight)
@@ -1608,10 +1609,10 @@ bool ImplWriteDIBBody(const Bitmap& rBitmap, SvStream& rOStm, BitmapReadAccess c
     return bRet;
 }
 
-bool ImplWriteDIBFileHeader(SvStream& rOStm, BitmapReadAccess const & rAcc, bool bUseDIBV5)
+bool ImplWriteDIBFileHeader(SvStream& rOStm, BitmapReadAccess const & rAcc)
 {
     const sal_uInt32 nPalCount((rAcc.HasPalette() ? rAcc.GetPaletteEntryCount() : isBitfieldCompression(rAcc.GetScanlineFormat()) ? 3UL : 0UL));
-    const sal_uInt32 nOffset(14 + (bUseDIBV5 ? DIBV5HEADERSIZE : DIBINFOHEADERSIZE) + nPalCount * 4UL);
+    const sal_uInt32 nOffset(14 + DIBINFOHEADERSIZE + nPalCount * 4UL);
 
     rOStm.WriteUInt16( 0x4D42 ); // 'MB' from BITMAPFILEHEADER
     rOStm.WriteUInt32( nOffset + (rAcc.Height() * rAcc.GetScanlineSize()) );
@@ -1686,7 +1687,7 @@ bool ImplWriteDIB(
         {
             if(bFileHeader)
             {
-                if(ImplWriteDIBFileHeader(rOStm, *pAcc, false))
+                if(ImplWriteDIBFileHeader(rOStm, *pAcc))
                 {
                     bRet = ImplWriteDIBBody(rSource, rOStm, *pAcc, pAccAlpha.get(), bCompressed);
                 }
@@ -1782,14 +1783,14 @@ bool ReadDIBBitmapEx(
                     }
                 case TransparentType::Color:
                     {
-                        Color aTransparentColor;
+                        Color maTransparentColor;
 
-                        ReadColor( rIStm, aTransparentColor );
+                        ReadColor( rIStm, maTransparentColor );
                         bRetval = !rIStm.GetError();
 
                         if(bRetval)
                         {
-                            rTarget = BitmapEx(aBmp, aTransparentColor);
+                            rTarget = BitmapEx(aBmp, maTransparentColor);
                         }
                         break;
                     }
@@ -1829,11 +1830,9 @@ bool WriteDIB(
 
 bool WriteDIB(
     const BitmapEx& rSource,
-    SvStream& rOStm,
-    bool bCompressed,
-    bool bFileHeader)
+    SvStream& rOStm)
 {
-    return ImplWriteDIB(rSource.GetBitmapRef(), rOStm, bCompressed, bFileHeader);
+    return ImplWriteDIB(rSource.GetBitmapRef(), rOStm, /*bCompressed*/true, /*bFileHeader*/true);
 }
 
 bool WriteDIBBitmapEx(
@@ -1844,15 +1843,15 @@ bool WriteDIBBitmapEx(
     {
         rOStm.WriteUInt32( 0x25091962 );
         rOStm.WriteUInt32( 0xACB20201 );
-        rOStm.WriteUChar( static_cast<sal_uChar>(rSource.eTransparent) );
+        rOStm.WriteUChar( static_cast<sal_uChar>(rSource.meTransparent) );
 
-        if(TransparentType::Bitmap == rSource.eTransparent)
+        if(TransparentType::Bitmap == rSource.meTransparent)
         {
-            return ImplWriteDIB(rSource.aMask, rOStm, true, true);
+            return ImplWriteDIB(rSource.maMask, rOStm, true, true);
         }
-        else if(TransparentType::Color == rSource.eTransparent)
+        else if(TransparentType::Color == rSource.meTransparent)
         {
-            WriteColor( rOStm, rSource.aTransparentColor );
+            WriteColor( rOStm, rSource.maTransparentColor );
             return true;
         }
     }

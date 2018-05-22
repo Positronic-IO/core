@@ -179,7 +179,7 @@ namespace svx
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         // ensure we have at least one extension
@@ -228,7 +228,7 @@ namespace svx
         ::sfx2::FileDialogHelper aFileDlg(
             TemplateDescription::FILESAVE_AUTOEXTENSION,
             FileDialogFlags::NONE,
-            m_rLocationInput.GetSystemWindow()
+            m_rLocationInput.GetFrameWeld()
         );
         aFileDlg.SetDisplayDirectory( impl_getCurrentURL() );
 

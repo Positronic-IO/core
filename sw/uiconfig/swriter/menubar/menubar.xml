@@ -165,12 +165,11 @@
   </menu:menu>
   <menu:menu menu:id=".uno:ViewMenu">
     <menu:menupopup>
-      <menu:menuitem menu:id=".uno:PrintLayout"/>
-      <menu:menuitem menu:id=".uno:BrowseView"/>
+      <menu:menuitem menu:id=".uno:PrintLayout" menu:style="radio"/>
+      <menu:menuitem menu:id=".uno:BrowseView" menu:style="radio"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ToolbarMode"/>
       <menu:menuitem menu:id=".uno:AvailableToolbars"/>
-      <menu:menuitem menu:id=".uno:Notebookbar"/>
       <menu:menuitem menu:id=".uno:StatusBarVisible"/>
       <menu:menu menu:id=".uno:RulerMenu">
         <menu:menupopup>
@@ -441,6 +440,7 @@
       <menu:menuitem menu:id=".uno:EditRegion"/>
       <menu:menuitem menu:id=".uno:FormatAllNotes"/>
       <menu:menuitem menu:id=".uno:RubyDialog"/>
+      <menu:menuitem menu:id=".uno:FormatColumns"/>
       <menu:menuitem menu:id=".uno:Watermark"/>
       <menu:menuseparator/>
       <menu:menu menu:id=".uno:FormatImageMenu">

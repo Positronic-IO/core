@@ -26,6 +26,8 @@
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
 #include <sfx2/docfile.hxx>
+#include <vcl/GraphicLoader.hxx>
+#include <vcl/GraphicExternalLink.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -148,8 +150,8 @@ BlipContext::BlipContext( ContextHandler2Helper const & rParent,
     {
         // internal picture URL
         OUString aFragmentPath = getFragmentPathFromRelId( rAttribs.getString( R_TOKEN( embed ), OUString() ) );
-        if( !aFragmentPath.isEmpty() )
-            mrBlipProps.mxGraphic = getFilter().getGraphicHelper().importEmbeddedGraphic( aFragmentPath );
+        if (!aFragmentPath.isEmpty())
+            mrBlipProps.mxFillGraphic = getFilter().getGraphicHelper().importEmbeddedGraphic( aFragmentPath );
     }
     else if( rAttribs.hasAttribute( R_TOKEN( link ) ) )
     {
@@ -160,11 +162,9 @@ BlipContext::BlipContext( ContextHandler2Helper const & rParent,
         // code rework.
         OUString aRelId = rAttribs.getString( R_TOKEN( link ), OUString() );
         OUString aTargetLink = getFilter().getAbsoluteUrl( getRelations().getExternalTargetFromRelId( aRelId ) );
-        SfxMedium aMed( aTargetLink, StreamMode::STD_READ );
-        aMed.Download();
-        Reference< io::XInputStream > xInStrm = aMed.GetInputStream();
-        if ( xInStrm.is() )
-            mrBlipProps.mxGraphic = getFilter().getGraphicHelper().importGraphic( xInStrm );
+        GraphicExternalLink aLink(aTargetLink);
+        Graphic aGraphic(aLink);
+        mrBlipProps.mxFillGraphic = aGraphic.GetXGraphic();
     }
 }
 

@@ -21,6 +21,7 @@
 #include "svgfontexport.hxx"
 #include "svgwriter.hxx"
 
+#include <comphelper/base64.hxx>
 #include <rtl/crc.h>
 #include <vcl/unohelp.hxx>
 #include <vcl/outdev.hxx>
@@ -1362,22 +1363,20 @@ void SVGTextWriter::implWriteBulletChars()
     mrExport.AddAttribute( XML_NAMESPACE_NONE, "class", "BulletChars" );
     SvXMLElementExport aGroupElem( mrExport, XML_NAMESPACE_NONE, aXMLElemG, true, true );
 
-    BulletListItemInfoMap::const_iterator it = maBulletListItemMap.begin();
-    BulletListItemInfoMap::const_iterator end = maBulletListItemMap.end();
     OUString sId, sPosition, sScaling, sRefId;
-    for( ; it != end; ++it )
+    for (auto const& bulletListItem : maBulletListItemMap)
     {
         // <g id="?" > (used by animations)
         // As id we use the id of the text portion placeholder with prefix
         // bullet-char-*
-        sId = "bullet-char-" + it->first;
+        sId = "bullet-char-" + bulletListItem.first;
         mrExport.AddAttribute( XML_NAMESPACE_NONE, "id", sId );
         mrExport.AddAttribute( XML_NAMESPACE_NONE, "class", "BulletChar" );
         SvXMLElementExport aBulletCharElem( mrExport, XML_NAMESPACE_NONE, aXMLElemG, true, true );
 
         // <g transform="translate(x,y)" >
         {
-            const BulletListItemInfo& rInfo = it->second;
+            const BulletListItemInfo& rInfo = bulletListItem.second;
 
             // Add positioning attribute through a translation
             sPosition = "translate(" +
@@ -1872,7 +1871,6 @@ BitmapChecksum SVGActionWriter::GetChecksum( const MetaAction* pAction )
 {
     GDIMetaFile aMtf;
     MetaAction* pA = const_cast<MetaAction*>(pAction);
-    pA->Duplicate();
     aMtf.AddAction( pA );
     return aMtf.GetChecksum();
 }
@@ -2731,7 +2729,7 @@ void SVGActionWriter::ImplWriteBmp( const BitmapEx& rBmpEx,
                 Size                     aSz;
                 Sequence< sal_Int8 >     aSeq( static_cast<sal_Int8 const *>(aOStm.GetData()), aOStm.Tell() );
                 OUStringBuffer aBuffer( "data:image/png;base64," );
-                ::sax::Converter::encodeBase64( aBuffer, aSeq );
+                ::comphelper::Base64::encode( aBuffer, aSeq );
 
                 ImplMap( rPt, aPt );
                 ImplMap( rSz, aSz );
@@ -3068,7 +3066,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
                         {
                             bFound = true;
                             const MetaBmpScaleAction* pBmpScaleAction = static_cast<const MetaBmpScaleAction*>(pSubstAct);
-                            ImplWriteBmp( pBmpScaleAction->GetBitmap(),
+                            ImplWriteBmp( BitmapEx(pBmpScaleAction->GetBitmap()),
                                           pA->GetPoint(), pA->GetSize(),
                                           Point(), pBmpScaleAction->GetBitmap().GetSizePixel() );
                         }
@@ -3450,7 +3448,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
                 {
                     const MetaBmpAction* pA = static_cast<const MetaBmpAction*>(pAction);
 
-                    ImplWriteBmp( pA->GetBitmap(),
+                    ImplWriteBmp( BitmapEx(pA->GetBitmap()),
                                   pA->GetPoint(), mpVDev->PixelToLogic( pA->GetBitmap().GetSizePixel() ),
                                   Point(), pA->GetBitmap().GetSizePixel() );
                 }
@@ -3470,7 +3468,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
                     }
                     else
                     {
-                        ImplWriteBmp( pA->GetBitmap(),
+                        ImplWriteBmp( BitmapEx(pA->GetBitmap()),
                                       pA->GetPoint(), pA->GetSize(),
                                       Point(), pA->GetBitmap().GetSizePixel() );
                     }
@@ -3484,7 +3482,7 @@ void SVGActionWriter::ImplWriteActions( const GDIMetaFile& rMtf,
                 {
                     const MetaBmpScalePartAction* pA = static_cast<const MetaBmpScalePartAction*>(pAction);
 
-                    ImplWriteBmp( pA->GetBitmap(),
+                    ImplWriteBmp( BitmapEx(pA->GetBitmap()),
                                   pA->GetDestPoint(), pA->GetDestSize(),
                                   pA->GetSrcPoint(), pA->GetSrcSize() );
                 }

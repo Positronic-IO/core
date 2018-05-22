@@ -104,6 +104,7 @@ SidebarController::SidebarController (
       maAsynchronousDeckSwitch(),
       mbIsDeckRequestedOpen(),
       mbIsDeckOpen(),
+      mbFloatingDeckClosed(!pParentWindow->IsFloatingMode()),
       mnSavedSidebarWidth(pParentWindow->GetSizePixel().Width()),
       maFocusManager([this](const Panel& rPanel){ return this->ShowPanel(rPanel); }),
       mxReadOnlyModeDispatch(),
@@ -437,8 +438,12 @@ void SidebarController::UpdateConfigurations()
         || mnRequestedForceFlags!=SwitchFlag_NoForce)
     {
 
-        if (maCurrentContext.msApplication != "none")
+        if ((maCurrentContext.msApplication != "none") &&
+             !maCurrentContext.msApplication.isEmpty())
+        {
             mpResourceManager->SaveDecksSettings(maCurrentContext);
+            mpResourceManager->SetLastActiveDeck(maCurrentContext, msCurrentDeckId);
+        }
 
         // get last active deck for this application on first update
         if (!maRequestedContext.msApplication.isEmpty() &&
@@ -519,12 +524,17 @@ void SidebarController::OpenThenToggleDeck (
     else if ( IsDeckVisible( rsDeckId ) )
     {
         if ( pSplitWindow )
+        {
             // tdf#67627 Clicking a second time on a Deck icon will close the Deck
             RequestCloseDeck();
-        else
+            return;
+        }
+        else if( !WasFloatingDeckClosed() )
+        {
             // tdf#88241 Summoning an undocked sidebar a second time should close sidebar
             mpParentWindow->Close();
-        return;
+            return;
+        }
     }
     RequestOpenDeck();
     SwitchToDeck(rsDeckId);
@@ -863,7 +873,7 @@ Reference<ui::XUIElement> SidebarController::CreateUIElement (
         Reference<ui::XUIElement> xUIElement(
             xUIElementFactory->createUIElement(
                 rsImplementationURL,
-                Sequence<beans::PropertyValue>(aCreationArguments.getPropertyValues())),
+                aCreationArguments.getPropertyValues()),
             UNO_QUERY_THROW);
 
         return xUIElement;
@@ -951,7 +961,7 @@ VclPtr<PopupMenu> SidebarController::CreatePopupMenu (
     const ::std::vector<TabBar::DeckMenuData>& rMenuData) const
 {
     // Create the top level popup menu.
-    VclPtrInstance<PopupMenu> pMenu;
+    auto pMenu = VclPtr<PopupMenu>::Create();
     FloatingWindow* pMenuWindow = dynamic_cast<FloatingWindow*>(pMenu->GetWindow());
     if (pMenuWindow != nullptr)
     {
@@ -1328,6 +1338,17 @@ void SidebarController::FadeIn()
 {
     if (mpSplitWindow)
         mpSplitWindow->FadeIn();
+}
+
+tools::Rectangle SidebarController::GetDeckDragArea() const
+{
+    tools::Rectangle aRect;
+
+    VclPtr<DeckTitleBar> pTitleBar = mpCurrentDeck->GetTitleBar();
+    if ( pTitleBar)
+        aRect = pTitleBar->GetDragArea();
+
+    return aRect;
 }
 
 void SidebarController::frameAction(const css::frame::FrameActionEvent& rEvent)

@@ -23,10 +23,8 @@
 #include <utility>
 
 #include <com/sun/star/ucb/UniversalContentBroker.hpp>
-#include <comphelper/processfactory.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/localfilehelper.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/instance.hxx>
 #include <osl/detail/file.h>
@@ -410,7 +408,6 @@ OUString TempFile::GetFileName() const
 
 OUString const & TempFile::GetURL() const
 {
-    assert(!aName.isEmpty() && "TempFile::GetURL failed: unit test is leaking temp files, add the ucpfile1 component!");
     return aName;
 }
 

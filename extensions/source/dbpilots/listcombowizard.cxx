@@ -25,10 +25,8 @@
 #include <com/sun/star/form/ListSourceType.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
 #include <tools/debug.hxx>
-#include <vcl/msgbox.hxx>
 #include <connectivity/dbtools.hxx>
 #include <helpids.h>
-#include <comphelper/extract.hxx>
 
 
 namespace dbp

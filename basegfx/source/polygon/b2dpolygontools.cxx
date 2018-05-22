@@ -625,7 +625,6 @@ namespace basegfx
                     else if(fTools::equalZero(fDistance))
                     {
                         // start point of chosen edge
-                        aRetval = aRetval;
                     }
                     else
                     {
@@ -3205,8 +3204,7 @@ namespace basegfx
         // converters for css::drawing::PointSequence
 
         B2DPolygon UnoPointSequenceToB2DPolygon(
-            const css::drawing::PointSequence& rPointSequenceSource,
-            bool bCheckClosed)
+            const css::drawing::PointSequence& rPointSequenceSource)
         {
             B2DPolygon aRetval;
             const sal_uInt32 nLength(rPointSequenceSource.getLength());
@@ -3222,11 +3220,8 @@ namespace basegfx
                     aRetval.append(B2DPoint(pArray->X, pArray->Y));
                 }
 
-                if(bCheckClosed)
-                {
-                    // check for closed state flag
-                    utils::checkClosed(aRetval);
-                }
+                // check for closed state flag
+                utils::checkClosed(aRetval);
             }
 
             return aRetval;
@@ -3282,8 +3277,7 @@ namespace basegfx
 
         B2DPolygon UnoPolygonBezierCoordsToB2DPolygon(
             const css::drawing::PointSequence& rPointSequenceSource,
-            const css::drawing::FlagSequence& rFlagSequenceSource,
-            bool bCheckClosed)
+            const css::drawing::FlagSequence& rFlagSequenceSource)
         {
             const sal_uInt32 nCount(static_cast<sal_uInt32>(rPointSequenceSource.getLength()));
             OSL_ENSURE(nCount == static_cast<sal_uInt32>(rFlagSequenceSource.getLength()),
@@ -3374,10 +3368,7 @@ namespace basegfx
 
             // #i72807# API import uses old line start/end-equal definition for closed,
             // so we need to correct this to closed state here
-            if(bCheckClosed)
-            {
-                checkClosed(aRetval);
-            }
+            checkClosed(aRetval);
 
             return aRetval;
         }

@@ -928,7 +928,7 @@ bool SwFEShell::Paste( SwDoc* pClpDoc )
                             Imp()->GetDrawView()->InsertObjectAtView( pNew, *Imp()->GetPageView() );
 
                             Point aGrpAnchor( 0, 0 );
-                            SdrObjList* pList = pNew->GetObjList();
+                            SdrObjList* pList = pNew->getParentOfSdrObject();
                             if ( pList )
                             {
                                 SdrObject* pOwner = pList->GetOwnerObj();
@@ -1263,20 +1263,20 @@ bool SwFEShell::GetDrawObjGraphic( SotClipboardFormatId nFormat, Graphic& rGrf )
 
 // #i50824#
 // replace method <lcl_RemoveOleObjsFromSdrModel> by <lcl_ConvertSdrOle2ObjsToSdrGrafObjs>
-static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs( SdrModel* _pModel )
+static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs( SdrModel& _rModel )
 {
-    for ( sal_uInt16 nPgNum = 0; nPgNum < _pModel->GetPageCount(); ++nPgNum )
+    for ( sal_uInt16 nPgNum = 0; nPgNum < _rModel.GetPageCount(); ++nPgNum )
     {
         // setup object iterator in order to iterate through all objects
         // including objects in group objects, but exclusive group objects.
-        SdrObjListIter aIter(*(_pModel->GetPage( nPgNum )));
+        SdrObjListIter aIter(*(_rModel.GetPage( nPgNum )));
         while( aIter.IsMore() )
         {
             SdrOle2Obj* pOle2Obj = dynamic_cast< SdrOle2Obj* >( aIter.Next() );
             if( pOle2Obj )
             {
                 // found an ole2 shape
-                SdrObjList* pObjList = pOle2Obj->GetObjList();
+                SdrObjList* pObjList = pOle2Obj->getParentOfSdrObject();
 
                 // get its graphic
                 Graphic aGraphic;
@@ -1287,7 +1287,10 @@ static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs( SdrModel* _pModel )
                 pOle2Obj->Disconnect();
 
                 // create new graphic shape with the ole graphic and shape size
-                SdrGrafObj* pGraphicObj = new SdrGrafObj( aGraphic, pOle2Obj->GetCurrentBoundRect() );
+                SdrGrafObj* pGraphicObj = new SdrGrafObj(
+                    _rModel,
+                    aGraphic,
+                    pOle2Obj->GetCurrentBoundRect());
                 // apply layer of ole2 shape at graphic shape
                 pGraphicObj->SetLayer( pOle2Obj->GetLayer() );
 
@@ -1359,7 +1362,7 @@ void SwFEShell::Paste( SvStream& rStrm, SwPasteSdr nAction, const Point* pPt )
                     }
                 }
 
-                SdrObject* pNewObj = pClpObj->Clone();
+                SdrObject* pNewObj(pClpObj->CloneSdrObject(pOldObj->getSdrModelFromSdrObject()));
                 tools::Rectangle aOldObjRect( pOldObj->GetCurrentBoundRect() );
                 Size aOldObjSize( aOldObjRect.GetSize() );
                 tools::Rectangle aNewRect( pNewObj->GetCurrentBoundRect() );
@@ -1485,7 +1488,7 @@ void SwFEShell::Paste( SvStream& rStrm, SwPasteSdr nAction, const Point* pPt )
 
         // #i50824#
         // method <lcl_RemoveOleObjsFromSdrModel> replaced by <lcl_ConvertSdrOle2ObjsToSdrGrafObjs>
-        lcl_ConvertSdrOle2ObjsToSdrGrafObjs( pModel.get() );
+        lcl_ConvertSdrOle2ObjsToSdrGrafObjs( *pModel.get() );
         pView->Paste(*pModel, aPos, nullptr, SdrInsertFlags::NONE);
 
         const size_t nCnt = pView->GetMarkedObjectList().GetMarkCount();
@@ -1539,7 +1542,7 @@ bool SwFEShell::Paste(const Graphic &rGrf, const OUString& rURL)
 
         if(dynamic_cast< SdrGrafObj* >(pObj))
         {
-            SdrGrafObj* pNewGrafObj = static_cast<SdrGrafObj*>(pObj->Clone());
+            SdrGrafObj* pNewGrafObj(static_cast<SdrGrafObj*>(pObj->CloneSdrObject(pObj->getSdrModelFromSdrObject())));
 
             pNewGrafObj->SetGraphic(rGrf);
 

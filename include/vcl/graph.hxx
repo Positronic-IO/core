@@ -33,6 +33,7 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <vcl/vectorgraphicdata.hxx>
 #include <basegfx/vector/b2dsize.hxx>
+#include <vcl/GraphicExternalLink.hxx>
 
 
 enum class GraphicType
@@ -114,6 +115,7 @@ public:
 
 public:
                     Graphic();
+                    Graphic( const GraphicExternalLink& rGraphicLink );
                     Graphic( const Graphic& rGraphic );
                     Graphic( Graphic&& rGraphic );
                     Graphic( const Bitmap& rBmp );
@@ -141,6 +143,9 @@ public:
     bool            IsAlpha() const;
     bool            IsAnimated() const;
     bool            IsEPS() const;
+
+    bool isAvailable() const;
+    bool makeAvailable();
 
     // #i102089# Access of Bitmap potentially will have to rasterconvert the Graphic
     // if it is a MetaFile. To be able to control this conversion it is necessary to
@@ -201,6 +206,8 @@ public:
     OUString getOriginURL() const;
     void setOriginURL(OUString const & rOriginURL);
 
+    OString getUniqueID() const;
+
 public:
 
     std::shared_ptr<GraphicReader>& GetContext();
@@ -210,17 +217,10 @@ public:
 private:
     friend class GraphicObject;
 
-    bool            SwapOut();
-    void            SwapOutAsLink();
-    bool            SwapOut( SvStream* pOStm );
-    bool            SwapIn();
-    bool            SwapIn( SvStream* pIStm );
-    bool            IsSwapOut() const;
-
 public:
-    void            SetLink( const GfxLink& );
-    GfxLink         GetLink() const;
-    bool            IsLink() const;
+    void            SetGfxLink(const GfxLink& rGfxLink);
+    GfxLink         GetGfxLink() const;
+    bool            IsGfxLink() const;
 
     bool            ExportNative( SvStream& rOStream ) const;
 

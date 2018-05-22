@@ -30,6 +30,7 @@
 #include <com/sun/star/task/XInteractionRequest.hpp>
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 
+#include <comphelper/propertysequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <vcl/svapp.hxx>
 
@@ -44,35 +45,28 @@ namespace {
 
 void
 executeFilterDialog(
-    vcl::Window          * pParent ,
+    weld::Window* pParent ,
     OUString       const & rURL    ,
     uui::FilterNameList const & rFilters,
     OUString             & rFilter )
 {
-    try
+    SolarMutexGuard aGuard;
+
+    uui::FilterDialog aDialog(pParent);
+
+    aDialog.SetURL(rURL);
+    aDialog.ChangeFilters(&rFilters);
+
+    uui::FilterNameListPtr pSelected = rFilters.end();
+    if (aDialog.AskForFilter(pSelected))
     {
-        SolarMutexGuard aGuard;
-
-        ScopedVclPtrInstance< uui::FilterDialog > xDialog(pParent);
-
-        xDialog->SetURL(rURL);
-        xDialog->ChangeFilters(&rFilters);
-
-        uui::FilterNameListPtr pSelected = rFilters.end();
-        if( xDialog->AskForFilter( pSelected ) )
-        {
-            rFilter = pSelected->sInternal;
-        }
-    }
-    catch (std::bad_alloc const &)
-    {
-        throw uno::RuntimeException("out of memory");
+        rFilter = pSelected->sInternal;
     }
 }
 
 void
 handleNoSuchFilterRequest_(
-    vcl::Window * pParent,
+    weld::Window* pParent,
     uno::Reference< uno::XComponentContext > const & xContext,
     document::NoSuchFilterRequest const & rRequest,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
@@ -185,6 +179,7 @@ handleNoSuchFilterRequest_(
 
 void
 handleFilterOptionsRequest_(
+    uno::Reference<awt::XWindow> const & rWindow,
     uno::Reference< uno::XComponentContext > const & xContext,
     document::FilterOptionsRequest const & rRequest,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
@@ -233,11 +228,17 @@ handleFilterOptionsRequest_(
                         aProps[nProperty].Value >>= aServiceName;
                         if( !aServiceName.isEmpty() )
                         {
+                            uno::Sequence<uno::Any> aDialogArgs(comphelper::InitAnyPropertySequence(
+                            {
+                                {"ParentWindow", uno::Any(rWindow)},
+                            }));
+
                             uno::Reference<
                                 ui::dialogs::XExecutableDialog > xFilterDialog(
-                                    xContext->getServiceManager()->createInstanceWithContext(
-                                        aServiceName, xContext ),
+                                    xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
+                                        aServiceName, aDialogArgs, xContext ),
                                     uno::UNO_QUERY );
+
                             uno::Reference< beans::XPropertyAccess >
                                 xFilterProperties( xFilterDialog,
                                                    uno::UNO_QUERY );
@@ -291,7 +292,8 @@ UUIInteractionHelper::handleNoSuchFilterRequest(
     document::NoSuchFilterRequest aNoSuchFilterRequest;
     if (aAnyRequest >>= aNoSuchFilterRequest)
     {
-        handleNoSuchFilterRequest_(getParentProperty(),
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleNoSuchFilterRequest_(Application::GetFrameWeld(xParent),
                                    m_xContext,
                                    aNoSuchFilterRequest,
                                    rRequest->getContinuations());
@@ -309,7 +311,8 @@ UUIInteractionHelper::handleFilterOptionsRequest(
     document::FilterOptionsRequest aFilterOptionsRequest;
     if (aAnyRequest >>= aFilterOptionsRequest)
     {
-        handleFilterOptionsRequest_(m_xContext,
+        handleFilterOptionsRequest_(getParentXWindow(),
+                                    m_xContext,
                                     aFilterOptionsRequest,
                                     rRequest->getContinuations());
         return true;

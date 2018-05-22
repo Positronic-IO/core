@@ -24,7 +24,6 @@
 #include <svl/languageoptions.hxx>
 #if OSL_DEBUG_LEVEL > 0
     #include <unotools/ucbstreamhelper.hxx>
-    #include <vcl/msgbox.hxx>
     #include <sfx2/filedlghelper.hxx>
     #include <tools/urlobj.hxx>
     #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
@@ -235,7 +234,7 @@ namespace frm
                         { "Text (*.txt)", "*.txt", EETextFormat::Text }
                     };
 
-                    ::sfx2::FileDialogHelper aFP( bLoad ? css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE : css::ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION, FileDialogFlags::NONE, this );
+                    ::sfx2::FileDialogHelper aFP( bLoad ? css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE : css::ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION, FileDialogFlags::NONE, GetFrameWeld() );
 
                     for (auto & aExportFormat : aExportFormats)
                     {

@@ -27,7 +27,6 @@
 #include <com/sun/star/task/XInteractionRetry.hpp>
 
 #include <vcl/errinf.hxx>
-#include <svtools/strings.hrc>
 #include <svx/svxerr.hxx>
 #include <svx/dialogs.hrc>
 #include <unotools/resmgr.hxx>
@@ -54,7 +53,7 @@ enum class MessageBoxStyle {
 
 DialogMask
 executeErrorDialog(
-    vcl::Window * pParent,
+    weld::Window* pParent,
     task::InteractionClassification eClassification,
     OUString const & rContext,
     OUString const & rMessage,
@@ -73,19 +72,19 @@ executeErrorDialog(
     switch (eClassification)
     {
         case task::InteractionClassification_ERROR:
-            xBox.reset(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+            xBox.reset(Application::CreateMessageDialog(pParent,
                         VclMessageType::Error, VclButtonsType::NONE, aText.makeStringAndClear()));
             break;
         case task::InteractionClassification_WARNING:
-            xBox.reset(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+            xBox.reset(Application::CreateMessageDialog(pParent,
                         VclMessageType::Warning, VclButtonsType::NONE, aText.makeStringAndClear()));
             break;
         case task::InteractionClassification_INFO:
-            xBox.reset(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+            xBox.reset(Application::CreateMessageDialog(pParent,
                         VclMessageType::Info, VclButtonsType::NONE, aText.makeStringAndClear()));
             break;
         case task::InteractionClassification_QUERY:
-            xBox.reset(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
+            xBox.reset(Application::CreateMessageDialog(pParent,
                         VclMessageType::Question, VclButtonsType::NONE, aText.makeStringAndClear()));
             break;
         default:
@@ -246,8 +245,9 @@ UUIInteractionHelper::handleErrorHandlerRequest(
             }
         }
 
-        DialogMask nResult = executeErrorDialog(
-            getParentProperty(), eClassification, aContext, aMessage, nButtonMask );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        DialogMask nResult = executeErrorDialog(Application::GetFrameWeld(xParent),
+                eClassification, aContext, aMessage, nButtonMask );
 
         switch (nResult)
         {

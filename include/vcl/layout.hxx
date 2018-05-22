@@ -483,6 +483,7 @@ public:
     virtual vcl::Window *get_child() override;
     virtual const vcl::Window *get_child() const override;
     virtual bool set_property(const OString &rKey, const OUString &rValue) override;
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
     ScrollBar& getVertScrollBar() { return *m_pVScroll; }
     ScrollBar& getHorzScrollBar() { return *m_pHScroll; }
     Size getVisibleChildSize() const;
@@ -506,10 +507,13 @@ class VCL_DLLPUBLIC VclViewport : public VclBin
 public:
     VclViewport(vcl::Window *pParent)
         : VclBin(pParent, WB_HIDE | WB_CLIPCHILDREN)
+        , m_bInitialAllocation(true)
     {
     }
 protected:
     virtual void setAllocation(const Size &rAllocation) override;
+private:
+    bool m_bInitialAllocation;
 };
 
 //Enforces that its children are always the same size as itself.
@@ -610,17 +614,93 @@ public:
     void set_property(const OString &rKey, const OUString &rValue);
 };
 
-class VCL_DLLPUBLIC VclDrawingArea : public vcl::Window
+class VCL_DLLPUBLIC VclDrawingArea : public Control
 {
 private:
-    Link<vcl::RenderContext&, void> m_aPaintHdl;
+    FactoryFunction m_pFactoryFunction;
+    void* m_pUserData;
+    Link<std::pair<vcl::RenderContext&, const tools::Rectangle&>, void> m_aPaintHdl;
     Link<const Size&, void> m_aResizeHdl;
+    Link<const MouseEvent&, void> m_aMousePressHdl;
+    Link<const MouseEvent&, void> m_aMouseMotionHdl;
+    Link<const MouseEvent&, void> m_aMouseReleaseHdl;
+    Link<const KeyEvent&, bool> m_aKeyPressHdl;
+    Link<const KeyEvent&, bool> m_aKeyReleaseHdl;
+    Link<VclDrawingArea&, void> m_aStyleUpdatedHdl;
+
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override
+    {
+        m_aPaintHdl.Call(std::pair<vcl::RenderContext&, const tools::Rectangle&>(rRenderContext, rRect));
+    }
+    virtual void Resize() override
+    {
+        m_aResizeHdl.Call(GetOutputSizePixel());
+    }
+    virtual void MouseMove(const MouseEvent& rMEvt) override
+    {
+        m_aMouseMotionHdl.Call(rMEvt);
+    }
+    virtual void MouseButtonDown(const MouseEvent& rMEvt) override
+    {
+        m_aMousePressHdl.Call(rMEvt);
+    }
+    virtual void MouseButtonUp(const MouseEvent& rMEvt) override
+    {
+        m_aMouseReleaseHdl.Call(rMEvt);
+    }
+    virtual void KeyInput(const KeyEvent& rKEvt) override
+    {
+        if (!m_aKeyPressHdl.Call(rKEvt))
+            Control::KeyInput(rKEvt);
+
+    }
+    virtual void KeyUp(const KeyEvent& rKEvt) override
+    {
+        if (!m_aKeyReleaseHdl.Call(rKEvt))
+            Control::KeyUp(rKEvt);
+    }
+    virtual void StateChanged(StateChangedType nType) override
+    {
+        Control::StateChanged(nType);
+        if (nType == StateChangedType::ControlForeground || nType == StateChangedType::ControlBackground)
+        {
+            m_aStyleUpdatedHdl.Call(*this);
+            Invalidate();
+        }
+    }
+    virtual void DataChanged(const DataChangedEvent& rDCEvt) override
+    {
+        Control::DataChanged(rDCEvt);
+        if ((rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE))
+        {
+            m_aStyleUpdatedHdl.Call(*this);
+            Invalidate();
+        }
+    }
+    virtual FactoryFunction GetUITestFactory() const override
+    {
+        if (m_pFactoryFunction)
+            return m_pFactoryFunction;
+        return Control::GetUITestFactory();
+    }
+
 public:
     VclDrawingArea(vcl::Window *pParent, WinBits nStyle)
-        : vcl::Window(pParent, nStyle)
+        : Control(pParent, nStyle)
+        , m_pFactoryFunction(nullptr)
+        , m_pUserData(nullptr)
     {
     }
-    void SetPaintHdl(const Link<vcl::RenderContext&, void>& rLink)
+    void SetUITestFactory(FactoryFunction pFactoryFunction, void* pUserData)
+    {
+        m_pFactoryFunction = pFactoryFunction;
+        m_pUserData = pUserData;
+    }
+    void* GetUserData() const
+    {
+        return m_pUserData;
+    }
+    void SetPaintHdl(const Link<std::pair<vcl::RenderContext&, const tools::Rectangle&>, void>& rLink)
     {
         m_aPaintHdl = rLink;
     }
@@ -628,13 +708,29 @@ public:
     {
         m_aResizeHdl = rLink;
     }
-    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*rRect*/) override
+    void SetMousePressHdl(const Link<const MouseEvent&, void>& rLink)
     {
-        m_aPaintHdl.Call(rRenderContext);
+        m_aMousePressHdl = rLink;
     }
-    virtual void Resize() override
+    void SetMouseMoveHdl(const Link<const MouseEvent&, void>& rLink)
     {
-        m_aResizeHdl.Call(GetOutputSizePixel());
+        m_aMouseMotionHdl = rLink;
+    }
+    void SetMouseReleaseHdl(const Link<const MouseEvent&, void>& rLink)
+    {
+        m_aMouseReleaseHdl = rLink;
+    }
+    void SetKeyPressHdl(const Link<const KeyEvent&, bool>& rLink)
+    {
+        m_aKeyPressHdl = rLink;
+    }
+    void SetKeyReleaseHdl(const Link<const KeyEvent&, bool>& rLink)
+    {
+        m_aKeyReleaseHdl = rLink;
+    }
+    void SetStyleUpdatedHdl(const Link<VclDrawingArea&, void>& rLink)
+    {
+        m_aStyleUpdatedHdl = rLink;
     }
 };
 

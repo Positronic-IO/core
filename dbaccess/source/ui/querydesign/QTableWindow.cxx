@@ -27,7 +27,6 @@
 #include <querycontroller.hxx>
 #include <vcl/image.hxx>
 #include <TableWindowListBox.hxx>
-#include <strings.hrc>
 #include <strings.hxx>
 #include <com/sun/star/sdbcx/XKeysSupplier.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -36,9 +35,7 @@
 #include <com/sun/star/sdbcx/KeyType.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
 #include "TableFieldInfo.hxx"
-#include <comphelper/extract.hxx>
 #include <comphelper/string.hxx>
-#include <comphelper/uno3.hxx>
 #include <UITools.hxx>
 #include <svtools/treelistentry.hxx>
 

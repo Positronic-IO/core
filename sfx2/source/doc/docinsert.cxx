@@ -34,7 +34,6 @@
 #include <com/sun/star/ui/dialogs/XFilePickerControlAccess.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/itemset.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
@@ -74,8 +73,8 @@ FileDialogFlags lcl_map_mode_to_flags(const sfx2::DocumentInserter::Mode mode)
 
 namespace sfx2 {
 
-DocumentInserter::DocumentInserter(vcl::Window* pParent, const OUString& rFactory, const Mode mode)
-    : m_xParent                 ( pParent )
+DocumentInserter::DocumentInserter(weld::Window* pParent, const OUString& rFactory, const Mode mode)
+    : m_pParent                 ( pParent )
     , m_sDocFactory             ( rFactory )
     , m_nDlgFlags               ( lcl_map_mode_to_flags(mode) )
     , m_nError                  ( ERRCODE_NONE )
@@ -96,7 +95,7 @@ void DocumentInserter::StartExecuteModal( const Link<sfx2::FileDialogHelper*,voi
     {
         m_pFileDlg.reset( new FileDialogHelper(
                 ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
-                m_nDlgFlags, m_sDocFactory, SfxFilterFlags::NONE, SfxFilterFlags::NONE, m_xParent ) );
+                m_nDlgFlags, m_sDocFactory, SfxFilterFlags::NONE, SfxFilterFlags::NONE, m_pParent ) );
     }
     m_pFileDlg->StartExecuteModal( LINK( this, DocumentInserter, DialogClosedHdl ) );
 }
@@ -216,12 +215,12 @@ IMPL_LINK_NOARG(DocumentInserter, DialogClosedHdl, sfx2::FileDialogHelper*, void
                 if ( ( aValue >>= bPassWord ) && bPassWord )
                 {
                     // ask for the password
-                    ScopedVclPtrInstance< SfxPasswordDialog > aPasswordDlg(nullptr);
-                    aPasswordDlg->ShowExtras( SfxShowExtras::CONFIRM );
-                    short nRet = aPasswordDlg->Execute();
+                    SfxPasswordDialog aPasswordDlg(m_pParent);
+                    aPasswordDlg.ShowExtras( SfxShowExtras::CONFIRM );
+                    short nRet = aPasswordDlg.execute();
                     if ( RET_OK == nRet )
                     {
-                        m_pItemSet->Put( SfxStringItem( SID_PASSWORD, aPasswordDlg->GetPassword() ) );
+                        m_pItemSet->Put( SfxStringItem( SID_PASSWORD, aPasswordDlg.GetPassword() ) );
                     }
                     else
                     {

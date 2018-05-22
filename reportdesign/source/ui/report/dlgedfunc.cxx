@@ -126,14 +126,14 @@ DlgEdFunc::DlgEdFunc( OReportSection* _pParent )
     aScrollTimer.SetTimeout( SELENG_AUTOREPEAT_INTERVAL );
 }
 
-void DlgEdFunc::setOverlappedControlColor(sal_Int32 _nColor)
+void DlgEdFunc::setOverlappedControlColor(Color _nColor)
 {
     m_nOverlappedControlColor = _nColor;
 }
 
-sal_Int32 lcl_setColorOfObject(const uno::Reference< uno::XInterface >& _xObj, long _nColorTRGB)
+Color lcl_setColorOfObject(const uno::Reference< uno::XInterface >& _xObj, Color _nColorTRGB)
 {
-    sal_Int32 nBackColor = 0;
+    Color nBackColor;
     try
     {
         uno::Reference<report::XReportComponent> xComponent(_xObj, uno::UNO_QUERY_THROW);
@@ -405,7 +405,7 @@ void DlgEdFunc::activateOle(SdrObject* _pObj)
                 }
                 catch( uno::Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("reportdesign");
                 }
             }
         }
@@ -450,18 +450,15 @@ void DlgEdFunc::colorizeOverlappedObject(SdrObject* _pOverlappedObj)
         uno::Reference<report::XReportComponent> xComponent = pObj->getReportComponent();
         if (xComponent.is() && xComponent != m_xOverlappingObj)
         {
-            OReportModel* pRptModel = static_cast<OReportModel*>(_pOverlappedObj->GetModel());
-            if ( pRptModel )
-            {
-                OXUndoEnvironment::OUndoEnvLock aLock(pRptModel->GetUndoEnv());
+            OReportModel& rRptModel(static_cast< OReportModel& >(_pOverlappedObj->getSdrModelFromSdrObject()));
+            OXUndoEnvironment::OUndoEnvLock aLock(rRptModel.GetUndoEnv());
 
-                // uncolorize an old object, if there is one
-                unColorizeOverlappedObj();
+            // uncolorize an old object, if there is one
+            unColorizeOverlappedObj();
 
-                m_nOldColor = lcl_setColorOfObject(xComponent, m_nOverlappedControlColor);
-                m_xOverlappingObj = xComponent;
-                m_pOverlappingObj = _pOverlappedObj;
-            }
+            m_nOldColor = lcl_setColorOfObject(xComponent, m_nOverlappedControlColor);
+            m_xOverlappingObj = xComponent;
+            m_pOverlappingObj = _pOverlappedObj;
         }
     }
 }
@@ -471,15 +468,12 @@ void DlgEdFunc::unColorizeOverlappedObj()
     // uncolorize an old object, if there is one
     if (m_xOverlappingObj.is())
     {
-        OReportModel* pRptModel = static_cast<OReportModel*>(m_pOverlappingObj->GetModel());
-        if ( pRptModel )
-        {
-            OXUndoEnvironment::OUndoEnvLock aLock(pRptModel->GetUndoEnv());
+        OReportModel& rRptModel(static_cast< OReportModel& >(m_pOverlappingObj->getSdrModelFromSdrObject()));
+        OXUndoEnvironment::OUndoEnvLock aLock(rRptModel.GetUndoEnv());
 
-            lcl_setColorOfObject(m_xOverlappingObj, m_nOldColor);
-            m_xOverlappingObj = nullptr;
-            m_pOverlappingObj = nullptr;
-        }
+        lcl_setColorOfObject(m_xOverlappingObj, m_nOldColor);
+        m_xOverlappingObj = nullptr;
+        m_pOverlappingObj = nullptr;
     }
 }
 

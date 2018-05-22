@@ -31,6 +31,7 @@
 #define STR_UNDO_REPLACE                                NC_("STR_UNDO_REPLACE", "Replace")
 #define STR_UNDO_DRAGDROP                               NC_("STR_UNDO_DRAGDROP", "Drag and Drop")
 #define STR_INSERTGRAPHIC                               NC_("STR_INSERTGRAPHIC", "Insert Image")
+#define STR_QUERYROTATION                               NC_("STR_QUERYROTATION", "This image is rotated. Would you like to rotate it into standard orientation?")
 #define STR_UNDO_BEZCLOSE                               NC_("STR_UNDO_BEZCLOSE", "Close Polygon")
 #define STR_SLIDE_SORTER_MODE                           NC_("STR_SLIDE_SORTER_MODE", "Slide Sorter")
 #define STR_NORMAL_MODE                                 NC_("STR_NORMAL_MODE", "Normal")
@@ -188,11 +189,14 @@
 #define STR_NEW_CUSTOMSHOW                              NC_("STR_NEW_CUSTOMSHOW", "New Custom Slide Show")
 #define STR_COPY_CUSTOMSHOW                             NC_("STR_COPY_CUSTOMSHOW", "Copy ")
 #define STR_IMPRESS_DOCUMENT                            NC_("STR_IMPRESS_DOCUMENT", "Presentation")
-#define STR_IMPRESS_DOCUMENT_FULLTYPE_60                NC_("STR_IMPRESS_DOCUMENT_FULLTYPE_60", "%PRODUCTNAME %PRODUCTVERSION Presentation")
+#define STR_IMPRESS_DOCUMENT_FULLTYPE_60                NC_("STR_IMPRESS_DOCUMENT_FULLTYPE_60", "%PRODUCTNAME Presentation format (Impress 6)")
 #define STR_GRAPHIC_DOCUMENT                            NC_("STR_GRAPHIC_DOCUMENT", "Drawing")
-#define STR_GRAPHIC_DOCUMENT_FULLTYPE_60                NC_("STR_GRAPHIC_DOCUMENT_FULLTYPE_60", "%PRODUCTNAME %PRODUCTVERSION Drawing")
+#define STR_GRAPHIC_DOCUMENT_FULLTYPE_60                NC_("STR_GRAPHIC_DOCUMENT_FULLTYPE_60", "%PRODUCTNAME Drawing format (Draw 6)")
 #define STR_BREAK_METAFILE                              NC_("STR_BREAK_METAFILE", "Ungroup Metafile(s)...")
 #define STR_BREAK_FAIL                                  NC_("STR_BREAK_FAIL", "It was not possible to ungroup all drawing objects.")
+#define STR_IMPRESS_DOCUMENT_FULLTYPE_80                NC_("STR_IMPRESS_DOCUMENT_FULLTYPE_80", "%PRODUCTNAME %PRODUCTVERSION Presentation")
+#define STR_GRAPHIC_DOCUMENT_FULLTYPE_80                NC_("STR_GRAPHIC_DOCUMENT_FULLTYPE_80", "%PRODUCTNAME %PRODUCTVERSION Drawing")
+
 // HtmlExport
 #define STR_PUBDLG_SAMENAME                             NC_("STR_PUBDLG_SAMENAME", "A design already exists with this name.\nDo you want to replace it?")
 #define STR_HTMLATTR_TEXT                               NC_("STR_HTMLATTR_TEXT", "Text")
@@ -308,21 +312,26 @@
 #define STR_LAYOUT_DEFAULT_TITLE_NAME                   NC_("STR_LAYOUT_DEFAULT_TITLE_NAME", "Title" )
 #define STR_STANDARD_STYLESHEET_NAME                    NC_("STR_STANDARD_STYLESHEET_NAME", "Default" )
 #define STR_UNDO_MOVEPAGES                              NC_("STR_UNDO_MOVEPAGES", "Move slides" )
+
 #define STR_POOLSHEET_MEASURE                           NC_("STR_POOLSHEET_MEASURE", "Dimension Line" )
-#define STR_POOLSHEET_OBJNOLINENOFILL                   NC_("STR_POOLSHEET_OBJNOLINENOFILL", "Object with no fill and no line" )
-#define STR_POOLSHEET_OBJWITHARROW                      NC_("STR_POOLSHEET_OBJWITHARROW", "Object with arrow" )
-#define STR_POOLSHEET_OBJWITHSHADOW                     NC_("STR_POOLSHEET_OBJWITHSHADOW", "Object with shadow" )
-#define STR_POOLSHEET_OBJWITHOUTFILL                    NC_("STR_POOLSHEET_OBJWITHOUTFILL", "Object without fill" )
 #define STR_POOLSHEET_TEXT                              NC_("STR_POOLSHEET_TEXT", "Text" )
-#define STR_POOLSHEET_TEXTBODY                          NC_("STR_POOLSHEET_TEXTBODY", "Text body" )
-#define STR_POOLSHEET_TEXTBODY_JUSTIFY                  NC_("STR_POOLSHEET_TEXTBODY_JUSTIFY", "Text body justified" )
-#define STR_POOLSHEET_TEXTBODY_INDENT                   NC_("STR_POOLSHEET_TEXTBODY_INDENT", "First line indent" )
 #define STR_POOLSHEET_TITLE                             NC_("STR_POOLSHEET_TITLE", "Title" )
-#define STR_POOLSHEET_TITLE1                            NC_("STR_POOLSHEET_TITLE1", "Title1" )
-#define STR_POOLSHEET_TITLE2                            NC_("STR_POOLSHEET_TITLE2", "Title2" )
 #define STR_POOLSHEET_HEADLINE                          NC_("STR_POOLSHEET_HEADLINE", "Heading" )
-#define STR_POOLSHEET_HEADLINE1                         NC_("STR_POOLSHEET_HEADLINE1", "Heading1" )
-#define STR_POOLSHEET_HEADLINE2                         NC_("STR_POOLSHEET_HEADLINE2", "Heading2" )
+#define STR_POOLSHEET_OBJWITHOUTFILL                    NC_("STR_POOLSHEET_OBJWITHOUTFILL", "Object without fill" )
+#define STR_POOLSHEET_OBJNOLINENOFILL                   NC_("STR_POOLSHEET_OBJNOLINENOFILL", "Object with no fill and no line" )
+
+#define STR_POOLSHEET_FILLED                            NC_("STR_POOLSHEET_FILLED", "Filled" )
+#define STR_POOLSHEET_FILLED_BLUE                       NC_("STR_POOLSHEET_FILLED_BLUE", "Filled Blue" )
+#define STR_POOLSHEET_FILLED_GREEN                      NC_("STR_POOLSHEET_FILLED_GREEN", "Filled Green" )
+#define STR_POOLSHEET_FILLED_YELLOW                     NC_("STR_POOLSHEET_FILLED_YELLOW", "Filled Yellow" )
+#define STR_POOLSHEET_FILLED_RED                        NC_("STR_POOLSHEET_FILLED_RED", "Filled Red" )
+
+#define STR_POOLSHEET_OUTLINE                           NC_("STR_POOLSHEET_OUTLINE", "Outlined" )
+#define STR_POOLSHEET_OUTLINE_BLUE                      NC_("STR_POOLSHEET_OUTLINE_BLUE", "Outlined Blue" )
+#define STR_POOLSHEET_OUTLINE_GREEN                     NC_("STR_POOLSHEET_OUTLINE_GREEN", "Outlined Green" )
+#define STR_POOLSHEET_OUTLINE_YELLOW                    NC_("STR_POOLSHEET_OUTLINE_YELLOW", "Outlined Yellow" )
+#define STR_POOLSHEET_OUTLINE_RED                       NC_("STR_POOLSHEET_OUTLINE_RED", "Outlined Red" )
+
 #define STR_PSEUDOSHEET_TITLE                           NC_("STR_PSEUDOSHEET_TITLE", "Title" )
 #define STR_PSEUDOSHEET_SUBTITLE                        NC_("STR_PSEUDOSHEET_SUBTITLE", "Subtitle")
 #define STR_PSEUDOSHEET_OUTLINE                         NC_("STR_PSEUDOSHEET_OUTLINE", "Outline" )
@@ -464,6 +473,9 @@
 #define STR_SAR_WRAP_BACKWARD_DRAW                      NC_("STR_SAR_WRAP_BACKWARD_DRAW", "%PRODUCTNAME Draw has searched to the beginning of the document. Do you want to continue at the end?")
 
 #define STR_SD_NONE                                     NC_("STR_SD_NONE", "- None -")
+
+#define STR_CTRLCLICKHYPERLINK                          NC_("STR_CTRLCLICKHYPERLINK", "%s-click to follow hyperlink: ")
+#define STR_CLICKHYPERLINK                              NC_("STR_CLICKHYPERLINK", "Click to open hyperlink: ")
 
 #endif
 

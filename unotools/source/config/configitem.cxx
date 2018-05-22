@@ -23,7 +23,6 @@
 #include <unotools/configitem.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/configpaths.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/util/XChangesListener.hpp>
@@ -43,6 +42,7 @@
 #include <comphelper/solarmutex.hxx>
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace utl;
 using namespace com::sun::star::uno;
@@ -1090,9 +1090,9 @@ bool ConfigItem::AddNode(const OUString& rNode, const OUString& rNewNode)
             }
             xBatch->commitChanges();
         }
-        catch (const Exception& rEx)
+        catch (const Exception&)
         {
-            SAL_WARN("unotools.config", "Exception from AddNode(): " << rEx);
+            DBG_UNHANDLED_EXCEPTION("unotools.config");
             bRet = false;
         }
     }

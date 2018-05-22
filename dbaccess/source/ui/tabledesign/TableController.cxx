@@ -274,7 +274,8 @@ bool OTableController::doSaveDoc(bool _bSaveAs)
     if (!xTablesSup.is())
     {
         OUString aMessage(DBA_RES(STR_TABLEDESIGN_CONNECTION_MISSING));
-        ScopedVclPtrInstance<OSQLWarningBox>(getView(), aMessage )->Execute();
+        OSQLWarningBox aWarning(getFrameWeld(), aMessage);
+        aWarning.run();
         return false;
     }
 
@@ -372,7 +373,7 @@ bool OTableController::doSaveDoc(bool _bSaveAs)
                 assignTable();
             }
             // now check if our datasource has set a tablefilter and if append the new table name to it
-            ::dbaui::appendToFilter(getConnection(),m_sName,getORB(),getView()); // we are not interessted in the return value
+            ::dbaui::appendToFilter(getConnection(), m_sName, getORB(), getFrameWeld()); // we are not interessted in the return value
             Reference< frame::XTitleChangeListener> xEventListener(impl_getTitleHelper_throw(),UNO_QUERY);
             if ( xEventListener.is() )
             {
@@ -404,15 +405,14 @@ bool OTableController::doSaveDoc(bool _bSaveAs)
     {
         OUString sText( DBA_RES( STR_NAME_ALREADY_EXISTS ) );
         sText = sText.replaceFirst( "#" , m_sName);
-        ScopedVclPtrInstance< OSQLMessageBox > aDlg( getView(), DBA_RES( STR_ERROR_DURING_CREATION ), sText, MessBoxStyle::Ok, OSQLMessageBox::Error );
-
-        aDlg->Execute();
+        OSQLMessageBox aDlg(getFrameWeld(), DBA_RES( STR_ERROR_DURING_CREATION ), sText, MessBoxStyle::Ok, MessageType::Error);
+        aDlg.run();
         bError = true;
     }
     catch( const Exception& )
     {
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         bError = true;
-        DBG_UNHANDLED_EXCEPTION();
     }
 
     if ( aInfo.isValid() )
@@ -475,7 +475,7 @@ void OTableController::doEditIndexes()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     if (!xIndexes.is())
@@ -504,7 +504,7 @@ void OTableController::impl_initialize()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     try
@@ -513,7 +513,8 @@ void OTableController::impl_initialize()
     }
     catch(const SQLException&)
     {
-        ScopedVclPtrInstance<OSQLWarningBox>(getView(), DBA_RES( STR_NO_TYPE_INFO_AVAILABLE ))->Execute();
+        OSQLWarningBox aWarning(getFrameWeld(), DBA_RES( STR_NO_TYPE_INFO_AVAILABLE));
+        aWarning.run();
         throw;
     }
     try
@@ -525,7 +526,7 @@ void OTableController::impl_initialize()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -717,7 +718,7 @@ void OTableController::appendColumns(Reference<XColumnsSupplier> const & _rxColS
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -914,7 +915,8 @@ bool OTableController::checkColumns(bool _bNew)
                 {
                     OUString strMessage = DBA_RES(STR_TABLEDESIGN_DUPLICATE_NAME);
                     strMessage = strMessage.replaceFirst("$column$", pFieldDesc->GetName());
-                    ScopedVclPtrInstance<OSQLWarningBox>(getView(), strMessage)->Execute();
+                    OSQLWarningBox aWarning(getFrameWeld(), strMessage);
+                    aWarning.run();
                     return false;
                 }
             }
@@ -924,9 +926,9 @@ bool OTableController::checkColumns(bool _bNew)
     {
         OUString sTitle(DBA_RES(STR_TABLEDESIGN_NO_PRIM_KEY_HEAD));
         OUString sMsg(DBA_RES(STR_TABLEDESIGN_NO_PRIM_KEY));
-        ScopedVclPtrInstance< OSQLMessageBox > aBox(getView(), sTitle,sMsg, MessBoxStyle::YesNoCancel | MessBoxStyle::DefaultYes);
+        OSQLMessageBox aBox(getFrameWeld(), sTitle,sMsg, MessBoxStyle::YesNoCancel | MessBoxStyle::DefaultYes);
 
-        switch ( aBox->Execute() )
+        switch (aBox.run())
         {
         case RET_YES:
         {
@@ -1055,8 +1057,8 @@ void OTableController::alterColumns()
                         aMessage = aMessage.replaceFirst( "$column$", pField->GetName() );
 
                         SQLExceptionInfo aError( ::cppu::getCaughtException() );
-                        ScopedVclPtrInstance< OSQLWarningBox > aMsg( getView(), aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes , &aError );
-                        bNotOk = aMsg->Execute() == RET_YES;
+                        OSQLWarningBox aMsg(getFrameWeld(), aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes , &aError);
+                        bNotOk = aMsg.run() == RET_YES;
                     }
                     else
                         throw;
@@ -1112,8 +1114,8 @@ void OTableController::alterColumns()
                 {
                     OUString aMessage(DBA_RES(STR_TABLEDESIGN_ALTER_ERROR));
                     aMessage = aMessage.replaceFirst("$column$",pField->GetName());
-                    ScopedVclPtrInstance< OSQLWarningBox > aMsg( getView(), aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, &aError);
-                    if ( aMsg->Execute() != RET_YES )
+                    OSQLWarningBox aMsg(getFrameWeld(), aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, &aError);
+                    if (aMsg.run() != RET_YES)
                     {
                         Reference<XPropertySet> xNewColumn(xIdxColumns->getByIndex(nPos),UNO_QUERY_THROW);
                         OUString sName;
@@ -1175,8 +1177,8 @@ void OTableController::alterColumns()
                     OUString aMsgT(DBA_RES(STR_TBL_COLUMN_IS_KEYCOLUMN));
                     aMsgT = aMsgT.replaceFirst("$column$",rColumnName);
                     OUString aTitle(DBA_RES(STR_TBL_COLUMN_IS_KEYCOLUMN_TITLE));
-                    ScopedVclPtrInstance< OSQLMessageBox > aMsg(getView(),aTitle,aMsgT,MessBoxStyle::YesNo| MessBoxStyle::DefaultYes);
-                    if(aMsg->Execute() == RET_YES)
+                    OSQLMessageBox aMsg(getFrameWeld(), aTitle, aMsgT, MessBoxStyle::YesNo| MessBoxStyle::DefaultYes);
+                    if (aMsg.run() == RET_YES)
                     {
                         xKeyColumns = nullptr;
                         dropPrimaryKey();
@@ -1330,7 +1332,7 @@ void OTableController::dropPrimaryKey()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     showError(aInfo);
@@ -1389,7 +1391,7 @@ bool OTableController::isAddAllowed() const
     }
     catch(Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         bAddAllowed = false;
     }
 
@@ -1480,7 +1482,7 @@ OUString OTableController::getPrivateTitle() const
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return sTitle;
 }
@@ -1496,18 +1498,18 @@ void OTableController::reload()
 
 sal_Int32 OTableController::getFirstEmptyRowPosition()
 {
-    sal_Int32 nRet = -1;
-    std::vector< std::shared_ptr<OTableRow> >::const_iterator aIter = m_vRowList.begin();
-    std::vector< std::shared_ptr<OTableRow> >::const_iterator aEnd = m_vRowList.end();
-    for(;aIter != aEnd;++aIter)
+    sal_Int32 nRet = 0;
+    bool bFoundElem = false;
+    for (auto const& row : m_vRowList)
     {
-        if ( !*aIter || !(*aIter)->GetActFieldDescr() || (*aIter)->GetActFieldDescr()->GetName().isEmpty() )
+        if ( !row || !row->GetActFieldDescr() || row->GetActFieldDescr()->GetName().isEmpty() )
         {
-            nRet = aIter - m_vRowList.begin();
+            bFoundElem = true;
             break;
         }
+        ++nRet;
     }
-    if ( nRet == -1 )
+    if (!bFoundElem)
     {
         bool bReadRow = !isAddAllowed();
         std::shared_ptr<OTableRow> pTabEdRow(new OTableRow());

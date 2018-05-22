@@ -23,6 +23,8 @@
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 
 class SdrObject;
+class SdrObjCustomShape;
+
 class EnhancedCustomShapeFontWork
 {
         static css::uno::Reference < css::i18n::XBreakIterator > mxBreakIterator;
@@ -30,7 +32,9 @@ class EnhancedCustomShapeFontWork
     public:
 
         static css::uno::Reference < css::i18n::XBreakIterator > const & GetBreakIterator();
-        static SdrObject* CreateFontWork( const SdrObject* pShape2d, const SdrObject* pCustomShape );
+        static SdrObject* CreateFontWork(
+            const SdrObject* pShape2d,
+            const SdrObjCustomShape& rSdrObjCustomShape);
 };
 
 #endif

@@ -47,7 +47,6 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/character.hxx>
 #include <svl/zforlist.hxx>
-#include <comphelper/processfactory.hxx>
 
 #include <o3tl/make_unique.hxx>
 
@@ -91,8 +90,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
     if( bOnlyIntntl )
     {
         ImpGetIntntlSep( cIntntlDecSep, cIntntlGrpSep, cIntntlDecSepAlt );
-        if( bOnlyIntntl )
-            cNonIntntlDecSep = cIntntlDecSep;
+        cNonIntntlDecSep = cIntntlDecSep;
         // Ensure that the decimal separator alternative is really one.
         if (cIntntlDecSepAlt && cIntntlDecSepAlt == cNonIntntlDecSep)
             cIntntlDecSepAlt = 0;
@@ -776,7 +774,7 @@ void SbxValue::Format( OUString& rRes, const OUString* pFmt ) const
             {
                 sal_Int16 nYear = implGetDateYear( nNumber );
                 double dBaseDate;
-                implDateSerial( nYear, 1, 1, true, false, dBaseDate );
+                implDateSerial( nYear, 1, 1, true, SbDateCorrection::None, dBaseDate );
                 sal_Int32 nYear32 = 1 + sal_Int32( nNumber - dBaseDate );
                 rRes = OUString::number(nYear32);
             }

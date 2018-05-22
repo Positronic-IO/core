@@ -21,7 +21,6 @@
 
 #include <sot/storage.hxx>
 #include <unotools/streamwrap.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <ucbhelper/content.hxx>
@@ -66,7 +65,7 @@ BitmapEx GalleryResGetBitmapEx(const OUString &rId)
 }
 
 GalleryGraphicImportRet GalleryGraphicImport( const INetURLObject& rURL, Graphic& rGraphic,
-                             OUString& rFilterName, bool bShowProgress )
+                             OUString& rFilterName )
 {
     GalleryGraphicImportRet  nRet = GalleryGraphicImportRet::IMPORT_NONE;
     SfxMedium   aMedium( rURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ );
@@ -78,7 +77,6 @@ GalleryGraphicImportRet GalleryGraphicImport( const INetURLObject& rURL, Graphic
     if( pIStm )
     {
         GraphicFilter& rGraphicFilter = GraphicFilter::GetGraphicFilter();
-        std::unique_ptr<GalleryProgress> pProgress(bShowProgress ? new GalleryProgress( &rGraphicFilter ) : nullptr);
         sal_uInt16              nFormat;
 
         if( !rGraphicFilter.ImportGraphic( rGraphic, rURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), *pIStm, GRFILTER_FORMAT_DONTKNOW, &nFormat ) )
@@ -332,8 +330,7 @@ bool KillFile( const INetURLObject& rURL )
 }
 
 
-GalleryProgress::GalleryProgress( GraphicFilter* pFilter ) :
-    mpFilter( pFilter )
+GalleryProgress::GalleryProgress( GraphicFilter* pFilter )
 {
 
     uno::Reference< lang::XMultiServiceFactory > xMgr( ::comphelper::getProcessServiceFactory() );
@@ -349,10 +346,10 @@ GalleryProgress::GalleryProgress( GraphicFilter* pFilter ) :
         {
             OUString aProgressText;
 
-            if( mpFilter )
+            if( pFilter )
             {
                 aProgressText = SvxResId(RID_SVXSTR_GALLERY_FILTER);
-//              mpFilter->SetUpdatePercentHdl( LINK( this, GalleryProgress, Update ) );     // sj: progress wasn't working up from SO7 at all
+//              pFilter->SetUpdatePercentHdl( LINK( this, GalleryProgress, Update ) );     // sj: progress wasn't working up from SO7 at all
 //                                                                                          // so I am removing this. The gallery progress should
 //                                                                                          // be changed to use the XStatusIndicator instead of XProgressMonitor
             }
@@ -382,7 +379,6 @@ GalleryTransferable::GalleryTransferable( GalleryTheme* pTheme, sal_uInt32 nObje
     meObjectKind( mpTheme->GetObjectKind( nObjectPos ) ),
     mnObjectPos( nObjectPos ),
     mpGraphicObject( nullptr ),
-    mpImageMap( nullptr ),
     mpURL( nullptr )
 {
 
@@ -406,7 +402,7 @@ void GalleryTransferable::InitData( bool bLazy )
                     Graphic aGraphic;
 
                     if( mpTheme->GetGraphic( mnObjectPos, aGraphic ) )
-                        mpGraphicObject = new GraphicObject( aGraphic );
+                        mpGraphicObject.reset(new GraphicObject( aGraphic ));
                 }
 
                 if( !mxModelStream.is() )
@@ -430,12 +426,11 @@ void GalleryTransferable::InitData( bool bLazy )
         {
             if( !mpURL )
             {
-                mpURL = new INetURLObject;
+                mpURL.reset(new INetURLObject);
 
                 if( !mpTheme->GetURL( mnObjectPos, *mpURL ) )
                 {
-                    delete mpURL;
-                    mpURL = nullptr;
+                    mpURL.reset();
                 }
             }
 
@@ -444,7 +439,7 @@ void GalleryTransferable::InitData( bool bLazy )
                 Graphic aGraphic;
 
                 if( mpTheme->GetGraphic( mnObjectPos, aGraphic ) )
-                    mpGraphicObject = new GraphicObject( aGraphic );
+                    mpGraphicObject.reset(new GraphicObject( aGraphic ));
             }
         }
         break;
@@ -498,11 +493,6 @@ bool GalleryTransferable::GetData( const datatransfer::DataFlavor& rFlavor, cons
     {
         bRet = ( mxModelStream.is() && SetObject( mxModelStream.get(), 0, rFlavor ) );
     }
-    else if( ( SotClipboardFormatId::SVIM == nFormat ) && mpImageMap )
-    {
-        // TODO/MBA: do we need a BaseURL here?!
-        bRet = SetImageMap( *mpImageMap );
-    }
     else if( ( SotClipboardFormatId::SIMPLE_FILE == nFormat ) && mpURL )
     {
         bRet = SetString( mpURL->GetMainURL( INetURLObject::DecodeMechanism::NONE ), rFlavor );
@@ -552,12 +542,8 @@ void GalleryTransferable::DragFinished( sal_Int8 nDropAction )
 void GalleryTransferable::ObjectReleased()
 {
     mxModelStream.clear();
-    delete mpGraphicObject;
-    mpGraphicObject = nullptr;
-    delete mpImageMap;
-    mpImageMap = nullptr;
-    delete mpURL;
-    mpURL = nullptr;
+    mpGraphicObject.reset();
+    mpURL.reset();
 }
 
 void GalleryTransferable::StartDrag( vcl::Window* pWindow, sal_Int8 nDragSourceActions )

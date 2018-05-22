@@ -40,11 +40,9 @@
 #include <cppuhelper/queryinterface.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
-#include <comphelper/processfactory.hxx>
 #include <vcl/outdev.hxx>
 #include <comphelper/types.hxx>
 
-#include <unotools/ucbstreamhelper.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/image.hxx>
 
@@ -302,7 +300,7 @@ void ControlModelContainerBase::Clone_Impl(ControlModelContainerBase& _rClone) c
         CloneControlModel( _rClone.maModels )
     );
 }
-UnoControlModel* ControlModelContainerBase::Clone() const
+rtl::Reference<UnoControlModel> ControlModelContainerBase::Clone() const
 {
     // clone the container itself
     ControlModelContainerBase* pClone = new ControlModelContainerBase( *this );
@@ -415,35 +413,33 @@ Reference< XInterface > ControlModelContainerBase::createInstanceWithArguments( 
 
 Sequence< OUString > ControlModelContainerBase::getAvailableServiceNames()
 {
-    static Sequence< OUString >* pNamesSeq = nullptr;
-    if ( !pNamesSeq )
-    {
-        pNamesSeq = new Sequence< OUString >( 26 );
-        OUString* pNames = pNamesSeq->getArray();
-        pNames[0] = "com.sun.star.awt.UnoControlEditModel";
-        pNames[1] = "com.sun.star.awt.UnoControlFormattedFieldModel";
-        pNames[2] = "com.sun.star.awt.UnoControlFileControlModel";
-        pNames[3] = "com.sun.star.awt.UnoControlButtonModel";
-        pNames[4] = "com.sun.star.awt.UnoControlImageControlModel";
-        pNames[5] = "com.sun.star.awt.UnoControlRadioButtonModel";
-        pNames[6] = "com.sun.star.awt.UnoControlCheckBoxModel";
-        pNames[7] = "com.sun.star.awt.UnoControlFixedTextModel";
-        pNames[8] = "com.sun.star.awt.UnoControlGroupBoxModel";
-        pNames[9] = "com.sun.star.awt.UnoControlListBoxModel";
-        pNames[10] = "com.sun.star.awt.UnoControlComboBoxModel";
-        pNames[11] = "com.sun.star.awt.UnoControlDateFieldModel";
-        pNames[12] = "com.sun.star.awt.UnoControlTimeFieldModel";
-        pNames[13] = "com.sun.star.awt.UnoControlNumericFieldModel";
-        pNames[14] = "com.sun.star.awt.UnoControlCurrencyFieldModel";
-        pNames[15] = "com.sun.star.awt.UnoControlPatternFieldModel";
-        pNames[16] = "com.sun.star.awt.tree.TreeControlModel";
-        pNames[21] = "com.sun.star.awt.grid.UnoControlGridModel";
-        pNames[22] = "com.sun.star.awt.tab.UnoControlTabPageContainerModel";
-        pNames[23] = "com.sun.star.awt.tab.UnoControlTabPageModel";
-        pNames[24] = "com.sun.star.awt.UnoMultiPageModel";
-        pNames[25] = "com.sun.star.awt.UnoFrameModel";
-    }
-    return *pNamesSeq;
+    return { "com.sun.star.awt.UnoControlEditModel",
+            "com.sun.star.awt.UnoControlFormattedFieldModel",
+            "com.sun.star.awt.UnoControlFileControlModel",
+            "com.sun.star.awt.UnoControlButtonModel",
+            "com.sun.star.awt.UnoControlImageControlModel",
+            "com.sun.star.awt.UnoControlRadioButtonModel",
+            "com.sun.star.awt.UnoControlCheckBoxModel",
+            "com.sun.star.awt.UnoControlFixedTextModel",
+            "com.sun.star.awt.UnoControlGroupBoxModel",
+            "com.sun.star.awt.UnoControlListBoxModel",
+            "com.sun.star.awt.UnoControlComboBoxModel",
+            "com.sun.star.awt.UnoControlDateFieldModel",
+            "com.sun.star.awt.UnoControlTimeFieldModel",
+            "com.sun.star.awt.UnoControlNumericFieldModel",
+            "com.sun.star.awt.UnoControlCurrencyFieldModel",
+            "com.sun.star.awt.UnoControlPatternFieldModel",
+            "com.sun.star.awt.UnoControlProgressBarModel",
+            "com.sun.star.awt.UnoControlScrollBarModel",
+            "com.sun.star.awt.UnoControlFixedLineModel",
+            "com.sun.star.awt.UnoControlRoadmapModel",
+            "com.sun.star.awt.tree.TreeControlModel",
+            "com.sun.star.awt.grid.UnoControlGridModel",
+            "com.sun.star.awt.tab.UnoControlTabPageContainerModel",
+            "com.sun.star.awt.tab.UnoControlTabPageModel",
+            "com.sun.star.awt.UnoMultiPageModel",
+            "com.sun.star.awt.UnoFrameModel"
+    };
 }
 
 // XContainer
@@ -643,7 +639,7 @@ void ControlModelContainerBase::removeByName( const OUString& aName )
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("toolkit.controls");
         }
     }
 
@@ -1356,7 +1352,7 @@ void ControlContainerBase::ImplRemoveControl( Reference< XControlModel > const &
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("toolkit.controls");
         }
     }
 }
@@ -1555,7 +1551,7 @@ void ControlContainerBase::elementInserted( const ContainerEvent& Event )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 }
 
@@ -1576,7 +1572,7 @@ void ControlContainerBase::elementRemoved( const ContainerEvent& Event )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 }
 
@@ -1598,7 +1594,7 @@ void ControlContainerBase::elementReplaced( const ContainerEvent& Event )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 
     OUString aName;
@@ -1615,7 +1611,7 @@ void ControlContainerBase::elementReplaced( const ContainerEvent& Event )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 }
 

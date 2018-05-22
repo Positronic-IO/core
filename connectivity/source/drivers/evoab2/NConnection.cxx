@@ -24,9 +24,7 @@
 #include <com/sun/star/sdbc/TransactionIsolation.hpp>
 #include "NPreparedStatement.hxx"
 #include "NStatement.hxx"
-#include <comphelper/extract.hxx>
 #include <connectivity/dbexception.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <rtl/ustring.hxx>
 
@@ -40,7 +38,7 @@ using namespace ::com::sun::star::sdbcx;
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::lang;
 
-OEvoabConnection::OEvoabConnection(OEvoabDriver& _rDriver)
+OEvoabConnection::OEvoabConnection(OEvoabDriver const & _rDriver)
     : m_rDriver(_rDriver)
     , m_eSDBCAddressType(SDBCAddress::EVO_LOCAL)
     , m_xCatalog(nullptr)

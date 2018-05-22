@@ -48,7 +48,6 @@
 #include <com/sun/star/util/Date.hpp>
 #include <TConnection.hxx>
 #include <comphelper/numbers.hxx>
-#include <comphelper/processfactory.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbmetadata.hxx>
 #include <tools/diagnose_ex.h>
@@ -348,6 +347,18 @@ bool OSQLParseNode::parseNodeToExecutableStatement( OUString& _out_rString, cons
 
     aParseParam.pParser = &_rParser;
 
+    // LIMIT keyword differs in Firebird
+    OSQLParseNode* pTableExp = getChild(3);
+    Reference< XDatabaseMetaData > xMeta( _rxConnection->getMetaData() );
+    OUString sLimitValue;
+    if( pTableExp->getChild(6)->count() >= 2 && pTableExp->getChild(6)->getChild(1)
+            && (xMeta->getURL().equalsIgnoreAsciiCase("sdbc:embedded:firebird")
+                || xMeta->getURL().startsWithIgnoreAsciiCase("sdbc:firebird:")))
+    {
+        sLimitValue = pTableExp->getChild(6)->getChild(1)->getTokenValue();
+        pTableExp->removeAt(6);
+    }
+
     _out_rString.clear();
     OUStringBuffer sBuffer;
     bool bSuccess = false;
@@ -361,6 +372,14 @@ bool OSQLParseNode::parseNodeToExecutableStatement( OUString& _out_rString, cons
         if ( _pErrorHolder )
             *_pErrorHolder = e;
     }
+
+    if(sLimitValue.getLength() > 0)
+    {
+        constexpr char SELECT_KEYWORD[] = "SELECT";
+        sBuffer.insert(sBuffer.indexOf(SELECT_KEYWORD) + strlen(SELECT_KEYWORD),
+                " FIRST " + sLimitValue);
+    }
+
     _out_rString = sBuffer.makeStringAndClear();
     return bSuccess;
 }
@@ -701,7 +720,7 @@ bool OSQLParseNode::impl_parseTableNameNodeToString_throw( OUStringBuffer& rStri
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("connectivity.parse");
     }
     return false;
 }
@@ -726,7 +745,7 @@ void OSQLParseNode::impl_parseLikeNodeToString_throw( OUStringBuffer& rString, c
     const OSQLParseNode* pParaNode = nullptr;
 
     SQLParseNodeParameter aNewParam(rParam);
-    //aNewParam.bQuote = sal_True; // why setting this to true? @see http://www.openoffice.org/issues/show_bug.cgi?id=75557
+    //aNewParam.bQuote = sal_True; // why setting this to true? @see https://bz.apache.org/ooo/show_bug.cgi?id=75557
 
     if ( !(bSimple && rParam.bPredicate && rParam.xField.is() && SQL_ISRULE(m_aChildren[0],column_ref) && columnMatchP(m_aChildren[0].get(), rParam)) )
         m_aChildren[0]->impl_parseNodeToString_throw( rString, aNewParam, bSimple );

@@ -52,7 +52,6 @@
 #include <cmdid.h>
 #include <drawdoc.hxx>
 #include <textboxhelper.hxx>
-#include <strings.hrc>
 #include <frmfmt.hxx>
 #include <frmatr.hxx>
 #include <fmtfsize.hxx>
@@ -96,9 +95,12 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <calbck.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+#include <svx/svxids.hrc>
 
 #include <com/sun/star/embed/EmbedMisc.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
+
+#include <svx/srchdlg.hxx>
 
 #define SCROLLVAL 75
 
@@ -110,10 +112,10 @@ using namespace com::sun::star;
 
 namespace {
 
-::basegfx::B2DPolyPolygon getPolygon(const char* pResId, SdrModel const * pDoc)
+::basegfx::B2DPolyPolygon getPolygon(const char* pResId, const SdrModel& rModel)
 {
     ::basegfx::B2DPolyPolygon aRetval;
-    XLineEndListRef pLineEndList = pDoc->GetLineEndList();
+    XLineEndListRef pLineEndList(rModel.GetLineEndList());
 
     if( pLineEndList.is() )
     {
@@ -400,7 +402,7 @@ bool SwFEShell::MoveAnchor( SwMove nDir )
             }
             case RndStdIds::FLY_AT_CHAR:
             {
-                OSL_ENSURE( pOld->IsContentFrame(), "Wrong anchor, page expected." );
+                OSL_ENSURE(pOld->IsTextFrame(), "Wrong anchor, text frame expected.");
                 if( SwMove::LEFT == nDir || SwMove::RIGHT == nDir )
                 {
                     SwPosition pos = *aAnch.GetContentAnchor();
@@ -435,7 +437,7 @@ bool SwFEShell::MoveAnchor( SwMove nDir )
             }
             case RndStdIds::FLY_AT_PARA:
             {
-                OSL_ENSURE( pOld->IsContentFrame(), "Wrong anchor, page expected." );
+                OSL_ENSURE(pOld->IsTextFrame(), "Wrong anchor, text frame expected.");
                 if( SwMove::UP == nDir )
                     pNew = pOld->FindPrev();
                 else if( SwMove::DOWN == nDir )
@@ -715,7 +717,7 @@ long SwFEShell::BeginDrag( const Point* pPt, bool bIsShift)
     return 0;
 }
 
-long SwFEShell::Drag( const Point *pPt, bool )
+void SwFEShell::Drag( const Point *pPt, bool )
 {
     OSL_ENSURE( Imp()->HasDrawView(), "Drag without DrawView?" );
     if ( Imp()->GetDrawView()->IsDragObj() )
@@ -724,9 +726,7 @@ long SwFEShell::Drag( const Point *pPt, bool )
         Imp()->GetDrawView()->MovDragObj( *pPt );
         Imp()->GetDrawView()->ShowDragAnchor();
         ::FrameNotify( this );
-        return 1;
     }
-    return 0;
 }
 
 void SwFEShell::EndDrag()
@@ -891,9 +891,9 @@ static void lcl_NotifyNeighbours( const SdrMarkList *pLst )
     }
 }
 
-void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt16 nSlotId)
+void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const & rObj, sal_uInt16 nSlotId)
 {
-    SdrModel *pDoc = pObj->GetModel();
+    SdrModel& rModel(rObj.getSdrModelFromSdrObject());
 
     if ( !(nSlotId == SID_LINE_ARROW_START      ||
           nSlotId == SID_LINE_ARROW_END        ||
@@ -907,7 +907,7 @@ void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt1
     // set attributes of line start and ends
 
     // arrowhead
-    ::basegfx::B2DPolyPolygon aArrow( getPolygon( RID_SVXSTR_ARROW, pDoc ) );
+    ::basegfx::B2DPolyPolygon aArrow( getPolygon( RID_SVXSTR_ARROW, rModel ) );
     if( !aArrow.count() )
     {
         ::basegfx::B2DPolygon aNewArrow;
@@ -919,7 +919,7 @@ void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt1
     }
 
     // Circles
-    ::basegfx::B2DPolyPolygon aCircle( getPolygon( RID_SVXSTR_CIRCLE, pDoc ) );
+    ::basegfx::B2DPolyPolygon aCircle( getPolygon( RID_SVXSTR_CIRCLE, rModel ) );
     if( !aCircle.count() )
     {
         ::basegfx::B2DPolygon aNewCircle;
@@ -929,7 +929,7 @@ void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt1
     }
 
     // Square
-    ::basegfx::B2DPolyPolygon aSquare( getPolygon( RID_SVXSTR_SQUARE, pDoc ) );
+    ::basegfx::B2DPolyPolygon aSquare( getPolygon( RID_SVXSTR_SQUARE, rModel ) );
     if( !aSquare.count() )
     {
         ::basegfx::B2DPolygon aNewSquare;
@@ -941,7 +941,7 @@ void SwFEShell::SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt1
         aSquare.append(aNewSquare);
     }
 
-    SfxItemSet aSet( pDoc->GetItemPool() );
+    SfxItemSet aSet( rModel.GetItemPool() );
     long nWidth = 100; // (1/100th mm)
 
     // determine line width and calculate with it the line end width
@@ -1501,14 +1501,14 @@ const SdrObject* SwFEShell::GetBestObject( bool bNext, GotoObjFlags eType, bool 
             // If an object inside a group is selected, we want to
             // iterate over the group members.
             if ( ! pStartObj->GetUserCall() )
-                pList = pStartObj->GetObjList();
+                pList = pStartObj->getParentOfSdrObject();
         }
         else
         {
             // If no object is selected, we check if we just entered a group.
             // In this case we want to iterate over the group members.
             aPos = GetCharRect().Center();
-            const SdrObject* pStartObj = pPV ? pPV->GetAktGroup() : nullptr;
+            const SdrObject* pStartObj = pPV ? pPV->GetCurrentGroup() : nullptr;
             if ( pStartObj && dynamic_cast<const SdrObjGroup*>( pStartObj) !=  nullptr )
                 pList = pStartObj->GetSubList();
         }
@@ -1630,7 +1630,10 @@ const SdrObject* SwFEShell::GetBestObject( bool bNext, GotoObjFlags eType, bool 
         }
         // unfortunately nothing found
         if( bNext ? (aBestPos.getX() == LONG_MAX) : (aBestPos.getX() == 0) )
+        {
             pBest = pTop;
+            SvxSearchDialogWrapper::SetSearchLabel( bNext ? SearchLabel::EndWrapped : SearchLabel::StartWrapped );
+        }
     }
 
     return pBest;
@@ -1638,10 +1641,15 @@ const SdrObject* SwFEShell::GetBestObject( bool bNext, GotoObjFlags eType, bool 
 
 bool SwFEShell::GotoObj( bool bNext, GotoObjFlags eType )
 {
+    SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+
     const SdrObject* pBest = GetBestObject( bNext, eType );
 
     if ( !pBest )
+    {
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
         return false;
+    }
 
     const SwVirtFlyDrawObj *pVirtO = dynamic_cast<const SwVirtFlyDrawObj*>(pBest);
     if (pVirtO)
@@ -2002,6 +2010,14 @@ bool SwFEShell::ImpEndCreate()
     }
     else
     {
+        if (rSdrObj.GetName().isEmpty())
+        {
+            bool bRestore = GetDoc()->GetIDocumentUndoRedo().DoesDrawUndo();
+            GetDoc()->GetIDocumentUndoRedo().DoDrawUndo(false);
+            rSdrObj.SetName(GetUniqueShapeName());
+            GetDoc()->GetIDocumentUndoRedo().DoDrawUndo(bRestore);
+        }
+
         Point aRelNullPt;
         if( OBJ_CAPTION == nIdent )
             aRelNullPt = static_cast<SdrCaptionObj&>(rSdrObj).GetTailPos();
@@ -2056,9 +2072,6 @@ bool SwFEShell::ImpEndCreate()
             } while( pTmp->IsFollow() );
             pAnch = pTmp;
         }
-
-        if (rSdrObj.GetName().isEmpty())
-            rSdrObj.SetName(GetUniqueShapeName());
 
         pContact->ConnectToLayout();
 
@@ -2913,8 +2926,9 @@ long SwFEShell::GetSectionWidth( SwFormat const & rFormat ) const
     SdrView* pDrawView = GetDrawView();
     SdrModel* pDrawModel = pDrawView->GetModel();
     SdrObject* pObj = SdrObjFactory::MakeNewObject(
-        SdrInventor::Default, eSdrObjectKind,
-        nullptr, pDrawModel);
+        *pDrawModel,
+        SdrInventor::Default,
+        eSdrObjectKind);
 
     if(pObj)
     {
@@ -3034,8 +3048,8 @@ long SwFEShell::GetSectionWidth( SwFormat const & rFormat ) const
                     aTempPoly.append(basegfx::B2DPoint(aRect.BottomRight().getX(), nYMiddle));
                     aPoly.append(aTempPoly);
 
-                    SfxItemSet aAttr(pObj->GetModel()->GetItemPool());
-                    SetLineEnds(aAttr, pObj, nSlotId);
+                    SfxItemSet aAttr(pObj->getSdrModelFromSdrObject().GetItemPool());
+                    SetLineEnds(aAttr, *pObj, nSlotId);
                     pObj->SetMergedItemSet(aAttr);
                 }
                 break;

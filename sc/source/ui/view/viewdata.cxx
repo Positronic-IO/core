@@ -491,8 +491,15 @@ void ScViewDataTable::WriteUserDataSequence(uno::Sequence <beans::PropertyValue>
             pSettings[SC_VERTICAL_SPLIT_POSITION].Value <<= sal_Int32(nFixPosY);
         else
             pSettings[SC_VERTICAL_SPLIT_POSITION].Value <<= sal_Int32(nVSplitPos);
+        // Prevent writing odd settings that would make crash versions that
+        // don't apply SanitizeWhichActive() when reading the settings.
+        // See tdf#117093
+        const ScSplitPos eActiveSplitRange = SanitizeWhichActive();
+        // And point out to give us a chance to inspect weird things (if anyone
+        // remembers what s/he did).
+        assert(eWhichActive == eActiveSplitRange);
         pSettings[SC_ACTIVE_SPLIT_RANGE].Name = SC_ACTIVESPLITRANGE;
-        pSettings[SC_ACTIVE_SPLIT_RANGE].Value <<= sal_Int16(eWhichActive);
+        pSettings[SC_ACTIVE_SPLIT_RANGE].Value <<= sal_Int16(eActiveSplitRange);
         pSettings[SC_POSITION_LEFT].Name = SC_POSITIONLEFT;
         pSettings[SC_POSITION_LEFT].Value <<= sal_Int32(nPosX[SC_SPLIT_LEFT]);
         pSettings[SC_POSITION_RIGHT].Name = SC_POSITIONRIGHT;
@@ -548,13 +555,13 @@ void ScViewDataTable::ReadUserDataSequence(const uno::Sequence <beans::PropertyV
         }
         else if (sName == SC_HORIZONTALSPLITMODE)
         {
-            aSettings[i].Value >>= nTemp16;
-            eHSplitMode = static_cast<ScSplitMode>(nTemp16);
+            if ((aSettings[i].Value >>= nTemp16) && nTemp16 <= ScSplitMode::SC_SPLIT_MODE_MAX_ENUM)
+                eHSplitMode = static_cast<ScSplitMode>(nTemp16);
         }
         else if (sName == SC_VERTICALSPLITMODE)
         {
-            aSettings[i].Value >>= nTemp16;
-            eVSplitMode = static_cast<ScSplitMode>(nTemp16);
+            if ((aSettings[i].Value >>= nTemp16) && nTemp16 <= ScSplitMode::SC_SPLIT_MODE_MAX_ENUM)
+                eVSplitMode = static_cast<ScSplitMode>(nTemp16);
         }
         else if (sName == SC_HORIZONTALSPLITPOSITION)
         {
@@ -578,8 +585,8 @@ void ScViewDataTable::ReadUserDataSequence(const uno::Sequence <beans::PropertyV
         }
         else if (sName == SC_ACTIVESPLITRANGE)
         {
-            aSettings[i].Value >>= nTemp16;
-            eWhichActive = static_cast<ScSplitPos>(nTemp16);
+            if ((aSettings[i].Value >>= nTemp16) && nTemp16 <= ScSplitPos::SC_SPLIT_POS_MAX_ENUM)
+                eWhichActive = static_cast<ScSplitPos>(nTemp16);
         }
         else if (sName == SC_POSITIONLEFT)
         {
@@ -649,6 +656,7 @@ void ScViewDataTable::ReadUserDataSequence(const uno::Sequence <beans::PropertyV
         // Fallback to common SdrModel processing
         else rViewData.GetDocument()->GetDrawLayer()->ReadUserDataSequenceValue(&aSettings[i]);
     }
+
     if (eHSplitMode == SC_SPLIT_FIX)
         nFixPosX = SanitizeCol( static_cast<SCCOL>( bHasHSplitInTwips ? nTempPosHTw : nTempPosH ));
     else
@@ -658,6 +666,20 @@ void ScViewDataTable::ReadUserDataSequence(const uno::Sequence <beans::PropertyV
         nFixPosY = SanitizeRow( static_cast<SCROW>( bHasVSplitInTwips ? nTempPosVTw : nTempPosV ));
     else
         nVSplitPos = bHasVSplitInTwips ? static_cast< long >( nTempPosVTw * rViewData.GetPPTY() ) : nTempPosV;
+
+    eWhichActive = SanitizeWhichActive();
+}
+
+ScSplitPos ScViewDataTable::SanitizeWhichActive() const
+{
+    if ((WhichH(eWhichActive) == SC_SPLIT_RIGHT && eHSplitMode == SC_SPLIT_NONE) ||
+            (WhichV(eWhichActive) == SC_SPLIT_TOP && eVSplitMode == SC_SPLIT_NONE))
+    {
+        SAL_WARN("sc.ui","ScViewDataTable::SanitizeWhichActive - bad eWhichActive " << eWhichActive);
+        // The default always initialized grid window is SC_SPLIT_BOTTOMLEFT.
+        return SC_SPLIT_BOTTOMLEFT;
+    }
+    return eWhichActive;
 }
 
 ScViewData::ScViewData( ScDocShell* pDocSh, ScTabViewShell* pViewSh ) :
@@ -1188,8 +1210,7 @@ void ScViewData::GetMultiArea( ScRangeListRef& rRange ) const
     {
         ScRange aSimple;
         GetSimpleArea(aSimple);
-        rRange = new ScRangeList;
-        rRange->Append(aSimple);
+        rRange = new ScRangeList(aSimple);
     }
 }
 
@@ -2068,6 +2089,12 @@ ScPositionHelper* ScViewData::GetLOKHeightHelper(SCTAB nTabIndex)
 void ScViewData::SetActivePart( ScSplitPos eNewActive )
 {
     pThisTab->eWhichActive = eNewActive;
+
+    // Let's hope we find the culprit for tdf#117093
+    // Don't sanitize the real value (yet?) because this function might be
+    // called before setting the then corresponding split modes. For which in
+    // fact then the order should be changed.
+    assert(eNewActive == pThisTab->SanitizeWhichActive());
 }
 
 Point ScViewData::GetScrPos( SCCOL nWhereX, SCROW nWhereY, ScHSplitPos eWhich ) const
@@ -2971,18 +2998,7 @@ void ScViewData::ReadUserData(const OUString& rData)
             maTabData[nPos]->nPosY[0] = SanitizeRow( aTabOpt.getToken(9,cTabSep).toInt32());
             maTabData[nPos]->nPosY[1] = SanitizeRow( aTabOpt.getToken(10,cTabSep).toInt32());
 
-            // test whether the active part according to SplitMode exists at all
-            //  (Bug #44516#)
-            ScSplitPos eTest = maTabData[nPos]->eWhichActive;
-            if ( ( WhichH( eTest ) == SC_SPLIT_RIGHT &&
-                    maTabData[nPos]->eHSplitMode == SC_SPLIT_NONE ) ||
-                 ( WhichV( eTest ) == SC_SPLIT_TOP &&
-                    maTabData[nPos]->eVSplitMode == SC_SPLIT_NONE ) )
-            {
-                // then back to default again (bottom left)
-                maTabData[nPos]->eWhichActive = SC_SPLIT_BOTTOMLEFT;
-                OSL_FAIL("SplitPos had to be corrected");
-            }
+            maTabData[nPos]->eWhichActive = maTabData[nPos]->SanitizeWhichActive();
         }
         ++nPos;
     }
@@ -3325,7 +3341,7 @@ void ScViewData::WriteUserDataSequence(uno::Sequence <beans::PropertyValue>& rSe
             pSettings[SC_GRIDCOLOR].Name = SC_UNO_GRIDCOLOR;
             OUString aColorName;
             Color aColor = pOptions->GetGridColor(&aColorName);
-            pSettings[SC_GRIDCOLOR].Value <<= static_cast<sal_Int64>(aColor.GetColor());
+            pSettings[SC_GRIDCOLOR].Value <<= aColor;
             pSettings[SC_SHOWPAGEBR].Name = SC_UNO_SHOWPAGEBR;
             pSettings[SC_SHOWPAGEBR].Value <<= pOptions->GetOption( VOPT_PAGEBREAKS );
             pSettings[SC_COLROWHDR].Name = SC_UNO_COLROWHDR;
@@ -3454,10 +3470,9 @@ void ScViewData::ReadUserDataSequence(const uno::Sequence <beans::PropertyValue>
             pOptions->SetOption(VOPT_GRID, ScUnoHelpFunctions::GetBoolFromAny( rSettings[i].Value ) );
         else if ( sName == SC_UNO_GRIDCOLOR )
         {
-            sal_Int64 nColor = 0;
-            if (rSettings[i].Value >>= nColor)
+            Color aColor;
+            if (rSettings[i].Value >>= aColor)
             {
-                Color aColor(static_cast<sal_uInt32>(nColor));
                 // #i47435# set automatic grid color explicitly
                 if( aColor == COL_AUTO )
                     aColor = SC_STD_GRIDCOLOR;

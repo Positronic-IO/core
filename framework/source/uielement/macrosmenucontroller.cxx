@@ -20,14 +20,11 @@
 #include <uielement/macrosmenucontroller.hxx>
 #include <uielement/menubarmanager.hxx>
 #include <services.h>
-#include <strings.hrc>
-#include <classes/fwkresid.hxx>
 #include <com/sun/star/awt/MenuItemStyle.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
-#include <comphelper/processfactory.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/i18nhelp.hxx>
 #include <vcl/commandinfoprovider.hxx>

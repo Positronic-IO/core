@@ -42,7 +42,6 @@ private:
     VclPtr<ScrollBar>          mpVScrollBar;
     VclPtr<ScrollBarBox>       mpScrollBox;
 
-    Point               maTextWindowOffset;
     long                mnTextWidth;
     mutable Selection   maSelection;
 
@@ -379,7 +378,7 @@ void ImpVclMEdit::Resize()
         else
             mpHScrollBar->setPosSizePixel( 0, aEditSize.Height()-nSBWidth, aSz.Width(), nSBWidth );
 
-        Point aTextWindowPos( maTextWindowOffset );
+        Point aTextWindowPos;
         if ( mpVScrollBar )
         {
             if( AllSettings::GetLayoutRTL() )
@@ -395,8 +394,6 @@ void ImpVclMEdit::Resize()
             mpScrollBox->setPosSizePixel( aSz.Width(), aSz.Height(), nSBWidth, nSBWidth );
 
         Size aTextWindowSize( aSz );
-        aTextWindowSize.AdjustWidth( -(maTextWindowOffset.X()) );
-        aTextWindowSize.AdjustHeight( -(maTextWindowOffset.Y()) );
         if ( aTextWindowSize.Width() < 0 )
             aTextWindowSize.setWidth( 0 );
         if ( aTextWindowSize.Height() < 0 )
@@ -675,13 +672,13 @@ TextWindow::TextWindow(Edit* pParent)
 
     SetPointer( Pointer( PointerStyle::Text ) );
 
-    mpExtTextEngine = new ExtTextEngine;
+    mpExtTextEngine.reset(new ExtTextEngine);
     mpExtTextEngine->SetMaxTextLen(EDIT_NOLIMIT);
     if( pParent->GetStyle() & WB_BORDER )
         mpExtTextEngine->SetLeftMargin( 2 );
     mpExtTextEngine->SetLocale( GetSettings().GetLanguageTag().getLocale() );
-    mpExtTextView = new TextView( mpExtTextEngine, this );
-    mpExtTextEngine->InsertView( mpExtTextView );
+    mpExtTextView.reset(new TextView( mpExtTextEngine.get(), this ));
+    mpExtTextEngine->InsertView( mpExtTextView.get() );
     mpExtTextEngine->EnableUndo( true );
     mpExtTextView->ShowCursor();
 
@@ -698,10 +695,8 @@ TextWindow::~TextWindow()
 void TextWindow::dispose()
 {
     mxParent.clear();
-    delete mpExtTextView;
-    mpExtTextView = nullptr;
-    delete mpExtTextEngine;
-    mpExtTextEngine = nullptr;
+    mpExtTextView.reset();
+    mpExtTextEngine.reset();
     Window::dispose();
 }
 
@@ -907,7 +902,7 @@ VclMultiLineEdit::VclMultiLineEdit( vcl::Window* pParent, WinBits nWinStyle )
     : Edit( pParent, nWinStyle )
 {
     SetType( WindowType::MULTILINEEDIT );
-    pImpVclMEdit = new ImpVclMEdit( this, nWinStyle );
+    pImpVclMEdit.reset(new ImpVclMEdit( this, nWinStyle ));
     ImplInitSettings( true );
     pUpdateDataTimer = nullptr;
 
@@ -922,13 +917,8 @@ VclMultiLineEdit::~VclMultiLineEdit()
 
 void VclMultiLineEdit::dispose()
 {
-    {
-        std::unique_ptr< ImpVclMEdit > xDelete(pImpVclMEdit);
-        pImpVclMEdit = nullptr;
-    }
-    delete pUpdateDataTimer;
-    pUpdateDataTimer = nullptr;
-
+    pImpVclMEdit.reset();
+    pUpdateDataTimer.reset();
     Edit::dispose();
 }
 
@@ -1097,7 +1087,7 @@ void VclMultiLineEdit::EnableUpdateData( sal_uLong nTimeout )
     {
         if ( !pUpdateDataTimer )
         {
-            pUpdateDataTimer = new Timer("MultiLineEditTimer");
+            pUpdateDataTimer.reset(new Timer("MultiLineEditTimer"));
             pUpdateDataTimer->SetInvokeHandler( LINK( this, VclMultiLineEdit, ImpUpdateDataHdl ) );
         }
         pUpdateDataTimer->SetTimeout( nTimeout );

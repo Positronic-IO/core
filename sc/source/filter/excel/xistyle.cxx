@@ -52,6 +52,7 @@
 #include <stlsheet.hxx>
 #include <formulacell.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <attarray.hxx>
 #include <xltracer.hxx>
 #include <xistream.hxx>
@@ -168,7 +169,7 @@ void XclImpPalette::ReadPalette( XclImpStream& rStrm )
     for( sal_uInt16 nIndex = 0; nIndex < nCount; ++nIndex )
     {
         rStrm >> aColor;
-        maColorTable[ nIndex ] = aColor.GetColor();
+        maColorTable[ nIndex ] = aColor;
     }
     ExportPalette();
 }
@@ -1351,7 +1352,7 @@ void XclImpXF::ApplyPatternToAttrVector(
             {
                 ScStyleSheet* pStyleSheet = static_cast<ScStyleSheet*>(
                     pStylePool->Find(
-                        ScGlobal::GetRscString(STR_STYLENAME_STANDARD), SfxStyleFamily::Para));
+                        ScResId(STR_STYLENAME_STANDARD), SfxStyleFamily::Para));
 
                 if (pStyleSheet)
                     rPat.SetStyleSheet(pStyleSheet, false);
@@ -1513,7 +1514,7 @@ ScStyleSheet* XclImpStyle::CreateStyleSheet()
             if( pXF ) pXF->SetAllUsedFlags( true );
             // use existing "Default" style sheet
             mpStyleSheet = static_cast< ScStyleSheet* >( GetStyleSheetPool().Find(
-                ScGlobal::GetRscString( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) );
+                ScResId( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) );
             OSL_ENSURE( mpStyleSheet, "XclImpStyle::CreateStyleSheet - Default style not found" );
             bCreatePattern = true;
         }
@@ -1525,7 +1526,7 @@ ScStyleSheet* XclImpStyle::CreateStyleSheet()
             mpStyleSheet = static_cast< ScStyleSheet* >( GetStyleSheetPool().Find( maFinalName, SfxStyleFamily::Para ) );
             if( !mpStyleSheet )
             {
-                mpStyleSheet = &static_cast< ScStyleSheet& >( GetStyleSheetPool().Make( maFinalName, SfxStyleFamily::Para, SFXSTYLEBIT_USERDEF ) );
+                mpStyleSheet = &static_cast< ScStyleSheet& >( GetStyleSheetPool().Make( maFinalName, SfxStyleFamily::Para, SfxStyleSearchBits::UserDefined ) );
                 bCreatePattern = true;
             }
         }
@@ -1614,7 +1615,7 @@ void XclImpXFBuffer::CreateUserStyles()
         BIFF4W import filter is never used to import from clipboard... */
     bool bReserveAll = (GetBiff() == EXC_BIFF4) && (GetCurrScTab() > 0);
     SfxStyleSheetIterator aStyleIter( GetDoc().GetStyleSheetPool(), SfxStyleFamily::Para );
-    OUString aStandardName = ScGlobal::GetRscString( STR_STYLENAME_STANDARD );
+    OUString aStandardName = ScResId( STR_STYLENAME_STANDARD );
     for( SfxStyleSheetBase* pStyleSheet = aStyleIter.First(); pStyleSheet; pStyleSheet = aStyleIter.Next() )
         if( (pStyleSheet->GetName() != aStandardName) && (bReserveAll || !pStyleSheet->IsUserDefined()) )
             if( aCellStyles.count( pStyleSheet->GetName() ) == 0 )
@@ -1905,11 +1906,11 @@ void XclImpXFRangeBuffer::SetXF( const ScAddress& rScPos, sal_uInt16 nXFIndex, X
         if( pXF && ((pXF->GetHorAlign() == EXC_XF_HOR_CENTER_AS) || (pXF->GetHorAlign() == EXC_XF_HOR_FILL)) )
         {
             // expand last merged range if this attribute is set repeatedly
-            ScRange* pRange = maMergeList.empty() ? nullptr : maMergeList.back();
+            ScRange* pRange = maMergeList.empty() ? nullptr : &maMergeList.back();
             if (pRange && (pRange->aEnd.Row() == nScRow) && (pRange->aEnd.Col() + 1 == nScCol) && (eMode == xlXFModeBlank))
                 pRange->aEnd.IncCol();
             else if( eMode != xlXFModeBlank )   // do not merge empty cells
-                maMergeList.Append( ScRange( nScCol, nScRow, 0 ) );
+                maMergeList.push_back( ScRange( nScCol, nScRow, 0 ) );
         }
     }
 }
@@ -1970,7 +1971,7 @@ void XclImpXFRangeBuffer::SetHyperlink( const XclRange& rXclRange, const OUStrin
 void XclImpXFRangeBuffer::SetMerge( SCCOL nScCol1, SCROW nScRow1, SCCOL nScCol2, SCROW nScRow2 )
 {
     if( (nScCol1 < nScCol2) || (nScRow1 < nScRow2) )
-        maMergeList.Append( ScRange( nScCol1, nScRow1, 0, nScCol2, nScRow2, 0 ) );
+        maMergeList.push_back( ScRange( nScCol1, nScRow1, 0, nScCol2, nScRow2, 0 ) );
 }
 
 void XclImpXFRangeBuffer::Finalize()
@@ -2029,17 +2030,17 @@ void XclImpXFRangeBuffer::Finalize()
     // apply cell merging
     for ( size_t i = 0, nRange = maMergeList.size(); i < nRange; ++i )
     {
-        const ScRange* pRange = maMergeList[ i ];
-        const ScAddress& rStart = pRange->aStart;
-        const ScAddress& rEnd = pRange->aEnd;
+        const ScRange & rRange = maMergeList[ i ];
+        const ScAddress& rStart = rRange.aStart;
+        const ScAddress& rEnd = rRange.aEnd;
         bool bMultiCol = rStart.Col() != rEnd.Col();
         bool bMultiRow = rStart.Row() != rEnd.Row();
         // set correct right border
         if( bMultiCol )
-            SetBorderLine( *pRange, nScTab, SvxBoxItemLine::RIGHT );
+            SetBorderLine( rRange, nScTab, SvxBoxItemLine::RIGHT );
         // set correct lower border
         if( bMultiRow )
-            SetBorderLine( *pRange, nScTab, SvxBoxItemLine::BOTTOM );
+            SetBorderLine( rRange, nScTab, SvxBoxItemLine::BOTTOM );
         // do merge
         if( bMultiCol || bMultiRow )
             rDoc.getDoc().DoMerge( nScTab, rStart.Col(), rStart.Row(), rEnd.Col(), rEnd.Row() );

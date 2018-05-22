@@ -29,6 +29,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <com/sun/star/uno/Sequence.h>
 #include <com/sun/star/util/MeasureUnit.hpp>
+#include <tools/color.hxx>
 
 
 namespace com { namespace sun { namespace star {
@@ -97,10 +98,21 @@ public:
     /** convert string to rgb color */
     static bool convertColor( sal_Int32& rColor,
                               const OUString&rValue );
+    static bool convertColor( ::Color& rColor,
+                              const OUString&rValue )
+    {
+        sal_Int32 n(rColor);
+        bool b = convertColor( n, rValue );
+        if (b) rColor = n;
+        return b;
+    }
 
     /** convert color to string */
     static void convertColor( OUStringBuffer &rBuffer,
                               sal_Int32 nColor );
+    static void convertColor( OUStringBuffer &rBuffer,
+                              ::Color nColor )
+    { convertColor( rBuffer, sal_Int32(nColor) ); }
 
     /** convert string to number with optional min and max values */
     static bool convertNumber( sal_Int32& rValue,
@@ -193,18 +205,6 @@ public:
         rStr. Commas inside '"' pairs are not matched */
     static sal_Int32 indexOfComma( const OUString& rStr,
                                    sal_Int32 nPos );
-
-    /** encodes the given byte sequence into Base64 */
-    static void encodeBase64(OUStringBuffer& aStrBuffer, const css::uno::Sequence<sal_Int8>& aPass);
-
-    // Decode a base 64 encoded string into a sequence of bytes. The first
-    // version can be used for attribute values only, because it does not
-    // return any chars left from conversion.
-    // For text submitted throgh the SAX characters call, the later method
-    // must be used!
-    static void decodeBase64(css::uno::Sequence<sal_Int8>& aPass, const OUString& sBuffer);
-
-    static sal_Int32 decodeBase64SomeChars(css::uno::Sequence<sal_Int8>& aPass, const OUString& sBuffer);
 
     static double GetConversionFactor(OUStringBuffer& rUnit, sal_Int16 nSourceUnit, sal_Int16 nTargetUnit);
     static sal_Int16 GetUnitFromString(const OUString& rString, sal_Int16 nDefaultUnit);

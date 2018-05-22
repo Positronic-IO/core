@@ -121,9 +121,9 @@ private:
     SfxItemSet          aCaptionSet;
 };
 
-Color ScDetectiveFunc::nArrowColor = 0;
-Color ScDetectiveFunc::nErrorColor = 0;
-Color ScDetectiveFunc::nCommentColor = 0;
+Color ScDetectiveFunc::nArrowColor = Color(0);
+Color ScDetectiveFunc::nErrorColor = Color(0);
+Color ScDetectiveFunc::nCommentColor = Color(0);
 bool ScDetectiveFunc::bColorsInitialized = false;
 
 static bool lcl_HasThickLine( const SdrObject& rObj )
@@ -453,7 +453,9 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
         // insert the rectangle before the arrow - this is relied on in FindFrameForObject
 
         tools::Rectangle aRect = GetDrawRect( nRefStartCol, nRefStartRow, nRefEndCol, nRefEndRow );
-        SdrRectObj* pBox = new SdrRectObj( aRect );
+        SdrRectObj* pBox = new SdrRectObj(
+            *pModel,
+            aRect);
 
         pBox->SetMergedItemSetAndBroadcast(rData.GetBoxSet());
 
@@ -494,7 +496,10 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
     basegfx::B2DPolygon aTempPoly;
     aTempPoly.append(basegfx::B2DPoint(aStartPos.X(), aStartPos.Y()));
     aTempPoly.append(basegfx::B2DPoint(aEndPos.X(), aEndPos.Y()));
-    SdrPathObj* pArrow = new SdrPathObj(OBJ_LINE, basegfx::B2DPolyPolygon(aTempPoly));
+    SdrPathObj* pArrow = new SdrPathObj(
+        *pModel,
+        OBJ_LINE,
+        basegfx::B2DPolyPolygon(aTempPoly));
     pArrow->NbcSetLogicRect(tools::Rectangle(aStartPos,aEndPos));  //TODO: needed ???
     pArrow->SetMergedItemSetAndBroadcast(rAttrSet);
 
@@ -526,7 +531,9 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
     if (bArea)
     {
         tools::Rectangle aRect = GetDrawRect( nStartCol, nStartRow, nEndCol, nEndRow );
-        SdrRectObj* pBox = new SdrRectObj( aRect );
+        SdrRectObj* pBox = new SdrRectObj(
+            *pModel,
+            aRect);
 
         pBox->SetMergedItemSetAndBroadcast(rData.GetBoxSet());
 
@@ -559,7 +566,10 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
     basegfx::B2DPolygon aTempPoly;
     aTempPoly.append(basegfx::B2DPoint(aStartPos.X(), aStartPos.Y()));
     aTempPoly.append(basegfx::B2DPoint(aEndPos.X(), aEndPos.Y()));
-    SdrPathObj* pArrow = new SdrPathObj(OBJ_LINE, basegfx::B2DPolyPolygon(aTempPoly));
+    SdrPathObj* pArrow = new SdrPathObj(
+        *pModel,
+        OBJ_LINE,
+        basegfx::B2DPolyPolygon(aTempPoly));
     pArrow->NbcSetLogicRect(tools::Rectangle(aStartPos,aEndPos));  //TODO: needed ???
 
     pArrow->SetMergedItemSetAndBroadcast(rAttrSet);
@@ -625,7 +635,10 @@ void ScDetectiveFunc::DrawCircle( SCCOL nCol, SCROW nRow, ScDetectiveData& rData
     aRect.AdjustTop( -70 );
     aRect.AdjustBottom(70 );
 
-    SdrCircObj* pCircle = new SdrCircObj( OBJ_CIRC, aRect );
+    SdrCircObj* pCircle = new SdrCircObj(
+        *pModel,
+        OBJ_CIRC,
+        aRect);
     SfxItemSet& rAttrSet = rData.GetCircleSet();
 
     pCircle->SetMergedItemSetAndBroadcast(rAttrSet);
@@ -1523,7 +1536,7 @@ void ScDetectiveFunc::FindFrameForObject( const SdrObject* pObject, ScRange& rRa
     if (!pPage) return;
 
     // test if the object is a direct page member
-    if( pObject && pObject->GetPage() && (pObject->GetPage() == pObject->GetObjList()) )
+    if( pObject && pObject->GetPage() && (pObject->GetPage() == pObject->getParentOfSdrObject()) )
     {
         // Is there a previous object?
         const size_t nOrdNum = pObject->GetOrdNum();
@@ -1579,7 +1592,7 @@ ScDetectiveObjType ScDetectiveFunc::GetDetectiveObjectType( SdrObject* pObject, 
                     FindFrameForObject( pObject, rSource );     // modifies rSource
                 }
 
-                Color nObjColor = pObject->GetMergedItem(XATTR_LINECOLOR).GetColorValue().GetColor();
+                Color nObjColor = pObject->GetMergedItem(XATTR_LINECOLOR).GetColorValue();
                 if ( nObjColor == GetErrorColor() && nObjColor != GetArrowColor() )
                     rRedLine = true;
             }

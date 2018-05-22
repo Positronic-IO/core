@@ -54,6 +54,7 @@
 #include <pagedata.hxx>
 #include <docpool.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <docsh.hxx>
 #include <cbutton.hxx>
 #include <invmerge.hxx>
@@ -206,7 +207,7 @@ static void lcl_DrawScenarioFrames( OutputDevice* pDev, ScViewData* pViewData, S
 
         for (size_t j = 0, n = xRanges->size(); j < n; ++j)
         {
-            ScRange aRange = *(*xRanges)[j];
+            ScRange aRange = (*xRanges)[j];
             // Always extend scenario frame to merged cells where no new non-covered cells
             // are framed
             pDoc->ExtendTotalMerge( aRange );
@@ -239,7 +240,7 @@ static void lcl_DrawScenarioFrames( OutputDevice* pDev, ScViewData* pViewData, S
                     }
 
                 if (aCurrent.isEmpty())
-                    aCurrent = ScGlobal::GetRscString( STR_EMPTYDATA );
+                    aCurrent = ScResId( STR_EMPTYDATA );
 
                 //! Own text "(None)" instead of "(Empty)" ???
 
@@ -1021,7 +1022,12 @@ void ScGridWindow::DrawContent(OutputDevice &rDevice, const ScTableInfo& rTableI
         }
 
         // paint the background
-        rDevice.DrawRect(rDevice.PixelToLogic(aBackground));
+        tools::Rectangle aLogicRect(rDevice.PixelToLogic(aBackground));
+        //tdf#100925, rhbz#1283420, Draw some text here, to get
+        //X11CairoTextRender::getCairoContext called, so that the forced read
+        //from the underlying X Drawable gets it to sync.
+        rDevice.DrawText(aLogicRect.BottomLeft(), " ");
+        rDevice.DrawRect(aLogicRect);
 
         // paint the editeng text
         tools::Rectangle aEditRect(Point(nScrX, nScrY), Size(aOutputData.GetScrW(), aOutputData.GetScrH()));
@@ -1197,7 +1203,10 @@ void ScGridWindow::PaintTile( VirtualDevice& rDevice,
     ScDrawLayer* pModel = pDoc->GetDrawLayer();
     if (pModel)
     {
-        mpLOKDrawView.reset(new FmFormView(pModel, &rDevice));
+        mpLOKDrawView.reset(
+            new FmFormView(
+                *pModel,
+                &rDevice));
         mpLOKDrawView->ShowSdrPage(mpLOKDrawView->GetModel()->GetPage(nTab));
         aOutputData.SetDrawView(mpLOKDrawView.get());
         aOutputData.SetSpellCheckContext(mpSpellCheckCxt.get());
@@ -1334,7 +1343,7 @@ void ScGridWindow::DrawPagePreview( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, 
         Color aManual( rColorCfg.GetColorValue(svtools::CALCPAGEBREAKMANUAL).nColor );
         Color aAutomatic( rColorCfg.GetColorValue(svtools::CALCPAGEBREAK).nColor );
 
-        OUString aPageStr = ScGlobal::GetRscString( STR_PGNUM );
+        OUString aPageStr = ScResId( STR_PGNUM );
         if ( nPageScript == SvtScriptType::NONE )
         {
             //  get script type of translated "Page" string only once
@@ -1528,7 +1537,7 @@ void ScGridWindow::DrawButtons(SCCOL nX1, SCCOL nX2, const ScTableInfo& rTabInfo
     aComboButton.SetOutputDevice( pContentDev );
 
     ScDocument* pDoc = pViewData->GetDocument();
-    ScDPFieldButton aCellBtn(pContentDev, &GetSettings().GetStyleSettings(), &pViewData->GetZoomX(), &pViewData->GetZoomY(), pDoc);
+    ScDPFieldButton aCellBtn(pContentDev, &GetSettings().GetStyleSettings(), &pViewData->GetZoomY(), pDoc);
 
     SCCOL nCol;
     SCROW nRow;
@@ -1659,7 +1668,7 @@ void ScGridWindow::DrawButtons(SCCOL nX1, SCCOL nX2, const ScTableInfo& rTabInfo
             }
         }
 
-        if ( bListValButton && pRowInfo[nArrY].nRowNo == aListValPos.Row() && pRowInfo[nArrY].bChanged )
+        if ( !comphelper::LibreOfficeKit::isActive() && bListValButton && pRowInfo[nArrY].nRowNo == aListValPos.Row() && pRowInfo[nArrY].bChanged )
         {
             tools::Rectangle aRect = GetListValButtonRect( aListValPos );
             aComboButton.SetPosPixel( aRect.TopLeft() );

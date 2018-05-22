@@ -112,6 +112,10 @@ namespace
     {
         return pBox->IsEnabled() && pBox->IsChecked();
     }
+    bool GetNegatedCheckBoxValue(const CheckBox *pBox)
+    {
+        return pBox->IsEnabled() && !pBox->IsChecked();
+    }
 }
 
 struct SearchDlg_Impl
@@ -305,6 +309,7 @@ SvxSearchDialog::SvxSearchDialog( vcl::Window* pParent, SfxChildWindow* pChildWi
 
     get(m_pCloseBtn, "close");
 
+    get(m_pOtherOptionsExpander, "OptionsExpander");
     get(m_pIncludeDiacritics, "includediacritics");
     get(m_pIncludeKashida, "includekashida");
     get(m_pSelectionBtn, "selection");
@@ -387,6 +392,7 @@ void SvxSearchDialog::dispose()
     m_pCloseBtn.clear();
     m_pIncludeDiacritics.clear();
     m_pIncludeKashida.clear();
+    m_pOtherOptionsExpander.clear();
     m_pSelectionBtn.clear();
     m_pReplaceBackwardsCB.clear();
     m_pRegExpBtn.clear();
@@ -474,11 +480,15 @@ void SvxSearchDialog::Construct_Impl()
         m_pJapMatchFullHalfWidthCB->Hide();
     }
     SvtCTLOptions aCTLOptions;
+    // Do not disable and hide the m_pIncludeDiacritics button.
+    // Include Diacritics == Not Ignore Diacritics => A does not match A-Umlaut (Diaeresis).
+    // Confusingly these have negated names (following the UI) but the actual
+    // transliteration is to *ignore* diacritics if "included" (sensitive) is
+    // _not_ checked.
     if(!aCTLOptions.IsCTLFontEnabled())
     {
-        m_pIncludeDiacritics->Check( false );
-        m_pIncludeDiacritics->Hide();
-        m_pIncludeKashida->Check( false );
+        m_pIncludeDiacritics->Check( true );
+        m_pIncludeKashida->Check( true );
         m_pIncludeKashida->Hide();
     }
     //component extension - show component search buttons if the commands
@@ -604,6 +614,22 @@ void SvxSearchDialog::ApplyTransliterationFlags_Impl( TransliterationFlags nSett
 }
 
 
+bool SvxSearchDialog::IsOtherOptionsExpanded()
+{
+    return m_pReplaceBackwardsCB->IsChecked() ||
+           m_pSelectionBtn->IsChecked() ||
+           m_pRegExpBtn->IsChecked() ||
+           m_pLayoutBtn->IsChecked() ||
+           m_pSimilarityBox->IsChecked() ||
+           m_pJapMatchFullHalfWidthCB->IsChecked() ||
+           m_pJapOptionsCB->IsChecked() ||
+           m_pWildcardBtn->IsChecked() ||
+           m_pNotesBtn->IsChecked() ||
+           m_pIncludeKashida->IsChecked() ||
+           m_pIncludeDiacritics->IsChecked();
+}
+
+
 void SvxSearchDialog::Activate()
 {
     // apply possible transliteration changes of the SvxSearchItem member
@@ -720,7 +746,7 @@ void SvxSearchDialog::ShowOptionalControls_Impl()
     m_pSimilarityBox->Show();
     m_pSimilarityBtn->Show();
     m_pSelectionBtn->Show();
-    m_pIncludeDiacritics->Show(aCTLOptions.IsCTLFontEnabled());
+    m_pIncludeDiacritics->Show();
     m_pIncludeKashida->Show(aCTLOptions.IsCTLFontEnabled());
     m_pJapMatchFullHalfWidthCB->Show(aCJKOptions.IsCJKFontEnabled());
     m_pJapOptionsCB->Show(aCJKOptions.IsJapaneseFindEnabled());
@@ -798,12 +824,13 @@ void SvxSearchDialog::Init_Impl( bool bSearchPattern )
     if (m_pNotesBtn->IsChecked())
         m_pLayoutBtn->Disable();
     m_pSimilarityBox->Check( pSearchItem->IsLevenshtein() );
-    if( m_pJapOptionsCB->IsVisible() )
+    if ( m_pJapOptionsCB->IsVisible() )
         m_pJapOptionsCB->Check( pSearchItem->IsUseAsianOptions() );
-    if (m_pIncludeDiacritics->IsVisible())
-        m_pIncludeDiacritics->Check( !aOpt.IsIgnoreDiacritics_CTL() );
-    if (m_pIncludeKashida->IsVisible())
+    m_pIncludeDiacritics->Check( !aOpt.IsIgnoreDiacritics_CTL() );
+    if ( m_pIncludeKashida->IsVisible() )
         m_pIncludeKashida->Check( !aOpt.IsIgnoreKashida_CTL() );
+    if ( SvxSearchDialog::IsOtherOptionsExpanded() )
+        m_pOtherOptionsExpander->set_expanded( true );
     ApplyTransliterationFlags_Impl( pSearchItem->GetTransliterationFlags() );
 
     ShowOptionalControls_Impl();
@@ -1330,9 +1357,9 @@ IMPL_LINK( SvxSearchDialog, CommandHdl_Impl, Button *, pBtn, void )
         if( !pSearchItem->IsUseAsianOptions())
             nFlags &= (TransliterationFlags::IGNORE_CASE |
                        TransliterationFlags::IGNORE_WIDTH );
-        if (!GetCheckBoxValue(m_pIncludeDiacritics))
+        if (GetNegatedCheckBoxValue(m_pIncludeDiacritics))
             nFlags |= TransliterationFlags::IGNORE_DIACRITICS_CTL;
-        if (!GetCheckBoxValue(m_pIncludeKashida))
+        if (GetNegatedCheckBoxValue(m_pIncludeKashida))
             nFlags |= TransliterationFlags::IGNORE_KASHIDA_CTL;
         pSearchItem->SetTransliterationFlags( nFlags );
 
@@ -1389,7 +1416,7 @@ IMPL_LINK( SvxSearchDialog, CommandHdl_Impl, Button *, pBtn, void )
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         if(pFact)
         {
-            ScopedVclPtr<AbstractSvxSearchSimilarityDialog> pDlg(pFact->CreateSvxSearchSimilarityDialog( this,
+            ScopedVclPtr<AbstractSvxSearchSimilarityDialog> pDlg(pFact->CreateSvxSearchSimilarityDialog(GetFrameWeld(),
                                                                         pSearchItem->IsLEVRelaxed(),
                                                                         pSearchItem->GetLEVOther(),
                                                                         pSearchItem->GetLEVShorter(),
@@ -2287,17 +2314,17 @@ void SvxSearchDialog::SaveToModule_Impl()
     pSearchItem->SetUseAsianOptions(GetCheckBoxValue(m_pJapOptionsCB));
 
     SvtSearchOptions aOpt;
-    aOpt.SetIgnoreDiacritics_CTL(!GetCheckBoxValue(m_pIncludeDiacritics));
-    aOpt.SetIgnoreKashida_CTL(!GetCheckBoxValue(m_pIncludeKashida));
+    aOpt.SetIgnoreDiacritics_CTL(GetNegatedCheckBoxValue(m_pIncludeDiacritics));
+    aOpt.SetIgnoreKashida_CTL(GetNegatedCheckBoxValue(m_pIncludeKashida));
     aOpt.Commit();
 
     TransliterationFlags nFlags = GetTransliterationFlags();
     if( !pSearchItem->IsUseAsianOptions())
         nFlags &= (TransliterationFlags::IGNORE_CASE |
                    TransliterationFlags::IGNORE_WIDTH );
-    if (!GetCheckBoxValue(m_pIncludeDiacritics))
+    if (GetNegatedCheckBoxValue(m_pIncludeDiacritics))
         nFlags |= TransliterationFlags::IGNORE_DIACRITICS_CTL;
-    if (!GetCheckBoxValue(m_pIncludeKashida))
+    if (GetNegatedCheckBoxValue(m_pIncludeKashida))
         nFlags |= TransliterationFlags::IGNORE_KASHIDA_CTL;
     pSearchItem->SetTransliterationFlags( nFlags );
 
@@ -2362,7 +2389,6 @@ SfxChildWinInfo SvxSearchDialogWrapper::GetInfo() const
     return aInfo;
 }
 
-
 static void lcl_SetSearchLabelWindow(const OUString& rStr)
 {
     SfxViewFrame* pViewFrame = SfxViewFrame::Current();
@@ -2387,16 +2413,44 @@ static void lcl_SetSearchLabelWindow(const OUString& rStr)
         {
             vcl::Window* pSearchLabel = pToolBox->GetItemWindow(id);
             assert(pSearchLabel);
-            pSearchLabel->Hide();
             pSearchLabel->SetText(rStr);
-            if (!rStr.isEmpty())
-            {
+            if (rStr.isEmpty())
+                pSearchLabel->SetSizePixel(Size(16, pSearchLabel->get_preferred_size().Height()));
+            else
                 pSearchLabel->SetSizePixel(pSearchLabel->get_preferred_size());
-                pSearchLabel->Show();
-            }
         }
     }
+    xLayoutManager->doLayout();
     pToolBox->Resize();
+}
+
+OUString SvxSearchDialogWrapper::GetSearchLabel()
+{
+    SfxViewFrame* pViewFrame = SfxViewFrame::Current();
+    if (!pViewFrame)
+        return OUString();
+
+    css::uno::Reference< css::beans::XPropertySet > xPropSet(
+            pViewFrame->GetFrame().GetFrameInterface(), css::uno::UNO_QUERY_THROW);
+    css::uno::Reference< css::frame::XLayoutManager > xLayoutManager;
+    xPropSet->getPropertyValue("LayoutManager") >>= xLayoutManager;
+    css::uno::Reference< css::ui::XUIElement > xUIElement =
+        xLayoutManager->getElement("private:resource/toolbar/findbar");
+    if (!xUIElement.is())
+        return OUString();
+    css::uno::Reference< css::awt::XWindow > xWindow(
+            xUIElement->getRealInterface(), css::uno::UNO_QUERY_THROW);
+    VclPtr< ToolBox > pToolBox = static_cast<ToolBox*>( VCLUnoHelper::GetWindow(xWindow).get() );
+    for (ToolBox::ImplToolItems::size_type i = 0; pToolBox && i < pToolBox->GetItemCount(); ++i)
+    {
+        sal_uInt16 id = pToolBox->GetItemId(i);
+        if (pToolBox->GetItemCommand(id) == ".uno:SearchLabel")
+        {
+            vcl::Window* pSearchLabel = pToolBox->GetItemWindow(id);
+            return pSearchLabel ? pSearchLabel->GetText() : OUString();
+        }
+    }
+    return OUString();
 }
 
 void SvxSearchDialogWrapper::SetSearchLabel(const SearchLabel& rSL)
@@ -2406,10 +2460,16 @@ void SvxSearchDialogWrapper::SetSearchLabel(const SearchLabel& rSL)
         sStr = SvxResId(RID_SVXSTR_SEARCH_END);
     else if (rSL == SearchLabel::Start)
         sStr = SvxResId(RID_SVXSTR_SEARCH_START);
+    else if (rSL == SearchLabel::EndWrapped)
+        sStr = SvxResId(RID_SVXSTR_SEARCH_END_WRAPPED);
+    else if (rSL == SearchLabel::StartWrapped)
+        sStr = SvxResId(RID_SVXSTR_SEARCH_START_WRAPPED);
     else if (rSL == SearchLabel::EndSheet)
         sStr = SvxResId(RID_SVXSTR_SEARCH_END_SHEET);
     else if (rSL == SearchLabel::NotFound)
         sStr = SvxResId(RID_SVXSTR_SEARCH_NOT_FOUND);
+    else if (rSL == SearchLabel::NavElementNotFound)
+        sStr = SvxResId(RID_SVXSTR_SEARCH_NAV_ELEMENT_NOT_FOUND);
 
     lcl_SetSearchLabelWindow(sStr);
     if (SvxSearchDialogWrapper *pWrp = static_cast<SvxSearchDialogWrapper*>( SfxViewFrame::Current()->

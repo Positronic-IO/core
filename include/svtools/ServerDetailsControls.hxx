@@ -16,29 +16,18 @@
 #include <com/sun/star/task/XPasswordContainer2.hpp>
 
 #include <tools/urlobj.hxx>
-#include <vcl/builder.hxx>
-#include <vcl/button.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/field.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/layout.hxx>
+#include <vcl/weld.hxx>
+
+class PlaceEditDialog;
 
 class DetailsContainer
 {
     protected:
+        PlaceEditDialog* m_pDialog;
         Link<DetailsContainer*,void> m_aChangeHdl;
-        VclPtr<VclGrid>        m_pDetailsGrid;
-        VclPtr<VclHBox>        m_pHostBox;
-        VclPtr<Edit>           m_pEDHost;
-        VclPtr<FixedText>      m_pFTHost;
-        VclPtr<NumericField>   m_pEDPort;
-        VclPtr<FixedText>      m_pFTPort;
-        VclPtr<Edit>           m_pEDRoot;
-        VclPtr<FixedText>      m_pFTRoot;
 
     public:
-        DetailsContainer( VclBuilderContainer* pBuilder );
+        DetailsContainer(PlaceEditDialog* pDialog);
         virtual ~DetailsContainer( );
 
         void setChangeHdl( const Link<DetailsContainer*,void>& rLink ) { m_aChangeHdl = rLink; }
@@ -60,7 +49,8 @@ class DetailsContainer
 
     protected:
         void notifyChange( );
-        DECL_LINK ( ValueChangeHdl, Edit&, void );
+        DECL_LINK(ValueChangeHdl, weld::Entry&, void);
+        DECL_LINK(FormatPortHdl, weld::SpinButton&, void);
 };
 
 class HostDetailsContainer : public DetailsContainer
@@ -71,7 +61,7 @@ class HostDetailsContainer : public DetailsContainer
         OUString m_sHost;
 
     public:
-        HostDetailsContainer( VclBuilderContainer* pBuilder, sal_uInt16 nPort, const OUString& sScheme );
+        HostDetailsContainer(PlaceEditDialog* pDialog, sal_uInt16 nPort, const OUString& sScheme);
 
         virtual void show( bool bShow = true ) override;
         virtual INetURLObject getUrl( ) override;
@@ -88,30 +78,23 @@ class HostDetailsContainer : public DetailsContainer
 
 class DavDetailsContainer : public HostDetailsContainer
 {
-    private:
-        VclPtr<CheckBox>   m_pCBDavs;
-
     public:
-        DavDetailsContainer( VclBuilderContainer* pBuilder );
+        DavDetailsContainer(PlaceEditDialog* pDialog);
 
         virtual void show( bool bShow = true ) override;
-    virtual bool enableUserCredentials( ) override { return false; };
+        virtual bool enableUserCredentials( ) override { return false; };
 
     protected:
         virtual bool verifyScheme( const OUString& rScheme ) override;
 
     private:
-        DECL_LINK( ToggledDavsHdl, CheckBox&, void );
+        DECL_LINK(ToggledDavsHdl, weld::ToggleButton&, void);
 };
 
 class SmbDetailsContainer : public DetailsContainer
 {
-    private:
-        VclPtr<Edit>           m_pEDShare;
-        VclPtr<FixedText>      m_pFTShare;
-
     public:
-        SmbDetailsContainer( VclBuilderContainer* pBuilder );
+        SmbDetailsContainer(PlaceEditDialog* pDialog);
 
         virtual INetURLObject getUrl( ) override;
         virtual bool setUrl( const INetURLObject& rUrl ) override;
@@ -127,15 +110,10 @@ class CmisDetailsContainer : public DetailsContainer
         std::vector< OUString > m_aRepoIds;
         OUString m_sRepoId;
         OUString m_sBinding;
-
-        VclPtr<VclHBox>    m_pRepositoryBox;
-        VclPtr<FixedText>  m_pFTRepository;
-        VclPtr<ListBox>    m_pLBRepository;
-        VclPtr<Button>     m_pBTRepoRefresh;
         css::uno::Reference< css::awt::XWindow > m_xParentDialog;
 
     public:
-        CmisDetailsContainer(VclBuilderContainer* pBuilder, Dialog* pParentDialog, OUString const & sBinding);
+        CmisDetailsContainer(PlaceEditDialog* pDialog, OUString const & sBinding);
 
         virtual void show( bool bShow = true ) override;
         virtual INetURLObject getUrl( ) override;
@@ -145,8 +123,8 @@ class CmisDetailsContainer : public DetailsContainer
 
     private:
         void selectRepository( );
-        DECL_LINK ( RefreshReposHdl, Button*, void );
-        DECL_LINK ( SelectRepoHdl, ListBox&, void );
+        DECL_LINK ( RefreshReposHdl, weld::Button&, void );
+        DECL_LINK ( SelectRepoHdl, weld::ComboBoxText&, void );
 };
 
 #endif

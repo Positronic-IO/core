@@ -34,7 +34,6 @@
 #include <core_resource.hxx>
 #include <stringconstants.hxx>
 #include <connectivity/dbtools.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -162,7 +161,8 @@ void ORelationController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue
                 if(!::dbaui::checkDataSourceAvailable(::comphelper::getString(getDataSource()->getPropertyValue(PROPERTY_NAME)), getORB()))
                 {
                     OUString aMessage(DBA_RES(STR_DATASOURCE_DELETED));
-                    ScopedVclPtrInstance<OSQLWarningBox>(getView(), aMessage)->Execute();
+                    OSQLWarningBox aWarning(getFrameWeld(), aMessage);
+                    aWarning.run();
                 }
                 else
                 {
@@ -180,7 +180,7 @@ void ORelationController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue
                     }
                     catch ( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                 }
             }
@@ -207,8 +207,8 @@ void ORelationController::impl_initialize()
         {
             OUString sTitle(DBA_RES(STR_RELATIONDESIGN));
             sTitle = sTitle.copy(3);
-            ScopedVclPtrInstance< OSQLMessageBox > aDlg(nullptr,sTitle,DBA_RES(STR_RELATIONDESIGN_NOT_AVAILABLE));
-            aDlg->Execute();
+            OSQLMessageBox aDlg(getFrameWeld(), sTitle, DBA_RES(STR_RELATIONDESIGN_NOT_AVAILABLE));
+            aDlg.run();
         }
         disconnect();
         throw SQLException();
@@ -234,7 +234,7 @@ void ORelationController::impl_initialize()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
 }
@@ -340,7 +340,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
     }
@@ -478,7 +478,7 @@ IMPL_LINK_NOARG( ORelationController, OnThreadFinished, void*, void )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     m_pWaitObject.reset();
 }
@@ -524,7 +524,7 @@ void ORelationController::loadData()
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

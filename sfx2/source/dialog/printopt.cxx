@@ -19,7 +19,6 @@
 
 
 #include <sal/macros.h>
-#include <vcl/msgbox.hxx>
 #include <unotools/printwarningoptions.hxx>
 #include <svtools/printoptions.hxx>
 #include <svtools/restartdialog.hxx>
@@ -27,7 +26,6 @@
 
 #include <comphelper/processfactory.hxx>
 
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/printopt.hxx>
 
@@ -115,9 +113,9 @@ void SfxCommonPrintOptionsTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SfxCommonPrintOptionsTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SfxCommonPrintOptionsTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SfxCommonPrintOptionsTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SfxCommonPrintOptionsTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 vcl::Window* SfxCommonPrintOptionsTabPage::GetParentLabeledBy( const vcl::Window* pWindow ) const

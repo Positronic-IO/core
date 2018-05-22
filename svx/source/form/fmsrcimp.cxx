@@ -24,7 +24,6 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/wldcrd.hxx>
-#include <svx/dialmgr.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/textsearch.hxx>
 #include <com/sun/star/util/SearchAlgorithms2.hpp>
@@ -38,14 +37,13 @@
 #include <com/sun/star/util/NumberFormat.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 #include <com/sun/star/util/XNumberFormats.hpp>
-#include <comphelper/processfactory.hxx>
 
 #include <fmprop.hxx>
 #include <fmservs.hxx>
 #include <svx/fmsrcimp.hxx>
 #include <svx/fmsearch.hxx>
 
-#include <comphelper/numbers.hxx>
+#include <comphelper/types.hxx>
 #include <unotools/syslocale.hxx>
 #include <i18nutil/searchopt.hxx>
 
@@ -302,7 +300,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchSpecial(bool _bSearchForNull,
     // memorize the start position
     Any aStartMark;
     try { aStartMark = m_xSearchCursor.getBookmark(); }
-    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
     FieldCollection::const_iterator iterInitialField = iterFieldLoop;
 
 
@@ -325,7 +323,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchSpecial(bool _bSearchForNull,
             // will definitely go wrong again, thus abort.
             // Before, however, so that the search continues at the current position:
             try { m_aPreviousLocBookmark = m_xSearchCursor.getBookmark(); }
-            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); }
             m_iterPreviousLocField = iterFieldLoop;
             // and leave
             return SearchResult::Error;
@@ -333,7 +331,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchSpecial(bool _bSearchForNull,
 
         Any aCurrentBookmark;
         try { aCurrentBookmark = m_xSearchCursor.getBookmark(); }
-        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
 
         bMovedAround = EQUAL_BOOKMARKS(aStartMark, aCurrentBookmark) && (iterFieldLoop == iterInitialField);
 
@@ -359,7 +357,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchWildcard(const OUString& strE
     // memorize the start position
     Any aStartMark;
     try { aStartMark = m_xSearchCursor.getBookmark(); }
-    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
     FieldCollection::const_iterator iterInitialField = iterFieldLoop;
 
     WildCard aSearchExpression(strExpression);
@@ -395,7 +393,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchWildcard(const OUString& strE
             // will definitely go wrong again, thus abort.
             // Before, however, so that the search continues at the current position:
             try { m_aPreviousLocBookmark = m_xSearchCursor.getBookmark(); }
-            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); }
             m_iterPreviousLocField = iterFieldLoop;
             // and leave
             return SearchResult::Error;
@@ -403,7 +401,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchWildcard(const OUString& strE
 
         Any aCurrentBookmark;
         try { aCurrentBookmark = m_xSearchCursor.getBookmark(); }
-        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
 
         bMovedAround = EQUAL_BOOKMARKS(aStartMark, aCurrentBookmark) && (iterFieldLoop == iterInitialField);
 
@@ -434,7 +432,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchRegularApprox(const OUString&
     // memorize start position
     Any aStartMark;
     try { aStartMark = m_xSearchCursor.getBookmark(); }
-    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+    catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
     FieldCollection::const_iterator iterInitialField = iterFieldLoop;
 
     // collect parameters
@@ -514,7 +512,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchRegularApprox(const OUString&
             // notification, I expect it to be displayed in the Move).
             // Before, however, so that the search continues at the current position:
             try { m_aPreviousLocBookmark = m_xSearchCursor.getBookmark(); }
-            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); }
             m_iterPreviousLocField = iterFieldLoop;
             // and leave
             return SearchResult::Error;
@@ -522,7 +520,7 @@ FmSearchEngine::SearchResult FmSearchEngine::SearchRegularApprox(const OUString&
 
         Any aCurrentBookmark;
         try { aCurrentBookmark = m_xSearchCursor.getBookmark(); }
-        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); return SearchResult::Error; }
+        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); return SearchResult::Error; }
         bMovedAround = EQUAL_BOOKMARKS(aStartMark, aCurrentBookmark) && (iterFieldLoop == iterInitialField);
 
         if (nFieldPos == 0)
@@ -745,7 +743,7 @@ void FmSearchEngine::SetFormatterUsing(bool bSet)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     // I have to re-bind the fields, because the text exchange might take
@@ -770,7 +768,7 @@ void FmSearchEngine::PropagateProgress(bool _bDontPropagateOverflow)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         m_aProgressHandler.Call(&aProgress);
@@ -870,7 +868,7 @@ void FmSearchEngine::SearchNextImpl()
     {
         // memorize the position
         try { m_aPreviousLocBookmark = m_xSearchCursor.getBookmark(); }
-        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("svx"); }
         m_iterPreviousLocField = iterFieldCheck;
     }
     else
@@ -910,7 +908,7 @@ void FmSearchEngine::OnSearchTerminated()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     // by definition, the link must be thread-safe (I just require that),
@@ -1004,7 +1002,7 @@ void FmSearchEngine::StartOver(const OUString& strExpression)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
         return;
     }
 
@@ -1024,7 +1022,7 @@ void FmSearchEngine::StartOverSpecial(bool _bSearchForNull)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
         return;
     }
 

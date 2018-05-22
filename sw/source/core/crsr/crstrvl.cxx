@@ -70,6 +70,7 @@
 #include <unotools/intlwrapper.hxx>
 #include <vcl/window.hxx>
 #include <docufld.hxx>
+#include <svx/srchdlg.hxx>
 
 using namespace ::com::sun::star;
 
@@ -940,16 +941,27 @@ bool SwCursorShell::GotoOutline( const OUString& rName )
 /// jump to next node with outline num.
 bool SwCursorShell::GotoNextOutline()
 {
-    SwCursor* pCursor = getShellCursor( true );
     const SwNodes& rNds = GetDoc()->GetNodes();
 
+    if ( rNds.GetOutLineNds().size() == 0 )
+    {
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+        return false;
+    }
+
+    SwCursor* pCursor = getShellCursor( true );
     SwNode* pNd = &(pCursor->GetNode());
     SwOutlineNodes::size_type nPos;
     if( rNds.GetOutLineNds().Seek_Entry( pNd, &nPos ))
         ++nPos;
 
     if( nPos == rNds.GetOutLineNds().size() )
-        return false;
+    {
+        nPos = 0;
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::EndWrapped );
+    }
+    else
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
 
     pNd = rNds.GetOutLineNds()[ nPos ];
 
@@ -968,19 +980,32 @@ bool SwCursorShell::GotoNextOutline()
 /// jump to previous node with outline num.
 bool SwCursorShell::GotoPrevOutline()
 {
-    SwCursor* pCursor = getShellCursor( true );
     const SwNodes& rNds = GetDoc()->GetNodes();
 
+    if ( rNds.GetOutLineNds().size() == 0 )
+    {
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+        return false;
+    }
+
+    SwCursor* pCursor = getShellCursor( true );
     SwNode* pNd = &(pCursor->GetNode());
     SwOutlineNodes::size_type nPos;
-    bool bRet = rNds.GetOutLineNds().Seek_Entry(pNd, &nPos);
-    if (bRet && nPos)
+    bool bRet = false;
+    rNds.GetOutLineNds().Seek_Entry(pNd, &nPos);
+    if ( nPos == 0 )
+    {
+        nPos = rNds.GetOutLineNds().size();
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::StartWrapped );
+    }
+    else
+        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+
+    if (nPos)
     {
         --nPos; // before
 
         pNd = rNds.GetOutLineNds()[ nPos ];
-        if( pNd->GetIndex() > pCursor->GetPoint()->nNode.GetIndex() )
-            return false;
 
         SET_CURR_SHELL( this );
         SwCallLink aLk( *this ); // watch Cursor-Moves
@@ -1113,11 +1138,6 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
     SET_CURR_SHELL( this );
     bool bRet = false;
 
-    const bool bHideInlineTooltips = GetDoc()->getIDocumentRedlineAccess().IsHideInlineTooltips();
-    const bool bShowTrackChanges = IDocumentRedlineAccess::IsShowChanges( GetDoc()->getIDocumentRedlineAccess().GetRedlineFlags() );
-
-    if (bHideInlineTooltips || !bShowTrackChanges) return bRet;
-
     if( !IsTableMode() )
     {
         Point aPt( rPt );
@@ -1180,7 +1200,7 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
                     const sal_Int32 nBegin = nCurrent;
                     sal_Int32 nLen = 1;
 
-                    if ( pSmartTagList && pSmartTagList->InWrongWord( nCurrent, nLen ) && !pTextNd->IsSymbol(nBegin) )
+                    if (pSmartTagList && pSmartTagList->InWrongWord(nCurrent, nLen) && !pTextNd->IsSymbolAt(nBegin))
                     {
                         const sal_uInt16 nIndex = pSmartTagList->GetWrongPos( nBegin );
                         const SwWrongList* pSubList = pSmartTagList->SubList( nIndex );
@@ -1232,7 +1252,14 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
                     if ( pField )
                     {
                         if( pFieldRect && nullptr != ( pFrame = pTextNd->getLayoutFrame( GetLayout(), &aPt ) ) )
+                        {
+                            //tdf#116397 now that we looking for the bounds of the field drop the SmartTag
+                            //index within field setting so we don't the bounds of the char within the field
+                            SwSpecialPos* pSpecialPos = aTmpState.m_pSpecialPos;
+                            aTmpState.m_pSpecialPos = nullptr;
                             pFrame->GetCharRect( *pFieldRect, aPos, &aTmpState );
+                            aTmpState.m_pSpecialPos = pSpecialPos;
+                        }
 
                         if( bSetCursor )
                         {
@@ -1457,6 +1484,7 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
                 if( !bRet && IsAttrAtPos::Redline & rContentAtPos.eContentAtPos )
                 {
                     const SwRangeRedline* pRedl = GetDoc()->getIDocumentRedlineAccess().GetRedline(aPos, nullptr);
+
                     if( pRedl )
                     {
                         rContentAtPos.aFnd.pRedl = pRedl;

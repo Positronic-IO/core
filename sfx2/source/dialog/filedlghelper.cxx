@@ -58,7 +58,6 @@
 #include <osl/security.hxx>
 #include <osl/thread.hxx>
 #include <vcl/cvtgrf.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/mnemonic.hxx>
 #include <unotools/pathoptions.hxx>
 #include <unotools/saveopt.hxx>
@@ -848,12 +847,19 @@ static open_or_save_t lcl_OpenOrSave(sal_Int16 const nDialogType)
 
 // FileDialogHelper_Impl
 
+css::uno::Reference<css::awt::XWindow> FileDialogHelper_Impl::GetFrameInterface()
+{
+    if (mpFrameWeld)
+        return mpFrameWeld->GetXWindow();
+    return css::uno::Reference<css::awt::XWindow>();
+}
+
 FileDialogHelper_Impl::FileDialogHelper_Impl(
     FileDialogHelper* _pAntiImpl,
     sal_Int16 nDialogType,
     FileDialogFlags nFlags,
     sal_Int16 nDialog,
-    const vcl::Window* _pPreferredParentWindow,
+    weld::Window* pFrameWeld,
     const OUString& sStandardDir,
     const css::uno::Sequence< OUString >& rBlackList
     )
@@ -882,7 +888,7 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
     // create the file open dialog
     // the flags can be SFXWB_INSERT or SFXWB_MULTISELECTION
 
-    mpPreferredParentWindow = _pPreferredParentWindow ? _pPreferredParentWindow->GetSystemWindow() : nullptr;
+    mpFrameWeld             = pFrameWeld;
     mpAntiImpl              = _pAntiImpl;
     mbHasAutoExt            = false;
     mbHasPassword           = false;
@@ -1036,7 +1042,9 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
             maPreviewIdle.SetInvokeHandler( LINK( this, FileDialogHelper_Impl, TimeOutHdl_Impl ) );
         }
 
-        Sequence < Any > aInitArguments( !mpPreferredParentWindow ? 3 : 4 );
+        auto xWindow = GetFrameInterface();
+
+        Sequence < Any > aInitArguments(!xWindow.is() ? 3 : 4);
 
         // This is a hack. We currently know that the internal file picker implementation
         // supports the extended arguments as specified below.
@@ -1046,8 +1054,8 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
         if ( mbSystemPicker )
         {
             aInitArguments[0] <<= nTemplateDescription;
-            if ( mpPreferredParentWindow )
-                aInitArguments[1] <<= VCLUnoHelper::GetInterface( mpPreferredParentWindow );
+            if (xWindow.is())
+                aInitArguments[1] <<= xWindow;
         }
         else
         {
@@ -1067,11 +1075,8 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
                                 );
 
 
-            if ( mpPreferredParentWindow )
-                aInitArguments[3] <<= NamedValue(
-                                        "ParentWindow",
-                                        makeAny( VCLUnoHelper::GetInterface( mpPreferredParentWindow ) )
-                                    );
+            if (xWindow.is())
+                aInitArguments[3] <<= NamedValue("ParentWindow", makeAny(xWindow));
         }
 
         try
@@ -1514,7 +1519,7 @@ ErrCode FileDialogHelper_Impl::execute( std::vector<OUString>& rpURLList,
                 {
                     // ask for a password
                     OUString aDocName(rpURLList[0]);
-                    ErrCode errCode = RequestPassword(pCurrentFilter, aDocName, rpSet);
+                    ErrCode errCode = RequestPassword(pCurrentFilter, aDocName, rpSet, GetFrameInterface());
                     if (errCode != ERRCODE_NONE)
                         return errCode;
                 }
@@ -1541,7 +1546,7 @@ ErrCode FileDialogHelper_Impl::execute( std::vector<OUString>& rpURLList,
                         }
                         catch( const IllegalArgumentException& )
                         {
-                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(mpPreferredParentWindow ? mpPreferredParentWindow->GetFrameWeld() : nullptr,
+                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(mpFrameWeld,
                                                                                      VclMessageType::Warning, VclButtonsType::Ok,
                                                                                      SfxResId(RID_SVXSTR_GPG_ENCRYPT_FAILURE)));
                             xBox->run();
@@ -2275,9 +2280,9 @@ FileDialogHelper::FileDialogHelper(
     const OUString& rFact,
     SfxFilterFlags nMust,
     SfxFilterFlags nDont,
-    const vcl::Window* _pPreferredParent)
+    weld::Window* pPreferredParent)
     :   m_nError(0),
-        mpImpl(new FileDialogHelper_Impl(this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, _pPreferredParent))
+        mpImpl(new FileDialogHelper_Impl(this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, pPreferredParent))
 {
 
     // create the list of filters
@@ -2294,21 +2299,18 @@ FileDialogHelper::FileDialogHelper(
     SfxFilterFlags nDont,
     const OUString& rStandardDir,
     const css::uno::Sequence< OUString >& rBlackList,
-    const vcl::Window* _pPreferredParent)
+    weld::Window* pPreferredParent)
     :   m_nError(0),
-        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, nDialog, _pPreferredParent, rStandardDir, rBlackList ) )
+        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, nDialog, pPreferredParent, rStandardDir, rBlackList ) )
 {
     // create the list of filters
     mpImpl->addFilters(
             SfxObjectShell::GetServiceNameFromFactory(rFact), nMust, nDont );
 }
 
-FileDialogHelper::FileDialogHelper(
-    sal_Int16 nDialogType,
-    FileDialogFlags nFlags,
-    const vcl::Window* _pPreferredParent )
+FileDialogHelper::FileDialogHelper(sal_Int16 nDialogType, FileDialogFlags nFlags, weld::Window* pPreferredParent)
     :   m_nError(0),
-        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, _pPreferredParent ) )
+        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, pPreferredParent ) )
 {
 }
 
@@ -2319,9 +2321,9 @@ FileDialogHelper::FileDialogHelper(
     const OUString& aExtName,
     const OUString& rStandardDir,
     const css::uno::Sequence< OUString >& rBlackList,
-    const vcl::Window* _pPreferredParent )
+    weld::Window* pPreferredParent )
     :   m_nError(0),
-        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, _pPreferredParent,rStandardDir, rBlackList ) )
+        mpImpl( new FileDialogHelper_Impl( this, nDialogType, nFlags, SFX2_IMPL_DIALOG_CONFIG, pPreferredParent, rStandardDir, rBlackList ) )
 {
     // the wildcard here is expected in form "*.extension"
     OUString aWildcard;
@@ -2630,10 +2632,9 @@ void FileDialogHelper::DialogClosed( const DialogClosedEvent& _rEvent )
     m_aDialogClosedLink.Call( this );
 }
 
-ErrCode FileOpenDialog_Impl( const vcl::Window* pParent,
+ErrCode FileOpenDialog_Impl( weld::Window* pParent,
                              sal_Int16 nDialogType,
                              FileDialogFlags nFlags,
-                             const OUString& rFact,
                              std::vector<OUString>& rpURLList,
                              OUString& rFilter,
                              SfxItemSet *& rpSet,
@@ -2650,7 +2651,7 @@ ErrCode FileOpenDialog_Impl( const vcl::Window* pParent,
     if (nFlags & FileDialogFlags::SignPDF)
         pDialog.reset(new FileDialogHelper(nDialogType, nFlags, SfxResId(STR_SFX_FILTERNAME_PDF), "pdf", rStandardDir, rBlackList, pParent));
     else
-        pDialog.reset(new FileDialogHelper(nDialogType, nFlags, rFact, nDialog, SfxFilterFlags::NONE, SfxFilterFlags::NONE, rStandardDir, rBlackList, pParent));
+        pDialog.reset(new FileDialogHelper(nDialogType, nFlags, OUString(), nDialog, SfxFilterFlags::NONE, SfxFilterFlags::NONE, rStandardDir, rBlackList, pParent));
 
     OUString aPath;
     if ( pPath )
@@ -2664,9 +2665,9 @@ ErrCode FileOpenDialog_Impl( const vcl::Window* pParent,
     return nRet;
 }
 
-ErrCode RequestPassword(const std::shared_ptr<const SfxFilter>& pCurrentFilter, OUString const & aURL, SfxItemSet* pSet)
+ErrCode RequestPassword(const std::shared_ptr<const SfxFilter>& pCurrentFilter, OUString const & aURL, SfxItemSet* pSet, const css::uno::Reference<css::awt::XWindow>& rParent)
 {
-    uno::Reference < task::XInteractionHandler2 > xInteractionHandler = task::InteractionHandler::createWithParent( ::comphelper::getProcessComponentContext(), nullptr );
+    uno::Reference<task::XInteractionHandler2> xInteractionHandler = task::InteractionHandler::createWithParent(::comphelper::getProcessComponentContext(), rParent);
     // TODO: need a save way to distinguish MS filters from other filters
     // for now MS-filters are the only alien filters that support encryption
     bool bMSType = !pCurrentFilter->IsOwnFormat();

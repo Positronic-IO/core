@@ -65,11 +65,10 @@ private:
     std::unique_ptr<std::vector<ScTokenRef> > mpTokens;
 
     OUString maName;
-    ScChartUnoData* pUnoData;
+    std::unique_ptr<ScChartUnoData> pUnoData;
     ScDocument*     mpDoc;
     bool            bUsed:1;  // for ScChartListenerCollection::FreeUnused
     bool            bDirty:1;
-    bool            bSeriesRangesScheduled:1;
 
     ScChartListener& operator=( const ScChartListener& ) = delete;
 
@@ -104,10 +103,6 @@ public:
     void            SetDirty( bool bFlg ) { bDirty = bFlg; }
 
     void            UpdateChartIntersecting( const ScRange& rRange );
-
-    // if chart series ranges are to be updated later on (e.g. DeleteTab, InsertTab)
-    void            UpdateScheduledSeriesRanges();
-    void            UpdateSeriesRanges();
 
     ExternalRefListener* GetExtRefListener();
     void            SetUpdateQueue();
@@ -190,7 +185,6 @@ public:
 
     void            SetRangeDirty( const ScRange& rRange );     // for example rows/columns
 
-    void            UpdateScheduledSeriesRanges();
     void            UpdateChartsContainingTab( SCTAB nTab );
 
     bool operator==( const ScChartListenerCollection& r ) const;

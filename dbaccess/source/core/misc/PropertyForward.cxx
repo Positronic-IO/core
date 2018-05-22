@@ -21,6 +21,7 @@
 #include <stringconstants.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/sdbcx/XDataDescriptorFactory.hpp>
 #include <com/sun/star/sdbcx/XAppend.hpp>
 
@@ -53,15 +54,13 @@ namespace dbaccess
                 _xSource->addPropertyChangeListener( OUString(), this );
             else
             {
-                std::vector< OUString >::const_iterator aIter = _aPropertyList.begin();
-                std::vector< OUString >::const_iterator aEnd = _aPropertyList.end();
-                for (; aIter != aEnd ; ++aIter )
-                    _xSource->addPropertyChangeListener( *aIter, this );
+                for (auto const& property : _aPropertyList)
+                    _xSource->addPropertyChangeListener(property, this);
             }
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         osl_atomic_decrement( &m_refCount );
     }
@@ -108,7 +107,7 @@ namespace dbaccess
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -141,7 +140,7 @@ namespace dbaccess
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 

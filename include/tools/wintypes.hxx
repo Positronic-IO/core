@@ -195,7 +195,6 @@ WinBits const WB_NOMULTILINE =          0x10000000;
 WinBits const WB_EARLYTOGGLE =          SAL_CONST_INT64(0x4000000000);
 
 // Window-Bits for Edit
-WinBits const WB_PASSWORD =             0x01000000;
 WinBits const WB_READONLY =             0x02000000;
 WinBits const WB_NOHIDESELECTION =      SAL_CONST_INT64(0x1000000000);
 
@@ -209,7 +208,6 @@ WinBits const WB_SIMPLEMODE =           0x20000000;
 WinBits const WB_SCALE =                0x08000000;
 
 // Window-Bits for ToolBox
-WinBits const WB_LINESPACING =          0x01000000;
 WinBits const WB_SCROLL =               0x02000000;
 
 // Window-Bits for SplitWindow

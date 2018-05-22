@@ -50,6 +50,7 @@
 #include <officecfg/Office/Common.hxx>
 #include "optHeaderTabListbox.hxx"
 #include <vcl/help.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace css;
 using namespace css::beans;
@@ -222,10 +223,10 @@ SvxPathTabPage::SvxPathTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
     long nWidth1 = rBar.GetTextWidth(rBar.GetItemText(ITEMID_TYPE));
     long nWidth2 = rBar.GetTextWidth(rBar.GetItemText(ITEMID_PATH));
 
-    long aTabs[] = {3, 0, 0, 0};
-    aTabs[2] = nWidth1 + 12;
-    aTabs[3] = aTabs[2] + nWidth2 + 12;
-    pPathBox->SetTabs(aTabs, MapUnit::MapPixel);
+    long aTabs[] = {0, 0, 0};
+    aTabs[1] = nWidth1 + 12;
+    aTabs[2] = aTabs[1] + nWidth2 + 12;
+    pPathBox->SetTabs(SAL_N_ELEMENTS(aTabs), aTabs, MapUnit::MapPixel);
 
     pPathBox->SetDoubleClickHdl( LINK( this, SvxPathTabPage, DoubleClickPathHdl_Impl ) );
     pPathBox->SetSelectHdl( LINK( this, SvxPathTabPage, PathSelect_Impl ) );
@@ -256,10 +257,10 @@ void SvxPathTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxPathTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SvxPathTabPage::Create( TabPageParent pParent,
                                            const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxPathTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxPathTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SvxPathTabPage::FillItemSet( SfxItemSet* )
@@ -359,10 +360,10 @@ void SvxPathTabPage::Reset( const SfxItemSet* )
 
     }
 
-    long aTabs[] = {3, 0, 0, 0};
-    aTabs[2] = nWidth1 + 12;
-    aTabs[3] = aTabs[2] + nWidth2 + 12;
-    pPathBox->SetTabs(aTabs, MapUnit::MapPixel);
+    long aTabs[] = {0, 0, 0};
+    aTabs[1] = nWidth1 + 12;
+    aTabs[2] = aTabs[1] + nWidth2 + 12;
+    pPathBox->SetTabs(SAL_N_ELEMENTS(aTabs), aTabs, MapUnit::MapPixel);
 
     PathSelect_Impl( nullptr );
 }
@@ -648,9 +649,9 @@ IMPL_LINK_NOARG(SvxPathTabPage, PathHdl_Impl, Button*, void)
                 ChangeCurrentEntry(aPathSeq[0]);
             }
         }
-        catch (const uno::Exception& rException)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("cui.options", "SvxPathTabPage::PathHdl_Impl: exception from file picker: " << rException);
+            DBG_UNHANDLED_EXCEPTION("cui.options", "exception from file picker");
         }
     }
 }

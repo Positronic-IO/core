@@ -20,8 +20,10 @@
 #include <sal/config.h>
 
 #include <o3tl/string_view.hxx>
+#include <officecfg/Inet.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <officecfg/Office/Security.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
 #include <tools/config.hxx>
 #include <vcl/weld.hxx>
 #include <svl/intitem.hxx>
@@ -55,6 +57,7 @@
 #include <strings.hrc>
 
 #include <com/sun/star/security/DocumentDigitalSignatures.hpp>
+#include <com/sun/star/task/InteractionHandler.hpp>
 
 #ifdef UNX
 #include <sys/stat.h>
@@ -252,9 +255,9 @@ void SvxProxyTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxProxyTabPage::Create(vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SvxProxyTabPage::Create(TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxProxyTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SvxProxyTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 void SvxProxyTabPage::ReadConfigData_Impl()
@@ -417,7 +420,7 @@ void SvxProxyTabPage::Reset(const SfxItemSet*)
     m_pFtpPortED->SaveValue();
     m_pNoProxyForED->SaveValue();
 
-    EnableControls_Impl( m_pProxyModeLB->GetSelectedEntryPos() == 2 );
+    EnableControls_Impl();
 }
 
 bool SvxProxyTabPage::FillItemSet(SfxItemSet* )
@@ -504,26 +507,37 @@ bool SvxProxyTabPage::FillItemSet(SfxItemSet* )
     return bModified;
 }
 
-void SvxProxyTabPage::EnableControls_Impl(bool bEnable)
+void SvxProxyTabPage::EnableControls_Impl()
 {
-    m_pHttpProxyFT->Enable(bEnable);
-    m_pHttpProxyED->Enable(bEnable);
-    m_pHttpPortFT->Enable(bEnable);
-    m_pHttpPortED->Enable(bEnable);
+    m_pProxyModeLB->Enable(!officecfg::Inet::Settings::ooInetNoProxy::isReadOnly());
 
-    m_pHttpsProxyFT->Enable(bEnable);
-    m_pHttpsProxyED->Enable(bEnable);
-    m_pHttpsPortFT->Enable(bEnable);
-    m_pHttpsPortED->Enable(bEnable);
+    const bool bManualConfig = m_pProxyModeLB->GetSelectedEntryPos() == 2;
 
-    m_pFtpProxyFT->Enable(bEnable);
-    m_pFtpProxyED->Enable(bEnable);
-    m_pFtpPortFT->Enable(bEnable);
-    m_pFtpPortED->Enable(bEnable);
+    const bool bHTTPProxyNameEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetHTTPProxyName::isReadOnly();
+    const bool bHTTPProxyPortEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetHTTPProxyPort::isReadOnly();
+    m_pHttpProxyFT->Enable(bHTTPProxyNameEnabled);
+    m_pHttpProxyED->Enable(bHTTPProxyNameEnabled);
+    m_pHttpPortFT->Enable(bHTTPProxyPortEnabled);
+    m_pHttpPortED->Enable(bHTTPProxyPortEnabled);
 
-    m_pNoProxyForFT->Enable(bEnable);
-    m_pNoProxyForED->Enable(bEnable);
-    m_pNoProxyDescFT->Enable(bEnable);
+    const bool bHTTPSProxyNameEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetHTTPSProxyName::isReadOnly();
+    const bool bHTTPSProxyPortEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetHTTPSProxyPort::isReadOnly();
+    m_pHttpsProxyFT->Enable(bHTTPSProxyNameEnabled);
+    m_pHttpsProxyED->Enable(bHTTPSProxyNameEnabled);
+    m_pHttpsPortFT->Enable(bHTTPSProxyPortEnabled);
+    m_pHttpsPortED->Enable(bHTTPSProxyPortEnabled);
+
+    const bool bFTPProxyNameEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetFTPProxyName::isReadOnly();
+    const bool bFTPProxyPortEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetFTPProxyPort::isReadOnly();
+    m_pFtpProxyFT->Enable(bFTPProxyNameEnabled);
+    m_pFtpProxyED->Enable(bFTPProxyNameEnabled);
+    m_pFtpPortFT->Enable(bFTPProxyPortEnabled);
+    m_pFtpPortED->Enable(bFTPProxyPortEnabled);
+
+    const bool bInetNoProxyEnabled = bManualConfig && !officecfg::Inet::Settings::ooInetNoProxy::isReadOnly();
+    m_pNoProxyForFT->Enable(bInetNoProxyEnabled);
+    m_pNoProxyForED->Enable(bInetNoProxyEnabled);
+    m_pNoProxyDescFT->Enable(bInetNoProxyEnabled);
 }
 
 
@@ -537,7 +551,7 @@ IMPL_LINK( SvxProxyTabPage, ProxyHdl_Impl, ListBox&, rBox, void )
         ReadConfigDefaults_Impl();
     }
 
-    EnableControls_Impl(nPos == 2);
+    EnableControls_Impl();
 }
 
 
@@ -559,7 +573,6 @@ IMPL_STATIC_LINK( SvxProxyTabPage, LoseFocusHdl_Impl, Control&, rControl, void )
 SvxSecurityTabPage::SvxSecurityTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
     : SfxTabPage(pParent, "OptSecurityPage", "cui/ui/optsecuritypage.ui", &rSet)
     , mpSecOptions(new SvtSecurityOptions)
-    , mpSecOptDlg(nullptr)
     , mpCertPathDlg(nullptr)
 {
     get(m_pSecurityOptionsPB, "options");
@@ -611,7 +624,7 @@ void SvxSecurityTabPage::dispose()
     delete mpSecOptions;
     mpSecOptions = nullptr;
     mpCertPathDlg.disposeAndClear();
-    mpSecOptDlg.clear();
+    m_xSecOptDlg.reset();
     m_pSecurityOptionsPB.clear();
     m_pSavePasswordsCB.clear();
     m_pShowConnectionsPB.clear();
@@ -630,9 +643,9 @@ void SvxSecurityTabPage::dispose()
 
 IMPL_LINK_NOARG(SvxSecurityTabPage, SecurityOptionsHdl, Button*, void)
 {
-    if ( !mpSecOptDlg )
-        mpSecOptDlg = VclPtr<svx::SecurityOptionsDialog>::Create( this, mpSecOptions );
-    mpSecOptDlg->Execute();
+    if (!m_xSecOptDlg)
+        m_xSecOptDlg.reset(new svx::SecurityOptionsDialog(GetFrameWeld(), mpSecOptions));
+    (void)m_xSecOptDlg->run();
 }
 
 IMPL_LINK_NOARG(SvxSecurityTabPage, SavePasswordHdl, Button*, void)
@@ -646,7 +659,11 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, SavePasswordHdl, Button*, void)
         {
             bool bOldValue = xMasterPasswd->allowPersistentStoring( true );
             xMasterPasswd->removeMasterPassword();
-            if ( xMasterPasswd->changeMasterPassword( Reference< task::XInteractionHandler >() ) )
+
+            uno::Reference<task::XInteractionHandler> xTmpHandler(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(),
+                                                                  VCLUnoHelper::GetInterface(GetParentDialog())));
+
+            if ( xMasterPasswd->changeMasterPassword(xTmpHandler) )
             {
                 m_pMasterPasswordPB->Enable();
                 m_pMasterPasswordCB->Check();
@@ -692,7 +709,7 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, SavePasswordHdl, Button*, void)
     }
 }
 
-IMPL_STATIC_LINK_NOARG(SvxSecurityTabPage, MasterPasswordHdl, Button*, void)
+IMPL_LINK_NOARG(SvxSecurityTabPage, MasterPasswordHdl, Button*, void)
 {
     try
     {
@@ -700,7 +717,11 @@ IMPL_STATIC_LINK_NOARG(SvxSecurityTabPage, MasterPasswordHdl, Button*, void)
             task::PasswordContainer::create(comphelper::getProcessComponentContext()));
 
         if ( xMasterPasswd->isPersistentStoringAllowed() )
-            xMasterPasswd->changeMasterPassword( Reference< task::XInteractionHandler >() );
+        {
+            uno::Reference<task::XInteractionHandler> xTmpHandler(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(),
+                                                                  VCLUnoHelper::GetInterface(GetParentDialog())));
+            xMasterPasswd->changeMasterPassword(xTmpHandler);
+        }
     }
     catch (const Exception&)
     {}
@@ -713,9 +734,12 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, MasterPasswordCBHdl, Button*, void)
         Reference< task::XPasswordContainer2 > xMasterPasswd(
             task::PasswordContainer::create(comphelper::getProcessComponentContext()));
 
+        uno::Reference<task::XInteractionHandler> xTmpHandler(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(),
+                                                              VCLUnoHelper::GetInterface(GetParentDialog())));
+
         if ( m_pMasterPasswordCB->IsChecked() )
         {
-            if ( xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->changeMasterPassword( Reference< task::XInteractionHandler >() ) )
+            if (xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->changeMasterPassword(xTmpHandler))
             {
                 m_pMasterPasswordPB->Enable();
                 m_pMasterPasswordFT->Enable();
@@ -729,7 +753,7 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, MasterPasswordCBHdl, Button*, void)
         }
         else
         {
-            if ( xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->useDefaultMasterPassword( Reference< task::XInteractionHandler >() ) )
+            if ( xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->useDefaultMasterPassword(xTmpHandler) )
             {
                 m_pMasterPasswordPB->Enable( false );
                 m_pMasterPasswordFT->Enable( false );
@@ -755,7 +779,10 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, ShowPasswordsHdl, Button*, void)
         Reference< task::XPasswordContainer2 > xMasterPasswd(
             task::PasswordContainer::create(comphelper::getProcessComponentContext()));
 
-        if ( xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->authorizateWithMasterPassword( Reference< task::XInteractionHandler>() ) )
+        uno::Reference<task::XInteractionHandler> xTmpHandler(task::InteractionHandler::createWithParent(comphelper::getProcessComponentContext(),
+                                                              VCLUnoHelper::GetInterface(GetParentDialog())));
+
+        if ( xMasterPasswd->isPersistentStoringAllowed() && xMasterPasswd->authorizateWithMasterPassword(xTmpHandler) )
         {
             ScopedVclPtrInstance< svx::WebConnectionInfoDialog > aDlg(this);
             aDlg->Execute();
@@ -859,9 +886,9 @@ void SvxSecurityTabPage::InitControls()
     }
 }
 
-VclPtr<SfxTabPage> SvxSecurityTabPage::Create(vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SvxSecurityTabPage::Create(TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxSecurityTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SvxSecurityTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 void SvxSecurityTabPage::ActivatePage( const SfxItemSet& )
@@ -898,16 +925,16 @@ bool SvxSecurityTabPage::FillItemSet( SfxItemSet* )
 {
     bool bModified = false;
 
-    if ( mpSecOptDlg )
+    if (m_xSecOptDlg)
     {
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnSaveOrSend, mpSecOptDlg->IsSaveOrSendDocsChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnSigning, mpSecOptDlg->IsSignDocsChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnPrint, mpSecOptDlg->IsPrintDocsChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnCreatePdf, mpSecOptDlg->IsCreatePdfChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo, mpSecOptDlg->IsRemovePersInfoChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnRecommendPassword, mpSecOptDlg->IsRecommPasswdChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::CtrlClickHyperlink, mpSecOptDlg->IsCtrlHyperlinkChecked(), bModified );
-        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::BlockUntrustedRefererLinks, mpSecOptDlg->IsBlockUntrustedRefererLinksChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnSaveOrSend, m_xSecOptDlg->IsSaveOrSendDocsChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnSigning, m_xSecOptDlg->IsSignDocsChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnPrint, m_xSecOptDlg->IsPrintDocsChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnCreatePdf, m_xSecOptDlg->IsCreatePdfChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo, m_xSecOptDlg->IsRemovePersInfoChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::DocWarnRecommendPassword, m_xSecOptDlg->IsRecommPasswdChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::CtrlClickHyperlink, m_xSecOptDlg->IsCtrlHyperlinkChecked(), bModified );
+        CheckAndSave( *mpSecOptions, SvtSecurityOptions::EOption::BlockUntrustedRefererLinks, m_xSecOptDlg->IsBlockUntrustedRefererLinksChecked(), bModified );
     }
 
     return bModified;
@@ -974,9 +1001,9 @@ void SvxEMailTabPage::dispose()
 
 /* -------------------------------------------------------------------------*/
 
-VclPtr<SfxTabPage>  SvxEMailTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage>  SvxEMailTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxEMailTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SvxEMailTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 /* -------------------------------------------------------------------------*/
@@ -1031,7 +1058,7 @@ IMPL_LINK(  SvxEMailTabPage, FileDialogHdl_Impl, Button*, pButton, void )
 {
     if (m_pMailerURLPB == pButton && !pImpl->bROProgram)
     {
-        FileDialogHelper aHelper(css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, this);
+        FileDialogHelper aHelper(css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, GetFrameWeld());
         OUString sPath = m_pMailerURLED->GetText();
         if ( sPath.isEmpty() )
             sPath = "/usr/bin";

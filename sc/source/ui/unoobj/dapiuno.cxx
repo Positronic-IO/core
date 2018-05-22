@@ -42,6 +42,7 @@
 #include <hints.hxx>
 #include <dputil.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <generalfunction.hxx>
 
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
@@ -918,7 +919,7 @@ Any SAL_CALL ScDataPilotDescriptorBase::getPropertyValue( const OUString& aPrope
             }
             else if ( aPropertyName == SC_UNO_DP_GRANDTOTAL_NAME )
             {
-                const OUString* pGrandTotalName = aNewData.GetGrandTotalName();
+                const boost::optional<OUString> & pGrandTotalName = aNewData.GetGrandTotalName();
                 if (pGrandTotalName)
                     aRet <<= *pGrandTotalName;      // same behavior as in ScDPSource
             }
@@ -1310,18 +1311,13 @@ void ScDataPilotTableObj::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
     else if ( dynamic_cast<const ScUpdateRefHint*>(&rHint) )
     {
         ScRange aRange( 0, 0, nTab );
-        ScRangeList aRanges;
-        aRanges.Append( aRange );
+        ScRangeList aRanges( aRange );
         const ScUpdateRefHint& rRef = static_cast< const ScUpdateRefHint& >( rHint );
         if ( aRanges.UpdateReference( rRef.GetMode(), &GetDocShell()->GetDocument(), rRef.GetRange(),
                  rRef.GetDx(), rRef.GetDy(), rRef.GetDz() ) &&
              aRanges.size() == 1 )
         {
-            const ScRange* pRange = aRanges.front();
-            if ( pRange )
-            {
-                nTab = pRange->aStart.Tab();
-            }
+            nTab = aRanges.front().aStart.Tab();
         }
     }
 
@@ -1771,7 +1767,7 @@ OUString SAL_CALL ScDataPilotFieldObj::getName()
             aName = SC_DATALAYOUT_NAME;
         else
         {
-            const OUString* pLayoutName = pDim->GetLayoutName();
+            const boost::optional<OUString> & pLayoutName = pDim->GetLayoutName();
             if (pLayoutName)
                 aName = *pLayoutName;
             else
@@ -1975,7 +1971,7 @@ Any SAL_CALL ScDataPilotFieldObj::getPropertyValue( const OUString& aPropertyNam
     {
         const DataPilotFieldAutoShowInfo* pInfo = getAutoShowInfo();
         if (pInfo)
-            aRet <<= DataPilotFieldAutoShowInfo(*pInfo);
+            aRet <<= *pInfo;
     }
     else if ( aPropertyName == SC_UNONAME_HASLAYOUTINFO )
         aRet <<= (getLayoutInfo() != nullptr);
@@ -1983,7 +1979,7 @@ Any SAL_CALL ScDataPilotFieldObj::getPropertyValue( const OUString& aPropertyNam
     {
         const DataPilotFieldLayoutInfo* pInfo = getLayoutInfo();
         if (pInfo)
-            aRet <<= DataPilotFieldLayoutInfo(*pInfo);
+            aRet <<= *pInfo;
     }
     else if ( aPropertyName == SC_UNONAME_HASREFERENCE )
         aRet <<= (getReference() != nullptr);
@@ -1991,7 +1987,7 @@ Any SAL_CALL ScDataPilotFieldObj::getPropertyValue( const OUString& aPropertyNam
     {
         const DataPilotFieldReference* pRef = getReference();
         if (pRef)
-            aRet <<= DataPilotFieldReference(*pRef);
+            aRet <<= *pRef;
     }
     else if ( aPropertyName == SC_UNONAME_HASSORTINFO )
         aRet <<= (getSortInfo() != nullptr);
@@ -1999,7 +1995,7 @@ Any SAL_CALL ScDataPilotFieldObj::getPropertyValue( const OUString& aPropertyNam
     {
         const DataPilotFieldSortInfo* pInfo = getSortInfo();
         if (pInfo)
-            aRet <<= DataPilotFieldSortInfo(*pInfo);
+            aRet <<= *pInfo;
     }
     else if ( aPropertyName == SC_UNONAME_ISGROUP )
         aRet <<= hasGroupInfo();
@@ -2613,7 +2609,7 @@ Reference< XDataPilotField > SAL_CALL ScDataPilotFieldObj::createNameGroup( cons
         }
         OUString aGroupDimName = pGroupDimension->GetGroupDimName();
 
-        OUString aGroupName = pGroupDimension->CreateGroupName( ScGlobal::GetRscString(STR_PIVOT_GROUP) );
+        OUString aGroupName = pGroupDimension->CreateGroupName( ScResId(STR_PIVOT_GROUP) );
         ScDPSaveGroupItem aGroup( aGroupName );
         for (sal_Int32 nEntry = 0; nEntry < rItems.getLength(); nEntry++)
         {

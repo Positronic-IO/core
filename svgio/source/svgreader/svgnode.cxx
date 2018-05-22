@@ -185,7 +185,7 @@ namespace svgio
             if(mpLocalCssStyle)
             {
                 // if we have one, use as first entry
-                maCssStyleVector.push_back(mpLocalCssStyle);
+                maCssStyleVector.push_back(mpLocalCssStyle.get());
             }
 
             // check the hierarchy for concatenated patterns of Selectors
@@ -263,8 +263,6 @@ namespace svgio
             mpParent(pParent),
             mpAlternativeParent(nullptr),
             maChildren(),
-            mpId(nullptr),
-            mpClass(nullptr),
             maXmlSpace(XmlSpace_notset),
             maDisplay(Display_inline),
             maCssStyleVector(),
@@ -275,7 +273,7 @@ namespace svgio
 
             if(pParent)
             {
-                pParent->maChildren.push_back(this);
+                pParent->maChildren.emplace_back(this);
             }
             else
             {
@@ -290,13 +288,6 @@ namespace svgio
 
         SvgNode::~SvgNode()
         {
-            while(maChildren.size())
-            {
-                delete maChildren[maChildren.size() - 1];
-                maChildren.pop_back();
-            }
-
-            delete mpLocalCssStyle;
         }
 
         void SvgNode::readLocalCssStyle(const OUString& aContent)
@@ -304,7 +295,7 @@ namespace svgio
             if(!mpLocalCssStyle)
             {
                 // create LocalCssStyle if needed but not yet added
-                mpLocalCssStyle = new SvgStyleAttributes(*this);
+                mpLocalCssStyle.reset(new SvgStyleAttributes(*this));
             }
             else
             {
@@ -429,7 +420,7 @@ namespace svgio
                 {
                     if(!aContent.isEmpty())
                     {
-                        setId(&aContent);
+                        setId(aContent);
                     }
                     break;
                 }
@@ -437,7 +428,7 @@ namespace svgio
                 {
                     if(!aContent.isEmpty())
                     {
-                        setClass(&aContent);
+                        setClass(aContent);
                     }
                     break;
                 }
@@ -504,7 +495,7 @@ namespace svgio
                 }
             }
 
-            const SvgNodeVector& rChildren = getChildren();
+            const auto& rChildren = getChildren();
 
             if(!rChildren.empty())
             {
@@ -512,11 +503,11 @@ namespace svgio
 
                 for(sal_uInt32 a(0); a < nCount; a++)
                 {
-                    SvgNode* pCandidate = rChildren[a];
+                    SvgNode* pCandidate = rChildren[a].get();
 
                     if(pCandidate && Display_none != pCandidate->getDisplay())
                     {
-                        const SvgNodeVector& rGrandChildren = pCandidate->getChildren();
+                        const auto& rGrandChildren = pCandidate->getChildren();
                         const SvgStyleAttributes* pChildStyles = pCandidate->getSvgStyleAttributes();
                         // decompose:
                         // - visible terminal nodes
@@ -636,7 +627,7 @@ namespace svgio
             return getCurrentXHeightInherited();
         }
 
-        void SvgNode::setId(const OUString* pfId)
+        void SvgNode::setId(OUString const & rId)
         {
             if(mpId)
             {
@@ -644,14 +635,11 @@ namespace svgio
                 mpId.reset();
             }
 
-            if(pfId)
-            {
-                mpId.reset( new OUString(*pfId) );
-                mrDocument.addSvgNodeToMapper(*mpId, *this);
-            }
+            mpId = rId;
+            mrDocument.addSvgNodeToMapper(*mpId, *this);
         }
 
-        void SvgNode::setClass(const OUString* pfClass)
+        void SvgNode::setClass(OUString const & rClass)
         {
             if(mpClass)
             {
@@ -659,11 +647,8 @@ namespace svgio
                 mpClass.reset();
             }
 
-            if(pfClass)
-            {
-                mpClass.reset( new OUString(*pfClass) );
-                mrDocument.addSvgNodeToMapper(*mpClass, *this);
-            }
+            mpClass = rClass;
+            mrDocument.addSvgNodeToMapper(*mpClass, *this);
         }
 
         XmlSpace SvgNode::getXmlSpace() const

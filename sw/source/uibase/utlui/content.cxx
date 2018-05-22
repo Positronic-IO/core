@@ -858,7 +858,6 @@ SwContentTree::SwContentTree(vcl::Window* pParent, SwNavigationPI* pDialog)
     , m_bViewHasChanged(false)
     , m_bIsKeySpace(false)
 {
-    SetSublistDontOpenWithDoubleClick();
     SetHelpId(HID_NAVIGATOR_TREELIST);
 
     SetNodeDefaultImages();
@@ -932,7 +931,6 @@ OUString SwContentTree::GetEntryAltText( SvTreeListEntry* pEntry ) const
                         {
                         case OBJ_GRUP:
                         case OBJ_TEXT:
-                        case OBJ_TEXTEXT:
                         case OBJ_LINE:
                         case OBJ_RECT:
                         case OBJ_CUSTOMSHAPE:
@@ -1016,7 +1014,6 @@ OUString SwContentTree::GetEntryLongDescription( SvTreeListEntry* pEntry ) const
                         {
                         case OBJ_GRUP:
                         case OBJ_TEXT:
-                        case OBJ_TEXTEXT:
                         case OBJ_LINE:
                         case OBJ_RECT:
                         case OBJ_CUSTOMSHAPE:
@@ -1156,7 +1153,7 @@ sal_Int8 SwContentTree::ExecuteDrop( const ExecuteDropEvent& rEvt )
 
 VclPtr<PopupMenu> SwContentTree::CreateContextMenu()
 {
-    VclPtrInstance<PopupMenu> pPop;
+    auto pPop = VclPtr<PopupMenu>::Create();
     VclPtrInstance<PopupMenu> pSubPop1;
     VclPtrInstance<PopupMenu> pSubPop2;
     VclPtrInstance<PopupMenu> pSubPop3;
@@ -1252,7 +1249,7 @@ VclPtr<PopupMenu> SwContentTree::CreateContextMenu()
                 pSubPop4->CheckItem( 405, SwEditShell::IsTOXBaseReadonly(*pBase));
                 pSubPop4->InsertItem(501, m_aContextStrings[IDX_STR_DELETE_ENTRY]);
             }
-            else if(ContentTypeId::TABLE == nContentType && !bReadonly)
+            else if(ContentTypeId::TABLE == nContentType)
             {
                 bSubPop4 = true;
                 pSubPop4->InsertItem(403, m_aContextStrings[IDX_STR_EDIT_ENTRY]);
@@ -1264,7 +1261,7 @@ VclPtr<PopupMenu> SwContentTree::CreateContextMenu()
                 pSubPop4->EnableItem(404, bProt );
                 pSubPop4->InsertItem(501, m_aContextStrings[IDX_STR_DELETE_ENTRY]);
             }
-            else if(bEditable || bDeletable)
+            else
             {
 
                 if(bEditable && bDeletable)
@@ -2707,7 +2704,15 @@ void SwContentTree::MouseButtonDown( const MouseEvent& rMEvt )
     if( !pEntry && rMEvt.IsLeft() && rMEvt.IsMod1() && (rMEvt.GetClicks() % 2) == 0)
         Control::MouseButtonDown( rMEvt );
     else
+    {
+        if( pEntry && (rMEvt.GetClicks() % 2) == 0)
+        {
+            SwContent* pCnt = static_cast<SwContent*>(pEntry->GetUserData());
+            const ContentTypeId nActType = pCnt->GetParent()->GetType();
+            SetSublistDontOpenWithDoubleClick( nActType == ContentTypeId::OUTLINE );
+        }
         SvTreeListBox::MouseButtonDown( rMEvt );
+    }
 }
 
 // Update immediately
@@ -2835,7 +2840,6 @@ void SwContentTree::KeyInput(const KeyEvent& rEvent)
                             {
                                 case OBJ_GRUP:
                                 case OBJ_TEXT:
-                                case OBJ_TEXTEXT:
                                 case OBJ_LINE:
                                 case OBJ_RECT:
                                 case OBJ_CIRC:
@@ -3375,7 +3379,7 @@ void SwContentTree::EditEntry(SvTreeListEntry const * pEntry, EditEntryMode nMod
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
         OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-        ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(pFact->CreateSwRenameXNamedDlg(this, xNamed, xNameAccess));
+        ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(pFact->CreateSwRenameXNamedDlg(GetFrameWeld(), xNamed, xNameAccess));
         OSL_ENSURE(pDlg, "Dialog creation failed!");
         if(xSecond.is())
             pDlg->SetAlternativeAccess( xSecond, xThird);
@@ -3480,6 +3484,8 @@ void SwContentTree::GotoContent(SwContent* pCnt)
                     }
                 }
                 m_pActiveShell->GetNavigationMgr().addEntry(aPos);
+                m_pActiveShell->EnterStdMode();
+                bSel = true;
             }
         }
         break;

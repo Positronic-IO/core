@@ -43,7 +43,7 @@ static const ShapePropertyIds spnDefaultShapeIds =
     PROP_LineStyle, PROP_LineWidth, PROP_LineColor, PROP_LineTransparence, PROP_LineDash, PROP_LineJoint,
     PROP_LineStartName, PROP_LineStartWidth, PROP_LineStartCenter, PROP_LineEndName, PROP_LineEndWidth, PROP_LineEndCenter,
     PROP_FillStyle, PROP_FillColor, PROP_FillTransparence, PROP_FillTransparenceGradientName, PROP_FillGradient,
-    PROP_FillBitmapURL, PROP_FillBitmapMode, PROP_FillBitmapSizeX, PROP_FillBitmapSizeY,
+    PROP_FillBitmap, PROP_FillBitmapMode, PROP_FillBitmapSizeX, PROP_FillBitmapSizeY,
     PROP_FillBitmapPositionOffsetX, PROP_FillBitmapPositionOffsetY, PROP_FillBitmapRectanglePoint,
     PROP_FillHatch,
     PROP_ShadowXDistance,
@@ -56,12 +56,12 @@ static const ShapePropertyIds spnDefaultShapeIds =
 ShapePropertyInfo ShapePropertyInfo::DEFAULT( spnDefaultShapeIds, true, false, false, false );
 
 ShapePropertyInfo::ShapePropertyInfo( const ShapePropertyIds& rnPropertyIds,
-        bool bNamedLineMarker, bool bNamedLineDash, bool bNamedFillGradient, bool bNamedFillBitmapUrl ) :
+        bool bNamedLineMarker, bool bNamedLineDash, bool bNamedFillGradient, bool bNamedFillBitmap ) :
     mrPropertyIds(rnPropertyIds),
     mbNamedLineMarker( bNamedLineMarker ),
     mbNamedLineDash( bNamedLineDash ),
     mbNamedFillGradient( bNamedFillGradient ),
-    mbNamedFillBitmapUrl( bNamedFillBitmapUrl )
+    mbNamedFillBitmap( bNamedFillBitmap )
 {
 }
 
@@ -103,11 +103,11 @@ bool ShapePropertyMap::setAnyProperty( ShapeProperty ePropId, const Any& rValue 
         case ShapeProperty::GradientTransparency:
             return setGradientTrans( nPropId, rValue );
 
-        case ShapeProperty::FillBitmapUrl:
-            return setFillBitmapUrl( nPropId, rValue );
+        case ShapeProperty::FillBitmap:
+            return setFillBitmap(nPropId, rValue);
 
-        case ShapeProperty::FillBitmapNameFromUrl:
-            return setFillBitmapNameFromUrl( rValue );
+        case ShapeProperty::FillBitmapName:
+            return setFillBitmapName(rValue);
 
         default:;   // suppress compiler warnings
     }
@@ -180,23 +180,26 @@ bool ShapePropertyMap::setGradientTrans( sal_Int32 nPropId, const Any& rValue )
     return false;
 }
 
-bool ShapePropertyMap::setFillBitmapUrl( sal_Int32 nPropId, const Any& rValue )
+bool ShapePropertyMap::setFillBitmap(sal_Int32 nPropId, const Any& rValue)
 {
-    // push bitmap URL explicitly
-    if( !maShapePropInfo.mbNamedFillBitmapUrl )
-        return setAnyProperty( nPropId, rValue );
+    // push bitmap explicitly
+    if (!maShapePropInfo.mbNamedFillBitmap)
+    {
+        return setAnyProperty(nPropId, rValue);
+    }
 
     // create named bitmap URL and push its name
-    if( rValue.has< OUString >() )
+    if (rValue.has<uno::Reference<graphic::XGraphic>>())
     {
-        OUString aBitmapUrlName = mrModelObjHelper.insertFillBitmapUrl( rValue.get< OUString >() );
-        return !aBitmapUrlName.isEmpty() && setProperty( nPropId, aBitmapUrlName );
+        auto xGraphic = rValue.get<uno::Reference<graphic::XGraphic>>();
+        OUString aBitmapName = mrModelObjHelper.insertFillBitmapXGraphic(xGraphic);
+        return !aBitmapName.isEmpty() && setProperty(nPropId, aBitmapName);
     }
 
     return false;
 }
 
-bool ShapePropertyMap::setFillBitmapNameFromUrl(const Any& rValue)
+bool ShapePropertyMap::setFillBitmapName(const Any& rValue)
 {
     if (rValue.has<uno::Reference<graphic::XGraphic>>())
     {

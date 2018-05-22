@@ -117,7 +117,7 @@ class Desktop : public Application
         // first-start (ever) related methods
         static bool             CheckExtensionDependencies();
 
-        void                    SynchronizeExtensionRepositories();
+        static void             SynchronizeExtensionRepositories(bool bCleanedExtensionCache, Desktop* pDesktop = nullptr);
         void                    SetSplashScreenText( const OUString& rText );
         void                    SetSplashScreenProgress( sal_Int32 );
 
@@ -130,9 +130,11 @@ class Desktop : public Application
                                     css::uno::Reference< css::uno::XComponentContext > const & context);
         static void             DeregisterServices();
 
+    public:
         static void             CreateTemporaryDirectory();
         static void             RemoveTemporaryDirectory();
 
+    private:
         static bool             InitializeConfiguration();
         static void             FlushConfiguration();
         static bool             InitializeQuickstartMode( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
@@ -181,6 +183,7 @@ OUString ReplaceStringHookProc(const OUString& rStr);
 
 #if defined( UNX ) && !defined MACOSX && !defined IOS && !defined ANDROID && !defined LIBO_HEADLESS
 bool fire_glxtest_process();
+void reap_glxtest_process();
 #endif
 
 #endif // INCLUDED_DESKTOP_INC_APP_HXX

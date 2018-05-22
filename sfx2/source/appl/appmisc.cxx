@@ -21,7 +21,6 @@
 
 #include <vcl/canvastools.hxx>
 #include <vcl/status.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/whiter.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
@@ -35,7 +34,6 @@
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <unotools/configmgr.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <framework/menuconfiguration.hxx>
 #include <comphelper/processfactory.hxx>
 #include <unotools/localfilehelper.hxx>
@@ -45,7 +43,6 @@
 #include <osl/process.h>
 #include <rtl/bootstrap.hxx>
 
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/app.hxx>
 #include <appdata.hxx>
 #include <sfx2/tbxctrl.hxx>
@@ -58,7 +55,6 @@
 #include <sfx2/dispatch.hxx>
 #include <workwin.hxx>
 #include <sfx2/fcontnr.hxx>
-#include <sfx2/strings.hrc>
 #include <sfx2/templdlg.hxx>
 #include <sfx2/module.hxx>
 #include <sfx2/msgpool.hxx>
@@ -76,7 +72,7 @@ using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::container;
 
-#define SfxApplication
+#define ShellClass_SfxApplication
 #include <sfxslots.hxx>
 
 SFX_IMPL_INTERFACE(SfxApplication,SfxShell)

@@ -38,10 +38,10 @@ ImplImageList::ImplImageList( const ImplImageList &aSrc )
     , maImageSize(aSrc.maImageSize)
 {
     maImages.reserve( aSrc.maImages.size() );
-    for ( std::vector<ImageAryData *>::const_iterator aIt = aSrc.maImages.begin(), aEnd = aSrc.maImages.end(); aIt != aEnd; ++aIt )
+    for (auto const& elem : aSrc.maImages)
     {
-        ImageAryData* pAryData = new ImageAryData( **aIt );
-        maImages.push_back( pAryData );
+        ImageAryData* pAryData = new ImageAryData(*elem);
+        maImages.emplace_back( pAryData );
         if( !pAryData->maName.isEmpty() )
             maNameHash [ pAryData->maName ] = pAryData;
     }
@@ -49,22 +49,20 @@ ImplImageList::ImplImageList( const ImplImageList &aSrc )
 
 ImplImageList::~ImplImageList()
 {
-    for ( std::vector<ImageAryData *>::iterator aIt = maImages.begin(), aEnd = maImages.end(); aIt != aEnd; ++aIt )
-        delete *aIt;
 }
 
 void ImplImageList::AddImage( const OUString &aName,
                               sal_uInt16 nId, const BitmapEx &aBitmapEx )
 {
     ImageAryData *pImg = new ImageAryData( aName, nId, aBitmapEx );
-    maImages.push_back( pImg );
+    maImages.emplace_back( pImg );
     if( !aName.isEmpty() )
         maNameHash [ aName ] = pImg;
 }
 
 void ImplImageList::RemoveImage( sal_uInt16 nPos )
 {
-    ImageAryData *pImg = maImages[ nPos ];
+    ImageAryData *pImg = maImages[ nPos ].get();
     if( !pImg->maName.isEmpty() )
         maNameHash.erase( pImg->maName );
     maImages.erase( maImages.begin() + nPos );

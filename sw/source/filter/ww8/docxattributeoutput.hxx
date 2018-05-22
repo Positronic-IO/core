@@ -27,6 +27,7 @@
 #include <IMark.hxx>
 #include "docxexport.hxx"
 
+#include <editeng/boxitem.hxx>
 #include <sax/fshelper.hxx>
 #include <sax/fastattribs.hxx>
 #include <vcl/vclenum.hxx>
@@ -80,29 +81,13 @@ enum DocxColBreakStatus
  */
 struct OutputBorderOptions
 {
-    sal_Int32           tag;
-    bool                bUseStartEnd;
-    bool                bWriteTag;
-    bool                bWriteInsideHV;
-    bool                bWriteDistance;
-    SvxShadowLocation   aShadowLocation;
-    bool                bCheckDistanceSize;
-
-    OutputBorderOptions() : tag(0), bUseStartEnd(false), bWriteTag(true), bWriteInsideHV(false), bWriteDistance(false), aShadowLocation(SvxShadowLocation::NONE), bCheckDistanceSize(false) {}
-};
-
-/**
- * A structure that holds information about the page margins.
- *
- */
-struct PageMargins
-{
-    sal_uInt16 nPageMarginLeft;
-    sal_uInt16 nPageMarginRight;
-    sal_uInt16 nPageMarginTop;
-    sal_uInt16 nPageMarginBottom;
-
-    PageMargins() : nPageMarginLeft(0), nPageMarginRight(0), nPageMarginTop(0), nPageMarginBottom(0) {}
+    sal_Int32           tag = 0;
+    bool                bUseStartEnd = false;
+    bool                bWriteTag = true;
+    bool                bWriteInsideHV = false;
+    bool                bWriteDistance = false;
+    SvxShadowLocation   aShadowLocation = SvxShadowLocation::NONE;
+    std::shared_ptr<editeng::WordBorderDistances> pDistances;
 };
 
 struct DocxTableExportContext;
@@ -929,7 +914,7 @@ private:
     /// Is fake rotation detected, so rotation with 90 degrees should be ignored in this cell?
     bool m_bBtLr;
 
-    PageMargins m_pageMargins;
+    editeng::WordPageMargins m_pageMargins;
 
     std::shared_ptr<DocxTableStyleExport> m_pTableStyleExport;
     // flag to check if auto spacing was set in original file

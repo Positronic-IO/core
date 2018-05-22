@@ -120,7 +120,7 @@ public:
     OUString      GetCurCommand();
     OUString      GetCurLabel();
     OUString      GetSelectedScriptURI();
-    OUString      GetHelpText();
+    OUString      GetHelpText( bool bConsiderParent = true );
 };
 
 struct SvxConfigGroupBoxResource_Impl;
@@ -201,7 +201,7 @@ public:
     SvxScriptSelectorDialog (
         vcl::Window* pParent,
         bool bShowSlots,
-        const css::uno::Reference< css::frame::XFrame >& xFrame = nullptr
+        const css::uno::Reference< css::frame::XFrame >& xFrame
     );
     virtual ~SvxScriptSelectorDialog() override;
     virtual void dispose() override;

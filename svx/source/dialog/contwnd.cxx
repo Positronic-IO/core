@@ -18,7 +18,6 @@
  */
 
 #include <svx/xoutbmp.hxx>
-#include <svx/strings.hrc>
 #include <svx/svxids.hrc>
 #include "contwnd.hxx"
 #include <svx/svdpage.hxx>
@@ -55,13 +54,17 @@ void ContourWindow::SetPolyPolygon(const tools::PolyPolygon& rPolyPoly)
     // them first (!)
     pView->UnmarkAllObj();
 
-    pPage->Clear();
+    // clear SdrObjects with broadcasting
+    pPage->ClearSdrObjList();
 
     for (sal_uInt16 i = 0; i < nPolyCount; i++)
     {
         basegfx::B2DPolyPolygon aPolyPolygon;
         aPolyPolygon.append(aPolyPoly[ i ].getB2DPolygon());
-        SdrPathObj* pPathObj = new SdrPathObj( OBJ_PATHFILL, aPolyPolygon );
+        SdrPathObj* pPathObj = new SdrPathObj(
+            *pModel,
+            OBJ_PATHFILL,
+            aPolyPolygon);
 
         SfxItemSet aSet(pModel->GetItemPool());
 

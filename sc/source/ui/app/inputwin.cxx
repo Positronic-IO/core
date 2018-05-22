@@ -75,6 +75,7 @@
 #include <svtools/miscopt.hxx>
 #include <comphelper/string.hxx>
 #include <com/sun/star/frame/XLayoutManager.hpp>
+#include <helpids.h>
 
 #define THESIZE             1000000 // Should be more than enough!
 #define TBX_WINDOW_HEIGHT   22 // in pixel - TODO: The same on all systems?
@@ -168,10 +169,6 @@ ScInputWindow::ScInputWindow( vcl::Window* pParent, const SfxBindings* pBind ) :
         pRuntimeWindow  ( lcl_chooseRuntimeImpl( this, pBind ) ),
         aTextWindow     ( *pRuntimeWindow ),
         pInputHdl       ( nullptr ),
-        aTextOk         ( ScResId( SCSTR_QHELP_BTNOK ) ),       // Not always new as a Resource
-        aTextCancel     ( ScResId( SCSTR_QHELP_BTNCANCEL ) ),
-        aTextSum        ( ScResId( SCSTR_QHELP_BTNSUM ) ),
-        aTextEqual      ( ScResId( SCSTR_QHELP_BTNEQUAL ) ),
         mnMaxY          (0),
         bIsOkCancelMode ( false ),
         bInResize       ( false )
@@ -208,16 +205,16 @@ ScInputWindow::ScInputWindow( vcl::Window* pParent, const SfxBindings* pBind ) :
     SetItemText (SID_INPUT_FUNCTION, ScResId(SCSTR_QHELP_BTNCALC));
     SetHelpId   (SID_INPUT_FUNCTION, HID_INSWIN_CALC);
 
-    SetItemText (SID_INPUT_SUM, aTextSum);
+    SetItemText (SID_INPUT_SUM, ScResId( SCSTR_QHELP_BTNSUM ) );
     SetHelpId   (SID_INPUT_SUM, HID_INSWIN_SUMME);
 
-    SetItemText (SID_INPUT_EQUAL, aTextEqual);
+    SetItemText (SID_INPUT_EQUAL, ScResId( SCSTR_QHELP_BTNEQUAL ) );
     SetHelpId   (SID_INPUT_EQUAL, HID_INSWIN_FUNC);
 
-    SetItemText ( SID_INPUT_CANCEL, aTextCancel );
+    SetItemText ( SID_INPUT_CANCEL, ScResId( SCSTR_QHELP_BTNCANCEL ) );
     SetHelpId   ( SID_INPUT_CANCEL, HID_INSWIN_CANCEL );
 
-    SetItemText ( SID_INPUT_OK, aTextOk );
+    SetItemText ( SID_INPUT_OK, ScResId( SCSTR_QHELP_BTNOK ) );
     SetHelpId   ( SID_INPUT_OK, HID_INSWIN_OK );
 
     EnableItem( SID_INPUT_CANCEL, false );
@@ -1417,6 +1414,20 @@ void ScTextWnd::Command( const CommandEvent& rCEvt )
                 rBindings.Invalidate( SID_ATTR_CHAR_FONTHEIGHT );
             }
         }
+        else if ( nCommand == CommandEventId::ContextMenu )
+        {
+            SfxViewFrame* pViewFrm = SfxViewFrame::Current();
+            if (pViewFrm)
+            {
+                Point aPos = rCEvt.GetMousePosPixel();
+                if (!rCEvt.IsMouseEvent())
+                {
+                    Size aSize = GetOutputSizePixel();
+                    aPos = Point(aSize.Width() / 2, aSize.Height() / 2);
+                }
+                pViewFrm->GetDispatcher()->ExecutePopup("formulabar", this, &aPos);
+            }
+        }
         else if ( nCommand == CommandEventId::Wheel )
         {
             //don't call InputChanged for CommandEventId::Wheel
@@ -1424,6 +1435,15 @@ void ScTextWnd::Command( const CommandEvent& rCEvt )
         else if ( nCommand == CommandEventId::Swipe )
         {
             //don't call InputChanged for CommandEventId::Swipe
+        }
+        else if ( nCommand == CommandEventId::LongPress )
+        {
+            //don't call InputChanged for CommandEventId::LongPress
+        }
+        else if ( nCommand == CommandEventId::ModKeyChange )
+        {
+            //pass alt press/release to parent impl
+            Window::Command(rCEvt);
         }
         else
             SC_MOD()->InputChanged( mpEditView.get() );
@@ -1858,7 +1878,7 @@ void ScPosWnd::FillRangeNames()
     {
         ScDocument& rDoc = static_cast<ScDocShell*>(pObjSh)->GetDocument();
 
-        InsertEntry(ScGlobal::GetRscString( STR_MANAGE_NAMES ));
+        InsertEntry(ScResId( STR_MANAGE_NAMES ));
         SetSeparatorPos(0);
 
         ScRange aDummy;
@@ -1932,7 +1952,7 @@ void ScPosWnd::FillFunctions()
     //! Re-add entry "Other..." for Function AutoPilot if it can work with text that
     // has been entered so far
 
-    //  InsertEntry( ScGlobal::GetRscString(STR_FUNCTIONLIST_MORE) );
+    //  InsertEntry( ScResId(STR_FUNCTIONLIST_MORE) );
 
     SetText(aFirstName);
 }
@@ -1989,7 +2009,7 @@ static ScNameInputType lcl_GetInputType( const OUString& rText )
         SCTAB nNameTab;
         sal_Int32 nNumeric;
 
-        if (rText == ScGlobal::GetRscString(STR_MANAGE_NAMES))
+        if (rText == ScResId(STR_MANAGE_NAMES))
             eRet = SC_MANAGE_NAMES;
         else if ( aRange.Parse( rText, pDoc, eConv ) & ScRefFlags::VALID )
             eRet = SC_NAME_INPUT_RANGE;
@@ -2069,7 +2089,7 @@ void ScPosWnd::Modify()
             aPos = pWin->OutputToScreenPixel( aPos );
             tools::Rectangle aRect( aPos, aPos );
 
-            OUString aText = ScGlobal::GetRscString(pStrId);
+            OUString aText = ScResId(pStrId);
             QuickHelpFlags const nAlign = QuickHelpFlags::Left|QuickHelpFlags::Bottom;
             nTipVisible = Help::ShowPopover(pWin, aRect, aText, nAlign);
         }
@@ -2094,7 +2114,7 @@ void ScPosWnd::DoEnter()
         if ( bFormulaMode )
         {
             ScModule* pScMod = SC_MOD();
-            if ( aText == ScGlobal::GetRscString(STR_FUNCTIONLIST_MORE) )
+            if ( aText == ScResId(STR_FUNCTIONLIST_MORE) )
             {
                 // Function AutoPilot
                 //! Continue working with the text entered so far

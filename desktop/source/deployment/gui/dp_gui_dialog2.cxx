@@ -20,7 +20,6 @@
 #include <strings.hrc>
 #include <helpids.h>
 #include <svtools/controldims.hxx>
-#include <svtools/strings.hrc>
 
 #include "dp_gui.h"
 #include "dp_gui_dialog2.hxx"
@@ -673,7 +672,7 @@ bool ExtMgrDialog::acceptLicense( const uno::Reference< deployment::XPackage > &
 
 uno::Sequence< OUString > ExtMgrDialog::raiseAddPicker()
 {
-    sfx2::FileDialogHelper aDlgHelper(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, this);
+    sfx2::FileDialogHelper aDlgHelper(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, GetFrameWeld());
     const uno::Reference<ui::dialogs::XFilePicker3> xFilePicker = aDlgHelper.GetFilePicker();
     xFilePicker->setTitle( m_sAddPackages );
 
@@ -713,13 +712,14 @@ uno::Sequence< OUString > ExtMgrDialog::raiseAddPicker()
     // All files at top:
     xFilePicker->appendFilter( StrAllFiles::get(), "*.*" );
     // then supported ones:
-    t_string2string::const_iterator iPos( title2filter.begin() );
-    const t_string2string::const_iterator iEnd( title2filter.end() );
-    for ( ; iPos != iEnd; ++iPos ) {
-        try {
-            xFilePicker->appendFilter( iPos->first, iPos->second );
+    for (auto const& elem : title2filter)
+    {
+        try
+        {
+            xFilePicker->appendFilter( elem.first, elem.second );
         }
-        catch (const lang::IllegalArgumentException & exc) {
+        catch (const lang::IllegalArgumentException & exc)
+        {
             SAL_WARN( "desktop", exc );
         }
     }
@@ -1022,7 +1022,8 @@ IMPL_STATIC_LINK(ExtMgrDialog, Restart, void*, pParent, void)
 {
     SolarMutexGuard aGuard;
     ::svtools::executeRestartDialog(comphelper::getProcessComponentContext(),
-                                    static_cast<vcl::Window*>(pParent), svtools::RESTART_REASON_EXTENSION_INSTALL);
+                                    pParent ? static_cast<vcl::Window*>(pParent)->GetFrameWeld() : nullptr,
+                                    svtools::RESTART_REASON_EXTENSION_INSTALL);
 }
 
 bool ExtMgrDialog::Close()

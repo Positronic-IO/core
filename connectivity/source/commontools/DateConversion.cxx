@@ -80,7 +80,7 @@ OUString DBTypeConversion::toSQLString(sal_Int32 eType, const Any& _rVal,
                     {
                         OUString aTemp;
                         _rxTypeConverter->convertToSimpleType(_rVal, TypeClass_STRING) >>= aTemp;
-                        sal_Int32 nIndex = sal_Int32(-1);
+                        sal_Int32 nIndex = sal_Int32(-2);
                         const OUString sQuot("\'");
                         do
                         {
@@ -409,7 +409,7 @@ double DBTypeConversion::getValue( const Reference< XColumn >& i_column, const D
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("connectivity.commontools");
         return 0.0;
     }
 }
@@ -479,7 +479,7 @@ OUString DBTypeConversion::getFormattedValue(const Reference<XColumn>& xVariant,
                          }
                          catch( const Exception& )
                          {
-                            DBG_UNHANDLED_EXCEPTION();
+                            DBG_UNHANDLED_EXCEPTION("connectivity.commontools");
                          }
                          // get a value which represents the given date, relative to the null date of the formatter
                          fValue -= toDays( rNullDate, aFormatterNullDate );

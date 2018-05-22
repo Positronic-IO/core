@@ -1678,9 +1678,7 @@ static PyTypeObject PyUNOType =
     nullptr,
     nullptr,
     nullptr
-#if PY_VERSION_HEX >= 0x02060000
     , 0
-#endif
 #if PY_VERSION_HEX >= 0x03040000
     , nullptr
 #endif
@@ -1713,7 +1711,7 @@ PyRef PyUNO_new (
         {
             sal_Int64 that = xUnoTunnel->getSomething( ::pyuno::Adapter::getUnoTunnelImplementationId() );
             if( that )
-                return PyRef( reinterpret_cast<Adapter*>(that)->getWrappedObject() );
+                return reinterpret_cast<Adapter*>(that)->getWrappedObject();
         }
     }
     if( !Py_IsInitialized() )

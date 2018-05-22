@@ -25,19 +25,17 @@
 #include <sfx2/event.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/itemset.hxx>
 #include <sfx2/request.hxx>
 #include <com/sun/star/sdb/CommandType.hpp>
 #include <com/sun/star/sdbc/XDataSource.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
-#include <comphelper/processfactory.hxx>
+#include <comphelper/types.hxx>
 #include <sfx2/frame.hxx>
 #include <fldmgr.hxx>
 #include <fldbas.hxx>
 #include <dbmgr.hxx>
-#include <comphelper/uno3.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 
 #include <vcl/svapp.hxx>
@@ -47,7 +45,6 @@
 #include <swtypes.hxx>
 #include <cmdid.h>
 #include <swevent.hxx>
-#include <strings.hrc>
 #include <textsh.hxx>
 #include <swabstdlg.hxx>
 #include <dbui.hrc>

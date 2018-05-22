@@ -33,7 +33,6 @@
 #include <accmap.hxx>
 
 #include <pagepreviewlayout.hxx>
-#include <strings.hrc>
 #include <svx/svdundo.hxx>
 #include <comphelper/lok.hxx>
 #include <IDocumentLayoutAccess.hxx>
@@ -228,7 +227,10 @@ void SwViewShellImp::MakeDrawView()
                 pOutDevForDrawView = GetShell()->GetOut();
             }
 
-            m_pDrawView = new SwDrawView( *this, rIDDMA.GetDrawModel(), pOutDevForDrawView);
+            m_pDrawView = new SwDrawView(
+                *this,
+                *rIDDMA.GetOrCreateDrawModel(),
+                pOutDevForDrawView);
         }
 
         GetDrawView()->SetActiveLayer("Heaven");
@@ -254,7 +256,7 @@ Color SwViewShellImp::GetRetoucheColor() const
     if ( rSh.GetWin() )
     {
         if ( rSh.GetViewOptions()->getBrowseMode() &&
-             COL_TRANSPARENT != rSh.GetViewOptions()->GetRetoucheColor().GetColor() )
+             COL_TRANSPARENT != rSh.GetViewOptions()->GetRetoucheColor() )
             aRet = rSh.GetViewOptions()->GetRetoucheColor();
         else if(rSh.GetViewOptions()->IsPagePreview()  &&
                     !SW_MOD()->GetAccessibilityOptions().GetIsForPagePreviews())

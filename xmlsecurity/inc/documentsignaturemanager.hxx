@@ -28,6 +28,7 @@
 #include "xmlsignaturehelper.hxx"
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include "documentsignaturehelper.hxx"
 #include <com/sun/star/beans/PropertyValue.hpp>
 
@@ -65,7 +66,12 @@ public:
     /// Add a new signature, using xCert as a signing certificate, and rDescription as description.
     bool add(const css::uno::Reference<css::security::XCertificate>& xCert,
              const css::uno::Reference<css::xml::crypto::XXMLSecurityContext>& xSecurityContext,
-             const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant);
+             const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant,
+             const OUString& rSignatureLineId = OUString(),
+             const css::uno::Reference<css::graphic::XGraphic> xValidGraphic
+             = css::uno::Reference<css::graphic::XGraphic>(),
+             const css::uno::Reference<css::graphic::XGraphic> xInvalidGraphic
+             = css::uno::Reference<css::graphic::XGraphic>());
     /// Remove signature at nPosition.
     void remove(sal_uInt16 nPosition);
     /// Read signatures from either a temp stream or the real storage.

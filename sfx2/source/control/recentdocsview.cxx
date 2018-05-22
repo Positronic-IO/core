@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/base64.hxx>
 #include <sax/tools/converter.hxx>
 #include <sfx2/recentdocsview.hxx>
 #include <sfx2/templatelocalview.hxx>
@@ -25,7 +26,10 @@
 #include <unotools/historyoptions.hxx>
 #include <vcl/builderfactory.hxx>
 #include <vcl/pngread.hxx>
+#include <tools/stream.hxx>
 #include <tools/urlobj.hxx>
+#include <com/sun/star/beans/NamedValue.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XFrame.hpp>
@@ -49,17 +53,72 @@ void SetMessageFont(vcl::RenderContext& rRenderContext)
     rRenderContext.SetFont(aFont);
 }
 
+bool IsDocEncrypted(const OUString& rURL)
+{
+    uno::Reference< uno::XComponentContext > xContext(::comphelper::getProcessComponentContext());
+    bool bIsEncrypted = false;
+
+    try
+    {
+        uno::Reference<lang::XSingleServiceFactory> xStorageFactory = embed::StorageFactory::create(xContext);
+
+        uno::Sequence<uno::Any> aArgs (2);
+        aArgs[0] <<= rURL;
+        aArgs[1] <<= embed::ElementModes::READ;
+        uno::Reference<embed::XStorage> xDocStorage (
+            xStorageFactory->createInstanceWithArguments(aArgs),
+            uno::UNO_QUERY);
+        uno::Reference< beans::XPropertySet > xStorageProps( xDocStorage, uno::UNO_QUERY );
+        if ( xStorageProps.is() )
+        {
+            try
+            {
+                xStorageProps->getPropertyValue("HasEncryptedEntries")
+                    >>= bIsEncrypted;
+            } catch( uno::Exception& ) {}
+        }
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("sfx",
+            "caught exception trying to find out if doc is encrypted"
+            << rURL << ": " << rException);
+    }
+
+    return bIsEncrypted;
+}
+
 }
 
 namespace sfx2
 {
+
+static std::map<ApplicationType,OUString> BitmapForExtension =
+{
+    { ApplicationType::TYPE_WRITER, SFX_FILE_THUMBNAIL_TEXT },
+    { ApplicationType::TYPE_CALC, SFX_FILE_THUMBNAIL_SHEET },
+    { ApplicationType::TYPE_IMPRESS, SFX_FILE_THUMBNAIL_PRESENTATION },
+    { ApplicationType::TYPE_DRAW, SFX_FILE_THUMBNAIL_DRAWING },
+    { ApplicationType::TYPE_DATABASE, SFX_FILE_THUMBNAIL_DATABASE },
+    { ApplicationType::TYPE_MATH, SFX_FILE_THUMBNAIL_MATH }
+};
+
+static std::map<ApplicationType,OUString> EncryptedBitmapForExtension =
+{
+    { ApplicationType::TYPE_WRITER, BMP_128X128_WRITER_DOC },
+    { ApplicationType::TYPE_CALC, BMP_128X128_CALC_DOC },
+    { ApplicationType::TYPE_IMPRESS, BMP_128X128_IMPRESS_DOC },
+    { ApplicationType::TYPE_DRAW, BMP_128X128_DRAW_DOC },
+    // FIXME: icon for encrypted db doc doesn't exist
+    { ApplicationType::TYPE_DATABASE, BMP_128X128_CALC_DOC },
+    { ApplicationType::TYPE_MATH, BMP_128X128_MATH_DOC }
+};
 
 RecentDocsView::RecentDocsView( vcl::Window* pParent )
     : ThumbnailView(pParent)
     , mnFileTypes(ApplicationType::TYPE_NONE)
     , mnTextHeight(30)
     , mnItemPadding(5)
-    , mnItemMaxTextLength(30)
     , mnLastMouseDownItem(THUMBNAILVIEW_ITEM_NOTFOUND)
     , maWelcomeImage(BitmapEx(BMP_WELCOME))
     , maWelcomeLine1(SfxResId(STR_WELCOME_LINE1))
@@ -69,7 +128,7 @@ RecentDocsView::RecentDocsView( vcl::Window* pParent )
     mnItemMaxSize = std::min(aScreen.GetWidth(),aScreen.GetHeight()) > 800 ? 256 : 192;
 
     SetStyle(GetStyle() | WB_VSCROLL);
-    setItemMaxTextLength( mnItemMaxTextLength );
+    setItemMaxTextLength( 30 );
     setItemDimensions( mnItemMaxSize, mnItemMaxSize, mnTextHeight, mnItemPadding );
 
     maFillColor = Color(officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsBackgroundColor::get());
@@ -138,18 +197,16 @@ BitmapEx RecentDocsView::getDefaultThumbnail(const OUString &rURL)
     INetURLObject aUrl(rURL);
     OUString aExt = aUrl.getExtension();
 
-    if (typeMatchesExtension(ApplicationType::TYPE_WRITER, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_TEXT);
-    else if (typeMatchesExtension(ApplicationType::TYPE_CALC, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_SHEET);
-    else if (typeMatchesExtension(ApplicationType::TYPE_IMPRESS, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_PRESENTATION);
-    else if (typeMatchesExtension(ApplicationType::TYPE_DRAW, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_DRAWING);
-    else if (typeMatchesExtension(ApplicationType::TYPE_DATABASE, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_DATABASE);
-    else if (typeMatchesExtension(ApplicationType::TYPE_MATH, aExt))
-        aImg = BitmapEx(SFX_FILE_THUMBNAIL_MATH);
+    const std::map<ApplicationType,OUString>& rWhichMap = IsDocEncrypted( rURL) ?
+        EncryptedBitmapForExtension : BitmapForExtension;
+
+    std::map<ApplicationType,OUString>::const_iterator mIt =
+        std::find_if( rWhichMap.begin(), rWhichMap.end(),
+              [aExt] ( const std::pair<ApplicationType,OUString>& aEntry )
+              { return typeMatchesExtension( aEntry.first, aExt); } );
+
+    if (mIt != rWhichMap.end())
+        aImg = BitmapEx(mIt->second);
     else
         aImg = BitmapEx(SFX_FILE_THUMBNAIL_DEFAULT);
 
@@ -190,7 +247,7 @@ void RecentDocsView::Reload()
                 if (!aBase64.isEmpty())
                 {
                     Sequence<sal_Int8> aDecoded;
-                    sax::Converter::decodeBase64(aDecoded, aBase64);
+                    comphelper::Base64::decode(aDecoded, aBase64);
 
                     SvMemoryStream aStream(aDecoded.getArray(), aDecoded.getLength(), StreamMode::READ);
                     vcl::PNGReader aReader(aStream);
@@ -288,22 +345,21 @@ void RecentDocsView::Paint(vcl::RenderContext& rRenderContext, const tools::Rect
 
         long nTextHeight = rRenderContext.GetTextHeight();
 
-        long nTextWidth1 = rRenderContext.GetTextWidth(maWelcomeLine1);
-        long nTextWidth2 = rRenderContext.GetTextWidth(maWelcomeLine2);
-
         const Size& rImgSize = maWelcomeImage.GetSizePixel();
         const Size& rSize = GetSizePixel();
 
         const int nX = (rSize.Width() - rImgSize.Width())/2;
-        const int nY = (rSize.Height() - 3 * nTextHeight - rImgSize.Height())/2;
-
+        int nY = (rSize.Height() - 3 * nTextHeight - rImgSize.Height())/2;
         Point aImgPoint(nX, nY);
-        Point aStr1Point((rSize.Width() - nTextWidth1)/2, nY + rImgSize.Height());
-        Point aStr2Point((rSize.Width() - nTextWidth2)/2, nY + rImgSize.Height() + 1.5 * nTextHeight);
-
         rRenderContext.DrawImage(aImgPoint, rImgSize, maWelcomeImage);
-        rRenderContext.DrawText(aStr1Point, maWelcomeLine1);
-        rRenderContext.DrawText(aStr2Point, maWelcomeLine2);
+
+        nY = nY + rImgSize.Height();
+        rRenderContext.DrawText(tools::Rectangle(0, nY, rSize.Width(), nY + nTextHeight),
+                                maWelcomeLine1,
+                                DrawTextFlags::Center);
+        rRenderContext.DrawText(tools::Rectangle(0, nY + 1.5 * nTextHeight, rSize.Width(), rSize.Height()),
+                                maWelcomeLine2,
+                                DrawTextFlags::MultiLine | DrawTextFlags::WordBreak | DrawTextFlags::Center);
 
         rRenderContext.Pop();
     }

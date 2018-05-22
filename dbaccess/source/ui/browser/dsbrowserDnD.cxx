@@ -21,7 +21,6 @@
 #include <dbtreelistbox.hxx>
 #include "dbtreemodel.hxx"
 #include "dbtreeview.hxx"
-#include <strings.hrc>
 #include <stringconstants.hxx>
 #include <QEnumTypes.hxx>
 #include <UITools.hxx>
@@ -88,7 +87,7 @@ namespace dbaui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         return nullptr;
     }

@@ -94,6 +94,7 @@ struct ImplStyleData
     Color                           maAlternatingRowColor;
     Color                           maButtonTextColor;
     Color                           maButtonRolloverTextColor;
+    Color                           maButtonPressedRolloverTextColor;
     Color                           maCheckedColor;
     Color                           maDarkShadowColor;
     Color                           maDeactiveBorderColor;
@@ -562,6 +563,7 @@ ImplStyleData::ImplStyleData( const ImplStyleData& rData ) :
     maAlternatingRowColor( rData.maAlternatingRowColor ),
     maButtonTextColor( rData.maButtonTextColor ),
     maButtonRolloverTextColor( rData.maButtonRolloverTextColor ),
+    maButtonPressedRolloverTextColor( rData.maButtonPressedRolloverTextColor ),
     maCheckedColor( rData.maCheckedColor ),
     maDarkShadowColor( rData.maDarkShadowColor ),
     maDeactiveBorderColor( rData.maDeactiveBorderColor ),
@@ -703,6 +705,7 @@ void ImplStyleData::SetStandardStyles()
     maDarkShadowColor           = COL_BLACK;
     maButtonTextColor           = COL_BLACK;
     maButtonRolloverTextColor   = COL_BLACK;
+    maButtonPressedRolloverTextColor = COL_BLACK;
     maRadioCheckTextColor       = COL_BLACK;
     maGroupTextColor            = COL_BLACK;
     maLabelTextColor            = COL_BLACK;
@@ -873,6 +876,19 @@ const Color&
 StyleSettings::GetButtonRolloverTextColor() const
 {
     return mxData->maButtonRolloverTextColor;
+}
+
+void
+StyleSettings::SetButtonPressedRolloverTextColor( const Color& rColor )
+{
+    CopyData();
+    mxData->maButtonPressedRolloverTextColor = rColor;
+}
+
+const Color&
+StyleSettings::GetButtonPressedRolloverTextColor() const
+{
+    return mxData->maButtonPressedRolloverTextColor;
 }
 
 void
@@ -2159,7 +2175,7 @@ static void setupPersonaHeaderFooter( WhichPersona eWhich, OUString& rHeaderFoot
         if ( nIndex > 0 )
         {
             OUString aColor = aPersonaSettings.getToken( 0, ';', ++nIndex );
-            rMenuBarTextColor = Color( aColor.toUInt64( 16 ) );
+            rMenuBarTextColor = Color( aColor.toUInt32( 16 ) );
         }
     }
 
@@ -2994,7 +3010,7 @@ StyleSettings::DetermineIconTheme() const
     if (sTheme.isEmpty())
     {
         if (utl::ConfigManager::IsFuzzing())
-            sTheme = "galaxy";
+            sTheme = "colibre";
         else
         {
             // read from the configuration, or fallback to what the desktop wants

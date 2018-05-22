@@ -11,6 +11,7 @@
 
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/table/BorderLine.hpp>
 #include <com/sun/star/text/XDependentTextField.hpp>
 #include <com/sun/star/text/XFootnote.hpp>
 #include <com/sun/star/text/XPageCursor.hpp>
@@ -83,6 +84,13 @@ DECLARE_OOXMLEXPORT_TEST(testTdf112694, "tdf112694.docx")
     CPPUNIT_ASSERT(!getProperty<bool>(aPageStyle, "HeaderIsOn"));
 }
 
+DECLARE_OOXMLEXPORT_TEST(testTdf115861, "tdf115861.docx")
+{
+    // Second item in the paragraph enumeration was a table, 2nd paragraph was
+    // lost.
+    CPPUNIT_ASSERT_EQUAL(OUString("(k)"), getParagraph(2)->getString());
+}
+
 DECLARE_OOXMLEXPORT_TEST(testTdf67207_MERGEFIELD, "mailmerge.docx")
 {
     uno::Reference<beans::XPropertySet> xTextField = getProperty< uno::Reference<beans::XPropertySet> >(getRun(getParagraph(1), 2), "TextField");
@@ -114,6 +122,12 @@ DECLARE_OOXMLEXPORT_TEST(testTdf115719, "tdf115719.docx")
     // This was a single page, instead of pushing the textboxes to the second
     // page.
     CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf116410, "tdf116410.docx")
+{
+    // Opposite of the above, was 2 pages, should be 1 page.
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testParagraphSplitOnSectionBorder, "parasplit-on-section-border.odt")
@@ -261,6 +275,110 @@ DECLARE_OOXMLEXPORT_TEST(testTdf113258, "tdf113258.docx")
     // margin for the first paragraph in a shape.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
                          getProperty<sal_Int32>(xShape->getStart(), "ParaTopMargin"));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf107035, "tdf107035.docx")
+{
+    // Select the second run containing the page number field
+    auto xPgNumRun = getRun(getParagraph(1), 2, "1");
+
+    // Check that the page number field colour is set to "automatic".
+    sal_Int32 nPgNumColour = getProperty<sal_Int32>(xPgNumRun, "CharColor");
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(COL_AUTO), nPgNumColour);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf112118_DOCX, "tdf112118.docx")
+{
+    // The resulting left margin width (2081) differs from its DOC counterpart from ww8export2.cxx,
+    // because DOCX import does two conversions between mm/100 and twips on the route, losing one
+    // twip on the road and arriving with a value that is 2 mm/100 less. I don't see an obvious way
+    // to avoid that.
+    struct {
+        const char* styleName;
+        struct {
+            const char* sideName;
+            sal_Int32 nMargin;
+            sal_Int32 nBorderDistance;
+            sal_Int32 nBorderWidth;
+        } sideParams[4];
+    } styleParams[] = {                      // Margin (MS-style), border distance, border width
+        {
+            "Standard",
+            {
+                { "Top", 496, 847, 159 },    //  851 twip, 24 pt (from text), 4.5 pt
+                { "Left", 2081, 706, 212 },  // 1701 twip, 20 pt (from text), 6.0 pt
+                { "Bottom", 1401, 564, 35 }, // 1134 twip, 16 pt (from text), 1.0 pt
+                { "Right", 3471, 423, 106 }  // 2268 twip, 12 pt (from text), 3.0 pt
+            }
+        },
+        {
+            "Converted1",
+            {
+                { "Top", 847, 496, 159 },    //  851 twip, 24 pt (from edge), 4.5 pt
+                { "Left", 706, 2081, 212 },  // 1701 twip, 20 pt (from edge), 6.0 pt
+                { "Bottom", 564, 1401, 35 }, // 1134 twip, 16 pt (from edge), 1.0 pt
+                { "Right", 423, 3471, 106 }  // 2268 twip, 12 pt (from edge), 3.0 pt
+            }
+        }
+    };
+    auto xStyles = getStyles("PageStyles");
+
+    for (const auto& style : styleParams)
+    {
+        const OUString sName = OUString::createFromAscii(style.styleName);
+        uno::Reference<beans::XPropertySet> xStyle(xStyles->getByName(sName), uno::UNO_QUERY_THROW);
+        for (const auto& side : style.sideParams)
+        {
+            const OUString sSide = OUString::createFromAscii(side.sideName);
+            const OString sStage = OString(style.styleName) + " " + side.sideName;
+
+            sal_Int32 nMargin = getProperty<sal_Int32>(xStyle, sSide + "Margin");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " margin width").getStr(),
+                side.nMargin, nMargin);
+
+            sal_Int32 nBorderDistance = getProperty<sal_Int32>(xStyle, sSide + "BorderDistance");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border distance").getStr(),
+                side.nBorderDistance, nBorderDistance);
+
+            table::BorderLine aBorder = getProperty<table::BorderLine>(xStyle, sSide + "Border");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border width").getStr(),
+                side.nBorderWidth,
+                sal_Int32(aBorder.OuterLineWidth + aBorder.InnerLineWidth + aBorder.LineDistance));
+
+            // tdf#116472: check that AUTO border color is imported as black
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border color").getStr(),
+                sal_Int32(COL_BLACK), aBorder.Color);
+        }
+    }
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf116976, "tdf116976.docx")
+{
+    // This was 0, relative size of shape after bitmap was ignored.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int16>(40),
+                         getProperty<sal_Int16>(getShape(1), "RelativeWidth"));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf116985, "tdf116985.docx")
+{
+    // Body frame width is 10800, 40% is the requested relative width, with 144
+    // spacing to text on the left/right side.  So ideal width would be 4032,
+    // was 3431. Allow one pixel tolerance, though.
+    sal_Int32 nWidth
+        = parseDump("/root/page[1]/body/txt[1]/anchored/fly/infos/bounds", "width").toInt32();
+    CPPUNIT_ASSERT(nWidth > 4000);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf116801, "tdf116801.docx")
+{
+    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+    // This raised a lang::IndexOutOfBoundsException, table was missing from
+    // the import result.
+    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("D1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("D1"), xCell->getString());
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

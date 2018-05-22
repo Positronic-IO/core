@@ -43,8 +43,6 @@
 #include <vcl/textdata.hxx>
 #include <basic/codecompletecache.hxx>
 #include <com/sun/star/reflection/XIdlClass.hpp>
-#include <comphelper/namedvaluecollection.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/syntaxhighlight.hxx>
 #include <com/sun/star/reflection/XIdlReflection.hpp>
 
@@ -369,7 +367,7 @@ public:
     BasicStatus&    GetBasicStatus() { return m_aStatus; }
 
     virtual bool    IsModified () override;
-    virtual bool    IsPasteAllowed () override;
+    bool            IsPasteAllowed ();
 
     void            ShowCursor( bool bOn );
 

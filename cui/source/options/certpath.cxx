@@ -14,7 +14,6 @@
 #include <svtools/treelistentry.hxx>
 #include <unotools/securityoptions.hxx>
 #include "certpath.hxx"
-#include <dialmgr.hxx>
 
 #include <com/sun/star/mozilla/MozillaBootstrap.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
@@ -37,12 +36,8 @@ CertPathDialog::CertPathDialog(vcl::Window* pParent)
     m_sAddDialogText = get<FixedText>("certdir")->GetText();
     m_sManual = get<FixedText>("manual")->GetText();
 
-    static long aStaticTabs[]=
-    {
-        3, 0, 15, 75
-    };
-
-    m_pCertPathList->SvSimpleTable::SetTabs( aStaticTabs );
+    static long aStaticTabs[] = { 0, 15, 75 };
+    m_pCertPathList->SvSimpleTable::SetTabs( SAL_N_ELEMENTS(aStaticTabs), aStaticTabs );
 
     OUString sProfile(get<FixedText>("profile")->GetText());
     OUString sDirectory(get<FixedText>("dir")->GetText());

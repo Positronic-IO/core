@@ -324,7 +324,7 @@ namespace HelperNotifyChanges
             ScRangeList aChangeRanges;
             ScMarkData::iterator itr = rMark.begin(), itrEnd = rMark.end();
             for (; itr != itrEnd; ++itr)
-                aChangeRanges.Append( ScRange( nCol, nRow, *itr ) );
+                aChangeRanges.push_back( ScRange( nCol, nRow, *itr ) );
 
             HelperNotifyChanges::Notify(*pModelObj, aChangeRanges, "cell-change");
         }
@@ -684,7 +684,7 @@ void ScViewFunc::EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab,
 
         //      undo
 
-        EditTextObject* pUndoData = nullptr;
+        std::unique_ptr<EditTextObject> pUndoData;
         ScUndoEnterData::ValuesType aOldValues;
 
         if (bRecord && !bSimple)
@@ -725,7 +725,7 @@ void ScViewFunc::EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab,
             if ( bRecord )
             {   //  because of ChangeTrack current first
                 pDocSh->GetUndoManager()->AddUndoAction(
-                    new ScUndoEnterData(pDocSh, ScAddress(nCol,nRow,nTab), aOldValues, aString, pUndoData));
+                    new ScUndoEnterData(pDocSh, ScAddress(nCol,nRow,nTab), aOldValues, aString, std::move(pUndoData)));
             }
 
             HideAllCursors();
@@ -1162,7 +1162,7 @@ void ScViewFunc::ApplySelectionPattern( const ScPatternAttr& rAttr, bool bCursor
             ScRange aChangeRange( aMarkRange );
             aChangeRange.aStart.SetTab( *itr );
             aChangeRange.aEnd.SetTab( *itr );
-            aChangeRanges.Append( aChangeRange );
+            aChangeRanges.push_back( aChangeRange );
         }
 
         SCCOL nStartCol = aMarkRange.aStart.Col();
@@ -1212,8 +1212,8 @@ void ScViewFunc::ApplySelectionPattern( const ScPatternAttr& rAttr, bool bCursor
         SCROW nRow = rViewData.GetCurY();
         SCTAB nTab = rViewData.GetTabNo();
 
-        EditTextObject* pOldEditData = nullptr;
-        EditTextObject* pNewEditData = nullptr;
+        std::unique_ptr<EditTextObject> pOldEditData;
+        std::unique_ptr<EditTextObject> pNewEditData;
         ScAddress aPos(nCol, nRow, nTab);
         ScRefCellValue aCell(rDoc, aPos);
         if (aCell.meType == CELLTYPE_EDIT)
@@ -1225,7 +1225,7 @@ void ScViewFunc::ApplySelectionPattern( const ScPatternAttr& rAttr, bool bCursor
             pNewEditData = pEditObj->Clone();
         }
 
-        aChangeRanges.Append(aPos);
+        aChangeRanges.push_back(aPos);
         std::unique_ptr<ScPatternAttr> pOldPat(new ScPatternAttr(*rDoc.GetPattern( nCol, nRow, nTab )));
 
         rDoc.ApplyPattern( nCol, nRow, nTab, rAttr );
@@ -1236,7 +1236,7 @@ void ScViewFunc::ApplySelectionPattern( const ScPatternAttr& rAttr, bool bCursor
         {
             ScUndoCursorAttr* pUndo = new ScUndoCursorAttr(
                 pDocSh, nCol, nRow, nTab, pOldPat.get(), pNewPat, &rAttr );
-            pUndo->SetEditData(pOldEditData, pNewEditData);
+            pUndo->SetEditData(std::move(pOldEditData), std::move(pNewEditData));
             pDocSh->GetUndoManager()->AddUndoAction(pUndo);
         }
         pOldPat.reset();     // is copied in undo (Pool)
@@ -1650,11 +1650,11 @@ void ScViewFunc::DeleteCells( DelCellCmd eCmd )
 
 #if HAVE_FEATURE_MULTIUSER_ENVIRONMENT
         // #i94841# [Collaboration] if deleting rows is rejected, the content is sometimes wrong
-        if ( pDocSh->IsDocShared() && ( eCmd == DEL_DELROWS || eCmd == DEL_DELCOLS ) )
+        if ( pDocSh->IsDocShared() && ( eCmd == DelCellCmd::Rows || eCmd == DelCellCmd::Cols ) )
         {
             ScRange aDelRange( aRange.aStart );
             SCCOLROW nCount = 0;
-            if ( eCmd == DEL_DELROWS )
+            if ( eCmd == DelCellCmd::Rows )
             {
                 nCount = sal::static_int_cast< SCCOLROW >( aRange.aEnd.Row() - aRange.aStart.Row() + 1 );
             }
@@ -1678,9 +1678,9 @@ void ScViewFunc::DeleteCells( DelCellCmd eCmd )
         CellContentChanged();
         ResetAutoSpell();
 
-        if ( eCmd == DEL_DELROWS || eCmd == DEL_DELCOLS )
+        if ( eCmd == DelCellCmd::Rows || eCmd == DelCellCmd::Cols )
         {
-            OUString aOperation = ( eCmd == DEL_DELROWS) ?
+            OUString aOperation = ( eCmd == DelCellCmd::Rows) ?
               OUString("delete-rows"):
               OUString("delete-columns");
             HelperNotifyChanges::NotifyIfChangesListeners(*pDocSh, aRange, aOperation);
@@ -1689,7 +1689,7 @@ void ScViewFunc::DeleteCells( DelCellCmd eCmd )
         //  put cursor directly behind deleted range
         SCCOL nCurX = GetViewData().GetCurX();
         SCROW nCurY = GetViewData().GetCurY();
-        if ( eCmd==DEL_CELLSLEFT || eCmd==DEL_DELCOLS )
+        if ( eCmd==DelCellCmd::CellsLeft || eCmd==DelCellCmd::Cols )
             nCurX = aRange.aStart.Col();
         else
             nCurY = aRange.aStart.Row();
@@ -1697,18 +1697,18 @@ void ScViewFunc::DeleteCells( DelCellCmd eCmd )
 
         if (comphelper::LibreOfficeKit::isActive())
         {
-            if (eCmd == DEL_DELCOLS)
+            if (eCmd == DelCellCmd::Cols)
                 ScTabViewShell::notifyAllViewsHeaderInvalidation(COLUMN_HEADER, GetViewData().GetTabNo());
 
-            if (eCmd == DEL_DELROWS)
+            if (eCmd == DelCellCmd::Rows)
                 ScTabViewShell::notifyAllViewsHeaderInvalidation(ROW_HEADER, GetViewData().GetTabNo());
         }
     }
     else
     {
-        if (eCmd == DEL_DELCOLS)
+        if (eCmd == DelCellCmd::Cols)
             DeleteMulti( false );
-        else if (eCmd == DEL_DELROWS)
+        else if (eCmd == DelCellCmd::Rows)
             DeleteMulti( true );
         else
             ErrorMessage(STR_NOMULTISELECT);
@@ -1965,7 +1965,7 @@ void ScViewFunc::DeleteContents( InsertDeleteFlags nFlags )
         ScRangeList aChangeRanges;
         if ( bSimple )
         {
-            aChangeRanges.Append( aMarkRange );
+            aChangeRanges.push_back( aMarkRange );
         }
         else
         {
@@ -2291,7 +2291,7 @@ void ScViewFunc::SetWidthOrHeight(
                     SCCOL nEndCol   = rRange.mnEnd;
                     for ( SCCOL nCol = nStartCol; nCol <= nEndCol; ++nCol )
                     {
-                        aChangeRanges.Append( ScRange( nCol, 0, nTab ) );
+                        aChangeRanges.push_back( ScRange( nCol, 0, nTab ) );
                     }
                 }
             }
@@ -2481,7 +2481,7 @@ void ScViewFunc::ProtectSheet( SCTAB nTab, const ScTableProtection& rProtect )
 
     if (bUndo)
     {
-        OUString aUndo = ScGlobal::GetRscString( STR_UNDO_PROTECT_TAB );
+        OUString aUndo = ScResId( STR_UNDO_PROTECT_TAB );
         pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, GetViewData().GetViewShell()->GetViewShellId() );
     }
 
@@ -2512,7 +2512,7 @@ void ScViewFunc::Protect( SCTAB nTab, const OUString& rPassword )
 
         if (bUndo)
         {
-            OUString aUndo = ScGlobal::GetRscString( STR_UNDO_PROTECT_TAB );
+            OUString aUndo = ScResId( STR_UNDO_PROTECT_TAB );
             pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, GetViewData().GetViewShell()->GetViewShellId() );
         }
 
@@ -2544,7 +2544,7 @@ bool ScViewFunc::Unprotect( SCTAB nTab, const OUString& rPassword )
 
         if (bUndo)
         {
-            OUString aUndo = ScGlobal::GetRscString( STR_UNDO_UNPROTECT_TAB );
+            OUString aUndo = ScResId( STR_UNDO_UNPROTECT_TAB );
             pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, GetViewData().GetViewShell()->GetViewShellId() );
         }
 

@@ -77,6 +77,7 @@
 #include "SectionColumnHandler.hxx"
 #include "GraphicHelpers.hxx"
 #include <dmapper/GraphicZOrderHelper.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 using namespace oox;
@@ -129,9 +130,9 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
         const uno::Reference<task::XInteractionHandler> xHandler;
         xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
     }
-    catch (const uno::Exception& rException)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("writerfilter", "DomainMapper::DomainMapper: failed to initialize RDF metadata: " << rException);
+        DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize RDF metadata");
     }
 
     if (eDocumentType == SourceDocumentType::OOXML) {
@@ -146,9 +147,9 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
             xDefProps->setPropertyValue(getPropertyName(PROP_CHAR_FONT_NAME), css::uno::Any(OUString("Calibri")));
             xDefProps->setPropertyValue(getPropertyName(PROP_CHAR_HEIGHT), css::uno::Any(double(11)));
         }
-        catch (const uno::Exception& rException)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("writerfilter", "DomainMapper::DomainMapper: failed to initialize default font: " << rException);
+            DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize default font");
         }
     }
 
@@ -304,7 +305,7 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
         case NS_ooxml::LN_CT_Color_val:
             if (m_pImpl->GetTopContext())
                 m_pImpl->GetTopContext()->Insert(PROP_CHAR_COLOR, uno::makeAny( nIntValue ) );
-            m_pImpl->appendGrabBag(m_pImpl->m_aSubInteropGrabBag, "val", OUString::fromUtf8(msfilter::util::ConvertColor(nIntValue, /*bAutoColor=*/true)));
+            m_pImpl->appendGrabBag(m_pImpl->m_aSubInteropGrabBag, "val", OUString::fromUtf8(msfilter::util::ConvertColor(nIntValue)));
             break;
         case NS_ooxml::LN_CT_Underline_color:
             if (m_pImpl->GetTopContext())
@@ -868,11 +869,16 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
                         //should be either LN_Value_doc_ST_Wrap_notBeside or LN_Value_doc_ST_Wrap_around or LN_Value_doc_ST_Wrap_auto
                         OSL_ENSURE( sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_around ||
                                     sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_notBeside ||
+                                    sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_through ||
+                                    sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_none ||
                                     sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_auto,
-                            "wrap not around, not_Beside or auto?");
+                            "wrap not around, not_Beside, through, none or auto?");
                         if( sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_around ||
+                            sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_through ||
                             sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_auto )
                             pParaProperties->SetWrap ( text::WrapTextMode_DYNAMIC ) ;
+                        else if (sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_Wrap_none)
+                            pParaProperties->SetWrap ( text::WrapTextMode_THROUGH ) ;
                         else
                             pParaProperties->SetWrap ( text::WrapTextMode_NONE ) ;
                     }
@@ -2093,7 +2099,6 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
 
             // Set the borders to the context and apply them to the styles
             pHandler->SetBorders( pSectionContext );
-            pSectionContext->SetBorderParams( pHandler->GetDisplayOffset( ) );
         }
     }
     break;
@@ -2110,9 +2115,9 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
     break;
     case NS_ooxml::LN_CT_PPrBase_pStyle:
     {
-        m_pImpl->SetCurrentParaStyleId( sStringValue );
         StyleSheetTablePtr pStyleTable = m_pImpl->GetStyleSheetTable();
         const OUString sConvertedStyleName = pStyleTable->ConvertStyleName( sStringValue, true );
+        m_pImpl->SetCurrentParaStyleName( sConvertedStyleName );
         if (m_pImpl->GetTopContext() && m_pImpl->GetTopContextType() != CONTEXT_SECTION)
         {
             m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( sConvertedStyleName ));
@@ -2834,15 +2839,19 @@ void DomainMapper::processDeferredCharacterProperties( const std::map< sal_Int32
                 {
                     double fontSize = 0;
                     font->second >>= fontSize;
-                    nEscapement = nIntValue * 100 / fontSize;
+                    if (fontSize != 0.0)
+                        nEscapement = nIntValue * 100 / fontSize;
                 }
                 // TODO if not direct formatting, check the style first, not directly the default char props.
                 else if (aDefaultFont)
                 {
                     double fHeight = 0;
                     aDefaultFont->second >>= fHeight;
-                    // fHeight is in points, nIntValue is in half points, nEscapement is in percents.
-                    nEscapement = nIntValue * 100 / fHeight / 2;
+                    if (fHeight != 0.0)
+                    {
+                        // fHeight is in points, nIntValue is in half points, nEscapement is in percents.
+                        nEscapement = nIntValue * 100 / fHeight / 2;
+                    }
                 }
                 else
                 { // TODO: Find out the font size. The 58/-58 values were here previous, but I have
@@ -2938,7 +2947,7 @@ void DomainMapper::lcl_startParagraphGroup()
         if (!m_pImpl->IsInShape())
         {
             m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::makeAny( OUString("Standard") ) ); //ConvertedStyleName
-            m_pImpl->SetCurrentParaStyleId("Normal"); //WW8 name
+            m_pImpl->SetCurrentParaStyleName("Standard");
         }
         if (m_pImpl->isBreakDeferred(PAGE_BREAK))
             m_pImpl->GetTopContext()->Insert(PROP_BREAK_TYPE, uno::makeAny(style::BreakType_PAGE_BEFORE));
@@ -3278,10 +3287,28 @@ void DomainMapper::lcl_utext(const sal_uInt8 * data_, size_t len)
         m_pImpl->m_bHasFtnSep = true;
         return;
     }
-    else if (len == 1 && sText[0] == '\t' && m_pImpl->m_bIgnoreNextTab)
+    else if (len == 1 && sText[0] == '\t' )
     {
-        m_pImpl->m_bIgnoreNextTab = false;
-        return;
+        if ( m_pImpl->m_bCheckFirstFootnoteTab && m_pImpl->IsInFootOrEndnote() )
+        {
+            // Allow MSO to emulate LO footnote text starting at left margin - only meaningful with hanging indent
+            m_pImpl->m_bCheckFirstFootnoteTab = false;
+            sal_Int32 nFirstLineIndent = 0;
+            m_pImpl->GetPropertyFromStyleSheet(PROP_PARA_FIRST_LINE_INDENT) >>= nFirstLineIndent;
+            PropertyMapPtr pParaContext = m_pImpl->GetTopContextOfType(CONTEXT_PARAGRAPH);
+            boost::optional<PropertyMap::Property> oHangingIndent = pParaContext->getProperty(PROP_PARA_FIRST_LINE_INDENT);
+            if ( oHangingIndent )
+                oHangingIndent->second >>= nFirstLineIndent;
+
+            if ( nFirstLineIndent < 0 )
+                m_pImpl->m_bIgnoreNextTab = true;
+        }
+
+        if ( m_pImpl->m_bIgnoreNextTab )
+        {
+            m_pImpl->m_bIgnoreNextTab = false;
+            return;
+        }
     }
 
     if (!m_pImpl->hasTableManager())

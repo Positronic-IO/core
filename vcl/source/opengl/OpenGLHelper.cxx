@@ -40,8 +40,9 @@
 #include <vcl/opengl/OpenGLWrapper.hxx>
 #include <vcl/opengl/OpenGLContext.hxx>
 #include <desktop/crashreport.hxx>
+#include <bitmapwriteaccess.hxx>
 
-#if defined UNX && !defined MACOSX && !defined IOS && !defined ANDROID
+#if defined UNX && !defined MACOSX && !defined IOS && !defined ANDROID && !defined HAIKU
 #include <opengl/x11/X11DeviceInfo.hxx>
 #elif defined (_WIN32)
 #include <opengl/win/WinDeviceInfo.hxx>
@@ -199,7 +200,7 @@ namespace
 
     OString getDeviceInfoString()
     {
-#if defined( SAL_UNX ) && !defined( MACOSX ) && !defined( IOS )&& !defined( ANDROID )
+#if defined( SAL_UNX ) && !defined( MACOSX ) && !defined( IOS )&& !defined( ANDROID ) && !defined( HAIKU )
         const X11OpenGLDeviceInfo aInfo;
         return aInfo.GetOS() +
             aInfo.GetOSRelease() +
@@ -533,7 +534,7 @@ GLint OpenGLHelper::LoadShaders(const OUString& rVertexShaderName,
     return LoadShaders(rVertexShaderName, rFragmentShaderName, OUString(), "", "");
 }
 
-void OpenGLHelper::ConvertBitmapExToRGBATextureBuffer(const BitmapEx& rBitmapEx, sal_uInt8* o_pRGBABuffer, const bool bFlip)
+void OpenGLHelper::ConvertBitmapExToRGBATextureBuffer(const BitmapEx& rBitmapEx, sal_uInt8* o_pRGBABuffer)
 {
     long nBmpWidth = rBitmapEx.GetSizePixel().Width();
     long nBmpHeight = rBitmapEx.GetSizePixel().Height();
@@ -543,7 +544,7 @@ void OpenGLHelper::ConvertBitmapExToRGBATextureBuffer(const BitmapEx& rBitmapEx,
     Bitmap::ScopedReadAccess pReadAccces( aBitmap );
     AlphaMask::ScopedReadAccess pAlphaReadAccess( aAlpha );
     size_t i = 0;
-    for (long ny = (bFlip ? nBmpHeight - 1 : 0); (bFlip ? ny >= 0 : ny < nBmpHeight); (bFlip ? ny-- : ny++))
+    for (long ny = 0; ny < nBmpHeight; ny++)
     {
         Scanline pAScan = pAlphaReadAccess ? pAlphaReadAccess->GetScanline(ny) : nullptr;
         for(long nx = 0; nx < nBmpWidth; nx++)
@@ -583,8 +584,8 @@ BitmapEx OpenGLHelper::ConvertBGRABufferToBitmapEx(const sal_uInt8* const pBuffe
     AlphaMask aAlpha( Size(nWidth, nHeight) );
 
     {
-        Bitmap::ScopedWriteAccess pWriteAccess( aBitmap );
-        AlphaMask::ScopedWriteAccess pAlphaWriteAccess( aAlpha );
+        BitmapScopedWriteAccess pWriteAccess( aBitmap );
+        AlphaScopedWriteAccess pAlphaWriteAccess( aAlpha );
 
         size_t nCurPos = 0;
         for( long y = 0; y < nHeight; ++y)
@@ -774,7 +775,7 @@ bool OpenGLHelper::isDeviceBlacklisted()
     {
         OpenGLZone aZone;
 
-#if defined UNX && !defined MACOSX && !defined IOS && !defined ANDROID
+#if defined UNX && !defined MACOSX && !defined IOS && !defined ANDROID && !defined HAIKU
         X11OpenGLDeviceInfo aInfo;
         bBlacklisted = aInfo.isDeviceBlocked();
         SAL_INFO("vcl.opengl", "blacklisted: " << bBlacklisted);

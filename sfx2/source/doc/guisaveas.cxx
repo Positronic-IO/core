@@ -63,6 +63,7 @@
 #include <tools/debug.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/propertysequence.hxx>
 #include <comphelper/mimeconfighelper.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/window.hxx>
@@ -593,8 +594,13 @@ bool ModelData_Impl::ExecuteFilterDialog_Impl( const OUString& aFilterName )
                     aProps[nProperty].Value >>= aServiceName;
                     if( !aServiceName.isEmpty() )
                     {
+                        uno::Sequence<uno::Any> aDialogArgs(comphelper::InitAnyPropertySequence(
+                        {
+                            {"ParentWindow", uno::Any(SfxStoringHelper::GetModelXWindow(m_xModel))},
+                        }));
+
                         uno::Reference< ui::dialogs::XExecutableDialog > xFilterDialog(
-                                                    comphelper::getProcessServiceFactory()->createInstance( aServiceName ), uno::UNO_QUERY );
+                                                    comphelper::getProcessServiceFactory()->createInstanceWithArguments(aServiceName, aDialogArgs), uno::UNO_QUERY );
                         uno::Reference< beans::XPropertyAccess > xFilterProperties( xFilterDialog, uno::UNO_QUERY );
 
                         if( xFilterDialog.is() && xFilterProperties.is() )
@@ -730,8 +736,7 @@ sal_Int8 ModelData_Impl::CheckFilter( const OUString& aFilterName )
     {
         // get properties of filter
         uno::Sequence< beans::PropertyValue > aFilterProps;
-        if ( !aFilterName.isEmpty() )
-            m_pOwner->GetFilterConfiguration()->getByName( aFilterName ) >>= aFilterProps;
+        m_pOwner->GetFilterConfiguration()->getByName( aFilterName ) >>= aFilterProps;
 
         aFiltPropsHM = ::comphelper::SequenceAsHashMap( aFilterProps );
         nFiltFlags = static_cast<SfxFilterFlags>(aFiltPropsHM.getUnpackedValueOrDefault("Flags", sal_Int32(0) ));
@@ -867,6 +872,7 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
     SfxFilterFlags nDont = getDontFlags( nStoreMode );
     sfx2::FileDialogHelper::Context eCtxt = sfx2::FileDialogHelper::UNKNOWN_CONTEXT;
     vcl::Window* pWin = SfxStoringHelper::GetModelWindow( m_xModel );
+    weld::Window* pFrameWin = pWin ? pWin->GetFrameWeld() : nullptr;
     if ( ( nStoreMode & EXPORT_REQUESTED ) && !( nStoreMode & WIDEEXPORT_REQUESTED ) )
     {
         if ( ( nStoreMode & PDFEXPORT_REQUESTED ) && !aPreselectedFilterPropsHM.empty() )
@@ -874,20 +880,20 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
             // this is a PDF export
             // the filter options has been shown already
             const OUString aFilterUIName = aPreselectedFilterPropsHM.getUnpackedValueOrDefault( "UIName", OUString() );
-            pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aFilterUIName, "pdf", rStandardDir, rBlackList, pWin ));
+            pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aFilterUIName, "pdf", rStandardDir, rBlackList, pFrameWin ));
             pFileDlg->SetCurrentFilter( aFilterUIName );
         }
         else if ((nStoreMode & EPUBEXPORT_REQUESTED) && !aPreselectedFilterPropsHM.empty())
         {
             // This is an EPUB export, the filter options has been shown already.
             const OUString aFilterUIName = aPreselectedFilterPropsHM.getUnpackedValueOrDefault( "UIName", OUString() );
-            pFileDlg.reset(new sfx2::FileDialogHelper(aDialogMode, aDialogFlags, aFilterUIName, "epub", rStandardDir, rBlackList, pWin));
+            pFileDlg.reset(new sfx2::FileDialogHelper(aDialogMode, aDialogFlags, aFilterUIName, "epub", rStandardDir, rBlackList, pFrameWin));
             pFileDlg->SetCurrentFilter(aFilterUIName);
         }
         else
         {
             // This is the normal dialog
-            pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aDocServiceName, nDialog, nMust, nDont, rStandardDir, rBlackList, pWin ));
+            pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aDocServiceName, nDialog, nMust, nDont, rStandardDir, rBlackList, pFrameWin ));
         }
 
         if ( aDocServiceName == "com.sun.star.drawing.DrawingDocument" )
@@ -916,7 +922,7 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
     {
         // This is the normal dialog
         pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aDocServiceName, nDialog,
-            nMust, nDont, rStandardDir, rBlackList, pWin ));
+            nMust, nDont, rStandardDir, rBlackList, pFrameWin ));
         pFileDlg->CreateMatcher( aDocServiceName );
     }
 
@@ -1808,9 +1814,8 @@ bool SfxStoringHelper::WarnUnacceptableFormat( const uno::Reference< frame::XMod
     return aDlg.run() == RET_OK;
 }
 
-vcl::Window* SfxStoringHelper::GetModelWindow( const uno::Reference< frame::XModel >& xModel )
+uno::Reference<awt::XWindow> SfxStoringHelper::GetModelXWindow(const uno::Reference<frame::XModel>& xModel)
 {
-    VclPtr<vcl::Window> pWin;
     try {
         if ( xModel.is() )
         {
@@ -1820,15 +1825,29 @@ vcl::Window* SfxStoringHelper::GetModelWindow( const uno::Reference< frame::XMod
                 uno::Reference< frame::XFrame > xFrame = xController->getFrame();
                 if ( xFrame.is() )
                 {
-                    uno::Reference< awt::XWindow > xWindow = xFrame->getContainerWindow();
-                    if ( xWindow.is() )
-                    {
-                        VCLXWindow* pVCLWindow = VCLXWindow::GetImplementation( xWindow );
-                        if ( pVCLWindow )
-                            pWin = pVCLWindow->GetWindow();
-                    }
+                    return xFrame->getContainerWindow();
                 }
             }
+        }
+    }
+    catch ( const uno::Exception& )
+    {
+    }
+
+    return uno::Reference<awt::XWindow>();
+}
+
+vcl::Window* SfxStoringHelper::GetModelWindow( const uno::Reference< frame::XModel >& xModel )
+{
+    VclPtr<vcl::Window> pWin;
+
+    try {
+        uno::Reference<awt::XWindow> xWindow = GetModelXWindow(xModel);
+        if ( xWindow.is() )
+        {
+            VCLXWindow* pVCLWindow = VCLXWindow::GetImplementation( xWindow );
+            if ( pVCLWindow )
+                pWin = pVCLWindow->GetWindow();
         }
     }
     catch ( const uno::Exception& )

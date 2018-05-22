@@ -26,7 +26,7 @@
 #include "securityenvironment_mscryptimpl.hxx"
 
 #include <xmlsec/xmldocumentwrapper_xmlsecimpl.hxx>
-#include <xmlsec/xmlelementwrapper_xmlsecimpl.hxx>
+#include <xmlelementwrapper_xmlsecimpl.hxx>
 #include <xmlsec/xmlstreamio.hxx>
 #include <xmlsec/errorcallback.hxx>
 
@@ -52,7 +52,6 @@ class XMLSignature_MSCryptImpl : public ::cppu::WeakImplHelper<
 {
     public:
         explicit XMLSignature_MSCryptImpl();
-        virtual ~XMLSignature_MSCryptImpl() override;
 
         //Methods from XXMLSignature
         virtual css::uno::Reference< css::xml::crypto::XXMLSignatureTemplate > SAL_CALL generate(
@@ -76,9 +75,6 @@ class XMLSignature_MSCryptImpl : public ::cppu::WeakImplHelper<
 } ;
 
 XMLSignature_MSCryptImpl::XMLSignature_MSCryptImpl() {
-}
-
-XMLSignature_MSCryptImpl::~XMLSignature_MSCryptImpl() {
 }
 
 /* XXMLSignature */

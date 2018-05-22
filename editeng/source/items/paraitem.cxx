@@ -21,8 +21,8 @@
 #include <com/sun/star/style/LineSpacing.hpp>
 #include <com/sun/star/style/LineSpacingMode.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <libxml/xmlwriter.h>
 #include <comphelper/fileformat.h>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/extract.hxx>
 #include <osl/diagnose.h>
 #include <unotools/syslocale.hxx>
@@ -245,30 +245,6 @@ bool SvxLineSpacingItem::GetPresentation
 sal_uInt16 SvxLineSpacingItem::GetValueCount() const
 {
     return sal_uInt16(SvxSpecialLineSpace::End);   // SvxSpecialLineSpace::TwoLines + 1
-}
-
-
-OUString SvxLineSpacingItem::GetValueTextByPos( sal_uInt16 nPos ) const
-{
-    //! load strings from resource
-    OUString aText;
-    switch ( static_cast<SvxSpecialLineSpace>(nPos) )
-    {
-        case SvxSpecialLineSpace::User:
-            aText = "User";
-            break;
-        case SvxSpecialLineSpace::OneLine:
-            aText = "One line";
-            break;
-        case SvxSpecialLineSpace::OnePointFiveLines:
-            aText = "1.5 line";
-            break;
-        case SvxSpecialLineSpace::TwoLines:
-            aText = "Two lines";
-            break;
-        default: break;
-    }
-    return aText;
 }
 
 
@@ -717,6 +693,15 @@ void SvxTabStop::fillDecimal() const
         m_cDecimal = SvtSysLocale().GetLocaleData().getNumDecimalSep()[0];
 }
 
+void SvxTabStop::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    xmlTextWriterStartElement(pWriter, BAD_CAST("SvxTabStop"));
+    xmlTextWriterWriteAttribute(pWriter, BAD_CAST("nTabPos"),
+                                BAD_CAST(OString::number(nTabPos).getStr()));
+    xmlTextWriterWriteAttribute(pWriter, BAD_CAST("eAdjustment"),
+                                BAD_CAST(OString::number(static_cast<int>(eAdjustment)).getStr()));
+    xmlTextWriterEndElement(pWriter);
+}
 
 // class SvxTabStopItem --------------------------------------------------
 
@@ -983,6 +968,13 @@ void SvxTabStopItem::Insert( const SvxTabStopItem* pTabs )
     }
 }
 
+void SvxTabStopItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    xmlTextWriterStartElement(pWriter, BAD_CAST("SvxTabStopItem"));
+    for (const auto& rTabStop : maTabStops)
+        rTabStop.dumpAsXml(pWriter);
+    xmlTextWriterEndElement(pWriter);
+}
 
 // class SvxFormatSplitItem -------------------------------------------------
 SvxFormatSplitItem::~SvxFormatSplitItem()

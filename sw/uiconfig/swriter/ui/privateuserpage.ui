@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.18.3 -->
+<!-- Generated with glade 3.20.4 -->
 <interface domain="sw">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkFrame" id="PrivateUserPage">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
     <property name="border_width">6</property>
     <property name="label_xalign">0</property>
     <property name="shadow_type">none</property>
@@ -120,7 +122,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="firstname-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|firstname-atkobject">First name</property>
@@ -138,7 +139,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="lastname-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|lastname-atkobject">Last name</property>
@@ -155,7 +155,6 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
-                    <property name="invisible_char">•</property>
                     <property name="width_chars">7</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="shortname-atkobject">
@@ -186,7 +185,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="title-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|title-atkobject">Title</property>
@@ -204,7 +202,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="job-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|job-atkobject">Position</property>
@@ -233,7 +230,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="fax-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|fax-atkobject">Home telephone number</property>
@@ -264,7 +260,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="url-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|url-atkobject">FAX number</property>
@@ -282,7 +277,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="email-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|email-atkobject">email address</property>
@@ -325,7 +319,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="firstname2-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|firstname2-atkobject">Last name</property>
@@ -343,7 +336,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="lastname2-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|lastname2-atkobject">First name</property>
@@ -360,7 +352,6 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
-                    <property name="invisible_char">•</property>
                     <property name="width_chars">7</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="shortname2-atkobject">
@@ -404,7 +395,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="icity-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|icity-atkobject">City</property>
@@ -421,7 +411,6 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
-                    <property name="invisible_char">•</property>
                     <property name="width_chars">15</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="izip-atkobject">
@@ -451,7 +440,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -476,7 +464,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -489,7 +476,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -528,7 +514,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="phone-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|phone-atkobject">Title</property>
@@ -546,7 +531,6 @@
                     <property name="can_focus">True</property>
                     <property name="valign">center</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="mobile-atkobject">
                         <property name="AtkObject::accessible-name" translatable="yes" context="privateuserpage|mobile-atkobject">Position</property>

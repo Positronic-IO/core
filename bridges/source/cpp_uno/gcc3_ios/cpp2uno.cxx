@@ -16,33 +16,23 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-
-#ifdef __arm64
-
-// For iOS devices (64-bit ARM). Originally a copy of
-// ../gcc3_linux_arm/cpp2uno.cxx.
-
-// No attempts at factoring out the large amounts of more or less
-// common code in this, cpp2uno-arm.cxx and cpp2uno-i386.cxx have been
-// done. Which is sad. But then the whole bridges/source/cpp_uno is
-// full of copy/paste. So I continue in that tradition...
-
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <sal/log.hxx>
 #include <uno/data.h>
 #include <typelib/typedescription.hxx>
-
 #include "bridge.hxx"
 #include "cppinterfaceproxy.hxx"
 #include "types.hxx"
 #include "vtablefactory.hxx"
-
 #include "share.hxx"
 
-extern "C" {
-    extern int nFunIndexes, nVtableOffsets;
-    extern int codeSnippets[];
-}
+
+
+extern "C" int codeSnippets[];
+const int nFunIndexes = 8;
+const int nVtableOffsets = 4;
+
+
 
 using namespace ::com::sun::star::uno;
 
@@ -300,11 +290,13 @@ namespace
     }
 
 
-    static typelib_TypeClass cpp_mediate( sal_Int32 nFunctionIndex,
-                                          sal_Int32 nVtableOffset,
-                                          void ** pCallStack,
-                                          sal_Int64 * pRegisterReturn )
+    static void cpp_mediate(sal_Int32 nFunctionIndex,
+                            sal_Int32 nVtableOffset,
+                            void ** pCallStack)
     {
+        sal_Int64 nRegReturn;
+        sal_Int64 *pRegisterReturn = &nRegReturn;
+
         // pCallStack: x8, lr, d0..d7, x0..x7, rest of params originally on stack
         // _this_ ptr is patched cppu_XInterfaceProxy object
         void *pThis = pCallStack[2 + 8];
@@ -419,7 +411,8 @@ namespace
         }
         }
 
-        return eRet;
+        (void)eRet;
+        return;
     }
 }
 
@@ -428,34 +421,10 @@ namespace
  * (called by asm snippets)
  */
 
-extern "C" sal_Int64 cpp_vtable_call( sal_Int32 *pFunctionAndOffset,
-                                      void **pCallStack )
+extern "C" void cpp_vtable_call( sal_Int32 func, sal_Int32 offset,
+                                 void **pStack )
 {
-    sal_Int64 nRegReturn;
-    typelib_TypeClass aType = cpp_mediate( pFunctionAndOffset[0], pFunctionAndOffset[1], pCallStack, &nRegReturn );
-
-    switch( aType )
-    {
-        case typelib_TypeClass_BOOLEAN:
-        case typelib_TypeClass_BYTE:
-            nRegReturn = (unsigned long)(*(unsigned char *)&nRegReturn);
-            break;
-        case typelib_TypeClass_CHAR:
-        case typelib_TypeClass_UNSIGNED_SHORT:
-        case typelib_TypeClass_SHORT:
-            nRegReturn = (unsigned long)(*(unsigned short *)&nRegReturn);
-            break;
-        case typelib_TypeClass_ENUM:
-        case typelib_TypeClass_UNSIGNED_LONG:
-        case typelib_TypeClass_LONG:
-            nRegReturn = (unsigned long)(*(unsigned int *)&nRegReturn);
-            break;
-        case typelib_TypeClass_VOID:
-        default:
-            break;
-    }
-
-    return nRegReturn;
+    cpp_mediate(func, offset, pStack);
 }
 
 namespace
@@ -555,7 +524,6 @@ unsigned char * bridges::cpp_uno::shared::VtableFactory::addLocalFunctions(
     return code;
 }
 
-#endif
 
 
 void bridges::cpp_uno::shared::VtableFactory::flushCode(

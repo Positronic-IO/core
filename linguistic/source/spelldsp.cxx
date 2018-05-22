@@ -186,24 +186,15 @@ SpellCheckerDispatcher::~SpellCheckerDispatcher()
 }
 
 
-void SpellCheckerDispatcher::ClearSvcList()
-{
-    // release memory for each table entry
-    SpellSvcByLangMap_t aTmp;
-    m_aSvcMap.swap( aTmp );
-}
-
-
 Sequence< Locale > SAL_CALL SpellCheckerDispatcher::getLocales()
 {
     MutexGuard  aGuard( GetLinguMutex() );
 
     Sequence< Locale > aLocales( static_cast< sal_Int32 >(m_aSvcMap.size()) );
     Locale *pLocales = aLocales.getArray();
-    SpellSvcByLangMap_t::const_iterator aIt;
-    for (aIt = m_aSvcMap.begin();  aIt != m_aSvcMap.end();  ++aIt)
+    for (auto const& elem : m_aSvcMap)
     {
-        *pLocales++ = LanguageTag::convertToLocale( aIt->first );
+        *pLocales++ = LanguageTag::convertToLocale(elem.first);
     }
     return aLocales;
 }

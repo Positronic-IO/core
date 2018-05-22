@@ -37,7 +37,6 @@
 #include <txtfrm.hxx>
 #include <breakit.hxx>
 #include <vcl/layout.hxx>
-#include <strings.hrc>
 #include <editsh.hxx>
 #include <fmtfld.hxx>
 #include <docufld.hxx>
@@ -47,6 +46,7 @@
 #include <frmfmt.hxx>
 
 #include <vector>
+#include <com/sun/star/linguistic2/XProofreadingIterator.hpp>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::linguistic2;
@@ -240,7 +240,7 @@ void DelFlyInRange( const SwNodeIndex& rMkNdIdx,
 // From now on this class saves the redline positions of all redlines which ends exact at the
 // insert position (node _and_ content index)
 SaveRedlEndPosForRestore::SaveRedlEndPosForRestore( const SwNodeIndex& rInsIdx, sal_Int32 nCnt )
-    : pSavArr( nullptr ), pSavIdx( nullptr ), nSavContent( nCnt )
+    : nSavContent( nCnt )
 {
     SwNode& rNd = rInsIdx.GetNode();
     SwDoc* pDest = rNd.GetDoc();
@@ -255,24 +255,24 @@ SaveRedlEndPosForRestore::SaveRedlEndPosForRestore( const SwNodeIndex& rInsIdx, 
               && *( pEnd = ( pRedl = pDest->getIDocumentRedlineAccess().GetRedlineTable()[ nFndPos ] )->End() ) == aSrcPos
               && *pRedl->Start() < aSrcPos )
         {
-            if( !pSavArr )
+            if( !pSavIdx )
             {
-                pSavArr = new std::vector<SwPosition*>;
-                pSavIdx = new SwNodeIndex( rInsIdx, -1 );
+                pSavIdx.reset(new SwNodeIndex( rInsIdx, -1 ));
             }
-            pSavArr->push_back( const_cast<SwPosition*>(pEnd) );
+            mvSavArr.push_back( const_cast<SwPosition*>(pEnd) );
         }
     }
 }
 
 SaveRedlEndPosForRestore::~SaveRedlEndPosForRestore()
 {
-    delete pSavArr;
-    delete pSavIdx;
+    pSavIdx.reset();
 }
 
-void SaveRedlEndPosForRestore::Restore_()
+void SaveRedlEndPosForRestore::Restore()
 {
+    if (mvSavArr.empty())
+        return;
     ++(*pSavIdx);
     SwContentNode* pNode = pSavIdx->GetNode().GetContentNode();
     // If there's no content node at the remembered position, we will not restore the old position
@@ -280,8 +280,8 @@ void SaveRedlEndPosForRestore::Restore_()
     if( pNode )
     {
         SwPosition aPos( *pSavIdx, SwIndex( pNode, nSavContent ));
-        for( auto n = pSavArr->size(); n; )
-            *(*pSavArr)[ --n ] = aPos;
+        for( auto n = mvSavArr.size(); n; )
+            *mvSavArr[ --n ] = aPos;
     }
 }
 
@@ -348,7 +348,7 @@ bool sw_JoinText( SwPaM& rPam, bool bJoinPrev )
         if( bJoinPrev )
         {
             // We do not need to handle xmlids in this case, because
-            // it is only invoked if one paragraph is completely empty
+            // it is only invoked if one paragraph is/becomes completely empty
             // (see sw_GetJoinFlags)
             {
                 // If PageBreaks are deleted/set, it must not be added to the Undo history!
@@ -360,8 +360,9 @@ bool sw_JoinText( SwPaM& rPam, bool bJoinPrev )
                 // PageDesc, etc. we also have to change SwUndoDelete.
                 // There, we copy the AUTO PageBreak from the GetMarkNode!
 
-                /* The GetMarkNode */
-                if( ( pTextNd = aIdx.GetNode().GetTextNode())->HasSwAttrSet() )
+                /* The MarkNode */
+                pTextNd = aIdx.GetNode().GetTextNode();
+                if (pTextNd->HasSwAttrSet())
                 {
                     const SfxPoolItem* pItem;
                     if( SfxItemState::SET == pTextNd->GetpSwAttrSet()->GetItemState(

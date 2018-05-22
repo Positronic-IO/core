@@ -57,9 +57,9 @@ void MysqlCDriver::disposing()
     ::osl::MutexGuard aGuard(m_aMutex);
 
     // when driver will be destroyed so all our connections have to be destroyed as well
-    for (OWeakRefArray::iterator i = m_xConnections.begin(); m_xConnections.end() != i; ++i)
+    for (auto const& connection : m_xConnections)
     {
-        Reference< XComponent > xComp(i->get(), UNO_QUERY);
+        Reference< XComponent > xComp(connection.get(), UNO_QUERY);
         if (xComp.is()) {
             xComp->dispose();
         }
@@ -259,40 +259,6 @@ namespace mysqlc
 Reference< XInterface > MysqlCDriver_CreateInstance(const Reference< XMultiServiceFactory >& _rxFactory)
 {
     return(*(new MysqlCDriver(_rxFactory)));
-}
-
-void release(oslInterlockedCount& _refCount,
-             ::cppu::OBroadcastHelper& rBHelper,
-             Reference< XInterface >& _xInterface,
-             css::lang::XComponent* _pObject)
-{
-    if (osl_atomic_decrement(&_refCount) == 0) {
-        osl_atomic_increment(&_refCount);
-
-        if (!rBHelper.bDisposed && !rBHelper.bInDispose) {
-            // remember the parent
-            Reference< XInterface > xParent;
-            {
-                ::osl::MutexGuard aGuard(rBHelper.rMutex);
-                xParent = _xInterface;
-                _xInterface = nullptr;
-            }
-
-            // First dispose
-            _pObject->dispose();
-
-            // only the alive ref holds the object
-            OSL_ASSERT(_refCount == 1);
-
-            // release the parent in the destructor
-            if (xParent.is()) {
-                ::osl::MutexGuard aGuard(rBHelper.rMutex);
-                _xInterface = xParent;
-            }
-        }
-    } else {
-        osl_atomic_increment(&_refCount);
-    }
 }
 
 void checkDisposed(bool _bThrow)

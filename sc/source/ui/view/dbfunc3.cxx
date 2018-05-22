@@ -37,6 +37,7 @@
 #include <com/sun/star/sheet/XDrillDownDataSupplier.hpp>
 
 #include <global.hxx>
+#include <scresid.hxx>
 #include <globstr.hrc>
 #include <sc.hrc>
 #include <undotab.hxx>
@@ -424,8 +425,8 @@ void ScDBFunc::DoSubTotals( const ScSubTotalParam& rParam, bool bRecord,
             vcl::Window* pWin = GetViewData().GetDialogParent();
             std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Question, VclButtonsType::YesNo,
-                                                      ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_1))); // "delete data?"
-            xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
+                                                      ScResId(STR_MSSG_DOSUBTOTALS_1))); // "delete data?"
+            xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
             xBox->set_default_response(RET_YES);
             bOk = xBox->run() == RET_YES;
         }
@@ -594,7 +595,7 @@ bool ScDBFunc::MakePivotTable(
     {
         SCTAB nSrcTab = GetViewData().GetTabNo();
 
-        OUString aName( ScGlobal::GetRscString(STR_PIVOT_TABLE) );
+        OUString aName( ScResId(STR_PIVOT_TABLE) );
         OUString aStr;
 
         pDoc->GetName( nSrcTab, aStr );
@@ -713,12 +714,12 @@ void ScDBFunc::GetSelectedMemberList(ScDPUniqueStringSet& rEntries, long& rDimen
 
     for (size_t nRangePos=0; nRangePos < nRangeCount && bContinue; nRangePos++)
     {
-        ScRange aRange = *(*xRanges)[nRangePos];
-        SCCOL nStartCol = aRange.aStart.Col();
-        SCROW nStartRow = aRange.aStart.Row();
-        SCCOL nEndCol = aRange.aEnd.Col();
-        SCROW nEndRow = aRange.aEnd.Row();
-        SCTAB nTab = aRange.aStart.Tab();
+        ScRange const & rRange = (*xRanges)[nRangePos];
+        SCCOL nStartCol = rRange.aStart.Col();
+        SCROW nStartRow = rRange.aStart.Row();
+        SCCOL nEndCol = rRange.aEnd.Col();
+        SCROW nEndRow = rRange.aEnd.Row();
+        SCTAB nTab = rRange.aStart.Tab();
 
         for (SCROW nRow=nStartRow; nRow<=nEndRow && bContinue; nRow++)
             for (SCCOL nCol=nStartCol; nCol<=nEndCol && bContinue; nCol++)
@@ -1171,7 +1172,7 @@ void ScDBFunc::GroupDataPilot()
     }
     OUString aGroupDimName = pGroupDimension->GetGroupDimName();
 
-    OUString aGroupName = pGroupDimension->CreateGroupName(ScGlobal::GetRscString(STR_PIVOT_GROUP));
+    OUString aGroupName = pGroupDimension->CreateGroupName(ScResId(STR_PIVOT_GROUP));
     ScDPSaveGroupItem aGroup( aGroupName );
     ScDPUniqueStringSet::const_iterator it = aEntries.begin(), itEnd = aEntries.end();
     for (; it != itEnd; ++it)
@@ -1556,7 +1557,7 @@ void ScDBFunc::DataPilotInput( const ScAddress& rPos, const OUString& rString )
                             if (pDim->GetSubTotalFunc(0) != ScGeneralFunction::AUTO)
                                 break;
 
-                            const OUString* pLayoutName = pMem->GetLayoutName();
+                            const boost::optional<OUString> & pLayoutName = pMem->GetLayoutName();
                             OUString aMemberName;
                             if (pLayoutName)
                                 aMemberName = *pLayoutName;
@@ -1623,13 +1624,13 @@ void ScDBFunc::DataPilotInput( const ScAddress& rPos, const OUString& rString )
 
 static void lcl_MoveToEnd( ScDPSaveDimension& rDim, const OUString& rItemName )
 {
-    ScDPSaveMember* pNewMember = nullptr;
+    std::unique_ptr<ScDPSaveMember> pNewMember;
     const ScDPSaveMember* pOldMember = rDim.GetExistingMemberByName( rItemName );
     if ( pOldMember )
-        pNewMember = new ScDPSaveMember( *pOldMember );
+        pNewMember.reset(new ScDPSaveMember( *pOldMember ));
     else
-        pNewMember = new ScDPSaveMember( rItemName );
-    rDim.AddMember( pNewMember );
+        pNewMember.reset(new ScDPSaveMember( rItemName ));
+    rDim.AddMember( std::move(pNewMember) );
     // AddMember takes ownership of the new pointer,
     // puts it to the end of the list even if it was in the list before.
 }
@@ -1748,8 +1749,7 @@ void ScDBFunc::DataPilotSort(ScDPObject* pDPObj, long nDimIndex, bool bAscending
                 // All members are supposed to be present.
                 continue;
 
-            ScDPSaveMember* pNewMem = new ScDPSaveMember(*pOldMem);
-            pSaveDim->AddMember(pNewMem);
+            pSaveDim->AddMember(std::unique_ptr<ScDPSaveMember>(new ScDPSaveMember(*pOldMem)));
         }
 
         // Set the sorting mode to manual for now.  We may introduce a new sorting
@@ -2036,8 +2036,6 @@ void ScDBFunc::ShowDataPilotSourceData( ScDPObject& rDPObj, const Sequence<sheet
             double fVal;
             if (rAny >>= aStr)
             {
-                ScSetStringParam aParam;
-                aParam.setTextInput();
                 pInsDoc->SetString(ScAddress(nCol,nRow,nNewTab), aStr);
             }
             else if (rAny >>= fVal)
@@ -2072,7 +2070,7 @@ void ScDBFunc::ShowDataPilotSourceData( ScDPObject& rDPObj, const Sequence<sheet
     pInsDoc->SetClipArea( ScRange( 0, 0, nNewTab, nEndCol, nEndRow, nNewTab ) );
 
     ::svl::IUndoManager* pMgr = GetViewData().GetDocShell()->GetUndoManager();
-    OUString aUndo = ScGlobal::GetRscString( STR_UNDO_DOOUTLINE );
+    OUString aUndo = ScResId( STR_UNDO_DOOUTLINE );
     pMgr->EnterListAction( aUndo, aUndo, 0, GetViewData().GetViewShell()->GetViewShellId() );
 
     OUString aNewTabName;

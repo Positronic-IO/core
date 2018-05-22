@@ -26,12 +26,11 @@
 #include <view.hxx>
 #include <wfrmsh.hxx>
 #include <globals.hrc>
-#include <strings.hrc>
 
 #include <sfx2/request.hxx>
     // needed for -fsanitize=function visibility of typeinfo for functions of
     // type void(SfxShell*,SfxRequest&) defined in swslots.hxx
-#define SwWebFrameShell
+#define ShellClass_SwWebFrameShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 

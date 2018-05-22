@@ -34,7 +34,7 @@
 #include <vcl/idle.hxx>
 #include <svl/slstitm.hxx>
 #include <svtools/transfer.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <sfx2/tabdlg.hxx>
 #include <svx/galctrl.hxx>
 #include <svx/galmisc.hxx>
@@ -168,30 +168,28 @@ public:
     virtual short       Execute() override;
 };
 
-class TitleDialog : public ModalDialog
+class TitleDialog : public weld::GenericDialogController
 {
 private:
-    VclPtr<Edit> m_pEdit;
+    std::unique_ptr<weld::Entry> m_xEdit;
 public:
-    TitleDialog(vcl::Window* pParent, const OUString& rOldText);
+    TitleDialog(weld::Window* pParent, const OUString& rOldText);
     virtual ~TitleDialog() override;
-    virtual void dispose() override;
-    OUString GetTitle() const { return m_pEdit->GetText(); }
+    OUString GetTitle() const { return m_xEdit->get_text(); }
 };
 
-class GalleryIdDialog : public ModalDialog
+class GalleryIdDialog : public weld::GenericDialogController
 {
 private:
-    VclPtr<OKButton> m_pBtnOk;
-    VclPtr<ListBox> m_pLbResName;
-    GalleryTheme*   pThm;
+    GalleryTheme* m_pThm;
+    std::unique_ptr<weld::Button> m_xBtnOk;
+    std::unique_ptr<weld::ComboBoxText> m_xLbResName;
 
-    DECL_LINK( ClickOkHdl, Button*, void );
+    DECL_LINK(ClickOkHdl, weld::Button&, void);
 public:
-    GalleryIdDialog( vcl::Window* pParent, GalleryTheme* pThm );
+    GalleryIdDialog(weld::Window* pParent, GalleryTheme* pThm);
     virtual ~GalleryIdDialog() override;
-    virtual void dispose() override;
-    sal_uInt32 GetId() const { return m_pLbResName->GetSelectedEntryPos(); }
+    sal_uInt32 GetId() const { return m_xLbResName->get_active(); }
 };
 
 class GalleryThemeProperties : public SfxTabDialog
@@ -199,7 +197,6 @@ class GalleryThemeProperties : public SfxTabDialog
     ExchangeData*   pData;
 
     sal_uInt16 m_nGeneralPageId;
-    sal_uInt16 m_nFilesPageId;
 
     virtual void PageCreated(sal_uInt16 nId, SfxTabPage &rPage) override;
 
@@ -231,7 +228,7 @@ public:
 
     void                SetXChgData( ExchangeData* pData );
 
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rSet );
 };
 
 class TPGalleryThemeProperties : public SfxTabPage
@@ -296,7 +293,7 @@ public:
 
     void                StartSearchFiles( const OUString& _rFolderURL, short _nDlgResult );
 
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rSet );
 };
 
 #endif // INCLUDED_CUI_SOURCE_INC_CUIGALDLG_HXX

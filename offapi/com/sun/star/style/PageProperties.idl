@@ -29,10 +29,9 @@
 #include <com/sun/star/text/XTextColumns.idl>
 #include <com/sun/star/container/XNameContainer.idl>
 #include <com/sun/star/text/WritingMode2.idl>
+#include <com/sun/star/graphic/XGraphic.idl>
 
-
- module com {  module sun {  module star {  module style {
-
+module com {  module sun {  module star {  module style {
 
 /** describes the style of pages.
  */
@@ -42,11 +41,15 @@ published service PageProperties
      */
     [property] com::sun::star::util::Color BackColor;
 
-    /**
-     */
-    //[property] BackGraphic;
-
     /** contains the URL of the background graphic.
+
+        @deprecated as of LibreOffice 6.1 - use BackGraphic instead
+
+        Note the new behaviour since it this was deprecated:
+        This property can only be set and only external URLs are
+        supported (no more vnd.sun.star.GraphicObject scheme). When an
+        URL is set, then it will load the graphic and set the BackGraphic
+        property.
      */
     [property] string BackGraphicURL;
 
@@ -169,11 +172,15 @@ published service PageProperties
      */
     [property, maybevoid] com::sun::star::util::Color HeaderBackColor;
 
-    /**
-     */
-    //[property, maybevoid] HeaderBackGraphic;
-
     /** contains the URL of the background graphic of the header.
+
+        @deprecated as of LibreOffice 6.1 - use HeaderBackGraphic instead
+
+        Note the new behaviour since it this was deprecated:
+        This property can only be set and only external URLs are
+        supported (no more vnd.sun.star.GraphicObject scheme). When an
+        URL is set, then it will load the graphic and set the HeaderBackGraphic
+        property.
      */
     [property, maybevoid] string HeaderBackGraphicURL;
 
@@ -279,6 +286,14 @@ published service PageProperties
     [property, maybevoid] com::sun::star::util::Color FooterBackColor;
 
     /** contains the URL of the background graphic in the footer.
+
+        @deprecated as of LibreOffice 6.1 - use FooterBackGraphic
+
+        Note the new behaviour since it this was deprecated:
+        This property can only be set and only external URLs are
+        supported (no more vnd.sun.star.GraphicObject scheme). When an
+        URL is set, then it will load the graphic and set the FooterBackGraphic
+        property.
      */
     [property, maybevoid] string FooterBackGraphicURL;
 
@@ -454,6 +469,24 @@ published service PageProperties
 
     /** determines the distance of all borders of the header. */
     [property, maybevoid] long HeaderBorderDistance;
+
+    /** contains the graphic of the background.
+
+        @since LibreOffice 6.1
+     */
+    [optional, property] com::sun::star::graphic::XGraphic BackGraphic;
+
+    /** contains the graphic of the background of the header.
+
+        @since LibreOffice 6.1
+     */
+    [optional, property, maybevoid] com::sun::star::graphic::XGraphic HeaderBackGraphic;
+
+    /** contains the graphic of the background of the footer.
+
+        @since LibreOffice 6.1
+     */
+    [optional, property, maybevoid] com::sun::star::graphic::XGraphic FooterBackGraphic;
 };
 
 }; }; }; };

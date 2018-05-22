@@ -29,8 +29,6 @@
 #include <svx/sdr/contact/objectcontact.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <sdr/primitive2d/sdrgrafprimitive2d.hxx>
-#include <svx/strings.hrc>
-#include <svdglob.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
@@ -69,17 +67,6 @@ namespace sdr
 
         ViewContactOfGraphic::~ViewContactOfGraphic()
         {
-        }
-
-        void ViewContactOfGraphic::flushGraphicObjects()
-        {
-            // #i102380# The graphic is swapped out. To let that have an effect, it is necessary to
-            // delete copies of the GraphicObject which are not swapped out and have no SwapHandler set
-            // (this is what happens when the GraphicObject gets copied to a SdrGrafPrimitive2D). This
-            // is best achieved for the VC by clearing the local decomposition cache. It would be possible
-            // to also do this for the VOC cache, but that VOCs exist exactly express that the object
-            // gets visualised, so this would be wrong.
-            flushViewIndependentPrimitive2DSequence();
         }
 
         drawinglayer::primitive2d::Primitive2DContainer ViewContactOfGraphic::createVIP2DSForPresObj(
@@ -241,7 +228,7 @@ namespace sdr
                 aDraftText += " ...";
             }
 
-            if (!aDraftText.isEmpty() && GetGrafObject().GetModel())
+            if (!aDraftText.isEmpty())
             {
                 // #i103255# Goal is to produce TextPrimitives which hold the given text as
                 // BlockText in the available space. It would be very tricky to do
@@ -253,14 +240,13 @@ namespace sdr
                 // needed and can be deleted.
 
                 // create temp RectObj as TextObj and set needed attributes
-                SdrRectObj aRectObj(OBJ_TEXT);
-                aRectObj.SetModel(GetGrafObject().GetModel());
-                aRectObj.NbcSetText(aDraftText);
-                aRectObj.SetMergedItem(SvxColorItem(COL_LIGHTRED, EE_CHAR_COLOR));
+                SdrRectObj* pRectObj(new SdrRectObj(GetGrafObject().getSdrModelFromSdrObject(), OBJ_TEXT));
+                pRectObj->NbcSetText(aDraftText);
+                pRectObj->SetMergedItem(SvxColorItem(COL_LIGHTRED, EE_CHAR_COLOR));
 
                 // get SdrText and OPO
-                SdrText* pSdrText = aRectObj.getText(0);
-                OutlinerParaObject* pOPO = aRectObj.GetOutlinerParaObject();
+                SdrText* pSdrText(pRectObj->getText(0));
+                OutlinerParaObject* pOPO(pRectObj->GetOutlinerParaObject());
 
                 if(pSdrText && pOPO)
                 {
@@ -286,6 +272,10 @@ namespace sdr
                     const drawinglayer::geometry::ViewInformation2D aViewInformation2D;
                     xBlockTextPrimitive->get2DDecomposition(xRetval, aViewInformation2D);
                 }
+
+                // always use SdrObject::Free(...) for SdrObjects (!)
+                SdrObject* pTemp(pRectObj);
+                SdrObject::Free(pTemp);
             }
 
             return xRetval;
@@ -419,10 +409,6 @@ namespace sdr
 
             // draft when swapped out
             const GraphicObject& rGraphicObject = GetGrafObject().GetGraphicObject();
-            static bool bAllowReplacements(true);
-
-            if(rGraphicObject.IsSwappedOut() && bAllowReplacements)
-                return true;
 
             // draft when no graphic
             if(GraphicType::NONE == rGraphicObject.GetType() || GraphicType::Default == rGraphicObject.GetType())

@@ -60,6 +60,7 @@ class SFX2_DLLPUBLIC SfxFilter
     SfxFilterFlags  nFormatType;
     sal_Int32       nVersion;
     SotClipboardFormatId lFormat;
+    bool mbEnabled;
 
 public:
     SfxFilter( const OUString& rProvider, const OUString& rFilterName );
@@ -71,7 +72,8 @@ public:
                const OUString &rTypeName,
                const OUString &rMimeType,
                const OUString &rUserData,
-               const OUString& rServiceName );
+               const OUString& rServiceName,
+               bool bEnabled = true );
     ~SfxFilter();
 
     bool IsAllowedAsTemplate() const { return bool(nFormatType & SfxFilterFlags::TEMPLATE); }
@@ -80,7 +82,10 @@ public:
     bool GetSupportsSigning() const { return bool(nFormatType & SfxFilterFlags::SUPPORTSSIGNING); }
     bool GetGpgEncryption() const { return bool(nFormatType & SfxFilterFlags::GPGENCRYPTION); }
     bool IsOwnTemplateFormat() const { return bool(nFormatType & SfxFilterFlags::TEMPLATEPATH); }
+    /// not our built-in format
     bool IsAlienFormat() const { return bool(nFormatType & SfxFilterFlags::ALIEN); }
+    /// an unusual/legacy file to be loading
+    bool IsExoticFormat() const { return bool(nFormatType & SfxFilterFlags::EXOTIC); }
     bool CanImport() const { return bool(nFormatType & SfxFilterFlags::IMPORT); }
     bool CanExport() const { return bool(nFormatType & SfxFilterFlags::EXPORT); }
     SfxFilterFlags  GetFilterFlags() const  { return nFormatType; }
@@ -115,6 +120,7 @@ public:
     /// @throws css::uno::RuntimeException
     static OUString GetTypeFromStorage(
         const css::uno::Reference<css::embed::XStorage>& xStorage );
+    bool IsEnabled() const  { return mbEnabled; }
 };
 
 #endif

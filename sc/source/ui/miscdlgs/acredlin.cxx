@@ -22,7 +22,6 @@
 #include <unotools/textsearch.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/collatorwrapper.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/viewfrm.hxx>
 
@@ -32,7 +31,6 @@
 #include <document.hxx>
 #include <docsh.hxx>
 #include <scresid.hxx>
-#include <globstr.hrc>
 #include <strings.hrc>
 #include <simpref.hxx>
 #include <scmod.hxx>
@@ -244,8 +242,8 @@ void ScAcceptChgDlg::Init()
 
     if( !aChangeViewSet.GetTheRangeList().empty() )
     {
-        const ScRange* pRangeEntry = aChangeViewSet.GetTheRangeList().front();
-        OUString aRefStr(pRangeEntry->Format(ScRefFlags::RANGE_ABS_3D, pDoc));
+        const ScRange & rRangeEntry = aChangeViewSet.GetTheRangeList().front();
+        OUString aRefStr(rRangeEntry.Format(ScRefFlags::RANGE_ABS_3D, pDoc));
         pTPFilter->SetRange(aRefStr);
     }
 
@@ -338,8 +336,8 @@ bool ScAcceptChgDlg::IsValidAction(const ScChangeAction* pScChangeAction)
         {
             for ( size_t i = 0, nRanges = aRangeList.size(); i < nRanges; ++i )
             {
-                ScRange* pRangeEntry = aRangeList[ i ];
-                if (pRangeEntry->Intersects(aRef)) {
+                ScRange const & rRangeEntry = aRangeList[ i ];
+                if (rRangeEntry.Intersects(aRef)) {
                     bFlag = true;
                     break;
                 }
@@ -457,8 +455,8 @@ SvTreeListEntry* ScAcceptChgDlg::AppendChangeAction(
             {
                 for ( size_t i = 0, nRanges = aRangeList.size(); i < nRanges; ++i )
                 {
-                    ScRange* pRangeEntry = aRangeList[ i ];
-                    if( pRangeEntry->Intersects(aRef) )
+                    ScRange const & rRangeEntry = aRangeList[ i ];
+                    if( rRangeEntry.Intersects(aRef) )
                     {
                         bHasFilterEntry=true;
                         bFlag=true;
@@ -527,8 +525,8 @@ SvTreeListEntry* ScAcceptChgDlg::AppendFilteredAction(
         {
             for ( size_t i = 0, nRanges = aRangeList.size(); i < nRanges; ++i )
             {
-                ScRange* pRangeEntry=aRangeList[ i ];
-                if( pRangeEntry->Intersects(aRef) )
+                ScRange const & rRangeEntry=aRangeList[ i ];
+                if( rRangeEntry.Intersects(aRef) )
                 {
                     if( pScChangeAction->GetState()==eState )
                         bFlag = true;
@@ -647,8 +645,8 @@ SvTreeListEntry* ScAcceptChgDlg::InsertChangeActionContent(const ScChangeActionC
         {
             for ( size_t i = 0, nRanges = aRangeList.size(); i < nRanges; ++i )
             {
-                ScRange* pRangeEntry = aRangeList[ i ];
-                if( pRangeEntry->Intersects(aRef) )
+                ScRange const & rRangeEntry = aRangeList[ i ];
+                if( rRangeEntry.Intersects(aRef) )
                 {
                     bFlag=true;
                     break;
@@ -1694,7 +1692,7 @@ IMPL_LINK_NOARG(ScAcceptChgDlg, CommandHdl, SvSimpleTable*, void)
                         ScChangeAction* pScChangeAction=
                                 static_cast<ScChangeAction*>(pEntryData->pData);
 
-                        pViewData->GetDocShell()->ExecuteChangeCommentDialog( pScChangeAction, this,false);
+                        pViewData->GetDocShell()->ExecuteChangeCommentDialog(pScChangeAction, GetFrameWeld(), false);
                     }
                 }
             }

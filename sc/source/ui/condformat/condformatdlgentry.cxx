@@ -22,7 +22,6 @@
 #include <svx/colorbox.hxx>
 #include <svx/xtable.hxx>
 #include <svx/drawitem.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <formula/token.hxx>
 #include <formula/errorcodes.hxx>
@@ -32,7 +31,7 @@
 #include <simpleformulacalc.hxx>
 
 #include <colorformat.hxx>
-
+#include <scresid.hxx>
 #include <globstr.hrc>
 #include <strings.hrc>
 
@@ -306,7 +305,7 @@ IMPL_LINK(ScConditionFrmtEntry, OnEdChanged, Edit&, rEdit, void)
 
     if( aFormula.isEmpty() )
     {
-        maFtVal->SetText(ScGlobal::GetRscString(STR_ENTER_VALUE));
+        maFtVal->SetText(ScResId(STR_ENTER_VALUE));
         return;
     }
 
@@ -317,7 +316,7 @@ IMPL_LINK(ScConditionFrmtEntry, OnEdChanged, Edit&, rEdit, void)
     if( ta->GetCodeError() != FormulaError::NONE || ( ta->GetLen() == 0 ) )
     {
         rEdit.SetControlBackground(COL_LIGHTRED);
-        maFtVal->SetText(ScGlobal::GetRscString(STR_VALID_DEFERROR));
+        maFtVal->SetText(ScResId(STR_VALID_DEFERROR));
         return;
     }
 
@@ -330,7 +329,7 @@ IMPL_LINK(ScConditionFrmtEntry, OnEdChanged, Edit&, rEdit, void)
       )
     {
         rEdit.SetControlBackground(COL_YELLOW);
-        maFtVal->SetText(ScGlobal::GetRscString(STR_UNQUOTED_STRING));
+        maFtVal->SetText(ScResId(STR_UNQUOTED_STRING));
         return;
     }
 
@@ -481,7 +480,7 @@ void StyleSelect( ListBox& rLbStyle, const ScDocument* pDoc, SvxFontPrevWindow& 
     {
         // call new style dialog
         SfxUInt16Item aFamilyItem( SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Para) );
-        SfxStringItem aRefItem( SID_STYLE_REFERENCE, ScGlobal::GetRscString(STR_STYLENAME_STANDARD) );
+        SfxStringItem aRefItem( SID_STYLE_REFERENCE, ScResId(STR_STYLENAME_STANDARD) );
 
         // unlock the dispatcher so SID_STYLE_NEW can be executed
         // (SetDispatcherLock would affect all Calc documents)

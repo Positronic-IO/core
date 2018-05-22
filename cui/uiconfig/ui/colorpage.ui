@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.16.1 -->
 <interface domain="cui">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <!-- interface-requires LibreOffice 1.0 -->
   <object class="GtkAdjustment" id="adjustment1">
     <property name="upper">100</property>
@@ -111,7 +111,7 @@
                     <child>
                       <object class="svxcorelo-SvxColorValueSet" id="recentcolorset">
                         <property name="visible">True</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
                       </object>
@@ -156,6 +156,7 @@
                         <property name="label" translatable="yes" context="colorpage|RGB">RGB</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="active">True</property>
                         <property name="draw_indicator">True</property>
@@ -172,6 +173,7 @@
                         <property name="label" translatable="yes" context="colorpage|CMYK">CMYK</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="active">True</property>
                         <property name="draw_indicator">True</property>
@@ -229,7 +231,7 @@
                     <child>
                       <object class="svxcorelo-SvxColorValueSet" id="colorset">
                         <property name="visible">True</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
                       </object>
@@ -652,7 +654,6 @@
                       <object class="GtkSpinButton" id="B_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|B_custom">Blue</property>
                         <property name="adjustment">adjustment2</property>
                       </object>
@@ -667,7 +668,6 @@
                       <object class="GtkSpinButton" id="R_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|R_custom">Red</property>
                         <property name="adjustment">adjustment2</property>
                       </object>
@@ -724,7 +724,6 @@
                       <object class="GtkSpinButton" id="G_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|G_custom">Green</property>
                         <property name="adjustment">adjustment2</property>
                       </object>
@@ -827,7 +826,6 @@
                       <object class="GtkSpinButton" id="C_custom:0%">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustment1</property>
                       </object>
                       <packing>
@@ -841,7 +839,6 @@
                       <object class="GtkSpinButton" id="K_custom:0%">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustment1</property>
                       </object>
                       <packing>
@@ -869,7 +866,6 @@
                       <object class="GtkSpinButton" id="Y_custom:0%">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustment1</property>
                       </object>
                       <packing>
@@ -883,7 +879,6 @@
                       <object class="GtkSpinButton" id="M_custom:0%">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustment1</property>
                       </object>
                       <packing>

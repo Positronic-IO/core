@@ -31,7 +31,6 @@
 
 #include <comphelper/fileformat.h>
 #include <comphelper/seqstream.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <svtools/embedtransfer.hxx>
 #include <tools/fract.hxx>
@@ -55,7 +54,7 @@ SfxObjectShell* SfxObjectShell::GetParentShellByModel_Impl()
             {
                 SvGlobalName aSfxIdent( SFX_GLOBAL_CLASSID );
                 pResult = reinterpret_cast<SfxObjectShell*>(xParentTunnel->getSomething(
-                                                uno::Sequence< sal_Int8 >( aSfxIdent.GetByteSequence() ) ) );
+                                                aSfxIdent.GetByteSequence() ) );
             }
         }
     }

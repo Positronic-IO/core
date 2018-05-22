@@ -174,11 +174,11 @@
 #include <svx/svdoutl.hxx>
 #include <svl/languageoptions.hxx>
 #include <svx/svdview.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <SwSpellDialogChildWindow.hxx>
 #include <memory>
 #include <fchrfmt.hxx>
+#include <redline.hxx>
 
 #define TWIPS_PER_PIXEL 15
 
@@ -448,6 +448,12 @@ SwXTextDocument::SwXTextDocument(SwDocShell* pShell)
     // #i117783#
     bApplyPagePrintSettingsFromXPagePrintable( false )
 {
+}
+
+SdrModel& SwXTextDocument::getSdrModelFromUnoModel() const
+{
+    OSL_ENSURE(pDocShell->GetDoc()->getIDocumentDrawModelAccess().GetOrCreateDrawModel(), "No SdrModel in SwDoc, should not happen");
+    return *pDocShell->GetDoc()->getIDocumentDrawModelAccess().GetDrawModel();
 }
 
 SwXTextDocument::~SwXTextDocument()
@@ -3052,7 +3058,7 @@ void SAL_CALL SwXTextDocument::render(
                     if (bPrintProspect)
                         pVwSh->PrintProspect( pOut, rSwPrtOptions, nRenderer );
                     else    // normal printing and PDF export
-                        pVwSh->PrintOrPDFExport( pOut, rSwPrtOptions, nRenderer );
+                        pVwSh->PrintOrPDFExport( pOut, rSwPrtOptions, nRenderer, bIsPDFExport );
 
                     // #i35176#
 
@@ -3486,7 +3492,7 @@ void SwXTextDocument::postKeyEvent(int nType, int nCharCode, int nKeyCode)
     SolarMutexGuard aGuard;
 
     VclPtr<vcl::Window> pWindow = getDocWindow();
-    if (!pWindow)
+    if (!pWindow || pWindow->IsDisposed())
         return;
 
     LOKAsyncEventData* pLOKEv = new LOKAsyncEventData;
@@ -3716,16 +3722,6 @@ void SAL_CALL SwXTextDocument::paintTile( const ::css::uno::Any& Parent, ::sal_I
     (void)nTileWidth;
     (void)nTileHeight;
     #endif
-}
-
-void * SwXTextDocument::operator new( size_t t) throw()
-{
-    return SwXTextDocumentBaseClass::operator new(t);
-}
-
-void SwXTextDocument::operator delete( void * p) throw()
-{
-    SwXTextDocumentBaseClass::operator delete(p);
 }
 
 /**

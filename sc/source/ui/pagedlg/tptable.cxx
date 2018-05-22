@@ -26,7 +26,6 @@
 #include <tptable.hxx>
 #include <global.hxx>
 #include <attrib.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <bitmaps.hlst>
 
@@ -167,9 +166,9 @@ void ScTablePage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> ScTablePage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScTablePage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScTablePage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScTablePage>::Create( pParent.pParent, *rCoreSet );
 }
 
 void ScTablePage::Reset( const SfxItemSet* rCoreSet )

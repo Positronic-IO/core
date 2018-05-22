@@ -23,7 +23,6 @@
 
 #include "advancedsettings.hxx"
 #include <advancedsettingsdlg.hxx>
-#include <core_resource.hxx>
 #include <dsitems.hxx>
 #include "DbAdminImpl.hxx"
 #include "DriverSettings.hxx"
@@ -34,8 +33,6 @@
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
-
-#include <vcl/msgbox.hxx>
 
 namespace dbaui
 {
@@ -89,22 +86,19 @@ namespace dbaui
 
         const FeatureSet& rFeatures( _rDSMeta.getFeatureSet() );
         // create all the check boxes for the boolean settings
-        for (   BooleanSettingDescs::const_iterator setting = m_aBooleanSettings.begin();
-                setting != m_aBooleanSettings.end();
-                ++setting
-             )
+        for (auto const& booleanSetting : m_aBooleanSettings)
         {
-            sal_uInt16 nItemId = setting->nItemId;
+            sal_uInt16 nItemId = booleanSetting.nItemId;
             if ( rFeatures.has( nItemId ) )
             {
-                get(*setting->ppControl, setting->sControlId);
-                (*setting->ppControl)->SetClickHdl( LINK(this, OGenericAdministrationPage, OnControlModifiedClick) );
-                (*setting->ppControl)->Show();
+                get(*booleanSetting.ppControl, booleanSetting.sControlId);
+                (*booleanSetting.ppControl)->SetClickHdl( LINK(this, OGenericAdministrationPage, OnControlModifiedClick) );
+                (*booleanSetting.ppControl)->Show();
 
                 // check whether this must be a tristate check box
                 const SfxPoolItem& rItem = _rCoreAttrs.Get( nItemId );
                 if ( nullptr != dynamic_cast< const OptionalBoolItem* >(&rItem) )
-                    (*setting->ppControl)->EnableTriState();
+                    (*booleanSetting.ppControl)->EnableTriState();
             }
         }
 
@@ -214,14 +208,11 @@ namespace dbaui
 
     void SpecialSettingsPage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
     {
-        for (   BooleanSettingDescs::const_iterator setting = m_aBooleanSettings.begin();
-                setting != m_aBooleanSettings.end();
-                ++setting
-             )
+        for (auto const& booleanSetting : m_aBooleanSettings)
         {
-            if ( *setting->ppControl )
+            if ( *booleanSetting.ppControl )
             {
-                _rControlList.push_back( new OSaveValueWrapper< CheckBox >( *setting->ppControl ) );
+                _rControlList.push_back( new OSaveValueWrapper< CheckBox >( *booleanSetting.ppControl ) );
             }
         }
 
@@ -244,18 +235,15 @@ namespace dbaui
         }
 
         // the boolean items
-        for (   BooleanSettingDescs::const_iterator setting = m_aBooleanSettings.begin();
-                setting != m_aBooleanSettings.end();
-                ++setting
-             )
+        for (auto const& booleanSetting : m_aBooleanSettings)
         {
-            if ( !(*setting->ppControl) )
+            if ( !(*booleanSetting.ppControl) )
                 continue;
 
             ::boost::optional< bool > aValue(false);
             aValue.reset();
 
-            const SfxPoolItem* pItem = _rSet.GetItem<SfxPoolItem>(setting->nItemId);
+            const SfxPoolItem* pItem = _rSet.GetItem<SfxPoolItem>(booleanSetting.nItemId);
             if (const SfxBoolItem *pBoolItem = dynamic_cast<const SfxBoolItem*>( pItem) )
             {
                 aValue.reset( pBoolItem->GetValue() );
@@ -269,14 +257,14 @@ namespace dbaui
 
             if ( !aValue )
             {
-                (*setting->ppControl)->SetState( TRISTATE_INDET );
+                (*booleanSetting.ppControl)->SetState( TRISTATE_INDET );
             }
             else
             {
                 bool bValue = *aValue;
-                if ( setting->bInvertedDisplay )
+                if ( booleanSetting.bInvertedDisplay )
                     bValue = !bValue;
-                (*setting->ppControl)->Check( bValue );
+                (*booleanSetting.ppControl)->Check( bValue );
             }
         }
 
@@ -301,14 +289,11 @@ namespace dbaui
         bool bChangedSomething = false;
 
         // the boolean items
-        for (   BooleanSettingDescs::const_iterator setting = m_aBooleanSettings.begin();
-                setting != m_aBooleanSettings.end();
-                ++setting
-             )
+        for (auto const& booleanSetting : m_aBooleanSettings)
         {
-            if ( !*setting->ppControl )
+            if ( !*booleanSetting.ppControl )
                 continue;
-            fillBool( *_rSet, *setting->ppControl, setting->nItemId, bChangedSomething, setting->bInvertedDisplay );
+            fillBool( *_rSet, *booleanSetting.ppControl, booleanSetting.nItemId, bChangedSomething, booleanSetting.bInvertedDisplay );
         }
 
         // the non-boolean items

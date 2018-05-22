@@ -11,8 +11,8 @@
 #define INCLUDED_SC_INC_CELLVALUES_HXX
 
 #include "address.hxx"
-#include "global.hxx"
 #include <memory>
+#include <vector>
 
 class ScColumn;
 

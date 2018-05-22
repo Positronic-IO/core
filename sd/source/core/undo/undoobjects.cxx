@@ -44,24 +44,24 @@ ViewShellId SdUndoAction::GetViewShellId() const
 }
 
 UndoRemovePresObjectImpl::UndoRemovePresObjectImpl( SdrObject& rObject )
-: mpUndoUsercall(nullptr)
-, mpUndoAnimation(nullptr)
-, mpUndoPresObj(nullptr)
 {
     SdPage* pPage = dynamic_cast< SdPage* >( rObject.GetPage() );
     if( pPage )
     {
         if( pPage->IsPresObj(&rObject) )
-            mpUndoPresObj = new UndoObjectPresentationKind( rObject );
+            mpUndoPresObj.reset( new UndoObjectPresentationKind( rObject ) );
         if( rObject.GetUserCall() )
-            mpUndoUsercall = new UndoObjectUserCall(rObject);
+            mpUndoUsercall.reset( new UndoObjectUserCall(rObject) );
 
         if( pPage->hasAnimationNode() )
         {
             css::uno::Reference< css::drawing::XShape > xShape( rObject.getUnoShape(), css::uno::UNO_QUERY );
             if( pPage->getMainSequence()->hasEffect( xShape ) )
             {
-                mpUndoAnimation = new UndoAnimation( static_cast< SdDrawDocument* >( pPage->GetModel() ), pPage );
+                mpUndoAnimation.reset(
+                    new UndoAnimation( // TTTT may use ref? Or just *SdrPage?
+                        static_cast< SdDrawDocument* >(&pPage->getSdrModelFromSdrPage()),
+                        pPage));
             }
         }
     }
@@ -69,9 +69,6 @@ UndoRemovePresObjectImpl::UndoRemovePresObjectImpl( SdrObject& rObject )
 
 UndoRemovePresObjectImpl::~UndoRemovePresObjectImpl()
 {
-    delete mpUndoAnimation;
-    delete mpUndoPresObj;
-    delete mpUndoUsercall;
 }
 
 void UndoRemovePresObjectImpl::Undo()
@@ -186,7 +183,10 @@ UndoObjectSetText::UndoObjectSetText( SdrObject& rObject, sal_Int32 nText )
         css::uno::Reference< css::drawing::XShape > xShape( rObject.getUnoShape(), css::uno::UNO_QUERY );
         if( pPage->getMainSequence()->hasEffect( xShape ) )
         {
-            mpUndoAnimation.reset( new UndoAnimation( static_cast< SdDrawDocument* >( pPage->GetModel() ), pPage ) );
+            mpUndoAnimation.reset(
+                new UndoAnimation(
+                    static_cast< SdDrawDocument* >(&pPage->getSdrModelFromSdrPage()),
+                    pPage));
         }
     }
 }

@@ -272,10 +272,6 @@ bool QuartzSalBitmap::CreateContext()
         try
         {
             m_pContextBuffer = o3tl::make_shared_array<sal_uInt8>(mnHeight * nContextBytesPerRow);
-#ifdef DBG_UTIL
-            for (size_t i = 0; i < mnHeight * nContextBytesPerRow; i++)
-                m_pContextBuffer.get()[i] = (i & 0xFF);
-#endif
 
             if( !bSkipConversion )
             {
@@ -342,15 +338,6 @@ bool QuartzSalBitmap::AllocateUserData()
         m_pUserBuffer.reset( static_cast<sal_uInt8*>(nullptr) );
         mnBytesPerRow = 0;
     }
-#ifdef DBG_UTIL
-    else
-    {
-        for (size_t i = 0; i < mnBytesPerRow * mnHeight; i++)
-        {
-            m_pUserBuffer.get()[i] = (i & 0xFF);
-        }
-    }
-#endif
 
     return m_pUserBuffer.get() != nullptr;
 }
@@ -451,11 +438,13 @@ class ImplPixelFormat8 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
+    const sal_uInt8 mnPaletteCount;
 
 public:
     explicit ImplPixelFormat8( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
+        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
         {
         }
     virtual void StartLine( sal_uInt8* pLine ) override { pData = pLine; }
@@ -465,7 +454,13 @@ public:
         }
     virtual Color ReadPixel() override
         {
-            return mrPalette[ *pData++ ].GetColor().GetColor();
+            const sal_uInt8 nIndex(*pData++);
+
+            // Caution(!) rPalette.GetEntryCount() may be != (depth^^2)-1 (!)
+            if(nIndex < mnPaletteCount)
+                return mrPalette[nIndex].GetColor();
+            else
+                return Color(COL_BLACK);
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -478,6 +473,7 @@ class ImplPixelFormat4 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
+    const sal_uInt8 mnPaletteCount;
     sal_uInt32 mnX;
     sal_uInt32 mnShift;
 
@@ -485,6 +481,7 @@ public:
     explicit ImplPixelFormat4( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
+        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
         , mnX(0)
         , mnShift(0)
         {
@@ -505,10 +502,15 @@ public:
         }
     virtual Color ReadPixel() override
         {
-            const BitmapColor& rColor = mrPalette[( pData[mnX >> 1] >> mnShift) & 0x0f];
+            // Caution(!) rPalette.GetEntryCount() may be != (depth^^2)-1 (!)
+            const sal_uInt8 nIndex(( pData[mnX >> 1] >> mnShift) & 0x0f);
             mnX++;
             mnShift ^= 4;
-            return rColor.GetColor().GetColor();
+
+            if(nIndex < mnPaletteCount)
+                return mrPalette[nIndex].GetColor();
+            else
+                return Color(COL_BLACK);
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -524,12 +526,14 @@ class ImplPixelFormat1 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
+    const sal_uInt8 mnPaletteCount;
     sal_uInt32 mnX;
 
 public:
     explicit ImplPixelFormat1( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
+        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
         , mnX(0)
         {
         }
@@ -544,9 +548,14 @@ public:
         }
     virtual Color ReadPixel() override
         {
-            const BitmapColor& rColor = mrPalette[ (pData[mnX >> 3 ] >> ( 7 - ( mnX & 7 ) )) & 1];
+            // Caution(!) rPalette.GetEntryCount() may be != (depth^^2)-1 (!)
+            const sal_uInt8 nIndex( (pData[mnX >> 3 ] >> ( 7 - ( mnX & 7 ) )) & 1);
             mnX++;
-            return rColor.GetColor().GetColor();
+
+            if(nIndex < mnPaletteCount)
+                return mrPalette[nIndex].GetColor();
+            else
+                return Color(COL_BLACK);
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -818,6 +827,7 @@ void QuartzSalBitmap::ReleaseBuffer( BitmapBuffer* pBuffer, BitmapAccessMode nMo
         {
             DestroyContext();
         }
+        InvalidateChecksum();
     }
 
     delete pBuffer;
@@ -920,7 +930,7 @@ CGImageRef QuartzSalBitmap::CreateWithMask( const QuartzSalBitmap& rMask,
 /** creates an image from the given rectangle, replacing all black pixels
     with nMaskColor and make all other full transparent */
 CGImageRef QuartzSalBitmap::CreateColorMask( int nX, int nY, int nWidth,
-                                             int nHeight, SalColor nMaskColor ) const
+                                             int nHeight, Color nMaskColor ) const
 {
     CGImageRef xMask = nullptr;
     if (m_pUserBuffer.get() && (nX + nWidth <= mnWidth) && (nY + nHeight <= mnHeight))
@@ -935,9 +945,9 @@ CGImageRef QuartzSalBitmap::CreateColorMask( int nX, int nY, int nWidth,
         {
             sal_uInt32 nColor;
             reinterpret_cast<sal_uInt8*>(&nColor)[0] = 0xff;
-            reinterpret_cast<sal_uInt8*>(&nColor)[1] = SALCOLOR_RED( nMaskColor );
-            reinterpret_cast<sal_uInt8*>(&nColor)[2] = SALCOLOR_GREEN( nMaskColor );
-            reinterpret_cast<sal_uInt8*>(&nColor)[3] = SALCOLOR_BLUE( nMaskColor );
+            reinterpret_cast<sal_uInt8*>(&nColor)[1] = nMaskColor.GetRed();
+            reinterpret_cast<sal_uInt8*>(&nColor)[2] = nMaskColor.GetGreen();
+            reinterpret_cast<sal_uInt8*>(&nColor)[3] = nMaskColor.GetBlue();
 
             sal_uInt8* pSource = m_pUserBuffer.get();
             if( nY )

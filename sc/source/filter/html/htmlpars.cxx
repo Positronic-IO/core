@@ -445,10 +445,10 @@ void ScHTMLLayoutParser::SkipLocked( ScEEParseEntry* pE, bool bJoin )
             bAgain = false;
             for ( size_t i =  0, nRanges = xLockedList->size(); i < nRanges; ++i )
             {
-                ScRange* pR = (*xLockedList)[i];
-                if ( pR->Intersects( aRange ) )
+                ScRange & rR = (*xLockedList)[i];
+                if ( rR.Intersects( aRange ) )
                 {
-                    pE->nCol = pR->aEnd.Col() + 1;
+                    pE->nCol = rR.aEnd.Col() + 1;
                     SCCOL nTmp = pE->nCol + pE->nColOverlap - 1;
                     if ( pE->nCol > MAXCOL || nTmp > MAXCOL )
                         bBadCol = true;
@@ -987,12 +987,12 @@ void ScHTMLLayoutParser::TableDataOn( HtmlImportInfo* pInfo )
             break;
             case HtmlOptionId::SDVAL:
             {
-                mxActEntry->pValStr.reset(new OUString(rOption.GetString()));
+                mxActEntry->pValStr = rOption.GetString();
             }
             break;
             case HtmlOptionId::SDNUM:
             {
-                mxActEntry->pNumStr.reset(new OUString(rOption.GetString()));
+                mxActEntry->pNumStr = rOption.GetString();
             }
             break;
             default: break;
@@ -1028,8 +1028,6 @@ void ScHTMLLayoutParser::TableDataOff( const HtmlImportInfo* pInfo )
 
 void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
 {
-    OUString aTabName;
-
     if ( ++nTableLevel > 1 )
     {   // Table in Table
         sal_uInt16 nTmpColOffset = nColOffset; // Will be changed in Colonize()
@@ -1060,9 +1058,6 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
                     break;
                     case HtmlOptionId::BORDER:
                         // Border is: ((pOption->GetString().Len() == 0) || (pOption->GetNumber() != 0));
-                    break;
-                    case HtmlOptionId::ID:
-                        aTabName = rOption.GetString();
                     break;
                     default: break;
                 }
@@ -1117,9 +1112,6 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
                     break;
                     case HtmlOptionId::BORDER:
                         //BorderOn is: ((pOption->GetString().Len() == 0) || (pOption->GetNumber() != 0));
-                    break;
-                    case HtmlOptionId::ID:
-                        aTabName = rOption.GetString();
                     break;
                     default: break;
                 }
@@ -1425,7 +1417,7 @@ void ScHTMLLayoutParser::AnchorOn( HtmlImportInfo* pInfo )
     for (const auto & rOption : rOptions)
     {
         if( rOption.GetToken() == HtmlOptionId::NAME )
-            mxActEntry->pName.reset(new OUString(rOption.GetString()));
+            mxActEntry->pName = rOption.GetString();
     }
 }
 
@@ -2078,7 +2070,7 @@ void ScHTMLTable::DataOn( const HtmlImportInfo& rInfo )
     {
         // read needed options from the <td> tag
         ScHTMLSize aSpanSize( 1, 1 );
-        std::unique_ptr<OUString> pValStr, pNumStr;
+        boost::optional<OUString> pValStr, pNumStr;
         const HTMLOptions& rOptions = static_cast<HTMLParser*>(rInfo.pParser)->GetOptions();
         HTMLOptions::const_iterator itr = rOptions.begin(), itrEnd = rOptions.end();
         sal_uInt32 nNumberFormat = NUMBERFORMAT_ENTRY_NOT_FOUND;
@@ -2093,10 +2085,10 @@ void ScHTMLTable::DataOn( const HtmlImportInfo& rInfo )
                     aSpanSize.mnRows = static_cast<SCROW>( getLimitedValue<sal_Int32>( itr->GetString().toInt32(), 1, 256 ) );
                 break;
                 case HtmlOptionId::SDVAL:
-                    pValStr.reset(new OUString(itr->GetString()));
+                    pValStr = itr->GetString();
                 break;
                 case HtmlOptionId::SDNUM:
-                    pNumStr.reset(new OUString(itr->GetString()));
+                    pNumStr = itr->GetString();
                 break;
                 case HtmlOptionId::CLASS:
                 {
@@ -2132,8 +2124,8 @@ void ScHTMLTable::DataOn( const HtmlImportInfo& rInfo )
 
         ProcessFormatOptions( *mxDataItemSet, rInfo );
         CreateNewEntry( rInfo );
-        mxCurrEntry->pValStr.reset( pValStr.release() );
-        mxCurrEntry->pNumStr.reset( pNumStr.release() );
+        mxCurrEntry->pValStr = std::move(pValStr);
+        mxCurrEntry->pNumStr = std::move(pNumStr);
     }
     else
         CreateNewEntry( rInfo );
@@ -2428,7 +2420,7 @@ void ScHTMLTable::InsertNewCell( const ScHTMLSize& rSpanSize )
     }
     if( rSpanSize.mnRows > 1 )
     {
-        maVMergedCells.Append( aNewRange );
+        maVMergedCells.push_back( aNewRange );
         /*  Do not insert vertically merged ranges into maUsedCells yet,
             because they may be shrunken (see above). The final vertically
             merged ranges are inserted in FillEmptyCells(). */
@@ -2436,7 +2428,7 @@ void ScHTMLTable::InsertNewCell( const ScHTMLSize& rSpanSize )
     else
     {
         if( rSpanSize.mnCols > 1 )
-            maHMergedCells.Append( aNewRange );
+            maHMergedCells.push_back( aNewRange );
         /*  Insert horizontally merged ranges and single cells into
             maUsedCells, they will not be changed anymore. */
         maUsedCells.Join( aNewRange );
@@ -2589,8 +2581,8 @@ void ScHTMLTable::FillEmptyCells()
     // insert the final vertically merged ranges into maUsedCells
     for ( size_t i = 0, nRanges = maVMergedCells.size(); i < nRanges; ++i )
     {
-        ScRange* pRange = maVMergedCells[ i ];
-        maUsedCells.Join( *pRange );
+        ScRange & rRange = maVMergedCells[ i ];
+        maUsedCells.Join( rRange );
     }
 
     for( ScAddress aAddr; aAddr.Row() < maSize.mnRows; aAddr.IncRow() )

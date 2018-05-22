@@ -43,7 +43,6 @@
 #include <svl/stritem.hxx>
 #include <svl/ctloptions.hxx>
 #include <unotools/useroptions.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/sysdata.hxx>
 #include <vcl/wrkwin.hxx>
 #include <svx/insctrl.hxx>
@@ -109,11 +108,9 @@ using namespace ::com::sun::star;
 
 // here are the SlotID's being included
 // see Idl-file
-#define SwModule
+#define ShellClass_SwModule
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
-
-#include <strings.hrc>
 
 SFX_IMPL_INTERFACE(SwModule, SfxModule)
 
@@ -818,8 +815,8 @@ void SwModule::ExecOther(SfxRequest& rReq)
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             switch (nWhich)
             {
-                case FN_MAILMERGE_SAVE_DOCUMENTS: pFact->ExecuteMMResultSaveDialog(); break;
-                case FN_MAILMERGE_PRINT_DOCUMENTS: pFact->ExecuteMMResultPrintDialog(); break;
+                case FN_MAILMERGE_SAVE_DOCUMENTS: pFact->ExecuteMMResultSaveDialog(rReq.GetFrameWeld()); break;
+                case FN_MAILMERGE_PRINT_DOCUMENTS: pFact->ExecuteMMResultPrintDialog(rReq.GetFrameWeld()); break;
                 case FN_MAILMERGE_EMAIL_DOCUMENTS: pFact->ExecuteMMResultEmailDialog(); break;
             }
         }

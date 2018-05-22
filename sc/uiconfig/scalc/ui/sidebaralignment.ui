@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.20.0 -->
 <interface domain="sc">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkImage" id="image1">
     <property name="visible">True</property>
@@ -276,7 +276,6 @@
                     <property name="can_focus">True</property>
                     <property name="has_tooltip">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|leftindent|tooltip_text">Indents from the left edge.</property>
-                    <property name="invisible_char">•</property>
                     <accessibility>
                       <relation type="labelled-by" target="leftindentlabel"/>
                     </accessibility>
@@ -311,6 +310,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="has_tooltip">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|mergecells|tooltip_text">Joins the selected cells into one.</property>
                     <property name="halign">start</property>
@@ -330,6 +330,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="has_tooltip">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|wraptext|tooltip_text">Wrap texts automatically.</property>
                     <property name="halign">start</property>
@@ -408,6 +409,7 @@
                     <property name="can_focus">True</property>
                     <property name="focus_on_click">False</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|bottom|tooltip_text">Text Extension From Lower Cell Border</property>
                     <property name="image">image3</property>
                     <property name="xalign">0</property>
@@ -426,6 +428,7 @@
                     <property name="can_focus">True</property>
                     <property name="focus_on_click">False</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|top|tooltip_text">Text Extension From Upper Cell Border</property>
                     <property name="image">image2</property>
                     <property name="xalign">0</property>
@@ -444,6 +447,7 @@
                     <property name="can_focus">True</property>
                     <property name="focus_on_click">False</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="tooltip_text" translatable="yes" context="sidebaralignment|standard|tooltip_text">Text Extension Inside Cell</property>
                     <property name="image">image1</property>
                     <property name="xalign">0</property>
@@ -477,6 +481,7 @@
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">False</property>
+            <property name="use_underline">True</property>
             <property name="xalign">0</property>
             <property name="draw_indicator">True</property>
           </object>

@@ -18,7 +18,6 @@
  */
 #ifndef INCLUDED_SW_INC_SWATRSET_HXX
 #define INCLUDED_SW_INC_SWATRSET_HXX
-#include <tools/solar.h>
 #include <tools/mempool.hxx>
 #include <svl/itemset.hxx>
 #include <svl/itempool.hxx>
@@ -28,7 +27,6 @@ class SwModify;
 class SwDoc;
 class OutputDevice;
 class IDocumentSettingAccess;
-class SfxBoolItem;
 class SvxPostureItem;
 class SvxWeightItem;
 class SvxShadowedItem;
@@ -40,10 +38,8 @@ class SvxUnderlineItem;
 class SvxOverlineItem;
 class SvxCrossedOutItem;
 class SvxFontHeightItem;
-class SvxPropSizeItem;
 class SvxFontItem;
 class SvxColorItem;
-class SvxCharSetColorItem;
 class SvxLanguageItem;
 class SvxEscapementItem;
 class SvxCaseMapItem;
@@ -90,7 +86,6 @@ class SwFormatFootnoteAtTextEnd;
 class SwFormatEndAtTextEnd;
 class SwFormatNoBalancedColumns;
 class SvxFrameDirectionItem;
-class SwTextGridItem;
 class SwHeaderAndFooterEatSpacingItem;
 class SwFormatFollowTextFlow;
 class SwFormatWrapInfluenceOnObjPos;
@@ -173,7 +168,7 @@ public:
     SwAttrSet( SwAttrPool&, const sal_uInt16* nWhichPairTable );
     SwAttrSet( const SwAttrSet& );
 
-    virtual SfxItemSet* Clone(bool bItems = true, SfxItemPool *pToPool = nullptr) const override;
+    virtual std::unique_ptr<SfxItemSet> Clone(bool bItems = true, SfxItemPool *pToPool = nullptr) const override;
 
     bool Put_BC( const SfxPoolItem& rAttr, SwAttrSet* pOld, SwAttrSet* pNew );
     bool Put_BC( const SfxItemSet& rSet, SwAttrSet* pOld, SwAttrSet* pNew );

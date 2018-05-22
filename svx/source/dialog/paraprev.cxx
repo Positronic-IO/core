@@ -85,7 +85,7 @@ void SvxParaPrevWindow::DrawParagraph(vcl::RenderContext& rRenderContext)
         if (i == 3)
         {
             rRenderContext.SetFillColor(COL_GRAY);
-            long nTop = nUpper * aLineSiz.Height() / aSize.Height();
+            auto nTop = nUpper * aLineSiz.Height() / aSize.Height();
             aPnt.AdjustY(nTop * 2 );
         }
 
@@ -200,7 +200,7 @@ void SvxParaPrevWindow::DrawParagraph(vcl::RenderContext& rRenderContext)
 
         if (5 == i)
         {
-            long nBottom = nLower * aLineSiz.Height() / aSize.Height();
+            auto nBottom = nLower * aLineSiz.Height() / aSize.Height();
             aPnt.AdjustY(nBottom * 2 );
         }
 

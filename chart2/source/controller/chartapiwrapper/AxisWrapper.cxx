@@ -27,6 +27,7 @@
 #include <DisposeHelper.hxx>
 #include <unonames.hxx>
 
+#include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/chart/ChartAxisArrangeOrderType.hpp>
@@ -48,6 +49,7 @@
 #include <algorithm>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
@@ -584,9 +586,9 @@ Reference< chart2::XAxis > AxisWrapper::getAxis()
                 xProp->setPropertyValue("Show", uno::Any( false ) );
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return xAxis;
 }

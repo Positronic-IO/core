@@ -103,7 +103,7 @@ protected:
 public:
     static Reference<deployment::XPackageRegistry> create(
         OUString const & context,
-        OUString const & cachePath, bool readOnly,
+        OUString const & cachePath,
         Reference<XComponentContext> const & xComponentContext );
 
     // XUpdatable
@@ -134,10 +134,9 @@ inline void PackageRegistryImpl::check()
 void PackageRegistryImpl::disposing()
 {
     // dispose all backends:
-    t_registryset::const_iterator iPos( m_allBackends.begin() );
-    t_registryset::const_iterator const iEnd( m_allBackends.end() );
-    for ( ; iPos != iEnd; ++iPos ) {
-        try_dispose( *iPos );
+    for (auto const& backend : m_allBackends)
+    {
+        try_dispose(backend);
     }
     m_mediaType2backend = t_string2registry();
     m_ambiguousBackends = t_registryset();
@@ -265,17 +264,16 @@ void PackageRegistryImpl::insertBackend(
     }
 
     // cut out ambiguous filters:
-    t_stringset::const_iterator iPos( ambiguousFilters.begin() );
-    const t_stringset::const_iterator iEnd( ambiguousFilters.end() );
-    for ( ; iPos != iEnd; ++iPos ) {
-        m_filter2mediaType.erase( *iPos );
+    for (auto const& ambiguousFilter : ambiguousFilters)
+    {
+        m_filter2mediaType.erase(ambiguousFilter);
     }
 }
 
 
 Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
     OUString const & context,
-    OUString const & cachePath, bool readOnly,
+    OUString const & cachePath,
     Reference<XComponentContext> const & xComponentContext )
 {
     PackageRegistryImpl * that = new PackageRegistryImpl;
@@ -306,10 +304,9 @@ Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
                                  rtl_UriEncodeIgnoreEscapes,
                                  RTL_TEXTENCODING_UTF8 ) ) );
                 registryArgs[ 1 ] <<= registryCachePath;
-                registryArgs[ 2 ] <<= readOnly;
-                if (! readOnly)
-                    create_folder( nullptr, registryCachePath,
-                                   Reference<XCommandEnvironment>() );
+                registryArgs[ 2 ] <<= false; // readOnly;
+                create_folder( nullptr, registryCachePath,
+                               Reference<XCommandEnvironment>() );
             }
 
             Reference<deployment::XPackageRegistry> xBackend;
@@ -344,7 +341,7 @@ Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
     // backends.
     Reference<deployment::XPackageRegistry> extensionBackend =
         ::dp_registry::backend::bundle::create(
-            that, context, cachePath, readOnly, xComponentContext);
+            that, context, cachePath, xComponentContext);
     that->insertBackend(extensionBackend);
 
     Reference<lang::XServiceInfo> xServiceInfo(
@@ -366,18 +363,16 @@ Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
     {
         t_registryset allBackends;
         dp_misc::TRACE("> [dp_registry.cxx] media-type detection:\n\n" );
-        for ( t_string2string::const_iterator iPos(
-                  that->m_filter2mediaType.begin() );
-              iPos != that->m_filter2mediaType.end(); ++iPos )
+        for (auto const& elem : that->m_filter2mediaType)
         {
             OUStringBuffer buf;
             buf.append( "extension \"" );
-            buf.append( iPos->first );
+            buf.append( elem.first );
             buf.append( "\" maps to media-type \"" );
-            buf.append( iPos->second );
+            buf.append( elem.second );
             buf.append( "\" maps to backend " );
             const Reference<deployment::XPackageRegistry> xBackend(
-                that->m_mediaType2backend.find( iPos->second )->second );
+                that->m_mediaType2backend.find( elem.second )->second );
             allBackends.insert( xBackend );
             buf.append( Reference<lang::XServiceInfo>(
                             xBackend, UNO_QUERY_THROW )
@@ -385,17 +380,15 @@ Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
             dp_misc::TRACE( buf.makeStringAndClear() + "\n");
         }
         dp_misc::TRACE( "> [dp_registry.cxx] ambiguous backends:\n\n" );
-        for ( t_registryset::const_iterator iPos(
-                  that->m_ambiguousBackends.begin() );
-              iPos != that->m_ambiguousBackends.end(); ++iPos )
+        for (auto const& ambiguousBackend : that->m_ambiguousBackends)
         {
             OUStringBuffer buf;
             buf.append(
                 Reference<lang::XServiceInfo>(
-                    *iPos, UNO_QUERY_THROW )->getImplementationName() );
+                    ambiguousBackend, UNO_QUERY_THROW )->getImplementationName() );
             buf.append( ": " );
             const Sequence< Reference<deployment::XPackageTypeInfo> > types(
-                (*iPos)->getSupportedPackageTypes() );
+                ambiguousBackend->getSupportedPackageTypes() );
             for ( sal_Int32 pos = 0; pos < types.getLength(); ++pos ) {
                 Reference<deployment::XPackageTypeInfo> const & xInfo =
                     types[ pos ];
@@ -425,10 +418,9 @@ Reference<deployment::XPackageRegistry> PackageRegistryImpl::create(
 void PackageRegistryImpl::update()
 {
     check();
-    t_registryset::const_iterator iPos( m_allBackends.begin() );
-    const t_registryset::const_iterator iEnd( m_allBackends.end() );
-    for ( ; iPos != iEnd; ++iPos ) {
-        const Reference<util::XUpdatable> xUpdatable( *iPos, UNO_QUERY );
+    for (auto const& backend : m_allBackends)
+    {
+        const Reference<util::XUpdatable> xUpdatable(backend, UNO_QUERY);
         if (xUpdatable.is())
             xUpdatable->update();
     }
@@ -479,12 +471,10 @@ Reference<deployment::XPackage> PackageRegistryImpl::bindPackage(
     if (mediaType.isEmpty())
     {
         // try ambiguous backends:
-        t_registryset::const_iterator iPos( m_ambiguousBackends.begin() );
-        const t_registryset::const_iterator iEnd( m_ambiguousBackends.end() );
-        for ( ; iPos != iEnd; ++iPos )
+        for (auto const& ambiguousBackend : m_ambiguousBackends)
         {
             try {
-                return (*iPos)->bindPackage( url, mediaType, bRemoved,
+                return ambiguousBackend->bindPackage( url, mediaType, bRemoved,
                     identifier, xCmdEnv );
             }
             catch (const lang::IllegalArgumentException &) {
@@ -534,7 +524,7 @@ Reference<deployment::XPackageRegistry> create(
     Reference<XComponentContext> const & xComponentContext )
 {
     return PackageRegistryImpl::create(
-        context, cachePath, false/*readOnly*/, xComponentContext );
+        context, cachePath, xComponentContext );
 }
 
 } // namespace dp_registry

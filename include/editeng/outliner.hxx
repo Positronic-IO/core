@@ -37,7 +37,7 @@
 #include <editeng/editengdllapi.h>
 #include <com/sun/star/lang/Locale.hpp>
 
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitTypes.h>
 #include <com/sun/star/uno/Reference.h>
@@ -154,7 +154,6 @@ private:
                         Paragraph( sal_Int16 nDepth );
                         Paragraph( const Paragraph& ) = delete;
                         Paragraph( const ParagraphData& );
-                        ~Paragraph();
 
     sal_Int16           GetDepth() const { return nDepth; }
 
@@ -168,6 +167,7 @@ private:
     void                RemoveFlag( ParaFlag nFlag ) { nFlags &= ~nFlag; }
     bool                HasFlag( ParaFlag nFlag ) const { return bool(nFlags & nFlag); }
 public:
+                        ~Paragraph();
     void                dumpAsXml(struct _xmlTextWriter* pWriter) const;
 };
 
@@ -248,7 +248,7 @@ public:
 
     void        CreateSelectionList (std::vector<Paragraph*> &aSelList) ;
 
-    // Retruns the number of selected paragraphs
+    // Returns the number of selected paragraphs
     sal_Int32   Select( Paragraph const * pParagraph, bool bSelect = true);
 
     OUString    GetSelected() const;
@@ -900,7 +900,7 @@ public:
     bool            UpdateFields();
     void            RemoveFields( const std::function<bool ( const SvxFieldData* )>& isFieldData = [] (const SvxFieldData* ){return true;} );
 
-    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rTxtColor, Color*& rFldColor );
+    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rTxtColor, boost::optional<Color>& rFldColor );
 
     void            SetSpeller( css::uno::Reference< css::linguistic2::XSpellChecker1 > const &xSpeller );
     css::uno::Reference< css::linguistic2::XSpellChecker1 > const &
@@ -930,8 +930,7 @@ public:
     OutputDevice*   GetRefDevice() const;
 
     sal_uLong       GetTextHeight() const;
-    sal_uLong       GetTextHeight( sal_Int32 nParagraph ) const;
-    Point           GetDocPosTopLeft( sal_Int32 nParagraph );
+    tools::Rectangle GetParaBounds( sal_Int32 nParagraph ) const;
     Point           GetDocPos( const Point& rPaperPos ) const;
     bool            IsTextPos( const Point& rPaperPos, sal_uInt16 nBorder );
     bool            IsTextPos( const Point& rPaperPos, sal_uInt16 nBorder, bool* pbBulletPos );
@@ -996,7 +995,6 @@ public:
 
     // tdf#115639 compatibility flag
     void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
-    bool IsHoriAlignIgnoreTrailingWhitespace() const;
 };
 
 #endif

@@ -41,11 +41,13 @@
 #include <vcl/fixed.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/waitobj.hxx>
 #include <vcl/window.hxx>
+#include <vcl/weld.hxx>
+#include <vcl/GraphicNativeTransform.hxx>
+#include <vcl/GraphicNativeMetadata.hxx>
 #include <appoptio.hxx>
 #include <attrib.hxx>
 #include <autoform.hxx>

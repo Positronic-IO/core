@@ -90,8 +90,7 @@ public:
     virtual SvxEditViewForwarder* GetEditViewForwarder( bool bCreate ) override;
 
 private:
-    ScViewForwarder* mpViewForwarder;
-    ScEditViewForwarder* mpEditViewForwarder;
+    std::unique_ptr<ScViewForwarder> mpViewForwarder;
     ScTabViewShell* mpViewShell;
     ScSplitPos meSplitPos;
     ScAccessibleCell* mpAccessibleCell;
@@ -119,11 +118,11 @@ public:
 
     DECL_LINK( NotifyHdl, EENotify&, void );
 protected:
-    ScEditObjectViewForwarder* mpViewForwarder;
-    ScEditViewForwarder*       mpEditViewForwarder;
+    std::unique_ptr<ScEditObjectViewForwarder> mpViewForwarder;
+    std::unique_ptr<ScEditViewForwarder>       mpEditViewForwarder;
     EditView*                  mpEditView;
     EditEngine*                mpEditEngine;
-    SvxEditEngineForwarder*    mpForwarder;
+    std::unique_ptr<SvxEditEngineForwarder>    mpForwarder;
     VclPtr<vcl::Window>        mpWindow;
     bool                       mbIsCloned;
 };
@@ -165,7 +164,7 @@ public:
     virtual SvxEditViewForwarder* GetEditViewForwarder( bool /* bCreate */ ) override { return nullptr; }
 
 private:
-    ScPreviewViewForwarder* mpViewForwarder;
+    std::unique_ptr<ScPreviewViewForwarder> mpViewForwarder;
     ScPreviewShell* mpViewShell;
 
     using ScAccessibleCellBaseTextData::GetDocShell;
@@ -188,7 +187,7 @@ public:
     virtual SvxEditViewForwarder* GetEditViewForwarder( bool /* bCreate */ ) override { return nullptr; }
 
 private:
-    ScPreviewViewForwarder* mpViewForwarder;
+    std::unique_ptr<ScPreviewViewForwarder> mpViewForwarder;
     ScPreviewShell* mpViewShell;
     OUString        maText;
     bool            mbColHeader;
@@ -217,8 +216,8 @@ public:
 private:
     ScPreviewViewForwarder* mpViewForwarder;
     ScPreviewShell*         mpViewShell;
-    ScEditEngineDefaulter*  mpEditEngine;
-    SvxEditEngineForwarder* mpForwarder;
+    std::unique_ptr<ScEditEngineDefaulter>  mpEditEngine;
+    std::unique_ptr<SvxEditEngineForwarder> mpForwarder;
     ScDocShell*             mpDocSh;
     const EditTextObject*   mpEditObj;
     bool                    mbHeader;
@@ -245,7 +244,7 @@ public:
 private:
     ScPreviewViewForwarder* mpViewForwarder;
     ScPreviewShell*         mpViewShell;
-    ScEditEngineDefaulter*  mpEditEngine;
+    std::unique_ptr<ScEditEngineDefaulter> mpEditEngine;
     SvxEditEngineForwarder* mpForwarder;
     ScDocShell*             mpDocSh;
     OUString                msText;

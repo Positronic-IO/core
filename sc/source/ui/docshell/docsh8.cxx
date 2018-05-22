@@ -30,10 +30,6 @@
 #include <svx/txenctab.hxx>
 #include <unotools/sharedunocomponent.hxx>
 
-#if HAVE_FEATURE_DBCONNECTIVITY
-#include <svx/dbcharsethelper.hxx>
-#endif
-
 #include <com/sun/star/sdb/CommandType.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
 #include <com/sun/star/sdbc/SQLException.hpp>
@@ -69,6 +65,7 @@
 #include <dbdocutl.hxx>
 #include <dociter.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <svl/zformat.hxx>
 #include <svl/intitem.hxx>
 #include <patattr.hxx>
@@ -124,26 +121,13 @@ namespace
         OUString aConnUrl("sdbc:dbase:");
         aConnUrl += aPath;
 
-        ::std::vector< rtl_TextEncoding > aEncodings;
-        svxform::charset_helper::getSupportedTextEncodings( aEncodings );
-        ::std::vector< rtl_TextEncoding >::iterator aIter = ::std::find(aEncodings.begin(),aEncodings.end(), eCharSet);
-        if ( aIter == aEncodings.end() )
-        {
-            OSL_FAIL( "DBaseImport: dbtools::OCharsetMap doesn't know text encoding" );
-            return SCERR_IMPORT_CONNECT;
-        } // if ( aIter == aMap.end() )
-        OUString aCharSetStr;
-        if ( RTL_TEXTENCODING_DONTKNOW != *aIter )
-        {   // it's not the virtual "system charset"
-            const char* pIanaName = rtl_getMimeCharsetFromTextEncoding( *aIter );
-            OSL_ENSURE( pIanaName, "invalid mime name!" );
-            if ( pIanaName )
-                aCharSetStr = OUString::createFromAscii( pIanaName );
-        }
-
+        // sdbc:dbase is based on the css.sdbc.FILEConnectionProperties UNOIDL service, so we can
+        // transport the raw rtl_TextEncoding value instead of having to translate it into a IANA
+        // character set name string (which might not exist for certain eCharSet values, like
+        // RTL_TEXTENCODING_MS_950):
         uno::Sequence<beans::PropertyValue> aProps( comphelper::InitPropertySequence({
                 { SC_DBPROP_EXTENSION, uno::Any(aExtension) },
-                { SC_DBPROP_CHARSET, uno::Any(aCharSetStr) }
+                { SC_DBPROP_CHARSET, uno::Any(eCharSet) }
             }));
 
         _rConnection = _rDrvMgr->getConnectionWithInfo( aConnUrl, aProps );
@@ -313,7 +297,7 @@ ErrCode ScDocShell::DBaseImport( const OUString& rFullFileName, rtl_TextEncoding
             return nRet;
         ::utl::DisposableComponent aConnectionHelper(xConnection);
 
-        ScProgress aProgress( this, ScGlobal::GetRscString( STR_LOAD_DOC ), 0, true );
+        ScProgress aProgress( this, ScResId( STR_LOAD_DOC ), 0, true );
         uno::Reference<lang::XMultiServiceFactory> xFactory = comphelper::getProcessServiceFactory();
         uno::Reference<sdbc::XRowSet> xRowSet( xFactory->createInstance(SC_SERVICE_ROWSET),
                             uno::UNO_QUERY);
@@ -773,7 +757,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
         nFirstCol = nLastCol;
     if ( nFirstRow > nLastRow )
         nFirstRow = nLastRow;
-    ScProgress aProgress( this, ScGlobal::GetRscString( STR_SAVE_DOC ),
+    ScProgress aProgress( this, ScResId( STR_SAVE_DOC ),
                                                     nLastRow - nFirstRow, true );
     SvNumberFormatter* pNumFmt = aDocument.GetFormatTable();
 
@@ -928,7 +912,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                         if (!aCell.isEmpty())
                         {
                             if (aCell.meType == CELLTYPE_EDIT)
-                            {   // Paragraphs erhalten
+                            {   // preserve paragraphs
                                 lcl_getLongVarCharEditString(aString, aCell, aEditEngine);
                             }
                             else

@@ -163,7 +163,7 @@ static const sal_Char pFilterHtml[]     = "HTML (StarCalc)";
 static const sal_Char pFilterHtmlWebQ[] = "calc_HTML_WebQuery";
 static const sal_Char pFilterRtf[]      = "Rich Text Format (StarCalc)";
 
-#define ScDocShell
+#define ShellClass_ScDocShell
 #include <scslots.hxx>
 
 SFX_IMPL_INTERFACE(ScDocShell,SfxObjectShell)
@@ -188,14 +188,14 @@ void ScDocShell::FillClass( SvGlobalName* pClassName,
     {
         *pClassName     = SvGlobalName( SO3_SC_CLASSID_60 );
         *pFormat        = SotClipboardFormatId::STARCALC_60;
-        *pFullTypeName  = ScResId( SCSTR_LONG_SCDOC_NAME );
+        *pFullTypeName  = ScResId( SCSTR_LONG_SCDOC_NAME_60 );
         *pShortTypeName = ScResId( SCSTR_SHORT_SCDOC_NAME );
     }
     else if ( nFileFormat == SOFFICE_FILEFORMAT_8 )
     {
         *pClassName     = SvGlobalName( SO3_SC_CLASSID_60 );
         *pFormat        = bTemplate ? SotClipboardFormatId::STARCALC_8_TEMPLATE : SotClipboardFormatId::STARCALC_8;
-        *pFullTypeName  = "calc8";
+        *pFullTypeName  = ScResId( SCSTR_LONG_SCDOC_NAME_80 );
         *pShortTypeName = ScResId(SCSTR_SHORT_SCDOC_NAME);
     }
     else
@@ -428,6 +428,19 @@ void processDataStream( ScDocShell& rShell, const sc::ImportPostProcessData& rDa
     rMgr.setDataStream(pStrm);
 }
 
+class MessageWithCheck : public weld::MessageDialogController
+{
+private:
+    std::unique_ptr<weld::CheckButton> m_xWarningOnBox;
+public:
+    MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OString& rDialogId)
+        : weld::MessageDialogController(pParent, rUIFile, rDialogId, "ask")
+        , m_xWarningOnBox(m_xBuilder->weld_check_button("ask"))
+    {
+    }
+    bool get_active() const { return m_xWarningOnBox->get_active(); }
+};
+
 }
 
 bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css::embed::XStorage >& xStor )
@@ -475,27 +488,14 @@ bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css
             // full re-calculation.
             vcl::Window* pWin = GetActiveDialogParent();
 
-            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr,
-                        "modules/scalc/ui/recalcquerydialog.ui"));
-            std::unique_ptr<weld::MessageDialog> xQueryBox(xBuilder->weld_message_dialog("RecalcQueryDialog"));
-            xQueryBox->set_primary_text(ScGlobal::GetRscString(STR_QUERY_FORMULA_RECALC_ONLOAD_ODS));
-            xQueryBox->set_default_response(RET_YES);
-            std::unique_ptr<weld::CheckButton> xWarningOnBox(xBuilder->weld_check_button("ask"));
+            MessageWithCheck aQueryBox(pWin ? pWin->GetFrameWeld() : nullptr,
+                    "modules/scalc/ui/recalcquerydialog.ui", "RecalcQueryDialog");
+            aQueryBox.set_primary_text(ScResId(STR_QUERY_FORMULA_RECALC_ONLOAD_ODS));
+            aQueryBox.set_default_response(RET_YES);
 
-            //fdo#75121, a bit tricky because the widgets we want to align with
-            //don't actually exist in the ui description, they're implied
-            std::unique_ptr<weld::Container> xOrigParent(xWarningOnBox->weld_parent());
-            std::unique_ptr<weld::Container> xContentArea(xQueryBox->weld_message_area());
-            xOrigParent->remove(xWarningOnBox.get());
-            xContentArea->add(xWarningOnBox.get());
+            bHardRecalc = aQueryBox.run() == RET_YES;
 
-            bHardRecalc = xQueryBox->run() == RET_YES;
-
-            //put them back as they were
-            xContentArea->remove(xWarningOnBox.get());
-            xOrigParent->add(xWarningOnBox.get());
-
-            if (xWarningOnBox->get_active())
+            if (aQueryBox.get_active())
             {
                 // Always perform selected action in the future.
                 std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
@@ -725,25 +725,11 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                         {
                             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
 
-                            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pWin ? pWin->GetFrameWeld() : nullptr,
-                                        "modules/scalc/ui/sharedwarningdialog.ui"));
-                            std::unique_ptr<weld::MessageDialog> xWarningBox(xBuilder->weld_message_dialog("SharedWarningDialog"));
-                            std::unique_ptr<weld::CheckButton> xWarningOnBox(xBuilder->weld_check_button("ask"));
+                            MessageWithCheck aWarningBox(pWin ? pWin->GetFrameWeld() : nullptr,
+                                    "modules/scalc/ui/sharedwarningdialog.ui", "SharedWarningDialog");
+                            aWarningBox.run();
 
-                            //fdo#75121, a bit tricky because the widgets we want to align with
-                            //don't actually exist in the ui description, they're implied
-                            std::unique_ptr<weld::Container> xOrigParent(xWarningOnBox->weld_parent());
-                            std::unique_ptr<weld::Container> xContentArea(xWarningBox->weld_message_area());
-                            xOrigParent->remove(xWarningOnBox.get());
-                            xContentArea->add(xWarningOnBox.get());
-
-                            xWarningBox->run();
-
-                            //put them back as they were
-                            xContentArea->remove(xWarningOnBox.get());
-                            xOrigParent->add(xWarningOnBox.get());
-
-                            bool bChecked = xWarningOnBox->get_active();
+                            bool bChecked = aWarningBox.get_active();
                             if (bChecked)
                             {
                                 aAppOptions.SetShowSharedDocumentWarning( !bChecked );
@@ -836,7 +822,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                     {
                                         xCloseable->close( true );
 
-                                        OUString aUserName( ScGlobal::GetRscString( STR_UNKNOWN_USER ) );
+                                        OUString aUserName( ScResId( STR_UNKNOWN_USER ) );
                                         bool bNoLockAccess = false;
                                         try
                                         {
@@ -863,7 +849,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                         }
                                         else
                                         {
-                                            OUString aMessage( ScGlobal::GetRscString( STR_FILE_LOCKED_SAVE_LATER ) );
+                                            OUString aMessage( ScResId( STR_FILE_LOCKED_SAVE_LATER ) );
                                             aMessage = aMessage.replaceFirst( "%1", aUserName );
 
                                             vcl::Window* pWin = GetActiveDialogParent();
@@ -950,7 +936,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                         vcl::Window* pWin = GetActiveDialogParent();
                                         std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                                    VclMessageType::Warning, VclButtonsType::Ok,
-                                                                                   ScGlobal::GetRscString(STR_DOC_NOLONGERSHARED)));
+                                                                                   ScResId(STR_DOC_NOLONGERSHARED)));
                                         xWarn->run();
 
                                         SfxBindings* pBindings = GetViewBindings();
@@ -993,7 +979,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                         vcl::Window* pWin = GetActiveDialogParent();
                         std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                    VclMessageType::Warning, VclButtonsType::YesNo,
-                                                                   ScGlobal::GetRscString(STR_UNSAVED_EXT_REF)));
+                                                                   ScResId(STR_UNSAVED_EXT_REF)));
                         if (RET_NO == xWarn->run())
                         {
                             SetError(ERRCODE_IO_ABORT); // this error code will produce no error message, but will break the further saving process
@@ -1943,7 +1929,7 @@ void ScDocShell::AsciiSave( SvStream& rStream, const ScImportOptions& rAsciiOpt 
     SCROW nEndRow;
     aDocument.GetCellArea( nTab, nEndCol, nEndRow );
 
-    ScProgress aProgress( this, ScGlobal::GetRscString( STR_SAVE_DOC ), nEndRow, true );
+    ScProgress aProgress( this, ScResId( STR_SAVE_DOC ), nEndRow, true );
 
     OUString aString;
 
@@ -2965,7 +2951,7 @@ VclPtr<SfxDocumentInfoDialog> ScDocShell::CreateDocumentInfoDialog( const SfxIte
         OSL_ENSURE(ScDocStatPageCreate, "Tabpage create fail!");
         pDlg->AddFontTabPage();
         pDlg->AddTabPage( 42,
-            ScGlobal::GetRscString( STR_DOC_STAT ),
+            ScResId( STR_DOC_STAT ),
             ScDocStatPageCreate,
             nullptr);
     }

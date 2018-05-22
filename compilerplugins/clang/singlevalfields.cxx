@@ -85,7 +85,7 @@ public:
         for (const MyFieldInfo & s : definitionSet)
             output += "defn:\t" + s.parentClass + "\t" + s.fieldName + "\t" + s.sourceLocation + "\n";
         std::ofstream myfile;
-        myfile.open( SRCDIR "/loplugin.singlevalfields.log", std::ios::app | std::ios::out);
+        myfile.open( WORKDIR "/loplugin.singlevalfields.log", std::ios::app | std::ios::out);
         myfile << output;
         myfile.close();
     }
@@ -307,8 +307,8 @@ bool SingleValFields::VisitMemberExpr( const MemberExpr* memberExpr )
                 bPotentiallyAssignedTo = true;
                 break;
             }
-            child = parent;
-            parent = getParentStmt(parent);
+            // cannot be assigned to anymore
+            break;
         }
         else if (isa<CallExpr>(parent))
         {

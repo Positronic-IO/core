@@ -19,7 +19,6 @@
 
 #include <unotools/pathoptions.hxx>
 #include "optchart.hxx"
-#include <dialmgr.hxx>
 #include <vcl/builderfactory.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
@@ -191,9 +190,9 @@ void SvxDefaultColorOptPage::Construct()
 }
 
 
-VclPtr<SfxTabPage> SvxDefaultColorOptPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrs )
+VclPtr<SfxTabPage> SvxDefaultColorOptPage::Create( TabPageParent pParent, const SfxItemSet* rAttrs )
 {
-    return VclPtr<SvxDefaultColorOptPage>::Create( pParent, *rAttrs );
+    return VclPtr<SvxDefaultColorOptPage>::Create( pParent.pParent, *rAttrs );
 }
 
 bool SvxDefaultColorOptPage::FillItemSet( SfxItemSet* rOutAttrs )
@@ -335,7 +334,7 @@ IMPL_LINK_NOARG(SvxDefaultColorOptPage, BoxClickedHdl, ValueSet*, void)
     sal_Int32 nIdx = m_pLbChartColors->GetSelectedEntryPos();
     if( nIdx != LISTBOX_ENTRY_NOTFOUND )
     {
-        const XColorEntry aEntry( m_pValSetColorBox->GetItemColor( m_pValSetColorBox->GetSelectItemId() ), m_pLbChartColors->GetSelectedEntry() );
+        const XColorEntry aEntry( m_pValSetColorBox->GetItemColor( m_pValSetColorBox->GetSelectedItemId() ), m_pLbChartColors->GetSelectedEntry() );
 
         ModifyColorEntry(aEntry, nIdx);
         pColorConfig->ReplaceColorByIndex( nIdx, aEntry );

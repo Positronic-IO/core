@@ -33,7 +33,6 @@
 #include <svx/postattr.hxx>
 #include <unotools/misccfg.hxx>
 #include <vcl/virdev.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 
 #include <docsh.hxx>
@@ -61,6 +60,7 @@
 #include <inputhdl.hxx>
 #include <conflictsdlg.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <markdata.hxx>
 #include <memory>
 
@@ -104,7 +104,7 @@ void ScDocShell::PostPaint( const ScRangeList& rRanges, PaintPartFlags nPart, sa
     ScRangeList aPaintRanges;
     for (size_t i = 0, n = rRanges.size(); i < n; ++i)
     {
-        const ScRange& rRange = *rRanges[i];
+        const ScRange& rRange = rRanges[i];
         SCCOL nCol1 = rRange.aStart.Col(), nCol2 = rRange.aEnd.Col();
         SCROW nRow1 = rRange.aStart.Row(), nRow2 = rRange.aEnd.Row();
         SCTAB nTab1 = rRange.aStart.Tab(), nTab2 = rRange.aEnd.Tab();
@@ -159,7 +159,7 @@ void ScDocShell::PostPaint( const ScRangeList& rRanges, PaintPartFlags nPart, sa
                 nCol2 = MAXCOL;
             }
         }
-        aPaintRanges.Append(ScRange(nCol1, nRow1, nTab1, nCol2, nRow2, nTab2));
+        aPaintRanges.push_back(ScRange(nCol1, nRow1, nTab1, nCol2, nRow2, nTab2));
     }
 
     Broadcast(ScPaintHint(aPaintRanges.Combine(), nPart));
@@ -255,9 +255,9 @@ void ScDocShell::UnlockPaint_Impl(bool bDoc)
                 for ( size_t i = 0, nCount = xRangeList->size(); i < nCount; i++ )
                 {
                     //! nExtFlags ???
-                    ScRange aRange = *(*xRangeList)[i];
-                    PostPaint( aRange.aStart.Col(), aRange.aStart.Row(), aRange.aStart.Tab(),
-                                aRange.aEnd.Col(), aRange.aEnd.Row(), aRange.aEnd.Tab(),
+                    ScRange const & rRange = (*xRangeList)[i];
+                    PostPaint( rRange.aStart.Col(), rRange.aStart.Row(), rRange.aStart.Tab(),
+                                rRange.aEnd.Col(), rRange.aEnd.Row(), rRange.aEnd.Tab(),
                                 nParts );
                 }
             }
@@ -452,10 +452,9 @@ SfxPrinter* ScDocShell::GetPrinter(bool bCreateIfNotExist)
 
 void ScDocShell::UpdateFontList()
 {
-    delete pImpl->pFontList;
     // pImpl->pFontList = new FontList( GetPrinter(), Application::GetDefaultDevice() );
-    pImpl->pFontList = new FontList(GetRefDevice(), nullptr);
-    SvxFontListItem aFontListItem( pImpl->pFontList, SID_ATTR_CHAR_FONTLIST );
+    pImpl->pFontList.reset(new FontList(GetRefDevice(), nullptr));
+    SvxFontListItem aFontListItem( pImpl->pFontList.get(), SID_ATTR_CHAR_FONTLIST );
     PutItem( aFontListItem );
 
     CalcOutputFactor();
@@ -632,7 +631,7 @@ void ScDocShell::SetChangeComment( ScChangeAction* pAction, const OUString& rCom
     }
 }
 
-void ScDocShell::ExecuteChangeCommentDialog( ScChangeAction* pAction, vcl::Window* pParent, bool bPrevNext)
+void ScDocShell::ExecuteChangeCommentDialog( ScChangeAction* pAction, weld::Window* pParent, bool bPrevNext)
 {
     if (!pAction) return;           // without action is nothing..
 
@@ -1033,7 +1032,7 @@ void ScDocShell::MergeDocument( ScDocument& rOtherDoc, bool bShared, bool bCheck
                             if ( pDel->IsTopDelete() )
                             {
                                 aSourceRange = pDel->GetOverAllRange().MakeRange();
-                                (void)GetDocFunc().DeleteCells( aSourceRange, nullptr, DEL_DELROWS, false );
+                                (void)GetDocFunc().DeleteCells( aSourceRange, nullptr, DelCellCmd::Rows, false );
 
                                 // #i101099# [Collaboration] Changes are not correctly shown
                                 if ( bShared )
@@ -1053,7 +1052,7 @@ void ScDocShell::MergeDocument( ScDocument& rOtherDoc, bool bShared, bool bCheck
                             if ( pDel->IsTopDelete() && !pDel->IsTabDeleteCol() )
                             {   // deleted table contains deleted cols, which are not
                                 aSourceRange = pDel->GetOverAllRange().MakeRange();
-                                (void)GetDocFunc().DeleteCells( aSourceRange, nullptr, DEL_DELCOLS, false );
+                                (void)GetDocFunc().DeleteCells( aSourceRange, nullptr, DelCellCmd::Cols, false );
                             }
                         }
                         break;
@@ -1207,7 +1206,7 @@ bool ScDocShell::MergeSharedDocument( ScDocShell* pSharedDocShell )
                         vcl::Window* pWin = GetActiveDialogParent();
                         std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                        VclMessageType::Question, VclButtonsType::YesNo,
-                                                                       ScGlobal::GetRscString(STR_DOC_WILLNOTBESAVED)));
+                                                                       ScResId(STR_DOC_WILLNOTBESAVED)));
                         xQueryBox->set_default_response(RET_YES);
                         if (xQueryBox->run() == RET_YES)
                         {
@@ -1324,7 +1323,7 @@ bool ScDocShell::MergeSharedDocument( ScDocShell* pSharedDocShell )
         vcl::Window* pWin = GetActiveDialogParent();
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_DOC_UPDATED)));
+                                                      ScResId(STR_DOC_UPDATED)));
         xInfoBox->run();
     }
 

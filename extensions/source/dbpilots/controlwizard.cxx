@@ -34,10 +34,8 @@
 #include <com/sun/star/sdbc/SQLWarning.hpp>
 #include <com/sun/star/sdb/SQLContext.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
-#include <vcl/msgbox.hxx>
 #include <comphelper/interaction.hxx>
 #include <vcl/stdtext.hxx>
 #include <connectivity/conncleanup.hxx>

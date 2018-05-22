@@ -13,6 +13,7 @@
 #include "xmltbli.hxx"
 #include "XMLSectionContext.hxx"
 #include "XMLTextListContext.hxx"
+#include "xmlimp.hxx"
 
 using namespace com::sun::star;
 
@@ -20,18 +21,24 @@ namespace writerperfect
 {
 namespace exp
 {
-
-XMLBodyContentContext::XMLBodyContentContext(XMLImport &rImport)
+XMLBodyContentContext::XMLBodyContentContext(XMLImport& rImport)
     : XMLImportContext(rImport)
 {
 }
 
-rtl::Reference<XMLImportContext> XMLBodyContentContext::CreateChildContext(const OUString &rName, const css::uno::Reference<css::xml::sax::XAttributeList> &/*xAttribs*/)
+void XMLBodyContentContext::endElement(const OUString& /*rName*/)
+{
+    if (mrImport.GetIsInPageSpan())
+        mrImport.GetGenerator().closePageSpan();
+}
+
+rtl::Reference<XMLImportContext> XMLBodyContentContext::CreateChildContext(
+    const OUString& rName, const css::uno::Reference<css::xml::sax::XAttributeList>& /*xAttribs*/)
 {
     return CreateTextChildContext(mrImport, rName);
 }
 
-rtl::Reference<XMLImportContext> CreateTextChildContext(XMLImport &rImport, const OUString &rName)
+rtl::Reference<XMLImportContext> CreateTextChildContext(XMLImport& rImport, const OUString& rName)
 {
     if (rName == "text:p" || rName == "text:h")
         return new XMLParaContext(rImport);

@@ -27,17 +27,6 @@ PDFWriter::AnyWidget::~AnyWidget()
 {
 }
 
-PDFWriter::PDFSignContext::PDFSignContext(OStringBuffer& rCMSHexBuffer)
-    : m_pDerEncoded(nullptr),
-      m_nDerEncoded(0),
-      m_pByteRange1(nullptr),
-      m_nByteRange1(0),
-      m_pByteRange2(nullptr),
-      m_nByteRange2(0),
-      m_rCMSHexBuffer(rCMSHexBuffer)
-{
-}
-
 PDFWriter::PDFWriter( const PDFWriter::PDFWriterContext& rContext, const css::uno::Reference< css::beans::XMaterialHolder >& xEnc )
         :
         xImplementation( new PDFWriterImpl( rContext, xEnc, *this ) )
@@ -464,11 +453,10 @@ std::set< PDFWriter::ErrorCode > const & PDFWriter::GetErrors()
 
 css::uno::Reference< css::beans::XMaterialHolder >
 PDFWriter::InitEncryption( const OUString& i_rOwnerPassword,
-                           const OUString& i_rUserPassword,
-                           bool b128Bit
+                           const OUString& i_rUserPassword
                           )
 {
-    return PDFWriterImpl::initEncryption( i_rOwnerPassword, i_rUserPassword, b128Bit );
+    return PDFWriterImpl::initEncryption( i_rOwnerPassword, i_rUserPassword, /*b128Bit*/true );
 }
 
 void PDFWriter::PlayMetafile( const GDIMetaFile& i_rMTF, const vcl::PDFWriter::PlayMetafileContext& i_rPlayContext, PDFExtOutDevData* i_pData )

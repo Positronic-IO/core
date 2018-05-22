@@ -407,11 +407,11 @@ bool SwEditRegionDlg::CheckPasswd(CheckBox* pBox)
         if (!pRepr->GetTempPasswd().getLength()
             && pRepr->GetSectionData().GetPassword().getLength())
         {
-            ScopedVclPtrInstance< SfxPasswordDialog > aPasswdDlg(this);
+            SfxPasswordDialog aPasswdDlg(GetFrameWeld());
             bRet = false;
-            if (aPasswdDlg->Execute())
+            if (aPasswdDlg.execute())
             {
-                const OUString sNewPasswd( aPasswdDlg->GetPassword() );
+                const OUString sNewPasswd(aPasswdDlg.GetPassword());
                 css::uno::Sequence <sal_Int8 > aNewPasswd;
                 SvPasswordHelper::GetHashPassword( aNewPasswd, sNewPasswd );
                 if (SvPasswordHelper::CompareHashPassword(
@@ -1040,7 +1040,7 @@ IMPL_LINK_NOARG(SwEditRegionDlg, FileSearchHdl, Button*, void)
     if(!CheckPasswd())
         return;
     delete m_pDocInserter;
-    m_pDocInserter = new ::sfx2::DocumentInserter(this, "swriter");
+    m_pDocInserter = new ::sfx2::DocumentInserter(GetFrameWeld(), "swriter");
     m_pDocInserter->StartExecuteModal( LINK( this, SwEditRegionDlg, DlgClosedHdl ) );
 }
 
@@ -1260,12 +1260,12 @@ IMPL_LINK( SwEditRegionDlg, ChangePasswdHdl, Button *, pBox, void )
         {
             if(!pRepr->GetTempPasswd().getLength() || bChange)
             {
-                ScopedVclPtrInstance< SfxPasswordDialog > aPasswdDlg(this);
-                aPasswdDlg->ShowExtras(SfxShowExtras::CONFIRM);
-                if(RET_OK == aPasswdDlg->Execute())
+                SfxPasswordDialog aPasswdDlg(GetFrameWeld());
+                aPasswdDlg.ShowExtras(SfxShowExtras::CONFIRM);
+                if (RET_OK == aPasswdDlg.execute())
                 {
-                    const OUString sNewPasswd( aPasswdDlg->GetPassword() );
-                    if( aPasswdDlg->GetConfirm() == sNewPasswd )
+                    const OUString sNewPasswd(aPasswdDlg.GetPassword());
+                    if (aPasswdDlg.GetConfirm() == sNewPasswd)
                     {
                         SvPasswordHelper::GetHashPassword( pRepr->GetTempPasswd(), sNewPasswd );
                     }
@@ -1672,10 +1672,10 @@ void SwInsertSectionTabPage::Reset( const SfxItemSet* )
 {
 }
 
-VclPtr<SfxTabPage> SwInsertSectionTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwInsertSectionTabPage::Create( TabPageParent pParent,
                                                    const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwInsertSectionTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwInsertSectionTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 IMPL_LINK( SwInsertSectionTabPage, ChangeHideHdl, Button *, pBox, void )
@@ -1700,12 +1700,12 @@ IMPL_LINK( SwInsertSectionTabPage, ChangePasswdHdl, Button *, pButton, void )
     {
         if(!m_aNewPasswd.getLength() || bChange)
         {
-            ScopedVclPtrInstance< SfxPasswordDialog > aPasswdDlg(this);
-            aPasswdDlg->ShowExtras(SfxShowExtras::CONFIRM);
-            if(RET_OK == aPasswdDlg->Execute())
+            SfxPasswordDialog aPasswdDlg(GetFrameWeld());
+            aPasswdDlg.ShowExtras(SfxShowExtras::CONFIRM);
+            if (RET_OK == aPasswdDlg.execute())
             {
-                const OUString sNewPasswd( aPasswdDlg->GetPassword() );
-                if( aPasswdDlg->GetConfirm() == sNewPasswd )
+                const OUString sNewPasswd(aPasswdDlg.GetPassword());
+                if (aPasswdDlg.GetConfirm() == sNewPasswd)
                 {
                     SvPasswordHelper::GetHashPassword( m_aNewPasswd, sNewPasswd );
                 }
@@ -1770,7 +1770,7 @@ IMPL_LINK( SwInsertSectionTabPage, UseFileHdl, Button *, pButton, void )
 IMPL_LINK_NOARG(SwInsertSectionTabPage, FileSearchHdl, Button*, void)
 {
     delete m_pDocInserter;
-    m_pDocInserter = new ::sfx2::DocumentInserter(this, "swriter");
+    m_pDocInserter = new ::sfx2::DocumentInserter(GetFrameWeld(), "swriter");
     m_pDocInserter->StartExecuteModal( LINK( this, SwInsertSectionTabPage, DlgClosedHdl ) );
 }
 
@@ -2030,10 +2030,10 @@ void SwSectionFootnoteEndTabPage::Reset( const SfxItemSet* rSet )
     ResetState( false, rSet->Get( RES_END_AT_TXTEND, false ));
 }
 
-VclPtr<SfxTabPage> SwSectionFootnoteEndTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwSectionFootnoteEndTabPage::Create( TabPageParent pParent,
                                                    const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwSectionFootnoteEndTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwSectionFootnoteEndTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 IMPL_LINK( SwSectionFootnoteEndTabPage, FootEndHdl, Button *, pBox, void )
@@ -2199,9 +2199,9 @@ void SwSectionIndentTabPage::Reset( const SfxItemSet* rSet)
     IndentModifyHdl(*m_pBeforeMF);
 }
 
-VclPtr<SfxTabPage> SwSectionIndentTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SwSectionIndentTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwSectionIndentTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwSectionIndentTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 void SwSectionIndentTabPage::SetWrtShell(SwWrtShell const & rSh)

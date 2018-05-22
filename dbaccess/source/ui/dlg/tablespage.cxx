@@ -41,14 +41,12 @@
 #include <com/sun/star/sdbcx/XDrop.hpp>
 #include <com/sun/star/sdbcx/XDataDefinitionSupplier.hpp>
 #include <sqlmessage.hxx>
-#include <vcl/msgbox.hxx>
 #include <UITools.hxx>
 #include <osl/diagnose.h>
 #include <svtools/imgdef.hxx>
 #include <svtools/treelistentry.hxx>
 #include <TablesSingleDlg.hxx>
 #include <tools/diagnose_ex.h>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
 namespace dbaui
@@ -253,7 +251,7 @@ namespace dbaui
                 }
                 catch(const Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
 
@@ -310,8 +308,9 @@ namespace dbaui
             if (aErrorInfo.isValid())
             {
                 // establishing the connection failed. Show an error window and exit.
-                ScopedVclPtrInstance< OSQLMessageBox > aMessageBox( GetParentDialog(), aErrorInfo );
-                aMessageBox->Execute();
+                vcl::Window *pParent = GetParentDialog();
+                OSQLMessageBox aMessageBox(pParent ? pParent->GetFrameWeld() : nullptr, aErrorInfo);
+                aMessageBox.run();
                 m_pTables->Enable(false);
                 m_pTablesList->Clear();
 
@@ -339,7 +338,7 @@ namespace dbaui
                 }
                 catch(Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
         }

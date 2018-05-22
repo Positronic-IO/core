@@ -36,7 +36,6 @@ class ScDocument;
 struct ScSortParam;
 struct ScQueryParam;
 struct ScSubTotalParam;
-struct ScImportParam;
 
 /** Enum used to indicate which portion of the DBArea is to be considered. */
 enum class ScDBDataPortion
@@ -262,7 +261,7 @@ public:
             Deletes p if it could not be inserted, i.e. duplicate name.
             @return <TRUE/> if inserted, else <FALSE/>.
          */
-        SAL_WARN_UNUSED_RESULT bool insert(ScDBData* p);
+        bool insert(ScDBData* p);
 
         void erase(const iterator& itr);
         bool empty() const;

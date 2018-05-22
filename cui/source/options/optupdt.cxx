@@ -22,7 +22,6 @@
 #include <sfx2/filedlghelper.hxx>
 #include <svl/zforlist.hxx>
 #include "optupdt.hxx"
-#include <dialmgr.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -199,9 +198,9 @@ void SvxOnlineUpdateTabPage::UpdateUserAgent()
 }
 
 VclPtr<SfxTabPage>
-SvxOnlineUpdateTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+SvxOnlineUpdateTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxOnlineUpdateTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxOnlineUpdateTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SvxOnlineUpdateTabPage::FillItemSet( SfxItemSet* )

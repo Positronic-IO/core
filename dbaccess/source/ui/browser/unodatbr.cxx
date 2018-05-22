@@ -119,7 +119,6 @@
 #include <tools/multisel.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/confignode.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/split.hxx>
 #include <vcl/stdtext.hxx>
 #include <vcl/svapp.hxx>
@@ -310,7 +309,7 @@ void SAL_CALL SbaTableQueryBrowser::disposing()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // check out from all the objects we are listening
@@ -504,7 +503,7 @@ void SbaTableQueryBrowser::impl_sanitizeRowSetClauses_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -552,7 +551,7 @@ bool SbaTableQueryBrowser::InitializeForm( const Reference< XPropertySet > & i_f
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         return false;
     }
 
@@ -783,18 +782,12 @@ void SbaTableQueryBrowser::InitializeGridModel(const Reference< css::form::XForm
                     aInitialValues.emplace_back( PROPERTY_MOUSE_WHEEL_BEHAVIOR, makeAny( MouseWheelBehavior::SCROLL_DISABLED ) );
 
                 // now set all those values
-                for ( std::vector< NamedValue >::const_iterator property = aInitialValues.begin();
-                      property != aInitialValues.end();
-                      ++property
-                    )
+                for (auto const& property : aInitialValues)
                 {
-                    xGridCol->setPropertyValue( property->Name, property->Value );
+                    xGridCol->setPropertyValue( property.Name, property.Value );
                 }
-                for ( std::vector< OUString >::const_iterator copyPropertyName = aCopyProperties.begin();
-                      copyPropertyName != aCopyProperties.end();
-                      ++copyPropertyName
-                    )
-                    xGridCol->setPropertyValue( *copyPropertyName, xColumn->getPropertyValue( *copyPropertyName ) );
+                for (auto const& copyPropertyName : aCopyProperties)
+                    xGridCol->setPropertyValue( copyPropertyName, xColumn->getPropertyValue(copyPropertyName) );
 
                 xColContainer->insertByName(rName, makeAny(xGridCol));
             }
@@ -802,7 +795,7 @@ void SbaTableQueryBrowser::InitializeGridModel(const Reference< css::form::XForm
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -889,7 +882,7 @@ void SbaTableQueryBrowser::propertyChange(const PropertyChangeEvent& evt)
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
 
@@ -937,7 +930,7 @@ void SbaTableQueryBrowser::propertyChange(const PropertyChangeEvent& evt)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -968,19 +961,17 @@ void SAL_CALL SbaTableQueryBrowser::statusChanged( const FeatureStateEvent& _rEv
 {
     // search the external dispatcher causing this call
     Reference< XDispatch > xSource(_rEvent.Source, UNO_QUERY);
-    ExternalFeaturesMap::iterator aLoop;
-    for ( aLoop = m_aExternalFeatures.begin();
-          aLoop != m_aExternalFeatures.end();
-          ++aLoop
-        )
+    bool bFound = false;
+    for (auto & externalFeature : m_aExternalFeatures)
     {
-        if ( _rEvent.FeatureURL.Complete == aLoop->second.aURL.Complete)
+        if ( _rEvent.FeatureURL.Complete == externalFeature.second.aURL.Complete)
         {
-            OSL_ENSURE( xSource.get() == aLoop->second.xDispatcher.get(), "SbaTableQueryBrowser::statusChanged: inconsistent!" );
+            bFound = true;
+            OSL_ENSURE( xSource.get() == externalFeature.second.xDispatcher.get(), "SbaTableQueryBrowser::statusChanged: inconsistent!" );
             // update the enabled state
-            aLoop->second.bEnabled = _rEvent.IsEnabled;
+            externalFeature.second.bEnabled = _rEvent.IsEnabled;
 
-            switch ( aLoop->first )
+            switch ( externalFeature.first )
             {
                 case ID_BROWSER_DOCUMENT_DATASOURCE:
                 {
@@ -1004,14 +995,14 @@ void SAL_CALL SbaTableQueryBrowser::statusChanged( const FeatureStateEvent& _rEv
 
                 default:
                     // update the toolbox
-                    implCheckExternalSlot( aLoop->first );
+                    implCheckExternalSlot( externalFeature.first );
                     break;
             }
             break;
         }
     }
 
-    OSL_ENSURE(aLoop != m_aExternalFeatures.end(), "SbaTableQueryBrowser::statusChanged: don't know who sent this!");
+    OSL_ENSURE(bFound, "SbaTableQueryBrowser::statusChanged: don't know who sent this!");
 }
 
 void SbaTableQueryBrowser::checkDocumentDataSource()
@@ -1276,36 +1267,33 @@ void SbaTableQueryBrowser::connectExternalDispatches()
             }
         }
 
-        for ( ExternalFeaturesMap::iterator feature = m_aExternalFeatures.begin();
-              feature != m_aExternalFeatures.end();
-              ++feature
-            )
+        for (auto & externalFeature : m_aExternalFeatures)
         {
-            feature->second.xDispatcher = xProvider->queryDispatch(
-                feature->second.aURL, "_parent", FrameSearchFlag::PARENT
+            externalFeature.second.xDispatcher = xProvider->queryDispatch(
+                externalFeature.second.aURL, "_parent", FrameSearchFlag::PARENT
             );
 
-            if ( feature->second.xDispatcher.get() == static_cast< XDispatch* >( this ) )
+            if ( externalFeature.second.xDispatcher.get() == static_cast< XDispatch* >( this ) )
             {
                 SAL_WARN("dbaccess.ui",  "SbaTableQueryBrowser::connectExternalDispatches: this should not happen anymore!" );
                     // (nowadays, the URLs aren't in our SupportedFeatures list anymore, so we should
                     // not supply a dispatcher for this)
-                feature->second.xDispatcher.clear();
+                externalFeature.second.xDispatcher.clear();
             }
 
-            if ( feature->second.xDispatcher.is() )
+            if ( externalFeature.second.xDispatcher.is() )
             {
                 try
                 {
-                    feature->second.xDispatcher->addStatusListener( this, feature->second.aURL );
+                    externalFeature.second.xDispatcher->addStatusListener( this, externalFeature.second.aURL );
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
 
-            implCheckExternalSlot( feature->first );
+            implCheckExternalSlot( externalFeature.first );
         }
     }
 }
@@ -1347,19 +1335,19 @@ void SAL_CALL SbaTableQueryBrowser::disposing( const css::lang::EventObject& _rS
             ExternalFeaturesMap::const_iterator aEnd = m_aExternalFeatures.end();
             while (aLoop != aEnd)
             {
-                ExternalFeaturesMap::const_iterator aI = aLoop++;
-                if ( aI->second.xDispatcher.get() == xSource.get() )
+                if ( aLoop->second.xDispatcher.get() == xSource.get() )
                 {
-                    sal_uInt16 nSlot = aI->first;
+                    sal_uInt16 nSlot = aLoop->first;
 
                     // remove it
-                    m_aExternalFeatures.erase(aI);
+                    aLoop = m_aExternalFeatures.erase(aLoop);
 
                     // maybe update the UI
                     implCheckExternalSlot(nSlot);
 
                     // continue, the same XDispatch may be responsible for more than one URL
                 }
+                ++aLoop;
             }
         }
         else
@@ -1393,16 +1381,13 @@ void SAL_CALL SbaTableQueryBrowser::disposing( const css::lang::EventObject& _rS
 void SbaTableQueryBrowser::implRemoveStatusListeners()
 {
     // clear all old dispatches
-    for ( ExternalFeaturesMap::const_iterator aLoop = m_aExternalFeatures.begin();
-          aLoop != m_aExternalFeatures.end();
-          ++aLoop
-        )
+    for (auto const& externalFeature : m_aExternalFeatures)
     {
-        if ( aLoop->second.xDispatcher.is() )
+        if ( externalFeature.second.xDispatcher.is() )
         {
             try
             {
-                aLoop->second.xDispatcher->removeStatusListener( this, aLoop->second.aURL );
+                externalFeature.second.xDispatcher->removeStatusListener( this, externalFeature.second.aURL );
             }
             catch (Exception&)
             {
@@ -1461,7 +1446,7 @@ Any SAL_CALL SbaTableQueryBrowser::getSelection(  )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return aReturn;
@@ -1512,7 +1497,7 @@ void SbaTableQueryBrowser::attachFrame(const Reference< css::frame::XFrame > & _
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -1757,7 +1742,7 @@ FeatureState SbaTableQueryBrowser::GetState(sal_uInt16 nId) const
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
             break;
@@ -1815,7 +1800,7 @@ FeatureState SbaTableQueryBrowser::GetState(sal_uInt16 nId) const
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return aReturn;
@@ -1930,7 +1915,7 @@ void SbaTableQueryBrowser::Execute(sal_uInt16 nId, const Sequence< PropertyValue
                             aSelection.realloc(pSelection->GetSelectCount());
                             long nIdx = pSelection->FirstSelected();
                             Any* pSelectionNos = aSelection.getArray();
-                            while (nIdx >= 0)
+                            while (nIdx != SFX_ENDOFSELECTION)
                             {
                                 *pSelectionNos++ <<= static_cast<sal_Int32>(nIdx + 1);
                                 nIdx = pSelection->NextSelected();
@@ -1980,7 +1965,7 @@ void SbaTableQueryBrowser::Execute(sal_uInt16 nId, const Sequence< PropertyValue
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                 }
             }
@@ -2216,7 +2201,7 @@ IMPL_LINK(SbaTableQueryBrowser, OnExpandEntry, SvTreeListEntry*, _pParent, bool)
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
             if (aInfo.isValid())
                 showError(aInfo);
@@ -2278,7 +2263,7 @@ bool SbaTableQueryBrowser::ensureEntryObject( SvTreeListEntry* _pEntry )
                     }
                     catch(const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
 
                     bSuccess = pEntryData->xContainer.is();
@@ -2306,7 +2291,7 @@ bool SbaTableQueryBrowser::ensureEntryObject( SvTreeListEntry* _pEntry )
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                 }
             }
@@ -2401,17 +2386,14 @@ bool SbaTableQueryBrowser::implLoadAnything(const OUString& _rDataSourceName, co
     }
     catch( const WrappedTargetException& e )
     {
-        SQLException aSql;
         if  ( e.TargetException.isExtractableTo( ::cppu::UnoType< SQLException >::get() ) )
             showError( SQLExceptionInfo( e.TargetException ) );
         else
-        {
-            DBG_UNHANDLED_EXCEPTION();
-        }
+            SAL_WARN("dbaccess", e);
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     InvalidateAll();
@@ -2651,7 +2633,7 @@ bool SbaTableQueryBrowser::implSelect( SvTreeListEntry* _pEntry )
                                     }
                                     catch (Exception&)
                                     {
-                                        DBG_UNHANDLED_EXCEPTION();
+                                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                                     }
                                 }
                             }
@@ -2908,7 +2890,7 @@ void SbaTableQueryBrowser::impl_releaseConnection( SharedConnection& _rxConnecti
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // clear
@@ -3044,7 +3026,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         return xDataSource.get();
     }
@@ -3129,7 +3111,7 @@ void SbaTableQueryBrowser::impl_initialize()
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -3439,7 +3421,7 @@ void SbaTableQueryBrowser::implAdministrate( SvTreeListEntry* _pApplyTo )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -3556,7 +3538,7 @@ bool SbaTableQueryBrowser::implGetQuerySignature( OUString& _rCommand, bool& _bE
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return false;
@@ -3683,7 +3665,7 @@ Reference< XEmbeddedScripts > SAL_CALL SbaTableQueryBrowser::getScriptContainer(
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     Reference< XEmbeddedScripts > xScripts( xDocument, UNO_QUERY );
     OSL_ENSURE( xScripts.is() || !xDocument.is(),

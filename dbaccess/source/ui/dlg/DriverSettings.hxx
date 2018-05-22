@@ -20,6 +20,7 @@
 #define INCLUDED_DBACCESS_SOURCE_UI_DLG_DRIVERSETTINGS_HXX
 
 #include <dsntypes.hxx>
+#include <sfx2/tabdlg.hxx>
 #include <svl/poolitem.hxx>
 #include <vcl/vclptr.hxx>
 #include <vector>
@@ -33,61 +34,50 @@ namespace dbaui
     {
     public:
 
-        /** fills the IDs of the settings which are reflected in indirect data source properties
-            (aka properties in the css.sdb.DataSource.Info sequence)
-
-            @param  _eType
-                The Type of the data source.
-            @param  _out_rDetailsIds
-                Will be filled.
+        /** Creates the detail page for ado
         */
-        static void getSupportedIndirectSettings( const OUString& _sURLPrefix,const css::uno::Reference< css::uno::XComponentContext >& _xContext,std::vector< sal_Int32>& _out_rDetailsIds );
+        static  VclPtr<SfxTabPage> CreateDbase( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for ado
         */
-        static  VclPtr<SfxTabPage> CreateDbase( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
-
-        /** Creates the detail page for ado
-        */
-        static  VclPtr<SfxTabPage> CreateAdo( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateAdo( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for ODBC
         */
-        static  VclPtr<SfxTabPage> CreateODBC( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateODBC( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for user
         */
-        static  VclPtr<SfxTabPage> CreateUser( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateUser( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for MySQLODBC
         */
-        static  VclPtr<SfxTabPage> CreateMySQLODBC( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateMySQLODBC( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for MySQLJDBC
         */
-        static  VclPtr<SfxTabPage> CreateMySQLJDBC( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateMySQLJDBC( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for MySQLNATIVE
         */
-        static  VclPtr<SfxTabPage> CreateMySQLNATIVE( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateMySQLNATIVE( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for Oracle JDBC
         */
-        static VclPtr<SfxTabPage>  CreateOracleJDBC( vcl::Window* pParent, const SfxItemSet* _rAttrSet );
+        static VclPtr<SfxTabPage>  CreateOracleJDBC( TabPageParent pParent, const SfxItemSet* _rAttrSet );
 
         /** Creates the detail page for LDAP
         */
-        static  VclPtr<SfxTabPage> CreateLDAP( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateLDAP( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /// Creates the detail page for Text
-        static  VclPtr<SfxTabPage> CreateText( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
-
+        static  VclPtr<SfxTabPage> CreateText( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /// creates the GeneratedValues page
-        static  VclPtr<SfxTabPage> CreateGeneratedValuesPage( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateGeneratedValuesPage( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
 
         /// creates the "Special Settings" page of the "Advanced Settings" dialog
-        static  VclPtr<SfxTabPage> CreateSpecialSettingsPage( vcl::Window* _pParent, const SfxItemSet* _rAttrSet );
+        static  VclPtr<SfxTabPage> CreateSpecialSettingsPage( TabPageParent _pParent, const SfxItemSet* _rAttrSet );
     };
 }
 

@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "svdconv.hxx"
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
@@ -94,71 +93,63 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
     {
         case SdrMeasureFieldKind::Value:
         {
-            if(pModel)
+            eModUIUnit = getSdrModelFromSdrObject().GetUIUnit();
+
+            if(eMeasureUnit == FUNIT_NONE)
+                eMeasureUnit = eModUIUnit;
+
+            sal_Int32 nLen(GetLen(aPt2 - aPt1));
+            Fraction aFact(1,1);
+
+            if(eMeasureUnit != eModUIUnit)
             {
-                eModUIUnit = pModel->GetUIUnit();
+                // for the unit conversion
+                aFact *= GetMapFactor(eModUIUnit, eMeasureUnit).X();
+            }
 
-                if(eMeasureUnit == FUNIT_NONE)
-                    eMeasureUnit = eModUIUnit;
+            if(aMeasureScale.GetNumerator() != aMeasureScale.GetDenominator())
+            {
+                aFact *= aMeasureScale;
+            }
 
-                sal_Int32 nLen(GetLen(aPt2 - aPt1));
-                Fraction aFact(1,1);
+            if(aFact.GetNumerator() != aFact.GetDenominator())
+            {
+                // scale via BigInt, to avoid overruns
+                nLen = BigMulDiv(nLen, aFact.GetNumerator(), aFact.GetDenominator());
+            }
 
-                if(eMeasureUnit != eModUIUnit)
-                {
-                    // for the unit conversion
-                    aFact *= GetMapFactor(eModUIUnit, eMeasureUnit).X();
-                }
-
-                if(aMeasureScale.GetNumerator() != aMeasureScale.GetDenominator())
-                {
-                    aFact *= aMeasureScale;
-                }
-
-                if(aFact.GetNumerator() != aFact.GetDenominator())
-                {
-                    // scale via BigInt, to avoid overruns
-                    nLen = BigMulDiv(nLen, aFact.GetNumerator(), aFact.GetDenominator());
-                }
-
-                if(!aFact.IsValid())
-                {
-                    aStr = "?";
-                }
-                else
-                {
-                    aStr = pModel->GetMetricString(nLen, true, nNumDigits);
-                }
-
-                SvtSysLocale aSysLocale;
-                const LocaleDataWrapper& rLocaleDataWrapper = aSysLocale.GetLocaleData();
-                sal_Unicode cDec(rLocaleDataWrapper.getNumDecimalSep()[0]);
-                sal_Unicode cDecAlt(rLocaleDataWrapper.getNumDecimalSepAlt().toChar());
-
-                if(aStr.indexOf(cDec) != -1 || (cDecAlt && aStr.indexOf(cDecAlt) != -1))
-                {
-                    sal_Int32 nLen2(aStr.getLength() - 1);
-
-                    while(aStr[nLen2] == '0')
-                    {
-                        aStr = aStr.copy(0, nLen2);
-                        nLen2--;
-                    }
-
-                    if(aStr[nLen2] == cDec || (cDecAlt && aStr[nLen2] == cDecAlt))
-                    {
-                        aStr = aStr.copy(0, nLen2);
-                        nLen2--;
-                    }
-
-                    if(aStr.isEmpty())
-                        aStr += "0";
-                }
+            if(!aFact.IsValid())
+            {
+                aStr = "?";
             }
             else
             {
-                // if there's no Model ... (e. g. preview in dialog)
-                aStr = "4711";
+                aStr = getSdrModelFromSdrObject().GetMetricString(nLen, true, nNumDigits);
+            }
+
+            SvtSysLocale aSysLocale;
+            const LocaleDataWrapper& rLocaleDataWrapper = aSysLocale.GetLocaleData();
+            sal_Unicode cDec(rLocaleDataWrapper.getNumDecimalSep()[0]);
+            sal_Unicode cDecAlt(rLocaleDataWrapper.getNumDecimalSepAlt().toChar());
+
+            if(aStr.indexOf(cDec) != -1 || (cDecAlt && aStr.indexOf(cDecAlt) != -1))
+            {
+                sal_Int32 nLen2(aStr.getLength() - 1);
+
+                while(aStr[nLen2] == '0')
+                {
+                    aStr = aStr.copy(0, nLen2);
+                    nLen2--;
+                }
+
+                if(aStr[nLen2] == cDec || (cDecAlt && aStr[nLen2] == cDecAlt))
+                {
+                    aStr = aStr.copy(0, nLen2);
+                    nLen2--;
+                }
+
+                if(aStr.isEmpty())
+                    aStr += "0";
             }
 
             break;
@@ -167,16 +158,12 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
         {
             if(bShowUnit)
             {
-                if(pModel)
-                {
-                    eModUIUnit = pModel->GetUIUnit();
+                eModUIUnit = getSdrModelFromSdrObject().GetUIUnit();
 
-                    if(eMeasureUnit == FUNIT_NONE)
-                        eMeasureUnit = eModUIUnit;
+                if(eMeasureUnit == FUNIT_NONE)
+                    eMeasureUnit = eModUIUnit;
 
-                    if(bShowUnit)
-                        aStr = SdrModel::GetUnitString(eMeasureUnit);
-                }
+                aStr = SdrModel::GetUnitString(eMeasureUnit);
             }
 
             break;
@@ -211,14 +198,19 @@ sdr::contact::ViewContact* SdrMeasureObj::CreateObjectSpecificViewContact()
 }
 
 
-SdrMeasureObj::SdrMeasureObj():
+SdrMeasureObj::SdrMeasureObj(SdrModel& rSdrModel)
+:   SdrTextObj(rSdrModel),
     bTextDirty(false)
 {
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = false;
 }
 
-SdrMeasureObj::SdrMeasureObj(const Point& rPt1, const Point& rPt2):
+SdrMeasureObj::SdrMeasureObj(
+    SdrModel& rSdrModel,
+    const Point& rPt1,
+    const Point& rPt2)
+:   SdrTextObj(rSdrModel),
     aPt1(rPt1),
     aPt2(rPt2),
     bTextDirty(false)
@@ -556,18 +548,15 @@ basegfx::B2DPolyPolygon SdrMeasureObj::ImpCalcXPoly(const ImpMeasurePoly& rPol)
 
 bool SdrMeasureObj::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_uInt16 nPos,
     bool bEdit,
-    Color*& rpTxtColor, Color*& rpFldColor, OUString& rRet) const
+    boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor, OUString& rRet) const
 {
     const SvxFieldData* pField=rField.GetField();
     const SdrMeasureField* pMeasureField=dynamic_cast<const SdrMeasureField*>( pField );
     if (pMeasureField!=nullptr) {
         rRet = TakeRepresentation(pMeasureField->GetMeasureFieldKind());
-        if (rpFldColor!=nullptr) {
-            if (!bEdit)
-            {
-                delete rpFldColor;
-                rpFldColor=nullptr;
-            }
+        if (rpFldColor && !bEdit)
+        {
+            rpFldColor.reset();
         }
         return true;
     } else {
@@ -708,14 +697,27 @@ void SdrMeasureObj::TakeUnrotatedSnapRect(tools::Rectangle& rRect) const
     }
 }
 
-SdrMeasureObj* SdrMeasureObj::Clone() const
+SdrMeasureObj* SdrMeasureObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrMeasureObj >();
+    return CloneHelper< SdrMeasureObj >(rTargetModel);
+}
+
+SdrMeasureObj& SdrMeasureObj::operator=(const SdrMeasureObj& rObj)
+{
+    if( this == &rObj )
+        return *this;
+    SdrTextObj::operator=(rObj);
+
+    aPt1 = rObj.aPt1;
+    aPt2 = rObj.aPt2;
+    bTextDirty = rObj.bTextDirty;
+
+    return *this;
 }
 
 OUString SdrMeasureObj::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulMEASURE));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulMEASURE));
 
     OUString aName( GetName() );
     if (!aName.isEmpty())
@@ -731,7 +733,7 @@ OUString SdrMeasureObj::TakeObjNameSingul() const
 
 OUString SdrMeasureObj::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralMEASURE);
+    return SvxResId(STR_ObjNamePluralMEASURE);
 }
 
 basegfx::B2DPolyPolygon SdrMeasureObj::TakeXorPoly() const
@@ -1138,8 +1140,7 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
     SfxStyleSheet* pStyleSheet = GetStyleSheet();
 
     // prepare group
-    SdrObjGroup* pGroup = new SdrObjGroup;
-    pGroup->SetModel(GetModel());
+    SdrObjGroup* pGroup = new SdrObjGroup(getSdrModelFromSdrObject());
 
     // prepare parameters
     basegfx::B2DPolyPolygon aPolyPoly;
@@ -1153,8 +1154,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[0].getB2DPolygon());
 
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
         pGroup->GetSubList()->NbcInsertObject(pPath);
@@ -1171,8 +1175,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
 
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[0].getB2DPolygon());
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
 
@@ -1183,8 +1190,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
 
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[1].getB2DPolygon());
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
 
@@ -1202,8 +1212,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
 
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[0].getB2DPolygon());
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
 
@@ -1214,8 +1227,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
 
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[1].getB2DPolygon());
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
 
@@ -1229,8 +1245,11 @@ SdrObject* SdrMeasureObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
     {
         aPolyPoly.clear();
         aPolyPoly.append(aTmpPolyPolygon[nLoopStart].getB2DPolygon());
-        pPath = new SdrPathObj(OBJ_PATHLINE, aPolyPoly);
-        pPath->SetModel(GetModel());
+        pPath = new SdrPathObj(
+            getSdrModelFromSdrObject(),
+            OBJ_PATHLINE,
+            aPolyPoly);
+
         pPath->SetMergedItemSet(aSet);
         pPath->SetStyleSheet(pStyleSheet, true);
 
@@ -1361,36 +1380,11 @@ bool SdrMeasureObj::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B
     basegfx::B2DTuple aTranslate(aRange.getMinimum());
 
     // position maybe relative to anchor position, convert
-    if( pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {
             aTranslate -= basegfx::B2DTuple(GetAnchorPos().X(), GetAnchorPos().Y());
-        }
-    }
-
-    // force MapUnit to 100th mm
-    MapUnit eMapUnit = pModel->GetItemPool().GetMetric(0);
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplTwipsToMM(aTranslate.getX()));
-                aTranslate.setY(ImplTwipsToMM(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplTwipsToMM(aScale.getX()));
-                aScale.setY(ImplTwipsToMM(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRGetBaseGeometry: Missing unit translation to 100th mm!");
-            }
         }
     }
 
@@ -1406,30 +1400,7 @@ void SdrMeasureObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, cons
     basegfx::B2DPoint aPosA(rMatrix * basegfx::B2DPoint(0.0, 0.0));
     basegfx::B2DPoint aPosB(rMatrix * basegfx::B2DPoint(1.0, 0.0));
 
-    // force metric to pool metric
-    MapUnit eMapUnit = pModel->GetItemPool().GetMetric(0);
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aPosA.setX(ImplMMToTwips(aPosA.getX()));
-                aPosA.setY(ImplMMToTwips(aPosA.getY()));
-                aPosB.setX(ImplMMToTwips(aPosB.getX()));
-                aPosB.setY(ImplMMToTwips(aPosB.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRSetBaseGeometry: Missing unit translation to PoolMetric!");
-            }
-        }
-    }
-
-    if( pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         // if anchor is used, make position relative to it
         if(GetAnchorPos().X() || GetAnchorPos().Y())

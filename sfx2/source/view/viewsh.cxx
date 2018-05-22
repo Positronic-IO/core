@@ -22,7 +22,6 @@
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/weld.hxx>
 #include <svl/intitem.hxx>
@@ -95,7 +94,7 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::util;
 using namespace ::cppu;
 
-#define SfxViewShell
+#define ShellClass_SfxViewShell
 #include <sfxslots.hxx>
 
 
@@ -156,12 +155,18 @@ SfxClipboardChangeListener::SfxClipboardChangeListener( SfxViewShell* pView, con
 void SfxClipboardChangeListener::ChangedContents()
 {
     const SolarMutexGuard aGuard;
-    if( m_pViewShell )
+    if (m_pViewShell)
     {
         SfxBindings& rBind = m_pViewShell->GetViewFrame()->GetBindings();
-        rBind.Invalidate( SID_PASTE );
-        rBind.Invalidate( SID_PASTE_SPECIAL );
-        rBind.Invalidate( SID_CLIPBOARD_FORMAT_ITEMS );
+        rBind.Invalidate(SID_PASTE);
+        rBind.Invalidate(SID_PASTE_SPECIAL);
+        rBind.Invalidate(SID_CLIPBOARD_FORMAT_ITEMS);
+
+        if (comphelper::LibreOfficeKit::isActive())
+        {
+            // In the future we might send the payload as well.
+            SfxLokHelper::notifyAllViews(LOK_CALLBACK_CLIPBOARD_CHANGED, "");
+        }
     }
 }
 
@@ -217,7 +222,6 @@ SfxViewShell_Impl::SfxViewShell_Impl(SfxViewShellFlags const nFlags)
 ,   m_bIsShowView(!(nFlags & SfxViewShellFlags::NO_SHOW))
 ,   m_nFamily(0xFFFF)   // undefined, default set by TemplateDialog
 ,   m_pController(nullptr)
-,   mpIPClients(nullptr)
 ,   m_pLibreOfficeKitViewCallback(nullptr)
 ,   m_pLibreOfficeKitViewData(nullptr)
 ,   m_bTiledSearching(false)
@@ -226,14 +230,13 @@ SfxViewShell_Impl::SfxViewShell_Impl(SfxViewShellFlags const nFlags)
 
 SfxViewShell_Impl::~SfxViewShell_Impl()
 {
-    DELETEZ(mpIPClients);
 }
 
 std::vector< SfxInPlaceClient* > *SfxViewShell_Impl::GetIPClients_Impl( bool bCreate ) const
 {
     if (!mpIPClients && bCreate)
-        mpIPClients = new std::vector< SfxInPlaceClient* >;
-    return mpIPClients;
+        mpIPClients.reset(new std::vector< SfxInPlaceClient* >);
+    return mpIPClients.get();
 }
 
 SFX_IMPL_SUPERCLASS_INTERFACE(SfxViewShell,SfxShell)
@@ -641,7 +644,8 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
                     return;
                 }
 
-                rReq.Done(sfx2::openUriExternally(aFileURL, true));
+                sfx2::openUriExternally(aFileURL, true);
+                rReq.Done(true);
                 break;
             }
             else
@@ -822,7 +826,7 @@ SfxInPlaceClient* SfxViewShell::GetUIActiveClient() const
     if ( !pClients )
         return nullptr;
 
-    bool bIsTiledRendering = comphelper::LibreOfficeKit::isActive();
+    const bool bIsTiledRendering = comphelper::LibreOfficeKit::isActive();
 
     for (SfxInPlaceClient* pIPClient : *pClients)
     {
@@ -848,16 +852,6 @@ void SfxViewShell::Activate( bool bMDI )
 
 
 void SfxViewShell::Deactivate(bool /*bMDI*/)
-{
-}
-
-
-void SfxViewShell::AdjustPosSizePixel
-(
-    const Point&    /*rToolOffset*/,// Upper left corner Tools in Frame-Window
-    const Size&     /*rSize*/       // All available sizes.
-)
-
 {
 }
 
@@ -2011,6 +2005,11 @@ void SfxViewShell::AddRemoveClipboardListener( const uno::Reference < datatransf
     catch (const uno::Exception&)
     {
     }
+}
+
+weld::Window* SfxViewShell::GetFrameWeld() const
+{
+    return pWindow ? pWindow->GetFrameWeld() : nullptr;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

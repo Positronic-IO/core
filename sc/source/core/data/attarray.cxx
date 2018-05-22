@@ -40,6 +40,7 @@
 #include <markarr.hxx>
 #include <rechead.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <segmenttree.hxx>
 #include <editdataarray.hxx>
 #include <formulacell.hxx>
@@ -57,7 +58,6 @@ ScAttrArray::ScAttrArray( SCCOL nNewCol, SCTAB nNewTab, ScDocument* pDoc, ScAttr
 {
     if ( nCol != -1 && pDefaultColAttrArray && !pDefaultColAttrArray->mvData.empty())
     {
-        bool bNumFormatChanged;
         ScAddress aAdrStart( nCol, 0, nTab );
         ScAddress aAdrEnd( nCol, 0, nTab );
         mvData.resize( pDefaultColAttrArray->mvData.size() );
@@ -66,7 +66,7 @@ ScAttrArray::ScAttrArray( SCCOL nNewCol, SCTAB nNewTab, ScDocument* pDoc, ScAttr
             mvData[nIdx].nEndRow = pDefaultColAttrArray->mvData[nIdx].nEndRow;
             ScPatternAttr aNewPattern( *(pDefaultColAttrArray->mvData[nIdx].pPattern) );
             mvData[nIdx].pPattern = static_cast<const ScPatternAttr*>( &pDocument->GetPool()->Put( aNewPattern ) );
-            bNumFormatChanged = false;
+            bool bNumFormatChanged = false;
             if ( ScGlobal::CheckWidthInvalidate( bNumFormatChanged,
                  mvData[nIdx].pPattern->GetItemSet(), pDocument->GetDefPattern()->GetItemSet() ) )
             {
@@ -389,7 +389,7 @@ void ScAttrArray::RemoveCellCharAttribs( SCROW nStartRow, SCROW nEndRow,
         if (aCell.meType != CELLTYPE_EDIT || !aCell.mpEditText)
             continue;
 
-        EditTextObject* pOldData = nullptr;
+        std::unique_ptr<EditTextObject> pOldData;
         if (pDataArray)
             pOldData = aCell.mpEditText->Clone();
 
@@ -399,8 +399,8 @@ void ScAttrArray::RemoveCellCharAttribs( SCROW nStartRow, SCROW nEndRow,
 
         if (pDataArray)
         {
-            EditTextObject* pNewData = aCell.mpEditText->Clone();
-            pDataArray->AddItem(nTab, nCol, nRow, pOldData, pNewData);
+            std::unique_ptr<EditTextObject> pNewData = aCell.mpEditText->Clone();
+            pDataArray->AddItem(nTab, nCol, nRow, std::move(pOldData), std::move(pNewData));
         }
     }
 }
@@ -1809,9 +1809,9 @@ void ScAttrArray::FindStyleSheet( const SfxStyleSheetBase* pStyleSheet, ScFlatBo
                 pDocument->GetPool()->Remove(*mvData[nPos].pPattern);
                 pNewPattern->SetStyleSheet( static_cast<ScStyleSheet*>(
                     pDocument->GetStyleSheetPool()->
-                        Find( ScGlobal::GetRscString(STR_STYLENAME_STANDARD),
+                        Find( ScResId(STR_STYLENAME_STANDARD),
                               SfxStyleFamily::Para,
-                              SFXSTYLEBIT_AUTO | SCSTYLEBIT_STANDARD ) ) );
+                              SfxStyleSearchBits::Auto | SfxStyleSearchBits::ScStandard ) ) );
                 mvData[nPos].pPattern = static_cast<const ScPatternAttr*>(
                                             &pDocument->GetPool()->Put(*pNewPattern));
                 pNewPattern.reset();

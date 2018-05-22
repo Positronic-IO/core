@@ -84,12 +84,14 @@ inline std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, t
 
         if (IsEqualIID(rIid, IID_IMarshal))
             stream << "=\"IMarshal\"";
+        else if (IsEqualIID(rIid, IID_IMarshal2))
+            stream << "=\"IMarshal2\"";
         else if (IsEqualIID(rIid, IID_INoMarshal))
             stream << "=\"INoMarshal\"";
         else if (IsEqualIID(rIid, IID_IdentityUnmarshal))
             stream << "=\"IdentityUnmarshal\"";
         else if (IsEqualIID(rIid, IID_IFastRundown))
-            stream << "=\"IdentityUnmarshal\"";
+            stream << "=\"IFastRundown\"";
         else if (IsEqualIID(rIid, IID_IStdMarshalInfo))
             stream << "=\"IStdMarshalInfo\"";
         else if (IsEqualIID(rIid, IID_IAgileObject))
@@ -115,7 +117,7 @@ inline std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, t
     if (rVariant.vt & VT_BYREF)
         stream << "BYREF:";
 
-    switch (rVariant.vt)
+    switch (rVariant.vt & ~(VT_VECTOR | VT_ARRAY | VT_BYREF))
     {
         case VT_EMPTY:
             stream << "EMPTY";
@@ -293,7 +295,8 @@ inline std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, t
                 stream << *(double*)rVariant.byref;
                 break; // FIXME
             case VT_BSTR:
-                stream << (OLECHAR*)rVariant.byref;
+                stream << std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(
+                    *(OLECHAR**)rVariant.byref);
                 break;
             case VT_DISPATCH:
                 stream << rVariant.byref;
@@ -417,7 +420,8 @@ inline std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, t
             stream << (double)rVariant.date;
             break; // FIXME
         case VT_BSTR:
-            stream << rVariant.bstrVal;
+            stream << std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(
+                rVariant.bstrVal);
             break;
         case VT_DISPATCH:
             stream << rVariant.pdispVal;

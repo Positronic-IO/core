@@ -23,21 +23,21 @@
 #include <sfx2/basedlgs.hxx>
 #include <svl/style.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <attrib.hxx>
 #include <tphf.hxx>
 #include <sc.hrc>
 #include <scabstdlg.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <tabvwsh.hxx>
 #include <viewdata.hxx>
 #include <document.hxx>
 #include <hfedtdlg.hxx>
 #include <styledlg.hxx>
-#include <scresid.hxx>
 #include <scuitphfedit.hxx>
 #include <memory>
+#include <helpids.h>
 
 // class ScHFPage
 
@@ -202,31 +202,30 @@ IMPL_LINK_NOARG(ScHFPage, HFEditHdl, void*, void)
     {
         OUString  aText;
         VclPtrInstance< SfxSingleTabDialog > pDlg(this, aDataSet);
-        const int nSettingsId = 42;
         bool bRightPage =   m_pCntSharedBox->IsChecked()
                          || ( SvxPageUsage::Left != nPageUsage );
 
         if ( nId == SID_ATTR_PAGE_HEADERSET )
         {
-            aText = ScGlobal::GetRscString( STR_PAGEHEADER );
+            aText = ScResId( STR_PAGEHEADER );
             if ( bRightPage )
-                pDlg->SetTabPage( ScRightHeaderEditPage::Create( pDlg->get_content_area(), &aDataSet ), nSettingsId );
+                pDlg->SetTabPage( ScRightHeaderEditPage::Create( pDlg->get_content_area(), &aDataSet ) );
             else
-                pDlg->SetTabPage( ScLeftHeaderEditPage::Create( pDlg->get_content_area(), &aDataSet ), nSettingsId );
+                pDlg->SetTabPage( ScLeftHeaderEditPage::Create( pDlg->get_content_area(), &aDataSet ) );
         }
         else
         {
-            aText = ScGlobal::GetRscString( STR_PAGEFOOTER );
+            aText = ScResId( STR_PAGEFOOTER );
             if ( bRightPage )
-                pDlg->SetTabPage( ScRightFooterEditPage::Create( pDlg->get_content_area(), &aDataSet ), nSettingsId );
+                pDlg->SetTabPage( ScRightFooterEditPage::Create( pDlg->get_content_area(), &aDataSet ) );
             else
-                pDlg->SetTabPage( ScLeftFooterEditPage::Create( pDlg->get_content_area(), &aDataSet ), nSettingsId );
+                pDlg->SetTabPage( ScLeftFooterEditPage::Create( pDlg->get_content_area(), &aDataSet ) );
         }
 
         SvxNumType eNumType = aDataSet.Get(ATTR_PAGE).GetNumType();
         static_cast<ScHFEditPage*>(pDlg->GetTabPage())->SetNumType(eNumType);
 
-        aText += " (" + ScGlobal::GetRscString( STR_PAGESTYLE );
+        aText += " (" + ScResId( STR_PAGESTYLE );
         aText += ": " + aStrPageStyle + ")";
 
         pDlg->SetText( aText );
@@ -245,9 +244,9 @@ ScHeaderPage::ScHeaderPage( vcl::Window* pParent, const SfxItemSet& rSet )
 {
 }
 
-VclPtr<SfxTabPage> ScHeaderPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScHeaderPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScHeaderPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScHeaderPage>::Create( pParent.pParent, *rCoreSet );
 }
 
 const sal_uInt16* ScHeaderPage::GetRanges()
@@ -262,9 +261,9 @@ ScFooterPage::ScFooterPage( vcl::Window* pParent, const SfxItemSet& rSet )
 {
 }
 
-VclPtr<SfxTabPage> ScFooterPage::Create( vcl::Window* pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScFooterPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
 {
-    return VclPtr<ScFooterPage>::Create( pParent, *rCoreSet );
+    return VclPtr<ScFooterPage>::Create( pParent.pParent, *rCoreSet );
 }
 
 const sal_uInt16* ScFooterPage::GetRanges()

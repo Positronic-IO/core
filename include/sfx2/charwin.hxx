@@ -22,15 +22,67 @@
 
 #include <sfx2/tbxctrl.hxx>
 #include <sfx2/dllapi.h>
+#include <vcl/weld.hxx>
 
-class SFX2_DLLPUBLIC SvxCharView : public Control
+class SFX2_DLLPUBLIC SvxCharView
+{
+private:
+    VclPtr<VirtualDevice> mxVirDev;
+    std::unique_ptr<weld::DrawingArea> mxDrawingArea;
+    Size m_aSize;
+    long            mnY;
+    Point           maPosition;
+    vcl::Font       maFont;
+    bool            maHasInsert;
+    OUString        m_sText;
+
+    Link<SvxCharView*, void> maMouseClickHdl;
+    Link<SvxCharView*, void> maClearClickHdl;
+    Link<SvxCharView*, void> maClearAllClickHdl;
+
+
+    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
+    DECL_LINK(DoResize, const Size& rSize, void);
+    DECL_LINK(DoMouseButtonDown, const MouseEvent&, void);
+    DECL_LINK(DoKeyDown, const KeyEvent&, bool);
+    DECL_LINK(DoGetFocus, weld::Widget&, void);
+    DECL_LINK(DoLoseFocus, weld::Widget&, void);
+public:
+    SvxCharView(weld::Builder& rBuilder, const OString& rId, const VclPtr<VirtualDevice>& rVirDev);
+
+    void            SetFont( const vcl::Font& rFont );
+    vcl::Font       GetFont() const { return maFont; }
+    void            SetText( const OUString& rText );
+    OUString        GetText() const { return m_sText; }
+    void            Show() { mxDrawingArea->show(); }
+    void            Hide() { mxDrawingArea->hide(); }
+    void            SetHasInsert( bool bInsert );
+    void            InsertCharToDoc();
+
+    void            createContextMenu();
+
+    void            grab_focus() { mxDrawingArea->grab_focus(); }
+    void            queue_draw() { mxDrawingArea->queue_draw(); }
+    Size            get_preferred_size() const { return mxDrawingArea->get_preferred_size(); }
+
+    void            connect_focus_in(const Link<weld::Widget&, void>& rLink) { mxDrawingArea->connect_focus_in(rLink); }
+    void            connect_focus_out(const Link<weld::Widget&, void>& rLink) { mxDrawingArea->connect_focus_out(rLink); }
+
+
+    void setMouseClickHdl(const Link<SvxCharView*,void> &rLink);
+    void setClearClickHdl(const Link<SvxCharView*,void> &rLink);
+    void setClearAllClickHdl(const Link<SvxCharView*,void> &rLink);
+
+    void ContextMenuSelect(const OString& rIdent);
+};
+
+class SFX2_DLLPUBLIC SvxCharViewControl : public Control
 {
 public:
-    SvxCharView(vcl::Window* pParent);
+    SvxCharViewControl(vcl::Window* pParent);
 
     void            SetFont( const vcl::Font& rFont );
     void            SetText( const OUString& rText ) override;
-    void            SetHasInsert( bool bInsert );
     void            InsertCharToDoc();
 
     void            createContextMenu();
@@ -39,11 +91,7 @@ public:
 
     virtual Size    GetOptimalSize() const override;
 
-    void setMouseClickHdl(const Link<SvxCharView*,void> &rLink);
-    void setClearClickHdl(const Link<SvxCharView*,void> &rLink);
-    void setClearAllClickHdl(const Link<SvxCharView*,void> &rLink);
-
-    DECL_LINK(ContextMenuSelectHdl, Menu*, bool);
+    void setMouseClickHdl(const Link<SvxCharViewControl*,void> &rLink);
 
 protected:
     virtual void    Paint(vcl::RenderContext& rRenderContext, const ::tools::Rectangle&) override;
@@ -56,11 +104,10 @@ private:
     long            mnY;
     Point           maPosition;
     vcl::Font       maFont;
-    bool            maHasInsert;
 
-    Link<SvxCharView*, void> maMouseClickHdl;
-    Link<SvxCharView*, void> maClearClickHdl;
-    Link<SvxCharView*, void> maClearAllClickHdl;
+    Link<SvxCharViewControl*, void> maMouseClickHdl;
 };
 
 #endif
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

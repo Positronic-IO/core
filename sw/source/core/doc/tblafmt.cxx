@@ -28,7 +28,6 @@
 #include <unotools/configmgr.hxx>
 #include <unotools/pathoptions.hxx>
 #include <sfx2/app.hxx>
-#include <svx/dialmgr.hxx>
 #include <swtable.hxx>
 #include <swtblfmt.hxx>
 #include <com/sun/star/text/VertOrientation.hpp>
@@ -41,6 +40,8 @@
 #include <hintids.hxx>
 #include <fmtornt.hxx>
 #include <editsh.hxx>
+#include <fmtlsplt.hxx>
+#include <fmtrowsplt.hxx>
 
 #include <memory>
 #include <vector>

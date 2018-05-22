@@ -39,19 +39,15 @@
 
 class OutputDevice;
 class SwWrtShell;
-class SwDoc;
 class SwView;
 class SwPostItField;
 class SwFormatField;
-class SwField;
 class SfxBroadcaster;
 class SfxHint;
 class SwEditWin;
 class Color;
-class SfxItemPool;
 class SfxItemSet;
 class SvxSearchItem;
-class SvxLanguageItem;
 namespace sw { namespace annotation {
     class SwAnnotationWin;
 }}
@@ -62,14 +58,11 @@ class SwSidebarItem;
 class SwFrame;
 namespace vcl { class Window; }
 struct ImplSVEvent;
-class OutlinerSearchable;
 class OutlinerParaObject;
 namespace i18nutil { struct SearchOptions2; }
 
 #define COL_NOTES_SIDEPANE_ARROW_ENABLED    Color(0,0,0)
 #define COL_NOTES_SIDEPANE_ARROW_DISABLED   Color(172,168,153)
-
-typedef std::list<SwSidebarItem*> SwSidebarItem_list;
 
 struct SwPostItPageItem
 {
@@ -77,17 +70,10 @@ struct SwPostItPageItem
     sw::sidebarwindows::SidebarPosition eSidebarPosition;
     long lOffset;
     SwRect mPageRect;
-    SwSidebarItem_list* mList;
+    std::vector<SwSidebarItem*> mvSidebarItems;
     SwPostItPageItem(): bScrollbar(false), eSidebarPosition( sw::sidebarwindows::SidebarPosition::LEFT ), lOffset(0)
     {
-        mList = new SwSidebarItem_list;
     }
-    ~SwPostItPageItem()
-    {
-        mList->clear();
-        delete mList;
-    }
-
 };
 
 struct FieldShadowState

@@ -99,6 +99,8 @@ $(eval $(call gb_Configuration_add_spool_modules,registry,officecfg/registry/dat
 	org/openoffice/Office/Paths-unixdesktop.xcu \
 	org/openoffice/Office/Paths-internallibexttextcatdata.xcu \
 	org/openoffice/Office/Paths-externallibexttextcatdata.xcu \
+	org/openoffice/Office/Paths-internallibnumbertextdata.xcu \
+	org/openoffice/Office/Paths-externallibnumbertextdata.xcu \
 	org/openoffice/Office/Writer-cjk.xcu \
 	org/openoffice/Office/Impress-ogltrans.xcu \
 	org/openoffice/Office/Embedding-calc.xcu \
@@ -164,7 +166,6 @@ $(eval $(call gb_Configuration_add_localized_datas,registry,officecfg/registry/d
 	org/openoffice/Office/UI/DrawWindowState.xcu \
 	org/openoffice/Office/UI/ImpressWindowState.xcu \
 	org/openoffice/Office/UI/MathWindowState.xcu \
-	org/openoffice/Office/UI/Notebookbar.xcu \
 	org/openoffice/Office/UI/ReportCommands.xcu \
 	org/openoffice/Office/UI/Sidebar.xcu \
 	org/openoffice/Office/UI/StartModuleWindowState.xcu \

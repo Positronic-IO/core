@@ -25,7 +25,6 @@
 #include <com/sun/star/deployment/PackageInformationProvider.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
 #include <ucbhelper/contentidentifier.hxx>
-#include <comphelper/processfactory.hxx>
 #include <ucbhelper/providerhelper.hxx>
 #include <ucbhelper/content.hxx>
 #include <ucbhelper/propertyvalueset.hxx>
@@ -167,7 +166,7 @@ namespace ucb { namespace ucp { namespace ext
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("ucb.ucp.ext");
         }
     }
 
@@ -240,7 +239,7 @@ namespace ucb { namespace ucp { namespace ext
             }
             catch ( const IllegalIdentifierException& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("ucb.ucp.ext");
             }
         }
 

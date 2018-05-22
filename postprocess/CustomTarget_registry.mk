@@ -182,7 +182,6 @@ postprocess_FILES_main := \
 	$(postprocess_XCS)/Office/UI/GenericCategories.xcs \
 	$(postprocess_XCS)/Office/UI/GenericCommands.xcs \
 	$(postprocess_XCS)/Office/UI/GlobalSettings.xcs \
-	$(postprocess_XCS)/Office/UI/Notebookbar.xcs \
 	$(postprocess_XCS)/Office/UI/Sidebar.xcs \
 	$(postprocess_XCS)/Office/UI/StartModuleCommands.xcs \
 	$(postprocess_XCS)/Office/UI/StartModuleWindowState.xcs \
@@ -247,7 +246,6 @@ postprocess_FILES_main := \
 	$(postprocess_XCU)/Office/UI/Factories.xcu \
 	$(postprocess_XCU)/Office/UI/GenericCategories.xcu \
 	$(postprocess_XCU)/Office/UI/GenericCommands.xcu \
-	$(postprocess_XCU)/Office/UI/Notebookbar.xcu \
 	$(postprocess_XCU)/Office/UI/Sidebar.xcu \
 	$(postprocess_XCU)/Office/UI/StartModuleWindowState.xcu \
 	$(postprocess_XCU)/Office/UI/ToolbarMode.xcu \
@@ -347,6 +345,12 @@ ifneq (,$(SYSTEM_LIBEXTTEXTCAT_DATA))
 postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-externallibexttextcatdata.xcu
 else
 postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-internallibexttextcatdata.xcu
+endif
+
+ifneq (,$(SYSTEM_LIBNUMBERTEXT_DATA))
+postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-externallibnumbertextdata.xcu
+else
+postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-internallibnumbertextdata.xcu
 endif
 
 ifneq ($(filter $(CPUNAME),POWERPC INTEL ARM HPPA GODSON M68K SPARC S390),)
@@ -553,6 +557,7 @@ postprocess_main_SED := \
 	-e 's,$${STARTCENTER_HIDE_EXTERNAL_LINKS},0,g' \
 	-e 's,$${STARTCENTER_TEMPLREP_URL},http://templates.libreoffice.org/,g' \
 	-e 's,$${SYSTEM_LIBEXTTEXTCAT_DATA},$(SYSTEM_LIBEXTTEXTCAT_DATA),g' \
+	-e 's,$${SYSTEM_LIBNUMBERTEXT_DATA},$(SYSTEM_LIBNUMBERTEXT_DATA),g' \
 
 $(call gb_XcdTarget_get_target,main.xcd) \
 		: $(BUILDDIR)/config_host.mk.stamp \

@@ -32,59 +32,100 @@ public:
 
     virtual void run() override
     {
+        std::string fn(compiler.getSourceManager()
+                           .getFileEntryForID(compiler.getSourceManager().getMainFileID())
+                           ->getName());
+        loplugin::normalizeDotDotInFilePath(fn);
+        // can't change these because we pass them down to the SfxItemPool stuff
+        if (fn == SRCDIR "/sc/source/core/data/docpool.cxx")
+            return;
+        // this just too clever for me
+        if (fn == SRCDIR "/sc/source/core/tool/chgtrack.cxx")
+            return;
+        // too clever
+        if (fn == SRCDIR "/pyuno/source/module/pyuno_runtime.cxx")
+            return;
+        // m_pExampleSet here is very badly manageed. sometimes it is owning, sometimes not,
+        // and the logic depends on overriding methods.
+        if (fn == SRCDIR "/sfx2/source/dialog/tabdlg.cxx")
+            return;
+        // pLongArr is being deleted here because we temporarily overwrite a pointer to someone else's buffer, with a pointer
+        // to our own buffer
+        if (fn == SRCDIR "/editeng/source/misc/txtrange.cxx")
+            return;
+        // can't use std::set<std::unique_ptr<>> until C++14
+        if (fn == SRCDIR "/editeng/source/misc/svxacorr.cxx")
+            return;
+
         TraverseDecl(compiler.getASTContext().getTranslationUnitDecl());
     }
 
-    bool VisitCXXDestructorDecl(const CXXDestructorDecl* );
+    bool VisitCXXMethodDecl(const CXXMethodDecl* );
     bool VisitCompoundStmt(const CompoundStmt* );
 private:
-    void CheckForUnconditionalDelete(const CXXDestructorDecl*, const CompoundStmt* );
-    void CheckForSimpleDelete(const CXXDestructorDecl*, const CompoundStmt* );
-    void CheckRangedLoopDelete(const CXXDestructorDecl*, const CXXForRangeStmt* );
-    void CheckLoopDelete(const CXXDestructorDecl*, const Stmt* );
-    void CheckLoopDelete(const CXXDestructorDecl*, const CXXDeleteExpr* );
-    void CheckDeleteExpr(const CXXDestructorDecl*, const CXXDeleteExpr*);
-    void CheckDeleteExpr(const CXXDestructorDecl*, const CXXDeleteExpr*,
+    void CheckCompoundStmt(const CXXMethodDecl*, const CompoundStmt* );
+    void CheckForUnconditionalDelete(const CXXMethodDecl*, const CompoundStmt* );
+    void CheckForSimpleDelete(const CXXMethodDecl*, const CompoundStmt* );
+    void CheckRangedLoopDelete(const CXXMethodDecl*, const CXXForRangeStmt* );
+    void CheckLoopDelete(const CXXMethodDecl*, const Stmt* );
+    void CheckLoopDelete(const CXXMethodDecl*, const CXXDeleteExpr* );
+    void CheckDeleteExpr(const CXXMethodDecl*, const CXXDeleteExpr*);
+    void CheckParenExpr(const CXXMethodDecl*, const ParenExpr*);
+    void CheckDeleteExpr(const CXXMethodDecl*, const CXXDeleteExpr*,
         const MemberExpr*, StringRef message);
 };
 
-bool UseUniquePtr::VisitCXXDestructorDecl(const CXXDestructorDecl* destructorDecl)
+bool UseUniquePtr::VisitCXXMethodDecl(const CXXMethodDecl* methodDecl)
 {
-    if (ignoreLocation(destructorDecl))
+    if (ignoreLocation(methodDecl))
         return true;
-    if (isInUnoIncludeFile(destructorDecl))
+    if (isInUnoIncludeFile(methodDecl))
         return true;
 
-    const CompoundStmt* compoundStmt = dyn_cast_or_null< CompoundStmt >( destructorDecl->getBody() );
+    const CompoundStmt* compoundStmt = dyn_cast_or_null< CompoundStmt >( methodDecl->getBody() );
     if (!compoundStmt || compoundStmt->size() == 0)
         return true;
 
-    CheckForSimpleDelete(destructorDecl, compoundStmt);
+    CheckCompoundStmt(methodDecl, compoundStmt);
+
+    return true;
+}
+
+void UseUniquePtr::CheckCompoundStmt(const CXXMethodDecl* methodDecl, const CompoundStmt* compoundStmt)
+{
+    CheckForSimpleDelete(methodDecl, compoundStmt);
 
     for (auto i = compoundStmt->body_begin(); i != compoundStmt->body_end(); ++i)
     {
         if (auto cxxForRangeStmt = dyn_cast<CXXForRangeStmt>(*i))
-            CheckRangedLoopDelete(destructorDecl, cxxForRangeStmt);
+            CheckRangedLoopDelete(methodDecl, cxxForRangeStmt);
         else if (auto forStmt = dyn_cast<ForStmt>(*i))
-            CheckLoopDelete(destructorDecl, forStmt->getBody());
+            CheckLoopDelete(methodDecl, forStmt->getBody());
         else if (auto whileStmt = dyn_cast<WhileStmt>(*i))
-            CheckLoopDelete(destructorDecl, whileStmt->getBody());
+            CheckLoopDelete(methodDecl, whileStmt->getBody());
+        // check for unconditional inner compound statements
+        else if (auto innerCompoundStmt = dyn_cast<CompoundStmt>(*i))
+            CheckCompoundStmt(methodDecl, innerCompoundStmt);
     }
-
-    return true;
 }
 
 /**
  * check for simple call to delete in a destructor i.e. direct unconditional call, or if-guarded call
  */
-void UseUniquePtr::CheckForSimpleDelete(const CXXDestructorDecl* destructorDecl, const CompoundStmt* compoundStmt)
+void UseUniquePtr::CheckForSimpleDelete(const CXXMethodDecl* methodDecl, const CompoundStmt* compoundStmt)
 {
     for (auto i = compoundStmt->body_begin(); i != compoundStmt->body_end(); ++i)
     {
         auto deleteExpr = dyn_cast<CXXDeleteExpr>(*i);
         if (deleteExpr)
         {
-            CheckDeleteExpr(destructorDecl, deleteExpr);
+            CheckDeleteExpr(methodDecl, deleteExpr);
+            continue;
+        }
+        auto parenExpr = dyn_cast<ParenExpr>(*i);
+        if (parenExpr)
+        {
+            CheckParenExpr(methodDecl, parenExpr);
             continue;
         }
         // Check for conditional deletes like:
@@ -114,7 +155,14 @@ void UseUniquePtr::CheckForSimpleDelete(const CXXDestructorDecl* destructorDecl,
         deleteExpr = dyn_cast<CXXDeleteExpr>(ifStmt->getThen());
         if (deleteExpr)
         {
-            CheckDeleteExpr(destructorDecl, deleteExpr);
+            CheckDeleteExpr(methodDecl, deleteExpr);
+            continue;
+        }
+
+        parenExpr = dyn_cast<ParenExpr>(ifStmt->getThen());
+        if (parenExpr)
+        {
+            CheckParenExpr(methodDecl, parenExpr);
             continue;
         }
 
@@ -125,7 +173,10 @@ void UseUniquePtr::CheckForSimpleDelete(const CXXDestructorDecl* destructorDecl,
         {
             auto ifDeleteExpr = dyn_cast<CXXDeleteExpr>(*j);
             if (ifDeleteExpr)
-                CheckDeleteExpr(destructorDecl, ifDeleteExpr);
+                CheckDeleteExpr(methodDecl, ifDeleteExpr);
+            ParenExpr const * parenExpr = dyn_cast<ParenExpr>(*i);
+            if (parenExpr)
+                CheckParenExpr(methodDecl, parenExpr);
         }
     }
 }
@@ -133,7 +184,7 @@ void UseUniquePtr::CheckForSimpleDelete(const CXXDestructorDecl* destructorDecl,
 /**
  * Check the delete expression in a destructor.
  */
-void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, const CXXDeleteExpr* deleteExpr)
+void UseUniquePtr::CheckDeleteExpr(const CXXMethodDecl* methodDecl, const CXXDeleteExpr* deleteExpr)
 {
     const ImplicitCastExpr* castExpr = dyn_cast<ImplicitCastExpr>(deleteExpr->getArgument());
     if (!castExpr)
@@ -141,14 +192,28 @@ void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, cons
     const MemberExpr* memberExpr = dyn_cast<MemberExpr>(castExpr->getSubExpr());
     if (!memberExpr)
         return;
-    CheckDeleteExpr(destructorDecl, deleteExpr, memberExpr,
+    CheckDeleteExpr(methodDecl, deleteExpr, memberExpr,
         "unconditional call to delete on a member, should be using std::unique_ptr");
+}
+
+/**
+ * Look for DELETEZ expressions.
+ */
+void UseUniquePtr::CheckParenExpr(const CXXMethodDecl* methodDecl, const ParenExpr* parenExpr)
+{
+    auto binaryOp = dyn_cast<BinaryOperator>(parenExpr->getSubExpr());
+    if (!binaryOp || binaryOp->getOpcode() != BO_Comma)
+        return;
+    auto deleteExpr = dyn_cast<CXXDeleteExpr>(binaryOp->getLHS());
+    if (!deleteExpr)
+        return;
+    CheckDeleteExpr(methodDecl, deleteExpr);
 }
 
 /**
  * Check the delete expression in a destructor.
  */
-void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, const CXXDeleteExpr* deleteExpr,
+void UseUniquePtr::CheckDeleteExpr(const CXXMethodDecl* methodDecl, const CXXDeleteExpr* deleteExpr,
     const MemberExpr* memberExpr, StringRef message)
 {
     // ignore union games
@@ -160,32 +225,32 @@ void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, cons
         return;
 
     // ignore calling delete on someone else's field
-    if (fieldDecl->getParent() != destructorDecl->getParent() )
+    if (fieldDecl->getParent() != methodDecl->getParent() )
         return;
 
     if (ignoreLocation(fieldDecl))
         return;
     // to ignore things like the CPPUNIT macros
     StringRef aFileName = compiler.getSourceManager().getFilename(compiler.getSourceManager().getSpellingLoc(fieldDecl->getLocStart()));
-    if (loplugin::hasPathnamePrefix(aFileName, WORKDIR))
+    if (loplugin::hasPathnamePrefix(aFileName, WORKDIR "/"))
         return;
     // passes and stores pointers to member fields
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sot/source/sdstor/stgdir.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sot/source/sdstor/stgdir.hxx"))
         return;
     // something platform-specific
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/hwpfilter/source/htags.h"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/hwpfilter/source/htags.h"))
         return;
     // passes pointers to member fields
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sd/inc/sdpptwrp.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sd/inc/sdpptwrp.hxx"))
         return;
     // @TODO intrusive linked-lists here, with some trickiness
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sw/source/filter/html/parcss1.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sw/source/filter/html/parcss1.hxx"))
         return;
     // @TODO SwDoc has some weird ref-counting going on
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sw/inc/shellio.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sw/inc/shellio.hxx"))
         return;
     // @TODO it's sharing pointers with another class
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sc/inc/formulacell.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sc/inc/formulacell.hxx"))
         return;
     // some weird stuff going on here around struct Entity
     if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sax/"))
@@ -198,23 +263,23 @@ void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, cons
     if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/sot/"))
         return;
     // the std::vector is being passed to another class
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/sfx2/source/explorer/nochaos.cxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/sfx2/source/explorer/nochaos.cxx"))
         return;
     // ignore std::map and std::unordered_map, MSVC 2015 has problems with mixing these with std::unique_ptr
     auto tc = loplugin::TypeCheck(fieldDecl->getType());
     if (tc.Class("map").StdNamespace() || tc.Class("unordered_map").StdNamespace())
         return;
     // there is a loop in ~ImplPrnQueueList deleting stuff on a global data structure
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/vcl/inc/print.h"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/vcl/inc/print.h"))
         return;
     // painful linked list
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/basic/source/inc/runtime.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/basic/source/inc/runtime.hxx"))
         return;
     // not sure how the node management is working here
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/i18npool/source/localedata/saxparser.cxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/i18npool/source/localedata/saxparser.cxx"))
         return;
     // has a pointer that it only sometimes owns
-    if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/editeng/source/editeng/impedit.hxx"))
+    if (loplugin::isSamePathname(aFileName, SRCDIR "/editeng/source/editeng/impedit.hxx"))
         return;
 
     report(
@@ -229,21 +294,21 @@ void UseUniquePtr::CheckDeleteExpr(const CXXDestructorDecl* destructorDecl, cons
         << fieldDecl->getSourceRange();
 }
 
-void UseUniquePtr::CheckLoopDelete(const CXXDestructorDecl* destructorDecl, const Stmt* bodyStmt)
+void UseUniquePtr::CheckLoopDelete(const CXXMethodDecl* methodDecl, const Stmt* bodyStmt)
 {
     if (auto deleteExpr = dyn_cast<CXXDeleteExpr>(bodyStmt))
-        CheckLoopDelete(destructorDecl, deleteExpr);
+        CheckLoopDelete(methodDecl, deleteExpr);
     else if (auto compoundStmt = dyn_cast<CompoundStmt>(bodyStmt))
     {
         for (auto i = compoundStmt->body_begin(); i != compoundStmt->body_end(); ++i)
         {
             if (auto deleteExpr = dyn_cast<CXXDeleteExpr>(*i))
-                CheckLoopDelete(destructorDecl, deleteExpr);
+                CheckLoopDelete(methodDecl, deleteExpr);
         }
     }
 }
 
-void UseUniquePtr::CheckLoopDelete(const CXXDestructorDecl* destructorDecl, const CXXDeleteExpr* deleteExpr)
+void UseUniquePtr::CheckLoopDelete(const CXXMethodDecl* methodDecl, const CXXDeleteExpr* deleteExpr)
 {
     const MemberExpr* memberExpr = nullptr;
     const Expr* subExpr = deleteExpr->getArgument();
@@ -269,10 +334,10 @@ void UseUniquePtr::CheckLoopDelete(const CXXDestructorDecl* destructorDecl, cons
     if (!memberExpr)
         return;
 
-    CheckDeleteExpr(destructorDecl, deleteExpr, memberExpr, "rather manage with std::some_container<std::unique_ptr<T>>");
+    CheckDeleteExpr(methodDecl, deleteExpr, memberExpr, "rather manage with std::some_container<std::unique_ptr<T>>");
 }
 
-void UseUniquePtr::CheckRangedLoopDelete(const CXXDestructorDecl* destructorDecl, const CXXForRangeStmt* cxxForRangeStmt)
+void UseUniquePtr::CheckRangedLoopDelete(const CXXMethodDecl* methodDecl, const CXXForRangeStmt* cxxForRangeStmt)
 {
     CXXDeleteExpr const * deleteExpr = nullptr;
     if (auto compoundStmt = dyn_cast<CompoundStmt>(cxxForRangeStmt->getBody()))
@@ -288,7 +353,7 @@ void UseUniquePtr::CheckRangedLoopDelete(const CXXDestructorDecl* destructorDecl
     if (!fieldDecl)
         return;
 
-    CheckDeleteExpr(destructorDecl, deleteExpr, memberExpr, "rather manage with std::some_container<std::unique_ptr<T>>");
+    CheckDeleteExpr(methodDecl, deleteExpr, memberExpr, "rather manage with std::some_container<std::unique_ptr<T>>");
 }
 
 bool UseUniquePtr::VisitCompoundStmt(const CompoundStmt* compoundStmt)

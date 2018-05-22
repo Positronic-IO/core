@@ -327,9 +327,9 @@ void BackendImpl::packageRemoved(OUString const & url, OUString const & /*mediaT
     //Notify the backend responsible for processing the different media
     //types that this extension was removed.
     ExtensionBackendDb::Data data = readDataFromDb(url);
-    for (ExtensionBackendDb::Data::ITC_ITEMS i = data.items.begin(); i != data.items.end(); ++i)
+    for (auto const& item : data.items)
     {
-        m_xRootRegistry->packageRemoved(i->first, i->second);
+        m_xRootRegistry->packageRemoved(item.first, item.second);
     }
 
     if (m_backendDb.get())
@@ -1239,12 +1239,10 @@ Sequence< Reference<deployment::XPackage> > BackendImpl::PackageImpl::getBundle(
         Reference<deployment::XPackage> * pret = ret.getArray();
         sal_Int32 lower_end = 0;
         sal_Int32 upper_end = ret.getLength();
-        t_packagevec::const_iterator iPos( bundle.begin() );
-        t_packagevec::const_iterator const iEnd( bundle.end() );
-        for ( ; iPos != iEnd; ++iPos )
+        for (auto const& elem : bundle)
         {
             const Reference<deployment::XPackageTypeInfo> xPackageType(
-                (*iPos)->getPackageType() );
+                elem->getPackageType() );
             OSL_ASSERT( xPackageType.is() );
             if (xPackageType.is())
             {
@@ -1257,11 +1255,11 @@ Sequence< Reference<deployment::XPackage> > BackendImpl::PackageImpl::getBundle(
                      subType.equalsIgnoreAsciiCase( "vnd.sun.star.configuration-data")))
                 {
                     --upper_end;
-                    pret[ upper_end ] = *iPos;
+                    pret[ upper_end ] = elem;
                     continue;
                 }
             }
-            pret[ lower_end ] = *iPos;
+            pret[ lower_end ] = elem;
             ++lower_end;
         }
         OSL_ASSERT( lower_end == upper_end );
@@ -1573,11 +1571,10 @@ BackendImpl::PackageImpl::getPackagesFromDb(
 {
     std::vector<Reference<deployment::XPackage> > retVector;
 
-    typedef std::vector< std::pair<OUString, OUString> >::const_iterator ITC;
-    for (ITC i = m_dbData.items.begin(); i != m_dbData.items.end(); ++i)
+    for (auto const& item : m_dbData.items)
     {
         Reference<deployment::XPackage> xExtension =
-            bindBundleItem(i->first, i->second, true, m_identifier, xCmdEnv);
+            bindBundleItem(item.first, item.second, true, m_identifier, xCmdEnv);
         OSL_ASSERT(xExtension.is());
         if (xExtension.is())
             retVector.push_back(xExtension);
@@ -1591,14 +1588,14 @@ BackendImpl::PackageImpl::getPackagesFromDb(
 
 Reference<deployment::XPackageRegistry> create(
     Reference<deployment::XPackageRegistry> const & xRootRegistry,
-    OUString const & context, OUString const & cachePath, bool readOnly,
+    OUString const & context, OUString const & cachePath,
     Reference<XComponentContext> const & xComponentContext )
 {
     Sequence<Any> args(cachePath.isEmpty() ? 1 : 3 );
     args[ 0 ] <<= context;
     if (!cachePath.isEmpty()) {
         args[ 1 ] <<= cachePath;
-        args[ 2 ] <<= readOnly;
+        args[ 2 ] <<= false; // readOnly
     }
     return new BackendImpl( args, xComponentContext, xRootRegistry );
 }

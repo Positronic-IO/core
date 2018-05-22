@@ -7,14 +7,6 @@
 #ifndef CONFIG_FEATURES_H
 #define CONFIG_FEATURES_H
 
-/* JAVA
- *
- * Whether we have support for Java extensions, and use own Java
- * functionality).
- */
-
-#define HAVE_FEATURE_JAVA 0
-
 /* DESKTOP - Whether we have a "normal" desktop UI or not.
  *
  * Non-DESKTOP in practice means touch-based mobile devices, Android
@@ -121,7 +113,8 @@
  *
  * Prevents attempts by LibreOffice to write into its installation. That means
  * at least that no "system-wide" extensions can be added, if the location for
- * them is the traditional one. Experimental work in progress, not actually implemented.
+ * them is the traditional one right in the middle of the installation.
+ * Probably not completely implemented.
  */
 
 #define HAVE_FEATURE_READONLY_INSTALLSET 0

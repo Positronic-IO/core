@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/propertysequence.hxx>
 #include <comphelper/dispatchcommand.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <sfx2/charmapcontrol.hxx>
@@ -184,7 +183,7 @@ IMPL_STATIC_LINK(SfxCharmapCtrl, LoseFocusHdl, Control&, pItem, void)
 }
 
 
-IMPL_LINK(SfxCharmapCtrl, CharClickHdl, SvxCharView*, rView, void)
+IMPL_LINK(SfxCharmapCtrl, CharClickHdl, SvxCharViewControl*, rView, void)
 {
     rView->GrabFocus();
     rView->Invalidate();

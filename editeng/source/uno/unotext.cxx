@@ -219,7 +219,7 @@ SvxUnoTextRangeBase::SvxUnoTextRangeBase(const SvxEditSource* pSource, const Svx
 
     DBG_ASSERT(pSource,"SvxUnoTextRangeBase: I need a valid SvxEditSource!");
 
-    mpEditSource.reset( pSource->Clone() );
+    mpEditSource = pSource->Clone();
     if (mpEditSource != nullptr)
     {
         ESelection aSelection;
@@ -244,7 +244,8 @@ SvxUnoTextRangeBase::SvxUnoTextRangeBase(const SvxUnoTextRangeBase& rRange)
 {
     SolarMutexGuard aGuard;
 
-    mpEditSource.reset( rRange.mpEditSource ? rRange.mpEditSource->Clone() : nullptr );
+    if (rRange.mpEditSource)
+        mpEditSource = rRange.mpEditSource->Clone();
 
     SvxTextForwarder* pForwarder = mpEditSource ? mpEditSource->GetTextForwarder() : nullptr;
     if( pForwarder )
@@ -602,7 +603,7 @@ uno::Any SvxUnoTextRangeBase::_getPropertyValue(const OUString& PropertyName, sa
         const SfxItemPropertySimpleEntry* pMap = mpPropSet->getPropertyMapEntry(PropertyName );
         if( pMap )
         {
-            SfxItemSet* pAttribs = nullptr;
+            std::unique_ptr<SfxItemSet> pAttribs;
             if( nPara != -1 )
                 pAttribs = pForwarder->GetParaAttribs( nPara ).Clone();
             else
@@ -613,7 +614,6 @@ uno::Any SvxUnoTextRangeBase::_getPropertyValue(const OUString& PropertyName, sa
 
             getPropertyValue( pMap, aAny, *pAttribs );
 
-            delete pAttribs;
             return aAny;
         }
     }
@@ -633,14 +633,11 @@ void SvxUnoTextRangeBase::getPropertyValue( const SfxItemPropertySimpleEntry* pM
             uno::Reference< text::XTextRange > xAnchor( this );
 
             // get presentation string for field
-            Color* pTColor = nullptr;
-            Color* pFColor = nullptr;
+            boost::optional<Color> pTColor;
+            boost::optional<Color> pFColor;
 
             SvxTextForwarder* pForwarder = mpEditSource->GetTextForwarder();
             OUString aPresentation( pForwarder->CalcFieldValue( SvxFieldItem(*pData, EE_FEATURE_FIELD), maSelection.nStartPara, maSelection.nStartPos, pTColor, pFColor ) );
-
-            delete pTColor;
-            delete pFColor;
 
             uno::Reference< text::XTextField > xField( new SvxUnoTextField( xAnchor, aPresentation, pData ) );
             rAny <<= xField;
@@ -886,7 +883,7 @@ uno::Sequence< uno::Any > SvxUnoTextRangeBase::_getPropertyValues( const uno::Se
     SvxTextForwarder* pForwarder = mpEditSource ? mpEditSource->GetTextForwarder() : nullptr;
     if( pForwarder )
     {
-        SfxItemSet* pAttribs = nullptr;
+        std::unique_ptr<SfxItemSet> pAttribs;
         if( nPara != -1 )
             pAttribs = pForwarder->GetParaAttribs( nPara ).Clone();
         else
@@ -905,9 +902,6 @@ uno::Sequence< uno::Any > SvxUnoTextRangeBase::_getPropertyValues( const uno::Se
                 getPropertyValue( pMap, *pValues, *pAttribs );
             }
         }
-
-        delete pAttribs;
-
     }
 
     return aValues;
@@ -1277,12 +1271,9 @@ void SAL_CALL SvxUnoTextRangeBase::setAllPropertiesToDefault()
 
     if( pForwarder )
     {
-        PropertyEntryVector_t aEntries = mpPropSet->getPropertyMap().getPropertyEntries();
-        PropertyEntryVector_t::const_iterator aIt = aEntries.begin();
-        while( aIt != aEntries.end() )
+        for (auto & entry : mpPropSet->getPropertyMap().getPropertyEntries())
         {
-            _setPropertyToDefault( pForwarder, &(*aIt), -1 );
-            ++aIt;
+            _setPropertyToDefault( pForwarder, &entry, -1 );
         }
     }
 }
@@ -2298,9 +2289,9 @@ SvxDummyTextSource::~SvxDummyTextSource()
 {
 };
 
-SvxEditSource* SvxDummyTextSource::Clone() const
+std::unique_ptr<SvxEditSource> SvxDummyTextSource::Clone() const
 {
-    return new SvxDummyTextSource;
+    return std::unique_ptr<SvxEditSource>(new SvxDummyTextSource);
 }
 
 SvxTextForwarder* SvxDummyTextSource::GetTextForwarder()
@@ -2383,7 +2374,7 @@ void SvxDummyTextSource::QuickInsertLineBreak( const ESelection& )
 {
 };
 
-OUString SvxDummyTextSource::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, Color*&, Color*& )
+OUString SvxDummyTextSource::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, boost::optional<Color>&, boost::optional<Color>& )
 {
     return OUString();
 }

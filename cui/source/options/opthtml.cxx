@@ -20,7 +20,6 @@
 #include <svtools/langtab.hxx>
 #include <svtools/htmlcfg.hxx>
 #include "opthtml.hxx"
-#include <dialmgr.hxx>
 #include <sal/macros.h>
 
 
@@ -89,10 +88,10 @@ void OfaHtmlTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaHtmlTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaHtmlTabPage::Create( TabPageParent pParent,
                                            const SfxItemSet* rAttrSet )
 {
-    return VclPtr<OfaHtmlTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<OfaHtmlTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 bool OfaHtmlTabPage::FillItemSet( SfxItemSet* )

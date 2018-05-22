@@ -38,8 +38,8 @@ SearchResultsDlg::SearchResultsDlg( SfxBindings* _pBindings, vcl::Window* pParen
     pContainer->set_height_request(aControlSize.Height());
 
     mpList = VclPtr<SvSimpleTable>::Create(*pContainer);
-    long nTabs[] = {3, 0, 40, 60};
-    mpList->SetTabs(&nTabs[0]);
+    long nTabs[] = {0, 40, 60};
+    mpList->SetTabs(SAL_N_ELEMENTS(nTabs), nTabs);
     mpList->InsertHeaderEntry(ScResId(STR_SHEET) + "\t" + ScResId(STR_CELL) + "\t" + ScResId(STR_CONTENT));
     mpList->SetSelectHdl( LINK(this, SearchResultsDlg, ListSelectHdl) );
 }
@@ -107,17 +107,17 @@ void SearchResultsDlg::FillResults( ScDocument* pDoc, const ScRangeList &rMatche
             /* TODO: a CellNotes iterator would come handy and might speed
              * things up a little, though we only loop through the
              * search/replace result positions here. */
-            ScRange aRange( *rMatchedRanges[i] );
+            ScRange const & rRange( rMatchedRanges[i] );
             // Bear in mind that mostly the range is one address position
             // or a column or a row joined.
-            ScAddress aPos( aRange.aStart );
-            for ( ; aPos.Tab() <= aRange.aEnd.Tab(); aPos.IncTab())
+            ScAddress aPos( rRange.aStart );
+            for ( ; aPos.Tab() <= rRange.aEnd.Tab(); aPos.IncTab())
             {
                 if (aPos.Tab() >= nTabCount)
                     break;  // can this even happen? we just searched on existing sheets ...
-                for (aPos.SetCol( aRange.aStart.Col()); aPos.Col() <= aRange.aEnd.Col(); aPos.IncCol())
+                for (aPos.SetCol( rRange.aStart.Col()); aPos.Col() <= rRange.aEnd.Col(); aPos.IncCol())
                 {
-                    for (aPos.SetRow( aRange.aStart.Row()); aPos.Row() <= aRange.aEnd.Row(); aPos.IncRow())
+                    for (aPos.SetRow( rRange.aStart.Row()); aPos.Row() <= rRange.aEnd.Row(); aPos.IncRow())
                     {
                         const ScPostIt* pNote = pDoc->GetNote( aPos);
                         if (pNote)
@@ -133,7 +133,7 @@ void SearchResultsDlg::FillResults( ScDocument* pDoc, const ScRangeList &rMatche
     {
         for (size_t i = 0, n = nMatchMax; i < n; ++i)
         {
-            ScCellIterator aIter(pDoc, *rMatchedRanges[i]);
+            ScCellIterator aIter(pDoc, rMatchedRanges[i]);
             for (bool bHas = aIter.first(); bHas; bHas = aIter.next())
             {
                 ScAddress aPos = aIter.GetPos();

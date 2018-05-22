@@ -270,10 +270,11 @@ struct lcl_EqualsSoundFileName
     {
         // note: formerly this was a case insensitive search for all
         // platforms. It seems more sensible to do this platform-dependent
+        INetURLObject aURL(rStr);
 #if defined(_WIN32)
-        return maStr.equalsIgnoreAsciiCase( rStr );
+        return maStr.equalsIgnoreAsciiCase( aURL.GetBase() );
 #else
-        return maStr == rStr;
+        return maStr == aURL.GetBase();
 #endif
     }
 
@@ -286,9 +287,10 @@ bool lcl_findSoundInList( const ::std::vector< OUString > & rSoundList,
                           const OUString & rFileName,
                           ::std::vector< OUString >::size_type & rOutPosition )
 {
+    INetURLObject aURL(rFileName);
     ::std::vector< OUString >::const_iterator aIt =
           ::std::find_if( rSoundList.begin(), rSoundList.end(),
-                          lcl_EqualsSoundFileName( rFileName ));
+                          lcl_EqualsSoundFileName( aURL.GetBase()));
     if( aIt != rSoundList.end())
     {
         rOutPosition = ::std::distance( rSoundList.begin(), aIt );
@@ -731,14 +733,10 @@ void SlideTransitionPane::openSoundFileDialog()
     if( ! mpLB_SOUND->IsEnabled())
         return;
 
-    SdOpenSoundFileDialog aFileDialog(this);
+    SdOpenSoundFileDialog aFileDialog(GetFrameWeld());
 
-    OUString aFile;
     DBG_ASSERT( mpLB_SOUND->GetSelectedEntryPos() == 2,
                 "Dialog should only open when \"Other sound\" is selected" );
-    aFile = SvtPathOptions().GetWorkPath();
-
-    aFileDialog.SetPath( aFile );
 
     bool bValidSoundFile( false );
     bool bQuitLoop( false );
@@ -746,7 +744,7 @@ void SlideTransitionPane::openSoundFileDialog()
     while( ! bQuitLoop &&
            aFileDialog.Execute() == ERRCODE_NONE )
     {
-        aFile = aFileDialog.GetPath();
+        OUString aFile = aFileDialog.GetPath();
         tSoundListType::size_type nPos = 0;
         bValidSoundFile = lcl_findSoundInList( maSoundList, aFile, nPos );
 
@@ -808,11 +806,11 @@ impl::TransitionEffect SlideTransitionPane::getTransitionEffectFromControls() co
     // check first (aResult might be overwritten)
     if(  mpVS_TRANSITION_ICONS->IsEnabled() &&
         !mpVS_TRANSITION_ICONS->IsNoSelection() &&
-         mpVS_TRANSITION_ICONS->GetSelectItemId() > 0 )
+         mpVS_TRANSITION_ICONS->GetSelectedItemId() > 0 )
     {
         const sd::TransitionPresetList& rPresetList = sd::TransitionPreset::getTransitionPresetList();
         auto aSelected = rPresetList.begin();
-        std::advance( aSelected, mpVS_TRANSITION_ICONS->GetSelectItemId() - 1);
+        std::advance( aSelected, mpVS_TRANSITION_ICONS->GetSelectedItemId() - 1);
 
         if( mpLB_VARIANT->GetSelectedEntryPos() == LISTBOX_ENTRY_NOTFOUND )
         {
@@ -1046,7 +1044,7 @@ IMPL_LINK_NOARG(SlideTransitionPane, PlayButtonClicked, Button*, void)
 
 IMPL_LINK_NOARG(SlideTransitionPane, TransitionSelected, ValueSet *, void)
 {
-    updateVariants( mpVS_TRANSITION_ICONS->GetSelectItemId() - 1 );
+    updateVariants( mpVS_TRANSITION_ICONS->GetSelectedItemId() - 1 );
     applyToSelectedPages();
 }
 

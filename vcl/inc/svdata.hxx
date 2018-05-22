@@ -31,7 +31,6 @@
 #include <com/sun/star/i18n/XCharacterClassification.hpp>
 
 #include "vcleventlisteners.hxx"
-#include "impfontcache.hxx"
 #include "salwtype.hxx"
 #include "displayconnectiondispatch.hxx"
 
@@ -232,12 +231,12 @@ struct ImplSVCtrlData
     ImplTBDragMgr*          mpTBDragMgr = nullptr;          // DragMgr for ToolBox
     sal_uInt16              mnCheckStyle = 0;               // CheckBox-Style for ImageList-Update
     sal_uInt16              mnRadioStyle = 0;               // Radio-Style for ImageList-Update
-    sal_uLong               mnLastCheckFColor = 0;          // Last FaceColor for CheckImage
-    sal_uLong               mnLastCheckWColor = 0;          // Last WindowColor for CheckImage
-    sal_uLong               mnLastCheckLColor = 0;          // Last LightColor for CheckImage
-    sal_uLong               mnLastRadioFColor = 0;          // Last FaceColor for RadioImage
-    sal_uLong               mnLastRadioWColor = 0;          // Last WindowColor for RadioImage
-    sal_uLong               mnLastRadioLColor = 0;          // Last LightColor for RadioImage
+    Color                   mnLastCheckFColor;              // Last FaceColor for CheckImage
+    Color                   mnLastCheckWColor;              // Last WindowColor for CheckImage
+    Color                   mnLastCheckLColor;              // Last LightColor for CheckImage
+    Color                   mnLastRadioFColor;              // Last FaceColor for RadioImage
+    Color                   mnLastRadioWColor;              // Last WindowColor for RadioImage
+    Color                   mnLastRadioLColor;              // Last LightColor for RadioImage
     FieldUnitStringList*    mpFieldUnitStrings = nullptr;   // list with field units
     FieldUnitStringList*    mpCleanUnitStrings = nullptr;   // same list but with some "fluff" like spaces removed
 };

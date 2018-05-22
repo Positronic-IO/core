@@ -20,7 +20,6 @@
 #include <memory>
 #include <vcl/wrkwin.hxx>
 #include <tools/urlobj.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <unotools/pathoptions.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/dialoghelper.hxx>
@@ -92,7 +91,6 @@ SvxPatternTabPage::SvxPatternTabPage(  vcl::Window* pParent, const SfxItemSet& r
 
     m_pnPatternListState  ( nullptr ),
     m_pnColorListState    ( nullptr ),
-    m_aXPatternItem       ( OUString(), Graphic() ),
     m_aXFillAttr          ( rInAttrs.GetPool() ),
     m_rXFSet              ( m_aXFillAttr.GetItemSet() )
 {
@@ -118,7 +116,7 @@ SvxPatternTabPage::SvxPatternTabPage(  vcl::Window* pParent, const SfxItemSet& r
 
     // setting the output device
     m_rXFSet.Put( XFillStyleItem(drawing::FillStyle_BITMAP) );
-    m_rXFSet.Put( m_aXPatternItem );
+    m_rXFSet.Put( XFillBitmapItem(OUString(), Graphic()) );
 
     m_pBtnAdd->SetClickHdl( LINK( this, SvxPatternTabPage, ClickAddHdl_Impl ) );
     m_pBtnModify->SetClickHdl( LINK( this, SvxPatternTabPage, ClickModifyHdl_Impl ) );
@@ -212,7 +210,7 @@ bool SvxPatternTabPage::FillItemSet( SfxItemSet* _rOutAttrs )
     if(VALUESET_ITEM_NOTFOUND != nPos)
     {
         const XBitmapEntry* pXBitmapEntry = m_pPatternList->GetBitmap( static_cast<sal_uInt16>(nPos) );
-        const OUString aString( m_pPatternLB->GetItemText( m_pPatternLB->GetSelectItemId() ) );
+        const OUString aString( m_pPatternLB->GetItemText( m_pPatternLB->GetSelectedItemId() ) );
 
         _rOutAttrs->Put(XFillBitmapItem(aString, pXBitmapEntry->GetGraphicObject()));
     }
@@ -253,10 +251,10 @@ void SvxPatternTabPage::Reset( const SfxItemSet*  )
 }
 
 
-VclPtr<SfxTabPage> SvxPatternTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxPatternTabPage::Create( TabPageParent pWindow,
                                              const SfxItemSet* rSet )
 {
-    return VclPtr<SvxPatternTabPage>::Create( pWindow, *rSet );
+    return VclPtr<SvxPatternTabPage>::Create( pWindow.pParent, *rSet );
 }
 
 
@@ -298,7 +296,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ChangePatternHdl_Impl, ValueSet*, void)
     {
         BitmapColor aBack;
         BitmapColor aFront;
-        bool bIs8x8(isHistorical8x8(pGraphicObject->GetGraphic().GetBitmap(), aBack, aFront));
+        bool bIs8x8(isHistorical8x8(pGraphicObject->GetGraphic().GetBitmapEx(), aBack, aFront));
 
         m_pLbColor->SetNoSelection();
         m_pLbBackgroundColor->SetNoSelection();
@@ -358,7 +356,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickAddHdl_Impl, Button*, void)
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     assert(pFact && "Dialog creation failed!");
-    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
     assert(pDlg && "Dialog creation failed!");
     sal_uInt16         nError(1);
 
@@ -431,7 +429,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickAddHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxPatternTabPage, ClickModifyHdl_Impl, Button*, void)
 {
-    sal_uInt16 nId = m_pPatternLB->GetSelectItemId();
+    sal_uInt16 nId = m_pPatternLB->GetSelectedItemId();
     size_t nPos = m_pPatternLB->GetSelectItemPos();
 
     if ( nPos != VALUESET_ITEM_NOTFOUND )
@@ -456,7 +454,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickModifyHdl_Impl, Button*, void)
 IMPL_LINK_NOARG(SvxPatternTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void)
 {
     size_t nPos = m_pPatternLB->GetSelectItemPos();
-    sal_Int32 nId = m_pPatternLB->GetSelectItemId();
+    sal_Int32 nId = m_pPatternLB->GetSelectedItemId();
 
     if ( nPos != VALUESET_ITEM_NOTFOUND )
     {
@@ -465,7 +463,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void)
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
         assert(pDlg && "Dialog creation failed!");
 
         bool bLoop = true;
@@ -499,7 +497,7 @@ IMPL_LINK_NOARG(SvxPatternTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void)
 
 IMPL_LINK_NOARG(SvxPatternTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pPatternLB->GetSelectItemId();
+    sal_uInt16 nId = m_pPatternLB->GetSelectedItemId();
     size_t nPos = m_pPatternLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -550,7 +548,6 @@ void SvxPatternTabPage::ChangeColor_Impl()
     m_pCtlPreview->Invalidate();
 }
 
-
 void SvxPatternTabPage::PointChanged( vcl::Window* pWindow, RectPoint )
 {
     if( pWindow == m_pCtlPixel )
@@ -562,6 +559,18 @@ void SvxPatternTabPage::PointChanged( vcl::Window* pWindow, RectPoint )
         m_pCtlPreview->SetAttributes( m_aXFillAttr.GetItemSet() );
         m_pCtlPreview->Invalidate();
     }
+
+    m_pPatternLB->SetNoSelection();
+}
+
+void SvxPatternTabPage::PointChanged( weld::DrawingArea*, RectPoint )
+{
+    m_pBitmapCtl->SetBmpArray( m_pCtlPixel->GetBitmapPixelPtr() );
+
+    // get bitmap and display it
+    m_rXFSet.Put(XFillBitmapItem(OUString(), Graphic(m_pBitmapCtl->GetBitmapEx())));
+    m_pCtlPreview->SetAttributes( m_aXFillAttr.GetItemSet() );
+    m_pCtlPreview->Invalidate();
 
     m_pPatternLB->SetNoSelection();
 }

@@ -271,7 +271,7 @@ rtl::Reference< sdr::overlay::OverlayManager > const & SdrPaintWindow::GetOverla
 tools::Rectangle SdrPaintWindow::GetVisibleArea() const
 {
     Size aVisSizePixel(GetOutputDevice().GetOutputSizePixel());
-    return tools::Rectangle(GetOutputDevice().PixelToLogic(tools::Rectangle(Point(0,0), aVisSizePixel)));
+    return GetOutputDevice().PixelToLogic(tools::Rectangle(Point(0,0), aVisSizePixel));
 }
 
 bool SdrPaintWindow::OutputToRecordingMetaFile() const
@@ -292,7 +292,7 @@ void SdrPaintWindow::PreparePreRenderDevice()
     {
         if(!mpPreRenderDevice)
         {
-            mpPreRenderDevice = new SdrPreRenderDevice(*mpOutputDevice.get());
+            mpPreRenderDevice.reset(new SdrPreRenderDevice(*mpOutputDevice));
         }
     }
     else
@@ -308,11 +308,7 @@ void SdrPaintWindow::PreparePreRenderDevice()
 
 void SdrPaintWindow::DestroyPreRenderDevice()
 {
-    if(mpPreRenderDevice)
-    {
-        delete mpPreRenderDevice;
-        mpPreRenderDevice = nullptr;
-    }
+    mpPreRenderDevice.reset();
 }
 
 void SdrPaintWindow::OutputPreRenderDevice(const vcl::Region& rExpandedRegion)

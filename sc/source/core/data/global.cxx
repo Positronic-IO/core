@@ -43,6 +43,7 @@
 #include <time.h>
 #include <numeric>
 #include <svx/svdmodel.hxx>
+#include <svtools/colorcfg.hxx>
 
 #include <i18nlangtag/mslangid.hxx>
 #include <com/sun/star/lang/Locale.hpp>
@@ -85,7 +86,6 @@ ScAutoFormat*   ScGlobal::pAutoFormat = nullptr;
 LegacyFuncCollection* ScGlobal::pLegacyFuncCollection = nullptr;
 ScUnoAddInCollection* ScGlobal::pAddInCollection = nullptr;
 ScUserList*     ScGlobal::pUserList = nullptr;
-std::map<const char*, OUString>* ScGlobal::pRscString = nullptr;
 LanguageType    ScGlobal::eLnge = LANGUAGE_SYSTEM;
 css::lang::Locale*     ScGlobal::pLocale = nullptr;
 SvtSysLocale*   ScGlobal::pSysLocale = nullptr;
@@ -104,7 +104,6 @@ OUString*       ScGlobal::pStrClipDocName = nullptr;
 SvxBrushItem*   ScGlobal::pEmptyBrushItem = nullptr;
 SvxBrushItem*   ScGlobal::pButtonBrushItem = nullptr;
 SvxBrushItem*   ScGlobal::pEmbeddedBrushItem = nullptr;
-SvxBrushItem*   ScGlobal::pProtectedBrushItem = nullptr;
 
 ScFunctionList* ScGlobal::pStarCalcFunctionList = nullptr;
 ScFunctionMgr*  ScGlobal::pStarCalcFunctionMgr  = nullptr;
@@ -310,13 +309,6 @@ void ScGlobal::SetUserList( const ScUserList* pNewList )
     }
 }
 
-const OUString& ScGlobal::GetRscString(const char* pResId)
-{
-    if (pRscString->find(pResId) == pRscString->end())
-        (*pRscString)[pResId] = ScResId(pResId);
-    return (*pRscString)[pResId];
-}
-
 OUString ScGlobal::GetErrorString(FormulaError nErr)
 {
     const char* pErrNumber;
@@ -344,9 +336,9 @@ OUString ScGlobal::GetErrorString(FormulaError nErr)
         case FormulaError::IllegalFPOperation:
             return ScCompiler::GetNativeSymbol(ocErrNum);
         default:
-            return GetRscString(STR_ERROR_STR) + OUString::number( static_cast<int>(nErr) );
+            return ScResId(STR_ERROR_STR) + OUString::number( static_cast<int>(nErr) );
     }
-    return GetRscString(pErrNumber);
+    return ScResId(pErrNumber);
 }
 
 OUString ScGlobal::GetLongErrorString(FormulaError nErr)
@@ -433,7 +425,7 @@ OUString ScGlobal::GetLongErrorString(FormulaError nErr)
             pErrNumber = STR_ERROR_STR;
         break;
     }
-    return GetRscString(pErrNumber);
+    return ScResId(pErrNumber);
 }
 
 SvxBrushItem* ScGlobal::GetButtonBrushItem()
@@ -462,12 +454,9 @@ void ScGlobal::Init()
     pCharClass = pSysLocale->GetCharClassPtr();
     pLocaleData = pSysLocale->GetLocaleDataPtr();
 
-    pRscString = new std::map<const char*, OUString>;
-
     pEmptyBrushItem = new SvxBrushItem( COL_TRANSPARENT, ATTR_BACKGROUND );
     pButtonBrushItem = new SvxBrushItem( Color(), ATTR_BACKGROUND );
     pEmbeddedBrushItem = new SvxBrushItem( COL_LIGHTCYAN, ATTR_BACKGROUND );
-    pProtectedBrushItem = new SvxBrushItem( COL_LIGHTGRAY, ATTR_BACKGROUND );
 
     InitPPT();
     //ScCompiler::InitSymbolsNative();
@@ -552,7 +541,6 @@ void ScGlobal::Clear()
     DELETEZ(pLegacyFuncCollection);
     DELETEZ(pAddInCollection);
     DELETEZ(pUserList);
-    DELETEZ(pRscString);
     DELETEZ(pStarCalcFunctionList); // Destroy before ResMgr!
     DELETEZ(pStarCalcFunctionMgr);
     ScParameterClassification::Exit();
@@ -562,7 +550,6 @@ void ScGlobal::Clear()
     DELETEZ(pEmptyBrushItem);
     DELETEZ(pButtonBrushItem);
     DELETEZ(pEmbeddedBrushItem);
-    DELETEZ(pProtectedBrushItem);
     DELETEZ(pEnglishFormatter);
     DELETEZ(pCaseTransliteration);
     DELETEZ(pTransliteration);

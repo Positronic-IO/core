@@ -31,7 +31,6 @@
 #include <editeng/wghtitem.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/zforlist.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -43,7 +42,6 @@
 #include <attrib.hxx>
 #include <zforauto.hxx>
 #include <global.hxx>
-#include <globstr.hrc>
 #include <autoform.hxx>
 #include <autofmt.hxx>
 #include <scresid.hxx>

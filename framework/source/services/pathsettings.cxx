@@ -170,7 +170,7 @@ private:
     /** helper to listen for configuration changes without ownership cycle problems */
     css::uno::Reference< css::util::XChangesListener > m_xCfgNewListener;
 
-    ::cppu::OPropertyArrayHelper* m_pPropHelp;
+    std::unique_ptr<::cppu::OPropertyArrayHelper> m_pPropHelp;
 
 public:
 
@@ -468,8 +468,7 @@ void SAL_CALL PathSettings::disposing()
     m_xCfgNew.clear();
     m_xCfgNewListener.clear();
 
-    delete m_pPropHelp;
-    m_pPropHelp = nullptr;
+    m_pPropHelp.reset();
 }
 
 css::uno::Any SAL_CALL PathSettings::queryInterface( const css::uno::Type& _rType )
@@ -683,27 +682,22 @@ void PathSettings::impl_storePath(const PathSettings::PathInfo& aPath)
 void PathSettings::impl_mergeOldUserPaths(      PathSettings::PathInfo& rPath,
                                           const std::vector<OUString>& lOld )
 {
-    std::vector<OUString>::const_iterator pIt;
-    for (  pIt  = lOld.begin();
-           pIt != lOld.end();
-         ++pIt                )
+    for (auto const& old : lOld)
     {
-        const OUString& sOld = *pIt;
-
         if (rPath.bIsSinglePath)
         {
             SAL_WARN_IF(lOld.size()>1, "fwk", "PathSettings::impl_mergeOldUserPaths(): Single path has more than one path value inside old configuration (Common.xcu)!");
-            if ( rPath.sWritePath != sOld )
-               rPath.sWritePath = sOld;
+            if ( rPath.sWritePath != old )
+               rPath.sWritePath = old;
         }
         else
         {
             if (
-                (  std::find(rPath.lInternalPaths.begin(), rPath.lInternalPaths.end(), sOld) == rPath.lInternalPaths.end()) &&
-                (  std::find(rPath.lUserPaths.begin(), rPath.lUserPaths.end(), sOld)     == rPath.lUserPaths.end()    ) &&
-                (  rPath.sWritePath != sOld                                     )
+                (  std::find(rPath.lInternalPaths.begin(), rPath.lInternalPaths.end(), old) == rPath.lInternalPaths.end()) &&
+                (  std::find(rPath.lUserPaths.begin(), rPath.lUserPaths.end(), old)     == rPath.lUserPaths.end()    ) &&
+                (  rPath.sWritePath != old                                     )
                )
-               rPath.lUserPaths.push_back(sOld);
+               rPath.lUserPaths.push_back(old);
         }
     }
 }
@@ -936,20 +930,15 @@ void PathSettings::impl_subst(std::vector<OUString>& lVals   ,
                               const css::uno::Reference< css::util::XStringSubstitution >& xSubst  ,
                                     bool                                               bReSubst)
 {
-    std::vector<OUString>::iterator pIt;
-
-    for (  pIt  = lVals.begin();
-           pIt != lVals.end();
-         ++pIt                 )
+    for (auto & old : lVals)
     {
-        const OUString& sOld = *pIt;
-              OUString  sNew;
+        OUString  sNew;
         if (bReSubst)
-            sNew = xSubst->reSubstituteVariables(sOld);
+            sNew = xSubst->reSubstituteVariables(old);
         else
-            sNew = xSubst->substituteVariables(sOld, false);
+            sNew = xSubst->substituteVariables(old, false);
 
-        *pIt = sNew;
+        old = sNew;
     }
 }
 
@@ -968,28 +957,23 @@ void PathSettings::impl_subst(PathSettings::PathInfo& aPath   ,
 
 OUString PathSettings::impl_convertPath2OldStyle(const PathSettings::PathInfo& rPath) const
 {
-    std::vector<OUString>::const_iterator pIt;
     std::vector<OUString> lTemp;
     lTemp.reserve(rPath.lInternalPaths.size() + rPath.lUserPaths.size() + 1);
 
-    for (  pIt  = rPath.lInternalPaths.begin();
-           pIt != rPath.lInternalPaths.end();
-         ++pIt                                 )
+    for (auto const& internalPath : rPath.lInternalPaths)
     {
-        lTemp.push_back(*pIt);
+        lTemp.push_back(internalPath);
     }
-    for (  pIt  = rPath.lUserPaths.begin();
-           pIt != rPath.lUserPaths.end();
-         ++pIt                             )
+    for (auto const& userPath : rPath.lUserPaths)
     {
-        lTemp.push_back(*pIt);
+        lTemp.push_back(userPath);
     }
 
     if (!rPath.sWritePath.isEmpty())
         lTemp.push_back(rPath.sWritePath);
 
     OUStringBuffer sPathVal(256);
-    for (  pIt  = lTemp.begin();
+    for (  auto pIt  = lTemp.begin();
            pIt != lTemp.end();
                                )
     {
@@ -1024,15 +1008,12 @@ void PathSettings::impl_purgeKnownPaths(PathSettings::PathInfo& rPath,
 
     // Erase items in the internal path list from lList.
     // Also erase items in the internal path list from the user path list.
-    for (  pIt  = rPath.lInternalPaths.begin();
-           pIt != rPath.lInternalPaths.end();
-         ++pIt                                 )
+    for (auto const& internalPath : rPath.lInternalPaths)
     {
-        const OUString& rItem = *pIt;
-        std::vector<OUString>::iterator pItem = std::find(lList.begin(), lList.end(), rItem);
+        std::vector<OUString>::iterator pItem = std::find(lList.begin(), lList.end(), internalPath);
         if (pItem != lList.end())
             lList.erase(pItem);
-        pItem = std::find(rPath.lUserPaths.begin(), rPath.lUserPaths.end(), rItem);
+        pItem = std::find(rPath.lUserPaths.begin(), rPath.lUserPaths.end(), internalPath);
         if (pItem != rPath.lUserPaths.end())
             rPath.lUserPaths.erase(pItem);
     }
@@ -1045,8 +1026,7 @@ void PathSettings::impl_purgeKnownPaths(PathSettings::PathInfo& rPath,
         std::vector<OUString>::iterator pItem = std::find(lList.begin(), lList.end(), rItem);
         if ( pItem == lList.end() )
         {
-            rPath.lUserPaths.erase(pIt);
-            pIt = rPath.lUserPaths.begin();
+            pIt = rPath.lUserPaths.erase(pIt);
         }
         else
         {
@@ -1055,12 +1035,9 @@ void PathSettings::impl_purgeKnownPaths(PathSettings::PathInfo& rPath,
     }
 
     // Erase items in the user path list from lList.
-    for (  pIt  = rPath.lUserPaths.begin();
-           pIt != rPath.lUserPaths.end();
-         ++pIt                             )
+    for (auto const& userPath : rPath.lUserPaths)
     {
-        const OUString& rItem = *pIt;
-        std::vector<OUString>::iterator pItem = std::find(lList.begin(), lList.end(), rItem);
+        std::vector<OUString>::iterator pItem = std::find(lList.begin(), lList.end(), userPath);
         if (pItem != lList.end())
             lList.erase(pItem);
     }
@@ -1080,12 +1057,9 @@ void PathSettings::impl_rebuildPropertyDescriptor()
     sal_Int32 i = 0;
     m_lPropDesc.realloc(c*IDGROUP_COUNT);
 
-    PathHash::const_iterator pIt;
-    for (  pIt  = m_lPaths.begin();
-           pIt != m_lPaths.end();
-         ++pIt                     )
+    for (auto const& path : m_lPaths)
     {
-        const PathSettings::PathInfo& rPath = pIt->second;
+        const PathSettings::PathInfo& rPath = path.second;
               css::beans::Property*   pProp = nullptr;
 
         pProp             = &(m_lPropDesc[i]);
@@ -1124,8 +1098,7 @@ void PathSettings::impl_rebuildPropertyDescriptor()
         ++i;
     }
 
-    delete m_pPropHelp;
-    m_pPropHelp = new ::cppu::OPropertyArrayHelper(m_lPropDesc, false); // false => not sorted ... must be done inside helper
+    m_pPropHelp.reset(new ::cppu::OPropertyArrayHelper(m_lPropDesc, false)); // false => not sorted ... must be done inside helper
 
     // <- SAFE
 }
@@ -1201,12 +1174,9 @@ void PathSettings::impl_setPathValue(      sal_Int32      nID ,
                 }
                 else
                 {
-                    std::vector<OUString>::const_iterator pIt;
-                    for (  pIt  = lList.begin();
-                           pIt != lList.end();
-                         ++pIt                 )
+                    for (auto const& elem : lList)
                     {
-                        aChangePath.lUserPaths.push_back(*pIt);
+                        aChangePath.lUserPaths.push_back(elem);
                     }
                 }
              }
@@ -1274,13 +1244,9 @@ void PathSettings::impl_setPathValue(      sal_Int32      nID ,
 
 bool PathSettings::impl_isValidPath(const std::vector<OUString>& lPath) const
 {
-    std::vector<OUString>::const_iterator pIt;
-    for (  pIt  = lPath.begin();
-           pIt != lPath.end();
-         ++pIt                 )
+    for (auto const& path : lPath)
     {
-        const OUString& rVal = *pIt;
-        if (! impl_isValidPath(rVal))
+        if (! impl_isValidPath(path))
             return false;
     }
 
@@ -1387,8 +1353,7 @@ void SAL_CALL PathSettings::getFastPropertyValue(css::uno::Any& aValue ,
 
 css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL PathSettings::getPropertySetInfo()
 {
-    return css::uno::Reference< css::beans::XPropertySetInfo >(
-            ::cppu::OPropertySetHelper::createPropertySetInfo(getInfoHelper()));
+    return ::cppu::OPropertySetHelper::createPropertySetInfo(getInfoHelper());
 }
 
 css::uno::Reference< css::util::XStringSubstitution > PathSettings::fa_getSubstitution()
@@ -1402,8 +1367,8 @@ css::uno::Reference< css::util::XStringSubstitution > PathSettings::fa_getSubsti
     if (! xSubst.is())
     {
         // create the needed substitution service.
-        // We must replace all used variables inside readed path values.
-        // In case we can't do so ... the whole office can't work really.
+        // We must replace all used variables inside read path values.
+        // In case we can't do so... the whole office can't work really.
         // That's why it seems to be OK to throw a RuntimeException then.
         xSubst = css::util::PathSubstitution::create(m_xContext);
 

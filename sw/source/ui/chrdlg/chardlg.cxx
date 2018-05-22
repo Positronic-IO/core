@@ -21,7 +21,6 @@
 #include <hintids.hxx>
 
 #include <comphelper/fileurl.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/urihelper.hxx>
 #include <svl/stritem.hxx>
 #include <editeng/flstitem.hxx>
@@ -77,7 +76,7 @@ SwCharDlg::SwCharDlg(vcl::Window* pParent, SwView& rVw, const SfxItemSet& rCoreS
     m_nCharPosId = AddTabPage("position", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_POSITION ), nullptr );
     m_nCharTwoId = AddTabPage("asianlayout", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_TWOLINES ), nullptr );
     m_nCharUrlId = AddTabPage("hyperlink", SwCharURLPage::Create, nullptr);
-    m_nCharBgdId = AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BACKGROUND ), nullptr );
+    m_nCharBgdId = AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), nullptr );
     m_nCharBrdId = AddTabPage("borders", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BORDER ), nullptr );
 
     SvtCJKOptions aCJKOptions;
@@ -296,16 +295,16 @@ bool SwCharURLPage::FillItemSet(SfxItemSet* rSet)
     return bModified;
 }
 
-VclPtr<SfxTabPage> SwCharURLPage::Create(  vcl::Window* pParent,
+VclPtr<SfxTabPage> SwCharURLPage::Create(  TabPageParent pParent,
                                            const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SwCharURLPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SwCharURLPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 IMPL_LINK_NOARG(SwCharURLPage, InsertFileHdl, Button*, void)
 {
     FileDialogHelper aDlgHelper(TemplateDescription::FILEOPEN_SIMPLE,
-                                FileDialogFlags::NONE, this);
+                                FileDialogFlags::NONE, GetFrameWeld());
     if( aDlgHelper.Execute() == ERRCODE_NONE )
     {
         Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();

@@ -123,6 +123,14 @@ public interface TileProvider {
     void postUnoCommand(String command, String arguments);
 
     /**
+     * This is the actual reference to the function in LOK, used for getting notified when uno:save event finishes
+     * @param command
+     * @param arguments
+     * @param notifyWhenFinished
+     */
+    void postUnoCommand(String command, String arguments, boolean notifyWhenFinished);
+
+    /**
      * Send text selection start coordinate.
      * @param documentCoordinate
      */
@@ -134,6 +142,19 @@ public interface TileProvider {
      */
     void setTextSelectionEnd(PointF documentCoordinate);
 
+    /**
+     * get selected text
+     * @param mimeType
+     */
+    String getTextSelection(String mimeType);
+
+    /**
+     * copy
+     * @param mimeType
+     * @param data
+     * @return
+     */
+    boolean paste(String mimeType, String data);
     /**
      * Send text selection reset coordinate.
      * @param documentCoordinate
@@ -149,6 +170,11 @@ public interface TileProvider {
      * Send a request to change end the change of graphic selection..
      */
     void setGraphicSelectionEnd(PointF documentCoordinate);
+
+    /**
+     * Set the new page size of the document when changed
+     */
+    void setDocumentSize(int pageWidth, int pageHeight);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

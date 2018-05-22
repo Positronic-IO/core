@@ -38,10 +38,6 @@
 
 #include <tools/diagnose_ex.h>
 
-#include <comphelper/container.hxx>
-#include <comphelper/numbers.hxx>
-#include <comphelper/processfactory.hxx>
-
 using namespace dbtools;
 
 namespace frm
@@ -451,7 +447,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
 }

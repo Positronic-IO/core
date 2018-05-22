@@ -91,8 +91,6 @@ public:
     SVX_DLLPRIVATE SdrTextVertAdjust GetTextVerticalAdjust() const;
     SdrTextHorzAdjust GetTextHorizontalAdjust() const;
 
-    SVX_DLLPRIVATE virtual void SetModel(SdrModel* pNewModel) override;
-
     SVX_DLLPRIVATE void merge( sal_Int32 nColumnSpan, sal_Int32 nRowSpan );
     SVX_DLLPRIVATE void mergeContent( const CellRef& xSourceCell );
     SVX_DLLPRIVATE void replaceContentAndFormating( const CellRef& xSourceCell );
@@ -193,7 +191,7 @@ protected:
 
 private:
     /// @throws css::uno::RuntimeException
-    SVX_DLLPRIVATE Cell( SdrTableObj& rTableObj, OutlinerParaObject* pOutlinerParaObject );
+    SVX_DLLPRIVATE Cell( SdrTableObj& rTableObj );
     SVX_DLLPRIVATE virtual ~Cell() throw() override;
 
     Cell(Cell const &) = delete;
@@ -201,7 +199,7 @@ private:
 
     const SvxItemPropertySet* mpPropSet;
 
-    sdr::properties::TextProperties*    mpProperties;
+    std::unique_ptr<sdr::properties::TextProperties> mpProperties;
 
     css::table::CellContentType mnCellContentType;
 

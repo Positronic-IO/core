@@ -22,7 +22,6 @@
 #include <vector>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/svdetc.hxx>
 #include <svx/svdoole2.hxx>
 #include <svx/svdograf.hxx>
@@ -100,7 +99,7 @@ css::uno::Reference< css::datatransfer::XTransferable > View::CreateClipboardDat
     // #112978# need to use GetAllMarkedBoundRect instead of GetAllMarkedRect to get
     // fat lines correctly
     const ::tools::Rectangle                 aMarkRect( GetAllMarkedBoundRect() );
-    TransferableObjectDescriptor    aObjDesc;
+    std::unique_ptr<TransferableObjectDescriptor> pObjDesc(new TransferableObjectDescriptor);
     SdrOle2Obj*                     pSdrOleObj = nullptr;
     SdrPageView*                    pPgView = GetSdrPageView();
     SdPage*                         pOldPage = pPgView ? static_cast<SdPage*>( pPgView->GetPage() ) : nullptr;
@@ -131,17 +130,17 @@ css::uno::Reference< css::datatransfer::XTransferable > View::CreateClipboardDat
     }
 
     if( pSdrOleObj )
-        SvEmbedTransferHelper::FillTransferableObjectDescriptor( aObjDesc, pSdrOleObj->GetObjRef(), pSdrOleObj->GetGraphic(), pSdrOleObj->GetAspect() );
+        SvEmbedTransferHelper::FillTransferableObjectDescriptor( *pObjDesc, pSdrOleObj->GetObjRef(), pSdrOleObj->GetGraphic(), pSdrOleObj->GetAspect() );
     else
-        pTransferable->GetWorkDocument()->GetDocSh()->FillTransferableObjectDescriptor( aObjDesc );
+        pTransferable->GetWorkDocument()->GetDocSh()->FillTransferableObjectDescriptor( *pObjDesc );
 
     if( mpDocSh )
-        aObjDesc.maDisplayName = mpDocSh->GetMedium()->GetURLObject().GetURLNoPass();
+        pObjDesc->maDisplayName = mpDocSh->GetMedium()->GetURLObject().GetURLNoPass();
 
-    aObjDesc.maSize = aMarkRect.GetSize();
+    pObjDesc->maSize = aMarkRect.GetSize();
 
     pTransferable->SetStartPos( aMarkRect.TopLeft() );
-    pTransferable->SetObjectDescriptor( aObjDesc );
+    pTransferable->SetObjectDescriptor( std::move(pObjDesc) );
     pTransferable->CopyToClipboard( mpViewSh->GetActiveWindow() );
 
     return xRet;
@@ -154,7 +153,7 @@ css::uno::Reference< css::datatransfer::XTransferable > View::CreateDragDataObje
 
     SD_MOD()->pTransferDrag = pTransferable;
 
-    TransferableObjectDescriptor    aObjDesc;
+    std::unique_ptr<TransferableObjectDescriptor> pObjDesc(new TransferableObjectDescriptor);
     OUString                        aDisplayName;
     SdrOle2Obj*                     pSdrOleObj = nullptr;
 
@@ -180,16 +179,16 @@ css::uno::Reference< css::datatransfer::XTransferable > View::CreateDragDataObje
         aDisplayName = mpDocSh->GetMedium()->GetURLObject().GetURLNoPass();
 
     if( pSdrOleObj )
-        SvEmbedTransferHelper::FillTransferableObjectDescriptor( aObjDesc, pSdrOleObj->GetObjRef(), pSdrOleObj->GetGraphic(), pSdrOleObj->GetAspect() );
+        SvEmbedTransferHelper::FillTransferableObjectDescriptor( *pObjDesc, pSdrOleObj->GetObjRef(), pSdrOleObj->GetGraphic(), pSdrOleObj->GetAspect() );
     else if (mpDocSh)
-        mpDocSh->FillTransferableObjectDescriptor( aObjDesc );
+        mpDocSh->FillTransferableObjectDescriptor( *pObjDesc );
 
-    aObjDesc.maSize = GetAllMarkedRect().GetSize();
-    aObjDesc.maDragStartPos = rDragPos;
-    aObjDesc.maDisplayName = aDisplayName;
+    pObjDesc->maSize = GetAllMarkedRect().GetSize();
+    pObjDesc->maDragStartPos = rDragPos;
+    pObjDesc->maDisplayName = aDisplayName;
 
     pTransferable->SetStartPos( rDragPos );
-    pTransferable->SetObjectDescriptor( aObjDesc );
+    pTransferable->SetObjectDescriptor( std::move(pObjDesc) );
     pTransferable->StartDrag( &rWindow, DND_ACTION_COPYMOVE | DND_ACTION_LINK );
 
     return xRet;
@@ -199,22 +198,21 @@ css::uno::Reference< css::datatransfer::XTransferable > View::CreateSelectionDat
 {
     SdTransferable*                 pTransferable = new SdTransferable( &mrDoc, pWorkView, true );
     css::uno::Reference< css::datatransfer::XTransferable > xRet( pTransferable );
-    TransferableObjectDescriptor    aObjDesc;
+    std::unique_ptr<TransferableObjectDescriptor> pObjDesc(new TransferableObjectDescriptor);
     const ::tools::Rectangle                 aMarkRect( GetAllMarkedRect() );
-    OUString                        aDisplayName;
 
     SD_MOD()->pTransferSelection = pTransferable;
 
     if( mpDocSh )
     {
-        aDisplayName = mpDocSh->GetMedium()->GetURLObject().GetURLNoPass();
-        mpDocSh->FillTransferableObjectDescriptor( aObjDesc );
+        mpDocSh->FillTransferableObjectDescriptor( *pObjDesc );
+        pObjDesc->maDisplayName = mpDocSh->GetMedium()->GetURLObject().GetURLNoPass();
     }
 
-    aObjDesc.maSize = aMarkRect.GetSize();
+    pObjDesc->maSize = aMarkRect.GetSize();
 
     pTransferable->SetStartPos( aMarkRect.TopLeft() );
-    pTransferable->SetObjectDescriptor( aObjDesc );
+    pTransferable->SetObjectDescriptor( std::move(pObjDesc) );
     pTransferable->CopyToSelection( &rWindow );
 
     return xRet;
@@ -264,7 +262,7 @@ void View::DoCopy()
     }
 }
 
-void View::DoPaste (vcl::Window const * pWindow)
+void View::DoPaste (::sd::Window* pWindow)
 {
     TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( mpViewSh->GetActiveWindow() ) );
     if( !aDataHelper.GetTransferable().is() )
@@ -315,17 +313,8 @@ void View::DoPaste (vcl::Window const * pWindow)
     }
     else
     {
-        Point       aPos;
         sal_Int8    nDnDAction = DND_ACTION_COPY;
-
-        if( pWindow )
-        {
-            if (comphelper::LibreOfficeKit::isActive())
-                aPos = ::tools::Rectangle(aPos, GetSdrPageView()->GetPage()->GetSize()).Center();
-            else
-                aPos = pWindow->PixelToLogic( ::tools::Rectangle( aPos, pWindow->GetOutputSizePixel() ).Center() );
-        }
-
+        Point aPos = pWindow->GetVisibleCenter();
         DrawViewShell* pDrViewSh = static_cast<DrawViewShell*>( mpDocSh->GetViewShell() );
 
         if (pDrViewSh != nullptr)
@@ -870,7 +859,7 @@ bool View::GetExchangeList (std::vector<OUString> &rExchangeList,
         OUString aNewName = *pIter;
 
         if( nType == 0  || nType == 2 )
-            bNameOK = mpDocSh->CheckPageName(mpViewSh->GetActiveWindow(), aNewName);
+            bNameOK = mpDocSh->CheckPageName(mpViewSh->GetFrameWeld(), aNewName);
 
         if( bNameOK && ( nType == 1  || nType == 2 ) )
         {
@@ -880,7 +869,7 @@ bool View::GetExchangeList (std::vector<OUString> &rExchangeList,
                 OUString aDesc(SdResId(STR_DESC_NAMEGROUP));
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact ? pFact->CreateSvxNameDialog(mpViewSh->GetActiveWindow(), aNewName, aDesc) : nullptr);
+                ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact ? pFact->CreateSvxNameDialog(mpViewSh->GetFrameWeld(), aNewName, aDesc) : nullptr);
 
                 if (pDlg)
                 {

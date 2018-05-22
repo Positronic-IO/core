@@ -18,7 +18,6 @@
  */
 
 #include <comphelper/string.hxx>
-#include <dialmgr.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/module.hxx>
 #include <swpossizetabpage.hxx>
@@ -106,8 +105,9 @@ SvxCaptionTabPage::SvxCaptionTabPage(vcl::Window* pParent, const SfxItemSet& rIn
 
     ListBox *pLineTypes = get<ListBox>("linetypes");
     assert(pLineTypes->GetEntryCount() == 3);
+    std::vector<OUString> aLineTypes;
     for (int i = 0;  i < 3; ++i)
-        m_aLineTypes.push_back(pLineTypes->GetEntry(i));
+        aLineTypes.push_back(pLineTypes->GetEntry(i));
 
     get(m_pFT_LAENGE, "lengthft");
     get(m_pMF_LAENGE, "length");
@@ -126,9 +126,9 @@ SvxCaptionTabPage::SvxCaptionTabPage(vcl::Window* pParent, const SfxItemSet& rIn
     m_pCT_CAPTTYPE->SetSelectHdl(LINK( this, SvxCaptionTabPage, SelectCaptTypeHdl_Impl));
 
     Image aImage;
-    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_1, aImage, m_aLineTypes[0]);
-    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_2, aImage, m_aLineTypes[1]);
-    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_3, aImage, m_aLineTypes[2]);
+    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_1, aImage, aLineTypes[0]);
+    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_2, aImage, aLineTypes[1]);
+    m_pCT_CAPTTYPE->InsertItem(BMP_CAPTTYPE_3, aImage, aLineTypes[2]);
 
     FillValueSet();
 
@@ -171,7 +171,7 @@ bool SvxCaptionTabPage::FillItemSet( SfxItemSet*  _rOutAttrs)
 
     MapUnit      eUnit;
 
-    nCaptionType = static_cast<SdrCaptionType>(m_pCT_CAPTTYPE->GetSelectItemId()-1);
+    nCaptionType = static_cast<SdrCaptionType>(m_pCT_CAPTTYPE->GetSelectedItemId()-1);
 
     _rOutAttrs->Put( SdrCaptionTypeItem( nCaptionType ) );
 
@@ -354,10 +354,10 @@ void SvxCaptionTabPage::Reset( const SfxItemSet*  )
 }
 
 
-VclPtr<SfxTabPage> SvxCaptionTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxCaptionTabPage::Create( TabPageParent pWindow,
                                               const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxCaptionTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxCaptionTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 
@@ -454,7 +454,7 @@ IMPL_LINK( SvxCaptionTabPage, LineOptHdl_Impl, Button *, pButton, void )
 
 IMPL_LINK_NOARG(SvxCaptionTabPage, SelectCaptTypeHdl_Impl, ValueSet*, void)
 {
-    SetupType_Impl( static_cast<SdrCaptionType>(m_pCT_CAPTTYPE->GetSelectItemId()) );
+    SetupType_Impl( static_cast<SdrCaptionType>(m_pCT_CAPTTYPE->GetSelectedItemId()) );
 }
 
 void SvxCaptionTabPage::SetupType_Impl( SdrCaptionType nType )

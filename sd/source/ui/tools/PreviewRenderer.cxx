@@ -129,7 +129,7 @@ Image PreviewRenderer::RenderPage (
         }
         catch (const css::uno::Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sd.tools");
         }
     }
 
@@ -188,7 +188,7 @@ Image PreviewRenderer::RenderSubstitution (
     }
     catch (const css::uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.tools");
     }
 
     return aPreview;
@@ -202,15 +202,9 @@ bool PreviewRenderer::Initialize (
     if (pPage == nullptr)
         return false;
 
-    SdrModel* pModel = pPage->GetModel();
-    if (pModel == nullptr)
-        return false;
-
     SetupOutputSize(*pPage, rPixelSize);
-
-    SdDrawDocument* pDocument
-        = static_cast<SdDrawDocument*>(pPage->GetModel());
-    DrawDocShell* pDocShell = pDocument->GetDocSh();
+    SdDrawDocument& rDocument(static_cast< SdDrawDocument& >(pPage->getSdrModelFromSdrPage()));
+    DrawDocShell* pDocShell = rDocument.GetDocSh();
 
     // Create view
     ProvideView (pDocShell);
@@ -260,9 +254,9 @@ bool PreviewRenderer::Initialize (
     }
 
     pPageView->SetApplicationDocumentColor(aApplicationDocumentColor);
-    SdrOutliner& rOutliner(pDocument->GetDrawOutliner());
+    SdrOutliner& rOutliner(rDocument.GetDrawOutliner());
     rOutliner.SetBackgroundColor(aApplicationDocumentColor);
-    rOutliner.SetDefaultLanguage(pDocument->GetLanguage(EE_CHAR_LANGUAGE));
+    rOutliner.SetDefaultLanguage(rDocument.GetLanguage(EE_CHAR_LANGUAGE));
     mpPreviewDevice->SetBackground(Wallpaper(aApplicationDocumentColor));
     mpPreviewDevice->Erase();
 
@@ -298,7 +292,7 @@ void PreviewRenderer::PaintPage (
     }
     catch (const css::uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.tools");
     }
 
     // Restore the previous online spelling and redlining states.

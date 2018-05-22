@@ -110,7 +110,6 @@
 #include <editeng/svxfont.hxx>
 #include <editeng/frmdiritem.hxx>
 #include <svx/sdtfchim.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <editeng/scripttypeitem.hxx>
 #include <com/sun/star/awt/Gradient.hpp>
 #include <com/sun/star/table/XMergeableCellRange.hpp>
@@ -525,10 +524,6 @@ SdrEscherImport::SdrEscherImport( PowerPointImportParam& rParam, const OUString&
 
 SdrEscherImport::~SdrEscherImport()
 {
-    for (PPTOleEntry* i : aOleObjectList)
-        delete i;
-    aOleObjectList.clear();
-    delete m_pFonts;
 }
 
 const PptSlideLayoutAtom* SdrEscherImport::GetSlideLayoutAtom() const
@@ -715,6 +710,24 @@ sal_uLong DffPropSet::SanitizeEndPos(SvStream &rIn, sal_uLong nEndRecPos)
     return nEndRecPos;
 }
 
+void SdrEscherImport::NotifyFreeObj(void* pData, SdrObject* pObj)
+{
+    ProcessData& rData = *static_cast<ProcessData*>(pData);
+    PptSlidePersistEntry& rPersistEntry = rData.rPersistEntry;
+    if (rPersistEntry.xSolverContainer)
+    {
+        for (auto & pPtr : rPersistEntry.xSolverContainer->aCList)
+        {
+            if (pPtr->pAObj == pObj)
+                pPtr->pAObj = nullptr;
+            if (pPtr->pBObj == pObj)
+                pPtr->pBObj = nullptr;
+            if (pPtr->pCObj == pObj)
+                pPtr->pCObj = nullptr;
+        }
+    }
+}
+
 /* ProcessObject is called from ImplSdPPTImport::ProcessObj to handle all application specific things,
    such as the import of text, animation effects, header footer and placeholder.
 
@@ -793,7 +806,10 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
 
             // replacing the object which we will return with a SdrPageObj
             SdrObject::Free( pRet );
-            pRet = new SdrPageObj( rObjData.aBoundRect, pSdrModel->GetPage( nPageNum - 1 ) );
+            pRet = new SdrPageObj(
+                *pSdrModel,
+                rObjData.aBoundRect,
+                pSdrModel->GetPage(nPageNum - 1));
         }
         else
         {
@@ -1055,8 +1071,9 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
                         SdrObject::Free( pRet );
                         pRet = nullptr;
                     }
-                    pTObj = new SdrRectObj( eTextKind != OBJ_RECT ? eTextKind : OBJ_TEXT );
-                    pTObj->SetModel( pSdrModel );
+                    pTObj = new SdrRectObj(
+                        *pSdrModel,
+                        eTextKind != OBJ_RECT ? eTextKind : OBJ_TEXT);
                     SfxItemSet aSet( pSdrModel->GetItemPool() );
                     if ( !pRet )
                         ApplyAttributes( rSt, aSet, rObjData );
@@ -1183,7 +1200,7 @@ SdrObject* SdrEscherImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
                     }
                     if ( pRet )
                     {
-                        SdrObject* pGroup = new SdrObjGroup;
+                        SdrObject* pGroup = new SdrObjGroup(*pSdrModel);
                         pGroup->GetSubList()->NbcInsertObject( pRet );
                         pGroup->GetSubList()->NbcInsertObject( pTObj );
                         pRet = pGroup;
@@ -1301,11 +1318,11 @@ SdrPowerPointImport::SdrPowerPointImport( PowerPointImportParam& rParam, const O
     m_pMasterPages      ( nullptr ),
     m_pSlidePages       ( nullptr ),
     m_pNotePages        ( nullptr ),
-    nAktPageNum         ( 0 ),
+    nCurrentPageNum     ( 0 ),
     nDocStreamPos       ( 0 ),
     nPageColorsNum      ( 0xFFFF ),
     ePageColorsKind     ( PPT_MASTERPAGE ),
-    eAktPageKind        ( PPT_MASTERPAGE )
+    eCurrentPageKind    ( PPT_MASTERPAGE )
 {
     if ( bOk )
     {
@@ -1483,9 +1500,9 @@ SdrPowerPointImport::SdrPowerPointImport( PowerPointImportParam& rParam, const O
             // TODO:: PPT_PST_TxPFStyleAtom
 
             // read SlidePersists
-            m_pMasterPages = new PptSlidePersistList;
-            m_pSlidePages = new PptSlidePersistList;
-            m_pNotePages  = new PptSlidePersistList;
+            m_pMasterPages.reset( new PptSlidePersistList );
+            m_pSlidePages.reset( new PptSlidePersistList );
+            m_pNotePages.reset( new PptSlidePersistList );
 
             // now always creating the handout page, it will be the first in our masterpage list
             std::unique_ptr<PptSlidePersistEntry> pE(new PptSlidePersistEntry);
@@ -1592,7 +1609,7 @@ SdrPowerPointImport::SdrPowerPointImport( PowerPointImportParam& rParam, const O
                             {
                                 PPTTextSpecInfo aTxSI( 0 );
                                 if ( aTxSIStyle.bValid && !aTxSIStyle.aList.empty() )
-                                    aTxSI = *( aTxSIStyle.aList[ 0 ] );
+                                    aTxSI = aTxSIStyle.aList[ 0 ];
 
                                 rE2.xStyleSheet.reset(new PPTStyleSheet(aSlideHd, rStCtrl, *this, aTxPFStyle, aTxSI));
                                 pDefaultSheet = rE2.xStyleSheet.get();
@@ -1640,13 +1657,9 @@ SdrPowerPointImport::SdrPowerPointImport( PowerPointImportParam& rParam, const O
 
 SdrPowerPointImport::~SdrPowerPointImport()
 {
-    for (SdHyperlinkEntry* i : aHyperList) {
-        delete i;
-    }
-    aHyperList.clear();
-    delete m_pMasterPages;
-    delete m_pSlidePages;
-    delete m_pNotePages;
+    m_pMasterPages.reset();
+    m_pSlidePages.reset();
+    m_pNotePages.reset();
 }
 
 bool PPTConvertOCXControls::ReadOCXStream( tools::SvRef<SotStorage>& rSrc,
@@ -1801,12 +1814,12 @@ SdrObject* SdrPowerPointImport::ImportOLE( sal_uInt32 nOLEId,
         }
     }
 
-    for (PPTOleEntry* pOe : const_cast<SdrPowerPointImport*>(this)->aOleObjectList)
+    for (PPTOleEntry& rOe : const_cast<SdrPowerPointImport*>(this)->aOleObjectList)
     {
-        if ( pOe->nId != nOLEId )
+        if ( rOe.nId != nOLEId )
             continue;
 
-        rStCtrl.Seek( pOe->nRecHdOfs );
+        rStCtrl.Seek( rOe.nRecHdOfs );
 
         DffRecordHeader aHd;
         ReadDffRecordHeader( rStCtrl, aHd );
@@ -1859,24 +1872,28 @@ SdrObject* SdrPowerPointImport::ImportOLE( sal_uInt32 nOLEId,
                                 OUString aNm;
                                 // if ( nSvxMSDffOLEConvFlags )
                                 {
-                                    uno::Reference < embed::XStorage > xDestStorage( pOe->pShell->GetStorage() );
+                                    uno::Reference < embed::XStorage > xDestStorage( rOe.pShell->GetStorage() );
                                     uno::Reference < embed::XEmbeddedObject > xObj =
                                         CheckForConvertToSOObj(nSvxMSDffOLEConvFlags, *xObjStor, xDestStorage, rGraf, rVisArea, maBaseURL);
                                     if( xObj.is() )
                                     {
-                                        pOe->pShell->getEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aNm );
+                                        rOe.pShell->getEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aNm );
 
-                                        svt::EmbeddedObjectRef aObj( xObj, pOe->nAspect );
+                                        svt::EmbeddedObjectRef aObj( xObj, rOe.nAspect );
 
                                         // TODO/LATER: need MediaType for Graphic
                                         aObj.SetGraphic( rGraf, OUString() );
-                                        pRet = new SdrOle2Obj( aObj, aNm, rBoundRect );
+                                        pRet = new SdrOle2Obj(
+                                            *pSdrModel,
+                                            aObj,
+                                            aNm,
+                                            rBoundRect);
                                     }
                                 }
-                                if ( !pRet && ( pOe->nType == PPT_PST_ExControl ) )
+                                if ( !pRet && ( rOe.nType == PPT_PST_ExControl ) )
                                 {
-                                    uno::Reference< frame::XModel > xModel( pOe->pShell->GetModel() );
-                                    PPTConvertOCXControls aPPTConvertOCXControls( this, xModel, eAktPageKind );
+                                    uno::Reference< frame::XModel > xModel( rOe.pShell->GetModel() );
+                                    PPTConvertOCXControls aPPTConvertOCXControls( this, xModel, eCurrentPageKind );
                                     css::uno::Reference< css::drawing::XShape > xShape;
                                     if ( aPPTConvertOCXControls.ReadOCXStream( xObjStor, &xShape ) )
                                         pRet = GetSdrObjectFromXShape( xShape );
@@ -1884,10 +1901,10 @@ SdrObject* SdrPowerPointImport::ImportOLE( sal_uInt32 nOLEId,
                                 }
                                 if ( !pRet )
                                 {
-                                    aNm = pOe->pShell->getEmbeddedObjectContainer().CreateUniqueObjectName();
+                                    aNm = rOe.pShell->getEmbeddedObjectContainer().CreateUniqueObjectName();
 
                                     // object is not an own object
-                                    const css::uno::Reference < css::embed::XStorage >& rStorage = pOe->pShell->GetStorage();
+                                    const css::uno::Reference < css::embed::XStorage >& rStorage = rOe.pShell->GetStorage();
                                     if (rStorage.is())
                                     {
                                         tools::SvRef<SotStorage> xTarget = SotStorage::OpenOLEStorage(rStorage, aNm, StreamMode::READWRITE);
@@ -1901,39 +1918,43 @@ SdrObject* SdrPowerPointImport::ImportOLE( sal_uInt32 nOLEId,
                                     }
 
                                     uno::Reference < embed::XEmbeddedObject > xObj =
-                                        pOe->pShell->getEmbeddedObjectContainer().GetEmbeddedObject( aNm );
+                                        rOe.pShell->getEmbeddedObjectContainer().GetEmbeddedObject( aNm );
                                     if ( xObj.is() )
                                     {
-                                        if ( pOe->nAspect != embed::Aspects::MSOLE_ICON )
+                                        if ( rOe.nAspect != embed::Aspects::MSOLE_ICON )
                                         {
                                             //TODO/LATER: keep on hacking?!
                                             // we don't want to be modified
                                             //xInplaceObj->EnableSetModified( sal_False );
                                             if ( rVisArea.IsEmpty() )
                                             {
-                                                MapUnit aMapUnit = VCLUnoHelper::UnoEmbed2VCLMapUnit( xObj->getMapUnit( pOe->nAspect ) );
+                                                MapUnit aMapUnit = VCLUnoHelper::UnoEmbed2VCLMapUnit( xObj->getMapUnit( rOe.nAspect ) );
                                                 Size aSize( OutputDevice::LogicToLogic( aGraphic.GetPrefSize(),
                                                     aGraphic.GetPrefMapMode(), MapMode( aMapUnit ) ) );
 
                                                 awt::Size aSz;
                                                 aSz.Width = aSize.Width();
                                                 aSz.Height = aSize.Height();
-                                                xObj->setVisualAreaSize( pOe->nAspect, aSz );
+                                                xObj->setVisualAreaSize( rOe.nAspect, aSz );
                                             }
                                             else
                                             {
                                                 awt::Size aSize( rVisArea.GetSize().Width(), rVisArea.GetSize().Height() );
-                                                xObj->setVisualAreaSize( pOe->nAspect, aSize );
+                                                xObj->setVisualAreaSize( rOe.nAspect, aSize );
                                             }
                                             //xInplaceObj->EnableSetModified( sal_True );
                                         }
 
-                                        svt::EmbeddedObjectRef aObj( xObj, pOe->nAspect );
+                                        svt::EmbeddedObjectRef aObj( xObj, rOe.nAspect );
 
                                         // TODO/LATER: need MediaType for Graphic
                                         aObj.SetGraphic( aGraphic, OUString() );
 
-                                        pRet = new SdrOle2Obj( aObj, aNm, rBoundRect );
+                                        pRet = new SdrOle2Obj(
+                                            *pSdrModel,
+                                            aObj,
+                                            aNm,
+                                            rBoundRect);
                                     }
                                 }
                             }
@@ -2117,8 +2138,8 @@ void SdrPowerPointImport::SeekOle( SfxObjectShell* pShell, sal_uInt32 nFilterOpt
                             if ( aHd.nRecType == DFF_PST_ExOleObjStg )
                             {
                                 rStCtrl.ReadUInt32( nId );
-                                aOleObjectList.push_back(
-                                    new PPTOleEntry( aAt.nId, aHd.nFilePos, pShell, nRecType, aAt.nAspect ) );
+                                aOleObjectList.emplace_back(
+                                    aAt.nId, aHd.nFilePos, pShell, nRecType, aAt.nAspect );
                             }
                         }
                     }
@@ -2145,7 +2166,7 @@ bool SdrPowerPointImport::ReadFontCollection()
             {
                 bRet = true;
                 if (!m_pFonts)
-                    m_pFonts = new PptFontCollection;
+                    m_pFonts.reset( new PptFontCollection );
                 std::unique_ptr<PptFontEntityAtom> pFont(new PptFontEntityAtom);
                 ReadPptFontEntityAtom( rStCtrl, *pFont );
 
@@ -2181,11 +2202,11 @@ bool SdrPowerPointImport::ReadFontCollection()
 PptSlidePersistList* SdrPowerPointImport::GetPageList(PptPageKind ePageKind) const
 {
     if ( ePageKind == PPT_MASTERPAGE )
-        return m_pMasterPages;
+        return m_pMasterPages.get();
     if ( ePageKind == PPT_SLIDEPAGE )
-        return m_pSlidePages;
+        return m_pSlidePages.get();
     if ( ePageKind == PPT_NOTEPAGE )
-        return m_pNotePages;
+        return m_pNotePages.get();
     return nullptr;
 }
 
@@ -2407,21 +2428,21 @@ bool SdrPowerPointImport::SeekToContentOfProgTag( sal_Int32 nVersion, SvStream& 
     return bRetValue;
 }
 
-sal_uInt32 SdrPowerPointImport::GetAktPageId()
+sal_uInt32 SdrPowerPointImport::GetCurrentPageId()
 {
-    PptSlidePersistList* pList = GetPageList( eAktPageKind );
-    if ( pList && nAktPageNum < pList->size() )
-        return (*pList)[ nAktPageNum ].aPersistAtom.nSlideId;
+    PptSlidePersistList* pList = GetPageList( eCurrentPageKind );
+    if ( pList && nCurrentPageNum < pList->size() )
+        return (*pList)[ nCurrentPageNum ].aPersistAtom.nSlideId;
     return 0;
 }
 
-bool SdrPowerPointImport::SeekToAktPage( DffRecordHeader* pRecHd ) const
+bool SdrPowerPointImport::SeekToCurrentPage( DffRecordHeader* pRecHd ) const
 {
     bool bRet = false;
-    PptSlidePersistList* pList = GetPageList( eAktPageKind );
-    if ( pList && ( nAktPageNum < pList->size() ) )
+    PptSlidePersistList* pList = GetPageList( eCurrentPageKind );
+    if ( pList && ( nCurrentPageNum < pList->size() ) )
     {
-        sal_uLong nPersist = (*pList)[ static_cast<sal_uInt16>(nAktPageNum) ].aPersistAtom.nPsrReference;
+        sal_uLong nPersist = (*pList)[ static_cast<sal_uInt16>(nCurrentPageNum) ].aPersistAtom.nPsrReference;
         if ( nPersist > 0 && nPersist < nPersistPtrCnt )
         {
             sal_uLong nFPos = 0;
@@ -2448,8 +2469,8 @@ sal_uInt16 SdrPowerPointImport::GetPageCount( PptPageKind ePageKind ) const
 
 void SdrPowerPointImport::SetPageNum( sal_uInt16 nPageNum, PptPageKind eKind )
 {
-    eAktPageKind = eKind;
-    nAktPageNum = nPageNum;
+    eCurrentPageKind = eKind;
+    nCurrentPageNum = nPageNum;
 
     pPPTStyleSheet = nullptr;
 
@@ -2486,7 +2507,7 @@ void SdrPowerPointImport::SetPageNum( sal_uInt16 nPageNum, PptPageKind eKind )
 
 Size SdrPowerPointImport::GetPageSize() const
 {
-    Size aRet( IsNoteOrHandout( nAktPageNum ) ? aDocAtom.GetNotesPageSize() : aDocAtom.GetSlidesPageSize() );
+    Size aRet( IsNoteOrHandout( nCurrentPageNum ) ? aDocAtom.GetNotesPageSize() : aDocAtom.GetSlidesPageSize() );
     Scale( aRet );
     // PPT works with units of 576 dpi in any case. To avoid inaccuracies
     // I do round the last decimal digit away.
@@ -2516,14 +2537,14 @@ Size SdrPowerPointImport::GetPageSize() const
 
 bool SdrPowerPointImport::GetColorFromPalette( sal_uInt16 nNum, Color& rColor ) const
 {
-    if ( nPageColorsNum != nAktPageNum || ePageColorsKind != eAktPageKind )
+    if ( nPageColorsNum != nCurrentPageNum || ePageColorsKind != eCurrentPageKind )
     {
         sal_uInt16 nSlideFlags = 0;
-        PptSlidePersistList* pPageList = GetPageList( eAktPageKind );
-        if ( pPageList && ( nAktPageNum < pPageList->size() ) )
+        PptSlidePersistList* pPageList = GetPageList( eCurrentPageKind );
+        if ( pPageList && ( nCurrentPageNum < pPageList->size() ) )
         {
-            assert( !pPageList->is_null( nAktPageNum ) );
-            const PptSlidePersistEntry& rE = (*pPageList)[ nAktPageNum ];
+            assert( !pPageList->is_null( nCurrentPageNum ) );
+            const PptSlidePersistEntry& rE = (*pPageList)[ nCurrentPageNum ];
             nSlideFlags = rE.aSlideAtom.nFlags;
             if ( ! ( nSlideFlags & 2 ) )
                 const_cast<SdrPowerPointImport*>(this)->aPageColors = rE.aColorScheme;
@@ -2534,13 +2555,13 @@ bool SdrPowerPointImport::GetColorFromPalette( sal_uInt16 nNum, Color& rColor ) 
             if ( pPageList2 )
             {
                 PptSlidePersistEntry* pMasterPersist = nullptr;
-                if ( eAktPageKind == PPT_MASTERPAGE )
-                    pMasterPersist = &(*pPageList2)[ nAktPageNum ];
+                if ( eCurrentPageKind == PPT_MASTERPAGE )
+                    pMasterPersist = &(*pPageList2)[ nCurrentPageNum ];
                 else
                 {
-                    if ( HasMasterPage( nAktPageNum, eAktPageKind ) )
+                    if ( HasMasterPage( nCurrentPageNum, eCurrentPageKind ) )
                     {
-                        sal_uInt16 nMasterNum = GetMasterPageIndex( nAktPageNum, eAktPageKind );
+                        sal_uInt16 nMasterNum = GetMasterPageIndex( nCurrentPageNum, eCurrentPageKind );
                         if ( nMasterNum < pPageList2->size() )
                             pMasterPersist = &(*pPageList2)[ nMasterNum ];
                     }
@@ -2566,8 +2587,8 @@ bool SdrPowerPointImport::GetColorFromPalette( sal_uInt16 nNum, Color& rColor ) 
             }
         }
         // register current color scheme
-        const_cast<SdrPowerPointImport*>(this)->nPageColorsNum = nAktPageNum;
-        const_cast<SdrPowerPointImport*>(this)->ePageColorsKind = eAktPageKind;
+        const_cast<SdrPowerPointImport*>(this)->nPageColorsNum = nCurrentPageNum;
+        const_cast<SdrPowerPointImport*>(this)->ePageColorsKind = eCurrentPageKind;
     }
     rColor = aPageColors.GetColor( nNum );
     return true;
@@ -2582,9 +2603,9 @@ bool SdrPowerPointImport::SeekToShape( SvStream& rSt, void* pClientData, sal_uIn
         PptSlidePersistEntry& rPersistEntry = rData.rPersistEntry;
         if ( rPersistEntry.ePageKind == PPT_SLIDEPAGE )
         {
-            if ( HasMasterPage( nAktPageNum, eAktPageKind ) )
+            if ( HasMasterPage( nCurrentPageNum, eCurrentPageKind ) )
             {
-                sal_uInt16 nMasterNum = GetMasterPageIndex( nAktPageNum, eAktPageKind );
+                sal_uInt16 nMasterNum = GetMasterPageIndex( nCurrentPageNum, eCurrentPageKind );
                 PptSlidePersistList* pPageList = GetPageList( PPT_MASTERPAGE );
                 if ( pPageList && ( nMasterNum < pPageList->size() ) )
                 {
@@ -2710,6 +2731,7 @@ void ImportComment10( SvxMSDffManager const & rMan, SvStream& rStCtrl, SdrPage* 
         xAnnotation->setPosition( geometry::RealPoint2D( aPosition.X() / 100.0, aPosition.Y() / 100.0 ) );
         xAnnotation->setAuthor( sAuthor );
         xAnnotation->setDateTime( aDateTime );
+        xAnnotation->setInitials( sInitials );
         uno::Reference< text::XText > xText( xAnnotation->getTextRange() );
         xText->setString( sText );
     }
@@ -2724,15 +2746,15 @@ void ImportComment10( SvxMSDffManager const & rMan, SvStream& rStCtrl, SdrPage* 
 void SdrPowerPointImport::ImportPage( SdrPage* pRet, const PptSlidePersistEntry* pMasterPersist )
 {
     sal_uInt32 nMerk = rStCtrl.Tell();
-    PptSlidePersistList* pList = GetPageList( eAktPageKind );
-    if ( ( !pList ) || ( pList->size() <= nAktPageNum ) )
+    PptSlidePersistList* pList = GetPageList( eCurrentPageKind );
+    if ( ( !pList ) || ( pList->size() <= nCurrentPageNum ) )
         return;
-    PptSlidePersistEntry& rSlidePersist = (*pList)[ nAktPageNum ];
+    PptSlidePersistEntry& rSlidePersist = (*pList)[ nCurrentPageNum ];
     if ( rSlidePersist.bStarDrawFiller )
         return;
 
     DffRecordHeader aPageHd;
-    if ( SeekToAktPage( &aPageHd ) )
+    if ( SeekToCurrentPage( &aPageHd ) )
     {
         rSlidePersist.xHeaderFooterEntry.reset(new HeaderFooterEntry(pMasterPersist));
         ProcessData aProcessData( rSlidePersist, SdPageCapsule(pRet) );
@@ -2785,9 +2807,9 @@ void SdrPowerPointImport::ImportPage( SdrPage* pRet, const PptSlidePersistEntry*
                                     tools::Rectangle aPageSize( Point(), pRet->GetSize() );
                                     if ( rSlidePersist.aSlideAtom.nFlags & 4 )          // follow master background?
                                     {
-                                        if ( HasMasterPage( nAktPageNum, eAktPageKind ) )
+                                        if ( HasMasterPage( nCurrentPageNum, eCurrentPageKind ) )
                                         {
-                                            sal_uInt16 nMasterNum = GetMasterPageIndex( nAktPageNum, eAktPageKind );
+                                            sal_uInt16 nMasterNum = GetMasterPageIndex( nCurrentPageNum, eCurrentPageKind );
                                             PptSlidePersistList* pPageList = GetPageList( PPT_MASTERPAGE );
                                             PptSlidePersistEntry* pE = &(*pPageList)[ nMasterNum ];
                                             while( ( pE->aSlideAtom.nFlags & 4 ) && pE->aSlideAtom.nMasterId )
@@ -2949,19 +2971,19 @@ void SdrPowerPointImport::ImportPage( SdrPage* pRet, const PptSlidePersistEntry*
 
 const PptSlideLayoutAtom* SdrPowerPointImport::GetSlideLayoutAtom() const
 {
-    PptSlidePersistList* pPageList = GetPageList( eAktPageKind );
-    if ( pPageList && nAktPageNum < pPageList->size() )
+    PptSlidePersistList* pPageList = GetPageList( eCurrentPageKind );
+    if ( pPageList && nCurrentPageNum < pPageList->size() )
     {
-        assert( !pPageList->is_null( nAktPageNum ) );
-        return &(*pPageList)[ nAktPageNum ].aSlideAtom.aLayout;
+        assert( !pPageList->is_null( nCurrentPageNum ) );
+        return &(*pPageList)[ nCurrentPageNum ].aSlideAtom.aLayout;
     }
     return nullptr;
 }
 
 bool SdrPowerPointImport::IsNoteOrHandout( sal_uInt16 nPageNum ) const
 {
-    bool bNote = eAktPageKind == PPT_NOTEPAGE;
-    if ( eAktPageKind == PPT_MASTERPAGE )
+    bool bNote = eCurrentPageKind == PPT_NOTEPAGE;
+    if ( eCurrentPageKind == PPT_MASTERPAGE )
         bNote = ( nPageNum & 1 ) == 0;
     return bNote;
 }
@@ -3012,7 +3034,7 @@ SdrObject* SdrPowerPointImport::ImportPageBackgroundObject( const SdrPage& rPage
     std::unique_ptr<SfxItemSet> pSet;
     sal_uLong nFPosMerk = rStCtrl.Tell(); // remember FilePos for restoring it later
     DffRecordHeader aPageHd;
-    if ( SeekToAktPage( &aPageHd ) )
+    if ( SeekToCurrentPage( &aPageHd ) )
     {   // and now search for the background attributes of the Page
         sal_uLong nPageRecEnd = aPageHd.GetRecEndFilePos();
         DffRecordHeader aPPDrawHd;
@@ -3051,12 +3073,17 @@ SdrObject* SdrPowerPointImport::ImportPageBackgroundObject( const SdrPage& rPage
         pSet->Put( XFillStyleItem( drawing::FillStyle_NONE ) );
     }
     pSet->Put( XLineStyleItem( drawing::LineStyle_NONE ) );
-    tools::Rectangle aRect( rPage.GetLeftBorder(), rPage.GetUpperBorder(), rPage.GetWidth()-rPage.GetRightBorder(), rPage.GetHeight()-rPage.GetLowerBorder() );
-    pRet = new SdrRectObj( aRect );
-    pRet->SetModel( pSdrModel );
+    tools::Rectangle aRect(
+        rPage.GetLeftBorder(),
+        rPage.GetUpperBorder(),
+        rPage.GetWidth() - rPage.GetRightBorder(),
+        rPage.GetHeight() - rPage.GetLowerBorder());
+
+    pRet = new SdrRectObj(
+        *pSdrModel,
+        aRect);
 
     pRet->SetMergedItemSet(*pSet);
-
     pRet->SetMarkProtect( true );
     pRet->SetMoveProtect( true );
     pRet->SetResizeProtect( true );
@@ -3187,15 +3214,15 @@ bool PPTExtParaProv::GetGraphic( sal_uInt32 nInstance, Graphic& rGraph ) const
     PPTBuGraEntry* pPtr = nullptr;
     if ( nInstance < aBuGraList.size() )
     {
-        pPtr = aBuGraList[ nInstance ];
+        pPtr = aBuGraList[ nInstance ].get();
         if ( pPtr->nInstance == nInstance )
             bRetValue = true;
     }
     if ( !bRetValue )
     {
-        for (PPTBuGraEntry* i : aBuGraList)
+        for (std::unique_ptr<PPTBuGraEntry> const & i : aBuGraList)
         {
-            pPtr = i;
+            pPtr = i.get();
             if ( pPtr->nInstance == nInstance )
             {
                 bRetValue = true;
@@ -3209,8 +3236,7 @@ bool PPTExtParaProv::GetGraphic( sal_uInt32 nInstance, Graphic& rGraph ) const
 }
 
 PPTExtParaProv::PPTExtParaProv( SdrPowerPointImport& rMan, SvStream& rSt, const DffRecordHeader* pHd ) :
-    bStyles         ( false ),
-    bGraphics       ( false )
+    bStyles         ( false )
 {
     sal_uInt32 nOldPos = rSt.Tell();
 
@@ -3262,9 +3288,9 @@ PPTExtParaProv::PPTExtParaProv( SdrPowerPointImport& rMan, SvStream& rSt, const 
                                     }
                                 }
                                 if ( n < nBuGraCount ) {
-                                    aBuGraList.insert( aBuGraList.begin() + n, pBuGra );
+                                    aBuGraList.emplace( aBuGraList.begin() + n, pBuGra );
                                 } else {
-                                    aBuGraList.push_back( pBuGra );
+                                    aBuGraList.emplace_back( pBuGra );
                                 }
                             }
 #ifdef DBG_UTIL
@@ -3277,8 +3303,6 @@ PPTExtParaProv::PPTExtParaProv( SdrPowerPointImport& rMan, SvStream& rSt, const 
                         if (!aBuGraAtomHd.SeekToEndOfRecord(rSt))
                             break;
                     }
-                    if ( !aBuGraList.empty() )
-                        bGraphics = true;
                 }
                 break;
 
@@ -3355,9 +3379,6 @@ PPTExtParaProv::PPTExtParaProv( SdrPowerPointImport& rMan, SvStream& rSt, const 
 
 PPTExtParaProv::~PPTExtParaProv()
 {
-    for (PPTBuGraEntry* i : aBuGraList)
-        delete i;
-    aBuGraList.clear();
 }
 
 PPTNumberFormatCreator::PPTNumberFormatCreator( PPTExtParaProv* pParaProv )
@@ -3582,6 +3603,12 @@ bool PPTNumberFormatCreator::ImplGetExtNumberFormat( SdrPowerPointImport const &
             {
                 rNumberFormat.SetNumberingType( SVX_NUM_NUMBER_UPPER_ZH_TW );
                 rNumberFormat.SetSuffix( "." );
+            }
+            break;
+            case 25: // Bidi Hebrew 2 with ANSI minus symbol.
+            {
+                rNumberFormat.SetNumberingType( SVX_NUM_NUMBER_HEBREW );
+                rNumberFormat.SetSuffix( "-" );
             }
             break;
             case 26: // Japanese/Korean.
@@ -4762,13 +4789,13 @@ bool PPTTextSpecInfoAtomInterpreter::Read( SvStream& rIn, const DffRecordHeader&
         sal_uInt32 nFlags(0);
         rIn.ReadUInt32(nFlags);
 
-        PPTTextSpecInfo* pEntry = new PPTTextSpecInfo( nCharIdx );
+        PPTTextSpecInfo aEntry( nCharIdx );
         if ( pTextSpecDefault )
         {
-            pEntry->nDontKnow = pTextSpecDefault->nDontKnow;
-            pEntry->nLanguage[ 0 ] = pTextSpecDefault->nLanguage[ 0 ];
-            pEntry->nLanguage[ 1 ] = pTextSpecDefault->nLanguage[ 1 ];
-            pEntry->nLanguage[ 2 ] = pTextSpecDefault->nLanguage[ 2 ];
+            aEntry.nDontKnow = pTextSpecDefault->nDontKnow;
+            aEntry.nLanguage[ 0 ] = pTextSpecDefault->nLanguage[ 0 ];
+            aEntry.nLanguage[ 1 ] = pTextSpecDefault->nLanguage[ 1 ];
+            aEntry.nLanguage[ 2 ] = pTextSpecDefault->nLanguage[ 2 ];
         }
         for (sal_uInt32 i = 1; nFlags && i ; i <<= 1)
         {
@@ -4776,7 +4803,7 @@ bool PPTTextSpecInfoAtomInterpreter::Read( SvStream& rIn, const DffRecordHeader&
             switch( nFlags & i )
             {
                 case 0 : break;
-                case 1 : rIn.ReadUInt16( pEntry->nDontKnow ); break;
+                case 1 : rIn.ReadUInt16( aEntry.nDontKnow ); break;
                 case 2 : rIn.ReadUInt16( nLang ); break;
                 case 4 : rIn.ReadUInt16( nLang ); break;
                 default :
@@ -4794,12 +4821,12 @@ bool PPTTextSpecInfoAtomInterpreter::Read( SvStream& rIn, const DffRecordHeader&
                 // load time.
                 if (i == 2)
                 {
-                    pEntry->nLanguage[ 0 ] = pEntry->nLanguage[ 1 ] = pEntry->nLanguage[ 2 ] = LanguageType(nLang);
+                    aEntry.nLanguage[ 0 ] = aEntry.nLanguage[ 1 ] = aEntry.nLanguage[ 2 ] = LanguageType(nLang);
                 }
             }
             nFlags &= ~i;
         }
-        aList.push_back( pEntry );
+        aList.push_back( aEntry );
     }
     bValid = rIn.Tell() == rRecHd.GetRecEndFilePos();
     return bValid;
@@ -4807,10 +4834,6 @@ bool PPTTextSpecInfoAtomInterpreter::Read( SvStream& rIn, const DffRecordHeader&
 
 PPTTextSpecInfoAtomInterpreter::~PPTTextSpecInfoAtomInterpreter()
 {
-    for (PPTTextSpecInfo* i : aList) {
-        delete i;
-    }
-    aList.clear();
 }
 
 void StyleTextProp9::Read( SvStream& rIn )
@@ -5076,7 +5099,7 @@ void PPTStyleTextPropReader::ReadParaProps( SvStream& rIn, const DffRecordHeader
         }
         PPTParaPropSet* pPara = new PPTParaPropSet( aParaPropSet );
         pPara->mnOriginalTextPos = nCharReadCnt;
-        aParaPropList.push_back( pPara );
+        aParaPropList.emplace_back( pPara );
         if ( nCharCount )
         {
             sal_uInt32   nCount;
@@ -5087,7 +5110,7 @@ void PPTStyleTextPropReader::ReadParaProps( SvStream& rIn, const DffRecordHeader
                 {
                     pPara = new PPTParaPropSet( aParaPropSet );
                     pPara->mnOriginalTextPos = nCharReadCnt + nCount + 1;
-                    aParaPropList.push_back( pPara );
+                    aParaPropList.emplace_back( pPara );
                 }
             }
         }
@@ -5291,7 +5314,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
                            bTextPropAtom, nExtParaPos, aStyleTextProp9, nExtParaFlags,
                            nBuBlip, nHasAnm, nAnmScheme );
 
-            aCharPropList.push_back( new PPTCharPropSet( aCharPropSet, 0 ) );
+            aCharPropList.emplace_back( new PPTCharPropSet( aCharPropSet, 0 ) );
         }
     }
 
@@ -5331,7 +5354,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
             {
                 if ( nExtParaPos && ( nLatestParaUpdate != nCurrentPara ) && ( nCurrentPara < aParaPropList.size() ) )
                 {
-                    PPTParaPropSet* pPropSet = aParaPropList[ nCurrentPara ];
+                    PPTParaPropSet* pPropSet = aParaPropList[ nCurrentPara ].get();
                     pPropSet->mxParaSet->mnExtParagraphMask = nExtParaFlags;
                     if ( nExtParaFlags & 0x800000 )
                         pPropSet->mxParaSet->mnBuBlip = nBuBlip;
@@ -5352,7 +5375,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
                         else if ( bEmptyParaPossible )
                             aCharPropSet.maString.clear();
                         if ( nLen || bEmptyParaPossible )
-                            aCharPropList.push_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
+                            aCharPropList.emplace_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
                         nCurrentPara++;
                         nLen++;
                         nCharReadCnt += nLen;
@@ -5365,7 +5388,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
                         {
                             nLen = ( nCurrentSpecMarker & 0xffff ) - nCharReadCnt;
                             aCharPropSet.maString = aString.copy(nCharReadCnt, nLen);
-                            aCharPropList.push_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
+                            aCharPropList.emplace_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
                             nCharCount -= nLen;
                             nCharReadCnt += nLen;
                         }
@@ -5373,7 +5396,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
                         pCPropSet->maString = aString.copy(nCharReadCnt, 1);
                         if ( aCharPropSet.mpImplPPTCharPropSet->mnAttrSet & ( 1 << PPT_CharAttr_Symbol ) )
                             pCPropSet->SetFont( aCharPropSet.mpImplPPTCharPropSet->mnSymbolFont );
-                        aCharPropList.push_back( pCPropSet );
+                        aCharPropList.emplace_back( pCPropSet );
                         nCharCount--;
                         nCharReadCnt++;
                         bEmptyParaPossible = false;
@@ -5392,7 +5415,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
                             nStrLen = nMaxStrLen;
                         aCharPropSet.maString = aString.copy(nCharReadCnt, nStrLen);
                     }
-                    aCharPropList.push_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
+                    aCharPropList.emplace_back( new PPTCharPropSet( aCharPropSet, nCurrentPara ) );
                     nCharReadCnt += nCharCount;
                     bEmptyParaPossible = false;
                     break;
@@ -5404,7 +5427,7 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
             PPTCharPropSet* pCharPropSet = new PPTCharPropSet( *aCharPropList.back(), nCurrentPara );
             pCharPropSet->maString.clear();
             pCharPropSet->mnOriginalTextPos = nStringLen - 1;
-            aCharPropList.push_back( pCharPropSet );
+            aCharPropList.emplace_back( pCharPropSet );
         }
     }
     rIn.Seek( nMerk );
@@ -5412,10 +5435,6 @@ void PPTStyleTextPropReader::Init( SvStream& rIn, const DffRecordHeader& rTextHe
 
 PPTStyleTextPropReader::~PPTStyleTextPropReader()
 {
-    for ( PPTParaPropSetList::const_iterator it = aParaPropList.begin(); it != aParaPropList.end(); ++it )
-        delete *it;
-    for ( PPTCharPropSetList::const_iterator it = aCharPropList.begin(); it != aCharPropList.end(); ++it )
-        delete *it;
 }
 
 PPTPortionObj::PPTPortionObj( const PPTStyleSheet& rStyleSheet, TSS_Type nInstance, sal_uInt32 nDepth ) :
@@ -5852,7 +5871,7 @@ PPTParagraphObj::PPTParagraphObj( PPTStyleTextPropReader& rPropReader,
              ++rnCurCharPos)
         {
             PPTCharPropSet *const pCharPropSet =
-                rPropReader.aCharPropList[rnCurCharPos];
+                rPropReader.aCharPropList[rnCurCharPos].get();
             std::unique_ptr<PPTPortionObj> pPPTPortion(new PPTPortionObj(
                     *pCharPropSet, rStyleSheet, nInstance, mxParaSet->mnDepth));
             if (!mbTab)
@@ -6264,12 +6283,6 @@ void PPTParagraphObj::ApplyTo( SfxItemSet& rSet,  boost::optional< sal_Int16 >& 
 
     if ( bIsHardAttribute )
     {
-        if ( pPortion && ( nVal2 > 200 ) )
-        {
-            sal_uInt32 nFontHeight;
-            pPortion->GetAttrib( PPT_CharAttr_FontHeight, nFontHeight, nDestinationInstance );
-            nVal2 = -static_cast<sal_Int16>( ( nFontHeight * nVal * 8 ) / 100 );
-        }
         SdrTextFixedCellHeightItem aHeightItem(true);
         aHeightItem.SetWhich(SDRATTR_TEXT_USEFIXEDCELLHEIGHT);
         rSet.Put( aHeightItem );
@@ -6280,7 +6293,7 @@ void PPTParagraphObj::ApplyTo( SfxItemSet& rSet,  boost::optional< sal_Int16 >& 
             aItem.SetInterLineSpaceRule(SvxInterLineSpaceRule::Off);
         } else
         {
-            sal_uInt8 nPropLineSpace = static_cast<sal_uInt8>(nVal2);
+            sal_uInt16 nPropLineSpace = static_cast<sal_uInt16>(nVal2);
             aItem.SetPropLineSpace( nPropLineSpace );
             aItem.SetLineSpaceRule( SvxLineSpaceRule::Auto );
         }
@@ -6540,7 +6553,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                     nTextRulerAtomOfs = 0xffffffff;
 
                 sal_uInt32 nInstance = 0;
-                switch( rSdrPowerPointImport.eAktPageKind )
+                switch( rSdrPowerPointImport.eCurrentPageKind )
                 {
                     case PPT_NOTEPAGE :
                         nInstance++;
@@ -6555,7 +6568,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                 }
                 if ( bStatus )
                 {
-                    sal_uInt32 nSlideId = rSdrPowerPointImport.GetAktPageId();
+                    sal_uInt32 nSlideId = rSdrPowerPointImport.GetCurrentPageId();
                     if ( !nSlideId )
                         bStatus = false;
                     else
@@ -6597,10 +6610,10 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                             rIn.Seek( nOldPos );
                         }
                         // now pHd points to the right SlideListWithText Container
-                        PptSlidePersistList* pPageList = rSdrPowerPointImport.GetPageList( rSdrPowerPointImport.eAktPageKind );
+                        PptSlidePersistList* pPageList = rSdrPowerPointImport.GetPageList( rSdrPowerPointImport.eCurrentPageKind );
                         PptSlidePersistEntry* pE = nullptr;
-                        if ( pPageList && ( rSdrPowerPointImport.nAktPageNum < pPageList->size() ) )
-                            pE = &(*pPageList)[ rSdrPowerPointImport.nAktPageNum ];
+                        if ( pPageList && ( rSdrPowerPointImport.nCurrentPageNum < pPageList->size() ) )
+                            pE = &(*pPageList)[ rSdrPowerPointImport.nCurrentPageNum ];
                         if ( (!pE) || (!pE->nSlidePersistStartOffset) || ( pE->aPersistAtom.nSlideId != nSlideId ) )
                             bStatus = false;
                         else
@@ -6689,20 +6702,20 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                 if ( aTextSpecInfoAtomInterpreter.Read( rIn, aTextSpecInfoHd, PPT_PST_TextSpecInfoAtom,
                                         &(rSdrPowerPointImport.pPPTStyleSheet->maTxSI) ) )
                                 {
-                                    PPTCharPropSetList::size_type nI = 0;
-                                    for (PPTTextSpecInfo* pSpecInfo : aTextSpecInfoAtomInterpreter.aList)
+                                    size_t nI = 0;
+                                    for (PPTTextSpecInfo& rSpecInfo : aTextSpecInfoAtomInterpreter.aList)
                                     {
-                                        sal_uInt32 nCharIdx = pSpecInfo->nCharIdx;
+                                        sal_uInt32 nCharIdx = rSpecInfo.nCharIdx;
 
                                         // portions and text have to been splitted in some cases
                                         for ( ; nI < aStyleTextPropReader.aCharPropList.size(); ++nI)
                                         {
-                                            PPTCharPropSet* pSet = aStyleTextPropReader.aCharPropList[nI];
+                                            PPTCharPropSet* pSet = aStyleTextPropReader.aCharPropList[nI].get();
                                             if (pSet->mnOriginalTextPos >= nCharIdx)
                                                 break;
-                                            pSet->mnLanguage[0] = pSpecInfo->nLanguage[0];
-                                            pSet->mnLanguage[1] = pSpecInfo->nLanguage[1];
-                                            pSet->mnLanguage[2] = pSpecInfo->nLanguage[2];
+                                            pSet->mnLanguage[0] = rSpecInfo.nLanguage[0];
+                                            pSet->mnLanguage[1] = rSpecInfo.nLanguage[1];
+                                            pSet->mnLanguage[2] = rSpecInfo.nLanguage[2];
                                             // test if the current portion needs to be splitted
                                             if (pSet->maString.getLength() <= 1)
                                                 continue;
@@ -6718,7 +6731,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                             pSet->maString = aString.copy(0, nOldLen);
                                             pNew->maString = aString.copy(nOldLen, nNewLen);
                                             pNew->mnOriginalTextPos += nOldLen;
-                                            aStyleTextPropReader.aCharPropList.insert(aStyleTextPropReader.aCharPropList.begin() + nI + 1, pNew);
+                                            aStyleTextPropReader.aCharPropList.emplace(aStyleTextPropReader.aCharPropList.begin() + nI + 1, pNew);
                                         }
                                     }
                                 }
@@ -6866,9 +6879,9 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                         {
                                             PptInteractiveInfoAtom aInteractiveInfoAtom;
                                             ReadPptInteractiveInfoAtom( rIn, aInteractiveInfoAtom );
-                                            for (SdHyperlinkEntry* pHyperlink : rSdrPowerPointImport.aHyperList)
+                                            for (SdHyperlinkEntry& rHyperlink : rSdrPowerPointImport.aHyperList)
                                             {
-                                                if ( pHyperlink->nIndex == aInteractiveInfoAtom.nExHyperlinkId )
+                                                if ( rHyperlink.nIndex == aInteractiveInfoAtom.nExHyperlinkId )
                                                 {
                                                     if (!aTextHd.SeekToEndOfRecord(rIn))
                                                     {
@@ -6890,11 +6903,11 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                             xEntry.reset(new PPTFieldEntry);
                                                             xEntry->nPos = static_cast<sal_uInt16>(nStartPos);
                                                             xEntry->nTextRangeEnd = static_cast<sal_uInt16>(nEndPos);
-                                                            OUString aTarget( pHyperlink->aTarget );
-                                                            if ( !pHyperlink->aConvSubString.isEmpty() )
+                                                            OUString aTarget( rHyperlink.aTarget );
+                                                            if ( !rHyperlink.aConvSubString.isEmpty() )
                                                             {
                                                                 aTarget += "#";
-                                                                aTarget += pHyperlink->aConvSubString;
+                                                                aTarget += rHyperlink.aConvSubString;
                                                             }
                                                             xEntry->xField1.reset(new SvxFieldItem( SvxURLField( aTarget, OUString(), SvxURLFormat::Repr ), EE_FEATURE_FIELD ));
                                                         }
@@ -6927,7 +6940,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                             if ( !FieldList.empty() )
                             {
                                 ::std::vector< PPTFieldEntry* >::iterator FE = FieldList.begin();
-                                PPTCharPropSetList& aCharPropList = aStyleTextPropReader.aCharPropList;
+                                auto& aCharPropList = aStyleTextPropReader.aCharPropList;
 
                                 sal_Int32   i = nParagraphs - 1;
                                 sal_Int32   n = aCharPropList.size() - 1;
@@ -6936,7 +6949,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                 // the next while loop tries to resolve the list of fields(pFieldList)
                                 while( ( FE < FieldList.end() ) && ( n >= 0 ) && ( i >= 0 ) )
                                 {
-                                    PPTCharPropSet* pSet  = aCharPropList[n];
+                                    PPTCharPropSet* pSet  = aCharPropList[n].get();
                                     OUString aString( pSet->maString );
                                     sal_uInt32 nCount = aString.getLength();
                                     sal_uInt32 nPos = pSet->mnOriginalTextPos + nCount;
@@ -6958,23 +6971,23 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                 {
                                                     PPTCharPropSet* pNewCPS = new PPTCharPropSet( *pSet );
                                                     pNewCPS->maString = aString.copy( nCount + 1, nBehind );
-                                                    aCharPropList.insert( aCharPropList.begin() + n + 1, pNewCPS );
+                                                    aCharPropList.emplace( aCharPropList.begin() + n + 1, pNewCPS );
                                                 }
                                                 if ( (*FE)->xField2 )
                                                 {
                                                     PPTCharPropSet* pNewCPS = new PPTCharPropSet( *pSet );
                                                     pNewCPS->mpFieldItem = std::move((*FE)->xField2);
-                                                    aCharPropList.insert( aCharPropList.begin() + n + 1, pNewCPS );
+                                                    aCharPropList.emplace( aCharPropList.begin() + n + 1, pNewCPS );
 
                                                     pNewCPS = new PPTCharPropSet( *pSet );
                                                     pNewCPS->maString = " ";
-                                                    aCharPropList.insert( aCharPropList.begin() + n + 1, pNewCPS );
+                                                    aCharPropList.emplace( aCharPropList.begin() + n + 1, pNewCPS );
                                                 }
                                                 if ( nCount )
                                                 {
                                                     PPTCharPropSet* pNewCPS = new PPTCharPropSet( *pSet );
                                                     pNewCPS->maString = aString.copy( 0, nCount );
-                                                    aCharPropList.insert( aCharPropList.begin() + n++, pNewCPS );
+                                                    aCharPropList.emplace( aCharPropList.begin() + n++, pNewCPS );
                                                 }
                                                 if ( (*FE)->xField1 )
                                                 {
@@ -7004,7 +7017,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                             // the textrange hyperlink can take more than 1 paragraph
                                                             // the solution here is to clone the hyperlink...
 
-                                                            PPTCharPropSet* pCurrent = aCharPropList[ nIdx ];
+                                                            PPTCharPropSet* pCurrent = aCharPropList[ nIdx ].get();
                                                             sal_Int32       nNextStringLen = pCurrent->maString.getLength();
 
                                                             DBG_ASSERT( (*FE)->xField1, "missing field!" );
@@ -7037,7 +7050,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                                         // the textrange is to decrease (because of the LineBreak character)
                                                                         if ( aCharPropList.size() > ( nIdx + 1 ) )
                                                                         {
-                                                                            PPTCharPropSet* pNext = aCharPropList[ nIdx + 1 ];
+                                                                            PPTCharPropSet* pNext = aCharPropList[ nIdx + 1 ].get();
                                                                             if ( pNext->mnParagraph > pCurrent->mnParagraph )
                                                                                 nHyperLenLeft--;
                                                                         }
@@ -7047,7 +7060,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                                 {
                                                                     PPTCharPropSet* pNewCPS = new PPTCharPropSet( *pCurrent );
                                                                     pNewCPS->maString = pCurrent->maString.copy( nHyperLenLeft,( nNextStringLen - nHyperLenLeft ) );
-                                                                    aCharPropList.insert( aCharPropList.begin() + nIdx + 1, pNewCPS );
+                                                                    aCharPropList.emplace( aCharPropList.begin() + nIdx + 1, pNewCPS );
                                                                     OUString aRepresentation = pCurrent->maString.copy( 0, nHyperLenLeft );
                                                                     pCurrent->mpFieldItem.reset( new SvxFieldItem( SvxURLField( pField->GetURL(), aRepresentation, SvxURLFormat::Repr ), EE_FEATURE_FIELD ) );
                                                                     nHyperLenLeft = 0;
@@ -7062,7 +7075,7 @@ PPTTextObj::PPTTextObj( SvStream& rIn, SdrPowerPointImport& rSdrPowerPointImport
                                                         if ( pBefCPS )
                                                         {
                                                             pBefCPS->maString = aString.copy( 0, nCount );
-                                                            aCharPropList.insert( aCharPropList.begin() + n, pBefCPS );
+                                                            aCharPropList.emplace( aCharPropList.begin() + n, pBefCPS );
                                                             n++;
                                                         }
                                                     }
@@ -7377,7 +7390,7 @@ void MergeCells( const Reference< XTable >& xTable, sal_Int32 nCol, sal_Int32 nR
    }
    catch( const Exception& )
    {
-       DBG_UNHANDLED_EXCEPTION();
+       DBG_UNHANDLED_EXCEPTION("filter.ms");
    }
 }
 
@@ -7420,8 +7433,7 @@ void ApplyCellAttributes( const SdrObject* pObj, Reference< XCell > const & xCel
                 {
                     eFS = css::drawing::FillStyle_SOLID;
                     Color aFillColor( pObj->GetMergedItem( XATTR_FILLCOLOR ).GetColorValue() );
-                    sal_Int32 nFillColor( aFillColor.GetColor() );
-                    xPropSet->setPropertyValue( "FillColor", Any( nFillColor ) );
+                    xPropSet->setPropertyValue( "FillColor", makeAny( aFillColor ) );
                 }
                 break;
             case drawing::FillStyle_GRADIENT :
@@ -7431,8 +7443,8 @@ void ApplyCellAttributes( const SdrObject* pObj, Reference< XCell > const & xCel
 
                     css::awt::Gradient aGradient;
                     aGradient.Style = aXGradient.GetGradientStyle();
-                    aGradient.StartColor = static_cast<sal_Int32>(aXGradient.GetStartColor().GetColor());
-                    aGradient.EndColor = static_cast<sal_Int32>(aXGradient.GetEndColor().GetColor());
+                    aGradient.StartColor = static_cast<sal_Int32>(aXGradient.GetStartColor());
+                    aGradient.EndColor = static_cast<sal_Int32>(aXGradient.GetEndColor());
                     aGradient.Angle = static_cast<short>(aXGradient.GetAngle());
                     aGradient.Border = aXGradient.GetBorder();
                     aGradient.XOffset = aXGradient.GetXOffset();
@@ -7452,21 +7464,18 @@ void ApplyCellAttributes( const SdrObject* pObj, Reference< XCell > const & xCel
                     eFS = css::drawing::FillStyle_BITMAP;
 
                     const XFillBitmapItem aXFillBitmapItem(pObj->GetMergedItem( XATTR_FILLBITMAP ));
-                    OUString aURL( UNO_NAME_GRAPHOBJ_URLPREFIX);
-                    aURL += OStringToOUString(
-                        aXFillBitmapItem.GetGraphicObject().GetUniqueID(),
-                        RTL_TEXTENCODING_ASCII_US);
-
-                    xPropSet->setPropertyValue("FillBitmapURL", Any( aURL ) );
+                    uno::Reference<graphic::XGraphic> xGraphic = aXFillBitmapItem.GetGraphicObject().GetGraphic().GetXGraphic();
+                    uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
+                    xPropSet->setPropertyValue("FillBitmap", uno::makeAny(xBitmap));
 
                     const XFillBmpStretchItem aStretchItem(pObj->GetMergedItem( XATTR_FILLBMP_STRETCH ));
                     const XFillBmpTileItem aTileItem(pObj->GetMergedItem( XATTR_FILLBMP_TILE ));
                     if( aTileItem.GetValue() )
-                        xPropSet->setPropertyValue( "FillBitmapMode", Any( css::drawing::BitmapMode_REPEAT ) );
+                        xPropSet->setPropertyValue("FillBitmapMode", uno::makeAny(drawing::BitmapMode_REPEAT));
                     else if( aStretchItem.GetValue() )
-                        xPropSet->setPropertyValue( "FillBitmapMode", Any( css::drawing::BitmapMode_STRETCH ) );
+                        xPropSet->setPropertyValue("FillBitmapMode", uno::makeAny(drawing::BitmapMode_STRETCH));
                     else
-                        xPropSet->setPropertyValue( "FillBitmapMode", Any( css::drawing::BitmapMode_NO_REPEAT ) );
+                        xPropSet->setPropertyValue("FillBitmapMode", uno::makeAny(drawing::BitmapMode_NO_REPEAT));
                 }
             break;
             default:
@@ -7499,7 +7508,7 @@ void ApplyCellLineAttributes( const SdrObject* pLine, Reference< XTable > const 
             case drawing::LineStyle_SOLID :
                 {
                     Color aLineColor( pLine->GetMergedItem( XATTR_LINECOLOR ).GetColorValue() );
-                    aBorderLine.Color = aLineColor.GetColor();
+                    aBorderLine.Color = sal_Int32(aLineColor);
                     // Avoid width = 0, the min value should be 1.
                     sal_Int32 nLineWidth = std::max(sal_Int32(1), pLine->GetMergedItem(XATTR_LINEWIDTH) .GetValue() / 4);
                     aBorderLine.LineWidth = static_cast< sal_Int16 >( nLineWidth );
@@ -7514,11 +7523,10 @@ void ApplyCellLineAttributes( const SdrObject* pLine, Reference< XTable > const 
                 }
             break;
         }
-        std::vector< sal_Int32 >::const_iterator aIter( vPositions.begin() );
-        while( aIter != vPositions.end() )
+        for (auto const& vPos : vPositions)
         {
-            sal_Int32 nPosition = *aIter & 0xffffff;
-            sal_Int32 nFlags = *aIter &~0xffffff;
+            sal_Int32 nPosition = vPos & 0xffffff;
+            sal_Int32 nFlags = vPos &~0xffffff;
             sal_Int32 nRow = nPosition / nColumns;
             sal_Int32 nColumn = nPosition - ( nRow * nColumns );
             Reference< XCell > xCell( xTable->getCellByPosition( nColumn, nRow ) );
@@ -7536,7 +7544,6 @@ void ApplyCellLineAttributes( const SdrObject* pLine, Reference< XTable > const 
                 xPropSet->setPropertyValue( "DiagonalTLBR", Any( true ) );
             if ( nFlags & LinePositionBLTR )
                 xPropSet->setPropertyValue( "DiagonalBLTR", Any( true ) );
-            ++aIter;
         }
     }
     catch( const Exception& )
@@ -7578,7 +7585,7 @@ SdrObject* SdrPowerPointImport::CreateTable( SdrObject* pGroup, const sal_uInt32
     if (aRows.empty())
         return pRet;
 
-    sdr::table::SdrTableObj* pTable = new sdr::table::SdrTableObj( pSdrModel );
+    sdr::table::SdrTableObj* pTable = new sdr::table::SdrTableObj(*pSdrModel);
     pTable->uno_lock();
     Reference< XTable > xTable( pTable->getTable() );
 
@@ -7642,13 +7649,12 @@ SdrObject* SdrPowerPointImport::CreateTable( SdrObject* pGroup, const sal_uInt32
                 GetLinePositions( pObj, aRows, aColumns, vPositions, pGroup->GetSnapRect() );
 
                 // correcting merged cell position
-                std::vector< sal_Int32 >::iterator aIter( vPositions.begin() );
-                while( aIter != vPositions.end() )
+                for (auto & vPos : vPositions)
                 {
-                    sal_Int32 nOldPosition = *aIter & 0xffff;
-                    sal_Int32 nOldFlags = *aIter & 0xffff0000;
+                    sal_Int32 nOldPosition = vPos & 0xffff;
+                    sal_Int32 nOldFlags = vPos & 0xffff0000;
                     sal_Int32 nNewPosition = pMergedCellIndexTable[ nOldPosition ] | nOldFlags;
-                    *aIter++ = nNewPosition;
+                    vPos = nNewPosition;
                 }
                 ApplyCellLineAttributes( pObj, xTable, vPositions, aColumns.size() );
             }

@@ -21,8 +21,6 @@
 
 #include <unotools/charclass.hxx>
 
-#include <vcl/msgbox.hxx>
-
 #include <editeng/boxitem.hxx>
 #include <editeng/lrspitem.hxx>
 #include <editeng/formatbreakitem.hxx>
@@ -167,7 +165,7 @@ class SwAutoFormat
     bool IsEnumericChar( const SwTextNode&) const;
     static bool IsBlanksInString( const SwTextNode&);
     sal_uInt16 CalcLevel( const SwTextNode&, sal_uInt16 *pDigitLvl = nullptr ) const;
-    sal_Int32 GetBigIndent( sal_Int32& rAktSpacePos ) const;
+    sal_Int32 GetBigIndent( sal_Int32& rCurrentSpacePos ) const;
 
     static OUString DelLeadingBlanks(const OUString& rStr);
     static OUString DelTrailingBlanks( const OUString& rStr );
@@ -480,7 +478,7 @@ sal_uInt16 SwAutoFormat::CalcLevel( const SwTextNode& rNd, sal_uInt16 *pDigitLvl
     return nLvl;
 }
 
-sal_Int32 SwAutoFormat::GetBigIndent( sal_Int32& rAktSpacePos ) const
+sal_Int32 SwAutoFormat::GetBigIndent( sal_Int32& rCurrentSpacePos ) const
 {
     SwTextFrameInfo aFInfo( GetFrame( *m_pCurTextNd ) );
     const SwTextFrame* pNxtFrame = nullptr;
@@ -494,7 +492,7 @@ sal_Int32 SwAutoFormat::GetBigIndent( sal_Int32& rAktSpacePos ) const
         pNxtFrame = GetFrame( *pNxtNd );
     }
 
-    return aFInfo.GetBigIndent( rAktSpacePos, pNxtFrame );
+    return aFInfo.GetBigIndent( rCurrentSpacePos, pNxtFrame );
 }
 
 bool SwAutoFormat::IsNoAlphaLine( const SwTextNode& rNd ) const
@@ -668,7 +666,7 @@ bool SwAutoFormat::DoTable()
         DelEmptyLine();
         SwNodeIndex aIdx( m_aDelPam.GetPoint()->nNode );
         m_aDelPam.Move( fnMoveForward );
-        m_pDoc->InsertTable( SwInsertTableOptions( tabopts::ALL_TBL_INS_ATTR , 1 ),
+        m_pDoc->InsertTable( SwInsertTableOptions( SwInsertTableFlags::All , 1 ),
                            *m_aDelPam.GetPoint(), 1, nColCnt, eHori,
                            nullptr, &aPosArr );
         m_aDelPam.GetPoint()->nNode = aIdx;
@@ -1804,9 +1802,9 @@ void SwAutoFormat::BuildHeadLine( sal_uInt16 nLvl )
 void SwAutoFormat::AutoCorrect( sal_Int32 nPos )
 {
     SvxAutoCorrect* pATst = SvxAutoCorrCfg::Get().GetAutoCorrect();
-    long aSvxFlags = pATst->GetFlags( );
-    bool bReplaceQuote = ( aSvxFlags & ChgQuotes ) > 0;
-    bool bReplaceSglQuote = ( aSvxFlags & ChgSglQuotes ) > 0;
+    ACFlags aSvxFlags = pATst->GetFlags( );
+    bool bReplaceQuote( aSvxFlags & ACFlags::ChgQuotes );
+    bool bReplaceSglQuote( aSvxFlags & ACFlags::ChgSglQuotes );
 
     if( m_aFlags.bAFormatByInput ||
         (!m_aFlags.bAutoCorrect && !bReplaceQuote && !bReplaceSglQuote &&

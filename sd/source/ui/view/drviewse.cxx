@@ -27,8 +27,6 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/uno/Any.hxx>
 
-#include <comphelper/processfactory.hxx>
-
 #include <undo/undomanager.hxx>
 #include <vcl/waitobj.hxx>
 #include <svl/aeitem.hxx>
@@ -234,7 +232,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_TEXT_FITTOSIZE:
         case SID_TEXT_FITTOSIZE_VERTICAL:
         {
-            SetCurrentFunction( FuText::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuText::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             GetCurrentFunction()->DoExecute(rReq);
 
             SfxBindings& rBindings = GetViewFrame()->GetBindings();
@@ -253,7 +251,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
 
         case SID_FM_CREATE_CONTROL:
         {
-            SetCurrentFunction( FuConstructUnoControl::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent ) );
+            SetCurrentFunction( FuConstructUnoControl::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             rReq.Done();
         }
         break;
@@ -266,7 +264,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
             if(pDescriptorItem)
             {
                 // get the form view
-                FmFormView* pFormView = dynamic_cast<FmFormView*>( mpDrawView );
+                FmFormView* pFormView = dynamic_cast<FmFormView*>( mpDrawView.get() );
                 SdrPageView* pPageView = pFormView ? pFormView->GetSdrPageView() : nullptr;
 
                 if(pPageView)
@@ -324,17 +322,16 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 if ( mpDrawView->GetMarkedObjectList().GetMarkCount() > 0 &&
                     !mpDrawView->IsCrookAllowed( mpDrawView->IsCrookNoContortion() ) )
                 {
-                    ::sd::Window* pWindow = GetActiveWindow();
                     if ( mpDrawView->IsPresObjSelected() )
                     {
-                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                                       SdResId(STR_ACTION_NOTPOSSIBLE)));
                         xInfoBox->run();
                     }
                     else
                     {
-                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                        VclMessageType::Question, VclButtonsType::YesNo,
                                                                        SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)));
                         if (xQueryBox->run() == RET_YES )
@@ -368,17 +365,16 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 if ( nMarkCnt > 0 && !b3DObjMarked &&
                      (!mpDrawView->IsShearAllowed() || !mpDrawView->IsDistortAllowed()) )
                 {
-                    ::sd::Window* pWindow = GetActiveWindow();
                     if ( mpDrawView->IsPresObjSelected() )
                     {
-                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                                       SdResId(STR_ACTION_NOTPOSSIBLE)));
                         xInfoBox->run();
                     }
                     else
                     {
-                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                        VclMessageType::Question, VclButtonsType::YesNo,
                                                                        SdResId(STR_ASK_FOR_CONVERT_TO_BEZIER)));
                         if (xQueryBox->run() == RET_YES)
@@ -391,7 +387,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 }
             }
 
-            SetCurrentFunction( FuSelection::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuSelection::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             rReq.Done();
             Invalidate( SID_OBJECT_SELECT );
         }
@@ -451,7 +447,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_CONNECTOR_LINES_CIRCLE_END:
         case SID_CONNECTOR_LINES_CIRCLES:
         {
-            SetCurrentFunction( FuConstructRectangle::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent ) );
+            SetCurrentFunction( FuConstructRectangle::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             rReq.Done();
         }
         break;
@@ -464,7 +460,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_DRAW_BEZIER_FILL:          // BASIC
         case SID_DRAW_BEZIER_NOFILL:        // BASIC
         {
-            SetCurrentFunction( FuConstructBezierPolygon::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent) );
+            SetCurrentFunction( FuConstructBezierPolygon::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent) );
             rReq.Done();
         }
         break;
@@ -473,7 +469,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         {
             if (nOldSId != SID_GLUE_EDITMODE)
             {
-                SetCurrentFunction( FuEditGluePoints::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent ) );
+                SetCurrentFunction( FuEditGluePoints::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             }
             else
             {
@@ -495,7 +491,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_DRAW_CIRCLECUT:
         case SID_DRAW_CIRCLECUT_NOFILL:
         {
-            SetCurrentFunction( FuConstructArc::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent) );
+            SetCurrentFunction( FuConstructArc::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent) );
             rReq.Done();
         }
         break;
@@ -509,7 +505,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_3D_CONE:
         case SID_3D_PYRAMID:
         {
-            SetCurrentFunction( FuConstruct3dObject::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent ) );
+            SetCurrentFunction( FuConstruct3dObject::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             rReq.Done();
         }
         break;
@@ -522,7 +518,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_DRAWTBX_CS_STAR :
         case SID_DRAW_CS_ID :
         {
-            SetCurrentFunction( FuConstructCustomShape::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq, bPermanent ) );
+            SetCurrentFunction( FuConstructCustomShape::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             rReq.Done();
 
             if ( nSId != SID_DRAW_CS_ID )
@@ -536,7 +532,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
 
         case SID_FORMATPAINTBRUSH:
         {
-            SetCurrentFunction( FuFormatPaintBrush::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuFormatPaintBrush::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             rReq.Done();
             SfxBindings& rBind = GetViewFrame()->GetBindings();
             rBind.Invalidate( nSId );
@@ -548,7 +544,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_ZOOM_PANNING:
         {
             mbZoomOnPage = false;
-            SetCurrentFunction( FuZoom::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuZoom::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             rReq.Done();
         }
         break;
@@ -683,8 +679,7 @@ void DrawViewShell::FuDeleteSelectedObjects()
     // placeholders which cannot be deleted selected
     if (mpDrawView->IsPresObjSelected(false, true, false, true))
     {
-        ::sd::Window* pWindow = GetActiveWindow();
-        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                       SdResId(STR_ACTION_NOTPOSSIBLE)));
         xInfoBox->run();
@@ -709,7 +704,7 @@ void DrawViewShell::FuDeleteSelectedObjects()
 void DrawViewShell::FuSupport(SfxRequest& rReq)
 {
     if( rReq.GetSlot() == SID_STYLE_FAMILY && rReq.GetArgs())
-        GetDocSh()->SetStyleFamily(static_cast<SfxStyleFamily>(static_cast<const SfxUInt16Item&>(rReq.GetArgs()->Get( SID_STYLE_FAMILY )).GetValue()));
+        GetDocSh()->SetStyleFamily(static_cast<SfxStyleFamily>(rReq.GetArgs()->Get( SID_STYLE_FAMILY ).GetValue()));
 
     // We do not execute a thing during a native slide show
     if(SlideShow::IsRunning(GetViewShellBase()) &&
@@ -737,12 +732,8 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
         case SID_PRESENTATION_CURRENT_SLIDE:
         case SID_REHEARSE_TIMINGS:
         {
-            sfx2::SfxNotebookBar::LockNotebookBar();
-
             slideshowhelp::ShowSlideShow(rReq, *GetDoc());
             rReq.Ignore ();
-
-            sfx2::SfxNotebookBar::UnlockNotebookBar();
         }
         break;
 
@@ -800,8 +791,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected(false, true, false, true) )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -825,8 +815,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected(false, true, false, true) )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -1469,7 +1458,9 @@ void DrawViewShell::InsertURLField(const OUString& rURL, const OUString& rText,
         pOutl->QuickInsertField( aURLItem, ESelection() );
         OutlinerParaObject* pOutlParaObject = pOutl->CreateParaObject();
 
-        SdrRectObj* pRectObj = new SdrRectObj(OBJ_TEXT);
+        SdrRectObj* pRectObj = new SdrRectObj(
+            GetView()->getSdrModelFromSdrView(),
+            OBJ_TEXT);
 
         pOutl->UpdateFields();
         pOutl->SetUpdateMode( true );
@@ -1545,8 +1536,12 @@ void DrawViewShell::InsertURLButton(const OUString& rURL, const OUString& rText,
 
     if (bNewObj) try
     {
-        SdrUnoObj* pUnoCtrl = static_cast< SdrUnoObj* >( SdrObjFactory::MakeNewObject(SdrInventor::FmForm, OBJ_FM_BUTTON,
-                                mpDrawView->GetSdrPageView()->GetPage(), GetDoc()) );
+        SdrUnoObj* pUnoCtrl = static_cast< SdrUnoObj* >(
+            SdrObjFactory::MakeNewObject(
+                GetView()->getSdrModelFromSdrView(),
+                SdrInventor::FmForm,
+                OBJ_FM_BUTTON,
+                mpDrawView->GetSdrPageView()->GetPage()));
 
         Reference< awt::XControlModel > xControlModel( pUnoCtrl->GetUnoControlModel(), uno::UNO_QUERY_THROW );
         Reference< beans::XPropertySet > xPropSet( xControlModel, uno::UNO_QUERY_THROW );
@@ -1609,6 +1604,7 @@ namespace slideshowhelp
         Reference< XPresentation2 > xPresentation( rDoc.getPresentation() );
         if( xPresentation.is() )
         {
+            sfx2::SfxNotebookBar::LockNotebookBar();
             if (SID_REHEARSE_TIMINGS == rReq.GetSlot())
                 xPresentation->rehearseTimings();
             else if (rDoc.getPresentationSettings().mbCustomShow)
@@ -1638,6 +1634,7 @@ namespace slideshowhelp
 
                 xPresentation->startWithArguments( aArguments );
             }
+            sfx2::SfxNotebookBar::UnlockNotebookBar();
         }
     }
 }

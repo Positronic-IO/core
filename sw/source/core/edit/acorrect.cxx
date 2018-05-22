@@ -83,7 +83,7 @@ void PaMIntoCursorShellRing::RemoveFromRing( SwPaM& rPam, SwPaM const * pPrev )
 
 SwAutoCorrDoc::SwAutoCorrDoc( SwEditShell& rEditShell, SwPaM& rPam,
                                 sal_Unicode cIns )
-    : rEditSh( rEditShell ), rCursor( rPam ), pIdx( nullptr )
+    : rEditSh( rEditShell ), rCursor( rPam )
     , m_nEndUndoCounter(0)
     , bUndoIdInitialized( cIns == 0 )
 {
@@ -95,7 +95,6 @@ SwAutoCorrDoc::~SwAutoCorrDoc()
     {
         rEditSh.EndUndo();
     }
-    delete pIdx;
 }
 
 void SwAutoCorrDoc::DeleteSel( SwPaM& rDelPam )
@@ -276,7 +275,7 @@ OUString const* SwAutoCorrDoc::GetPrevPara(bool const bAtNormalPos)
     OUString const* pStr(nullptr);
 
     if( bAtNormalPos || !pIdx )
-        pIdx = new SwNodeIndex( rCursor.GetPoint()->nNode, -1 );
+        pIdx.reset(new SwNodeIndex( rCursor.GetPoint()->nNode, -1 ));
     else
         --(*pIdx);
 
@@ -360,7 +359,7 @@ bool SwAutoCorrDoc::ChgAutoCorrWord( sal_Int32& rSttPos, sal_Int32 nEndPos,
                 if( pPara )
                 {
                     OSL_ENSURE( !pIdx, "who has not deleted his Index?" );
-                    pIdx = new SwNodeIndex( rCursor.GetPoint()->nNode, -1 );
+                    pIdx.reset(new SwNodeIndex( rCursor.GetPoint()->nNode, -1 ));
                 }
 
                 SwDoc* pAutoDoc = aTBlks.GetDoc();
@@ -411,7 +410,7 @@ bool SwAutoCorrDoc::ChgAutoCorrWord( sal_Int32& rSttPos, sal_Int32 nEndPos,
 //  - FnCapitalStartSentence
 // after the exchange of characters. Then the words, if necessary, can be inserted
 // into the exception list.
-void SwAutoCorrDoc::SaveCpltSttWord( sal_uLong nFlag, sal_Int32 nPos,
+void SwAutoCorrDoc::SaveCpltSttWord( ACFlags nFlag, sal_Int32 nPos,
                                             const OUString& rExceptWord,
                                             sal_Unicode cChar )
 {
@@ -444,9 +443,9 @@ void SwAutoCorrExceptWord::CheckChar( const SwPosition& rPos, sal_Unicode cChr )
         SvxAutoCorrect* pACorr = SvxAutoCorrCfg::Get().GetAutoCorrect();
 
         // then add to the list:
-        if (CapitalStartWord & m_nFlags)
+        if (ACFlags::CapitalStartWord & m_nFlags)
             pACorr->AddWrtSttException(m_sWord, m_eLanguage);
-        else if (CapitalStartSentence & m_nFlags)
+        else if (ACFlags::CapitalStartSentence & m_nFlags)
             pACorr->AddCplSttException(m_sWord, m_eLanguage);
     }
 }

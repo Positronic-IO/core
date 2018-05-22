@@ -162,10 +162,10 @@ void LwpPageLayout::ParseGeometry(XFPageMaster* pm1)
 */
 void LwpPageLayout::ParseWaterMark(XFPageMaster *pm1)
 {
-    XFBGImage* pXFBGImage = GetXFBGImage();
-    if(pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetXFBGImage());
+    if (xXFBGImage)
     {
-        pm1->SetBackImage(pXFBGImage);
+        pm1->SetBackImage(xXFBGImage);
     }
 }
 
@@ -214,10 +214,10 @@ void LwpPageLayout::ParseShadow(XFPageMaster *pm1)
 */
 void LwpPageLayout::ParsePatternFill(XFPageMaster* pm1)
 {
-    XFBGImage* pXFBGImage = GetFillPattern();
-    if (pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetFillPattern());
+    if (xXFBGImage)
     {
-        pm1->SetBackImage(pXFBGImage);
+        pm1->SetBackImage(xXFBGImage);
     }
 }
 /**
@@ -333,7 +333,7 @@ void LwpPageLayout::RegisterStyle()
 
     //Add the page master to stylemanager
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    XFPageMaster* pm1 = static_cast<XFPageMaster*>(pXFStyleManager->AddStyle(xpm1.release()).m_pStyle);
+    XFPageMaster* pm1 = static_cast<XFPageMaster*>(pXFStyleManager->AddStyle(std::move(xpm1)).m_pStyle);
     m_pXFPageMaster = pm1;
     OUString pmname = pm1->GetStyleName();
 
@@ -341,7 +341,7 @@ void LwpPageLayout::RegisterStyle()
     std::unique_ptr<XFMasterPage> p1(new XFMasterPage);
     p1->SetStyleName(GetName().str());
     p1->SetPageMaster(pmname);
-    XFMasterPage* p1_added = static_cast<XFMasterPage*>(pXFStyleManager->AddStyle(p1.release()).m_pStyle);
+    XFMasterPage* p1_added = static_cast<XFMasterPage*>(pXFStyleManager->AddStyle(std::move(p1)).m_pStyle);
     m_StyleName = p1_added->GetStyleName();
 
     //Set footer style
@@ -390,7 +390,7 @@ OUString LwpPageLayout::RegisterEndnoteStyle()
 
     //Add the page master to stylemanager
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    m_pXFPageMaster = static_cast<XFPageMaster*>(pXFStyleManager->AddStyle(pm1.release()).m_pStyle);
+    m_pXFPageMaster = static_cast<XFPageMaster*>(pXFStyleManager->AddStyle(std::move(pm1)).m_pStyle);
     OUString pmname = m_pXFPageMaster->GetStyleName();
 
     //Add master page
@@ -416,7 +416,7 @@ OUString LwpPageLayout::RegisterEndnoteStyle()
         pLayoutHeader->RegisterStyle(p1.get());
     }
 
-    return pXFStyleManager->AddStyle(p1.release()).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(p1)).m_pStyle->GetStyleName();
 }
 /**
 * @descr:   Whether current page layout has columns
@@ -781,7 +781,7 @@ void LwpHeaderLayout::ParseMargins(XFHeaderStyle* ph1)
 {
     //Set height: from top of header to top of body, including the spacing between header and body
     double height = GetGeometryHeight()- GetMarginsValue(MARGIN_TOP);
-    if( IsAutoGrowDown() )
+    if (GetIsAutoGrowDown())
     {
         ph1->SetMinHeight(height);
     }
@@ -834,10 +834,10 @@ void LwpHeaderLayout::ParseShadow(XFHeaderStyle* pHeaderStyle)
 */
 void LwpHeaderLayout::ParsePatternFill(XFHeaderStyle* pHeaderStyle)
 {
-    XFBGImage* pXFBGImage = GetFillPattern();
-    if (pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetFillPattern());
+    if (xXFBGImage)
     {
-        pHeaderStyle->SetBackImage(pXFBGImage);
+        pHeaderStyle->SetBackImage(xXFBGImage);
     }
 }
 /**
@@ -867,10 +867,10 @@ void LwpHeaderLayout::ParseBackColor(XFHeaderStyle* pHeaderStyle)
 
 void LwpHeaderLayout::ParseWaterMark(XFHeaderStyle * pHeaderStyle)
 {
-    XFBGImage* pXFBGImage = GetXFBGImage();
-    if(pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetXFBGImage());
+    if (xXFBGImage)
     {
-        pHeaderStyle->SetBackImage(pXFBGImage);
+        pHeaderStyle->SetBackImage(xXFBGImage);
     }
 }
 //End by
@@ -995,10 +995,10 @@ void LwpFooterLayout::ParseShadow(XFFooterStyle* pFooterStyle)
 */
 void LwpFooterLayout::ParsePatternFill(XFFooterStyle* pFooterStyle)
 {
-    XFBGImage* pXFBGImage = GetFillPattern();
-    if (pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetFillPattern());
+    if (xXFBGImage)
     {
-        pFooterStyle->SetBackImage(pXFBGImage);
+        pFooterStyle->SetBackImage(xXFBGImage);
     }
 }
 /**
@@ -1053,10 +1053,10 @@ void LwpFooterLayout::RegisterStyle(XFMasterPage* mp1)
 
 void LwpFooterLayout::ParseWaterMark(XFFooterStyle * pFooterStyle)
 {
-    XFBGImage* pXFBGImage = GetXFBGImage();
-    if(pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetXFBGImage());
+    if (xXFBGImage)
     {
-        pFooterStyle->SetBackImage(pXFBGImage);
+        pFooterStyle->SetBackImage(xXFBGImage);
     }
 }
 

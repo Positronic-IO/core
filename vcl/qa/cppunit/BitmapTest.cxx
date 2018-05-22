@@ -25,8 +25,10 @@
 #if HAVE_FEATURE_OPENGL
 #include <vcl/opengl/OpenGLHelper.hxx>
 #endif
+#include <vcl/BitmapMonochromeFilter.hxx>
 
 #include <BitmapSymmetryCheck.hxx>
+#include <bitmapwriteaccess.hxx>
 
 namespace
 {
@@ -210,7 +212,9 @@ void BitmapTest::testMonochrome()
 {
     Bitmap aBmp = createTestBitmap();
 
-    aBmp.MakeMonochrome(63);
+    BitmapEx aBmpEx(aBmp);
+    BitmapFilter::Filter(aBmpEx, BitmapMonochromeFilter(63));
+    aBmp = aBmpEx.GetBitmap();
     BitmapReadAccess aBmpReadAccess(aBmp);
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Black pixel wrong monochrome value", BitmapColor(COL_BLACK),
@@ -397,7 +401,7 @@ void BitmapTest::testScale()
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(24), aBitmap24Bit.GetBitCount());
 
     {
-        Bitmap::ScopedWriteAccess aWriteAccess(aBitmap24Bit);
+        BitmapScopedWriteAccess aWriteAccess(aBitmap24Bit);
         aWriteAccess->Erase(COL_WHITE);
         aWriteAccess->SetLineColor(COL_BLACK);
         aWriteAccess->DrawRect(tools::Rectangle(1, 1, 8, 8));
@@ -484,7 +488,7 @@ void BitmapTest::testCRC()
 #endif
 
     // a 1x1 black & white checkerboard
-    aVDev->DrawCheckered(Point(), aVDev->GetOutputSizePixel(), 1, 1);
+    aVDev->DrawCheckered(Point(), aVDev->GetOutputSizePixel(), 1, Color(0, 0, 1));
     Bitmap aChecker = getAsBitmap(aVDev);
     checkAndInsert(aCRCs, aChecker, "checkerboard");
     aChecker.Invert();

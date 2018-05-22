@@ -49,7 +49,6 @@
 #include <RptDef.hxx>
 #include <SectionWindow.hxx>
 #include <helpids.h>
-#include <strings.hrc>
 #include <dlgedclip.hxx>
 #include <UndoActions.hxx>
 #include <rptui_slotid.hrc>
@@ -70,11 +69,10 @@ namespace rptui
 using namespace ::com::sun::star;
 
 
-sal_Int32 lcl_getOverlappedControlColor(/*const uno::Reference <lang::XMultiServiceFactory> _rxFactory*/)
+Color lcl_getOverlappedControlColor(/*const uno::Reference <lang::XMultiServiceFactory> _rxFactory*/)
 {
     svtools::ExtendedColorConfig aConfig;
-    sal_Int32 nColor = aConfig.GetColorValue(CFG_REPORTDESIGNER, DBOVERLAPPEDCONTROL).getColor();
-    return nColor;
+    return aConfig.GetColorValue(CFG_REPORTDESIGNER, DBOVERLAPPEDCONTROL).getColor();
 }
 
 OReportSection::OReportSection(OSectionWindow* _pParent,const uno::Reference< report::XSection >& _xSection)
@@ -184,7 +182,10 @@ void OReportSection::fill()
     m_pModel = m_pParent->getViewsWindow()->getView()->getReportView()->getController().getSdrModel();
     m_pPage = m_pModel->getPage(m_xSection);
 
-    m_pView = new OSectionView( m_pModel.get(), this, m_pParent->getViewsWindow()->getView() );
+    m_pView = new OSectionView(
+        *m_pModel,
+        this,
+        m_pParent->getViewsWindow()->getView());
 
     // #i93597# tell SdrPage that only left and right page border is defined
     // instead of the full rectangle definition
@@ -215,7 +216,7 @@ void OReportSection::fill()
     sal_Int32 nColor = m_xSection->getBackColor();
     if ( nColor == static_cast<sal_Int32>(COL_TRANSPARENT) )
         nColor = getStyleProperty<sal_Int32>(m_xSection->getReportDefinition(),PROPERTY_BACKCOLOR);
-    m_pView->SetApplicationDocumentColor(nColor);
+    m_pView->SetApplicationDocumentColor(Color(nColor));
 
     uno::Reference<report::XReportDefinition> xReportDefinition = m_xSection->getReportDefinition();
     const sal_Int32 nLeftMargin = getStyleProperty<sal_Int32>(xReportDefinition,PROPERTY_LEFTMARGIN);
@@ -263,10 +264,10 @@ void OReportSection::Paste(const uno::Sequence< beans::NamedValue >& _aAllreadyC
                         SdrObject* pObject = pShape ? pShape->GetSdrObject() : nullptr;
                         if ( pObject )
                         {
-                            SdrObject* pNewObj = pObject->Clone();
+                            // Clone to target SdrModel
+                            SdrObject* pNewObj(pObject->CloneSdrObject(*m_pModel.get()));
 
                             pNewObj->SetPage( m_pPage );
-                            pNewObj->SetModel( m_pModel.get() );
                             m_pPage->InsertObject(pNewObj, SAL_MAX_SIZE);
 
                             tools::Rectangle aRet(VCLPoint((*pCopiesIter)->getPosition()),VCLSize((*pCopiesIter)->getSize()));
@@ -356,7 +357,7 @@ void OReportSection::Copy(uno::Sequence< beans::NamedValue >& _rAllreadyCopiedOb
         {
             try
             {
-                SdrObject* pNewObj = pSdrObject->Clone();
+                SdrObject* pNewObj(pSdrObject->CloneSdrObject(pSdrObject->getSdrModelFromSdrObject()));
                 aCopies.emplace_back(pNewObj->getUnoShape(),uno::UNO_QUERY);
                 if ( _bEraseAnddNoClone )
                 {
@@ -470,7 +471,7 @@ void OReportSection::_propertyChanged(const beans::PropertyChangeEvent& _rEvent)
             sal_Int32 nColor = m_xSection->getBackColor();
             if ( nColor == static_cast<sal_Int32>(COL_TRANSPARENT) )
                 nColor = getStyleProperty<sal_Int32>(m_xSection->getReportDefinition(),PROPERTY_BACKCOLOR);
-            m_pView->SetApplicationDocumentColor(nColor);
+            m_pView->SetApplicationDocumentColor(Color(nColor));
             Invalidate(InvalidateFlags::NoChildren|InvalidateFlags::NoErase);
         }
         else
@@ -607,7 +608,7 @@ void OReportSection::createDefault(const OUString& _sType,SdrObject* _pObj)
                         {
                             const SfxItemSet& rSource = pSourceObj->GetMergedItemSet();
                             SfxItemSet aDest(
-                                _pObj->GetModel()->GetItemPool(),
+                                _pObj->getSdrModelFromSdrObject().GetItemPool(),
                                 svl::Items<
                                     // Ranges from SdrAttrObj:
                                     SDRATTR_START, SDRATTR_SHADOW_LAST,

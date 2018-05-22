@@ -26,6 +26,7 @@
 #include <com/sun/star/sdb/XOfficeDatabaseDocument.hpp>
 #include <com/sun/star/util/MeasureUnit.hpp>
 #include <com/sun/star/xml/sax/Parser.hpp>
+#include <com/sun/star/document/GraphicStorageHandler.hpp>
 #include "xmlfilter.hxx"
 #include "xmlGroup.hxx"
 #include "xmlReport.hxx"
@@ -43,7 +44,6 @@
 #include <com/sun/star/xml/sax/XParser.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/genericpropertyset.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <xmloff/ProgressBarHelper.hxx>
@@ -181,7 +181,7 @@ ErrCode ReadThroughComponent(
     const sal_Char* pStreamName,
     const sal_Char* pCompatibilityStreamName,
     const uno::Reference<XComponentContext> & rxContext,
-    const Reference< document::XGraphicObjectResolver > & _xGraphicObjectResolver,
+    const Reference<document::XGraphicStorageHandler> & rxGraphicStorageHandler,
     const Reference<document::XEmbeddedObjectResolver>& _xEmbeddedObjectResolver,
     const OUString& _sFilterName
     ,const uno::Reference<beans::XPropertySet>& _xProp)
@@ -225,7 +225,7 @@ ErrCode ReadThroughComponent(
         }
 
         sal_Int32 nArgs = 0;
-        if( _xGraphicObjectResolver.is())
+        if (rxGraphicStorageHandler.is())
             nArgs++;
         if( _xEmbeddedObjectResolver.is())
             nArgs++;
@@ -235,8 +235,8 @@ ErrCode ReadThroughComponent(
         uno::Sequence< uno::Any > aFilterCompArgs( nArgs );
 
         nArgs = 0;
-        if( _xGraphicObjectResolver.is())
-            aFilterCompArgs[nArgs++] <<= _xGraphicObjectResolver;
+        if (rxGraphicStorageHandler.is())
+            aFilterCompArgs[nArgs++] <<= rxGraphicStorageHandler;
         if( _xEmbeddedObjectResolver.is())
             aFilterCompArgs[ nArgs++ ] <<= _xEmbeddedObjectResolver;
         if ( _xProp.is() )
@@ -458,15 +458,15 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
         }
 #endif
 
-        Reference< document::XGraphicObjectResolver > xGraphicObjectResolver;
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
         uno::Reference<document::XEmbeddedObjectResolver> xEmbeddedObjectResolver;
         uno::Reference< uno::XComponentContext > xContext = GetComponentContext();
 
-        uno::Sequence< uno::Any > aArgs(1);
+        uno::Sequence<uno::Any> aArgs(1);
         aArgs[0] <<= xStorage;
-        xGraphicObjectResolver.set(
+        xGraphicStorageHandler.set(
                 xContext->getServiceManager()->createInstanceWithArgumentsAndContext("com.sun.star.comp.Svx.GraphicImportHelper", aArgs, xContext),
-                uno::UNO_QUERY );
+                uno::UNO_QUERY);
 
         uno::Reference< lang::XMultiServiceFactory > xReportServiceFactory( m_xReportDefinition, uno::UNO_QUERY);
         aArgs[0] <<= beans::NamedValue("Storage",uno::makeAny(xStorage));
@@ -499,7 +499,7 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
                                     ,"meta.xml"
                                     ,"Meta.xml"
                                     ,GetComponentContext()
-                                    ,xGraphicObjectResolver
+                                    ,xGraphicStorageHandler
                                     ,xEmbeddedObjectResolver
                                     ,SERVICE_METAIMPORTER
                                     ,xProp
@@ -523,7 +523,7 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
                                     ,"settings.xml"
                                     ,"Settings.xml"
                                     ,GetComponentContext()
-                                    ,xGraphicObjectResolver
+                                    ,xGraphicStorageHandler
                                     ,xEmbeddedObjectResolver
                                     ,SERVICE_SETTINGSIMPORTER
                                     ,xProp
@@ -537,7 +537,7 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
                                     ,"styles.xml"
                                     ,"Styles.xml"
                                     ,GetComponentContext()
-                                    ,xGraphicObjectResolver
+                                    ,xGraphicStorageHandler
                                     ,xEmbeddedObjectResolver
                                     ,SERVICE_STYLESIMPORTER
                                     ,xProp);
@@ -551,7 +551,7 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
                                     ,"content.xml"
                                     ,"Content.xml"
                                     ,GetComponentContext()
-                                    ,xGraphicObjectResolver
+                                    ,xGraphicStorageHandler
                                     ,xEmbeddedObjectResolver
                                     ,SERVICE_CONTENTIMPORTER
                                     ,xProp
@@ -745,10 +745,6 @@ SvXMLImportContext* ORptFilter::CreateDocumentContext( sal_uInt16 nPrefix,
         case XML_TOK_DOC_CONTENT:
             pContext = new RptXMLDocumentContentContext(*this, nPrefix, rLocalName);
             break;
-        case XML_TOK_DOC_META:
-            GetProgressBarHelper()->Increment( PROGRESS_BAR_STEP );
-            pContext = CreateMetaContext( rLocalName );
-            break;
         default:
             break;
     }
@@ -756,6 +752,23 @@ SvXMLImportContext* ORptFilter::CreateDocumentContext( sal_uInt16 nPrefix,
     if ( !pContext )
         pContext = SvXMLImport::CreateDocumentContext( nPrefix, rLocalName, xAttrList );
 
+    return pContext;
+}
+
+SvXMLImportContext *ORptFilter::CreateFastContext( sal_Int32 nElement,
+        const uno::Reference< xml::sax::XFastAttributeList >& /*xAttrList*/ )
+{
+    SvXMLImportContext *pContext = nullptr;
+
+    switch (nElement)
+    {
+        case XML_ELEMENT( OFFICE, XML_DOCUMENT_META ):
+            GetProgressBarHelper()->Increment( PROGRESS_BAR_STEP );
+            pContext = CreateMetaContext( nElement );
+            break;
+        default:
+            pContext = new SvXMLImportContext(*this);
+    }
     return pContext;
 }
 
@@ -1102,14 +1115,14 @@ void ORptFilter::insertFunction(const css::uno::Reference< css::report::XFunctio
     m_aFunctions.emplace(_xFunction->getName(),_xFunction);
 }
 
-SvXMLImportContext* ORptFilter::CreateMetaContext(const OUString& rLocalName)
+SvXMLImportContext* ORptFilter::CreateMetaContext(const sal_Int32 /*nElement*/)
 {
     SvXMLImportContext* pContext = nullptr;
 
     if ( getImportFlags() & SvXMLImportFlags::META )
     {
         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(GetModel(), uno::UNO_QUERY_THROW);
-        pContext = new SvXMLMetaDocumentContext(*this,XML_NAMESPACE_OFFICE, rLocalName,xDPS->getDocumentProperties());
+        pContext = new SvXMLMetaDocumentContext(*this, xDPS->getDocumentProperties());
     }
     return pContext;
 }

@@ -30,7 +30,6 @@
 #include <queryparam.hxx>
 #include <subtotalparam.hxx>
 #include <bcaslot.hxx>
-#include <globstr.hrc>
 #include <rowheightcontext.hxx>
 #include <column.hxx>
 #include <sortparam.hxx>
@@ -245,7 +244,7 @@ ScBlockUndo::ScBlockUndo( ScDocShell* pDocSh, const ScRange& rRange,
     aBlockRange( rRange ),
     eMode( eBlockMode )
 {
-    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
+    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
 }
 
 ScBlockUndo::~ScBlockUndo()
@@ -346,7 +345,7 @@ ScMultiBlockUndo::ScMultiBlockUndo(
     ScSimpleUndo(pDocSh),
     maBlockRanges(rRanges)
 {
-    mpDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
+    mpDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
 }
 
 ScMultiBlockUndo::~ScMultiBlockUndo()
@@ -388,7 +387,7 @@ void ScMultiBlockUndo::ShowBlock()
         return;
 
     // Move to the sheet of the first range.
-    ScRange aRange = *maBlockRanges.front();
+    ScRange aRange = maBlockRanges.front();
     ShowTable(aRange);
     pViewShell->MoveCursorAbs(
         aRange.aStart.Col(), aRange.aStart.Row(), SC_FOLLOW_JUMP, false, false);
@@ -399,7 +398,7 @@ void ScMultiBlockUndo::ShowBlock()
 
     for (size_t i = 1, n = maBlockRanges.size(); i < n; ++i)
     {
-        aRange = *maBlockRanges[i];
+        aRange = maBlockRanges[i];
         aRange.aStart.SetTab(nTab);
         aRange.aEnd.SetTab(nTab);
         pViewShell->MarkRange(aRange, false, true);
@@ -416,7 +415,7 @@ ScMoveUndo::ScMoveUndo( ScDocShell* pDocSh, ScDocument* pRefDoc, ScRefUndoData* 
     ScDocument& rDoc = pDocShell->GetDocument();
     if (pRefUndoData)
         pRefUndoData->DeleteUnchanged(&rDoc);
-    pDrawUndo = GetSdrUndoAction( &rDoc );
+    pDrawUndo = GetSdrUndoAction( &rDoc ).release();
 }
 
 ScMoveUndo::~ScMoveUndo()

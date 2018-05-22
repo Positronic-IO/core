@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.20.2 -->
 <interface domain="cui">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">1583</property>
     <property name="upper">9857</property>
@@ -236,7 +236,6 @@
                   <object class="GtkSpinButton" id="year">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
-                    <property name="invisible_char">•</property>
                     <property name="adjustment">adjustment1</property>
                   </object>
                   <packing>
@@ -338,6 +337,7 @@
                     <property name="label" translatable="yes" context="optgeneralpage|quicklaunch">Load %PRODUCTNAME during system start-up</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="no_show_all">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
@@ -352,6 +352,7 @@
                     <property name="label" translatable="yes" context="optgeneralpage|systray">Enable systray Quickstarter</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="no_show_all">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>

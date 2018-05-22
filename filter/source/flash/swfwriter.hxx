@@ -196,10 +196,10 @@ public:
     ~Sprite();
 
     void write( SvStream& out );
-    void addTag( Tag* pNewTag );
+    void addTag( std::unique_ptr<Tag> pNewTag );
 
 private:
-    std::vector< Tag* > maTags;
+    std::vector< std::unique_ptr<Tag> > maTags;
     sal_uInt16  mnId;
     sal_uInt32  mnFrames;
 };
@@ -372,7 +372,6 @@ private:
     double mnDocXScale;
     double mnDocYScale;
 
-    sal_uInt16 mnWhiteBackgroundShapeId;
     sal_uInt16 mnPageButtonId;
 
     VclPtrInstance<VirtualDevice> mpVDev;

@@ -19,17 +19,14 @@
 
 #include <fuprobjs.hxx>
 
-#include <vcl/msgbox.hxx>
 #include <svl/style.hxx>
 #include <editeng/outliner.hxx>
 #include <svl/hint.hxx>
 
 #include <app.hrc>
 
-#include <strings.hrc>
 #include <strings.hxx>
 
-#include <sdresid.hxx>
 #include <drawdoc.hxx>
 #include <OutlineViewShell.hxx>
 #include <ViewShell.hxx>

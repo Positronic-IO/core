@@ -93,7 +93,7 @@ public:
     virtual bool            SaveAs( SfxMedium &rMedium  ) override;
 
     virtual ::tools::Rectangle       GetVisArea(sal_uInt16 nAspect) const override;
-    virtual void            Draw(OutputDevice*, const JobSetup& rSetup, sal_uInt16 nAspect = ASPECT_CONTENT) override;
+    virtual void            Draw(OutputDevice*, const JobSetup& rSetup, sal_uInt16 nAspect) override;
     virtual ::svl::IUndoManager*
                             GetUndoManager() override;
     virtual Printer*        GetDocumentPrinter() override;
@@ -148,7 +148,7 @@ public:
                 a default name of a not-yet-existing slide (e.g. 'Slide 17'),
                 sal_True is returned, but rName is set to an empty string.
      */
-    bool                    CheckPageName(vcl::Window* pWin, OUString& rName );
+    bool                    CheckPageName(weld::Window* pWin, OUString& rName );
 
     void                    SetSlotFilter(bool bEnable = false, o3tl::array_view<sal_uInt16 const> pSIDs = o3tl::array_view<sal_uInt16 const>()) { mbFilterEnable = bEnable; mpFilterSIDs = pSIDs; }
     void                    ApplySlotFilter() const;
@@ -209,10 +209,10 @@ public:
 protected:
 
     SdDrawDocument*         mpDoc;
-    SfxUndoManager*         mpUndoManager;
+    std::unique_ptr<SfxUndoManager> mpUndoManager;
     VclPtr<SfxPrinter>      mpPrinter;
     ::sd::ViewShell*        mpViewShell;
-    FontList*               mpFontList;
+    std::unique_ptr<FontList> mpFontList;
     rtl::Reference<FuPoor> mxDocShellFunction;
     DocumentType            meDocType;
     SfxStyleFamily          mnStyleFamily;

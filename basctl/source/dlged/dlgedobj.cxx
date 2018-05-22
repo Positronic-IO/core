@@ -27,10 +27,8 @@
 #include <dlgedobj.hxx>
 #include <dlgedpage.hxx>
 #include <dlgedview.hxx>
-#include <iderid.hxx>
 #include <localizationmgr.hxx>
 #include <strings.hxx>
-#include <strings.hrc>
 
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/form/binding/XBindableValue.hpp>
@@ -65,18 +63,20 @@ DlgEditor& DlgEdObj::GetDialogEditor ()
         return pDlgEdForm->GetDlgEditor();
 }
 
-DlgEdObj::DlgEdObj()
-          :SdrUnoObj(OUString())
-          ,bIsListening(false)
-          ,pDlgEdForm( nullptr )
+DlgEdObj::DlgEdObj(SdrModel& rSdrModel)
+:   SdrUnoObj(rSdrModel, OUString())
+    ,bIsListening(false)
+    ,pDlgEdForm( nullptr )
 {
 }
 
-DlgEdObj::DlgEdObj(const OUString& rModelName,
-                   const css::uno::Reference< css::lang::XMultiServiceFactory >& rxSFac)
-          :SdrUnoObj(rModelName, rxSFac)
-          ,bIsListening(false)
-          ,pDlgEdForm( nullptr )
+DlgEdObj::DlgEdObj(
+    SdrModel& rSdrModel,
+    const OUString& rModelName,
+    const css::uno::Reference< css::lang::XMultiServiceFactory >& rxSFac)
+:   SdrUnoObj(rSdrModel, rModelName, rxSFac)
+    ,bIsListening(false)
+    ,pDlgEdForm( nullptr )
 {
 }
 
@@ -502,7 +502,7 @@ void DlgEdObj::UpdateStep()
     sal_Int32 nCurStep = GetDlgEdForm()->GetStep();
     sal_Int32 nStep = GetStep();
 
-    SdrLayerAdmin& rLayerAdmin = GetModel()->GetLayerAdmin();
+    SdrLayerAdmin& rLayerAdmin(getSdrModelFromSdrObject().GetLayerAdmin());
     SdrLayerID nHiddenLayerId   = rLayerAdmin.GetLayerID( "HiddenLayer" );
     SdrLayerID nControlLayerId   = rLayerAdmin.GetLayerID( rLayerAdmin.GetControlLayerName() );
 
@@ -606,7 +606,7 @@ void DlgEdObj::TabIndexChange( const beans::PropertyChangeEvent& evt )
             }
 
             // reorder objects in drawing page
-            GetModel()->GetPage(0)->SetObjectOrdNum( nOldTabIndex + 1, nNewTabIndex + 1 );
+            getSdrModelFromSdrObject().GetPage(0)->SetObjectOrdNum( nOldTabIndex + 1, nNewTabIndex + 1 );
 
             pForm->UpdateTabOrderAndGroups();
         }
@@ -886,9 +886,9 @@ void DlgEdObj::clonedFrom(const DlgEdObj* _pSource)
     StartListening();
 }
 
-DlgEdObj* DlgEdObj::Clone() const
+DlgEdObj* DlgEdObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    DlgEdObj* pDlgEdObj = CloneHelper< DlgEdObj >();
+    DlgEdObj* pDlgEdObj = CloneHelper< DlgEdObj >(rTargetModel);
     DBG_ASSERT( pDlgEdObj != nullptr, "DlgEdObj::Clone: invalid clone!" );
     if ( pDlgEdObj )
         pDlgEdObj->clonedFrom( this );
@@ -900,7 +900,9 @@ SdrObject* DlgEdObj::getFullDragClone() const
 {
     // no need to really add the clone for dragging, it's a temporary
     // object
-    SdrObject* pObj = new SdrUnoObj(OUString());
+    SdrObject* pObj = new SdrUnoObj(
+        getSdrModelFromSdrObject(),
+        OUString());
     *pObj = *static_cast<const SdrUnoObj*>(this);
 
     return pObj;
@@ -1195,8 +1197,10 @@ void DlgEdObj::SetLayer(SdrLayerID nLayer)
     }
 }
 
-
-DlgEdForm::DlgEdForm (DlgEditor& rDlgEditor_) :
+DlgEdForm::DlgEdForm(
+    SdrModel& rSdrModel,
+    DlgEditor& rDlgEditor_)
+:   DlgEdObj(rSdrModel),
     rDlgEditor(rDlgEditor_)
 {
 }

@@ -25,7 +25,6 @@
 
 #include <sft.hxx>
 #include <sallayout.hxx>
-#include <CommonSalLayout.hxx>
 
 #include <shlwapi.h>
 #include <winver.h>
@@ -233,7 +232,7 @@ HRESULT D2DWriteTextOutRenderer::BindDC(HDC hDC, tools::Rectangle const & rRect)
     return CHECKHR(mpRT->BindDC(hDC, &rc));
 }
 
-bool D2DWriteTextOutRenderer::operator ()(CommonSalLayout const & rLayout, SalGraphics& rGraphics, HDC hDC)
+bool D2DWriteTextOutRenderer::operator ()(GenericSalLayout const & rLayout, SalGraphics& rGraphics, HDC hDC)
 {
     bool bRetry = false;
     bool bResult = false;
@@ -247,7 +246,7 @@ bool D2DWriteTextOutRenderer::operator ()(CommonSalLayout const & rLayout, SalGr
     return bResult;
 }
 
-bool D2DWriteTextOutRenderer::performRender(CommonSalLayout const & rLayout, SalGraphics& rGraphics, HDC hDC, bool& bRetry)
+bool D2DWriteTextOutRenderer::performRender(GenericSalLayout const & rLayout, SalGraphics& rGraphics, HDC hDC, bool& bRetry)
 {
     if (!Ready())
         return false;
@@ -294,7 +293,7 @@ bool D2DWriteTextOutRenderer::performRender(CommonSalLayout const & rLayout, Sal
         int nStart = 0;
         Point aPos(0, 0);
         const GlyphItem* pGlyph;
-        while (rLayout.GetNextGlyphs(1, &pGlyph, aPos, nStart))
+        while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))
         {
             UINT16 glyphIndices[] = { pGlyph->maGlyphId };
             FLOAT glyphAdvances[] = { pGlyph->mnNewWidth };
@@ -386,10 +385,10 @@ std::vector<tools::Rectangle> D2DWriteTextOutRenderer::GetGlyphInkBoxes(uint16_t
                    bottom = INT32(m.advanceHeight) - m.verticalOriginY - m.bottomSideBearing;
 
         // Scale to screen space.
-        pOut->Left()   = std::floor(left * mlfEmHeight / aFontMetrics.designUnitsPerEm);
-        pOut->Top()    = std::floor(top * mlfEmHeight / aFontMetrics.designUnitsPerEm);
-        pOut->Right()  = std::ceil(right * mlfEmHeight / aFontMetrics.designUnitsPerEm);
-        pOut->Bottom() = std::ceil(bottom * mlfEmHeight / aFontMetrics.designUnitsPerEm);
+        pOut->SetLeft( std::floor(left * mlfEmHeight / aFontMetrics.designUnitsPerEm) );
+        pOut->SetTop( std::floor(top * mlfEmHeight / aFontMetrics.designUnitsPerEm) );
+        pOut->SetRight( std::ceil(right * mlfEmHeight / aFontMetrics.designUnitsPerEm) );
+        pOut->SetBottom( std::ceil(bottom * mlfEmHeight / aFontMetrics.designUnitsPerEm) );
 
         ++pOut;
     }

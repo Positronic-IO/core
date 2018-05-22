@@ -128,7 +128,7 @@ Condition::Condition( vcl::Window* _pParent, IConditionalFormatAction& _rAction,
     get(m_pAddCondition, "addButton");
     get(m_pRemoveCondition, "removeButton");
 
-    m_pActions->SetStyle(m_pActions->GetStyle()|WB_LINESPACING);
+    m_pActions->SetLineSpacing(true);
     m_pCondLHS->GrabFocus();
 
     m_pConditionType->SetSelectHdl( LINK( this, Condition, OnTypeSelected ) );
@@ -375,7 +375,7 @@ void Condition::setCondition( const uno::Reference< report::XFormatCondition >& 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
     impl_setCondition( sConditionFormula );
     updateToolbar( _rxCondition.get() );
@@ -402,14 +402,14 @@ void Condition::updateToolbar(const uno::Reference< report::XReportControlFormat
             aFont.SetFontHeight(OutputDevice::LogicToLogic(Size(0, aFont.GetFontHeight()), MapMode(MapUnit::MapPoint), MapMode(MapUnit::MapTwip)).Height());
             aFont.SetEmphasisMark( static_cast< FontEmphasisMark >( _xReportControlFormat->getControlTextEmphasis() ) );
             aFont.SetRelief( static_cast< FontRelief >( _xReportControlFormat->getCharRelief() ) );
-            aFont.SetColor( _xReportControlFormat->getCharColor() );
+            aFont.SetColor( Color(_xReportControlFormat->getCharColor()) );
             m_pPreview->SetFont( aFont, aFont, aFont );
-            m_pPreview->SetBackColor( _xReportControlFormat->getControlBackground() );
+            m_pPreview->SetBackColor( Color(_xReportControlFormat->getControlBackground()) );
             m_pPreview->SetTextLineColor( Color( _xReportControlFormat->getCharUnderlineColor() ) );
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
     }
 }

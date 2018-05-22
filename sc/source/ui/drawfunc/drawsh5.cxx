@@ -35,7 +35,6 @@
 #include <svx/svdpage.hxx>
 #include <svx/svdundo.hxx>
 #include <svx/xdef.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/extrusionbar.hxx>
 #include <svx/fontworkbar.hxx>
 #include <sfx2/docfile.hxx>
@@ -50,7 +49,6 @@
 #include <viewdata.hxx>
 #include <tabvwsh.hxx>
 #include <docsh.hxx>
-#include <scresid.hxx>
 #include <undotab.hxx>
 #include <drwlayer.hxx>
 #include <userdat.hxx>
@@ -351,12 +349,21 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
             pView->SetPageAnchored();
             rBindings.Invalidate( SID_ANCHOR_PAGE );
             rBindings.Invalidate( SID_ANCHOR_CELL );
+            rBindings.Invalidate( SID_ANCHOR_CELL_RESIZE );
             break;
 
         case SID_ANCHOR_CELL:
-            pView->SetCellAnchored();
+            pView->SetCellAnchored(false);
             rBindings.Invalidate( SID_ANCHOR_PAGE );
             rBindings.Invalidate( SID_ANCHOR_CELL );
+            rBindings.Invalidate( SID_ANCHOR_CELL_RESIZE );
+            break;
+
+        case SID_ANCHOR_CELL_RESIZE:
+            pView->SetCellAnchored(true);
+            rBindings.Invalidate( SID_ANCHOR_PAGE );
+            rBindings.Invalidate( SID_ANCHOR_CELL );
+            rBindings.Invalidate( SID_ANCHOR_CELL_RESIZE );
             break;
 
         case SID_ANCHOR_TOGGLE:
@@ -364,15 +371,17 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                 switch( pView->GetAnchorType() )
                 {
                     case SCA_CELL:
+                    case SCA_CELL_RESIZE:
                     pView->SetPageAnchored();
                     break;
                     default:
-                    pView->SetCellAnchored();
+                    pView->SetCellAnchored(false);
                     break;
                 }
             }
             rBindings.Invalidate( SID_ANCHOR_PAGE );
             rBindings.Invalidate( SID_ANCHOR_CELL );
+            rBindings.Invalidate( SID_ANCHOR_CELL_RESIZE );
             break;
 
         case SID_OBJECT_ROTATE:
@@ -445,6 +454,10 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
             pView->SetMarkedOriginalSize();
             break;
 
+        case SID_FITCELLSIZE:
+            pView->FitToCellSize();
+            break;
+
         case SID_ENABLE_HYPHENATION:
             {
                 const SfxBoolItem* pItem = rReq.GetArg<SfxBoolItem>(SID_ENABLE_HYPHENATION);
@@ -473,7 +486,8 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
 
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                         OSL_ENSURE(pFact, "Dialog creation failed!");
-                        ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(aName));
+                        vcl::Window* pWin = pViewData->GetActiveWin();
+                        ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(pWin ? pWin->GetFrameWeld() : nullptr, aName));
                         OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                         pDlg->SetCheckNameHdl(LINK(this, ScDrawShell, NameObjectHdl));
@@ -542,7 +556,9 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
 
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                         OSL_ENSURE(pFact, "Dialog creation failed!");
-                        ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(aTitle, aDescription));
+                        vcl::Window* pWin = pViewData->GetActiveWin();
+                        ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
+                                    pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aDescription));
                         OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                         if(RET_OK == pDlg->Execute())
@@ -651,7 +667,7 @@ void ScDrawShell::ExecFormatPaintbrush( const SfxRequest& rReq )
         bool bLock = false;
         const SfxItemSet *pArgs = rReq.GetArgs();
         if( pArgs && pArgs->Count() >= 1 )
-            bLock = static_cast<const SfxBoolItem&>(pArgs->Get(SID_FORMATPAINTBRUSH)).GetValue();
+            bLock = pArgs->Get(SID_FORMATPAINTBRUSH).GetValue();
 
         ScDrawView* pDrawView = pViewData->GetScDrawView();
         if ( pDrawView && pDrawView->AreObjectsMarked() )

@@ -22,7 +22,6 @@
 #include <com/sun/star/xml/sax/XAttributeList.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include "typedetectionimport.hxx"
 #include "xmlfiltersettingsdialog.hxx"
 
@@ -69,20 +68,18 @@ void TypeDetectionImporter::doImport( const Reference< XComponentContext >& rxCo
 void TypeDetectionImporter::fillFilterVector(  XMLFilterVector& rFilters )
 {
     // create filter infos from imported filter nodes
-    NodeVector::iterator aIter = maFilterNodes.begin();
-    while( aIter != maFilterNodes.end() )
+    for (auto const& filterNode : maFilterNodes)
     {
-        filter_info_impl* pFilter = createFilterForNode( *aIter );
+        filter_info_impl* pFilter = createFilterForNode(filterNode);
         if( pFilter )
             rFilters.push_back( pFilter );
 
-        delete *aIter++;
+        delete filterNode;
     }
 
     // now delete type nodes
-    aIter = maTypeNodes.begin();
-    while( aIter != maTypeNodes.end() )
-        delete *aIter++;
+    for (auto const& typeNode : maTypeNodes)
+        delete typeNode;
 }
 
 static OUString getSubdata( int index, sal_Unicode delimiter, const OUString& rData )

@@ -564,7 +564,10 @@ void ScPrintFunc::DrawToDev( ScDocument* pDoc, OutputDevice* pDev, double /* nPr
 
     if( pModel )
     {
-        pDrawView.reset(new FmFormView( pModel, pDev ));
+        pDrawView.reset(
+            new FmFormView(
+                *pModel,
+                pDev));
         pDrawView->ShowSdrPage(pDrawView->GetModel()->GetPage(nTab));
         pDrawView->SetPrintPreview();
         aOutputData.SetDrawView( pDrawView.get() );
@@ -1372,8 +1375,7 @@ void ScPrintFunc::DrawBorder( long nScrX, long nScrY, long nScrW, long nScrH,
     {
         ScDocumentUniquePtr pBorderDoc(new ScDocument( SCDOCMODE_UNDO ));
         pBorderDoc->InitUndo( pDoc, 0,0, true,true );
-        if (pBorderData)
-            pBorderDoc->ApplyAttr( 0,0,0, *pBorderData );
+        pBorderDoc->ApplyAttr( 0,0,0, *pBorderData );
 
         ScTableInfo aTabInfo;
         pBorderDoc->FillInfo( aTabInfo, 0,0, 0,0, 0,
@@ -1388,8 +1390,7 @@ void ScPrintFunc::DrawBorder( long nScrX, long nScrY, long nScrW, long nScrH,
                                     nScrX+nLeft, nScrY+nTop, 0,0, 0,0, nScaleX, nScaleY );
         aOutputData.SetUseStyleColor( bUseStyleColor );
 
-        if (pBorderData)
-            aOutputData.DrawFrame(*pDev);
+        aOutputData.DrawFrame(*pDev);
     }
 }
 
@@ -2737,7 +2738,7 @@ long ScPrintFunc::DoPrint( const MultiSelection& rPageRanges,
         }
     }
 
-    aFieldData.aTabName = ScGlobal::GetRscString( STR_NOTES );
+    aFieldData.aTabName = ScResId( STR_NOTES );
 
     long nNoteNr = 0;
     long nNoteAdd;

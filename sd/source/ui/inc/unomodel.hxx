@@ -128,12 +128,16 @@ private:
 
     sd::DrawViewShell* GetViewShell();
 
+protected:
+    /** abstract SdrModel provider */
+    virtual SdrModel& getSdrModelFromUnoModel() const override;
+
 public:
     SdXImpressDocument(::sd::DrawDocShell* pShell, bool bClipBoard);
     SdXImpressDocument(SdDrawDocument* pDoc, bool bClipBoard);
     virtual ~SdXImpressDocument() throw() override;
 
-    static rtl::Reference< SdXImpressDocument > GetModel( SdDrawDocument const * pDoc );
+    static rtl::Reference< SdXImpressDocument > GetModel( SdDrawDocument const & rDoc );
 
     // intern
     bool operator==( const SdXImpressDocument& rModel ) const { return mpDoc == rModel.mpDoc; }

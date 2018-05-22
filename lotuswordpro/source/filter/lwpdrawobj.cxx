@@ -437,17 +437,16 @@ void LwpDrawLine::Read()
 
 OUString LwpDrawLine::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle( new XFDrawStyle() );
 
     // set line style
-    SetLineStyle(pStyle, m_aLineRec.nLineWidth, m_aLineRec.nLineStyle, m_aLineRec.aPenColor);
+    SetLineStyle(pStyle.get(), m_aLineRec.nLineWidth, m_aLineRec.nLineStyle, m_aLineRec.aPenColor);
 
     // set arrow head
-    SetArrowHead(pStyle, m_aLineRec.nLineEnd, m_aLineRec.nLineWidth);
+    SetArrowHead(pStyle.get(), m_aLineRec.nLineEnd, m_aLineRec.nLineWidth);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
-
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawLine::CreateDrawObj(const OUString& rStyleName )
@@ -484,11 +483,6 @@ LwpDrawPolyLine::LwpDrawPolyLine(SvStream * pStream, DrawingOffsetAndScale* pTra
 }
 LwpDrawPolyLine::~LwpDrawPolyLine()
 {
-    if (m_pVector)
-    {
-        delete [] m_pVector;
-        m_pVector = nullptr;
-    }
 }
 
 /**
@@ -508,7 +502,7 @@ void LwpDrawPolyLine::Read()
     if (m_aPolyLineRec.nNumPoints > m_pStream->remainingSize() / 4)
         throw BadRead();
 
-    m_pVector= new SdwPoint[m_aPolyLineRec.nNumPoints];
+    m_pVector.reset( new SdwPoint[m_aPolyLineRec.nNumPoints] );
 
     for (sal_uInt16 nC = 0; nC < m_aPolyLineRec.nNumPoints; nC++)
     {
@@ -519,17 +513,17 @@ void LwpDrawPolyLine::Read()
 
 OUString LwpDrawPolyLine::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     // set line style
-    SetLineStyle(pStyle, m_aPolyLineRec.nLineWidth, m_aPolyLineRec.nLineStyle,
+    SetLineStyle(pStyle.get(), m_aPolyLineRec.nLineWidth, m_aPolyLineRec.nLineStyle,
         m_aPolyLineRec.aPenColor);
 
     // set arrow head
-    SetArrowHead(pStyle, m_aPolyLineRec.nLineEnd, m_aPolyLineRec.nLineWidth);
+    SetArrowHead(pStyle.get(), m_aPolyLineRec.nLineEnd, m_aPolyLineRec.nLineWidth);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawPolyLine::CreateDrawObj(const OUString& rStyleName )
@@ -570,17 +564,11 @@ XFFrame* LwpDrawPolyLine::CreateStandardDrawObj(const  OUString& rStyleName)
 LwpDrawPolygon::LwpDrawPolygon(SvStream * pStream, DrawingOffsetAndScale* pTransData)
     : LwpDrawObj(pStream, pTransData)
     , m_nNumPoints(0)
-    , m_pVector(nullptr)
 {
 }
 
 LwpDrawPolygon::~LwpDrawPolygon()
 {
-    if (m_pVector)
-    {
-        delete [] m_pVector;
-        m_pVector = nullptr;
-    }
 }
 
 /**
@@ -594,7 +582,7 @@ void LwpDrawPolygon::Read()
     if (m_nNumPoints > m_pStream->remainingSize() / 4)
         throw BadRead();
 
-    m_pVector = new SdwPoint[m_nNumPoints];
+    m_pVector.reset( new SdwPoint[m_nNumPoints] );
 
     for (sal_uInt16 nC = 0; nC < m_nNumPoints; nC++)
     {
@@ -605,17 +593,17 @@ void LwpDrawPolygon::Read()
 
 OUString LwpDrawPolygon::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     // set line style
-    SetLineStyle(pStyle, m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
+    SetLineStyle(pStyle.get(), m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
         m_aClosedObjStyleRec.aPenColor);
 
     // set fill style
-    SetFillStyle(pStyle);
+    SetFillStyle(pStyle.get());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawPolygon::CreateDrawObj(const OUString& rStyleName)
@@ -685,17 +673,17 @@ void LwpDrawRectangle::Read()
 
 OUString LwpDrawRectangle::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     // set line style
-    SetLineStyle(pStyle, m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
+    SetLineStyle(pStyle.get(), m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
         m_aClosedObjStyleRec.aPenColor);
 
     // set fill style
-    SetFillStyle(pStyle);
+    SetFillStyle(pStyle.get());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawRectangle::CreateDrawObj(const OUString& rStyleName)
@@ -844,17 +832,17 @@ void LwpDrawEllipse::Read()
 
 OUString LwpDrawEllipse::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     // set line style
-    SetLineStyle(pStyle, m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
+    SetLineStyle(pStyle.get(), m_aClosedObjStyleRec.nLineWidth, m_aClosedObjStyleRec.nLineStyle,
         m_aClosedObjStyleRec.aPenColor);
 
     // set fill style
-    SetFillStyle(pStyle);
+    SetFillStyle(pStyle.get());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawEllipse::CreateDrawObj(const OUString& rStyleName )
@@ -923,17 +911,17 @@ void LwpDrawArc::Read()
 
 OUString LwpDrawArc::RegisterStyle()
 {
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     // set line style
-    SetLineStyle(pStyle, m_aArcRec.nLineWidth, m_aArcRec.nLineStyle,
+    SetLineStyle(pStyle.get(), m_aArcRec.nLineWidth, m_aArcRec.nLineStyle,
         m_aArcRec.aPenColor);
 
     // set arrow head
-    SetArrowHead(pStyle, m_aArcRec.nLineEnd, m_aArcRec.nLineWidth);
+    SetArrowHead(pStyle.get(), m_aArcRec.nLineEnd, m_aArcRec.nLineWidth);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawArc::CreateDrawObj(const OUString& rStyleName )
@@ -1067,7 +1055,7 @@ void LwpDrawTextBox::Read()
 
 OUString LwpDrawTextBox::RegisterStyle()
 {
-    XFParaStyle* pStyle = new XFParaStyle();
+    std::unique_ptr<XFParaStyle> pStyle(new XFParaStyle());
 
     // font style
     // the pFont need to be deleted myself?
@@ -1082,7 +1070,7 @@ OUString LwpDrawTextBox::RegisterStyle()
     pStyle->SetFont(pFont);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawTextBox::CreateDrawObj(const OUString& rStyleName )
@@ -1108,10 +1096,10 @@ XFFrame* LwpDrawTextBox::CreateDrawObj(const OUString& rStyleName )
     pTextBox->Add(pXFPara);
     SetPosition(pTextBox);
 
-    XFTextBoxStyle* pBoxStyle = new XFTextBoxStyle();
+    std::unique_ptr<XFTextBoxStyle> pBoxStyle(new XFTextBoxStyle());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    OUString sName = pXFStyleManager->AddStyle(pBoxStyle).m_pStyle->GetStyleName();
+    OUString sName = pXFStyleManager->AddStyle(std::move(pBoxStyle)).m_pStyle->GetStyleName();
     pTextBox->SetStyleName(sName);
 
     //todo: add the interface for rotating textbox
@@ -1271,7 +1259,7 @@ void LwpDrawTextArt::Read()
 
 OUString LwpDrawTextArt::RegisterStyle()
 {
-    XFParaStyle* pStyle = new XFParaStyle();
+    std::unique_ptr<XFParaStyle> pStyle(new XFParaStyle());
 
     // font style
     // the pFont need to be deleted myself?
@@ -1286,13 +1274,13 @@ OUString LwpDrawTextArt::RegisterStyle()
     pStyle->SetFont(pFont);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawTextArt::CreateDrawObj(const OUString& rStyleName)
 {
     XFFrame* pRetObj = nullptr;
-    XFDrawStyle* pStyle = new XFDrawStyle();
+    std::unique_ptr<XFDrawStyle> pStyle(new XFDrawStyle());
 
     pRetObj = new XFDrawPath();
     XFDrawPath* pFWPath = static_cast<XFDrawPath*>(pRetObj);
@@ -1318,7 +1306,7 @@ XFFrame* LwpDrawTextArt::CreateDrawObj(const OUString& rStyleName)
     pRetObj->Add(pXFPara);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    pRetObj->SetStyleName(pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName());
+    pRetObj->SetStyleName(pXFStyleManager->AddStyle(std::move(pStyle)).m_pStyle->GetStyleName());
 
     return pRetObj;
 }
@@ -1348,17 +1336,12 @@ void LwpDrawMetafile::Read()
  * @descr   Constructor of class LwpDrawBitmap
  * @param   pStream   The memory stream which contains the lwp-sdw draw objects
  */
-LwpDrawBitmap::LwpDrawBitmap(SvStream* pStream) : LwpDrawObj(pStream), m_pImageData(nullptr)
+LwpDrawBitmap::LwpDrawBitmap(SvStream* pStream) : LwpDrawObj(pStream)
 {
 }
 
 LwpDrawBitmap::~LwpDrawBitmap()
 {
-    if (m_pImageData)
-    {
-        delete [] m_pImageData;
-        m_pImageData = nullptr;
-    }
 }
 
 /**
@@ -1372,7 +1355,7 @@ void LwpDrawBitmap::Read()
     // 20 == length of draw-specific fields.
     // 14 == length of bmp file header.
     m_aBmpRec.nFileSize = m_aObjHeader.nRecLen - 20 + 14;
-    m_pImageData = new sal_uInt8 [m_aBmpRec.nFileSize];
+    m_pImageData.reset( new sal_uInt8 [m_aBmpRec.nFileSize] );
 
     BmpInfoHeader2 aInfoHeader2;
     m_pStream->ReadUInt32( aInfoHeader2.nHeaderLen );
@@ -1432,7 +1415,7 @@ void LwpDrawBitmap::Read()
     m_pImageData[13] = static_cast<sal_uInt8>(nOffBits >> 24);
 
     sal_uInt32 nDIBRemaining;
-    sal_uInt8* pPicData = m_pImageData;
+    sal_uInt8* pPicData = m_pImageData.get();
     if (aInfoHeader2.nHeaderLen== sizeof(BmpInfoHeader))
     {
         m_pImageData[14] = static_cast<sal_uInt8>(aInfoHeader2.nHeaderLen);
@@ -1479,18 +1462,18 @@ void LwpDrawBitmap::Read()
 
 OUString LwpDrawBitmap::RegisterStyle()
 {
-    XFImageStyle* pBmpStyle = new XFImageStyle();
+    std::unique_ptr<XFImageStyle> pBmpStyle(new XFImageStyle());
     pBmpStyle->SetYPosType(enumXFFrameYPosFromTop, enumXFFrameYRelFrame);
     pBmpStyle->SetXPosType(enumXFFrameXPosFromLeft, enumXFFrameXRelFrame);
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    return pXFStyleManager->AddStyle(pBmpStyle).m_pStyle->GetStyleName();
+    return pXFStyleManager->AddStyle(std::move(pBmpStyle)).m_pStyle->GetStyleName();
 }
 
 XFFrame* LwpDrawBitmap::CreateDrawObj(const OUString& rStyleName)
 {
     XFImage* pImage = new XFImage();
-    pImage->SetImageData(m_pImageData, m_aBmpRec.nFileSize);
+    pImage->SetImageData(m_pImageData.get(), m_aBmpRec.nFileSize);
     SetPosition(pImage);
 
     pImage->SetStyleName(rStyleName);

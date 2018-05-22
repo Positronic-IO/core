@@ -38,8 +38,11 @@
 #include <postdlg.hxx>
 #include <passwdomdlg.hxx>
 #include <screenshotannotationdlg.hxx>
+#include <cuicharmap.hxx>
 #include <cuihyperdlg.hxx>
 #include <cfgutil.hxx>
+#include <SignatureLineDialog.hxx>
+#include <SignSignatureLineDialog.hxx>
 #include <SpellDialog.hxx>
 #include <zoom.hxx>
 #include <showcols.hxx>

@@ -301,10 +301,9 @@ XMLFile::~XMLFile()
 {
     if( m_pXMLStrings )
     {
-        XMLHashMap::iterator pos = m_pXMLStrings->begin();
-        for( ; pos != m_pXMLStrings->end() ; ++pos )
+        for (auto const& pos : *m_pXMLStrings)
         {
-            delete pos->second;             // Check and delete content also ?
+            delete pos.second;             // Check and delete content also ?
         }
     }
 }
@@ -404,15 +403,15 @@ XMLFile& XMLFile::operator=(const XMLFile& rObj)
         if( rObj.m_pXMLStrings )
         {
             m_pXMLStrings.reset( new XMLHashMap );
-            for( XMLHashMap::iterator pos = rObj.m_pXMLStrings->begin() ; pos != rObj.m_pXMLStrings->end() ; ++pos )
+            for (auto const& pos : *rObj.m_pXMLStrings)
             {
-                LangHashMap* pElem=pos->second;
+                LangHashMap* pElem=pos.second;
                 LangHashMap* pNewelem = new LangHashMap;
-                for(LangHashMap::iterator pos2=pElem->begin(); pos2!=pElem->end();++pos2)
+                for (auto const& pos2 : *pElem)
                 {
-                    (*pNewelem)[ pos2->first ] = new XMLElement( *pos2->second );
+                    (*pNewelem)[ pos2.first ] = new XMLElement( *pos2.second );
                 }
-                (*m_pXMLStrings)[ pos->first ] = pNewelem;
+                (*m_pXMLStrings)[ pos.first ] = pNewelem;
             }
         }
     }
@@ -1059,11 +1058,12 @@ icu::UnicodeString lcl_QuotRange(
 
 bool lcl_isTag( const icu::UnicodeString& rString )
 {
-    static const int nSize = 14;
+    static const int nSize = 15;
     static const icu::UnicodeString vTags[nSize] = {
         "ahelp", "link", "item", "emph", "defaultinline",
         "switchinline", "caseinline", "variable",
-        "bookmark_value", "image", "embedvar", "alt", "sup", "sub" };
+        "bookmark_value", "image", "object",
+        "embedvar", "alt", "sup", "sub" };
 
     for( int nIndex = 0; nIndex < nSize; ++nIndex )
     {

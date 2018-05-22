@@ -28,7 +28,6 @@
 #include <com/sun/star/util/XChangesBatch.hpp>
 
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/oslfile2streamwrap.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <osl/file.hxx>
@@ -168,21 +167,18 @@ bool XMLFilterJarHelper::savePackage( const OUString& rPackageURL, const XMLFilt
             xIfc->getByHierarchicalName( "/" ) >>= xRootFolder;
 
             // export filters files
-            XMLFilterVector::const_iterator aIter( rFilters.begin() );
-            while( aIter != rFilters.end() )
+            for (auto const& filter : rFilters)
             {
-                const filter_info_impl* pFilter = (*aIter);
-
-                Reference< XInterface > xFilterRoot( addFolder( xRootFolder, xFactory, pFilter->maFilterName ) );
+                Reference< XInterface > xFilterRoot( addFolder( xRootFolder, xFactory, filter->maFilterName ) );
 
                 if( xFilterRoot.is() )
                 {
-                    if( !pFilter->maExportXSLT.isEmpty() )
-                        addFile( xFilterRoot, xFactory, pFilter->maExportXSLT );
+                    if( !filter->maExportXSLT.isEmpty() )
+                        addFile( xFilterRoot, xFactory, filter->maExportXSLT );
                     try
                     {
-                        if( !pFilter->maImportXSLT.isEmpty() )
-                            addFile( xFilterRoot, xFactory, pFilter->maImportXSLT );
+                        if( !filter->maImportXSLT.isEmpty() )
+                            addFile( xFilterRoot, xFactory, filter->maImportXSLT );
                     }
                     catch(const css::container::ElementExistException&)
                     {
@@ -191,11 +187,9 @@ bool XMLFilterJarHelper::savePackage( const OUString& rPackageURL, const XMLFilt
                         OSL_FAIL( "XMLFilterJarHelper::same named xslt filter exception!" );
                     }
 
-                    if( !pFilter->maImportTemplate.isEmpty() )
-                        addFile( xFilterRoot, xFactory, pFilter->maImportTemplate );
+                    if( !filter->maImportTemplate.isEmpty() )
+                        addFile( xFilterRoot, xFactory, filter->maImportTemplate );
                 }
-
-                ++aIter;
             }
 
             // create TypeDetection.xcu
@@ -274,19 +268,17 @@ void XMLFilterJarHelper::openPackage( const OUString& rPackageURL, XMLFilterVect
 
                     // copy all files used by the filters imported from the
                     // typedetection to office/user/xslt
-                    XMLFilterVector::iterator aIter( aFilters.begin() );
-                    while( aIter != aFilters.end() )
+                    for (auto const& filter : aFilters)
                     {
-                        if( copyFiles( xIfc, (*aIter) ) )
+                        if( copyFiles( xIfc, filter ) )
                         {
-                            rFilters.push_back( *aIter );
+                            rFilters.push_back(filter);
                         }
                         else
                         {
                             // failed to copy all files
-                            delete *aIter;
+                            delete filter;
                         }
-                        ++aIter;
                     }
                 }
             }

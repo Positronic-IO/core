@@ -31,6 +31,7 @@
 #include <tabvwsh.hxx>
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <cellvalue.hxx>
 #include <defaultsoptions.hxx>
 
@@ -435,10 +436,7 @@ void ScExternalRefCache::Table::setCachedCell(SCCOL nCol, SCROW nRow)
 void ScExternalRefCache::Table::setCachedCellRange(SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2)
 {
     ScRange aRange(nCol1, nRow1, 0, nCol2, nRow2, 0);
-    if ( maCachedRanges.empty() )
-        maCachedRanges.Append(aRange);
-    else
-        maCachedRanges.Join(aRange);
+    maCachedRanges.Join(aRange);
 }
 
 void ScExternalRefCache::Table::setWholeTableCached()
@@ -1499,7 +1497,7 @@ void ScExternalRefLink::Closed()
     return SUCCESS;
 }
 
-void ScExternalRefLink::Edit(vcl::Window* pParent, const Link<SvBaseLink&,void>& /*rEndEditHdl*/)
+void ScExternalRefLink::Edit(weld::Window* pParent, const Link<SvBaseLink&,void>& /*rEndEditHdl*/)
 {
     SvBaseLink::Edit(pParent, Link<SvBaseLink&,void>());
 }
@@ -3199,7 +3197,7 @@ void ScExternalRefManager::Notify( SfxBroadcaster&, const SfxHint& rHint )
                     vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
                     std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                VclMessageType::Warning, VclButtonsType::Ok,
-                                                               ScGlobal::GetRscString(STR_CLOSE_WITH_UNSAVED_REFS)));
+                                                               ScResId(STR_CLOSE_WITH_UNSAVED_REFS)));
                     xWarn->run();
                 }
                 break;

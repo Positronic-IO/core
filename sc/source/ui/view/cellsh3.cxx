@@ -28,6 +28,7 @@
 #include <vcl/weld.hxx>
 #include <sfx2/app.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <scmod.hxx>
 #include <appoptio.hxx>
 #include <tabvwsh.hxx>
@@ -424,7 +425,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                             vcl::Window* pWin = pTabViewShell->GetDialogParent();
                             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                            VclMessageType::Question, VclButtonsType::YesNo,
-                                                                           ScGlobal::GetRscString(STR_UPDATE_SCENARIO)));
+                                                                           ScResId(STR_UPDATE_SCENARIO)));
                             xQueryBox->set_default_response(RET_YES);
                             bExtend = xQueryBox->run() == RET_YES;
                         }
@@ -440,7 +441,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                         vcl::Window* pWin = pTabViewShell->GetDialogParent();
                         std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                        VclMessageType::Warning, VclButtonsType::Ok,
-                                                                       ScGlobal::GetRscString(STR_NOAREASELECTED)));
+                                                                       ScResId(STR_NOAREASELECTED)));
                         xErrorBox->run();
                     }
                 }
@@ -458,7 +459,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
 
                         OUString aTmp;
                         pDoc->GetName(nTab, aTmp);
-                        aBaseName = aTmp + "_" + ScGlobal::GetRscString(STR_SCENARIO) + "_";
+                        aBaseName = aTmp + "_" + ScResId(STR_SCENARIO) + "_";
 
                         //  first test, if the prefix is recognised as valid,
                         //  else avoid only doubles
@@ -578,7 +579,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     assert(pFact); //ScAbstractFactory create fail!
 
                     ScopedVclPtr<AbstractScMetricInputDlg> pDlg(pFact->CreateScMetricInputDlg(
-                        pTabViewShell->GetDialogParent(), "RowHeightDialog",
+                        pTabViewShell->GetFrameWeld(), "RowHeightDialog",
                         nCurHeight, ScGlobal::nStdRowHeight,
                         eMetric, 2, MAX_ROW_HEIGHT));
                     assert(pDlg); //Dialog create fail
@@ -619,7 +620,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     assert(pFact); //ScAbstractFactory create fail!
 
                     ScopedVclPtr<AbstractScMetricInputDlg> pDlg(pFact->CreateScMetricInputDlg(
-                        pTabViewShell->GetDialogParent(), "OptimalRowHeightDialog",
+                        pTabViewShell->GetFrameWeld(), "OptimalRowHeightDialog",
                         ScGlobal::nLastRowHeightExtra, 0, eMetric, 1, MAX_EXTRA_HEIGHT));
                     assert(pDlg); //Dialog create fail!
 
@@ -684,7 +685,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     assert(pFact); //ScAbstractFactory create fail!
 
                     ScopedVclPtr<AbstractScMetricInputDlg> pDlg(pFact->CreateScMetricInputDlg(
-                        pTabViewShell->GetDialogParent(), "ColWidthDialog", nCurHeight,
+                        pTabViewShell->GetFrameWeld(), "ColWidthDialog", nCurHeight,
                         STD_COL_WIDTH, eMetric, 2, MAX_COL_WIDTH));
                     assert(pDlg); //Dialog create fail!
 
@@ -724,7 +725,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     assert(pFact); //ScAbstractFactory create fail!
 
                     ScopedVclPtr<AbstractScMetricInputDlg> pDlg(pFact->CreateScMetricInputDlg(
-                        pTabViewShell->GetDialogParent(), "OptimalColWidthDialog",
+                        pTabViewShell->GetFrameWeld(), "OptimalColWidthDialog",
                         ScGlobal::nLastColWidthExtra, STD_EXTRA_WIDTH, eMetric, 1, MAX_EXTRA_WIDTH));
                     assert(pDlg); //Dialog create fail!
                     if ( pDlg->Execute() == RET_OK )
@@ -896,7 +897,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                 {
                     std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pDlgParent ? pDlgParent->GetFrameWeld() : nullptr,
                                                                    VclMessageType::Warning, VclButtonsType::Ok,
-                                                                   ScGlobal::GetRscString(STR_INVALID_AFAREA)));
+                                                                   ScResId(STR_INVALID_AFAREA)));
                     xErrorBox->run();
                 }
             }

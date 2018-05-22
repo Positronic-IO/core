@@ -8,6 +8,9 @@
  */
 
 #include "RemoteFilesDialog.hxx"
+#include <fpsofficeResMgr.hxx>
+#include <strings.hrc>
+#include <comphelper/docpasswordrequest.hxx>
 #include <comphelper/stillreadwriteinteraction.hxx>
 #include <bitmaps.hlst>
 
@@ -192,7 +195,7 @@ RemoteFilesDialog::RemoteFilesDialog( vcl::Window* pParent, PickerFlags nBits )
 
     m_eMode = ( nBits & PickerFlags::SaveAs ) ? REMOTEDLG_MODE_SAVE : REMOTEDLG_MODE_OPEN;
     m_eType = ( nBits & PickerFlags::PathDialog ) ? REMOTEDLG_TYPE_PATHDLG : REMOTEDLG_TYPE_FILEDLG;
-    m_bMultiselection = bool( nBits & PickerFlags::MultiSelection );
+    bool bMultiselection = bool( nBits & PickerFlags::MultiSelection );
     m_bIsUpdated = false;
     m_bIsConnected = false;
     m_bServiceChanged = false;
@@ -242,7 +245,7 @@ RemoteFilesDialog::RemoteFilesDialog( vcl::Window* pParent, PickerFlags nBits )
 
     m_pFileView = VclPtr< SvtFileView >::Create( m_pContainer, WB_BORDER | WB_TABSTOP,
                                        REMOTEDLG_TYPE_PATHDLG == m_eType,
-                                       m_bMultiselection, false );
+                                       bMultiselection, false );
 
     m_pFileView->Show();
     m_pFileView->EnableAutoResize();
@@ -329,10 +332,10 @@ void RemoteFilesDialog::dispose()
         Sequence< OUString > placesNamesList( m_aServices.size() );
 
         int i = 0;
-        for( std::vector< ServicePtr >::const_iterator it = m_aServices.begin(); it != m_aServices.end(); ++it )
+        for (auto const& service : m_aServices)
         {
-            placesUrlsList[i] = ( *it )->GetUrl();
-            placesNamesList[i] = ( *it )->GetName();
+            placesUrlsList[i] = service->GetUrl();
+            placesNamesList[i] = service->GetName();
             ++i;
         }
 
@@ -746,22 +749,22 @@ IMPL_LINK_NOARG ( RemoteFilesDialog, ListViewHdl, Button*, void )
 
 IMPL_LINK_NOARG ( RemoteFilesDialog, AddServiceHdl, Button*, void )
 {
-    ScopedVclPtrInstance< PlaceEditDialog > aDlg( this );
-    aDlg->ShowPasswordControl();
-    short aRetCode = aDlg->Execute();
+    PlaceEditDialog aDlg(GetFrameWeld());
+    aDlg.ShowPasswordControl();
+    short aRetCode = aDlg.run();
 
     switch( aRetCode )
     {
         case RET_OK :
         {
-            ServicePtr newService = aDlg->GetPlace();
+            ServicePtr newService = aDlg.GetPlace();
             m_aServices.push_back( newService );
 
-            OUString sPassword = aDlg->GetPassword();
-            OUString sUser = aDlg->GetUser();
+            OUString sPassword = aDlg.GetPassword();
+            OUString sUser = aDlg.GetUser();
             if( !sUser.isEmpty() && !sPassword.isEmpty() )
             {
-                bool bPersistent = aDlg->IsRememberChecked();
+                bool bPersistent = aDlg.IsRememberChecked();
                 SavePassword( newService->GetUrl(), sUser, sPassword, bPersistent );
             }
 
@@ -811,14 +814,14 @@ IMPL_LINK ( RemoteFilesDialog, EditServiceMenuHdl, MenuButton *, pButton, void )
 
         if( nPos >= 0 )
         {
-            ScopedVclPtrInstance< PlaceEditDialog > aDlg( this, m_aServices[nPos] );
-            short aRetCode = aDlg->Execute();
+            PlaceEditDialog aDlg(GetFrameWeld(), m_aServices[nPos]);
+            short aRetCode = aDlg.run();
 
             switch( aRetCode )
             {
                 case RET_OK :
                 {
-                    ServicePtr pEditedService = aDlg->GetPlace();
+                    ServicePtr pEditedService = aDlg.GetPlace();
 
                     m_aServices[nPos] = pEditedService;
                     m_pServices_lb->RemoveEntry( nSelected );
@@ -1084,17 +1087,17 @@ IMPL_LINK_NOARG ( RemoteFilesDialog, NewFolderHdl, Button*, void )
 
     OUString aTitle;
     aContent.getTitle( aTitle );
-    ScopedVclPtrInstance< QueryFolderNameDialog > aDlg(this, aTitle, FpsResId(STR_SVT_NEW_FOLDER));
+    QueryFolderNameDialog aDlg(GetFrameWeld(), aTitle, FpsResId(STR_SVT_NEW_FOLDER));
     bool bHandled = false;
 
     while( !bHandled )
     {
-        if( aDlg->Execute() == RET_OK )
+        if (aDlg.run() == RET_OK)
         {
-            OUString aUrl = aContent.createFolder( aDlg->GetName() );
+            OUString aUrl = aContent.createFolder(aDlg.GetName());
             if( !aUrl.isEmpty() )
             {
-                m_pFileView->CreatedFolder( aUrl, aDlg->GetName() );
+                m_pFileView->CreatedFolder(aUrl, aDlg.GetName());
                 bHandled = true;
             }
         }

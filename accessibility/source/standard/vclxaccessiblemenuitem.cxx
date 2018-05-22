@@ -18,8 +18,6 @@
  */
 
 #include <standard/vclxaccessiblemenuitem.hxx>
-#include <helper/accresmgr.hxx>
-#include <strings.hrc>
 #include <toolkit/helper/convert.hxx>
 #include <helper/characterattributeshelper.hxx>
 #include <comphelper/accessiblekeybindinghelper.hxx>
@@ -281,7 +279,7 @@ OUString VCLXAccessibleMenuItem::getSelectedText()
 {
     OExternalLockGuard aGuard( this );
 
-    return OCommonAccessibleText::getSelectedText();
+    return OUString();
 }
 
 
@@ -289,7 +287,7 @@ sal_Int32 VCLXAccessibleMenuItem::getSelectionStart()
 {
     OExternalLockGuard aGuard( this );
 
-    return OCommonAccessibleText::getSelectionStart();
+    return 0;
 }
 
 
@@ -297,7 +295,7 @@ sal_Int32 VCLXAccessibleMenuItem::getSelectionEnd()
 {
     OExternalLockGuard aGuard( this );
 
-    return OCommonAccessibleText::getSelectionEnd();
+    return 0;
 }
 
 

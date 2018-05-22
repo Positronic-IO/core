@@ -183,6 +183,9 @@ DECLARE_OOXMLEXPORT_TEST(testTextBoxPictureFill, "textbox_picturefill.docx")
     CPPUNIT_ASSERT(xGraphic.is());
     Graphic aGraphic(xGraphic);
     CPPUNIT_ASSERT(aGraphic);
+    CPPUNIT_ASSERT(aGraphic.GetSizeBytes() > 0L);
+    CPPUNIT_ASSERT_EQUAL(447L, aGraphic.GetSizePixel().Width());
+    CPPUNIT_ASSERT_EQUAL(528L, aGraphic.GetSizePixel().Height());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testFDO73034, "FDO73034.docx")
@@ -363,7 +366,15 @@ DECLARE_OOXMLEXPORT_TEST(testFDO74215, "FDO74215.docx")
     if (!pXmlDoc)
         return;
     // tdf#106849 NumPicBullet xShape should not to be resized.
-    assertXPath(pXmlDoc, "/w:numbering/w:numPicBullet[2]/w:pict/v:shape", "style", "width:6.4pt;height:6.4pt");
+
+// Seems this is dependent on the running system, which is - unfortunate
+// see: MSWordExportBase::BulletDefinitions
+// FIXME: the size of a bullet is defined by GraphicSize property
+// (stored in SvxNumberFormat::aGraphicSize) so use that for the size
+// (properly convert from 100mm to pt (1 inch is 72 pt, 1 pt is 20 twips).
+#if !defined(MACOSX)
+    assertXPath(pXmlDoc, "/w:numbering/w:numPicBullet[2]/w:pict/v:shape", "style", "width:11.25pt;height:11.25pt");
+#endif
 }
 
 DECLARE_OOXMLEXPORT_TEST(testColumnBreak_ColumnCountIsZero,"fdo74153.docx")
@@ -1052,6 +1063,13 @@ DECLARE_OOXMLEXPORT_TEST(testTdf92521, "tdf92521.odt")
 DECLARE_OOXMLEXPORT_TEST(testTdf102466, "tdf102466.docx")
 {
     // the problem was: file is truncated: the first page is missing.
+    // More precisely, the table in the first page was clipped.
+    {
+        xmlDocPtr pXmlDoc = parseLayoutDump();
+        sal_Int32 nFlyPrtHeight = getXPath(pXmlDoc, "(/root/page[1]//fly)[1]/infos/prtBounds", "height").toInt32();
+        sal_Int32 nTableHeight = getXPath(pXmlDoc, "(/root/page[1]//fly)[1]/tab/infos/bounds", "height").toInt32();
+        CPPUNIT_ASSERT_MESSAGE("The table is clipped in a fly frame.", nFlyPrtHeight >= nTableHeight);
+    }
 
     // check how much pages we have
     CPPUNIT_ASSERT_EQUAL(10, getPages());

@@ -24,7 +24,6 @@
 #include <vcl/graph.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svx/svxids.hrc>
-#include <svx/strings.hrc>
 
 #include <svl/intitem.hxx>
 
@@ -32,7 +31,6 @@
 #include <svx/pageitem.hxx>
 
 #include <svx/dlgutil.hxx>
-#include <svx/dialmgr.hxx>
 #include <sfx2/htmlmode.hxx>
 
 #include <editeng/brushitem.hxx>
@@ -92,7 +90,7 @@ namespace svx {
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         if(pFact)
         {
-            ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxBorderBackgroundDlg( pParent, *pBBSet, true/*bEnableBackgroundSelector*/ ));
+            ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxBorderBackgroundDlg( pParent, *pBBSet, false/*bEnableDrawingLayerFillStyles*/ ));
             DBG_ASSERT(pDlg, "Dialog creation failed!");
             if ( pDlg->Execute() == RET_OK && pDlg->GetOutputItemSet() )
             {
@@ -112,17 +110,15 @@ namespace svx {
     }
 }
 
-VclPtr<SfxTabPage> SvxHeaderPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxHeaderPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxHeaderPage>::Create( pParent, *rSet );
+    return VclPtr<SvxHeaderPage>::Create( pParent.pParent, *rSet );
 }
 
-
-VclPtr<SfxTabPage> SvxFooterPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxFooterPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxFooterPage>::Create( pParent, *rSet );
+    return VclPtr<SvxFooterPage>::Create( pParent.pParent, *rSet );
 }
-
 
 SvxHeaderPage::SvxHeaderPage( vcl::Window* pParent, const SfxItemSet& rAttr ) :
 
@@ -131,14 +127,12 @@ SvxHeaderPage::SvxHeaderPage( vcl::Window* pParent, const SfxItemSet& rAttr ) :
 {
 }
 
-
 SvxFooterPage::SvxFooterPage( vcl::Window* pParent, const SfxItemSet& rAttr ) :
 
     SvxHFPage( pParent, rAttr, SID_ATTR_PAGE_FOOTERSET )
 
 {
 }
-
 
 SvxHFPage::SvxHFPage( vcl::Window* pParent, const SfxItemSet& rSet, sal_uInt16 nSetId ) :
     SfxTabPage(pParent, "HFFormatPage", "svx/ui/headfootformatpage.ui", &rSet),
@@ -680,7 +674,6 @@ IMPL_LINK_NOARG(SvxHFPage, BackgroundHdl, Button*, void)
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxBorderBackgroundDlg(
             this,
             *pBBSet,
-            true/*EnableBackgroundSelector*/,
             mbEnableDrawingLayerFillStyles));
 
         DBG_ASSERT(pDlg,"Dialog creation failed!");

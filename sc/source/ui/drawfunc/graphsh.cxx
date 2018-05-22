@@ -29,7 +29,6 @@
 #include <svx/grafctrl.hxx>
 #include <svx/compressgraphicdialog.hxx>
 #include <svx/graphichelper.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <graphsh.hxx>
 #include <strings.hrc>
@@ -39,7 +38,7 @@
 #include <svx/extedit.hxx>
 #include <tabvwsh.hxx>
 
-#define ScGraphicShell
+#define ShellClass_ScGraphicShell
 #include <scslots.hxx>
 
 SFX_IMPL_INTERFACE(ScGraphicShell, ScDrawShell)
@@ -122,7 +121,7 @@ void ScGraphicShell::ExecuteFilter( const SfxRequest& rReq )
 
                 if( pPageView )
                 {
-                    SdrGrafObj* pFilteredObj = static_cast<SdrGrafObj*>(pObj->Clone());
+                    SdrGrafObj* pFilteredObj(static_cast<SdrGrafObj*>(pObj->CloneSdrObject(pObj->getSdrModelFromSdrObject())));
                     OUString    aStr = pView->GetDescriptionOfMarkedObjects() + " " + ScResId(SCSTR_UNDO_GRAFFILTER);
                     pView->BegUndo( aStr );
                     pFilteredObj->SetGraphicObject( aFilterObj );
@@ -203,10 +202,11 @@ void ScGraphicShell::ExecuteCompressGraphic( SAL_UNUSED_PARAMETER SfxRequest& )
         if( pObj && dynamic_cast<const SdrGrafObj*>( pObj)  != nullptr && static_cast<SdrGrafObj*>(pObj)->GetGraphicType() == GraphicType::Bitmap )
         {
             SdrGrafObj* pGraphicObj = static_cast<SdrGrafObj*>(pObj);
-            ScopedVclPtrInstance< CompressGraphicsDialog > dialog( GetViewData()->GetDialogParent(), pGraphicObj, GetViewData()->GetBindings() );
-            if ( dialog->Execute() == RET_OK )
+            vcl::Window* pWin = GetViewData()->GetDialogParent();
+            CompressGraphicsDialog dialog(pWin ? pWin->GetFrameWeld() : nullptr, pGraphicObj, GetViewData()->GetBindings());
+            if (dialog.run() == RET_OK)
             {
-                SdrGrafObj* pNewObject = dialog->GetCompressedSdrGrafObj();
+                SdrGrafObj* pNewObject = dialog.GetCompressedSdrGrafObj();
                 SdrPageView* pPageView = pView->GetSdrPageView();
                 OUString aUndoString = pView->GetDescriptionOfMarkedObjects() + " Compress";
                 pView->BegUndo( aUndoString );
@@ -267,11 +267,12 @@ void ScGraphicShell::ExecuteSaveGraphic( SAL_UNUSED_PARAMETER SfxRequest& /*rReq
             GraphicAttr aGraphicAttr = pObj->GetGraphicAttr();
             short nState = RET_CANCEL;
             vcl::Window* pWin = GetViewData()->GetActiveWin();
+            weld::Window* pWinFrame = pWin ? pWin->GetFrameWeld() : nullptr;
             if (aGraphicAttr != GraphicAttr()) // the image has been modified
             {
                 if (pWin)
                 {
-                    nState = GraphicHelper::HasToSaveTransformedImage(pWin->GetFrameWeld());
+                    nState = GraphicHelper::HasToSaveTransformedImage(pWinFrame);
                 }
             }
             else
@@ -281,12 +282,12 @@ void ScGraphicShell::ExecuteSaveGraphic( SAL_UNUSED_PARAMETER SfxRequest& /*rReq
 
             if (nState == RET_YES)
             {
-                GraphicHelper::ExportGraphic(pWin, pObj->GetTransformedGraphic(), "");
+                GraphicHelper::ExportGraphic(pWinFrame, pObj->GetTransformedGraphic(), "");
             }
             else if (nState == RET_NO)
             {
                 GraphicObject aGraphicObject(pObj->GetGraphicObject());
-                GraphicHelper::ExportGraphic(pWin, aGraphicObject.GetGraphic(), "");
+                GraphicHelper::ExportGraphic(pWinFrame, aGraphicObject.GetGraphic(), "");
             }
         }
     }
@@ -324,7 +325,7 @@ void ScGraphicShell::ExecuteChangePicture( SAL_UNUSED_PARAMETER SfxRequest& /*rR
         {
             SdrGrafObj* pGraphicObj = static_cast<SdrGrafObj*>(pObj);
             vcl::Window* pWin = GetViewData()->GetActiveWin();
-            SvxOpenGraphicDialog aDlg(ScResId(STR_INSERTGRAPHIC), pWin);
+            SvxOpenGraphicDialog aDlg(ScResId(STR_INSERTGRAPHIC), pWin ? pWin->GetFrameWeld() : nullptr);
 
             if( aDlg.Execute() == ERRCODE_NONE )
             {
@@ -332,7 +333,7 @@ void ScGraphicShell::ExecuteChangePicture( SAL_UNUSED_PARAMETER SfxRequest& /*rR
                 ErrCode nError = aDlg.GetGraphic(aGraphic);
                 if( nError == ERRCODE_NONE )
                 {
-                    SdrGrafObj* pNewObject = pGraphicObj->Clone();
+                    SdrGrafObj* pNewObject(pGraphicObj->CloneSdrObject(pGraphicObj->getSdrModelFromSdrObject()));
                     pNewObject->SetGraphic( aGraphic );
                     SdrPageView* pPageView = pView->GetSdrPageView();
                     OUString aUndoString = pView->GetDescriptionOfMarkedObjects() + " Change";

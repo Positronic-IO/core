@@ -271,7 +271,7 @@ ImageList* ImageManagerImpl::implts_getUserImageList( vcl::ImageType nImageType 
     if ( !m_pUserImageList[nImageType] )
         implts_loadUserImages( nImageType, m_xUserImageStorage, m_xUserBitmapsStorage );
 
-    return m_pUserImageList[nImageType];
+    return m_pUserImageList[nImageType].get();
 }
 
 void ImageManagerImpl::implts_initialize()
@@ -355,8 +355,7 @@ bool ImageManagerImpl::implts_loadUserImages(
                     }
 
                     // Delete old image list and create a new one from the read bitmap
-                    delete m_pUserImageList[nImageType];
-                    m_pUserImageList[nImageType] = new ImageList();
+                    m_pUserImageList[nImageType].reset(new ImageList());
                     m_pUserImageList[nImageType]->InsertFromHorizontalStrip
                         ( aUserBitmap, aUserImagesVector );
                     return true;
@@ -381,8 +380,7 @@ bool ImageManagerImpl::implts_loadUserImages(
     }
 
     // Destroy old image list - create a new empty one
-    delete m_pUserImageList[nImageType];
-    m_pUserImageList[nImageType] = new ImageList;
+    m_pUserImageList[nImageType].reset(new ImageList);
 
     return true;
 }
@@ -504,9 +502,9 @@ CmdImageList* ImageManagerImpl::implts_getDefaultImageList()
     SolarMutexGuard g;
 
     if ( !m_pDefaultImageList )
-        m_pDefaultImageList = new CmdImageList( m_xContext, m_aModuleIdentifier );
+        m_pDefaultImageList.reset(new CmdImageList( m_xContext, m_aModuleIdentifier ));
 
-    return m_pDefaultImageList;
+    return m_pDefaultImageList.get();
 }
 
 ImageManagerImpl::ImageManagerImpl( const uno::Reference< uno::XComponentContext >& rxContext,::cppu::OWeakObject* pOwner,bool _bUseGlobal ) :
@@ -548,13 +546,11 @@ void ImageManagerImpl::dispose()
         m_bDisposed = true;
 
         // delete user and default image list on dispose
-        for (ImageList*& n : m_pUserImageList)
+        for (auto& n : m_pUserImageList)
         {
-            delete n;
-            n = nullptr;
+            n.reset();
         }
-        delete m_pDefaultImageList;
-        m_pDefaultImageList = nullptr;
+        m_pDefaultImageList.reset();
     }
 
 }
@@ -995,24 +991,23 @@ void ImageManagerImpl::reload()
                 GraphicNameAccess* pReplacedImages( nullptr );
                 GraphicNameAccess* pRemovedImages( nullptr );
 
-                const sal_uInt32 nNewCount = aNewUserCmdImageSet.size();
-                for ( j = 0; j < nNewCount; j++ )
+                for (auto const& newUserCmdImage : aNewUserCmdImageSet)
                 {
-                    CommandMap::iterator pIter = aOldUserCmdImageSet.find( aNewUserCmdImageSet[j] );
+                    CommandMap::iterator pIter = aOldUserCmdImageSet.find(newUserCmdImage);
                     if ( pIter != aOldUserCmdImageSet.end() )
                     {
                         pIter->second = true; // mark entry as replaced
                         if ( !pReplacedImages )
                             pReplacedImages = new GraphicNameAccess();
-                        pReplacedImages->addElement( aNewUserCmdImageSet[j],
-                                                     GetXGraphic(pImageList->GetImage(aNewUserCmdImageSet[j])) );
+                        pReplacedImages->addElement( newUserCmdImage,
+                                                     GetXGraphic(pImageList->GetImage(newUserCmdImage)) );
                     }
                     else
                     {
                         if ( !pInsertedImages )
                             pInsertedImages = new GraphicNameAccess();
-                        pInsertedImages->addElement( aNewUserCmdImageSet[j],
-                                                     GetXGraphic(pImageList->GetImage(aNewUserCmdImageSet[j])) );
+                        pInsertedImages->addElement( newUserCmdImage,
+                                                     GetXGraphic(pImageList->GetImage(newUserCmdImage)) );
                     }
                 }
 
@@ -1027,30 +1022,29 @@ void ImageManagerImpl::reload()
                     pDefaultImageList = implts_getDefaultImageList();
                 }
                 uno::Reference<XGraphic> xEmptyGraphic;
-                CommandMap::const_iterator pIter = aOldUserCmdImageSet.begin();
-                while ( pIter != aOldUserCmdImageSet.end() )
+                for (auto const& oldUserCmdImage : aOldUserCmdImageSet)
                 {
-                    if ( !pIter->second )
+                    if ( !oldUserCmdImage.second )
                     {
                         if ( m_bUseGlobal )
                         {
-                            Image aImage = pDefaultImageList->getImageFromCommandURL( i, pIter->first );
+                            Image aImage = pDefaultImageList->getImageFromCommandURL( i, oldUserCmdImage.first );
                             if ( !aImage )
-                                aImage = rGlobalImageList->getImageFromCommandURL( i, pIter->first );
+                                aImage = rGlobalImageList->getImageFromCommandURL( i, oldUserCmdImage.first );
 
                             if ( !aImage )
                             {
                                 // No image in the module/global image list => remove user image
                                 if ( !pRemovedImages )
                                     pRemovedImages = new GraphicNameAccess();
-                                pRemovedImages->addElement( pIter->first, xEmptyGraphic );
+                                pRemovedImages->addElement( oldUserCmdImage.first, xEmptyGraphic );
                             }
                             else
                             {
                                 // Image has been found in the module/global image list => replace user image
                                 if ( !pReplacedImages )
                                     pReplacedImages = new GraphicNameAccess();
-                                pReplacedImages->addElement(pIter->first, GetXGraphic(aImage));
+                                pReplacedImages->addElement(oldUserCmdImage.first, GetXGraphic(aImage));
                             }
                         } // if ( m_bUseGlobal )
                         else
@@ -1058,10 +1052,9 @@ void ImageManagerImpl::reload()
                             // No image in the user image list => remove user image
                             if ( !pRemovedImages )
                                 pRemovedImages = new GraphicNameAccess();
-                            pRemovedImages->addElement( pIter->first, xEmptyGraphic );
+                            pRemovedImages->addElement( oldUserCmdImage.first, xEmptyGraphic );
                         }
                     }
-                    ++pIter;
                 }
 
                 aGuard.clear();
@@ -1237,10 +1230,9 @@ void ImageManagerImpl::clear()
 {
     SolarMutexGuard g;
 
-    for (ImageList* & n : m_pUserImageList)
+    for (auto & n : m_pUserImageList)
     {
-        delete n;
-        n = nullptr;
+        n.reset();
     }
 }
 } // namespace framework

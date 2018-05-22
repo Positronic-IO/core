@@ -75,6 +75,7 @@
 #include <scitems.hxx>
 #include <attrib.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <xlconst.hxx>
 #include <documentimport.hxx>
 #include <numformat.hxx>
@@ -199,7 +200,7 @@ const sal_uInt8 BIFF_FONTUNDERL_DOUBLE      = 2;
 const sal_uInt8 BIFF_FONTUNDERL_SINGLE_ACC  = 33;
 const sal_uInt8 BIFF_FONTUNDERL_DOUBLE_ACC  = 34;
 
-sal_Int32 lclReadRgbColor( BinaryInputStream& rStrm )
+::Color lclReadRgbColor( BinaryInputStream& rStrm )
 {
     sal_uInt8 nR, nG, nB, nA;
     nR = rStrm.readuChar();
@@ -213,7 +214,7 @@ sal_Int32 lclReadRgbColor( BinaryInputStream& rStrm )
     nValue |= nG;
     nValue <<= 8;
     nValue |= nB;
-    return nValue;
+    return ::Color(nValue);
 }
 
 } // namespace
@@ -224,12 +225,12 @@ ExcelGraphicHelper::ExcelGraphicHelper( const WorkbookHelper& rHelper ) :
 {
 }
 
-sal_Int32 ExcelGraphicHelper::getSchemeColor( sal_Int32 nToken ) const
+::Color ExcelGraphicHelper::getSchemeColor( sal_Int32 nToken ) const
 {
     return getTheme().getColorByToken( nToken );
 }
 
-sal_Int32 ExcelGraphicHelper::getPaletteColor( sal_Int32 nPaletteIdx ) const
+::Color ExcelGraphicHelper::getPaletteColor( sal_Int32 nPaletteIdx ) const
 {
     return getStyles().getPaletteColor( nPaletteIdx );
 }
@@ -240,10 +241,10 @@ void Color::setAuto()
     setSchemeClr( XML_phClr );
 }
 
-void Color::setRgb( sal_Int32 nRgbValue, double fTint )
+void Color::setRgb( ::Color nRgbValue, double fTint )
 {
     clearTransformations();
-    setSrgbClr( nRgbValue & 0xFFFFFF );
+    setSrgbClr( sal_uInt32(nRgbValue) & 0xFFFFFF );
     if( fTint != 0.0 ) addExcelTintTransformation( fTint );
 }
 
@@ -271,7 +272,7 @@ void Color::importColor( const AttributeList& rAttribs )
     if( rAttribs.hasAttribute( XML_theme ) )
         setTheme( rAttribs.getInteger( XML_theme, -1 ), rAttribs.getDouble( XML_tint, 0.0 ) );
     else if( rAttribs.hasAttribute( XML_rgb ) )
-        setRgb( rAttribs.getIntegerHex( XML_rgb, API_RGB_TRANSPARENT ), rAttribs.getDouble( XML_tint, 0.0 ) );
+        setRgb( rAttribs.getIntegerHex( XML_rgb, sal_Int32(API_RGB_TRANSPARENT) ), rAttribs.getDouble( XML_tint, 0.0 ) );
     else if( rAttribs.hasAttribute( XML_indexed ) )
         setIndexed( rAttribs.getInteger( XML_indexed, -1 ), rAttribs.getDouble( XML_tint, 0.0 ) );
     else if( rAttribs.getBool( XML_auto, false ) )
@@ -337,22 +338,22 @@ namespace {
 
 /** Standard EGA colors, bright. */
 #define PALETTE_EGA_COLORS_LIGHT \
-            0x000000, 0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF
-/** Standard EGA colors, dark. */
+            ::Color(0x000000), ::Color(0xFFFFFF), ::Color(0xFF0000), ::Color(0x00FF00), ::Color(0x0000FF), ::Color(0xFFFF00), ::Color(0xFF00FF), ::Color(0x00FFFF)
+/** Standard EGA colors), dark. */
 #define PALETTE_EGA_COLORS_DARK \
-            0x800000, 0x008000, 0x000080, 0x808000, 0x800080, 0x008080, 0xC0C0C0, 0x808080
+            ::Color(0x800000), ::Color(0x008000), ::Color(0x000080), ::Color(0x808000), ::Color(0x800080), ::Color(0x008080), ::Color(0xC0C0C0), ::Color(0x808080)
 
 /** Default color table for BIFF8/BIFF12/OOXML. */
-static const sal_Int32 spnDefColors8[] =
+static const ::Color spnDefColors8[] =
 {
 /*  0 */    PALETTE_EGA_COLORS_LIGHT,
 /*  8 */    PALETTE_EGA_COLORS_LIGHT,
 /* 16 */    PALETTE_EGA_COLORS_DARK,
-/* 24 */    0x9999FF, 0x993366, 0xFFFFCC, 0xCCFFFF, 0x660066, 0xFF8080, 0x0066CC, 0xCCCCFF,
-/* 32 */    0x000080, 0xFF00FF, 0xFFFF00, 0x00FFFF, 0x800080, 0x800000, 0x008080, 0x0000FF,
-/* 40 */    0x00CCFF, 0xCCFFFF, 0xCCFFCC, 0xFFFF99, 0x99CCFF, 0xFF99CC, 0xCC99FF, 0xFFCC99,
-/* 48 */    0x3366FF, 0x33CCCC, 0x99CC00, 0xFFCC00, 0xFF9900, 0xFF6600, 0x666699, 0x969696,
-/* 56 */    0x003366, 0x339966, 0x003300, 0x333300, 0x993300, 0x993366, 0x333399, 0x333333
+/* 24 */    ::Color(0x9999FF), ::Color(0x993366), ::Color(0xFFFFCC), ::Color(0xCCFFFF), ::Color(0x660066), ::Color(0xFF8080), ::Color(0x0066CC), ::Color(0xCCCCFF),
+/* 32 */    ::Color(0x000080), ::Color(0xFF00FF), ::Color(0xFFFF00), ::Color(0x00FFFF), ::Color(0x800080), ::Color(0x800000), ::Color(0x008080), ::Color(0x0000FF),
+/* 40 */    ::Color(0x00CCFF), ::Color(0xCCFFFF), ::Color(0xCCFFCC), ::Color(0xFFFF99), ::Color(0x99CCFF), ::Color(0xFF99CC), ::Color(0xCC99FF), ::Color(0xFFCC99),
+/* 48 */    ::Color(0x3366FF), ::Color(0x33CCCC), ::Color(0x99CC00), ::Color(0xFFCC00), ::Color(0xFF9900), ::Color(0xFF6600), ::Color(0x666699), ::Color(0x969696),
+/* 56 */    ::Color(0x003366), ::Color(0x339966), ::Color(0x003300), ::Color(0x333300), ::Color(0x993300), ::Color(0x993366), ::Color(0x333399), ::Color(0x333333)
 };
 
 #undef PALETTE_EGA_COLORS_LIGHT
@@ -371,19 +372,19 @@ ColorPalette::ColorPalette( const WorkbookHelper& rHelper )
 
 void ColorPalette::importPaletteColor( const AttributeList& rAttribs )
 {
-    appendColor( rAttribs.getIntegerHex( XML_rgb, API_RGB_WHITE ) );
+    appendColor( rAttribs.getIntegerHex( XML_rgb, sal_Int32(API_RGB_WHITE) ) );
 }
 
 void ColorPalette::importPaletteColor( SequenceInputStream& rStrm )
 {
-    sal_Int32 nRgb = lclReadRgbColor( rStrm );
-    appendColor( nRgb & 0xFFFFFF );
+    ::Color nRgb = lclReadRgbColor( rStrm );
+    appendColor( nRgb );
 }
 
-sal_Int32 ColorPalette::getColor( sal_Int32 nPaletteIdx ) const
+::Color ColorPalette::getColor( sal_Int32 nPaletteIdx ) const
 {
-    sal_Int32 nColor = API_RGB_TRANSPARENT;
-    if( const sal_Int32* pnPaletteColor = ContainerHelper::getVectorElement( maColors, nPaletteIdx ) )
+    ::Color nColor = API_RGB_TRANSPARENT;
+    if( const ::Color* pnPaletteColor = ContainerHelper::getVectorElement( maColors, nPaletteIdx ) )
     {
         nColor = *pnPaletteColor;
     }
@@ -405,7 +406,7 @@ sal_Int32 ColorPalette::getColor( sal_Int32 nPaletteIdx ) const
     return nColor;
 }
 
-void ColorPalette::appendColor( sal_Int32 nRGBValue )
+void ColorPalette::appendColor( ::Color nRGBValue )
 {
     if( mnAppendIndex < maColors.size() )
         maColors[ mnAppendIndex ] = nRGBValue;
@@ -922,7 +923,7 @@ void Font::fillToItemSet( SfxItemSet& rItemSet, bool bEditEngineText, bool bSkip
     // character color
     if( maUsedFlags.mbColorUsed )
     {
-        ScfTools::PutItem( rItemSet,SvxColorItem( maApiData.mnColor, bEditEngineText ? static_cast<sal_uInt16>(EE_CHAR_COLOR) : ATTR_FONT_COLOR  ) , bSkipPoolDefs );
+        ScfTools::PutItem( rItemSet,SvxColorItem( maApiData.mnColor, bEditEngineText ? static_cast<sal_uInt16>(EE_CHAR_COLOR) : ATTR_FONT_COLOR), bSkipPoolDefs );
     }
     // underline style
     if( maUsedFlags.mbUnderlineUsed )
@@ -1541,7 +1542,7 @@ bool Border::convertBorderLine( BorderLine2& rBorderLine, const BorderLineModel&
 {
     // Document: sc/qa/unit/data/README.cellborders
 
-    rBorderLine.Color = rModel.maColor.getColor( getBaseFilter().getGraphicHelper(), API_RGB_BLACK );
+    rBorderLine.Color = sal_Int32(rModel.maColor.getColor( getBaseFilter().getGraphicHelper(), API_RGB_BLACK ));
     switch( rModel.mnStyle )
     {
         case XML_dashDot:
@@ -1667,12 +1668,12 @@ inline sal_Int32 lclGetMixedColorComp( sal_Int32 nPatt, sal_Int32 nFill, sal_Int
     return ((nPatt - nFill) * nAlpha) / 0x80 + nFill;
 }
 
-sal_Int32 lclGetMixedColor( sal_Int32 nPattColor, sal_Int32 nFillColor, sal_Int32 nAlpha )
+::Color lclGetMixedColor( ::Color nPattColor, ::Color nFillColor, sal_Int32 nAlpha )
 {
-    return
-        (lclGetMixedColorComp( nPattColor & 0xFF0000, nFillColor & 0xFF0000, nAlpha ) & 0xFF0000) |
-        (lclGetMixedColorComp( nPattColor & 0x00FF00, nFillColor & 0x00FF00, nAlpha ) & 0x00FF00) |
-        (lclGetMixedColorComp( nPattColor & 0x0000FF, nFillColor & 0x0000FF, nAlpha ) & 0x0000FF);
+    return ::Color(
+        lclGetMixedColorComp( nPattColor.GetRed(), nFillColor.GetRed(), nAlpha ),
+        lclGetMixedColorComp( nPattColor.GetGreen(), nFillColor.GetGreen(), nAlpha ),
+        lclGetMixedColorComp( nPattColor.GetBlue(), nFillColor.GetBlue(), nAlpha ) );
 }
 
 } // namespace
@@ -1848,16 +1849,16 @@ void Fill::finalizeImport()
                 case XML_solid:             nAlpha = 0x80;  break;
             }
 
-            sal_Int32 nWinTextColor = rGraphicHelper.getSystemColor( XML_windowText );
-            sal_Int32 nWinColor = rGraphicHelper.getSystemColor( XML_window );
+            ::Color nWinTextColor = rGraphicHelper.getSystemColor( XML_windowText );
+            ::Color nWinColor = rGraphicHelper.getSystemColor( XML_window );
 
             if( !rModel.mbPattColorUsed )
                 rModel.maPatternColor.setAuto();
-            sal_Int32 nPattColor = rModel.maPatternColor.getColor( rGraphicHelper, nWinTextColor );
+            ::Color nPattColor = rModel.maPatternColor.getColor( rGraphicHelper, nWinTextColor );
 
             if( !rModel.mbFillColorUsed )
                 rModel.maFillColor.setAuto();
-            sal_Int32 nFillColor = rModel.maFillColor.getColor( rGraphicHelper, nWinColor );
+            ::Color nFillColor = rModel.maFillColor.getColor( rGraphicHelper, nWinColor );
 
             maApiData.mnColor = lclGetMixedColor( nPattColor, nFillColor, nAlpha );
             maApiData.mbTransparent = false;
@@ -1873,7 +1874,7 @@ void Fill::finalizeImport()
         if( ++aIt != rModel.maColors.end() )
         {
             OSL_ENSURE( !aIt->second.isAuto(), "Fill::finalizeImport - automatic gradient color" );
-            sal_Int32 nEndColor = aIt->second.getColor( rGraphicHelper, API_RGB_WHITE );
+            ::Color nEndColor = aIt->second.getColor( rGraphicHelper, API_RGB_WHITE );
             maApiData.mnColor = lclGetMixedColor( maApiData.mnColor, nEndColor, 0x40 );
             maApiData.mbTransparent = false;
         }
@@ -1887,7 +1888,7 @@ void Fill::fillToItemSet( SfxItemSet& rItemSet, bool bSkipPoolDefs ) const
         SvxBrushItem aBrushItem( ATTR_BACKGROUND );
         if ( maApiData.mbTransparent )
         {
-            aBrushItem.SetColor( ::COL_TRANSPARENT );
+            aBrushItem.SetColor( COL_TRANSPARENT );
         }
         else
         {
@@ -2028,7 +2029,7 @@ void Xf::applyPatternToAttrList( AttrList& rAttrs, SCROW nRow1, SCROW nRow2, sal
             {
                 ScStyleSheet* pStyleSheet = static_cast<ScStyleSheet*>(
                     pStylePool->Find(
-                        ScGlobal::GetRscString(STR_STYLENAME_STANDARD), SfxStyleFamily::Para));
+                        ScResId(STR_STYLENAME_STANDARD), SfxStyleFamily::Para));
 
                 if (pStyleSheet)
                     rPat.SetStyleSheet( pStyleSheet, false );
@@ -2462,7 +2463,7 @@ void CellStyle::createCellStyle()
     if( !mbCreated )
     {
         if ( bDefStyle && maFinalName.isEmpty() )
-            maFinalName = ScGlobal::GetRscString( STR_STYLENAME_STANDARD );
+            maFinalName = ScResId( STR_STYLENAME_STANDARD );
         mbCreated = maFinalName.isEmpty();
     }
 
@@ -2476,7 +2477,7 @@ void CellStyle::createCellStyle()
         {
             // use existing "Default" style sheet
             mpStyleSheet = static_cast< ScStyleSheet* >( rDoc.GetStyleSheetPool()->Find(
-                ScGlobal::GetRscString( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) );
+                ScResId( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) );
             OSL_ENSURE( mpStyleSheet, "CellStyle::createStyle - Default style not found" );
             bCreatePattern = true;
         }
@@ -2485,7 +2486,7 @@ void CellStyle::createCellStyle()
             mpStyleSheet = static_cast< ScStyleSheet* >( rDoc.GetStyleSheetPool()->Find( maFinalName, SfxStyleFamily::Para ) );
             if( !mpStyleSheet )
             {
-                mpStyleSheet = &static_cast< ScStyleSheet& >( rDoc.GetStyleSheetPool()->Make( maFinalName, SfxStyleFamily::Para, SFXSTYLEBIT_USERDEF ) );
+                mpStyleSheet = &static_cast< ScStyleSheet& >( rDoc.GetStyleSheetPool()->Make( maFinalName, SfxStyleFamily::Para, SfxStyleSearchBits::UserDefined ) );
                 bCreatePattern = true;
             }
         }
@@ -2787,7 +2788,7 @@ void StylesBuffer::finalizeImport()
     maDxfs.forEachMem( &Dxf::finalizeImport );
 }
 
-sal_Int32 StylesBuffer::getPaletteColor( sal_Int32 nPaletteIdx ) const
+::Color StylesBuffer::getPaletteColor( sal_Int32 nPaletteIdx ) const
 {
     return maPalette.getColor( nPaletteIdx );
 }

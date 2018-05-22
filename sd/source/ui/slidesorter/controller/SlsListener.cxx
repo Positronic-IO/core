@@ -35,7 +35,6 @@
 #include <drawdoc.hxx>
 #include <DrawDocShell.hxx>
 
-#include <strings.hrc>
 #include <ViewShellBase.hxx>
 #include <ViewShellManager.hxx>
 #include <FrameView.hxx>
@@ -204,7 +203,7 @@ void Listener::ConnectToController()
             }
             catch (beans::UnknownPropertyException&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sd");
             }
             try
             {
@@ -212,7 +211,7 @@ void Listener::ConnectToController()
             }
             catch (beans::UnknownPropertyException&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sd");
             }
         }
 
@@ -253,7 +252,7 @@ void Listener::DisconnectFromController()
         }
         catch (beans::UnknownPropertyException&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sd");
         }
 
         mbListeningToController = false;
@@ -451,7 +450,7 @@ void SAL_CALL Listener::propertyChange (
             }
             catch (beans::UnknownPropertyException&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sd");
             }
             catch (lang::DisposedException&)
             {

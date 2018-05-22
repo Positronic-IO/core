@@ -9,6 +9,10 @@
 
 $(eval $(call gb_Library_Library,test))
 
+$(eval $(call gb_Library_set_include,test,\
+    $$(INCLUDE) \
+))
+
 $(eval $(call gb_Library_add_defs,test,\
     -DOOO_DLLIMPLEMENTATION_TEST \
 ))
@@ -47,6 +51,7 @@ $(eval $(call gb_Library_add_exception_objects,test,\
     test/source/mtfxmldump \
     test/source/primitive2dxmldump \
     test/source/screenshot_test \
+    test/source/unoapi_property_testers \
 ))
 
 # vim: set noet sw=4 ts=4:

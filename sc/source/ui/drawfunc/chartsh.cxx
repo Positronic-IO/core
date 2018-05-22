@@ -27,7 +27,6 @@
 #include <sfx2/request.hxx>
 #include <vcl/EnumContext.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <chartsh.hxx>
 #include <drwlayer.hxx>
@@ -37,9 +36,8 @@
 #include <docpool.hxx>
 #include <drawview.hxx>
 #include <gridwin.hxx>
-#include <scresid.hxx>
 
-#define ScChartShell
+#define ShellClass_ScChartShell
 #include <scslots.hxx>
 
 using namespace css::uno;
@@ -99,7 +97,7 @@ void ScChartShell::ExecuteExportAsGraphic( SfxRequest& )
         {
             vcl::Window* pWin = GetViewData()->GetActiveWin();
             Reference< drawing::XShape > xSourceDoc( pObject->getUnoShape(), UNO_QUERY_THROW );
-            GraphicHelper::SaveShapeAsGraphic(pWin, xSourceDoc);
+            GraphicHelper::SaveShapeAsGraphic(pWin ? pWin->GetFrameWeld() : nullptr, xSourceDoc);
         }
     }
 

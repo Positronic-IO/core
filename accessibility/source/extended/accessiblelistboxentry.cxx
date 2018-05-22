@@ -329,7 +329,7 @@ namespace accessibility
                 aParentPath.pop_back();
 
                 // get the entry for this shortened access path
-                SvTreeListEntry* pParentEntry = getListBox()->GetEntryFromPath( m_aEntryPath );
+                SvTreeListEntry* pParentEntry = getListBox()->GetEntryFromPath( aParentPath );
                 OSL_ENSURE( pParentEntry, "AccessibleListBoxEntry::implGetParentAccessible: could not obtain a parent entry!" );
 
                 if ( pParentEntry )
@@ -1026,21 +1026,21 @@ namespace accessibility
         SolarMutexGuard aSolarGuard;
         ::osl::MutexGuard aGuard( m_aMutex );
         EnsureIsAlive();
-        return OCommonAccessibleText::getSelectedText(  );
+        return OUString();
     }
     sal_Int32 SAL_CALL AccessibleListBoxEntry::getSelectionStart(  )
     {
         SolarMutexGuard aSolarGuard;
         ::osl::MutexGuard aGuard( m_aMutex );
         EnsureIsAlive();
-        return OCommonAccessibleText::getSelectionStart(  );
+        return 0;
     }
     sal_Int32 SAL_CALL AccessibleListBoxEntry::getSelectionEnd(  )
     {
         SolarMutexGuard aSolarGuard;
         ::osl::MutexGuard aGuard( m_aMutex );
         EnsureIsAlive();
-        return OCommonAccessibleText::getSelectionEnd(  );
+        return 0;
     }
     sal_Bool SAL_CALL AccessibleListBoxEntry::setSelection( sal_Int32 nStartIndex, sal_Int32 nEndIndex )
     {

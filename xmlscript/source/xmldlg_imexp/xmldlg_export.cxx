@@ -63,7 +63,9 @@
 #include <com/sun/star/table/CellAddress.hpp>
 #include <com/sun/star/table/CellRangeAddress.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
-#include <com/sun/star/document/GraphicObjectResolver.hpp>
+#include <com/sun/star/document/GraphicStorageHandler.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 
 #include <comphelper/processfactory.hxx>
 #include <i18nlangtag/languagetag.hxx>
@@ -716,27 +718,34 @@ void ElementDescriptor::readVerticalAlignAttr( OUString const & rPropName, OUStr
     }
 }
 
-void ElementDescriptor::readImageURLAttr( OUString const & rPropName, OUString const & rAttrName )
+void ElementDescriptor::readImageOrGraphicAttr(OUString const & rAttrName)
 {
-    if (beans::PropertyState_DEFAULT_VALUE != _xPropState->getPropertyState( rPropName ))
+    OUString sURL;
+    if (beans::PropertyState_DEFAULT_VALUE != _xPropState->getPropertyState("Graphic"))
     {
-        OUString sURL;
-        _xProps->getPropertyValue( rPropName ) >>= sURL;
-
-        if ( sURL.startsWith( XMLSCRIPT_GRAPHOBJ_URLPREFIX ) )
+        uno::Reference<graphic::XGraphic> xGraphic;
+        _xProps->getPropertyValue("Graphic") >>= xGraphic;
+        if (xGraphic.is())
         {
             Reference< document::XStorageBasedDocument > xDocStorage( _xDocument, UNO_QUERY );
             if ( xDocStorage.is() )
             {
                 Reference<XComponentContext> xContext = ::comphelper::getProcessComponentContext();
-                uno::Reference< document::XGraphicObjectResolver > xGraphicResolver =
-                    document::GraphicObjectResolver::createWithStorage( xContext, xDocStorage->getDocumentStorage() );
-                sURL = xGraphicResolver->resolveGraphicObjectURL( sURL );
+                uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
+                xGraphicStorageHandler.set(document::GraphicStorageHandler::createWithStorage(xContext, xDocStorage->getDocumentStorage()));
+                if (xGraphicStorageHandler.is())
+                {
+                    sURL = xGraphicStorageHandler->saveGraphic(xGraphic);
+                }
             }
         }
-        if ( !sURL.isEmpty() )
-                addAttribute( rAttrName, sURL );
     }
+    else if (beans::PropertyState_DEFAULT_VALUE != _xPropState->getPropertyState("ImageURL"))
+    {
+        _xProps->getPropertyValue("ImageURL") >>= sURL;
+    }
+    if (!sURL.isEmpty())
+        addAttribute(rAttrName, sURL);
 }
 
 void ElementDescriptor::readImageAlignAttr( OUString const & rPropName, OUString const & rAttrName )
@@ -1098,7 +1107,7 @@ void ElementDescriptor::readDefaults( bool supportPrintable, bool supportVisible
     }
     catch( Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("xmlscript.xmldlg");
     }
     // force writing of pos/size
     a = _xProps->getPropertyValue( "PositionX" );

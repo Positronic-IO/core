@@ -13,14 +13,11 @@
 #include "scdllapi.h"
 
 #include <memory>
-#include <ostream>
 #include <set>
 
 #include <formula/grammar.hxx>
 #include <formula/opcode.hxx>
 #include <rtl/ustring.hxx>
-
-#include <comphelper/configurationlistener.hxx>
 
 // have to match the registry values
 enum ScRecalcOptions

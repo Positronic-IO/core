@@ -7,12 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		39022C1B1EDC2A0E00100066 /* program in Resources */ = {isa = PBXBuildFile; fileRef = 39022C1A1EDC2A0E00100066 /* program */; };
-		39022C1D1EDC2A2C00100066 /* services in Resources */ = {isa = PBXBuildFile; fileRef = 39022C1C1EDC2A2C00100066 /* services */; };
-		39022C1F1EDC2AB000100066 /* share in Resources */ = {isa = PBXBuildFile; fileRef = 39022C1E1EDC2AB000100066 /* share */; };
-		39022C211EDC2D0800100066 /* icudt60l.dat in Resources */ = {isa = PBXBuildFile; fileRef = 39022C201EDC2D0800100066 /* icudt60l.dat */; };
 		39284DB31FA5F207006F43E4 /* DocumentActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39284DB21FA5F207006F43E4 /* DocumentActions.swift */; };
 		392ED9B31E5E4B03005C8435 /* ViewPrintManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392ED9B21E5E4B03005C8435 /* ViewPrintManager.swift */; };
+		3941EF15204B4C8A00082486 /* unorc in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF06204B4C8900082486 /* unorc */; };
+		3941EF16204B4C8A00082486 /* fundamentalrc in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF07204B4C8900082486 /* fundamentalrc */; };
+		3941EF17204B4C8A00082486 /* program in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF08204B4C8900082486 /* program */; };
+		3941EF18204B4C8A00082486 /* services.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF09204B4C8900082486 /* services.rdb */; };
+		3941EF19204B4C8A00082486 /* oovbaapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0A204B4C8900082486 /* oovbaapi.rdb */; };
+		3941EF1A204B4C8A00082486 /* registry in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0B204B4C8900082486 /* registry */; };
+		3941EF1B204B4C8A00082486 /* services in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0C204B4C8900082486 /* services */; };
+		3941EF1C204B4C8A00082486 /* offapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0D204B4C8900082486 /* offapi.rdb */; };
+		3941EF1D204B4C8A00082486 /* filter in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0E204B4C8900082486 /* filter */; };
+		3941EF1E204B4C8A00082486 /* rc in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF0F204B4C8900082486 /* rc */; };
+		3941EF1F204B4C8A00082486 /* udkapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF10204B4C8900082486 /* udkapi.rdb */; };
+		3941EF20204B4C8A00082486 /* icudt60l.dat in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF11204B4C8900082486 /* icudt60l.dat */; };
+		3941EF21204B4C8A00082486 /* welcome.odt in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF12204B4C8900082486 /* welcome.odt */; };
+		3941EF22204B4C8A00082486 /* config in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF13204B4C8900082486 /* config */; };
+		3941EF23204B4C8A00082486 /* share in Resources */ = {isa = PBXBuildFile; fileRef = 3941EF14204B4C8900082486 /* share */; };
+		39514E002057DC55005599D0 /* shared in Resources */ = {isa = PBXBuildFile; fileRef = 39514DFF2057DC55005599D0 /* shared */; };
+		39514E082057E4A8005599D0 /* inc in Resources */ = {isa = PBXBuildFile; fileRef = 39514E072057E4A8005599D0 /* inc */; };
 		396F92F71E7AE62400A28C82 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 396F92F61E7AE62400A28C82 /* Settings.bundle */; };
 		397868D61E59A3EA007F9248 /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 397868D81E59A3EA007F9248 /* LaunchScreen.xib */; };
 		397E08FE1E597BD8001374E0 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 397E08FD1E597BD8001374E0 /* AppDelegate.swift */; };
@@ -20,14 +33,6 @@
 		397E09081E597BD8001374E0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 397E09071E597BD8001374E0 /* Assets.xcassets */; };
 		3992D85A1E5B762A00BEA987 /* DocumentController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3992D8591E5B762A00BEA987 /* DocumentController.swift */; };
 		399648471E5B87DC00E73E83 /* ViewProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399648461E5B87DC00E73E83 /* ViewProperties.swift */; };
-		39B08B9D1E5F0BB600682A59 /* fundamentalrc in Resources */ = {isa = PBXBuildFile; fileRef = 39B084E51E5F0BB400682A59 /* fundamentalrc */; };
-		39B08B9E1E5F0BB600682A59 /* offapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 39B084E61E5F0BB400682A59 /* offapi.rdb */; };
-		39B08B9F1E5F0BB600682A59 /* oovbaapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 39B084E71E5F0BB400682A59 /* oovbaapi.rdb */; };
-		39B08BD71E5F0BB600682A59 /* rc in Resources */ = {isa = PBXBuildFile; fileRef = 39B085211E5F0BB400682A59 /* rc */; };
-		39B08BD91E5F0BB600682A59 /* services.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 39B085241E5F0BB400682A59 /* services.rdb */; };
-		39B091CD1E5F0BB800682A59 /* udkapi.rdb in Resources */ = {isa = PBXBuildFile; fileRef = 39B08B9B1E5F0BB600682A59 /* udkapi.rdb */; };
-		39B091CE1E5F0BB800682A59 /* unorc in Resources */ = {isa = PBXBuildFile; fileRef = 39B08B9C1E5F0BB600682A59 /* unorc */; };
-		39E950531FC9842000D82C49 /* source in Resources */ = {isa = PBXBuildFile; fileRef = 39E950521FC9842000D82C49 /* source */; };
 		39EF4E2F1FA500C9001914AC /* PropertiesController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EF4E2E1FA500C9001914AC /* PropertiesController.swift */; };
 		FC31D01E2012F65500E7F402 /* DocumentHolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC31D01D2012F65500E7F402 /* DocumentHolder.swift */; };
 		FC31D0202012F6D300E7F402 /* RenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC31D01F2012F6D300E7F402 /* RenderCache.swift */; };
@@ -38,7 +43,6 @@
 		FCC2E3FC2004A01500CEB504 /* LibreOfficeKitWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC2E3F82004A01400CEB504 /* LibreOfficeKitWrapper.swift */; };
 		FCC2E3FD2004A01500CEB504 /* LOKitThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC2E3F92004A01400CEB504 /* LOKitThread.swift */; };
 		FCC2E3FF2004B59B00CEB504 /* DocumentTiledView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC2E3FE2004B59B00CEB504 /* DocumentTiledView.swift */; };
-		FCC2E4012004B65E00CEB504 /* example.odt in Resources */ = {isa = PBXBuildFile; fileRef = FCC2E4002004B65E00CEB504 /* example.odt */; };
 		FCC2E4032004B72700CEB504 /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC2E4022004B72700CEB504 /* Util.swift */; };
 		FCC2E4052004B74000CEB504 /* AsyncUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC2E4042004B74000CEB504 /* AsyncUtil.swift */; };
 		FCC7651D201C7F8A007D190C /* libKit.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = FCC7651C201C7F8A007D190C /* libKit.dylib */; };
@@ -60,13 +64,29 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		39022C1A1EDC2A0E00100066 /* program */ = {isa = PBXFileReference; lastKnownFileType = folder; name = program; path = ../generated/resources/program; sourceTree = "<group>"; };
-		39022C1C1EDC2A2C00100066 /* services */ = {isa = PBXFileReference; lastKnownFileType = folder; name = services; path = ../generated/resources/services; sourceTree = "<group>"; };
-		39022C1E1EDC2AB000100066 /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; name = share; path = ../generated/resources/share; sourceTree = "<group>"; };
-		39022C201EDC2D0800100066 /* icudt60l.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = icudt60l.dat; path = ../generated/resources/icudt60l.dat; sourceTree = "<group>"; };
 		39284DB21FA5F207006F43E4 /* DocumentActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentActions.swift; sourceTree = "<group>"; };
 		392ED9B21E5E4B03005C8435 /* ViewPrintManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ViewPrintManager.swift; path = LibreOfficeLight/ViewPrintManager.swift; sourceTree = SOURCE_ROOT; };
+		3941EF06204B4C8900082486 /* unorc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = unorc; path = ../generated/resources/unorc; sourceTree = "<group>"; };
+		3941EF07204B4C8900082486 /* fundamentalrc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = fundamentalrc; path = ../generated/resources/fundamentalrc; sourceTree = "<group>"; };
+		3941EF08204B4C8900082486 /* program */ = {isa = PBXFileReference; lastKnownFileType = folder; name = program; path = ../generated/resources/program; sourceTree = "<group>"; };
+		3941EF09204B4C8900082486 /* services.rdb */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = services.rdb; path = ../generated/resources/services.rdb; sourceTree = "<group>"; };
+		3941EF0A204B4C8900082486 /* oovbaapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = oovbaapi.rdb; path = ../generated/resources/oovbaapi.rdb; sourceTree = "<group>"; };
+		3941EF0B204B4C8900082486 /* registry */ = {isa = PBXFileReference; lastKnownFileType = folder; name = registry; path = ../generated/resources/registry; sourceTree = "<group>"; };
+		3941EF0C204B4C8900082486 /* services */ = {isa = PBXFileReference; lastKnownFileType = folder; name = services; path = ../generated/resources/services; sourceTree = "<group>"; };
+		3941EF0D204B4C8900082486 /* offapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = offapi.rdb; path = ../generated/resources/offapi.rdb; sourceTree = "<group>"; };
+		3941EF0E204B4C8900082486 /* filter */ = {isa = PBXFileReference; lastKnownFileType = folder; name = filter; path = ../generated/resources/filter; sourceTree = "<group>"; };
+		3941EF0F204B4C8900082486 /* rc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = rc; path = ../generated/resources/rc; sourceTree = "<group>"; };
+		3941EF10204B4C8900082486 /* udkapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = udkapi.rdb; path = ../generated/resources/udkapi.rdb; sourceTree = "<group>"; };
+		3941EF11204B4C8900082486 /* icudt60l.dat */ = {isa = PBXFileReference; lastKnownFileType = file; name = icudt60l.dat; path = ../generated/resources/icudt60l.dat; sourceTree = "<group>"; };
+		3941EF12204B4C8900082486 /* welcome.odt */ = {isa = PBXFileReference; lastKnownFileType = file; name = welcome.odt; path = ../generated/resources/welcome.odt; sourceTree = "<group>"; };
+		3941EF13204B4C8900082486 /* config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = config; path = ../generated/resources/config; sourceTree = "<group>"; };
+		3941EF14204B4C8900082486 /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; name = share; path = ../generated/resources/share; sourceTree = "<group>"; };
 		39503A6F1F94C4AC00F19C78 /* lokit-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "lokit-Bridging-Header.h"; sourceTree = "<group>"; };
+		39514DFF2057DC55005599D0 /* shared */ = {isa = PBXFileReference; lastKnownFileType = folder; name = shared; path = ../../bridges/source/cpp_uno/shared; sourceTree = "<group>"; };
+		39514E012057DC92005599D0 /* gcc3_ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = gcc3_ios; path = ../../bridges/source/cpp_uno/gcc3_ios; sourceTree = "<group>"; };
+		39514E032057DCE7005599D0 /* gcc3_macosx_x86-64 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "gcc3_macosx_x86-64"; path = "../../bridges/source/cpp_uno/gcc3_macosx_x86-64"; sourceTree = "<group>"; };
+		39514E052057DD17005599D0 /* gcc3_linux_aarch64 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = gcc3_linux_aarch64; path = ../../bridges/source/cpp_uno/gcc3_linux_aarch64; sourceTree = "<group>"; };
+		39514E072057E4A8005599D0 /* inc */ = {isa = PBXFileReference; lastKnownFileType = folder; name = inc; path = ../../bridges/inc; sourceTree = "<group>"; };
 		396F92F61E7AE62400A28C82 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		397275391E77D9F1006ACDCC /* LibreOfficeLight.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LibreOfficeLight.entitlements; sourceTree = "<group>"; };
 		397868D71E59A3EA007F9248 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/LaunchScreen.xib; sourceTree = "<group>"; };
@@ -76,17 +96,12 @@
 		397E09071E597BD8001374E0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = LibreOfficeLight/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		3992D8591E5B762A00BEA987 /* DocumentController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = DocumentController.swift; path = LibreOfficeLight/DocumentController.swift; sourceTree = SOURCE_ROOT; };
 		399648461E5B87DC00E73E83 /* ViewProperties.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ViewProperties.swift; path = LibreOfficeLight/ViewProperties.swift; sourceTree = SOURCE_ROOT; };
-		39B084E51E5F0BB400682A59 /* fundamentalrc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = fundamentalrc; path = ../generated/resources/fundamentalrc; sourceTree = SOURCE_ROOT; };
-		39B084E61E5F0BB400682A59 /* offapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = offapi.rdb; path = ../generated/resources/offapi.rdb; sourceTree = SOURCE_ROOT; };
-		39B084E71E5F0BB400682A59 /* oovbaapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = oovbaapi.rdb; path = ../generated/resources/oovbaapi.rdb; sourceTree = SOURCE_ROOT; };
-		39B085211E5F0BB400682A59 /* rc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = rc; path = ../generated/resources/rc; sourceTree = SOURCE_ROOT; };
-		39B085241E5F0BB400682A59 /* services.rdb */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = services.rdb; path = ../generated/resources/services.rdb; sourceTree = SOURCE_ROOT; };
-		39B08B9B1E5F0BB600682A59 /* udkapi.rdb */ = {isa = PBXFileReference; lastKnownFileType = file; name = udkapi.rdb; path = ../generated/resources/udkapi.rdb; sourceTree = SOURCE_ROOT; };
-		39B08B9C1E5F0BB600682A59 /* unorc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = unorc; path = ../generated/resources/unorc; sourceTree = SOURCE_ROOT; };
 		39B092501E5F3DEA00682A59 /* LibreOfficeLight-Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "LibreOfficeLight-Prefix.pch"; sourceTree = "<group>"; };
+		39B4245D2060FB2300347588 /* ucbhelper.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ucbhelper.cxx; path = ../../unotools/source/ucbhelper/ucbhelper.cxx; sourceTree = "<group>"; };
 		39E950521FC9842000D82C49 /* source */ = {isa = PBXFileReference; lastKnownFileType = folder; name = source; path = ../source; sourceTree = "<group>"; };
 		39EE81531FA644E800B73AB8 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		39EF4E2E1FA500C9001914AC /* PropertiesController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PropertiesController.swift; sourceTree = "<group>"; };
+		39FD89E6204EBCB900E7179F /* exc_thrower.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = exc_thrower.cxx; path = ../../cppuhelper/source/exc_thrower.cxx; sourceTree = "<group>"; };
 		FC31D01D2012F65500E7F402 /* DocumentHolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentHolder.swift; sourceTree = "<group>"; };
 		FC31D01F2012F6D300E7F402 /* RenderCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderCache.swift; sourceTree = "<group>"; };
 		FC31D02A2013500E00E7F402 /* ButtonScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonScrollView.swift; sourceTree = "<group>"; };
@@ -96,7 +111,6 @@
 		FCC2E3F82004A01400CEB504 /* LibreOfficeKitWrapper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LibreOfficeKitWrapper.swift; sourceTree = "<group>"; };
 		FCC2E3F92004A01400CEB504 /* LOKitThread.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LOKitThread.swift; sourceTree = "<group>"; };
 		FCC2E3FE2004B59B00CEB504 /* DocumentTiledView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DocumentTiledView.swift; sourceTree = "<group>"; };
-		FCC2E4002004B65E00CEB504 /* example.odt */ = {isa = PBXFileReference; lastKnownFileType = file; name = example.odt; path = "../../android/default-document/example.odt"; sourceTree = "<group>"; };
 		FCC2E4022004B72700CEB504 /* Util.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
 		FCC2E4042004B74000CEB504 /* AsyncUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncUtil.swift; sourceTree = "<group>"; };
 		FCC7651C201C7F8A007D190C /* libKit.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libKit.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -129,6 +143,13 @@
 		3956B72D1FAB3DBF00BF5DE4 /* extra */ = {
 			isa = PBXGroup;
 			children = (
+				39514E072057E4A8005599D0 /* inc */,
+				39514E052057DD17005599D0 /* gcc3_linux_aarch64 */,
+				39514E032057DCE7005599D0 /* gcc3_macosx_x86-64 */,
+				39514E012057DC92005599D0 /* gcc3_ios */,
+				39514DFF2057DC55005599D0 /* shared */,
+				39FD89E6204EBCB900E7179F /* exc_thrower.cxx */,
+				39B4245D2060FB2300347588 /* ucbhelper.cxx */,
 				39E950521FC9842000D82C49 /* source */,
 			);
 			name = extra;
@@ -187,18 +208,21 @@
 		39B084E41E5F0B5200682A59 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				FCC2E4002004B65E00CEB504 /* example.odt */,
-				39022C201EDC2D0800100066 /* icudt60l.dat */,
-				39022C1E1EDC2AB000100066 /* share */,
-				39022C1C1EDC2A2C00100066 /* services */,
-				39022C1A1EDC2A0E00100066 /* program */,
-				39B084E51E5F0BB400682A59 /* fundamentalrc */,
-				39B084E61E5F0BB400682A59 /* offapi.rdb */,
-				39B084E71E5F0BB400682A59 /* oovbaapi.rdb */,
-				39B085211E5F0BB400682A59 /* rc */,
-				39B085241E5F0BB400682A59 /* services.rdb */,
-				39B08B9B1E5F0BB600682A59 /* udkapi.rdb */,
-				39B08B9C1E5F0BB600682A59 /* unorc */,
+				3941EF13204B4C8900082486 /* config */,
+				3941EF0E204B4C8900082486 /* filter */,
+				3941EF07204B4C8900082486 /* fundamentalrc */,
+				3941EF11204B4C8900082486 /* icudt60l.dat */,
+				3941EF0D204B4C8900082486 /* offapi.rdb */,
+				3941EF0A204B4C8900082486 /* oovbaapi.rdb */,
+				3941EF08204B4C8900082486 /* program */,
+				3941EF0F204B4C8900082486 /* rc */,
+				3941EF0B204B4C8900082486 /* registry */,
+				3941EF0C204B4C8900082486 /* services */,
+				3941EF09204B4C8900082486 /* services.rdb */,
+				3941EF14204B4C8900082486 /* share */,
+				3941EF10204B4C8900082486 /* udkapi.rdb */,
+				3941EF06204B4C8900082486 /* unorc */,
+				3941EF12204B4C8900082486 /* welcome.odt */,
 			);
 			name = Resources;
 			sourceTree = SOURCE_ROOT;
@@ -246,7 +270,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 0820;
-				LastUpgradeCheck = 0920;
+				LastUpgradeCheck = 0930;
 				ORGANIZATIONNAME = jani;
 				TargetAttributes = {
 					397E08F91E597BD8001374E0 = {
@@ -290,23 +314,27 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3941EF15204B4C8A00082486 /* unorc in Resources */,
+				3941EF19204B4C8A00082486 /* oovbaapi.rdb in Resources */,
+				3941EF1D204B4C8A00082486 /* filter in Resources */,
 				397E09081E597BD8001374E0 /* Assets.xcassets in Resources */,
-				39B08BD71E5F0BB600682A59 /* rc in Resources */,
-				39B08B9E1E5F0BB600682A59 /* offapi.rdb in Resources */,
-				39022C211EDC2D0800100066 /* icudt60l.dat in Resources */,
-				39E950531FC9842000D82C49 /* source in Resources */,
-				39022C1B1EDC2A0E00100066 /* program in Resources */,
-				39022C1D1EDC2A2C00100066 /* services in Resources */,
 				397868D61E59A3EA007F9248 /* LaunchScreen.xib in Resources */,
+				39514E002057DC55005599D0 /* shared in Resources */,
+				3941EF1A204B4C8A00082486 /* registry in Resources */,
+				3941EF18204B4C8A00082486 /* services.rdb in Resources */,
+				3941EF1C204B4C8A00082486 /* offapi.rdb in Resources */,
+				3941EF22204B4C8A00082486 /* config in Resources */,
 				396F92F71E7AE62400A28C82 /* Settings.bundle in Resources */,
-				39B08B9F1E5F0BB600682A59 /* oovbaapi.rdb in Resources */,
-				39B08B9D1E5F0BB600682A59 /* fundamentalrc in Resources */,
-				39B091CD1E5F0BB800682A59 /* udkapi.rdb in Resources */,
-				FCC2E4012004B65E00CEB504 /* example.odt in Resources */,
-				39B08BD91E5F0BB600682A59 /* services.rdb in Resources */,
-				39B091CE1E5F0BB800682A59 /* unorc in Resources */,
-				39022C1F1EDC2AB000100066 /* share in Resources */,
+				3941EF1E204B4C8A00082486 /* rc in Resources */,
+				3941EF23204B4C8A00082486 /* share in Resources */,
+				3941EF1B204B4C8A00082486 /* services in Resources */,
+				3941EF21204B4C8A00082486 /* welcome.odt in Resources */,
 				397E09031E597BD8001374E0 /* Main.storyboard in Resources */,
+				3941EF20204B4C8A00082486 /* icudt60l.dat in Resources */,
+				3941EF16204B4C8A00082486 /* fundamentalrc in Resources */,
+				39514E082057E4A8005599D0 /* inc in Resources */,
+				3941EF1F204B4C8A00082486 /* udkapi.rdb in Resources */,
+				3941EF17204B4C8A00082486 /* program in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -391,6 +419,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -398,6 +427,7 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
@@ -426,7 +456,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "$(inherited)";
-				IPHONEOS_DEPLOYMENT_TARGET = 11.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_MAP_FILE_PATH = "";
 				LIBRARY_SEARCH_PATHS = "$PROJECT_DIR/../generated/debug/**";
 				MACH_O_TYPE = mh_execute;
@@ -458,6 +488,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -465,6 +496,7 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
@@ -488,7 +520,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "$(inherited)";
-				IPHONEOS_DEPLOYMENT_TARGET = 11.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_MAP_FILE_PATH = "";
 				LIBRARY_SEARCH_PATHS = "$PROJECT_DIR/../generated/release/**";
 				MACH_O_TYPE = mh_execute;

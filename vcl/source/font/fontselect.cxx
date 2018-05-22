@@ -18,6 +18,9 @@
  */
 
 #include <sal/config.h>
+#include <o3tl/safeint.hxx>
+
+#include <fontselect.hxx>
 
 #include <PhysicalFontFace.hxx>
 #include <svdata.hxx>
@@ -29,7 +32,6 @@ const char FontSelectPatternAttributes::FEAT_SEPARATOR = '&';
 FontSelectPattern::FontSelectPattern( const vcl::Font& rFont,
     const OUString& rSearchName, const Size& rSize, float fExactHeight)
     : FontSelectPatternAttributes(rFont, rSearchName, rSize, fExactHeight)
-    , mpFontData( nullptr )
     , mpFontInstance( nullptr )
 {
 }
@@ -62,9 +64,9 @@ FontSelectPatternAttributes::FontSelectPatternAttributes( const vcl::Font& rFont
 
     // normalize width and height
     if( mnHeight < 0 )
-        mnHeight = -mnHeight;
+        mnHeight = o3tl::saturating_toggle_sign(mnHeight);
     if( mnWidth < 0 )
-        mnWidth = -mnWidth;
+        mnWidth = o3tl::saturating_toggle_sign(mnWidth);
 }
 
 
@@ -89,7 +91,6 @@ FontSelectPatternAttributes::FontSelectPatternAttributes( const PhysicalFontFace
 FontSelectPattern::FontSelectPattern( const PhysicalFontFace& rFontData,
     const Size& rSize, float fExactHeight, int nOrientation, bool bVertical )
     : FontSelectPatternAttributes(rFontData, rSize, fExactHeight, nOrientation, bVertical)
-    , mpFontData( &rFontData )
     , mpFontInstance( nullptr )
 {
 }

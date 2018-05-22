@@ -30,7 +30,7 @@
 #include <svx/svdview.hxx>
 #include <svx/xfillit0.hxx>
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/scene3d.hxx>
 #include <editeng/editdata.hxx>
 #include <editeng/outlobj.hxx>
@@ -205,25 +205,25 @@ void SdrUndoGroup::SdrRepeat(SdrView& rView)
 
 OUString SdrUndoGroup::GetSdrRepeatComment(SdrView& /*rView*/) const
 {
-    return aComment.replaceAll("%1", ImpGetResStr(STR_ObjNameSingulPlural));
+    return aComment.replaceAll("%1", SvxResId(STR_ObjNameSingulPlural));
 }
 
 SdrUndoObj::SdrUndoObj(SdrObject& rNewObj)
-    : SdrUndoAction(*rNewObj.GetModel())
-    , pObj(&rNewObj)
+:   SdrUndoAction(rNewObj.getSdrModelFromSdrObject())
+    ,pObj(&rNewObj)
 {
 }
 
 OUString SdrUndoObj::GetDescriptionStringForObject( const SdrObject& _rForObject, const char* pStrCacheID, bool bRepeat )
 {
-    const OUString rStr {ImpGetResStr(pStrCacheID)};
+    const OUString rStr {SvxResId(pStrCacheID)};
 
     const sal_Int32 nPos = rStr.indexOf("%1");
     if (nPos < 0)
         return rStr;
 
     if (bRepeat)
-        return rStr.replaceAt(nPos, 2, ImpGetResStr(STR_ObjNameSingulPlural));
+        return rStr.replaceAt(nPos, 2, SvxResId(STR_ObjNameSingulPlural));
 
     return rStr.replaceAt(nPos, 2, _rForObject.TakeObjNameSingul());
 }
@@ -237,10 +237,10 @@ void SdrUndoObj::ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr, 
 // common call method for possible change of the page when UNDO/REDO is triggered
 void SdrUndoObj::ImpShowPageOfThisObject()
 {
-    if(pObj && pObj->IsInserted() && pObj->GetPage() && pObj->GetModel())
+    if(pObj && pObj->IsInserted() && pObj->GetPage())
     {
         SdrHint aHint(SdrHintKind::SwitchToPage, *pObj, pObj->GetPage());
-        pObj->GetModel()->Broadcast(aHint);
+        pObj->getSdrModelFromSdrObject().Broadcast(aHint);
     }
 }
 
@@ -275,7 +275,7 @@ SdrUndoAttrObj::SdrUndoAttrObj(SdrObject& rNewObj, bool bStyleSheet1, bool bSave
     if(bIsGroup)
     {
         // it's a group object!
-        pUndoGroup.reset( new SdrUndoGroup(*pObj->GetModel()) );
+        pUndoGroup.reset(new SdrUndoGroup(pObj->getSdrModelFromSdrObject()));
         const size_t nObjCount(pOL->GetObjCount());
 
         for(size_t nObjNum = 0; nObjNum < nObjCount; ++nObjNum)
@@ -343,9 +343,9 @@ void SdrUndoAttrObj::Undo()
             mxRedoStyleSheet = pObj->GetStyleSheet();
             SfxStyleSheet* pSheet = dynamic_cast< SfxStyleSheet* >(mxUndoStyleSheet.get());
 
-            if(pSheet && pObj->GetModel() && pObj->GetModel()->GetStyleSheetPool())
+            if(pSheet && pObj->getSdrModelFromSdrObject().GetStyleSheetPool())
             {
-                ensureStyleSheetInStyleSheetPool(*pObj->GetModel()->GetStyleSheetPool(), *pSheet);
+                ensureStyleSheetInStyleSheetPool(*pObj->getSdrModelFromSdrObject().GetStyleSheetPool(), *pSheet);
                 pObj->SetStyleSheet(pSheet, true);
             }
             else
@@ -426,9 +426,9 @@ void SdrUndoAttrObj::Redo()
             mxUndoStyleSheet = pObj->GetStyleSheet();
             SfxStyleSheet* pSheet = dynamic_cast< SfxStyleSheet* >(mxRedoStyleSheet.get());
 
-            if(pSheet && pObj->GetModel() && pObj->GetModel()->GetStyleSheetPool())
+            if(pSheet && pObj->getSdrModelFromSdrObject().GetStyleSheetPool())
             {
-                ensureStyleSheetInStyleSheetPool(*pObj->GetModel()->GetStyleSheetPool(), *pSheet);
+                ensureStyleSheetInStyleSheetPool(*pObj->getSdrModelFromSdrObject().GetStyleSheetPool(), *pSheet);
                 pObj->SetStyleSheet(pSheet, true);
             }
             else
@@ -581,7 +581,7 @@ SdrUndoGeoObj::SdrUndoGeoObj(SdrObject& rNewObj)
         // this is a group object!
         // If this were 3D scene, we'd only add an Undo for the scene itself
         // (which we do elsewhere).
-        pUndoGroup.reset(new SdrUndoGroup(*pObj->GetModel()));
+        pUndoGroup.reset(new SdrUndoGroup(pObj->getSdrModelFromSdrObject()));
         const size_t nObjCount = pOL->GetObjCount();
         for (size_t nObjNum = 0; nObjNum<nObjCount; ++nObjNum) {
             pUndoGroup->AddAction(new SdrUndoGeoObj(*pOL->GetObj(nObjNum)));
@@ -656,7 +656,7 @@ SdrUndoObjList::SdrUndoObjList(SdrObject& rNewObj, bool bOrdNumDirect)
     : SdrUndoObj(rNewObj)
     , bOwner(false)
 {
-    pObjList=pObj->GetObjList();
+    pObjList=pObj->getParentOfSdrObject();
     if (bOrdNumDirect)
     {
         nOrdNum=pObj->GetOrdNumDirect();
@@ -856,7 +856,7 @@ SdrUndoReplaceObj::SdrUndoReplaceObj(SdrObject& rOldObj1, SdrObject& rNewObj1, b
 {
     SetOldOwner(true);
 
-    pObjList=pObj->GetObjList();
+    pObjList=pObj->getParentOfSdrObject();
     if (bOrdNumDirect)
     {
         nOrdNum=pObj->GetOrdNumDirect();
@@ -983,7 +983,7 @@ void SdrUndoObjOrdNum::Undo()
     // Trigger PageChangeCall
     ImpShowPageOfThisObject();
 
-    SdrObjList* pOL=pObj->GetObjList();
+    SdrObjList* pOL=pObj->getParentOfSdrObject();
     if (pOL==nullptr)
     {
         OSL_FAIL("UndoObjOrdNum: pObj does not have an ObjList.");
@@ -994,7 +994,7 @@ void SdrUndoObjOrdNum::Undo()
 
 void SdrUndoObjOrdNum::Redo()
 {
-    SdrObjList* pOL=pObj->GetObjList();
+    SdrObjList* pOL=pObj->getParentOfSdrObject();
     if (pOL==nullptr)
     {
         OSL_FAIL("RedoObjOrdNum: pObj does not have an ObjList.");
@@ -1289,7 +1289,7 @@ void SdrUndoNewLayer::Redo()
 
 OUString SdrUndoNewLayer::GetComment() const
 {
-    return ImpGetResStr(STR_UndoNewLayer);
+    return SvxResId(STR_UndoNewLayer);
 }
 
 
@@ -1310,7 +1310,7 @@ void SdrUndoDelLayer::Redo()
 
 OUString SdrUndoDelLayer::GetComment() const
 {
-    return ImpGetResStr(STR_UndoDelLayer);
+    return SvxResId(STR_UndoDelLayer);
 }
 
 
@@ -1330,13 +1330,13 @@ void SdrUndoMoveLayer::Redo()
 
 OUString SdrUndoMoveLayer::GetComment() const
 {
-    return ImpGetResStr(STR_UndoMovLayer);
+    return SvxResId(STR_UndoMovLayer);
 }
 
 
 SdrUndoPage::SdrUndoPage(SdrPage& rNewPg)
-    : SdrUndoAction(*rNewPg.GetModel())
-    , mrPage(rNewPg)
+:   SdrUndoAction(rNewPg.getSdrModelFromSdrPage())
+    ,mrPage(rNewPg)
 {
 }
 
@@ -1392,7 +1392,7 @@ void SdrUndoPage::ImpMovePage(sal_uInt16 nOldNum, sal_uInt16 nNewNum)
 
 void SdrUndoPage::ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr)
 {
-    rStr = ImpGetResStr(pStrCacheID);
+    rStr = SvxResId(pStrCacheID);
 }
 
 
@@ -1657,7 +1657,7 @@ void SdrUndoPageRemoveMasterPage::Undo()
 {
     if(mbOldHadMasterPage)
     {
-        mrPage.TRG_SetMasterPage(*mrPage.GetModel()->GetMasterPage(maOldMasterPageNumber));
+        mrPage.TRG_SetMasterPage(*mrPage.getSdrModelFromSdrPage().GetMasterPage(maOldMasterPageNumber));
         mrPage.TRG_SetMasterPageVisibleLayers(maOldSet);
     }
 }
@@ -1695,7 +1695,7 @@ void SdrUndoPageChangeMasterPage::Undo()
     if(mbOldHadMasterPage)
     {
         mrPage.TRG_ClearMasterPage();
-        mrPage.TRG_SetMasterPage(*mrPage.GetModel()->GetMasterPage(maOldMasterPageNumber));
+        mrPage.TRG_SetMasterPage(*mrPage.getSdrModelFromSdrPage().GetMasterPage(maOldMasterPageNumber));
         mrPage.TRG_SetMasterPageVisibleLayers(maOldSet);
     }
 }
@@ -1706,7 +1706,7 @@ void SdrUndoPageChangeMasterPage::Redo()
     if(mbNewHadMasterPage)
     {
         mrPage.TRG_ClearMasterPage();
-        mrPage.TRG_SetMasterPage(*mrPage.GetModel()->GetMasterPage(maNewMasterPageNumber));
+        mrPage.TRG_SetMasterPage(*mrPage.getSdrModelFromSdrPage().GetMasterPage(maNewMasterPageNumber));
         mrPage.TRG_SetMasterPageVisibleLayers(maNewSet);
     }
 }

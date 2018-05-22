@@ -300,7 +300,7 @@ SvxEditSourceAdapter::~SvxEditSourceAdapter()
 {
 }
 
-SvxEditSource* SvxEditSourceAdapter::Clone() const
+std::unique_ptr<SvxEditSource> SvxEditSourceAdapter::Clone() const
 {
     if( mbEditSourceValid && mpAdaptee.get() )
     {
@@ -308,9 +308,9 @@ SvxEditSource* SvxEditSourceAdapter::Clone() const
 
         if( pClonedAdaptee.get() )
         {
-            SvxEditSourceAdapter* pClone = new SvxEditSourceAdapter();
+            std::unique_ptr<SvxEditSourceAdapter> pClone(new SvxEditSourceAdapter());
             pClone->SetEditSource( std::move(pClonedAdaptee) );
-            return pClone;
+            return std::unique_ptr< SvxEditSource >(pClone.release());
         }
     }
 
@@ -614,7 +614,7 @@ SfxItemPool* SvxAccessibleTextAdapter::GetPool() const
     return mpTextForwarder->GetPool();
 }
 
-OUString SvxAccessibleTextAdapter::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rpTxtColor, Color*& rpFldColor )
+OUString SvxAccessibleTextAdapter::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor )
 {
     assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
 

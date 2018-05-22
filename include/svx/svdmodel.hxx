@@ -172,11 +172,11 @@ protected:
     sfx2::LinkManager* pLinkManager;   // LinkManager
     std::unique_ptr<std::deque<std::unique_ptr<SfxUndoAction>>> pUndoStack;
     std::unique_ptr<std::deque<std::unique_ptr<SfxUndoAction>>> pRedoStack;
-    std::unique_ptr<SdrUndoGroup> pAktUndoGroup;  // for deeper
-    sal_uInt16          nUndoLevel;     // undo nesting
+    std::unique_ptr<SdrUndoGroup> pCurrentUndoGroup;  // For multi-level
+    sal_uInt16          nUndoLevel;                   // undo nesting
     bool                bMyPool:1;        // to clean up pMyPool from 303a
     bool                mbUndoEnabled:1;  // If false no undo is recorded or we are during the execution of an undo action
-    bool                bExtColorTable:1; // ne separate ColorTable
+    bool                bExtColorTable:1; // For no own ColorTable
     bool                mbChanged:1;
     bool                bPagNumsDirty:1;
     bool                bMPgNumsDirty:1;
@@ -214,8 +214,16 @@ public:
     sal_uInt16 getHandoutPageCount() const { return mnHandoutPageCount; }
     void setHandoutPageCount( sal_uInt16 nHandoutPageCount ) { mnHandoutPageCount = nHandoutPageCount; }
 
-protected:
+    // Adapt to given Size and Borders scaling all contained data, maybe
+    // including PresObj's in higher derivations
+    virtual void adaptSizeAndBorderForAllPages(
+        const Size& rNewSize,
+        long nLeft = 0,
+        long nRight = 0,
+        long nUpper = 0,
+        long nLower = 0);
 
+protected:
     virtual css::uno::Reference< css::uno::XInterface > createUnoModel();
 
 private:
@@ -299,7 +307,6 @@ public:
     void                 RefDeviceChanged(); // not yet implemented
     // default font height in logical units
     void                 SetDefaultFontHeight(sal_Int32 nVal);
-    sal_Int32            GetDefaultFontHeight() const           { return mnDefTextHgt; }
     // default tabulator width for the EditEngine
     void                 SetDefaultTabulator(sal_uInt16 nVal);
     sal_uInt16           GetDefaultTabulator() const            { return nDefaultTabulator; }
@@ -432,7 +439,7 @@ public:
     virtual void Merge(SdrModel& rSourceModel,
                sal_uInt16 nFirstPageNum, sal_uInt16 nLastPageNum,
                sal_uInt16 nDestPos,
-               bool bMergeMasterPages, bool bAllMasterPages = false,
+               bool bMergeMasterPages, bool bAllMasterPages,
                bool bUndo = true, bool bTreadSourceAsConst = false);
 
     // Behaves like Merge(SourceModel=DestModel,nFirst,nLast,nDest,sal_False,sal_False,bUndo,!bMoveNoCopy);
@@ -544,7 +551,7 @@ public:
 
     void ReformatAllTextObjects();
 
-    SdrOutliner* createOutliner( OutlinerMode nOutlinerMode );
+    std::unique_ptr<SdrOutliner> createOutliner( OutlinerMode nOutlinerMode );
     void disposeOutliner( SdrOutliner* pOutliner );
 
     bool IsWriter() const { return !bMyPool; }

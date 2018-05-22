@@ -97,6 +97,7 @@ gb_UIConfig_INSTDIR := $(LIBO_SHARE_FOLDER)/config/soffice.cfg
 
 ifneq ($(filter LXML,$(BUILD_TYPE)),)
 gb_UIConfig_LXML_PATH := PYPATH=$${PYPATH:+$$PYPATH:}$(call gb_UnpackedTarball_get_dir,lxml)/install ;
+gb_UIConfig_LXML_TARGET := $(call gb_ExternalProject_get_target,lxml)
 endif
 gb_UIConfig_gla11y_SCRIPT := $(SRCDIR)/bin/gla11y
 
@@ -124,17 +125,82 @@ $(call gb_UIConfig_get_clean_target,%) :
 	$(call gb_Output_announce,$*,$(false),UIA,2)
 	rm -f $(call gb_UIConfig_get_a11yerrors_target,$*)
 
+gb_UIConfig_gla11y_PARAMETERS = -P $(SRCDIR)/ -f $(UI_A11YFALSE)
+
+# Disable this to see suppressed warnings
+ifeq (1,1)
+gb_UIConfig_gla11y_PARAMETERS += -s $(UI_A11YSUPPRS)
+endif
 # Enable this to regenerate suppression files
 ifeq (1,0)
-GEN_A11Y_SUPPRS = -g $(UI_A11YSUPPRS)
+gb_UIConfig_gla11y_PARAMETERS += -g $(UI_A11YSUPPRS)
 endif
+
+# Tell gla11y about LO-specific widgets
+# These are already automatically labelled Shrink/Expand
+gb_UIConfig_gla11y_PARAMETERS += --widgets-ignored +foruilo-RefButton
+# These, however, do need a label like a GtkEntry
+gb_UIConfig_gla11y_PARAMETERS += --widgets-needlabel +foruilo-RefEdit
+# These are storage, containers, or preview
+gb_UIConfig_gla11y_PARAMETERS += --widgets-suffixignored +ValueSet,HBox,VBox,ToolBox,Preview,PreviewWin,PreviewWindow,PrevWindow
+# These are buttons, thus already contain their label (but an image is not enough)
+gb_UIConfig_gla11y_PARAMETERS += --widgets-button +vcllo-SmallButton,cuilo-RubyRadioButton,chartcontrollerlo-LightButton,svtlo-ManagedMenuButton
+
+# All new warnings should be fatal except a few kinds which could be only doubtful
+gb_UIConfig_gla11y_PARAMETERS += --fatal-all --not-fatal-type duplicate-mnemonic --not-fatal-type labelled-by-and-mnemonic --not-fatal-type orphan-label
+
+# Disable all warnings types by default for now, to enable warnings types progressively
+gb_UIConfig_gla11y_PARAMETERS += --disable-all
+
+# For now, ignore orphan labels without an unlabelled widget
+gb_UIConfig_gla11y_PARAMETERS += --disable-orphan-labels
+# but do not ignore orphan labels with an unlabelled widget
+gb_UIConfig_gla11y_PARAMETERS += --enable-type orphan-label
+
+# The following are to be uncommented progressively
+
+# These are definite errors
+gb_UIConfig_gla11y_PARAMETERS += --enable-type undeclared-target
+gb_UIConfig_gla11y_PARAMETERS += --enable-type missing-label-for
+gb_UIConfig_gla11y_PARAMETERS += --enable-type missing-labelled-by
+
+# These are often buttons with only an image
+gb_UIConfig_gla11y_PARAMETERS += --enable-type button-no-label
+# These are often doubtful
+gb_UIConfig_gla11y_PARAMETERS += --enable-type duplicate-mnemonic --enable-type labelled-by-and-mnemonic
+
+# For now, disable warning about widgets without a label by default, to enable warnings for classes progressively
+# To be uncommented progressively
+gb_UIConfig_gla11y_PARAMETERS += --disable-type no-labelled-by
+# Clearly need labelling
+gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkScale
+gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkEntry
+gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkSpinButton
+gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkSpinner
+gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkProgressBar
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.svxcorelo-SvxColorListBox
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.svxcorelo-SvxLanguageBox
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.sfxlo-SvxCharView
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.foruilo-RefEdit
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.svxcorelo-PaperSizeListBox
+# Probably need labelling
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkComboBox
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkComboBoxText
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkMenuItem
+# Possibly need labelling
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkTreeView
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkTreeViewColumn
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkTextView
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkDrawingArea
+# Perhaps need labelling
+#gb_UIConfig_gla11y_PARAMETERS += --enable-specific no-labelled-by.GtkImage
 
 define gb_UIConfig_a11yerrors__command
 $(call gb_Output_announce,$(2),$(true),UIA,1)
 $(call gb_UIConfig__gla11y_command)
 endef
 
-$(call gb_UIConfig_get_a11yerrors_target,%) : $(call gb_ExternalProject_get_target,lxml) $(call gb_ExternalExecutable_get_dependencies,python) $(gb_UIConfig_gla11y_SCRIPT)
+$(call gb_UIConfig_get_a11yerrors_target,%) : $(gb_UIConfig_LXML_TARGET) $(call gb_ExternalExecutable_get_dependencies,python) $(gb_UIConfig_gla11y_SCRIPT)
 	$(call gb_UIConfig_a11yerrors__command,$@,$*)
 
 gb_UIConfig_get_packagename = UIConfig/$(1)
@@ -160,6 +226,7 @@ $(call gb_UIConfig_get_target,$(1)) :| $(dir $(call gb_UIConfig_get_target,$(1))
 $(call gb_UIConfig_get_imagelist_target,$(1)) :| $(dir $(call gb_UIConfig_get_imagelist_target,$(1))).dir
 $(call gb_UIConfig_get_a11yerrors_target,$(1)) :| $(dir $(call gb_UIConfig_get_a11yerrors_target,$(1))).dir
 $(call gb_UIConfig_get_a11yerrors_target,$(1)) : UI_A11YSUPPRS := $(SRCDIR)/solenv/sanitizers/ui/$(1).suppr
+$(call gb_UIConfig_get_a11yerrors_target,$(1)) : UI_A11YFALSE := $(SRCDIR)/solenv/sanitizers/ui/$(1).false
 $(call gb_UIConfig_get_target,$(1)) : $(call gb_PackageSet_get_target,$(call gb_UIConfig_get_packagesetname,$(1)))
 $(call gb_UIConfig_get_clean_target,$(1)) : $(call gb_PackageSet_get_clean_target,$(call gb_UIConfig_get_packagesetname,$(1)))
 
@@ -181,6 +248,12 @@ $(call gb_UIConfig__package_file,$(1),$(2),ui,$(3),$(4))
 
 endef
 
+define gb_UIConfig_add_a11yerrors_uifile
+$(call gb_UIConfig_get_a11yerrors_target,$(1)) : UIFILES += $(SRCDIR)/$(2).ui
+$(call gb_UIConfig_get_a11yerrors_target,$(1)) : $(SRCDIR)/$(2).ui
+
+endef
+
 # gb_UIConfig__add_uifile target file
 define gb_UIConfig__add_uifile
 $(call gb_UIConfig__package_uifile,$(1),$(call gb_UIConfig_get_packagename,$(1)),$(notdir $(2)).ui,$(2).ui)
@@ -190,7 +263,7 @@ $(call gb_UIConfig_get_imagelist_target,$(1)) : UI_IMAGELISTS += $(call gb_UIIma
 $(call gb_UIConfig_get_imagelist_target,$(1)) : $(call gb_UIImageListTarget_get_target,$(2))
 $(call gb_UIConfig_get_clean_target,$(1)) : $(call gb_UIImageListTarget_get_clean_target,$(2))
 
-$(call gb_UIConfig_get_a11yerrors_target,$(1)) : UIFILES += $(SRCDIR)/$(2).ui
+$(call gb_UIConfig_add_a11yerrors_uifile,$(1),$(2))
 
 endef
 
@@ -211,6 +284,12 @@ endef
 # gb_UIConfig_add_uifiles target uifile(s)
 define gb_UIConfig_add_uifiles
 $(foreach uifile,$(2),$(call gb_UIConfig_add_uifile,$(1),$(uifile)))
+
+endef
+
+# gb_UIConfig_add_uifiles target uifile(s) but only for running gla11y
+define gb_UIConfig_add_a11yerrors_uifiles
+$(foreach uifile,$(2),$(call gb_UIConfig_add_a11yerrors_uifile,$(1),$(uifile)))
 
 endef
 

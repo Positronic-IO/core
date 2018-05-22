@@ -30,6 +30,12 @@ class SwFormatChg;
 class SwUpdateAttr;
 class SwAttrSetChg;
 class SwDocPosUpdate;
+class SwFormatMeta;
+class SvXMLAttrContainerItem;
+class SwMsgPoolItem;
+class SwPtrMsgPoolItem;
+class SfxBoolItem;
+class SvxCharSetColorItem;
 
 // For SwTextHints without end index the following char is added:
 

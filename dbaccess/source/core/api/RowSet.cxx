@@ -55,7 +55,6 @@
 #include <com/sun/star/uno/XNamingService.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/seqstream.hxx>
@@ -136,7 +135,6 @@ ORowSet::ORowSet( const Reference< css::uno::XComponentContext >& _rxContext )
     ,m_aRowsetListeners(*m_pMutex)
     ,m_aApproveListeners(*m_pMutex)
     ,m_aRowsChangeListener(*m_pMutex)
-    ,m_pTables(nullptr)
     ,m_nFetchDirection(FetchDirection::FORWARD)
     ,m_nFetchSize(50)
     ,m_nMaxFieldSize(0)
@@ -573,7 +571,7 @@ void ORowSet::freeResources( bool _bComplete )
         try { ::comphelper::disposeComponent( m_xComposer ); }
         catch(Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
             m_xComposer = nullptr;
         }
 
@@ -1520,7 +1518,7 @@ Reference< XIndexAccess > SAL_CALL ORowSet::getParameters(  )
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -1553,7 +1551,7 @@ void ORowSet::approveExecution()
         catch ( const RowSetVetoException& ) { throw; }
         catch ( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1682,7 +1680,7 @@ void ORowSet::impl_ensureStatement_throw()
             OUString sInfo(DBA_RES_PARAM( RID_STR_COMMAND_LEADING_TO_ERROR, "$command$", sCommandToExecute )  );
             aError.append( SQLExceptionInfo::TYPE::SQLContext, sInfo );
         }
-        catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+        catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
 
         // propagate
         aError.doThrow();
@@ -1766,7 +1764,7 @@ void ORowSet::impl_initializeColumnSettings_nothrow( const Reference< XPropertyS
     }
     catch(Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         return;
     }
 
@@ -1810,7 +1808,7 @@ void ORowSet::impl_initializeColumnSettings_nothrow( const Reference< XPropertyS
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2018,8 +2016,8 @@ void ORowSet::execute_NoApprove_NoNewConn(ResettableMutexGuard& _rClearForNotifi
         else
         {
             Reference<XDatabaseMetaData> xMeta = m_xActiveConnection->getMetaData();
-            m_pColumns = new ORowSetDataColumns(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),
-                                                aColumns,*this,m_aColumnsMutex,aNames);
+            m_pColumns.reset( new ORowSetDataColumns(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),
+                                                aColumns,*this,m_aColumnsMutex,aNames) );
         }
     }
     else // !m_bCommandFacetsDirty
@@ -2182,10 +2180,9 @@ void ORowSet::notifyRowSetAndClonesRowDeleted( const Any& _rBookmark, sal_Int32 
     // notify ourself
     onDeletedRow( _rBookmark, _nPos );
     // notify the clones
-    connectivity::OWeakRefArray::const_iterator aEnd = m_aClones.end();
-    for (connectivity::OWeakRefArray::const_iterator i = m_aClones.begin(); aEnd != i; ++i)
+    for (auto const& clone : m_aClones)
     {
-        Reference< XUnoTunnel > xTunnel(i->get(),UNO_QUERY);
+        Reference< XUnoTunnel > xTunnel(clone.get(),UNO_QUERY);
         if(xTunnel.is())
         {
             ORowSetClone* pClone = reinterpret_cast<ORowSetClone*>(xTunnel->getSomething(ORowSetClone::getUnoTunnelImplementationId()));
@@ -2246,9 +2243,9 @@ Reference< XNameAccess > ORowSet::impl_getTables_throw()
     {
         xTables.set( xTablesAccess->getTables(), UNO_QUERY_THROW );
     }
-    else if ( m_pTables )
+    else if ( m_xTables )
     {
-        xTables = m_pTables;
+        xTables = m_xTables.get();
     }
     else
     {
@@ -2263,13 +2260,13 @@ Reference< XNameAccess > ORowSet::impl_getTables_throw()
         }
         catch(SQLException&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
-        m_pTables = new OTableContainer(*this,m_aMutex,m_xActiveConnection,bCase,nullptr,nullptr,m_nInAppend);
-        xTables = m_pTables;
+        m_xTables = new OTableContainer(*this,m_aMutex,m_xActiveConnection,bCase,nullptr,nullptr,m_nInAppend);
+        xTables = m_xTables.get();
         Sequence<OUString> aTableFilter { "%" };
-        m_pTables->construct(aTableFilter,Sequence< OUString>());
+        m_xTables->construct(aTableFilter,Sequence< OUString>());
     }
 
     return xTables;
@@ -2277,19 +2274,19 @@ Reference< XNameAccess > ORowSet::impl_getTables_throw()
 
 void ORowSet::impl_resetTables_nothrow()
 {
-    if ( !m_pTables )
+    if ( !m_xTables )
         return;
 
     try
     {
-        m_pTables->dispose();
+        m_xTables->dispose();
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
-    DELETEZ( m_pTables );
+    m_xTables.clear();
 }
 
 void ORowSet::impl_initComposer_throw( OUString& _out_rCommandToExecute )
@@ -2837,8 +2834,8 @@ ORowSetClone::ORowSetClone( const Reference<XComponentContext>& _rContext, ORowS
         }
     }
     Reference<XDatabaseMetaData> xMeta = rParent.m_xActiveConnection->getMetaData();
-    m_pColumns = new ORowSetDataColumns(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),
-                                        aColumns,*this,m_aMutex,aNames);
+    m_pColumns.reset( new ORowSetDataColumns(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),
+                                        aColumns,*this,m_aMutex,aNames) );
 
     sal_Int32 const nRT = PropertyAttribute::READONLY   | PropertyAttribute::TRANSIENT;
 

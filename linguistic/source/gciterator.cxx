@@ -55,7 +55,6 @@
 #include <i18nlangtag/languagetag.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
-#include <comphelper/extract.hxx>
 
 #include <deque>
 #include <map>
@@ -242,7 +241,7 @@ GrammarCheckingIterator::GrammarCheckingIterator() :
     m_aEventListeners( MyMutex::get() ),
     m_aNotifyListeners( MyMutex::get() )
 {
-    m_thread = osl_createThread( lcl_workerfunc, this );
+    m_thread = nullptr;
 }
 
 
@@ -322,6 +321,8 @@ void GrammarCheckingIterator::AddEntry(
 
         // add new entry to the end of this queue
         ::osl::Guard< ::osl::Mutex > aGuard( MyMutex::get() );
+        if (!m_thread)
+            m_thread = osl_createThread( lcl_workerfunc, this );
         m_aFPEntriesQueue.push_back( aNewFPEntry );
 
         // wake up the thread in order to do grammar checking
@@ -797,13 +798,11 @@ sal_Int32 GrammarCheckingIterator::GetSuggestedEndOfSentence(
 
 void SAL_CALL GrammarCheckingIterator::resetIgnoreRules(  )
 {
-    GCReferences_t::iterator aIt( m_aGCReferencesByService.begin() );
-    while (aIt != m_aGCReferencesByService.end())
+    for (auto const& elem : m_aGCReferencesByService)
     {
-        uno::Reference< linguistic2::XProofreader > xGC( aIt->second );
+        uno::Reference< linguistic2::XProofreader > xGC(elem.second);
         if (xGC.is())
             xGC->resetIgnoreRules();
-        ++aIt;
     }
 }
 

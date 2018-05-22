@@ -37,9 +37,7 @@
 #include <com/sun/star/sdb/SQLContext.hpp>
 #include <com/sun/star/sdb/CommandType.hpp>
 
-#include <comphelper/numbers.hxx>
 #include <comphelper/basicio.hxx>
-#include <comphelper/processfactory.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <cppuhelper/queryinterface.hxx>
@@ -594,7 +592,7 @@ void OComboBoxModel::loadData( bool _bForce )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("forms.component");
         return;
     }
 
@@ -662,7 +660,7 @@ void OComboBoxModel::loadData( bool _bForce )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("forms.component");
         return;
     }
 
@@ -829,18 +827,6 @@ void OComboBoxModel::stringItemListChanged( ControlModelLock& /*_rInstanceLock*/
         m_xAggregateSet->setPropertyValue( PROPERTY_STRINGITEMLIST, makeAny( comphelper::containerToSequence(getStringItemList()) ) );
         m_xAggregateSet->setPropertyValue( PROPERTY_TYPEDITEMLIST, makeAny( getTypedItemList()) ) ;
     }
-}
-
-
-void OComboBoxModel::connectedExternalListSource( )
-{
-    // TODO?
-}
-
-
-void OComboBoxModel::disconnectedExternalListSource( )
-{
-    // TODO?
 }
 
 

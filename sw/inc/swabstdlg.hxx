@@ -20,19 +20,9 @@
 #define INCLUDED_SW_INC_SWABSTDLG_HXX
 
 #include <rtl/ustring.hxx>
-#include <tools/solar.h>
 #include <sfx2/sfxdlg.hxx>
-#include <svx/svxdlg.hxx>
-#include <vcl/syswin.hxx>
-#include "globals.hrc"
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/uno/Sequence.h>
-#include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/text/XTextCursor.hpp>
-#include <com/sun/star/container/XNameAccess.hpp>
-#include <com/sun/star/awt/XControl.hpp>
-#include <com/sun/star/container/XNamed.hpp>
-#include "itabenum.hxx"
 #include <boost/optional.hpp>
 #include "dbmgr.hxx"
 #include <cnttab.hxx>
@@ -41,15 +31,11 @@
 class SfxViewFrame;
 class SfxBindings;
 class SfxItemSet;
-class ResId;
 namespace vcl { class Window; }
-class SfxItemPool;
 class SfxStyleSheetBase;
 class SwGlossaryHdl;
 class SwField;
 
-class SwLabFormatPage;
-class SwLabRec;
 class SwAsciiOptions;
 class SwDocShell;
 class SvStream;
@@ -58,28 +44,25 @@ class SfxRequest;
 class SwView;
 class SwTableAutoFormat;
 class SwTOXMgr;
-class SwForm;
-struct CurTOXType;
 class SwTOXDescription;
 class SwTOXBase;
 class SwSectionData;
 struct SwDBData;
-class SwField;
 class Printer;
 class SwLabItem;
-class SwDBManager;
 class SwTableFUNC;
 class SwChildWinWrapper;
 struct SfxChildWinInfo;
 class SwTOXMark;
 struct SwDocStat;
+struct SwInsertTableOptions;
 enum class SwBorderModes;
 enum class SwCharDlgMode;
 enum class SfxStyleFamily;
 
 namespace com{namespace sun{namespace star{
     namespace frame{
-        class XFrame;
+        class XModel;
     }
     namespace sdbcx{
     class XColumnsSupplier;
@@ -89,6 +72,8 @@ namespace com{namespace sun{namespace star{
     class XConnection;
     class XResultSet;
     }
+    namespace container { class XNameAccess; }
+    namespace container { class XNamed; }
 }}}
 
 typedef   void (*SwLabDlgMethod) (css::uno::Reference< css::frame::XModel> const & xModel, const SwLabItem& rItem);
@@ -110,9 +95,6 @@ class AbstractFieldInputDlg : public VclAbstractTerminatedDialog
 protected:
     virtual ~AbstractFieldInputDlg() override = default;
 public:
-    //from class SalFrame
-    virtual void          SetWindowState( const OString & rStr ) = 0;
-    virtual OString       GetWindowState() const = 0;
     virtual void          EndDialog(sal_Int32 nResult) override = 0;
     virtual bool          PrevButtonPressed() const = 0;
     virtual bool          NextButtonPressed() const = 0;
@@ -284,8 +266,6 @@ class AbstractDropDownFieldDialog : public VclAbstractDialog
 protected:
     virtual ~AbstractDropDownFieldDialog() override = default;
 public:
-    virtual OString       GetWindowState() const = 0; //this method inherit from SystemWindow
-    virtual void          SetWindowState( const OString & rStr ) = 0; //this method inherit from SystemWindow
     virtual bool          PrevButtonPressed() const = 0;
     virtual bool          NextButtonPressed() const = 0;
 };
@@ -295,8 +275,8 @@ class AbstractSwLabDlg  : public SfxAbstractTabDialog
 protected:
     virtual ~AbstractSwLabDlg() override = default;
 public:
-     virtual const OUString& GetBusinessCardStr() const = 0;
-     virtual Printer *GetPrt() =0;
+    virtual const OUString& GetBusinessCardStr() const = 0;
+    virtual Printer *GetPrt() =0;
 };
 
 class AbstractSwSelGlossaryDlg : public VclAbstractDialog
@@ -314,7 +294,7 @@ class AbstractSwAutoFormatDlg : public VclAbstractDialog
 protected:
     virtual ~AbstractSwAutoFormatDlg() override = default;
 public:
-    virtual void FillAutoFormatOfIndex( SwTableAutoFormat*& rToFill ) const = 0;
+    virtual SwTableAutoFormat* FillAutoFormatOfIndex() const = 0;
 };
 
 class AbstractSwFieldDlg : public SfxAbstractTabDialog
@@ -362,7 +342,6 @@ public:
 #define RET_TARGET_CREATED      103
 #define RET_REMOVE_TARGET       104
 
-class SwView;
 class SwMailMergeConfigItem;
 
 class AbstractMailMergeWizard : public VclAbstractDialog2
@@ -390,8 +369,8 @@ public:
 
     virtual VclPtr<AbstractSwInsertAbstractDlg> CreateSwInsertAbstractDlg() = 0;
     virtual VclPtr<SfxAbstractDialog> CreateSwAddressAbstractDlg(vcl::Window* pParent, const SfxItemSet& rSet) = 0;
-    virtual VclPtr<AbstractSwAsciiFilterDlg>  CreateSwAsciiFilterDlg ( SwDocShell& rDocSh,
-                                                                SvStream* pStream ) = 0;
+    virtual VclPtr<AbstractSwAsciiFilterDlg>  CreateSwAsciiFilterDlg(weld::Window* pParent, SwDocShell& rDocSh,
+                                                                SvStream* pStream) = 0;
     virtual VclPtr<VclAbstractDialog> CreateSwInsertBookmarkDlg( vcl::Window *pParent, SwWrtShell &rSh, SfxRequest& rReq ) = 0;
 
     virtual VclPtr<AbstractSwBreakDlg> CreateSwBreakDlg(weld::Window *pParent, SwWrtShell &rSh) = 0;
@@ -400,19 +379,18 @@ public:
         SwCharDlgMode nDialogMode, const OUString* pFormatStr = nullptr) = 0;
     virtual VclPtr<AbstractSwConvertTableDlg> CreateSwConvertTableDlg(SwView& rView, bool bToTable) = 0;
     virtual VclPtr<VclAbstractDialog> CreateSwCaptionDialog ( vcl::Window *pParent, SwView &rV) = 0;
-    virtual VclPtr<VclAbstractDialog> CreateSignatureLineDialog(vcl::Window* pParent, SwView& rView) = 0;
 
     virtual VclPtr<AbstractSwInsertDBColAutoPilot> CreateSwInsertDBColAutoPilot(SwView& rView,
         css::uno::Reference< css::sdbc::XDataSource> rxSource,
         css::uno::Reference<css::sdbcx::XColumnsSupplier> xColSupp,
         const SwDBData& rData) = 0;
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwFootNoteOptionDlg(vcl::Window *pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwFootNoteOptionDlg(weld::Window *pParent, SwWrtShell &rSh) = 0;
 
-    virtual VclPtr<AbstractDropDownFieldDialog> CreateDropDownFieldDialog(SwWrtShell &rSh,
+    virtual VclPtr<AbstractDropDownFieldDialog> CreateDropDownFieldDialog(weld::Window* pParent, SwWrtShell &rSh,
         SwField* pField, bool bPrevButton, bool bNextButton) = 0;
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwEnvDlg ( vcl::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert ) = 0;
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwEnvDlg(weld::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert) = 0;
 
-    virtual VclPtr<AbstractSwLabDlg> CreateSwLabDlg(const SfxItemSet& rSet,
+    virtual VclPtr<AbstractSwLabDlg> CreateSwLabDlg(weld::Window* pParent, const SfxItemSet& rSet,
                                                      SwDBManager* pDBManager, bool bLabel) = 0;
 
     virtual SwLabDlgMethod GetSwLabDlgStaticMethod () =0;
@@ -427,29 +405,29 @@ public:
 
     virtual VclPtr<AbstractSwSelGlossaryDlg> CreateSwSelGlossaryDlg(const OUString &rShortName) = 0;
 
-    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(vcl::Window * pParent, SwWrtShell &rSh) = 0;
-    virtual VclPtr<VclAbstractDialog> CreateSwTableHeightDialog(vcl::Window *pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(weld::Window * pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwTableHeightDialog(weld::Window *pParent, SwWrtShell &rSh) = 0;
     virtual VclPtr<VclAbstractDialog> CreateSwColumnDialog(vcl::Window *pParent, SwWrtShell &rSh) = 0;
-    virtual VclPtr<AbstractSplitTableDialog> CreateSplitTableDialog ( vcl::Window * pParent, SwWrtShell &rSh ) = 0;
+    virtual VclPtr<AbstractSplitTableDialog> CreateSplitTableDialog(weld::Window* pParent, SwWrtShell &rSh) = 0;
 
-    virtual VclPtr<AbstractSwAutoFormatDlg> CreateSwAutoFormatDlg( vcl::Window* pParent, SwWrtShell* pShell,
-                                                            bool bSetAutoFormat = true,
-                                                            const SwTableAutoFormat* pSelFormat = nullptr ) = 0;
+    virtual VclPtr<AbstractSwAutoFormatDlg> CreateSwAutoFormatDlg(weld::Window* pParent, SwWrtShell* pShell,
+                                                                  bool bSetAutoFormat = true,
+                                                                  const SwTableAutoFormat* pSelFormat = nullptr ) = 0;
     virtual VclPtr<SfxAbstractDialog> CreateSwBorderDlg ( vcl::Window* pParent, SfxItemSet& rSet, SwBorderModes nType ) = 0;
     virtual VclPtr<SfxAbstractDialog> CreateSwWrapDlg ( vcl::Window* pParent, SfxItemSet& rSet, SwWrtShell* pSh ) = 0;
 
-    virtual VclPtr<VclAbstractDialog> CreateSwTableWidthDlg(vcl::Window *pParent, SwTableFUNC &rFnc) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwTableWidthDlg(weld::Window *pParent, SwTableFUNC &rFnc) = 0;
     virtual VclPtr<SfxAbstractTabDialog> CreateSwTableTabDlg(vcl::Window* pParent,
         const SfxItemSet* pItemSet, SwWrtShell* pSh) = 0;
 
     virtual VclPtr<AbstractSwFieldDlg> CreateSwFieldDlg(SfxBindings* pB, SwChildWinWrapper* pCW, vcl::Window *pParent) = 0;
     virtual VclPtr<SfxAbstractDialog>   CreateSwFieldEditDlg ( SwView& rVw ) = 0;
-    virtual VclPtr<AbstractSwRenameXNamedDlg> CreateSwRenameXNamedDlg(vcl::Window* pParent,
+    virtual VclPtr<AbstractSwRenameXNamedDlg> CreateSwRenameXNamedDlg(weld::Window* pParent,
         css::uno::Reference< css::container::XNamed > & xNamed,
         css::uno::Reference< css::container::XNameAccess > & xNameAccess) = 0;
     virtual VclPtr<AbstractSwModalRedlineAcceptDlg> CreateSwModalRedlineAcceptDlg(vcl::Window *pParent) = 0;
 
-    virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog( vcl::Window* pParent, bool& rWithPrev ) = 0;
+    virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog(weld::Window* pParent, bool& rWithPrev) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateFrameTabDialog(const OUString &rDialogType,
                                                 SfxViewFrame *pFrame, vcl::Window *pParent,
                                                 const SfxItemSet& rCoreSet,
@@ -467,14 +445,14 @@ public:
     virtual VclPtr<AbstractGlossaryDlg>        CreateGlossaryDlg(SfxViewFrame* pViewFrame,
                                                 SwGlossaryHdl* pGlosHdl,
                                                 SwWrtShell *pWrtShell) = 0;
-    virtual VclPtr<AbstractFieldInputDlg>        CreateFieldInputDlg(vcl::Window *pParent,
+    virtual VclPtr<AbstractFieldInputDlg>        CreateFieldInputDlg(weld::Window *pParent,
         SwWrtShell &rSh, SwField* pField, bool bPrevButton, bool bNextButton) = 0;
-    virtual VclPtr<AbstractInsFootNoteDlg>     CreateInsFootNoteDlg(vcl::Window * pParent,
+    virtual VclPtr<AbstractInsFootNoteDlg>     CreateInsFootNoteDlg(weld::Window * pParent,
         SwWrtShell &rSh, bool bEd = false) = 0;
     virtual VclPtr<VclAbstractDialog>          CreateTitlePageDlg ( vcl::Window * pParent ) = 0;
     virtual VclPtr<VclAbstractDialog>         CreateVclSwViewDialog(SwView& rView) = 0;
     virtual VclPtr<AbstractInsTableDlg>        CreateInsTableDlg(SwView& rView) = 0;
-    virtual VclPtr<AbstractJavaEditDialog>     CreateJavaEditDialog(vcl::Window* pParent,
+    virtual VclPtr<AbstractJavaEditDialog>     CreateJavaEditDialog(weld::Window* pParent,
         SwWrtShell* pWrtSh) = 0;
     virtual VclPtr<AbstractMailMergeDlg>       CreateMailMergeDlg(
                                                 vcl::Window* pParent, SwWrtShell& rSh,
@@ -484,8 +462,8 @@ public:
                                                 const css::uno::Reference< css::sdbc::XConnection>& xConnection ) = 0;
     virtual VclPtr<AbstractMailMergeCreateFromDlg>   CreateMailMergeCreateFromDlg(vcl::Window* pParent) = 0;
     virtual VclPtr<AbstractMailMergeFieldConnectionsDlg> CreateMailMergeFieldConnectionsDlg(vcl::Window* pParent) = 0;
-    virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(vcl::Window* pParent, SwTOXMgr &rTOXMgr) = 0;
-    virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(vcl::Window* pParent,
+    virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(weld::Window* pParent, SwTOXMgr &rTOXMgr) = 0;
+    virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(weld::Window* pParent,
                                                 const SfxItemSet* pSwItemSet,
                                                 SwWrtShell &) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateSvxNumBulletTabDialog(vcl::Window* pParent,
@@ -520,8 +498,8 @@ public:
     // for tabpage
     virtual CreateTabPage               GetTabPageCreatorFunc( sal_uInt16 nId ) = 0;
 
-    virtual void ExecuteMMResultSaveDialog() = 0;
-    virtual void ExecuteMMResultPrintDialog() = 0;
+    virtual void ExecuteMMResultSaveDialog(weld::Window* pParent) = 0;
+    virtual void ExecuteMMResultPrintDialog(weld::Window* pParent) = 0;
     virtual void ExecuteMMResultEmailDialog() = 0;
 
 protected:

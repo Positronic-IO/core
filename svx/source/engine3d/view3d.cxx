@@ -224,10 +224,12 @@ void Impl3DMirrorConstructOverlay::SetMirrorAxis(Point aMirrorAxisA, Point aMirr
     }
 }
 
-E3dView::E3dView(SdrModel* pModel, OutputDevice* pOut) :
-    SdrView(pModel, pOut)
+E3dView::E3dView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrView(rSdrModel, pOut)
 {
-    InitView ();
+    InitView();
 }
 
 // DrawMarkedObj override, since possibly only a single 3D object is to be
@@ -361,7 +363,7 @@ SdrModel* E3dView::GetMarkedObjModel() const
         return SdrView::GetMarkedObjModel();
     }
 
-    SdrModel* pNewModel = nullptr;
+    SdrModel* pNewModelel = nullptr;
     tools::Rectangle aSelectedSnapRect;
 
     // set 3d selection flags at all directly selected objects
@@ -403,13 +405,13 @@ SdrModel* E3dView::GetMarkedObjModel() const
 
     // call parent. This will copy all scenes and the selection flags at the 3D objects. So
     // it will be possible to delete all non-selected 3d objects from the cloned 3d scenes
-    pNewModel = SdrView::GetMarkedObjModel();
+    pNewModelel = SdrView::GetMarkedObjModel();
 
-    if(pNewModel)
+    if(pNewModelel)
     {
-        for(sal_uInt16 nPg(0); nPg < pNewModel->GetPageCount(); nPg++)
+        for(sal_uInt16 nPg(0); nPg < pNewModelel->GetPageCount(); nPg++)
         {
-            const SdrPage* pSrcPg=pNewModel->GetPage(nPg);
+            const SdrPage* pSrcPg=pNewModelel->GetPage(nPg);
             const size_t nObjCount(pSrcPg->GetObjCount());
 
             for(size_t nOb = 0; nOb < nObjCount; ++nOb)
@@ -434,7 +436,7 @@ SdrModel* E3dView::GetMarkedObjModel() const
     // restore old selection
     rCurrentMarkList = aOldML;
 
-    return pNewModel;
+    return pNewModelel;
 }
 
 // When pasting objects have to integrated if a scene is inserted, but
@@ -505,7 +507,7 @@ bool E3dView::ImpCloneAll3DObjectsToDestScene(E3dScene const * pSrcScene, E3dSce
 
             if(pCompoundObj)
             {
-                E3dCompoundObject* pNewCompoundObj = pCompoundObj->Clone();
+                E3dCompoundObject* pNewCompoundObj(pCompoundObj->CloneSdrObject(pDstScene->getSdrModelFromSdrObject()));
 
                 if(pNewCompoundObj)
                 {
@@ -579,8 +581,7 @@ bool E3dView::ImpCloneAll3DObjectsToDestScene(E3dScene const * pSrcScene, E3dSce
                     pNewCompoundObj->SetTransform(aModifyingTransform * aNewObjectTrans);
 
                     // fill and insert new object
-                    pNewCompoundObj->SetModel(pDstScene->GetModel());
-                    pNewCompoundObj->SetPage(pDstScene->GetPage());
+                    pNewCompoundObj->SetPage(pDstScene->E3dObject::GetPage());
                     pNewCompoundObj->NbcSetLayer(pCompoundObj->GetLayer());
                     pNewCompoundObj->NbcSetStyleSheet(pCompoundObj->GetStyleSheet(), true);
                     pDstScene->Insert3DObj(pNewCompoundObj);
@@ -700,10 +701,15 @@ void E3dView::ImpCreateSingle3DObjectFlat(E3dScene* pScene, SdrObject* pObj, boo
     if(pPath)
     {
         E3dDefaultAttributes aDefault = Get3DDefaultAttributes();
+
         if(bExtrude)
+        {
             aDefault.SetDefaultExtrudeCharacterMode(true);
+        }
         else
+        {
             aDefault.SetDefaultLatheCharacterMode(true);
+        }
 
         // Get Itemset of the original object
         SfxItemSet aSet(pObj->GetMergedItemSet());
@@ -736,13 +742,13 @@ void E3dView::ImpCreateSingle3DObjectFlat(E3dScene* pScene, SdrObject* pObj, boo
         E3dObject* p3DObj = nullptr;
         if(bExtrude)
         {
-            p3DObj = new E3dExtrudeObj(aDefault, pPath->GetPathPoly(), fDepth);
+            p3DObj = new E3dExtrudeObj(pObj->getSdrModelFromSdrObject(), aDefault, pPath->GetPathPoly(), fDepth);
         }
         else
         {
             basegfx::B2DPolyPolygon aPolyPoly2D(pPath->GetPathPoly());
             aPolyPoly2D.transform(rLatheMat);
-            p3DObj = new E3dLatheObj(aDefault, aPolyPoly2D);
+            p3DObj = new E3dLatheObj(pObj->getSdrModelFromSdrObject(), aDefault, aPolyPoly2D);
         }
 
         // Set attribute
@@ -836,8 +842,10 @@ void E3dView::ConvertMarkedObjTo3D(bool bExtrude, const basegfx::B2DPoint& rPnt1
     else
         BegUndo(SvxResId(RID_SVX_3D_UNDO_LATHE));
 
+    SdrModel& rSdrModel(GetSdrMarkByIndex(0)->GetMarkedSdrObj()->getSdrModelFromSdrObject());
+
     // Create a new scene for the created 3D object
-    E3dScene* pScene = new E3dScene;
+    E3dScene* pScene = new E3dScene(rSdrModel);
 
     // Determine rectangle and possibly correct it
     tools::Rectangle aRect = GetAllMarkedRect();
@@ -989,7 +997,9 @@ void E3dView::ConvertMarkedObjTo3D(bool bExtrude, const basegfx::B2DPoint& rPnt1
     else
     {
         // No 3D object was created, throw away everything
-        delete pScene;
+        // always use SdrObject::Free(...) for SdrObjects (!)
+        SdrObject* pTemp(pScene);
+        SdrObject::Free(pTemp);
     }
 
     EndUndo();
@@ -1262,7 +1272,6 @@ bool E3dView::BegDragObj(const Point& rPnt, OutputDevice* pOut,
 }
 
 // Set current 3D drawing object, create the scene for this
-
 E3dScene* E3dView::SetCurrent3DObj(E3dObject* p3DObj)
 {
     DBG_ASSERT(p3DObj != nullptr, "Who puts in a NULL-pointer here");
@@ -1275,7 +1284,7 @@ E3dScene* E3dView::SetCurrent3DObj(E3dObject* p3DObj)
 
     tools::Rectangle aRect(0,0, static_cast<long>(fW), static_cast<long>(fH));
 
-    E3dScene* pScene = new E3dScene;
+    E3dScene* pScene = new E3dScene(p3DObj->getSdrModelFromSdrObject());
 
     InitScene(pScene, fW, fH, aVolume.getMaxZ() + ((fW + fH) / 4.0));
 
@@ -1388,7 +1397,7 @@ void E3dView::Start3DCreation()
 
     // Show mirror polygon IMMEDIATELY
     const SdrHdlList &aHdlList = GetHdlList();
-    mpMirrorOverlay = new Impl3DMirrorConstructOverlay(*this);
+    mpMirrorOverlay.reset(new Impl3DMirrorConstructOverlay(*this));
     mpMirrorOverlay->SetMirrorAxis(aHdlList.GetHdl(SdrHdlKind::Ref1)->GetPos(), aHdlList.GetHdl(SdrHdlKind::Ref2)->GetPos());
 }
 
@@ -1478,11 +1487,7 @@ E3dView::~E3dView ()
 
 void E3dView::ResetCreationActive ()
 {
-    if(mpMirrorOverlay)
-    {
-        delete mpMirrorOverlay;
-        mpMirrorOverlay = nullptr;
-    }
+    mpMirrorOverlay.reset();
 }
 
 void E3dView::InitView ()

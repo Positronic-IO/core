@@ -47,7 +47,6 @@
 #include <comphelper/stl_types.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/processfactory.hxx>
 #include <core_resource.hxx>
 #include <SectionView.hxx>
 #include <ReportSection.hxx>
@@ -109,8 +108,8 @@ PropBrw::PropBrw(const Reference< XComponentContext >& _xORB, vcl::Window* pPare
     }
     catch (Exception&)
     {
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
         OSL_FAIL("PropBrw::PropBrw: could not create/initialize my frame!");
-        DBG_UNHANDLED_EXCEPTION();
         m_xMeAsFrame.clear();
     }
 
@@ -154,8 +153,8 @@ PropBrw::PropBrw(const Reference< XComponentContext >& _xORB, vcl::Window* pPare
         }
         catch (Exception&)
         {
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
             OSL_FAIL("PropBrw::PropBrw: could not create/initialize the browser controller!");
-            DBG_UNHANDLED_EXCEPTION();
             try
             {
                 ::comphelper::disposeComponent(m_xBrowserController);

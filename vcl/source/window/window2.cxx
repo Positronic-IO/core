@@ -38,7 +38,6 @@
 #include <fontinstance.hxx>
 #include <outdev.h>
 #include <svdata.hxx>
-#include <impbmp.hxx>
 #include <salbmp.hxx>
 #include <salgdi.hxx>
 #include <salframe.hxx>
@@ -64,21 +63,18 @@ void Window::ShowFocus( const tools::Rectangle& rRect )
         {
             if ( mpWindowImpl->mbFocusVisible )
             {
-                if ( *(pWinData->mpFocusRect) == rRect )
+                if ( *pWinData->mpFocusRect == rRect )
                 {
                     mpWindowImpl->mbInShowFocus = false;
                     return;
                 }
 
-                ImplInvertFocus( *(pWinData->mpFocusRect) );
+                ImplInvertFocus( *pWinData->mpFocusRect );
             }
 
             ImplInvertFocus( rRect );
         }
-        if ( !pWinData->mpFocusRect )
-            pWinData->mpFocusRect.reset( new tools::Rectangle( rRect ) );
-        else
-            *(pWinData->mpFocusRect) = rRect;
+        pWinData->mpFocusRect = rRect;
         mpWindowImpl->mbFocusVisible = true;
     }
     else
@@ -111,7 +107,7 @@ void Window::HideFocus()
         }
 
         if ( !mpWindowImpl->mbInPaint )
-            ImplInvertFocus( *(ImplGetWinData()->mpFocusRect) );
+            ImplInvertFocus( *ImplGetWinData()->mpFocusRect );
         mpWindowImpl->mbFocusVisible = false;
     }
     else
@@ -134,20 +130,17 @@ void Window::ShowTracking( const tools::Rectangle& rRect, ShowTrackFlags nFlags 
     {
         if ( mpWindowImpl->mbTrackVisible )
         {
-            if ( (*(pWinData->mpTrackRect)  == rRect) &&
+            if ( (*pWinData->mpTrackRect  == rRect) &&
                  (pWinData->mnTrackFlags    == nFlags) )
                 return;
 
-            InvertTracking( *(pWinData->mpTrackRect), pWinData->mnTrackFlags );
+            InvertTracking( *pWinData->mpTrackRect, pWinData->mnTrackFlags );
         }
 
         InvertTracking( rRect, nFlags );
     }
 
-    if ( !pWinData->mpTrackRect )
-        pWinData->mpTrackRect.reset(new tools::Rectangle( rRect ));
-    else
-        *(pWinData->mpTrackRect) = rRect;
+    pWinData->mpTrackRect = rRect;
     pWinData->mnTrackFlags      = nFlags;
     mpWindowImpl->mbTrackVisible              = true;
 }
@@ -158,7 +151,7 @@ void Window::HideTracking()
     {
         ImplWinData* pWinData = ImplGetWinData();
         if ( !mpWindowImpl->mbInPaint || !(pWinData->mnTrackFlags & ShowTrackFlags::TrackWindow) )
-            InvertTracking( *(pWinData->mpTrackRect), pWinData->mnTrackFlags );
+            InvertTracking( *pWinData->mpTrackRect, pWinData->mnTrackFlags );
         mpWindowImpl->mbTrackVisible = false;
     }
 }
@@ -1392,6 +1385,12 @@ void Window::queue_resize(StateChangedType eReason)
         if (pBorderWindow)
             pBorderWindow->Resize();
     }
+
+    if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
+    {
+        if (GetParentDialog())
+            LogicInvalidate(nullptr);
+    }
 }
 
 namespace
@@ -1604,6 +1603,14 @@ bool Window::set_property(const OString &rKey, const OUString &rValue)
     {
         if (toBool(rValue))
             GrabFocus();
+    }
+    else if (rKey == "can-focus")
+    {
+        WinBits nBits = GetStyle();
+        nBits &= ~WB_TABSTOP;
+        if (toBool(rValue))
+            nBits |= WB_TABSTOP;
+        SetStyle(nBits);
     }
     else
     {
@@ -1853,7 +1860,11 @@ sal_Int32 Window::get_border_width() const
 void Window::set_margin_left(sal_Int32 nWidth)
 {
     WindowImpl *pWindowImpl = mpWindowImpl->mpBorderWindow ? mpWindowImpl->mpBorderWindow->mpWindowImpl.get() : mpWindowImpl.get();
-    pWindowImpl->mnMarginLeft = nWidth;
+    if (pWindowImpl->mnMarginLeft != nWidth)
+    {
+        pWindowImpl->mnMarginLeft = nWidth;
+        queue_resize();
+    }
 }
 
 sal_Int32 Window::get_margin_left() const
@@ -1865,7 +1876,11 @@ sal_Int32 Window::get_margin_left() const
 void Window::set_margin_right(sal_Int32 nWidth)
 {
     WindowImpl *pWindowImpl = mpWindowImpl->mpBorderWindow ? mpWindowImpl->mpBorderWindow->mpWindowImpl.get() : mpWindowImpl.get();
-    pWindowImpl->mnMarginRight = nWidth;
+    if (pWindowImpl->mnMarginRight != nWidth)
+    {
+        pWindowImpl->mnMarginRight = nWidth;
+        queue_resize();
+    }
 }
 
 sal_Int32 Window::get_margin_right() const
@@ -1877,7 +1892,11 @@ sal_Int32 Window::get_margin_right() const
 void Window::set_margin_top(sal_Int32 nWidth)
 {
     WindowImpl *pWindowImpl = mpWindowImpl->mpBorderWindow ? mpWindowImpl->mpBorderWindow->mpWindowImpl.get() : mpWindowImpl.get();
-    pWindowImpl->mnMarginTop = nWidth;
+    if (pWindowImpl->mnMarginTop != nWidth)
+    {
+        pWindowImpl->mnMarginTop = nWidth;
+        queue_resize();
+    }
 }
 
 sal_Int32 Window::get_margin_top() const
@@ -1889,7 +1908,11 @@ sal_Int32 Window::get_margin_top() const
 void Window::set_margin_bottom(sal_Int32 nWidth)
 {
     WindowImpl *pWindowImpl = mpWindowImpl->mpBorderWindow ? mpWindowImpl->mpBorderWindow->mpWindowImpl.get() : mpWindowImpl.get();
-    pWindowImpl->mnMarginBottom = nWidth;
+    if (pWindowImpl->mnMarginBottom != nWidth)
+    {
+        pWindowImpl->mnMarginBottom = nWidth;
+        queue_resize();
+    }
 }
 
 sal_Int32 Window::get_margin_bottom() const

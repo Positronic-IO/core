@@ -368,6 +368,7 @@ namespace xmloff { namespace token {
         XML_CALCULATION_SETTINGS,
         XML_CALENDAR,
         XML_CAPITALIZE_ENTRIES,
+        XML_CAN_ADD_COMMENT,
         XML_CAPTION,
         XML_CAPTION_POINT_X,
         XML_CAPTION_POINT_Y,
@@ -1055,6 +1056,7 @@ namespace xmloff { namespace token {
         XML_INSTITUTION,
         XML_INT,
         XML_INTENSITY,
+        XML_INTER_CHARACTER,
         XML_INTERSECT,
         XML_INTERVAL,
         XML_INTERVAL_MAJOR,
@@ -1941,8 +1943,14 @@ namespace xmloff { namespace token {
         XML_DOT_DASH,
         XML_DOT_DOT_DASH,
         XML_LONG_DASH,
+        XML_SHOW_SIGN_DATE,
+        XML_SIGNATURELINE,
+        XML_SIGNING_INSTRUCTIONS,
         XML_SINGLE,
         XML_SMALL_WAVE,
+        XML_SUGGESTED_SIGNER_EMAIL,
+        XML_SUGGESTED_SIGNER_NAME,
+        XML_SUGGESTED_SIGNER_TITLE,
         XML_WAVE,
         XML_UNFORMATTED_TEXT,
         XML_UNION,
@@ -3303,6 +3311,10 @@ namespace xmloff { namespace token {
 
         // tdf#115319
         XML_REFERENCE_LANGUAGE,
+
+        XML_NEWLINE,
+
+        XML_CREATOR_INITIALS,
 
         XML_TOKEN_END
     };

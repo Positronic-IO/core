@@ -19,27 +19,19 @@
 #ifndef INCLUDED_SW_INC_SWTYPES_HXX
 #define INCLUDED_SW_INC_SWTYPES_HXX
 #include <rtl/ustring.hxx>
-#include <tools/solar.h>
-#include <tools/mapunit.hxx>
-#include "SwGetPoolIdFromName.hxx"
 
 #include <limits.h>
 #include <com/sun/star/uno/Reference.h>
 #include "swdllapi.h"
-#include <i18nlangtag/languagetag.hxx>
 #include <o3tl/typed_flags_set.hxx>
-#include <svx/swframetypes.hxx>
+#include <i18nlangtag/lang.h>
 
 namespace com { namespace sun { namespace star {
     namespace linguistic2{
-        class XDictionaryList;
         class XLinguProperties;
         class XSpellChecker1;
         class XHyphenator;
         class XThesaurus;
-    }
-    namespace beans{
-        class XPropertySet;
     }
 }}}
 namespace utl{
@@ -51,8 +43,8 @@ class SwPathFinder;
 class Graphic;
 class OutputDevice;
 class CharClass;
-class LocaleDataWrapper;
 class CollatorWrapper;
+class LanguageTag;
 
 typedef long SwTwips;
 #define INVALID_TWIPS   LONG_MAX
@@ -124,11 +116,11 @@ const short lNumFirstLineOffset = -lNumIndent;
 const short lOutlineMinTextDistance = 216; // 0.15 inch = 0.38 cm
 
 // Count of SystemField-types of SwDoc.
-#define INIT_FLDTYPES   32
+#define INIT_FLDTYPES   33
 
 // Count of predefined Seq-field types. It is always the last
 // fields before INIT_FLDTYPES.
-#define INIT_SEQ_FLDTYPES   4
+#define INIT_SEQ_FLDTYPES   5
 
 // defined in sw/source/uibase/app/swmodule.cxx
 SW_DLLPUBLIC OUString SwResId(const char* pId);

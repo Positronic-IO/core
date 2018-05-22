@@ -195,11 +195,6 @@ bool BaseWindow::IsModified ()
     return true;
 }
 
-bool BaseWindow::IsPasteAllowed ()
-{
-    return false;
-}
-
 ::svl::IUndoManager* BaseWindow::GetUndoManager()
 {
     return nullptr;
@@ -755,19 +750,20 @@ bool QueryPassword( const Reference< script::XLibraryContainer >& xLibContainer,
     do
     {
         // password dialog
-        ScopedVclPtrInstance< SfxPasswordDialog > aDlg(Application::GetDefDialogParent());
-        aDlg->SetMinLen( 1 );
+        vcl::Window* pWin = Application::GetDefDialogParent();
+        SfxPasswordDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr);
+        aDlg.SetMinLen(1);
 
         // set new title
         if ( bNewTitle )
         {
             OUString aTitle(IDEResId(RID_STR_ENTERPASSWORD));
             aTitle = aTitle.replaceAll("XX", rLibName);
-            aDlg->SetText( aTitle );
+            aDlg.set_title(aTitle);
         }
 
         // execute dialog
-        nRet = aDlg->Execute();
+        nRet = aDlg.execute();
 
         // verify password
         if ( nRet == RET_OK )
@@ -777,7 +773,7 @@ bool QueryPassword( const Reference< script::XLibraryContainer >& xLibContainer,
                 Reference< script::XLibraryContainerPassword > xPasswd( xLibContainer, UNO_QUERY );
                 if ( xPasswd.is() && xPasswd->isLibraryPasswordProtected( rLibName ) && !xPasswd->isLibraryPasswordVerified( rLibName ) )
                 {
-                    rPassword = aDlg->GetPassword();
+                    rPassword = aDlg.GetPassword();
                     //                    OUString aOUPassword( rPassword );
                     bOK = xPasswd->verifyLibraryPassword( rLibName, rPassword );
 

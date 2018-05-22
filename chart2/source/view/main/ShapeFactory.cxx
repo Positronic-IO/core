@@ -52,6 +52,7 @@
 
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/matrix/b3dhommatrix.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <algorithm>
 
@@ -2068,9 +2069,9 @@ uno::Reference< drawing::XShape > ShapeFactory::createInvisibleRectangle(
         }
         return xShape;
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return nullptr;
 }
@@ -2453,14 +2454,12 @@ uno::Reference< drawing::XShape >
         }
         else
         {
-            uno::Sequence< uno::Reference< text::XTextCursor > > aCursorList( xFormattedString.getLength() );
             sal_Int32 nN = 0;
             for( nN=0; nN<xFormattedString.getLength();nN++ )
             {
                 xTextCursor->gotoEnd(false);
                 xText->insertString( xTextRange, xFormattedString[nN]->getString(), false );
                 xTextCursor->gotoEnd(true);
-                aCursorList[nN] = xText->createTextCursorByRange( uno::Reference< text::XTextRange >(xTextCursor,uno::UNO_QUERY) );
             }
             awt::Size aOldRefSize;
             bool bHasRefPageSize =

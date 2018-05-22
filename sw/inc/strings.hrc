@@ -138,6 +138,7 @@
 #define STR_POOLCOLL_LABEL_TABLE                NC_("STR_POOLCOLL_LABEL_TABLE", "Table")
 #define STR_POOLCOLL_LABEL_FRAME                NC_("STR_POOLCOLL_LABEL_FRAME", "Text")
 #define STR_POOLCOLL_LABEL_DRAWING              NC_("STR_POOLCOLL_LABEL_DRAWING", "Drawing")
+#define STR_POOLCOLL_LABEL_FIGURE               NC_("STR_POOLCOLL_LABEL_FIGURE", "Figure")
 #define STR_POOLCOLL_JAKETADRESS                NC_("STR_POOLCOLL_JAKETADRESS", "Addressee")
 #define STR_POOLCOLL_SENDADRESS                 NC_("STR_POOLCOLL_SENDADRESS", "Sender")
 #define STR_POOLCOLL_TOX_IDXH                   NC_("STR_POOLCOLL_TOX_IDXH", "Index Heading")
@@ -566,7 +567,7 @@
 #define STR_PRINTOPTUI_PRODUCTNAME              NC_("STR_PRINTOPTUI_PRODUCTNAME", "%PRODUCTNAME %s")
 #define STR_PRINTOPTUI_CONTENTS                 NC_("STR_PRINTOPTUI_CONTENTS", "Contents")
 #define STR_PRINTOPTUI_PAGE_BACKGROUND          NC_("STR_PRINTOPTUI_PAGE_BACKGROUND", "Page ba~ckground")
-#define STR_PRINTOPTUI_PICTURES                 NC_("STR_PRINTOPTUI_PICTURES", "P~ictures and other graphic objects")
+#define STR_PRINTOPTUI_PICTURES                 NC_("STR_PRINTOPTUI_PICTURES", "~Images and other graphic objects")
 #define STR_PRINTOPTUI_HIDDEN                   NC_("STR_PRINTOPTUI_HIDDEN", "Hidden te~xt")
 #define STR_PRINTOPTUI_TEXT_PLACEHOLDERS        NC_("STR_PRINTOPTUI_TEXT_PLACEHOLDERS", "~Text placeholders")
 #define STR_PRINTOPTUI_FORM_CONTROLS            NC_("STR_PRINTOPTUI_FORM_CONTROLS", "Form control~s")
@@ -760,10 +761,10 @@
 #define STR_TABLE_TOO_LARGE                     NC_("STR_TABLE_TOO_LARGE", "The table cannot be inserted because it is too large")
 #define STR_ERR_INSERT_GLOS                     NC_("STR_ERR_INSERT_GLOS", "AutoText could not be created.")
 #define STR_CLPBRD_FORMAT_ERROR                 NC_("STR_CLPBRD_FORMAT_ERROR", "Requested clipboard format is not available.")
-#define STR_PRIVATETEXT                         NC_("STR_PRIVATETEXT", "%PRODUCTNAME Writer")
-#define STR_PRIVATEGRAPHIC                      NC_("STR_PRIVATEGRAPHIC", "Image [%PRODUCTNAME Writer]")
-#define STR_PRIVATEOLE                          NC_("STR_PRIVATEOLE", "Object [%PRODUCTNAME Writer]")
-#define STR_DDEFORMAT                           NC_("STR_DDEFORMAT", "DDE link")
+#define STR_PRIVATETEXT                         NC_("STR_PRIVATETEXT", "%PRODUCTNAME %PRODUCTVERSION Text Document")
+#define STR_PRIVATEGRAPHIC                      NC_("STR_PRIVATEGRAPHIC", "Image (%PRODUCTNAME %PRODUCTVERSION Text Document)")
+#define STR_PRIVATEOLE                          NC_("STR_PRIVATEOLE", "Object (%PRODUCTNAME %PRODUCTVERSION Text Document)")
+#define STR_DDEFORMAT                           NC_("STR_DDEFORMAT", "Dynamic Data Exchange (DDE link)")
 
 #define STR_DELETE_ALL_NOTES                    NC_("STR_DELETE_ALL_NOTES", "All Comments")
 #define STR_FORMAT_ALL_NOTES                    NC_("STR_FORMAT_ALL_NOTES", "All Comments")
@@ -1173,11 +1174,6 @@
 #define STR_REDLINE_TABLE_CELL_DELETE           NC_("STR_REDLINE_TABLE_CELL_DELETE", "Cell Deleted")
 #define STR_ENDNOTE                             NC_("STR_ENDNOTE", "Endnote: ")
 #define STR_FTNNOTE                             NC_("STR_FTNNOTE", "Footnote: ")
-#define STR_TABLE_COL_ADJUST                    NC_("STR_TABLE_COL_ADJUST", "Adjust table column")
-#define STR_TABLE_ROW_ADJUST                    NC_("STR_TABLE_ROW_ADJUST", "Adjust table row")
-#define STR_TABLE_SELECT_ALL                    NC_("STR_TABLE_SELECT_ALL", "Select whole table")
-#define STR_TABLE_SELECT_ROW                    NC_("STR_TABLE_SELECT_ROW", "Select table row")
-#define STR_TABLE_SELECT_COL                    NC_("STR_TABLE_SELECT_COL", "Select table column")
 #define STR_SMARTTAG_CLICK                      NC_("STR_SMARTTAG_CLICK", "%s-click to open Smart Tag menu")
 #define STR_HEADER_TITLE                        NC_("STR_HEADER_TITLE", "Header (%1)")
 #define STR_FIRST_HEADER_TITLE                  NC_("STR_FIRST_HEADER_TITLE", "First Page Header (%1)")
@@ -1331,6 +1327,8 @@
 #define STR_INVALID_SIGNATURE                   NC_("STR_INVALID_SIGNATURE", "Invalid Signature")
 #define STR_SIGNED_BY                           NC_("STR_SIGNED_BY", "Signed-by")
 #define STR_PARAGRAPH_SIGNATURE                 NC_("STR_PARAGRAPH_SIGNATURE", "Paragraph Signature")
+
+#define STR_BUSINESS_CARDS                      NC_("labeldialog|cards", "Business Cards")
 
 #endif
 

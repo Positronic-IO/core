@@ -30,6 +30,7 @@
 #include <unotools/useroptions.hxx>
 #include <svtools/controldims.hxx>
 #include <svtools/imagemgr.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
 
 #include <memory>
 
@@ -142,14 +143,13 @@ OUString CreateSizeText( sal_Int64 nSize )
     {
         aSizeStr = ::rtl::math::doubleToUString( fSize,
                 rtl_math_StringFormat_F, nDec,
-                rLocaleWrapper.getNumDecimalSep()[0] );
-        aSizeStr += aUnitStr;
-
-        aSizeStr += " (";
-        aSizeStr += rLocaleWrapper.getNum( nSize2, 0 );
-        aSizeStr += " ";
-        aSizeStr += SfxResId(STR_BYTES);
-        aSizeStr += ")";
+                rLocaleWrapper.getNumDecimalSep()[0] )
+                 + aUnitStr
+                 + " ("
+                 + rLocaleWrapper.getNum( nSize2, 0 )
+                 + " "
+                 + SfxResId(STR_BYTES)
+                 + ")";
     }
     return aSizeStr;
 }
@@ -160,9 +160,9 @@ OUString ConvertDateTime_Impl( const OUString& rName,
      Date aD(uDT);
      tools::Time aT(uDT);
      const OUString aDelim( ", " );
-     OUString aStr( rWrapper.getDate( aD ) );
-     aStr += aDelim;
-     aStr += rWrapper.getTime( aT );
+     OUString aStr = rWrapper.getDate( aD )
+                   + aDelim
+                   + rWrapper.getTime( aT );
      OUString aAuthor = comphelper::string::stripStart(rName, ' ');
      if (!aAuthor.isEmpty())
      {
@@ -248,8 +248,8 @@ SfxDocumentInfoItem::SfxDocumentInfoItem( const OUString& rFile,
                 }
 
                 uno::Any aValue = xSet->getPropertyValue(pProps[i].Name);
-                CustomProperty* pProp = new CustomProperty( pProps[i].Name, aValue );
-                m_aCustomProperties.push_back( pProp );
+                std::unique_ptr<CustomProperty> pProp(new CustomProperty( pProps[i].Name, aValue ));
+                m_aCustomProperties.push_back( std::move(pProp) );
             }
         }
 
@@ -284,11 +284,11 @@ SfxDocumentInfoItem::SfxDocumentInfoItem( const SfxDocumentInfoItem& rItem )
     , m_bUseUserData( rItem.m_bUseUserData )
     , m_bUseThumbnailSave( rItem.m_bUseThumbnailSave )
 {
-    for (const CustomProperty* pOtherProp : rItem.m_aCustomProperties)
+    for (auto const & pOtherProp : rItem.m_aCustomProperties)
     {
-        CustomProperty* pProp = new CustomProperty( pOtherProp->m_sName,
-                                                    pOtherProp->m_aValue );
-        m_aCustomProperties.push_back( pProp );
+        std::unique_ptr<CustomProperty> pProp(new CustomProperty( pOtherProp->m_sName,
+                                                    pOtherProp->m_aValue ));
+        m_aCustomProperties.push_back( std::move(pProp) );
     }
 
     m_aCmisProperties = rItem.m_aCmisProperties;
@@ -402,7 +402,7 @@ void SfxDocumentInfoItem::UpdateDocumentInfo(
             }
         }
 
-        for (const CustomProperty* pProp : m_aCustomProperties)
+        for (auto const & pProp : m_aCustomProperties)
         {
             try
             {
@@ -438,14 +438,14 @@ void SfxDocumentInfoItem::SetUseThumbnailSave( bool bSet )
     m_bUseThumbnailSave = bSet;
 }
 
-std::vector< CustomProperty* > SfxDocumentInfoItem::GetCustomProperties() const
+std::vector< std::unique_ptr<CustomProperty> > SfxDocumentInfoItem::GetCustomProperties() const
 {
-    std::vector< CustomProperty* > aRet;
-    for (CustomProperty* pOtherProp : m_aCustomProperties)
+    std::vector< std::unique_ptr<CustomProperty> > aRet;
+    for (auto const & pOtherProp : m_aCustomProperties)
     {
-        CustomProperty* pProp = new CustomProperty( pOtherProp->m_sName,
-                                                    pOtherProp->m_aValue );
-        aRet.push_back( pProp );
+        std::unique_ptr<CustomProperty> pProp(new CustomProperty( pOtherProp->m_sName,
+                                                    pOtherProp->m_aValue ));
+        aRet.push_back( std::move(pProp) );
     }
 
     return aRet;
@@ -453,15 +453,13 @@ std::vector< CustomProperty* > SfxDocumentInfoItem::GetCustomProperties() const
 
 void SfxDocumentInfoItem::ClearCustomProperties()
 {
-    for (CustomProperty* pProp : m_aCustomProperties)
-        delete pProp;
     m_aCustomProperties.clear();
 }
 
 void SfxDocumentInfoItem::AddCustomProperty( const OUString& sName, const Any& rValue )
 {
-    CustomProperty* pProp = new CustomProperty( sName, rValue );
-    m_aCustomProperties.push_back( pProp );
+    std::unique_ptr<CustomProperty> pProp(new CustomProperty( sName, rValue ));
+    m_aCustomProperties.push_back( std::move(pProp) );
 }
 
 
@@ -634,9 +632,9 @@ void SfxDocumentDescPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SfxDocumentDescPage::Create(vcl::Window *pParent, const SfxItemSet *rItemSet)
+VclPtr<SfxTabPage> SfxDocumentDescPage::Create(TabPageParent pParent, const SfxItemSet *rItemSet)
 {
-     return VclPtr<SfxDocumentDescPage>::Create(pParent, *rItemSet);
+     return VclPtr<SfxDocumentDescPage>::Create(pParent.pParent, *rItemSet);
 }
 
 bool SfxDocumentDescPage::FillItemSet(SfxItemSet *rSet)
@@ -699,7 +697,7 @@ bool SfxDocumentDescPage::FillItemSet(SfxItemSet *rSet)
 
 void SfxDocumentDescPage::Reset(const SfxItemSet *rSet)
 {
-    m_pInfoItem = const_cast<SfxDocumentInfoItem*>(&static_cast<const SfxDocumentInfoItem &>(rSet->Get(SID_DOCINFO)));
+    m_pInfoItem = const_cast<SfxDocumentInfoItem*>(&rSet->Get(SID_DOCINFO));
 
     m_pTitleEd->SetText( m_pInfoItem->getTitle() );
     m_pThemaEd->SetText( m_pInfoItem->getSubject() );
@@ -725,9 +723,9 @@ namespace
 
         Date aDate( _nDate );
         tools::Time aTime( _nTime );
-        OUString aStr( rWrapper.getDate( aDate ) );
-        aStr += ", ";
-        aStr += rWrapper.getTime( aTime );
+        OUString aStr = rWrapper.getDate( aDate )
+                      + ", "
+                      + rWrapper.getTime( aTime );
         return aStr;
     }
 
@@ -855,7 +853,7 @@ IMPL_LINK_NOARG(SfxDocumentPage, SignatureHdl, Button*, void)
     }
 }
 
-IMPL_STATIC_LINK_NOARG(SfxDocumentPage, ChangePassHdl, Button*, void)
+IMPL_LINK_NOARG(SfxDocumentPage, ChangePassHdl, Button*, void)
 {
     SfxObjectShell* pShell = SfxObjectShell::Current();
     do
@@ -869,7 +867,7 @@ IMPL_STATIC_LINK_NOARG(SfxDocumentPage, ChangePassHdl, Button*, void)
         if (!pFilter)
             break;
 
-        sfx2::RequestPassword(pFilter, OUString(), pMedSet);
+        sfx2::RequestPassword(pFilter, OUString(), pMedSet, VCLUnoHelper::GetInterface(GetParentDialog()));
         pShell->SetModified();
     }
     while (false);
@@ -930,9 +928,9 @@ void SfxDocumentPage::ImplCheckPasswordState()
     m_pChangePassBtn->Disable();
 }
 
-VclPtr<SfxTabPage> SfxDocumentPage::Create( vcl::Window* pParent, const SfxItemSet* rItemSet )
+VclPtr<SfxTabPage> SfxDocumentPage::Create( TabPageParent pParent, const SfxItemSet* rItemSet )
 {
-     return VclPtr<SfxDocumentPage>::Create( pParent, *rItemSet );
+     return VclPtr<SfxDocumentPage>::Create( pParent.pParent, *rItemSet );
 }
 
 void SfxDocumentPage::EnableUseUserData()
@@ -950,7 +948,7 @@ bool SfxDocumentPage::FillItemSet( SfxItemSet* rSet )
          m_pUseUserDataCB->IsValueChangedFromSaved() &&
          GetTabDialog() && GetTabDialog()->GetExampleSet() )
     {
-        SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
+        const SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
         const SfxPoolItem* pItem;
 
         if ( pExpSet && SfxItemState::SET == pExpSet->GetItemState( SID_DOCINFO, true, &pItem ) )
@@ -965,7 +963,7 @@ bool SfxDocumentPage::FillItemSet( SfxItemSet* rSet )
 
     if ( bHandleDelete )
     {
-        SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
+        const SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
         const SfxPoolItem* pItem;
         if ( pExpSet && SfxItemState::SET == pExpSet->GetItemState( SID_DOCINFO, true, &pItem ) )
         {
@@ -987,7 +985,7 @@ bool SfxDocumentPage::FillItemSet( SfxItemSet* rSet )
     if ( m_pUseThumbnailSaveCB->IsValueChangedFromSaved() &&
        GetTabDialog() && GetTabDialog()->GetExampleSet() )
     {
-        SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
+        const SfxItemSet* pExpSet = GetTabDialog()->GetExampleSet();
         const SfxPoolItem* pItem;
 
         if ( pExpSet && SfxItemState::SET == pExpSet->GetItemState( SID_DOCINFO, true, &pItem ) )
@@ -1006,8 +1004,7 @@ bool SfxDocumentPage::FillItemSet( SfxItemSet* rSet )
 void SfxDocumentPage::Reset( const SfxItemSet* rSet )
 {
     // Determine the document information
-    const SfxDocumentInfoItem& rInfoItem =
-        static_cast<const SfxDocumentInfoItem &>(rSet->Get(SID_DOCINFO));
+    const SfxDocumentInfoItem& rInfoItem = rSet->Get(SID_DOCINFO);
 
     // template data
     if ( rInfoItem.HasTemplate() )
@@ -1166,8 +1163,7 @@ SfxDocumentInfoDialog::SfxDocumentInfoDialog( vcl::Window* pParent,
         "sfx/ui/documentpropertiesdialog.ui", &rItemSet)
     , m_nDocInfoId(0)
 {
-    const SfxDocumentInfoItem& rInfoItem =
-        static_cast<const SfxDocumentInfoItem &>(rItemSet.Get( SID_DOCINFO ));
+    const SfxDocumentInfoItem& rInfoItem = rItemSet.Get( SID_DOCINFO );
 
 #ifdef DBG_UTIL
     const SfxStringItem* pURLItem = rItemSet.GetItem<SfxStringItem>(SID_BASEURL, false);
@@ -1256,78 +1252,54 @@ void CustomPropertiesYesNoButton::dispose()
     Control::dispose();
 }
 
-class DurationDialog_Impl : public ModalDialog
+class DurationDialog_Impl : public weld::GenericDialogController
 {
-    VclPtr<CheckBox>       m_pNegativeCB;
-    VclPtr<NumericField>   m_pYearNF;
-    VclPtr<NumericField>   m_pMonthNF;
-    VclPtr<NumericField>   m_pDayNF;
-    VclPtr<NumericField>   m_pHourNF;
-    VclPtr<NumericField>   m_pMinuteNF;
-    VclPtr<NumericField>   m_pSecondNF;
-    VclPtr<NumericField>   m_pMSecondNF;
+    std::unique_ptr<weld::CheckButton> m_xNegativeCB;
+    std::unique_ptr<weld::SpinButton> m_xYearNF;
+    std::unique_ptr<weld::SpinButton> m_xMonthNF;
+    std::unique_ptr<weld::SpinButton> m_xDayNF;
+    std::unique_ptr<weld::SpinButton> m_xHourNF;
+    std::unique_ptr<weld::SpinButton> m_xMinuteNF;
+    std::unique_ptr<weld::SpinButton> m_xSecondNF;
+    std::unique_ptr<weld::SpinButton> m_xMSecondNF;
 
 public:
-
-    DurationDialog_Impl( vcl::Window* pParent, const util::Duration& rDuration );
-    virtual ~DurationDialog_Impl() override;
-    virtual void dispose() override;
+    DurationDialog_Impl(weld::Window* pParent, const util::Duration& rDuration);
     util::Duration  GetDuration() const;
 };
 
-DurationDialog_Impl::DurationDialog_Impl(vcl::Window* pParent,
-    const util::Duration& rDuration)
-    : ModalDialog(pParent, "EditDurationDialog",
-        "sfx/ui/editdurationdialog.ui")
+DurationDialog_Impl::DurationDialog_Impl(weld::Window* pParent, const util::Duration& rDuration)
+    : GenericDialogController(pParent, "sfx/ui/editdurationdialog.ui", "EditDurationDialog")
+    , m_xNegativeCB(m_xBuilder->weld_check_button("negative"))
+    , m_xYearNF(m_xBuilder->weld_spin_button("years"))
+    , m_xMonthNF(m_xBuilder->weld_spin_button("months"))
+    , m_xDayNF(m_xBuilder->weld_spin_button("days"))
+    , m_xHourNF(m_xBuilder->weld_spin_button("hours"))
+    , m_xMinuteNF(m_xBuilder->weld_spin_button("minutes"))
+    , m_xSecondNF(m_xBuilder->weld_spin_button("seconds"))
+    , m_xMSecondNF(m_xBuilder->weld_spin_button("milliseconds"))
 {
-    get(m_pNegativeCB, "negative");
-    get(m_pYearNF, "years");
-    get(m_pMonthNF, "months");
-    get(m_pDayNF, "days");
-    get(m_pHourNF, "hours");
-    get(m_pMinuteNF, "minutes");
-    get(m_pSecondNF, "seconds");
-    get(m_pMSecondNF, "milliseconds");
-
-    m_pNegativeCB->Check(rDuration.Negative);
-    m_pYearNF->SetValue(rDuration.Years);
-    m_pMonthNF->SetValue(rDuration.Months);
-    m_pDayNF->SetValue(rDuration.Days);
-    m_pHourNF->SetValue(rDuration.Hours);
-    m_pMinuteNF->SetValue(rDuration.Minutes);
-    m_pSecondNF->SetValue(rDuration.Seconds);
-    m_pMSecondNF->SetValue(rDuration.NanoSeconds);
-}
-
-DurationDialog_Impl::~DurationDialog_Impl()
-{
-    disposeOnce();
-}
-
-void DurationDialog_Impl::dispose()
-{
-    m_pNegativeCB.clear();
-    m_pYearNF.clear();
-    m_pMonthNF.clear();
-    m_pDayNF.clear();
-    m_pHourNF.clear();
-    m_pMinuteNF.clear();
-    m_pSecondNF.clear();
-    m_pMSecondNF.clear();
-    ModalDialog::dispose();
+    m_xNegativeCB->set_active(rDuration.Negative);
+    m_xYearNF->set_value(rDuration.Years);
+    m_xMonthNF->set_value(rDuration.Months);
+    m_xDayNF->set_value(rDuration.Days);
+    m_xHourNF->set_value(rDuration.Hours);
+    m_xMinuteNF->set_value(rDuration.Minutes);
+    m_xSecondNF->set_value(rDuration.Seconds);
+    m_xMSecondNF->set_value(rDuration.NanoSeconds);
 }
 
 util::Duration  DurationDialog_Impl::GetDuration() const
 {
     util::Duration  aRet;
-    aRet.Negative = m_pNegativeCB->IsChecked();
-    aRet.Years = m_pYearNF->GetValue();
-    aRet.Months = m_pMonthNF->GetValue( );
-    aRet.Days = m_pDayNF->GetValue(   );
-    aRet.Hours  = m_pHourNF->GetValue( );
-    aRet.Minutes = m_pMinuteNF->GetValue();
-    aRet.Seconds = m_pSecondNF->GetValue();
-    aRet.NanoSeconds = m_pMSecondNF->GetValue();
+    aRet.Negative = m_xNegativeCB->get_active();
+    aRet.Years = m_xYearNF->get_value();
+    aRet.Months = m_xMonthNF->get_value();
+    aRet.Days = m_xDayNF->get_value();
+    aRet.Hours  = m_xHourNF->get_value();
+    aRet.Minutes = m_xMinuteNF->get_value();
+    aRet.Seconds = m_xSecondNF->get_value();
+    aRet.NanoSeconds = m_xMSecondNF->get_value();
     return aRet;
 }
 
@@ -1378,9 +1350,9 @@ CustomPropertiesEditButton::CustomPropertiesEditButton(vcl::Window* pParent, Win
 
 IMPL_LINK_NOARG(CustomPropertiesEditButton, ClickHdl, Button*, void)
 {
-    VclPtrInstance< DurationDialog_Impl > pDurationDlg( this, m_pLine->m_aDurationField->GetDuration() );
-    if ( RET_OK == pDurationDlg->Execute() )
-        m_pLine->m_aDurationField->SetDuration( pDurationDlg->GetDuration() );
+    DurationDialog_Impl aDurationDlg(GetFrameWeld(), m_pLine->m_aDurationField->GetDuration());
+    if (aDurationDlg.run() == RET_OK)
+        m_pLine->m_aDurationField->SetDuration(aDurationDlg.GetDuration());
 }
 
 void CustomPropertiesYesNoButton::Resize()
@@ -1728,7 +1700,7 @@ void CustomPropertiesWindow::SetVisibleLineCount(sal_uInt32 nCount)
 
 void CustomPropertiesWindow::AddLine(const OUString& sName, Any const & rAny)
 {
-    m_aCustomProperties.push_back(new CustomProperty(sName, rAny));
+    m_aCustomProperties.push_back(std::unique_ptr<CustomProperty>(new CustomProperty(sName, rAny)));
     ReloadLinesContent();
 }
 
@@ -1750,6 +1722,7 @@ void CustomPropertiesWindow::CreateNewLine()
     pNewLine->m_aValueEdit->SetAccessibleName(m_pHeaderAccValue->GetText());
 
     sal_Int32 nPos = GetExistingLineCount() * GetLineHeight();
+    nPos += LogicToPixel(Size(0, 2), MapMode(MapUnit::MapAppFont)).Height();
     m_aCustomPropertiesLines.push_back( pNewLine );
 
     SetWidgetWidths(pNewLine);
@@ -1889,9 +1862,9 @@ void CustomPropertiesWindow::StoreCustomProperties()
     }
 }
 
-void CustomPropertiesWindow::SetCustomProperties(const std::vector<CustomProperty*>& rProperties)
+void CustomPropertiesWindow::SetCustomProperties(std::vector< std::unique_ptr<CustomProperty> >&& rProperties)
 {
-    m_aCustomProperties = rProperties;
+    m_aCustomProperties = std::move(rProperties);
     ReloadLinesContent();
 }
 
@@ -2123,18 +2096,18 @@ IMPL_LINK_NOARG(CustomPropertiesControl, RemovedHdl, void*, void)
         m_pVertScroll->DoScrollAction ( ScrollType::LineUp );
 }
 
-void CustomPropertiesControl::AddLine( const OUString& sName, Any const & rAny, bool bInteractive )
+void CustomPropertiesControl::AddLine( Any const & rAny )
 {
-    m_pPropertiesWin->AddLine( sName, rAny );
+    m_pPropertiesWin->AddLine( OUString(), rAny );
     long nLineCount = m_pPropertiesWin->GetTotalLineCount();
     m_pVertScroll->SetRangeMax(nLineCount + 1);
-    if ( bInteractive && m_pPropertiesWin->GetOutputSizePixel().Height() < nLineCount * m_pPropertiesWin->GetLineHeight() )
+    if ( m_pPropertiesWin->GetOutputSizePixel().Height() < nLineCount * m_pPropertiesWin->GetLineHeight() )
         m_pVertScroll->DoScroll(nLineCount + 1);
 }
 
-void CustomPropertiesControl::SetCustomProperties(const std::vector<CustomProperty*>& rProperties)
+void CustomPropertiesControl::SetCustomProperties(std::vector< std::unique_ptr<CustomProperty> >&& rProperties)
 {
-    m_pPropertiesWin->SetCustomProperties(rProperties);
+    m_pPropertiesWin->SetCustomProperties(std::move(rProperties));
     long nLineCount = m_pPropertiesWin->GetTotalLineCount();
     m_pVertScroll->SetRangeMax(nLineCount + 1);
 }
@@ -2161,8 +2134,22 @@ void SfxCustomPropertiesPage::dispose()
 
 IMPL_LINK_NOARG(SfxCustomPropertiesPage, AddHdl, Button*, void)
 {
+    // tdf#115853: reload current lines before adding a brand new one
+    // indeed the info are deleted by ClearCustomProperties
+    // each time SfxDocumentInfoItem destructor is called
+    SfxDocumentInfoItem pInfo;
+    Sequence< beans::PropertyValue > aPropertySeq = m_pPropertiesCtrl->GetCustomProperties();
+    sal_Int32 i = 0, nCount = aPropertySeq.getLength();
+    for ( ; i < nCount; ++i )
+    {
+        if ( !aPropertySeq[i].Name.isEmpty() )
+        {
+            pInfo.AddCustomProperty( aPropertySeq[i].Name, aPropertySeq[i].Value );
+        }
+    }
+
     Any aAny;
-    m_pPropertiesCtrl->AddLine( OUString(), aAny, true );
+    m_pPropertiesCtrl->AddLine(aAny);
 }
 
 bool SfxCustomPropertiesPage::FillItemSet( SfxItemSet* rSet )
@@ -2176,7 +2163,7 @@ bool SfxCustomPropertiesPage::FillItemSet( SfxItemSet* rSet )
     {
         if ( SfxItemState::SET !=
                 GetTabDialog()->GetExampleSet()->GetItemState( SID_DOCINFO, true, &pItem ) )
-            pInfo = const_cast<SfxDocumentInfoItem*>(&static_cast<const SfxDocumentInfoItem& >(rSet->Get( SID_DOCINFO )));
+            pInfo = const_cast<SfxDocumentInfoItem*>(&rSet->Get( SID_DOCINFO ));
         else
         {
             bMustDelete = true;
@@ -2219,9 +2206,9 @@ bool SfxCustomPropertiesPage::FillItemSet( SfxItemSet* rSet )
 void SfxCustomPropertiesPage::Reset( const SfxItemSet* rItemSet )
 {
     m_pPropertiesCtrl->ClearAllLines();
-    const SfxDocumentInfoItem& rInfoItem = static_cast<const SfxDocumentInfoItem &>(rItemSet->Get(SID_DOCINFO));
-    std::vector< CustomProperty* > aCustomProps = rInfoItem.GetCustomProperties();
-    m_pPropertiesCtrl->SetCustomProperties(aCustomProps);
+    const SfxDocumentInfoItem& rInfoItem = rItemSet->Get(SID_DOCINFO);
+    std::vector< std::unique_ptr<CustomProperty> > aCustomProps = rInfoItem.GetCustomProperties();
+    m_pPropertiesCtrl->SetCustomProperties(std::move(aCustomProps));
 }
 
 DeactivateRC SfxCustomPropertiesPage::DeactivatePage( SfxItemSet* /*pSet*/ )
@@ -2232,9 +2219,9 @@ DeactivateRC SfxCustomPropertiesPage::DeactivatePage( SfxItemSet* /*pSet*/ )
     return nRet;
 }
 
-VclPtr<SfxTabPage> SfxCustomPropertiesPage::Create( vcl::Window* pParent, const SfxItemSet* rItemSet )
+VclPtr<SfxTabPage> SfxCustomPropertiesPage::Create( TabPageParent pParent, const SfxItemSet* rItemSet )
 {
-    return VclPtr<SfxCustomPropertiesPage>::Create( pParent, *rItemSet );
+    return VclPtr<SfxCustomPropertiesPage>::Create( pParent.pParent, *rItemSet );
 }
 
 CmisValue::CmisValue( vcl::Window* pParent, const OUString& aStr )
@@ -2644,7 +2631,7 @@ bool SfxCmisPropertiesPage::FillItemSet( SfxItemSet* rSet )
     {
         if ( SfxItemState::SET !=
                 GetTabDialog()->GetExampleSet()->GetItemState( SID_DOCINFO, true, &pItem ) )
-            pInfo = const_cast<SfxDocumentInfoItem*>(&static_cast<const SfxDocumentInfoItem& >(rSet->Get( SID_DOCINFO )));
+            pInfo = const_cast<SfxDocumentInfoItem*>(&rSet->Get( SID_DOCINFO ));
         else
         {
             bMustDelete = true;
@@ -2706,7 +2693,7 @@ bool SfxCmisPropertiesPage::FillItemSet( SfxItemSet* rSet )
 void SfxCmisPropertiesPage::Reset( const SfxItemSet* rItemSet )
 {
     m_pPropertiesCtrl.ClearAllLines();
-    const SfxDocumentInfoItem& rInfoItem = static_cast<const SfxDocumentInfoItem& >(rItemSet->Get(SID_DOCINFO));
+    const SfxDocumentInfoItem& rInfoItem = rItemSet->Get(SID_DOCINFO);
     uno::Sequence< document::CmisProperty > aCmisProps = rInfoItem.GetCmisProperties();
     for ( sal_Int32 i = 0; i < aCmisProps.getLength(); i++ )
     {
@@ -2728,9 +2715,9 @@ DeactivateRC SfxCmisPropertiesPage::DeactivatePage( SfxItemSet* /*pSet*/ )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SfxCmisPropertiesPage::Create( vcl::Window* pParent, const SfxItemSet* rItemSet )
+VclPtr<SfxTabPage> SfxCmisPropertiesPage::Create( TabPageParent pParent, const SfxItemSet* rItemSet )
 {
-    return VclPtr<SfxCmisPropertiesPage>::Create( pParent, *rItemSet );
+    return VclPtr<SfxCmisPropertiesPage>::Create( pParent.pParent, *rItemSet );
 }
 
 void SfxCmisPropertiesPage::SetPosSizePixel(const Point& rAllocPos, const Size& rAllocation)

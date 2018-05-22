@@ -20,11 +20,12 @@
 #ifndef INCLUDED_SW_INC_SWAPPLETIMPL_HXX
 #define INCLUDED_SW_INC_SWAPPLETIMPL_HXX
 
-#include <config_features.h>
+#include <config_java.h>
 
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <svl/itemset.hxx>
 #include <svl/ownlist.hxx>
+
+namespace com { namespace sun { namespace star { namespace embed { class XEmbeddedObject; } } } }
 
 enum class SwHtmlOptType {
     IGNORE = 0,

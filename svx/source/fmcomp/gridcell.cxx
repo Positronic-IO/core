@@ -124,8 +124,8 @@ namespace
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("svx");
             OSL_FAIL( "getModelLineEndSetting: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
         return eFormat;
     }
@@ -213,7 +213,7 @@ void DbGridColumn::CreateControl(sal_Int32 _nFieldPos, const Reference< css::bea
 
     // now create the control wrapper
     if (m_rParent.IsFilterMode())
-        m_pCell = new FmXFilterCell(this, pCellControl);
+        m_pCell = new FmXFilterCell(this, static_cast<DbFilterField*>(pCellControl));
     else
     {
         switch (nTypeId)
@@ -254,7 +254,7 @@ void DbGridColumn::impl_toggleScriptManager_nothrow( bool _bAttach )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -571,8 +571,8 @@ DbCellControl::DbCellControl( DbGridColumn& _rColumn )
     }
     catch( const Exception& )
     {
+        DBG_UNHANDLED_EXCEPTION("svx");
         OSL_FAIL( "DbCellControl::doPropertyListening: caught an exception!" );
-        DBG_UNHANDLED_EXCEPTION();
     }
 }
 
@@ -594,8 +594,8 @@ void DbCellControl::implDoPropertyListening(const OUString& _rPropertyName, bool
     }
     catch( const Exception& )
     {
+        DBG_UNHANDLED_EXCEPTION("svx");
         OSL_FAIL( "DbCellControl::doPropertyListening: caught an exception!" );
-        DBG_UNHANDLED_EXCEPTION();
     }
 }
 
@@ -695,7 +695,7 @@ bool DbCellControl::Commit()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     // unlock the listening for value property changes
     unlockValueProperty();
@@ -891,7 +891,7 @@ void DbCellControl::Init( vcl::Window& rParent, const Reference< XRowSet >& _rxC
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     m_xCursor = _rxCursor;
@@ -1094,8 +1094,8 @@ void DbTextField::Init( vcl::Window& rParent, const Reference< XRowSet >& xCurso
     }
     catch( const Exception& )
     {
+        DBG_UNHANDLED_EXCEPTION("svx");
         OSL_FAIL( "DbTextField::Init: caught an exception while determining the multi-line capabilities!" );
-        DBG_UNHANDLED_EXCEPTION();
     }
 
     m_bIsSimpleEdit = !bIsMultiLine;
@@ -1492,7 +1492,7 @@ OUString DbFormattedField::GetFormatText(const Reference< css::sdb::XColumn >& _
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     aText = m_pPainter->GetText();
@@ -1537,7 +1537,7 @@ void DbFormattedField::UpdateFromField(const Reference< css::sdb::XColumn >& _rx
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -1633,7 +1633,7 @@ void DbCheckBox::Init( vcl::Window& rParent, const Reference< XRowSet >& xCursor
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     DbCellControl::Init( rParent, xCursor );
@@ -1659,7 +1659,7 @@ static void lcl_setCheckBoxState(   const Reference< css::sdb::XColumn >& _rxFie
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     _pCheckBoxControl->GetBox().SetState(eState);
@@ -1941,7 +1941,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         return sValue;
@@ -2082,7 +2082,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         return sValue;
@@ -2224,7 +2224,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         return sDate;
@@ -2332,7 +2332,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         return sTime;
@@ -2597,7 +2597,7 @@ OUString DbListBox::GetFormatText(const Reference< css::sdb::XColumn >& _rxField
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     return sText;
@@ -4504,13 +4504,11 @@ void FmXComboBoxCell::onWindowEvent( const VclEventId _nEventId, const vcl::Wind
 }
 
 
-FmXFilterCell::FmXFilterCell(DbGridColumn* pColumn, DbCellControl* pControl )
+FmXFilterCell::FmXFilterCell(DbGridColumn* pColumn, DbFilterField* pControl )
               :FmXGridCell( pColumn, pControl )
               ,m_aTextListeners(m_aMutex)
 {
-
-    DBG_ASSERT( dynamic_cast<const DbFilterField*>( m_pCellControl) !=  nullptr, "FmXFilterCell::FmXFilterCell: invalid cell control!" );
-    static_cast< DbFilterField* >( m_pCellControl )->SetCommitHdl( LINK( this, FmXFilterCell, OnCommit ) );
+    pControl->SetCommitHdl( LINK( this, FmXFilterCell, OnCommit ) );
 }
 
 

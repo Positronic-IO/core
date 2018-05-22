@@ -24,7 +24,6 @@
 #include <sfx2/request.hxx>
 #include <vcl/settings.hxx>
 
-#include <svx/dialmgr.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/dlgutil.hxx>
 #include <svx/measctrl.hxx>
@@ -598,19 +597,31 @@ void SvxMeasurePage::Construct()
 {
     DBG_ASSERT( pView, "No valid View transferred!" );
 
-    m_pCtlPreview->pMeasureObj->SetModel( pView->GetModel() );
+    // TTTT
+    // pMeasureObj is member of SvxXMeasurePreview and can only be accessed due to
+    // SvxMeasurePage being a friend. It has its own SdrModel (also in SvxXMeasurePreview)
+    // and 'setting' the SdrModel is a hack. The comment above about 'notify unit and
+    // floatingpoint-values' is not clear, but has to be done another way - if needed.
+    // Checked on original aw080, is just commented out there, too.
+
+    // m_pCtlPreview->pMeasureObj->SetModel( pView->GetModel() );
     m_pCtlPreview->Invalidate();
 }
 
-VclPtr<SfxTabPage> SvxMeasurePage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxMeasurePage::Create( TabPageParent pWindow,
                                            const SfxItemSet* rAttrs )
 {
-    return VclPtr<SvxMeasurePage>::Create( pWindow, *rAttrs );
+    return VclPtr<SvxMeasurePage>::Create( pWindow.pParent, *rAttrs );
 }
 
 void SvxMeasurePage::PointChanged( vcl::Window* pWindow, RectPoint /*eRP*/ )
 {
     ChangeAttrHdl_Impl( pWindow );
+}
+
+void SvxMeasurePage::PointChanged( weld::DrawingArea*, RectPoint /*eRP*/ )
+{
+    ChangeAttrHdl_Impl( m_pCtlPosition );
 }
 
 IMPL_LINK( SvxMeasurePage, ClickAutoPosHdl_Impl, Button*, p, void )

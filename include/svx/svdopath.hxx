@@ -55,26 +55,29 @@ private:
     // for isolation of old Drag/Create code
     std::unique_ptr<ImpPathForDragAndCreate> mpDAC;
 
-    // brightness - used in EnhancedCustomShapes2d.cxx for DARKEN[LESS] and LIGHTEN[LESS] segments implementation
-    double mdBrightness;
-
     // helper functions for GET, SET, INS etc. PNT
     void ImpSetClosed(bool bClose);
     void ImpForceKind();
     void ImpForceLineAngle();
     ImpPathForDragAndCreate& impGetDAC() const;
 
-public:
-    double GetBrightness() { return mdBrightness; }
-
-    SdrPathObj(SdrObjKind eNewKind);
-    SdrPathObj(SdrObjKind eNewKind, const basegfx::B2DPolyPolygon& rPathPoly, double dBrightness = 0.0);
+private:
+    // protected destructor - due to final, make private
     virtual ~SdrPathObj() override;
+
+public:
+    SdrPathObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewKind);
+    SdrPathObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewKind,
+        const basegfx::B2DPolyPolygon& rPathPoly);
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
     virtual void TakeUnrotatedSnapRect(tools::Rectangle& rRect) const override;
-    virtual SdrPathObj* Clone() const override;
+    virtual SdrPathObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrPathObj& operator=(const SdrPathObj& rObj);
 
     virtual OUString TakeObjNameSingul() const override;

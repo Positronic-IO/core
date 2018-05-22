@@ -20,7 +20,6 @@
 #include "tp_DataLabel.hxx"
 
 #include "TabPageIds.h"
-#include <ResId.hxx>
 
 namespace chart
 {
@@ -34,9 +33,9 @@ DataLabelsTabPage::DataLabelsTabPage(vcl::Window* pWindow, const SfxItemSet& rIn
 {
 }
 
-VclPtr<SfxTabPage> DataLabelsTabPage::Create(vcl::Window* pWindow, const SfxItemSet* rOutAttrs)
+VclPtr<SfxTabPage> DataLabelsTabPage::Create(TabPageParent pWindow, const SfxItemSet* rOutAttrs)
 {
-    return VclPtr<DataLabelsTabPage>::Create(pWindow, *rOutAttrs);
+    return VclPtr<DataLabelsTabPage>::Create(pWindow.pParent, *rOutAttrs);
 }
 
 bool DataLabelsTabPage::FillItemSet(SfxItemSet* rOutAttrs)

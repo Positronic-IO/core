@@ -151,10 +151,12 @@ void SwSectionFrame::DestroyImpl()
                     pMaster->InvalidateSize();
             }
         }
+#if defined DBG_UTIL
         else if( HasFollow() )
         {
             PROTOCOL( this, PROT::Section, DbgAction::DelMaster, GetFollow() )
         }
+#endif
     }
 
     SwLayoutFrame::DestroyImpl();
@@ -1592,6 +1594,14 @@ SwLayoutFrame *SwFrame::GetNextSctLeaf( MakePageType eMakePage )
         }
     }
 
+#ifndef NDEBUG
+    std::vector<SwFrame *> parents;
+    for (SwFrame * pTmp = GetUpper(); pTmp && !pTmp->IsPageFrame(); pTmp = pTmp->GetUpper())
+    {
+        parents.push_back(pTmp);
+    }
+#endif
+
     // Always end up in the same section: Body again inside Body etc.
     const bool bBody = IsInDocBody();
     const bool bFootnotePage = FindPageFrame()->IsFootnotePage();
@@ -1602,9 +1612,13 @@ SwLayoutFrame *SwFrame::GetNextSctLeaf( MakePageType eMakePage )
     SwLayoutFrame *pLayLeaf;
 
     SwLayoutFrame* pCellLeaf = nullptr;
-    if (IsInTab() && CanContainSplitSection(this))
+    if (GetUpper()->IsInTab())
     {
-        // We are in a table (which is itself not in a section), see if there
+        if (IsTabFrame())
+        {
+            return nullptr; // table in section in table: split disabled for now
+        }
+        // We are *in* a table (not an outermost SwTabFrame), see if there
         // is a follow cell frame created already.
         pCellLeaf = GetNextCellLeaf();
         if (!pCellLeaf)
@@ -1730,6 +1744,86 @@ SwLayoutFrame *SwFrame::GetNextSctLeaf( MakePageType eMakePage )
             SwRectFnSet aRectFnSet(pNew);
             aRectFnSet.MakePos( *pNew, pLayLeaf, nullptr, true );
 
+#ifndef NDEBUG
+            {   // sanity check the parents of the new frame vs. the old frame
+                SwFrame * pTmp = pNew;
+                auto iter(parents.begin());
+                if (parents.size() >= 2 &&
+                    parents[0]->IsBodyFrame() && parents[1]->IsColumnFrame())
+                {   // this only inserts section frame - remove column
+                    assert(parents[2]->IsSctFrame());
+                    std::advance(iter, +2);
+                }
+                else if (IsBodyFrame() && parents.size() >= 1
+                         && parents[0]->IsColumnFrame())
+                {   // same as above, special case: "this" is the body frame
+                    assert(parents[1]->IsSctFrame());
+                    std::advance(iter, +1);
+                }
+                else  if (IsSctFrame()) // special case: "this" is the section
+                {
+                    pTmp = pTmp->GetUpper();
+                }
+
+                for ( ; iter != parents.end(); ++iter)
+                {
+                    if (pTmp->IsPageFrame())
+                    {
+                        if ((*iter)->IsColumnFrame() &&
+                            (iter + 1) != parents.end() && (*(iter + 1))->IsBodyFrame())
+                        {   // page style has columns - evidently these are
+                            break; // added later?
+                        }
+                        assert(!pTmp->IsPageFrame());
+                    }
+                    assert(pTmp->GetType() == (*iter)->GetType());
+                    // for cell frames and table frames:
+                    // 1) there may be multiple follow frames of the old one
+                    // 2) the new frame may be identical to the old one
+                    //    (not sure if this is allowed, but it happens now
+                    //     for the outer table of a nested table)
+                    if (pTmp->IsCellFrame())
+                    {
+                        SwCellFrame const*const pNewF(static_cast<SwCellFrame*>(pTmp));
+                        SwCellFrame const*const pOldF(static_cast<SwCellFrame*>(*iter));
+                        bool bFollowFound(false);
+                        for (SwCellFrame const* pOldIter = pOldF;
+                            pOldIter; pOldIter = pOldIter->GetFollowCell())
+                        {
+                            if (pOldIter == pNewF)
+                            {
+                                bFollowFound = true;
+                                break;
+                            }
+                        }
+                        assert(bFollowFound);
+                    }
+                    else if (pTmp->IsFlowFrame())
+                    {
+                        SwFlowFrame const*const pNewF(SwFlowFrame::CastFlowFrame(pTmp));
+                        SwFlowFrame const*const pOldF(SwFlowFrame::CastFlowFrame(*iter));
+                        bool bFollowFound(false);
+                        for (SwFlowFrame const* pOldIter = pOldF;
+                            pOldIter; pOldIter = pOldIter->GetFollow())
+                        {
+                            if (pOldIter == pNewF)
+                            {
+                                bFollowFound = true;
+                                break;
+                            }
+                        }
+                        assert(bFollowFound);
+                    }
+                    pTmp = pTmp->GetUpper();
+                }
+                assert(pTmp == nullptr /* SwFlyAtContentFrame case */
+                    || pTmp->IsPageFrame() // usual case
+                       // the new page has columns, but the old page did not
+                    || (pTmp->IsColumnFrame() && pTmp->GetUpper()->IsBodyFrame()
+                        && pTmp->GetUpper()->GetUpper()->IsPageFrame()));
+            }
+#endif
+
             // If our section frame has a successor then that has to be
             // moved behind the new Follow of the section frames
             SwFrame* pTmp = pSect->GetNext();
@@ -1749,7 +1843,7 @@ SwLayoutFrame *SwFrame::GetNextSctLeaf( MakePageType eMakePage )
                         pNxt = static_cast<SwSectionFrame*>(pTmp);
                     else
                     {
-                        OSL_ENSURE( pTmp->IsTabFrame(), "GetNextSctLeaf: Wrong Type" );
+                        assert(pTmp->IsTabFrame());
                         pNxt = static_cast<SwTabFrame*>(pTmp);
                     }
                     while( !pNxtContent && nullptr != ( pTmp = pTmp->GetNext() ) )

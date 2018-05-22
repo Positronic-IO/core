@@ -23,13 +23,11 @@
 #include <biginteger.hxx>
 #include <com/sun/star/xml/crypto/XSecurityEnvironment.hpp>
 #include <comphelper/sequence.hxx>
-#include <comphelper/processfactory.hxx>
 
 #include <com/sun/star/security/NoPasswordException.hpp>
 #include <com/sun/star/security/CertificateCharacters.hpp>
 
 #include <resourcemanager.hxx>
-#include <vcl/msgbox.hxx>
 #include <svtools/treelistentry.hxx>
 #include <unotools/useroptions.hxx>
 
@@ -58,8 +56,8 @@ CertificateChooser::CertificateChooser(vcl::Window* _pParent,
     pSignatures->set_height_request(aControlSize.Height());
 
     m_pCertLB = VclPtr<SvSimpleTable>::Create(*pSignatures);
-    static long nTabs[] = { 5, 0, 20*nControlWidth/100, 50*nControlWidth/100, 60*nControlWidth/100, 70*nControlWidth/100  };
-    m_pCertLB->SetTabs( &nTabs[0] );
+    static long nTabs[] = { 0, 20*nControlWidth/100, 50*nControlWidth/100, 60*nControlWidth/100, 70*nControlWidth/100  };
+    m_pCertLB->SetTabs( SAL_N_ELEMENTS(nTabs), nTabs );
     m_pCertLB->InsertHeaderEntry(get<FixedText>("issuedto")->GetText() + "\t" + get<FixedText>("issuedby")->GetText()
         + "\t" + get<FixedText>("type")->GetText() + "\t" + get<FixedText>("expiration")->GetText()
         + "\t" + get<FixedText>("usage")->GetText());
@@ -170,6 +168,12 @@ void CertificateChooser::ImplInitialize()
             msPreferredKey = aUserOpts.GetSigningKey();
             break;
 
+        case UserAction::SelectSign:
+            m_pFTSign->Show();
+            m_pOKBtn->SetText( get<FixedText>("str_selectsign")->GetText() );
+            msPreferredKey = aUserOpts.GetSigningKey();
+            break;
+
         case UserAction::Encrypt:
             m_pFTEncrypt->Show();
             m_pFTDescription->Hide();
@@ -192,7 +196,7 @@ void CertificateChooser::ImplInitialize()
         uno::Sequence< uno::Reference< security::XCertificate > > xCerts;
         try
         {
-            if ( meAction == UserAction::Sign )
+            if ( meAction == UserAction::Sign || meAction == UserAction::SelectSign)
                 xCerts = secEnvironment->getPersonalCertificates();
             else
                 xCerts = secEnvironment->getAllCertificates();
@@ -237,7 +241,7 @@ void CertificateChooser::ImplInitialize()
             // only GPG has preferred keys
             if ( sIssuer == msPreferredKey )
             {
-                if ( meAction == UserAction::Sign )
+                if ( meAction == UserAction::Sign || meAction == UserAction::SelectSign )
                     m_pCertLB->Select( pEntry );
                 else if ( meAction == UserAction::Encrypt &&
                           aUserOpts.GetEncryptToSelf() )

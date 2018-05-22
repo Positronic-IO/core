@@ -32,6 +32,7 @@
 
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <comphelper/base64.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/attributelist.hxx>
 
@@ -97,7 +98,6 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
     const OUString sWhiteSpace           ( " " );
 
     const OUString sSHA256_URL_ODF12     ( SHA256_URL_ODF12 );
-    const OUString sSHA256_URL           ( SHA256_URL );
     const OUString  sSHA1_Name           ( SHA1_NAME );
 
     const OUString  sSHA1_1k_Name        ( SHA1_1K_NAME );
@@ -231,8 +231,6 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
         {
             // yeah, so that goes directly below the manifest:manifest
             // element
-            ::comphelper::AttributeList * pNewAttrList = new ::comphelper::AttributeList;
-            uno::Reference < xml::sax::XAttributeList > xNewAttrList (pNewAttrList);
             OUStringBuffer aBuffer;
 
             xHandler->ignorableWhitespace ( sWhiteSpace );
@@ -267,6 +265,8 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                     xHandler->startElement( sEncryptedKeyElement, nullptr );
                     xHandler->ignorableWhitespace ( sWhiteSpace );
 
+                    ::comphelper::AttributeList * pNewAttrList = new ::comphelper::AttributeList;
+                    uno::Reference < xml::sax::XAttributeList > xNewAttrList (pNewAttrList);
                     // TODO: the algorithm should rather be configurable
                     pNewAttrList->AddAttribute ( sAlgorithmAttribute, sCdataAttribute,
                                                  "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p" );
@@ -281,7 +281,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                     xHandler->ignorableWhitespace ( sWhiteSpace );
 
                     xHandler->startElement( sPgpKeyIDElement, nullptr );
-                    ::sax::Converter::encodeBase64(aBuffer, aPgpKeyID);
+                    ::comphelper::Base64::encode(aBuffer, aPgpKeyID);
                     xHandler->characters( aBuffer.makeStringAndClear() );
                     xHandler->endElement( sPgpKeyIDElement );
                     xHandler->ignorableWhitespace ( sWhiteSpace );
@@ -290,7 +290,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                     if (aPgpKeyPacket.hasElements())
                     {
                         xHandler->startElement( sPGPKeyPacketElement, nullptr );
-                        ::sax::Converter::encodeBase64(aBuffer, aPgpKeyPacket);
+                        ::comphelper::Base64::encode(aBuffer, aPgpKeyPacket);
                         xHandler->characters( aBuffer.makeStringAndClear() );
                         xHandler->endElement( sPGPKeyPacketElement );
                         xHandler->ignorableWhitespace ( sWhiteSpace );
@@ -306,7 +306,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                     xHandler->ignorableWhitespace ( sWhiteSpace );
 
                     xHandler->startElement( sCipherValueElement, nullptr );
-                    ::sax::Converter::encodeBase64(aBuffer, aCipherValue);
+                    ::comphelper::Base64::encode(aBuffer, aCipherValue);
                     xHandler->characters( aBuffer.makeStringAndClear() );
                     xHandler->endElement( sCipherValueElement );
                     xHandler->ignorableWhitespace ( sWhiteSpace );
@@ -402,7 +402,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
 
             pNewAttrList->AddAttribute ( sChecksumTypeAttribute, sCdataAttribute, sChecksumType );
             *pDigest >>= aSequence;
-            ::sax::Converter::encodeBase64(aBuffer, aSequence);
+            ::comphelper::Base64::encode(aBuffer, aSequence);
             pNewAttrList->AddAttribute ( sChecksumAttribute, sCdataAttribute, aBuffer.makeStringAndClear() );
 
             xHandler->startElement( sEncryptionDataElement , xNewAttrList);
@@ -435,7 +435,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
             pNewAttrList->AddAttribute ( sAlgorithmNameAttribute, sCdataAttribute, sEncAlgName );
 
             *pVector >>= aSequence;
-            ::sax::Converter::encodeBase64(aBuffer, aSequence);
+            ::comphelper::Base64::encode(aBuffer, aSequence);
             pNewAttrList->AddAttribute ( sInitialisationVectorAttribute, sCdataAttribute, aBuffer.makeStringAndClear() );
 
             xHandler->ignorableWhitespace ( sWhiteSpace );
@@ -474,7 +474,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                 pNewAttrList->AddAttribute ( sIterationCountAttribute, sCdataAttribute, aBuffer.makeStringAndClear() );
 
                 *pSalt >>= aSequence;
-                ::sax::Converter::encodeBase64(aBuffer, aSequence);
+                ::comphelper::Base64::encode(aBuffer, aSequence);
                 pNewAttrList->AddAttribute ( sSaltAttribute, sCdataAttribute, aBuffer.makeStringAndClear() );
             }
 
@@ -497,8 +497,7 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                 *pStartKeyAlg >>= nStartKeyAlgID;
                 if ( nStartKeyAlgID == xml::crypto::DigestID::SHA256 )
                 {
-                    sStartKeyAlg = sSHA256_URL_ODF12; // TODO use sSHA256_URL
-                    (void) sSHA256_URL;
+                    sStartKeyAlg = sSHA256_URL_ODF12; // TODO use SHA256_URL
                     aBuffer.append( sal_Int32(32) );
                     sStartKeySize = aBuffer.makeStringAndClear();
                 }

@@ -58,6 +58,7 @@
 #define  PROPNAME_TEMPLATENAME      "TemplateName"
 #define  PROPNAME_FILEFORMATVERSION "FileFormatVersion"
 #define  PROPNAME_EXPORTEXTENSION   "ExportExtension"
+#define  PROPNAME_ENABLED           "Enabled"
 
 /** @short  used to identify a frame loader or detect service item
             property against the configuration API and can be used
@@ -120,6 +121,7 @@
 #define  FLAGNAME_TEMPLATEPATH      "TEMPLATEPATH"
 #define  FLAGNAME_COMBINED          "COMBINED"
 #define FLAGNAME_SUPPORTSSIGNING "SUPPORTSSIGNING"
+#define FLAGNAME_EXOTIC "EXOTIC"
 
 /** @short  some uno service names.
  */

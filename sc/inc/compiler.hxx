@@ -81,8 +81,8 @@ namespace o3tl {
 class ScDocument;
 class ScMatrix;
 class ScRangeData;
-class ScExternalRefManager;
 class ScTokenArray;
+struct ScInterpreterContext;
 
 namespace sc {
 
@@ -332,21 +332,24 @@ private:
     static void InitCharClassEnglish();
 
 public:
-    ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos );
+    ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, const ScInterpreterContext* pContext = nullptr );
 
     /** If eGrammar == GRAM_UNSPECIFIED then the grammar of pDocument is used,
         if pDocument==nullptr then GRAM_DEFAULT.
      */
     ScCompiler( ScDocument* pDocument, const ScAddress&,
-            formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_UNSPECIFIED );
+            formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_UNSPECIFIED,
+            const ScInterpreterContext* pContext = nullptr );
 
-    ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, ScTokenArray& rArr );
+    ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, ScTokenArray& rArr,
+            const ScInterpreterContext* pContext = nullptr );
 
     /** If eGrammar == GRAM_UNSPECIFIED then the grammar of pDocument is used,
         if pDocument==nullptr then GRAM_DEFAULT.
      */
     ScCompiler( ScDocument* pDocument, const ScAddress&, ScTokenArray& rArr,
-            formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_UNSPECIFIED );
+            formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_UNSPECIFIED,
+            const ScInterpreterContext* pContext = nullptr );
 
     virtual ~ScCompiler() override;
 
@@ -472,6 +475,11 @@ private:
     /// Access the CharTable flags
     ScCharFlags GetCharTableFlags( sal_Unicode c, sal_Unicode cLast )
         { return c < 128 ? pConv->getCharTableFlags(c, cLast) : ScCharFlags::NONE; }
+
+    bool IsIIOpCode(OpCode nOpCode) const override;
+    void HandleIIOpCode(OpCode nOpCode, formula::FormulaToken*** pppToken, sal_uInt8 nNumParams) override;
+    bool AdjustSumRangeShape(const ScComplexRefData& rBaseRange, ScComplexRefData& rSumRange);
+    void CorrectSumRange(const ScComplexRefData& rBaseRange, ScComplexRefData& rSumRange, formula::FormulaToken** ppSumRangeToken);
 };
 
 #endif

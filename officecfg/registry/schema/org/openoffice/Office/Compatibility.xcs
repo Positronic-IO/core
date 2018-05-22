@@ -118,9 +118,15 @@
       </prop>
       <prop oor:name="SubtractFlysAnchoredAtFlys" oor:type="xs:boolean" oor:nillable="false">
         <info>
-          <desc>Use LibreOffice 4.3 anchoring paint order</desc>
+          <desc>Tolerate white lines of PDF page backgrounds for compatibility with old documents (Use LibreOffice 4.3 anchoring paint order)</desc>
         </info>
         <value>false</value>
+      </prop>
+      <prop oor:name="EmptyDbFieldHidesPara" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>A database field (e.g., MailMerge) with empty value hides its paragraph</desc>
+        </info>
+        <value>true</value>
       </prop>
     </group>
   </templates>

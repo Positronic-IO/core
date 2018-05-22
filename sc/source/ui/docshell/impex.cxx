@@ -53,11 +53,13 @@
 #include <documentimport.hxx>
 
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <o3tl/safeint.hxx>
 #include <tools/svlibrary.h>
 #include <unotools/configmgr.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
+#include <editeng/editobj.hxx>
 
 #include <memory>
 #include <osl/endian.h>
@@ -187,8 +189,8 @@ ScImportExport::ScImportExport( ScDocument* p, const OUString& rPos )
 
 ScImportExport::~ScImportExport() COVERITY_NOEXCEPT_FALSE
 {
-    delete pUndoDoc;
-    delete pExtOptions;
+    pUndoDoc.reset();
+    pExtOptions.reset();
 }
 
 void ScImportExport::SetExtOptions( const ScAsciiOptions& rOpt )
@@ -196,7 +198,7 @@ void ScImportExport::SetExtOptions( const ScAsciiOptions& rOpt )
     if ( pExtOptions )
         *pExtOptions = rOpt;
     else
-        pExtOptions = new ScAsciiOptions( rOpt );
+        pExtOptions.reset(new ScAsciiOptions( rOpt ));
 
     //  "normal" Options
 
@@ -231,14 +233,14 @@ bool ScImportExport::StartPaste()
             vcl::Window* pWin = Application::GetDefDialogParent();
             std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                           VclMessageType::Info, VclButtonsType::Ok,
-                                                          ScGlobal::GetRscString(aTester.GetMessageId())));
+                                                          ScResId(aTester.GetMessageId())));
             xInfoBox->run();
             return false;
         }
     }
     if( bUndo && pDocSh && pDoc->IsUndoEnabled())
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
         pUndoDoc->InitUndo( pDoc, aRange.aStart.Tab(), aRange.aEnd.Tab() );
         pDoc->CopyToDocument(aRange, InsertDeleteFlags::ALL | InsertDeleteFlags::NOCAPTIONS, false, *pUndoDoc);
     }
@@ -259,9 +261,9 @@ void ScImportExport::EndPaste(bool bAutoRowHeight)
         ScMarkData aDestMark;
         aDestMark.SetMarkArea(aRange);
         pDocSh->GetUndoManager()->AddUndoAction(
-            new ScUndoPaste(pDocSh, aRange, aDestMark, pUndoDoc, pRedoDoc, InsertDeleteFlags::ALL, nullptr));
+            new ScUndoPaste(pDocSh, aRange, aDestMark, pUndoDoc.release(), pRedoDoc, InsertDeleteFlags::ALL, nullptr));
     }
-    pUndoDoc = nullptr;
+    pUndoDoc.reset();
     if( pDocSh )
     {
         if (!bHeight)
@@ -1288,7 +1290,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     sal_uInt64 const nOldPos = rStrm.Tell();
     sal_uInt64 const nRemaining = rStrm.remainingSize();
     std::unique_ptr<ScProgress> xProgress( new ScProgress( pDocSh,
-            ScGlobal::GetRscString( STR_LOAD_DOC ), nRemaining, true ));
+            ScResId( STR_LOAD_DOC ), nRemaining, true ));
     rStrm.StartReadingUnicodeText( rStrm.GetStreamCharSet() );
 
     SCCOL nStartCol = aRange.aStart.Col();
@@ -1478,7 +1480,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
             {
                 vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
                 ScReplaceWarnBox aBox(pWin ? pWin->GetFrameWeld() : nullptr);
-                if (aBox.run() != RET_YES)
+                if (aBox.execute() != RET_YES)
                 {
                     return false;
                 }
@@ -2099,12 +2101,12 @@ bool ScImportExport::Doc2Sylk( SvStream& rStrm )
                             rtl_math_StringFormat_Automatic,
                             rtl_math_DecimalPlaces_Max, '.', true );
 
-                    aBufStr = "C;X";
-                    aBufStr += OUString::number( c );
-                    aBufStr += ";Y";
-                    aBufStr += OUString::number( r );
-                    aBufStr += ";K";
-                    aBufStr += aValStr;
+                    aBufStr = "C;X"
+                            + OUString::number( c )
+                            + ";Y"
+                            + OUString::number( r )
+                            + ";K"
+                            + aValStr;
                     lcl_WriteSimpleString( rStrm, aBufStr );
                     goto checkformula;
 
@@ -2114,11 +2116,11 @@ bool ScImportExport::Doc2Sylk( SvStream& rStrm )
                     aCellStr = pDoc->GetString(nCol, nRow, aRange.aStart.Tab());
                     aCellStr = aCellStr.replaceAll("\n", SYLK_LF);
 
-                    aBufStr = "C;X";
-                    aBufStr += OUString::number( c );
-                    aBufStr += ";Y";
-                    aBufStr += OUString::number( r );
-                    aBufStr += ";K";
+                    aBufStr = "C;X"
+                            + OUString::number( c )
+                            + ";Y"
+                            + OUString::number( r )
+                            + ";K";
                     lcl_WriteSimpleString( rStrm, aBufStr );
                     lcl_WriteString( rStrm, aCellStr, '"', ';' );
 
@@ -2159,21 +2161,21 @@ bool ScImportExport::Doc2Sylk( SvStream& rStrm )
                                 pFCell->GetMatColsRows( nC, nR );
                                 nC += c - 1;
                                 nR += r - 1;
-                                aPrefix = ";R";
-                                aPrefix += OUString::number( nR );
-                                aPrefix += ";C";
-                                aPrefix += OUString::number( nC );
-                                aPrefix += ";M";
+                                aPrefix = ";R"
+                                        + OUString::number( nR )
+                                        + ";C"
+                                        + OUString::number( nC )
+                                        + ";M";
                             }
                             break;
                             case ScMatrixMode::Reference :
                             {   // diff expression with 'I' M$-extension
                                 ScAddress aPos;
                                 (void)pFCell->GetMatrixOrigin( aPos );
-                                aPrefix = ";I;R";
-                                aPrefix += OUString::number( aPos.Row() - nStartRow + 1 );
-                                aPrefix += ";C";
-                                aPrefix += OUString::number( aPos.Col() - nStartCol + 1 );
+                                aPrefix = ";I;R"
+                                        + OUString::number( aPos.Row() - nStartRow + 1 )
+                                        + ";C"
+                                        + OUString::number( aPos.Col() - nStartCol + 1 );
                             }
                             break;
                             default:

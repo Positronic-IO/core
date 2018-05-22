@@ -21,7 +21,6 @@
 
 #include "impdialog.hxx"
 #include <strings.hrc>
-#include <bitmaps.hlst>
 #include <officecfg/Office/Common.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
@@ -608,7 +607,7 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem( ImpPDFTabDialog* paParent )
     switch( paParent->mnPDFTypeSelection )
     {
     default:
-    case 0: mpCbPDFA1b->Check( false ); // PDF 1.4
+    case 0: mpCbPDFA1b->Check( false ); // PDF 1.5
         break;
     case 1: mpCbPDFA1b->Check(); // PDF/A-1a
         break;
@@ -645,6 +644,8 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem( ImpPDFTabDialog* paParent )
         mpCbExportNotesPages->SetToggleHdl( LINK(this, ImpPDFTabGeneralPage, ToggleExportNotesPagesHdl ) );
         mpCbExportOnlyNotesPages->Show();
         mpCbExportOnlyNotesPages->Check(paParent->mbExportOnlyNotesPages);
+        // tdf#116473 Initially enable Export only note pages option depending on the checked state of Export notes pages option
+        mpCbExportOnlyNotesPages->Enable(mpCbExportNotesPages->IsChecked());
         mpCbExportHiddenSlides->Show();
         mpCbExportHiddenSlides->Check(paParent->mbExportHiddenSlides);
     }
@@ -661,6 +662,8 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem( ImpPDFTabDialog* paParent )
     if( mbIsSpreadsheet )
     {
         mpRbSelection->SetText(get<FixedText>("selectedsheets")->GetText());
+        // tdf#105965 Make Selection/Selected sheets the default PDF export range setting for spreadsheets
+        mpRbSelection->Check();
     }
 
     mpCbExportPlaceholders->Show(mbIsWriter);
@@ -726,7 +729,8 @@ void ImpPDFTabGeneralPage::GetFilterConfigItem( ImpPDFTabDialog* paParent )
         paParent->mbExportFormFields = mpCbExportFormFields->IsChecked();
     }
 
-    paParent->maWatermarkText = mpEdWatermark->GetText();
+    if( mpCbWatermark->IsChecked() )
+        paParent->maWatermarkText = mpEdWatermark->GetText();
 
     /*
     * FIXME: the entries are only implicitly defined by the resource file. Should there
@@ -737,10 +741,10 @@ void ImpPDFTabGeneralPage::GetFilterConfigItem( ImpPDFTabDialog* paParent )
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabGeneralPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabGeneralPage::Create( TabPageParent pParent,
                                                  const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabGeneralPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabGeneralPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -933,10 +937,10 @@ void ImpPDFTabOpnFtrPage::dispose()
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabOpnFtrPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabOpnFtrPage::Create( TabPageParent pParent,
                                                 const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabOpnFtrPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabOpnFtrPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -1118,10 +1122,10 @@ IMPL_LINK_NOARG( ImpPDFTabViewerPage, ToggleRbBookmarksHdl, RadioButton&, void )
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabViewerPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabViewerPage::Create( TabPageParent pParent,
                                                 const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabViewerPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabViewerPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -1238,10 +1242,10 @@ void ImpPDFTabSecurityPage::dispose()
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabSecurityPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabSecurityPage::Create( TabPageParent pParent,
                                                   const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabSecurityPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabSecurityPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -1330,22 +1334,22 @@ void ImpPDFTabSecurityPage::SetFilterConfigItem( const  ImpPDFTabDialog* paParen
 
 IMPL_LINK_NOARG(ImpPDFTabSecurityPage, ClickmaPbSetPwdHdl, Button*, void)
 {
-    ScopedVclPtrInstance< SfxPasswordDialog > aPwdDialog( this, &msUserPwdTitle );
-    aPwdDialog->SetMinLen( 0 );
-    aPwdDialog->ShowMinLengthText(false);
-    aPwdDialog->ShowExtras( SfxShowExtras::CONFIRM | SfxShowExtras::PASSWORD2 | SfxShowExtras::CONFIRM2 );
-    aPwdDialog->SetText(msStrSetPwd);
-    aPwdDialog->SetGroup2Text(msOwnerPwdTitle);
-    aPwdDialog->AllowAsciiOnly();
-    if( aPwdDialog->Execute() == RET_OK )  // OK issued get password and set it
+    SfxPasswordDialog aPwdDialog(GetFrameWeld(), &msUserPwdTitle);
+    aPwdDialog.SetMinLen(0);
+    aPwdDialog.ShowMinLengthText(false);
+    aPwdDialog.ShowExtras( SfxShowExtras::CONFIRM | SfxShowExtras::PASSWORD2 | SfxShowExtras::CONFIRM2 );
+    aPwdDialog.set_title(msStrSetPwd);
+    aPwdDialog.SetGroup2Text(msOwnerPwdTitle);
+    aPwdDialog.AllowAsciiOnly();
+    if (aPwdDialog.execute() == RET_OK)  // OK issued get password and set it
     {
-        OUString aUserPW( aPwdDialog->GetPassword() );
-        OUString aOwnerPW( aPwdDialog->GetPassword2() );
+        OUString aUserPW(aPwdDialog.GetPassword());
+        OUString aOwnerPW(aPwdDialog.GetPassword2());
 
         mbHaveUserPassword = !aUserPW.isEmpty();
         mbHaveOwnerPassword = !aOwnerPW.isEmpty();
 
-        mxPreparedPasswords = vcl::PDFWriter::InitEncryption( aOwnerPW, aUserPW, true );
+        mxPreparedPasswords = vcl::PDFWriter::InitEncryption( aOwnerPW, aUserPW );
 
         if( mbHaveOwnerPassword )
         {
@@ -1469,10 +1473,10 @@ void ImpPDFTabLinksPage::dispose()
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabLinksPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabLinksPage::Create( TabPageParent pParent,
                                                const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabLinksPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabLinksPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -1586,103 +1590,54 @@ IMPL_LINK_NOARG(ImpPDFTabLinksPage, ClickRbOpnLnksBrowserHdl, Button*, void)
 }
 
 
-ImplErrorDialog::ImplErrorDialog(const std::set< vcl::PDFWriter::ErrorCode >& rErrors)
-    : MessageDialog(nullptr, "WarnPDFDialog", "filter/ui/warnpdfdialog.ui")
+ImplErrorDialog::ImplErrorDialog(weld::Window* pParent, const std::set<vcl::PDFWriter::ErrorCode>& rErrors)
+    : MessageDialogController(pParent, "filter/ui/warnpdfdialog.ui", "WarnPDFDialog", "grid")
+    , m_xErrors(m_xBuilder->weld_tree_view("errors"))
+    , m_xExplanation(m_xBuilder->weld_label("message"))
 {
-    get(m_pErrors, "errors");
-    get(m_pExplanation, "message");
+    int nWidth = m_xErrors->get_approximate_digit_width() * 26;
+    int nHeight = m_xErrors->get_height_rows(9);
+    m_xErrors->set_size_request(nWidth, nHeight);
+    m_xExplanation->set_size_request(nWidth, nHeight);
 
-    Size aSize(LogicToPixel(Size(100, 75), MapMode(MapUnit::MapAppFont)));
-    m_pErrors->set_width_request(aSize.Width());
-    m_pErrors->set_height_request(aSize.Height());
-    m_pExplanation->set_width_request(aSize.Width());
-    m_pExplanation->set_height_request(aSize.Height());
-
-    // load images
-    Image aWarnImg(BitmapEx(IMG_WARN));
-    Image aErrImg(BitmapEx(IMG_ERR));
-
-    for( std::set<vcl::PDFWriter::ErrorCode>::const_iterator it = rErrors.begin();
-         it != rErrors.end(); ++it )
+    for (auto const& error : rErrors)
     {
-        switch( *it )
+        switch(error)
         {
         case vcl::PDFWriter::Warning_Transparency_Omitted_PDFA:
-        {
-            sal_uInt16 nPos = m_pErrors->InsertEntry( PDFFilterResId( STR_WARN_TRANSP_PDFA_SHORT ),
-                                                aWarnImg );
-            m_pErrors->SetEntryData( nPos, new OUString( PDFFilterResId( STR_WARN_TRANSP_PDFA ) ) );
-        }
-        break;
+            m_xErrors->append(PDFFilterResId(STR_WARN_TRANSP_PDFA), PDFFilterResId(STR_WARN_TRANSP_PDFA_SHORT), "dialog-warning");
+            break;
         case vcl::PDFWriter::Warning_Transparency_Omitted_PDF13:
-        {
-            sal_uInt16 nPos = m_pErrors->InsertEntry( PDFFilterResId( STR_WARN_TRANSP_VERSION_SHORT ),
-                                                aWarnImg );
-            m_pErrors->SetEntryData( nPos, new OUString( PDFFilterResId( STR_WARN_TRANSP_VERSION ) ) );
-        }
-        break;
+            m_xErrors->append(PDFFilterResId(STR_WARN_TRANSP_VERSION), PDFFilterResId(STR_WARN_TRANSP_VERSION_SHORT), "dialog-warning");
+            break;
         case vcl::PDFWriter::Warning_FormAction_Omitted_PDFA:
-        {
-            sal_uInt16 nPos = m_pErrors->InsertEntry( PDFFilterResId( STR_WARN_FORMACTION_PDFA_SHORT ),
-                                                aWarnImg );
-            m_pErrors->SetEntryData( nPos, new OUString( PDFFilterResId( STR_WARN_FORMACTION_PDFA ) ) );
-        }
-        break;
+            m_xErrors->append(PDFFilterResId(STR_WARN_FORMACTION_PDFA), PDFFilterResId(STR_WARN_FORMACTION_PDFA_SHORT), "dialog-warning");
+            break;
         case vcl::PDFWriter::Warning_Transparency_Converted:
-        {
-            sal_uInt16 nPos = m_pErrors->InsertEntry( PDFFilterResId( STR_WARN_TRANSP_CONVERTED_SHORT ),
-                                                aWarnImg );
-            m_pErrors->SetEntryData( nPos, new OUString( PDFFilterResId( STR_WARN_TRANSP_CONVERTED ) ) );
-        }
-        break;
+            m_xErrors->append(PDFFilterResId(STR_WARN_TRANSP_CONVERTED), PDFFilterResId(STR_WARN_TRANSP_CONVERTED_SHORT), "dialog-warning");
+            break;
         case vcl::PDFWriter::Error_Signature_Failed:
-        {
-            sal_uInt16 nPos = m_pErrors->InsertEntry( PDFFilterResId( STR_ERR_SIGNATURE_FAILED ),
-                                                aErrImg );
-            m_pErrors->SetEntryData( nPos, new OUString( PDFFilterResId( STR_ERR_PDF_EXPORT_ABORTED ) ) );
-        }
-        break;
+            m_xErrors->append(PDFFilterResId(STR_ERR_PDF_EXPORT_ABORTED), PDFFilterResId(STR_ERR_SIGNATURE_FAILED), "dialog-error");
+            break;
         default:
             break;
         }
     }
 
-    if( m_pErrors->GetEntryCount() > 0 )
+    if (m_xErrors->n_children() > 0)
     {
-        m_pErrors->SelectEntryPos( 0 );
-        OUString* pStr = static_cast<OUString*>(m_pErrors->GetEntryData( 0 ));
-        m_pExplanation->SetText( pStr ? *pStr : OUString() );
+        m_xErrors->select(0);
+        m_xExplanation->set_label(m_xErrors->get_id(0));
     }
 
-    m_pErrors->SetSelectHdl( LINK( this, ImplErrorDialog, SelectHdl ) );
-
-    create_message_area();
+    m_xErrors->connect_changed(LINK(this, ImplErrorDialog, SelectHdl));
 }
 
-
-ImplErrorDialog::~ImplErrorDialog()
+IMPL_LINK_NOARG(ImplErrorDialog, SelectHdl, weld::TreeView&, void)
 {
-    disposeOnce();
+    OUString aExplanation = m_xErrors->get_selected_id();
+    m_xExplanation->set_label(aExplanation);
 }
-
-
-void ImplErrorDialog::dispose()
-{
-    // free strings again
-    for( sal_Int32 n = 0; n < m_pErrors->GetEntryCount(); n++ )
-        delete static_cast<OUString*>(m_pErrors->GetEntryData( n ));
-    m_pErrors.clear();
-    m_pExplanation.clear();
-    MessageDialog::dispose();
-}
-
-
-IMPL_LINK_NOARG(ImplErrorDialog, SelectHdl, ListBox&, void)
-{
-    OUString* pStr = static_cast<OUString*>(m_pErrors->GetSelectedEntryData());
-    m_pExplanation->SetText( pStr ? *pStr : OUString() );
-}
-
 
 /// The digital signatures tab page
 ImpPDFTabSigningPage::ImpPDFTabSigningPage(vcl::Window* pParent, const SfxItemSet& rCoreSet)
@@ -1751,9 +1706,9 @@ IMPL_LINK_NOARG( ImpPDFTabSigningPage, ClickmaPbSignCertSelect, Button*, void )
             if (aTSAURLs)
             {
                 const css::uno::Sequence<OUString>& rTSAURLs = aTSAURLs.get();
-                for (auto i = rTSAURLs.begin(); i != rTSAURLs.end(); ++i)
+                for (auto const& elem : rTSAURLs)
                 {
-                    mpLBSignTSA->InsertEntry( *i );
+                    mpLBSignTSA->InsertEntry(elem);
                 }
             }
         }
@@ -1782,10 +1737,10 @@ IMPL_LINK_NOARG( ImpPDFTabSigningPage, ClickmaPbSignCertClear, Button*, void )
 }
 
 
-VclPtr<SfxTabPage> ImpPDFTabSigningPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> ImpPDFTabSigningPage::Create( TabPageParent pParent,
                                                  const SfxItemSet* rAttrSet)
 {
-    return VclPtr<ImpPDFTabSigningPage>::Create( pParent, *rAttrSet );
+    return VclPtr<ImpPDFTabSigningPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 

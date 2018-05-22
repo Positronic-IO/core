@@ -55,9 +55,6 @@
 #include <com/sun/star/util/XModifiable2.hpp>
 
 #include <comphelper/basicio.hxx>
-#include <comphelper/container.hxx>
-#include <comphelper/enumhelper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
 #include <connectivity/dbtools.hxx>
@@ -122,7 +119,7 @@ private:
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
 
@@ -482,15 +479,12 @@ Sequence<sal_Int8> ODatabaseForm::GetDataMultiPartEncoded(const Reference<XContr
 
 
     // Aggregate Liste to OUString
-    for (   HtmlSuccessfulObjList::iterator pSuccObj = aSuccObjList.begin();
-            pSuccObj < aSuccObjList.end();
-            ++pSuccObj
-        )
+    for (auto const& succObj : aSuccObjList)
     {
-        if( pSuccObj->nRepresentation == SUCCESSFUL_REPRESENT_TEXT )
-            InsertTextPart( aParent, pSuccObj->aName, pSuccObj->aValue );
-        else if( pSuccObj->nRepresentation == SUCCESSFUL_REPRESENT_FILE )
-            InsertFilePart( aParent, pSuccObj->aName, pSuccObj->aValue );
+        if( succObj.nRepresentation == SUCCESSFUL_REPRESENT_TEXT )
+            InsertTextPart( aParent, succObj.aName, succObj.aValue );
+        else if( succObj.nRepresentation == SUCCESSFUL_REPRESENT_FILE )
+            InsertFilePart( aParent, succObj.aName, succObj.aValue );
     }
 
 
@@ -1981,7 +1975,7 @@ void ODatabaseForm::reset_impl(bool _bAproveByListeners)
                         }
                         catch(const Exception&)
                         {
-                            DBG_UNHANDLED_EXCEPTION();
+                            DBG_UNHANDLED_EXCEPTION("forms.component");
                         }
                     }
                 }
@@ -2342,7 +2336,7 @@ void SAL_CALL ODatabaseForm::setParent(const css::uno::Reference<css::uno::XInte
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
 
@@ -2364,7 +2358,7 @@ void SAL_CALL ODatabaseForm::setParent(const css::uno::Reference<css::uno::XInte
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
 
@@ -2792,7 +2786,7 @@ bool ODatabaseForm::implEnsureConnection()
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("forms.component");
     }
 
     return false;
@@ -3045,13 +3039,13 @@ bool ODatabaseForm::impl_approveRowChange_throw( const EventObject& _rEvent, con
         }
         catch (const SQLException&)
         {
+            DBG_UNHANDLED_EXCEPTION("forms.component");
             if ( _bAllowSQLException )
                 throw;
-            DBG_UNHANDLED_EXCEPTION();
         }
         catch (const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
     return true;
@@ -3089,7 +3083,7 @@ sal_Bool SAL_CALL ODatabaseForm::approveCursorMove(const EventObject& event)
             }
             catch (const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("forms.component");
             }
         }
         return true;
@@ -3138,7 +3132,7 @@ sal_Bool SAL_CALL ODatabaseForm::approveRowChange(const RowChangeEvent& event)
             }
             catch (const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("forms.component");
             }
         }
         return true;

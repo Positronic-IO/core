@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_INC_DRWLAYER_HXX
 #define INCLUDED_SC_INC_DRWLAYER_HXX
 
-#include <vcl/graph.hxx>
 #include <svx/fmmodel.hxx>
 #include <svx/svdundo.hxx>
 #include "global.hxx"
@@ -32,8 +31,6 @@ class ScIMapInfo;
 class ScMacroInfo;
 class IMapObject;
 class ScMarkData;
-class ScRange;
-class ScAddress;
 
 class ScTabDeletedHint : public SfxHint
 {
@@ -80,6 +77,7 @@ class ScUndoAnchorData : public SdrUndoObj
 {
 private:
     bool                    mbWasCellAnchored;
+    bool                    mbWasResizeWithCell;
     ScDocument*             mpDoc;
     SCTAB                   mnTab;
 public:
@@ -95,7 +93,7 @@ class SC_DLLPUBLIC ScDrawLayer : public FmFormModel
 private:
     OUString        aName;
     ScDocument*     pDoc;
-    SdrUndoGroup*   pUndoGroup;
+    std::unique_ptr<SdrUndoGroup> pUndoGroup;
     bool            bRecording;
     bool            bAdjustEnabled;
     bool            bHyphenatorSet;
@@ -134,7 +132,7 @@ public:
     void            EnableAdjust( bool bSet )    { bAdjustEnabled = bSet; }
 
     void            BeginCalcUndo(bool bDisableTextEditUsesCommonUndoManager);
-    SdrUndoGroup*   GetCalcUndo();
+    std::unique_ptr<SdrUndoGroup> GetCalcUndo();
     bool            IsRecording() const         { return bRecording; }
     void            AddCalcUndo( SdrUndoAction* pUndo );
 
@@ -174,17 +172,19 @@ public:
     void            EnsureGraphicNames();
 
     static bool IsCellAnchored( const SdrObject& rObj );
+    static bool IsResizeWithCell( const SdrObject& rObj );
     static void             SetPageAnchored( SdrObject& );
     static void             SetCellAnchored( SdrObject&, const ScDrawObjData &rAnchor );
     static void             SetVisualCellAnchored( SdrObject&, const ScDrawObjData &rAnchor );
     // Updates rAnchor based on position of rObj
     static void             GetCellAnchorFromPosition( const SdrObject &rObj, ScDrawObjData &rAnchor, const ScDocument &rDoc, SCTAB nTab, bool bUseLogicRect = true, bool bHiddenAsZero = true );
-    static void             SetCellAnchoredFromPosition( SdrObject &rObj, const ScDocument &rDoc, SCTAB nTab );
+    static void             SetCellAnchoredFromPosition( SdrObject &rObj, const ScDocument &rDoc, SCTAB nTab, bool bResizeWithCell );
     static void             UpdateCellAnchorFromPositionEnd( const SdrObject &rObj, ScDrawObjData &rAnchor, const ScDocument &rDoc, SCTAB nTab, bool bUseLogicRect = true );
     static ScAnchorType     GetAnchorType( const SdrObject& );
+    std::vector<SdrObject*> GetObjectsAnchoredToRows(SCTAB nTab, SCROW nStartRow, SCROW nEndRow);
     std::map<SCROW, std::vector<SdrObject*>> GetObjectsAnchoredToRange(SCTAB nTab, SCCOL nCol, SCROW nStartRow, SCROW nEndRow);
-    bool HasObjectsAnchoredInRange(ScRange& rRange);
-    void MoveObject(SdrObject* pObj, ScAddress& rNewPosition);
+    bool HasObjectsAnchoredInRange(const ScRange& rRange);
+    void MoveObject(SdrObject* pObj, const ScAddress& rNewPosition);
 
     // positions for detektive lines
     static ScDrawObjData* GetObjData( SdrObject* pObj, bool bCreate=false );

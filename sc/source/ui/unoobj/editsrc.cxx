@@ -55,9 +55,9 @@ ScEditEngineDefaulter* ScHeaderFooterEditSource::GetEditEngine()
     return mrTextData.GetEditEngine();
 }
 
-SvxEditSource* ScHeaderFooterEditSource::Clone() const
+std::unique_ptr<SvxEditSource> ScHeaderFooterEditSource::Clone() const
 {
-    return new ScHeaderFooterEditSource(mrTextData);
+    return std::unique_ptr<SvxEditSource>(new ScHeaderFooterEditSource(mrTextData));
 }
 
 SvxTextForwarder* ScHeaderFooterEditSource::GetTextForwarder()
@@ -77,9 +77,9 @@ ScCellEditSource::~ScCellEditSource()
 {
 }
 
-SvxEditSource* ScCellEditSource::Clone() const
+std::unique_ptr<SvxEditSource> ScCellEditSource::Clone() const
 {
-    return new ScCellEditSource(pCellTextData->GetDocShell(), pCellTextData->GetCellPos());
+    return std::unique_ptr<SvxEditSource>(new ScCellEditSource(pCellTextData->GetDocShell(), pCellTextData->GetCellPos()));
 }
 
 SvxTextForwarder* ScCellEditSource::GetTextForwarder()
@@ -129,9 +129,9 @@ ScAnnotationEditSource::~ScAnnotationEditSource()
     delete pEditEngine;
 }
 
-SvxEditSource* ScAnnotationEditSource::Clone() const
+std::unique_ptr<SvxEditSource> ScAnnotationEditSource::Clone() const
 {
-    return new ScAnnotationEditSource( pDocShell, aCellPos );
+    return std::unique_ptr<SvxEditSource>(new ScAnnotationEditSource( pDocShell, aCellPos ));
 }
 
 SdrObject* ScAnnotationEditSource::GetCaptionObj()
@@ -178,9 +178,9 @@ void ScAnnotationEditSource::UpdateData()
 
         if( SdrObject* pObj = GetCaptionObj() )
         {
-            EditTextObject* pEditObj = pEditEngine->CreateTextObject();
+            std::unique_ptr<EditTextObject> pEditObj = pEditEngine->CreateTextObject();
             OutlinerParaObject* pOPO = new OutlinerParaObject( *pEditObj );
-            delete pEditObj;
+            pEditObj.reset();
             pOPO->SetOutlinerMode( OutlinerMode::TextObject );
             pObj->NbcSetOutlinerParaObject( pOPO );
             pObj->ActionChanged();
@@ -227,9 +227,9 @@ ScSimpleEditSource::~ScSimpleEditSource()
 {
 }
 
-SvxEditSource* ScSimpleEditSource::Clone() const
+std::unique_ptr<SvxEditSource> ScSimpleEditSource::Clone() const
 {
-    return new ScSimpleEditSource( pForwarder );
+    return std::unique_ptr<SvxEditSource>(new ScSimpleEditSource( pForwarder ));
 }
 
 SvxTextForwarder* ScSimpleEditSource::GetTextForwarder()
@@ -251,9 +251,9 @@ ScAccessibilityEditSource::~ScAccessibilityEditSource()
 {
 }
 
-SvxEditSource* ScAccessibilityEditSource::Clone() const
+std::unique_ptr<SvxEditSource> ScAccessibilityEditSource::Clone() const
 {
-    return new ScAccessibilityEditSource(::std::unique_ptr < ScAccessibleTextData > (mpAccessibleTextData->Clone()));
+    return std::unique_ptr<SvxEditSource>(new ScAccessibilityEditSource(::std::unique_ptr < ScAccessibleTextData > (mpAccessibleTextData->Clone())));
 }
 
 SvxTextForwarder* ScAccessibilityEditSource::GetTextForwarder()

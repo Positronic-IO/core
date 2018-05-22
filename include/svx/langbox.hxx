@@ -25,6 +25,7 @@
 #include <vcl/image.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/combobox.hxx>
+#include <vcl/weld.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
 
@@ -78,14 +79,14 @@ public:
                                     bool bCheckEntry );
     void            RemoveLanguage( const LanguageType eLangType );
     void            SelectLanguage( const LanguageType eLangType );
-    LanguageType    GetSelectLanguage() const;
+    LanguageType    GetSelectedLanguage() const;
     bool            IsLanguageSelected( const LanguageType eLangType ) const;
 
     void                SetNoSelectionLBB();
     void                HideLBB();
     void                DisableLBB();
     void                SaveValueLBB();
-    sal_Int32           GetSelectEntryPosLBB() const;
+    sal_Int32           GetSelectedEntryPosLBB() const;
     void*               GetEntryDataLBB( sal_Int32  nPos ) const;
     sal_Int32           GetSavedValueLBB() const;
 
@@ -109,7 +110,7 @@ protected:
     SVX_DLLPRIVATE virtual void         ImplClear() = 0;
     SVX_DLLPRIVATE virtual sal_Int32    ImplInsertEntry( const OUString& rEntry, sal_Int32 nPos ) = 0;
     SVX_DLLPRIVATE virtual void         ImplSetEntryData( sal_Int32 nPos, void* pData ) = 0;
-    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectEntryPos() const = 0;
+    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectedEntryPos() const = 0;
     SVX_DLLPRIVATE virtual void*        ImplGetEntryData( sal_Int32 nPos ) const = 0;
     SVX_DLLPRIVATE virtual void         ImplSelectEntryPos( sal_Int32 nPos, bool bSelect ) = 0;
     SVX_DLLPRIVATE virtual bool         ImplIsEntryPosSelected( sal_Int32 nPos ) const = 0;
@@ -134,7 +135,7 @@ private:
     SVX_DLLPRIVATE virtual void         ImplClear() override;
     SVX_DLLPRIVATE virtual sal_Int32    ImplInsertEntry( const OUString& rEntry, sal_Int32 nPos ) override;
     SVX_DLLPRIVATE virtual void         ImplSetEntryData( sal_Int32 nPos, void* pData ) override;
-    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectEntryPos() const override;
+    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectedEntryPos() const override;
     SVX_DLLPRIVATE virtual void*        ImplGetEntryData( sal_Int32 nPos ) const override;
     SVX_DLLPRIVATE virtual void         ImplSelectEntryPos( sal_Int32 nPos, bool bSelect ) override;
     SVX_DLLPRIVATE virtual bool         ImplIsEntryPosSelected( sal_Int32 nPos ) const override;
@@ -146,6 +147,33 @@ private:
     SVX_DLLPRIVATE virtual sal_Int32    ImplGetSavedValue() const override;
 };
 
+class SVX_DLLPUBLIC LanguageBox
+{
+private:
+    std::unique_ptr<weld::ComboBoxText> m_xControl;
+    Link<weld::ComboBoxText&, void> m_aChangeHdl;
+    OUString m_aAllString;
+    bool m_bHasLangNone;
+    bool m_bLangNoneIsLangAll;
+
+    SVX_DLLPRIVATE int ImplTypeToPos(LanguageType eType) const;
+    SVX_DLLPRIVATE void ImplClear();
+    DECL_LINK(ChangeHdl, weld::ComboBoxText&, void);
+public:
+    LanguageBox(weld::ComboBoxText* pControl);
+    void            SetLanguageList( SvxLanguageListFlags nLangList,
+                            bool bHasLangNone, bool bLangNoneIsLangAll = false );
+    void            AddLanguages( const std::vector< LanguageType >& rLanguageTypes, SvxLanguageListFlags nLangList );
+    void            InsertLanguage(const LanguageType nLangType);
+    void            SelectLanguage( const LanguageType eLangType );
+    LanguageType    GetSelectedLanguage() const;
+    void            SelectEntryPos(int nPos) { m_xControl->set_active(nPos); }
+
+    void connect_changed(const Link<weld::ComboBoxText&, void>& rLink) { m_aChangeHdl = rLink; }
+    void save_value() { m_xControl->save_value(); }
+    bool get_value_changed_from_saved() const { return m_xControl->get_value_changed_from_saved(); }
+    void hide() { m_xControl->hide(); }
+};
 
 class SVX_DLLPUBLIC SvxLanguageComboBox : public ComboBox, public SvxLanguageBoxBase
 {
@@ -173,7 +201,7 @@ private:
     SVX_DLLPRIVATE virtual void         ImplClear() override;
     SVX_DLLPRIVATE virtual sal_Int32    ImplInsertEntry( const OUString& rEntry, sal_Int32 nPos ) override;
     SVX_DLLPRIVATE virtual void         ImplSetEntryData( sal_Int32 nPos, void* pData ) override;
-    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectEntryPos() const override;
+    SVX_DLLPRIVATE virtual sal_Int32    ImplGetSelectedEntryPos() const override;
     SVX_DLLPRIVATE virtual void*        ImplGetEntryData( sal_Int32 nPos ) const override;
     SVX_DLLPRIVATE virtual void         ImplSelectEntryPos( sal_Int32 nPos, bool bSelect ) override;
     SVX_DLLPRIVATE virtual bool         ImplIsEntryPosSelected( sal_Int32 nPos ) const override;

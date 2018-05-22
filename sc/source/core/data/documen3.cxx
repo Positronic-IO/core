@@ -114,7 +114,7 @@ void ScDocument::GetAllTabRangeNames(ScRangeName::TabNameCopyMap& rNames) const
             // no more tables to iterate through.
             break;
 
-        const ScRangeName* p = maTabs[i]->mpRangeName;
+        const ScRangeName* p = maTabs[i]->mpRangeName.get();
         if (!p || p->empty())
             // ignore empty ones.
             continue;
@@ -131,12 +131,10 @@ void ScDocument::SetAllRangeNames(const std::map<OUString, std::unique_ptr<ScRan
     {
         if (itr->first == STR_GLOBAL_RANGE_NAME)
         {
-            delete pRangeName;
+            pRangeName.reset();
             const ScRangeName *const pName = itr->second.get();
-            if (pName->empty())
-                pRangeName = nullptr;
-            else
-                pRangeName = new ScRangeName( *pName );
+            if (!pName->empty())
+                pRangeName.reset( new ScRangeName( *pName ) );
         }
         else
         {
@@ -147,7 +145,7 @@ void ScDocument::SetAllRangeNames(const std::map<OUString, std::unique_ptr<ScRan
             if (pName->empty())
                 SetRangeName( nTab, nullptr );
             else
-                SetRangeName( nTab, new ScRangeName( *pName ) );
+                SetRangeName( nTab, std::unique_ptr<ScRangeName>(new ScRangeName( *pName )) );
         }
     }
 }
@@ -162,7 +160,7 @@ void ScDocument::GetRangeNameMap(std::map<OUString, ScRangeName*>& aRangeNameMap
         if (!p )
         {
             p = new ScRangeName();
-            SetRangeName(i, p);
+            SetRangeName(i, std::unique_ptr<ScRangeName>(p));
         }
         OUString aTableName;
         maTabs[i]->GetName(aTableName);
@@ -170,10 +168,10 @@ void ScDocument::GetRangeNameMap(std::map<OUString, ScRangeName*>& aRangeNameMap
     }
     if (!pRangeName)
     {
-        pRangeName = new ScRangeName();
+        pRangeName.reset(new ScRangeName());
     }
     OUString aGlobal(STR_GLOBAL_RANGE_NAME);
-    aRangeNameMap.insert(std::pair<OUString, ScRangeName*>(aGlobal, pRangeName));
+    aRangeNameMap.insert(std::pair<OUString, ScRangeName*>(aGlobal, pRangeName.get()));
 }
 
 ScRangeName* ScDocument::GetRangeName(SCTAB nTab) const
@@ -187,28 +185,24 @@ ScRangeName* ScDocument::GetRangeName(SCTAB nTab) const
 ScRangeName* ScDocument::GetRangeName() const
 {
     if (!pRangeName)
-        pRangeName = new ScRangeName;
-    return pRangeName;
+        pRangeName.reset(new ScRangeName);
+    return pRangeName.get();
 }
 
-void ScDocument::SetRangeName(SCTAB nTab, ScRangeName* pNew)
+void ScDocument::SetRangeName(SCTAB nTab, std::unique_ptr<ScRangeName> pNew)
 {
     if (!ValidTab(nTab) || nTab >= static_cast<SCTAB>(maTabs.size()) || !maTabs[nTab])
         return;
 
-    return maTabs[nTab]->SetRangeName(pNew);
+    return maTabs[nTab]->SetRangeName(std::move(pNew));
 }
 
-void ScDocument::SetRangeName( ScRangeName* pNewRangeName )
+void ScDocument::SetRangeName( std::unique_ptr<ScRangeName> pNewRangeName )
 {
-    if (pRangeName == pNewRangeName)
-        return;
-
-    delete pRangeName;
-    pRangeName = pNewRangeName;
+    pRangeName = std::move(pNewRangeName);
 }
 
-bool ScDocument::IsAddressInRangeName( RangeNameScope eScope, ScAddress& rAddress )
+bool ScDocument::IsAddressInRangeName( RangeNameScope eScope, const ScAddress& rAddress )
 {
     ScRangeName* pRangeNames;
     ScRange aNameRange;
@@ -270,7 +264,7 @@ ScRangeData* ScDocument::FindRangeNameBySheetAndIndex( SCTAB nTab, sal_uInt16 nI
     return (pRN ? pRN->findByIndex( nIndex) : nullptr);
 }
 
-void ScDocument::SetDBCollection( ScDBCollection* pNewDBCollection, bool bRemoveAutoFilter )
+void ScDocument::SetDBCollection( std::unique_ptr<ScDBCollection> pNewDBCollection, bool bRemoveAutoFilter )
 {
     if (pDBCollection && bRemoveAutoFilter)
     {
@@ -315,9 +309,7 @@ void ScDocument::SetDBCollection( ScDBCollection* pNewDBCollection, bool bRemove
         }
     }
 
-    delete pDBCollection;
-
-    pDBCollection = pNewDBCollection;
+    pDBCollection = std::move(pNewDBCollection);
 }
 
 const ScDBData* ScDocument::GetDBAtCursor(SCCOL nCol, SCROW nRow, SCTAB nTab, ScDBDataPortion ePortion) const
@@ -366,13 +358,13 @@ bool ScDocument::HasPivotTable() const
 ScDPCollection* ScDocument::GetDPCollection()
 {
     if (!pDPCollection)
-        pDPCollection = new ScDPCollection(this);
-    return pDPCollection;
+        pDPCollection.reset( new ScDPCollection(this) );
+    return pDPCollection.get();
 }
 
 const ScDPCollection* ScDocument::GetDPCollection() const
 {
-    return pDPCollection;
+    return pDPCollection.get();
 }
 
 ScDPObject* ScDocument::GetDPAtCursor(SCCOL nCol, SCROW nRow, SCTAB nTab) const
@@ -662,10 +654,10 @@ const ScSheetEvents* ScDocument::GetSheetEvents( SCTAB nTab ) const
     return nullptr;
 }
 
-void ScDocument::SetSheetEvents( SCTAB nTab, const ScSheetEvents* pNew )
+void ScDocument::SetSheetEvents( SCTAB nTab, std::unique_ptr<ScSheetEvents> pNew )
 {
     if (ValidTab(nTab) && nTab < static_cast<SCTAB>(maTabs.size()) && maTabs[nTab])
-        maTabs[nTab]->SetSheetEvents( pNew );
+        maTabs[nTab]->SetSheetEvents( std::move(pNew) );
 }
 
 bool ScDocument::HasSheetEventScript( SCTAB nTab, ScSheetEventId nEvent, bool bWithVbaEvents ) const
@@ -824,8 +816,8 @@ void ScDocument::CopyScenario( SCTAB nSrcTab, SCTAB nDestTab, bool bNewScenario 
                 bool bTouched = false;
                 for ( size_t nR=0, nRangeCount = aRanges.size(); nR < nRangeCount && !bTouched; nR++ )
                 {
-                    const ScRange* pRange = aRanges[ nR ];
-                    if ( maTabs[nTab]->HasScenarioRange( *pRange ) )
+                    const ScRange& rRange = aRanges[ nR ];
+                    if ( maTabs[nTab]->HasScenarioRange( rRange ) )
                         bTouched = true;
                 }
                 if (bTouched)
@@ -898,7 +890,7 @@ bool ScDocument::TestCopyScenario( SCTAB nSrcTab, SCTAB nDestTab ) const
 void ScDocument::AddUnoObject( SfxListener& rObject )
 {
     if (!pUnoBroadcaster)
-        pUnoBroadcaster = new SfxBroadcaster;
+        pUnoBroadcaster.reset( new SfxBroadcaster );
 
     rObject.StartListening( *pUnoBroadcaster );
 }
@@ -980,23 +972,20 @@ void ScDocument::AddUnoListenerCall( const uno::Reference<util::XModifyListener>
     OSL_ENSURE( bInUnoBroadcast, "AddUnoListenerCall is supposed to be called from BroadcastUno only" );
 
     if ( !pUnoListenerCalls )
-        pUnoListenerCalls = new ScUnoListenerCalls;
+        pUnoListenerCalls.reset( new ScUnoListenerCalls );
     pUnoListenerCalls->Add( rListener, rEvent );
 }
 
 void ScDocument::BeginUnoRefUndo()
 {
     OSL_ENSURE( !pUnoRefUndoList, "BeginUnoRefUndo twice" );
-    delete pUnoRefUndoList;
-
-    pUnoRefUndoList = new ScUnoRefList;
+    pUnoRefUndoList.reset( new ScUnoRefList );
 }
 
-ScUnoRefList* ScDocument::EndUnoRefUndo()
+std::unique_ptr<ScUnoRefList> ScDocument::EndUnoRefUndo()
 {
-    ScUnoRefList* pRet = pUnoRefUndoList;
-    pUnoRefUndoList = nullptr;
-    return pRet; // Must be deleted by caller!
+    return std::move(pUnoRefUndoList);
+    // Must be deleted by caller!
 }
 
 void ScDocument::AddUnoRefChange( sal_Int64 nId, const ScRangeList& rOldRanges )
@@ -1117,7 +1106,7 @@ void ScDocument::UpdateTranspose( const ScAddress& rDestPos, ScDocument* pClipDo
     ScRange aSource;
     ScClipParam& rClipParam = GetClipParam();
     if (!rClipParam.maRanges.empty())
-        aSource = *rClipParam.maRanges.front();
+        aSource = rClipParam.maRanges.front();
     ScAddress aDest = rDestPos;
 
     SCTAB nClipTab = 0;
@@ -1622,9 +1611,11 @@ void ScDocument::GetDataEntries(
         return;
 
     std::set<ScTypedStrData> aStrings;
-    maTabs[nTab]->GetDataEntries(nCol, nRow, aStrings, bLimit);
-    rStrings.insert(rStrings.end(), aStrings.begin(), aStrings.end());
-    sortAndRemoveDuplicates(rStrings, true/*bCaseSens*/);
+    if (maTabs[nTab]->GetDataEntries(nCol, nRow, aStrings, bLimit))
+    {
+        rStrings.insert(rStrings.end(), aStrings.begin(), aStrings.end());
+        sortAndRemoveDuplicates(rStrings, true/*bCaseSens*/);
+    }
 }
 
 /**
@@ -1661,9 +1652,9 @@ void ScDocument::GetFormulaEntries( ScTypedCaseStrSet& rStrings )
 
         for ( size_t i = 0, nPairs = pList->size(); i < nPairs; ++i )
         {
-            ScRangePair* pPair = (*pList)[i];
-            ScRange aRange = pPair->GetRange(0);
-            ScCellIterator aIter( this, aRange );
+            const ScRangePair & rPair = (*pList)[i];
+            const ScRange & rRange = rPair.GetRange(0);
+            ScCellIterator aIter( this, rRange );
             for (bool bHas = aIter.first(); bHas; bHas = aIter.next())
             {
                 if (!aIter.hasString())

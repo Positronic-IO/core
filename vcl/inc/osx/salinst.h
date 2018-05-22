@@ -71,10 +71,11 @@ class AquaSalInstance : public SalInstance, public SalUserEventList
 
     bool RunInMainYield( bool bHandleAllCurrentEvents );
 
-    virtual void TriggerUserEventProcessing() override;
     virtual void ProcessEvent( SalUserEvent aEvent ) override;
 
 public:
+    virtual void TriggerUserEventProcessing() override;
+
     SalYieldMutex*                          mpSalYieldMutex;        // Sal-Yield-Mutex
     OUString                                maDefaultPrinter;
     oslThreadIdentifier                     maMainThread;
@@ -96,7 +97,8 @@ public:
     virtual SalObject*      CreateObject( SalFrame* pParent, SystemWindowData* pWindowData,
                                           bool bShow ) override;
     virtual void            DestroyObject( SalObject* pObject ) override;
-    virtual SalVirtualDevice* CreateVirtualDevice( SalGraphics* pGraphics,
+    virtual std::unique_ptr<SalVirtualDevice>
+                            CreateVirtualDevice( SalGraphics* pGraphics,
                                                    long &nDX, long &nDY,
                                                    DeviceFormat eFormat,
                                                    const SystemGraphicsData *pData = nullptr ) override;

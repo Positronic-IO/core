@@ -44,7 +44,6 @@
 #include <vcl/svapp.hxx>
 #include <ucbhelper/content.hxx>
 #include <ucbhelper/commandenvironment.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/sequenceashashmap.hxx>
@@ -52,7 +51,6 @@
 #include <sfx2/docfile.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <comphelper/storagehelper.hxx>
-#include <vcl/msgbox.hxx>
 
 
 namespace rptxml

@@ -33,8 +33,10 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/presentation/FadeEffect.hpp>
 #include <com/sun/star/task/XStatusIndicator.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <vcl/vclptr.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/graph.hxx>
 
 #include "grouptable.hxx"
 
@@ -122,10 +124,10 @@ class PPTExBulletProvider
 
     public:
 
-        sal_uInt16              GetId( const OString& rUniqueId, Size& rGraphicSize );
+        sal_uInt16 GetId(Graphic const & rGraphic, Size& rGraphicSize);
 
-                                PPTExBulletProvider();
-                                ~PPTExBulletProvider();
+        PPTExBulletProvider();
+        ~PPTExBulletProvider();
 };
 
 struct FontCollectionEntry
@@ -229,7 +231,7 @@ struct PPTExCharLevel
     sal_uInt16      mnAsianOrComplexFont;
     sal_uInt16      mnFontHeight;
     sal_uInt16      mnEscapement;
-    sal_uInt32      mnFontColor;
+    Color           mnFontColor;
 };
 
 struct PPTExCharSheet
@@ -290,8 +292,8 @@ class PPTExStyleSheet
 
     public:
 
-                PPTExCharSheet*     mpCharSheet[ PPTEX_STYLESHEETENTRYS ];
-                PPTExParaSheet*     mpParaSheet[ PPTEX_STYLESHEETENTRYS ];
+                std::unique_ptr<PPTExCharSheet>  mpCharSheet[ PPTEX_STYLESHEETENTRYS ];
+                std::unique_ptr<PPTExParaSheet>  mpParaSheet[ PPTEX_STYLESHEETENTRYS ];
 
                 PPTExStyleSheet( sal_uInt16 nDefaultTab, PPTExBulletProvider* pBuProv );
                 ~PPTExStyleSheet();
@@ -342,7 +344,7 @@ protected:
     css::awt::Size     maNotesPageSize;
 
     PageType                        meLatestPageType;
-    std::vector< PPTExStyleSheet* > maStyleSheetList;
+    std::vector< std::unique_ptr<PPTExStyleSheet> > maStyleSheetList;
     PPTExStyleSheet*                mpStyleSheet;
 
     FontCollection      maFontCollection;
@@ -351,7 +353,6 @@ protected:
                                  bool /* bHasBackground */, css::uno::Reference< css::beans::XPropertySet > const & /* aXBackgroundPropSet */ ) {}
     virtual void ImplWriteNotes( sal_uInt32 nPageNum ) = 0;
     virtual void ImplWriteSlideMaster( sal_uInt32 /* nPageNum */, css::uno::Reference< css::beans::XPropertySet > const & /* aXBackgroundPropSet */ ) {}
-    virtual void ImplWriteLayout( sal_Int32 /* nOffset */, sal_uInt32 /* nMasterNum */ ) {}
 
     virtual void exportPPTPre( const std::vector< css::beans::PropertyValue >& ) {}
     virtual void exportPPTPost() {}

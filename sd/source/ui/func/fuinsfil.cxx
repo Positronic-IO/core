@@ -26,7 +26,6 @@
 #include <svl/stritem.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/app.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <sfx2/printer.hxx>
 #include <svx/svdorect.hxx>
@@ -139,7 +138,7 @@ void FuInsertFile::DoExecute( SfxRequest& rReq )
     {
         sfx2::FileDialogHelper      aFileDialog(
                 ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
-                FileDialogFlags::Insert, mpWindow);
+                FileDialogFlags::Insert, mpWindow ? mpWindow->GetFrameWeld() : nullptr);
         Reference< XFilePicker >    xFilePicker( aFileDialog.GetFilePicker(), UNO_QUERY );
         Reference< XFilterManager > xFilterManager( xFilePicker, UNO_QUERY );
         OUString aOwnCont;
@@ -507,7 +506,9 @@ void FuInsertFile::InsTextOrRTFinDrMode(SfxMedium* pMedium)
             }
             else
             {
-                SdrRectObj* pTO = new SdrRectObj(OBJ_TEXT);
+                SdrRectObj* pTO = new SdrRectObj(
+                    mpView->getSdrModelFromSdrView(),
+                    OBJ_TEXT);
                 pTO->SetOutlinerParaObject(pOPO);
 
                 const bool bUndo = mpView->IsUndoEnabled();

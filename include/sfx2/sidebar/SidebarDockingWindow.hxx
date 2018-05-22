@@ -37,6 +37,10 @@ public:
     virtual ~SidebarDockingWindow() override;
     virtual void dispose() override;
     virtual bool EventNotify(NotifyEvent& rEvent) override;
+    virtual bool Close() override;
+
+    void SetReadyToDrag( bool bStartDrag ) { mbIsReadyToDrag = bStartDrag; }
+    bool IsReadyToDrag() const { return mbIsReadyToDrag; }
 
     using SfxDockingWindow::Close;
 
@@ -50,6 +54,7 @@ protected:
 
 private:
     ::rtl::Reference<sfx2::sidebar::SidebarController> mpSidebarController;
+    bool mbIsReadyToDrag;
 
     void DoDispose();
 };

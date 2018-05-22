@@ -24,9 +24,9 @@
 
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <viewopti.hxx>
 #include <rechead.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <miscuno.hxx>
 
@@ -130,7 +130,7 @@ void ScViewOptions::SetDefaults()
     aModeArr[VOBJ_TYPE_DRAW ] = VOBJ_MODE_SHOW;
 
     aGridCol     = SC_STD_GRIDCOLOR;
-    aGridColName = ScGlobal::GetRscString( STR_GRIDCOLOR );
+    aGridColName = ScResId( STR_GRIDCOLOR );
 
     aGridOpt.SetDefaults();
 }
@@ -490,7 +490,7 @@ IMPL_LINK_NOARG(ScViewCfg, LayoutCommitHdl, ScLinkConfigItem&, void)
         switch(nProp)
         {
             case SCLAYOUTOPT_GRIDCOLOR:
-                pValues[nProp] <<= static_cast<sal_Int32>(GetGridColor().GetColor());
+                pValues[nProp] <<= GetGridColor();
                 break;
             case SCLAYOUTOPT_GRIDLINES:
                 pValues[nProp] <<= GetOption( VOPT_GRID );

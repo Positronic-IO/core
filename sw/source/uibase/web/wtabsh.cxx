@@ -26,14 +26,13 @@
 #include <cmdid.h>
 #include <globals.hrc>
 #include <uitool.hxx>
-#include <strings.hrc>
 #include <wrtsh.hxx>
 #include <wtabsh.hxx>
 
 #include <sfx2/request.hxx>
     // needed for -fsanitize=function visibility of typeinfo for functions of
     // type void(SfxShell*,SfxRequest&) defined in swslots.hxx
-#define SwWebTableShell
+#define ShellClass_SwWebTableShell
 #include <sfx2/msg.hxx>
 #include <svx/svxids.hrc>
 #include <swslots.hxx>

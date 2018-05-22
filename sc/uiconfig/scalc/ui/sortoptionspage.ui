@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="sc">
-  <requires lib="gtk+" version="3.0"/>
-  <requires lib="LibreOffice" version="1.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkBox" id="SortOptionsPage">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -48,6 +47,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                   </object>
@@ -62,6 +62,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                   </object>
@@ -76,6 +77,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                   </object>
@@ -90,6 +92,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                   </object>
@@ -104,6 +107,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                   </object>
@@ -118,6 +122,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                     <accessibility>
@@ -130,7 +135,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkComboBox" id="outarealb">
+                  <object class="GtkComboBoxText" id="outarealb">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="margin_left">12</property>
@@ -140,7 +145,7 @@
                     </accessibility>
                     <child internal-child="accessible">
                       <object class="AtkObject" id="outarealb-atkobject">
-                      <property name="AtkObject::accessible-name" translatable="yes" context="sortoptionspage|outarealb-atkobject">Copy sort results to:</property>
+                        <property name="AtkObject::accessible-name" translatable="yes" context="sortoptionspage|outarealb-atkobject">Copy sort results to:</property>
                       </object>
                     </child>
                   </object>
@@ -154,7 +159,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="hexpand">True</property>
-                    <property name="invisible_char">•</property>
+                    <property name="activates_default">True</property>
                     <accessibility>
                       <relation type="labelled-by" target="outarealb"/>
                     </accessibility>
@@ -175,6 +180,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
+                    <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
                     <accessibility>
@@ -187,11 +193,10 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="VclComboBoxText" id="sortuserlb">
+                  <object class="GtkComboBoxText" id="sortuserlb">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="margin_left">12</property>
-                    <property name="max_width_chars">65</property>
                     <accessibility>
                       <relation type="labelled-by" target="sortuser"/>
                     </accessibility>
@@ -236,22 +241,28 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="svxcorelo-SvxLanguageBox" id="language">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                  </object>
-                  <packing>
-                    <property name="left_attach">0</property>
-                    <property name="top_attach">11</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkComboBox" id="algorithmlb">
+                  <object class="GtkComboBoxText" id="algorithmlb">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
+                    <property name="top_attach">11</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkComboBoxText" id="language">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="has_entry">True</property>
+                    <child internal-child="entry">
+                      <object class="GtkEntry">
+                        <property name="can_focus">True</property>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left_attach">0</property>
                     <property name="top_attach">11</property>
                   </packing>
                 </child>
@@ -326,7 +337,6 @@
                     <property name="xalign">0</property>
                     <property name="active">True</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">leftright</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>

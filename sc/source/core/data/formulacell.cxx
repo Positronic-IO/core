@@ -49,6 +49,7 @@
 #include <tokenarray.hxx>
 
 #include <comphelper/threadpool.hxx>
+#include <editeng/editobj.hxx>
 #include <tools/cpuid.hxx>
 #include <formula/errorcodes.hxx>
 #include <formula/vectortoken.hxx>
@@ -462,8 +463,8 @@ void adjustDBRange(formula::FormulaToken* pToken, ScDocument& rNewDoc, const ScD
     ScDBCollection* pNewDBCollection = rNewDoc.GetDBCollection();
     if (!pNewDBCollection)
     {
-        pNewDBCollection = new ScDBCollection(&rNewDoc);
-        rNewDoc.SetDBCollection(pNewDBCollection);
+        rNewDoc.SetDBCollection(std::unique_ptr<ScDBCollection>(new ScDBCollection(&rNewDoc)));
+        pNewDBCollection = rNewDoc.GetDBCollection();
     }
     ScDBCollection::NamedDBs& aNewNamedDBs = pNewDBCollection->getNamedDBs();
     ScDBData* pNewDBData = aNewNamedDBs.findByUpperName(aDBName);
@@ -960,7 +961,7 @@ ScFormulaVectorState ScFormulaCell::GetVectorState() const
 }
 
 void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
-                                const FormulaGrammar::Grammar eGrammar ) const
+                                const FormulaGrammar::Grammar eGrammar, const ScInterpreterContext* pContext ) const
 {
     if( pCode->GetCodeError() != FormulaError::NONE && !pCode->GetLen() )
     {
@@ -991,7 +992,7 @@ void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
             }
             else
             {
-                ScCompiler aComp( pDocument, aPos, *pCode, eGrammar);
+                ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, pContext );
                 aComp.CreateStringFromTokenArray( rBuffer );
             }
         }
@@ -1002,7 +1003,7 @@ void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
     }
     else
     {
-        ScCompiler aComp( pDocument, aPos, *pCode, eGrammar);
+        ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, pContext );
         aComp.CreateStringFromTokenArray( rBuffer );
     }
 
@@ -1014,21 +1015,22 @@ void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
     }
 }
 
-void ScFormulaCell::GetFormula( OUString& rFormula, const FormulaGrammar::Grammar eGrammar ) const
+void ScFormulaCell::GetFormula( OUString& rFormula, const FormulaGrammar::Grammar eGrammar,
+    const ScInterpreterContext* pContext ) const
 {
     OUStringBuffer rBuffer( rFormula );
-    GetFormula( rBuffer, eGrammar );
+    GetFormula( rBuffer, eGrammar, pContext );
     rFormula = rBuffer.makeStringAndClear();
 }
 
-OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt ) const
+OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt, const ScInterpreterContext* pContext ) const
 {
     OUStringBuffer aBuf;
     if (pCode->GetCodeError() != FormulaError::NONE && !pCode->GetLen())
     {
         ScTokenArray aCode;
         aCode.AddToken( FormulaErrorToken( pCode->GetCodeError()));
-        ScCompiler aComp(rCxt, aPos, aCode);
+        ScCompiler aComp(rCxt, aPos, aCode, pContext);
         aComp.CreateStringFromTokenArray(aBuf);
         return aBuf.makeStringAndClear();
     }
@@ -1055,7 +1057,7 @@ OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt ) const
             }
             else
             {
-                ScCompiler aComp(rCxt, aPos, *pCode);
+                ScCompiler aComp(rCxt, aPos, *pCode, pContext);
                 aComp.CreateStringFromTokenArray(aBuf);
             }
         }
@@ -1066,7 +1068,7 @@ OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt ) const
     }
     else
     {
-        ScCompiler aComp(rCxt, aPos, *pCode);
+        ScCompiler aComp(rCxt, aPos, *pCode, pContext);
         aComp.CreateStringFromTokenArray(aBuf);
     }
 
@@ -1903,8 +1905,8 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
                     bForceNumberFormat = false;
                 else
                 {
-                    nOldFormatIndex = pDocument->GetNumberFormat( aPos);
-                    nFormatType = pDocument->GetFormatTable()->GetType( nOldFormatIndex);
+                    nOldFormatIndex = pDocument->GetNumberFormat( rContext, aPos);
+                    nFormatType = rContext.GetFormatTable()->GetType( nOldFormatIndex);
                     switch (nFormatType)
                     {
                         case SvNumFormatType::PERCENT:
@@ -1929,11 +1931,11 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
             {
                 if (nOldFormatIndex == NUMBERFORMAT_ENTRY_NOT_FOUND)
                 {
-                    nOldFormatIndex = pDocument->GetNumberFormat( aPos);
-                    nFormatType = pDocument->GetFormatTable()->GetType( nOldFormatIndex);
+                    nOldFormatIndex = pDocument->GetNumberFormat( rContext, aPos);
+                    nFormatType = rContext.GetFormatTable()->GetType( nOldFormatIndex);
                 }
                 if (nOldFormatIndex !=
-                        ScGlobal::GetStandardFormat( *pDocument->GetFormatTable(), nOldFormatIndex, nFormatType))
+                        ScGlobal::GetStandardFormat( *rContext.GetFormatTable(), nOldFormatIndex, nFormatType))
                     bForceNumberFormat = false;
             }
         }
@@ -2064,9 +2066,9 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
           && nFormatType != SvNumFormatType::TIME
           && nFormatType != SvNumFormatType::DATETIME )
         {
-            sal_uInt32 nFormat = pDocument->GetNumberFormat( aPos );
+            sal_uInt32 nFormat = pDocument->GetNumberFormat( rContext, aPos );
             aResult.SetDouble( pDocument->RoundValueAsShown(
-                        aResult.GetDouble(), nFormat));
+                        aResult.GetDouble(), nFormat, &rContext));
         }
         if (eTailParam == SCITP_NORMAL)
         {
@@ -2589,7 +2591,7 @@ bool ScFormulaCell::IsHyperLinkCell() const
     return pCode && pCode->IsHyperLink();
 }
 
-EditTextObject* ScFormulaCell::CreateURLObject()
+std::unique_ptr<EditTextObject> ScFormulaCell::CreateURLObject()
 {
     OUString aCellText;
     OUString aURL;
@@ -4166,6 +4168,36 @@ struct ScDependantsCalculator
         return true;
     }
 
+    // Checks if the doubleref engulfs all of formula group cells
+    // Note : does not check if there is a partial overlap, that can be done by calling
+    //        isSelfReference[Absolute|Relative]() on both the start and end of the double ref
+    bool isDoubleRefSpanGroupRange(const ScRange& rAbs, bool bIsRef1RowRel, bool bIsRef2RowRel)
+    {
+        if (rAbs.aStart.Col() > mrPos.Col() || rAbs.aEnd.Col() < mrPos.Col())
+            return false;
+
+        SCROW nStartRow    = mrPos.Row();
+        SCROW nEndRow      = nStartRow + mnLen - 1;
+        SCROW nRefStartRow = rAbs.aStart.Row();
+        SCROW nRefEndRow   = rAbs.aEnd.Row();
+
+        if (bIsRef1RowRel && bIsRef2RowRel &&
+            ((nRefStartRow <= nStartRow && nRefEndRow >= nEndRow) ||
+             ((nRefStartRow + mnLen - 1) <= nStartRow &&
+              (nRefEndRow + mnLen - 1) >= nEndRow)))
+            return true;
+
+        if (!bIsRef1RowRel && nRefStartRow <= nStartRow &&
+            (nRefEndRow >= nEndRow || (nRefEndRow + mnLen - 1) >= nEndRow))
+            return true;
+
+        if (!bIsRef2RowRel &&
+            nRefStartRow <= nStartRow && nRefEndRow >= nEndRow)
+            return true;
+
+        return false;
+    }
+
     // FIXME: another copy-paste
     SCROW trimLength(SCTAB nTab, SCCOL nCol1, SCCOL nCol2, SCROW nRow, SCROW nRowLen)
     {
@@ -4194,7 +4226,7 @@ struct ScDependantsCalculator
         // Partially from ScGroupTokenConverter::convert in sc/source/core/data/grouptokenconverter.cxx
 
         ScRangeList aRangeList;
-        for (auto p: mrCode.Tokens())
+        for (auto p: mrCode.RPNTokens())
         {
             switch (p->GetType())
             {
@@ -4245,8 +4277,9 @@ struct ScDependantsCalculator
                     if (aRef.Ref1.Tab() != aRef.Ref2.Tab())
                         return false;
 
+                    bool bIsRef1RowRel = aRef.Ref1.IsRowRel();
                     // Check for self reference.
-                    if (aRef.Ref1.IsRowRel())
+                    if (bIsRef1RowRel)
                     {
                         if (isSelfReferenceRelative(aAbs.aStart, aRef.Ref1.Row()))
                             return false;
@@ -4254,12 +4287,16 @@ struct ScDependantsCalculator
                     else if (isSelfReferenceAbsolute(aAbs.aStart))
                         return false;
 
-                    if (aRef.Ref2.IsRowRel())
+                    bool bIsRef2RowRel = aRef.Ref2.IsRowRel();
+                    if (bIsRef2RowRel)
                     {
                         if (isSelfReferenceRelative(aAbs.aEnd, aRef.Ref2.Row()))
                             return false;
                     }
                     else if (isSelfReferenceAbsolute(aAbs.aEnd))
+                        return false;
+
+                    if (isDoubleRefSpanGroupRange(aAbs, bIsRef1RowRel, bIsRef2RowRel))
                         return false;
 
                     // Row reference is relative.
@@ -4291,12 +4328,12 @@ struct ScDependantsCalculator
 
         for (size_t i = 0; i < aRangeList.size(); ++i)
         {
-            const ScRange* pRange = aRangeList[i];
-            assert(pRange->aStart.Tab() == pRange->aEnd.Tab());
-            for (auto nCol = pRange->aStart.Col(); nCol <= pRange->aEnd.Col(); nCol++)
+            const ScRange & rRange = aRangeList[i];
+            assert(rRange.aStart.Tab() == rRange.aEnd.Tab());
+            for (auto nCol = rRange.aStart.Col(); nCol <= rRange.aEnd.Col(); nCol++)
             {
-                if (!mrDoc.HandleRefArrayForParallelism(ScAddress(nCol, pRange->aStart.Row(), pRange->aStart.Tab()),
-                                                        pRange->aEnd.Row() - pRange->aStart.Row() + 1))
+                if (!mrDoc.HandleRefArrayForParallelism(ScAddress(nCol, rRange.aStart.Row(), rRange.aStart.Tab()),
+                                                        rRange.aEnd.Row() - rRange.aStart.Row() + 1))
                     return false;
             }
         }

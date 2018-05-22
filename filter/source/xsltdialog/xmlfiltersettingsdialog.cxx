@@ -236,11 +236,11 @@ void XMLFilterSettingsDialog::onNew()
     aTempInfo.maDocumentService = "com.sun.star.text.TextDocument";
 
     // execute XML Filter Dialog
-    ScopedVclPtrInstance< XMLFilterTabDialog > aDlg( this, mxContext, &aTempInfo );
-    if ( aDlg->Execute() == RET_OK )
+    XMLFilterTabDialog aDlg(GetFrameWeld(), mxContext, &aTempInfo);
+    if (aDlg.run() == RET_OK)
     {
         // insert the new filter
-        insertOrEdit( aDlg->getNewFilterInfo() );
+        insertOrEdit( aDlg.getNewFilterInfo() );
     }
 }
 
@@ -255,10 +255,10 @@ void XMLFilterSettingsDialog::onEdit()
         filter_info_impl* pOldInfo = static_cast<filter_info_impl*>(pEntry->GetUserData());
 
         // execute XML Filter Dialog
-        ScopedVclPtrInstance< XMLFilterTabDialog > aDlg( this, mxContext, pOldInfo );
-        if ( aDlg->Execute() == RET_OK )
+        XMLFilterTabDialog aDlg(GetFrameWeld(), mxContext, pOldInfo);
+        if (aDlg.run() == RET_OK)
         {
-            filter_info_impl* pNewInfo = aDlg->getNewFilterInfo();
+            filter_info_impl* pNewInfo = aDlg.getNewFilterInfo();
 
             if( !(*pOldInfo == *pNewInfo) )
             {
@@ -759,8 +759,8 @@ void XMLFilterSettingsDialog::onTest()
     {
         filter_info_impl* pInfo = static_cast<filter_info_impl*>(pEntry->GetUserData());
 
-        ScopedVclPtrInstance< XMLFilterTestDialog > aDlg(this, mxContext);
-        aDlg->test( *pInfo );
+        XMLFilterTestDialog aDlg(GetFrameWeld(), mxContext);
+        aDlg.test( *pInfo );
     }
 }
 
@@ -874,7 +874,7 @@ void XMLFilterSettingsDialog::onSave()
     // Open Fileopen-Dialog
        ::sfx2::FileDialogHelper aDlg(
         css::ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION,
-        FileDialogFlags::NONE, this);
+        FileDialogFlags::NONE, GetFrameWeld());
 
     OUString aExtensions( "*.jar" );
     OUString aFilterName(XsltResId(STR_FILTER_PACKAGE));
@@ -919,7 +919,7 @@ void XMLFilterSettingsDialog::onOpen()
     // Open Fileopen-Dialog
        ::sfx2::FileDialogHelper aDlg(
         css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
-        FileDialogFlags::NONE, this);
+        FileDialogFlags::NONE, GetFrameWeld());
 
     OUString aExtensions( "*.jar" );
     OUString aFilterName(XsltResId(STR_FILTER_PACKAGE));
@@ -935,18 +935,15 @@ void XMLFilterSettingsDialog::onOpen()
         aJarHelper.openPackage( aURL, aFilters );
 
         int nFilters = 0;
-        XMLFilterVector::iterator aIter( aFilters.begin() );
-        while( aIter != aFilters.end() )
+        for (auto const& filter : aFilters)
         {
-            filter_info_impl* pInfo = (*aIter++);
-
-            if( insertOrEdit( pInfo ) )
+            if( insertOrEdit(filter) )
             {
-                aFilterName = pInfo->maFilterName;
+                aFilterName = filter->maFilterName;
                 nFilters++;
             }
 
-            delete pInfo;
+            delete filter;
         }
 
         disposeFilterList();
@@ -1005,10 +1002,9 @@ bool XMLFilterSettingsDialog::EventNotify( NotifyEvent& rNEvt )
 
 void XMLFilterSettingsDialog::disposeFilterList()
 {
-    std::vector< filter_info_impl* >::iterator aIter( maFilterVector.begin() );
-    while( aIter != maFilterVector.end() )
+    for (auto const& filter : maFilterVector)
     {
-        delete *aIter++;
+        delete filter;
     }
     maFilterVector.clear();
 
@@ -1259,13 +1255,12 @@ std::vector< application_info_impl* >& getApplicationInfos()
 const application_info_impl* getApplicationInfo( const OUString& rServiceName )
 {
     std::vector< application_info_impl* >& rInfos = getApplicationInfos();
-    for (std::vector< application_info_impl* >::const_iterator aIter( rInfos.begin() ), aEnd( rInfos.end() );
-        aIter != aEnd ; ++aIter)
+    for (auto const& info : rInfos)
     {
-        if( rServiceName == (*aIter)->maXMLExporter ||
-            rServiceName == (*aIter)->maXMLImporter)
+        if( rServiceName == info->maXMLExporter ||
+            rServiceName == info->maXMLImporter)
         {
-            return (*aIter);
+            return info;
         }
     }
     return nullptr;
@@ -1336,8 +1331,8 @@ void SvxPathControl::Resize()
         long nFirstColumnWidth = aWidths[1];
         m_pHeaderBar->SetItemSize(ITEMID_NAME, nFirstColumnWidth);
         m_pHeaderBar->SetItemSize(ITEMID_TYPE, 0xFFFF);
-        long nTabs[] = {2, 0, nFirstColumnWidth};
-        m_pFocusCtrl->SetTabs(&nTabs[0], MapUnit::MapPixel);
+        long nTabs[] = {0, nFirstColumnWidth};
+        m_pFocusCtrl->SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
     }
 }
 
@@ -1394,10 +1389,10 @@ XMLFilterListBox::XMLFilterListBox(Window* pParent, SvxPathControl* pPathControl
     m_pHeaderBar->InsertItem( ITEMID_TYPE, aStr2, nTabSize,
                             HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER );
 
-    static long nTabs[] = {2, 0, nTabSize };
+    static long nTabs[] = {0, nTabSize };
 
     SetSelectionMode( SelectionMode::Multiple );
-    SetTabs( &nTabs[0], MapUnit::MapPixel );
+    SetTabs( SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel );
     SetScrolledHdl( LINK( this, XMLFilterListBox, TabBoxScrollHdl_Impl ) );
     SetHighlightRange();
     Show();

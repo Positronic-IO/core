@@ -31,7 +31,7 @@
 #include <svx/svdpage.hxx>
 #include <svx/svdhdl.hxx>
 #include <svx/svdview.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 
 #include <svx/xlnwtit.hxx>
@@ -42,7 +42,6 @@
 #include <svx/xlntrit.hxx>
 #include <sdr/contact/viewcontactofsdrpathobj.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
-#include "svdconv.hxx"
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/range/b2drange.hxx>
@@ -668,7 +667,7 @@ bool ImpPathForDragAndCreate::movePathDrag( SdrDragStat& rDrag ) const
             Point  aPos(rDrag.GetNow());      // current position
             Point  aPnt(mpSdrPathDragData->aXP[nPnt]);      // the dragged point
             sal_uInt16 nPnt1=0xFFFF,nPnt2=0xFFFF; // its neighboring points
-            Point  aNeuPos1,aNeuPos2;         // new alternative for aPos
+            Point  aNewPos1,aNewPos2;         // new alternative for aPos
             bool bPnt1 = false, bPnt2 = false; // are these valid alternatives?
             if (!bClosed && mpSdrPathDragData->nPointCount>=2) { // minimum of 2 points for lines
                 if (!bBegPnt) nPnt1=nPrevPnt;
@@ -694,9 +693,9 @@ bool ImpPathForDragAndCreate::movePathDrag( SdrDragStat& rDrag ) const
                     bool bVer=bVLin || (!bHLin && (nXFact<=nYFact)==bBigOrtho);
                     if (bHor) ndy=long(ndy0*nXFact);
                     if (bVer) ndx=long(ndx0*nYFact);
-                    aNeuPos1=aPnt1;
-                    aNeuPos1.AdjustX(ndx );
-                    aNeuPos1.AdjustY(ndy );
+                    aNewPos1=aPnt1;
+                    aNewPos1.AdjustX(ndx );
+                    aNewPos1.AdjustY(ndy );
                 }
             }
             if (nPnt2!=0xFFFF && !bNextIsControl) {
@@ -715,23 +714,23 @@ bool ImpPathForDragAndCreate::movePathDrag( SdrDragStat& rDrag ) const
                     bool bVer=bVLin || (!bHLin && (nXFact<=nYFact)==bBigOrtho);
                     if (bHor) ndy=long(ndy0*nXFact);
                     if (bVer) ndx=long(ndx0*nYFact);
-                    aNeuPos2=aPnt2;
-                    aNeuPos2.AdjustX(ndx );
-                    aNeuPos2.AdjustY(ndy );
+                    aNewPos2=aPnt2;
+                    aNewPos2.AdjustX(ndx );
+                    aNewPos2.AdjustY(ndy );
                 }
             }
             if (bPnt1 && bPnt2) { // both alternatives exist (and compete)
-                BigInt nX1(aNeuPos1.X()-aPos.X()); nX1*=nX1;
-                BigInt nY1(aNeuPos1.Y()-aPos.Y()); nY1*=nY1;
-                BigInt nX2(aNeuPos2.X()-aPos.X()); nX2*=nX2;
-                BigInt nY2(aNeuPos2.Y()-aPos.Y()); nY2*=nY2;
+                BigInt nX1(aNewPos1.X()-aPos.X()); nX1*=nX1;
+                BigInt nY1(aNewPos1.Y()-aPos.Y()); nY1*=nY1;
+                BigInt nX2(aNewPos2.X()-aPos.X()); nX2*=nX2;
+                BigInt nY2(aNewPos2.Y()-aPos.Y()); nY2*=nY2;
                 nX1+=nY1; // correction distance to square
                 nX2+=nY2; // correction distance to square
                 // let the alternative that allows fewer correction win
                 if (nX1<nX2) bPnt2=false; else bPnt1=false;
             }
-            if (bPnt1) rDrag.SetNow(aNeuPos1);
-            if (bPnt2) rDrag.SetNow(aNeuPos2);
+            if (bPnt1) rDrag.SetNow(aNewPos1);
+            if (bPnt2) rDrag.SetNow(aNewPos2);
         }
         rDrag.SetActionRect(tools::Rectangle(rDrag.GetNow(),rDrag.GetNow()));
 
@@ -941,27 +940,27 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
         {
             aStr += SdrModel::GetAngleString(std::abs(pU->nCircRelAngle))
                     + " r="
-                    + mrSdrPathObject.GetModel()->GetMetricString(pU->nCircRadius, true);
+                    + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(pU->nCircRadius, true);
         }
 
         aStr += "dx="
-                + mrSdrPathObject.GetModel()->GetMetricString(aNow.X(), true)
+                + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(aNow.X(), true)
                 + " dy="
-                + mrSdrPathObject.GetModel()->GetMetricString(aNow.Y(), true);
+                + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(aNow.Y(), true);
 
         if(!IsFreeHand(meObjectKind))
         {
             sal_Int32 nLen(GetLen(aNow));
             sal_Int32 nAngle(GetAngle(aNow));
             aStr += "  l="
-                    + mrSdrPathObject.GetModel()->GetMetricString(nLen, true)
+                    + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(nLen, true)
                     + " "
                     + SdrModel::GetAngleString(nAngle);
         }
 
         aStr += ")";
     }
-    else if(!mrSdrPathObject.GetModel() || !pHdl)
+    else if(!pHdl)
     {
         // #i103058# fallback when no model and/or Handle, both needed
         // for else-path
@@ -995,7 +994,7 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
             aStr = aTmp;
 
             // delete %O
-            OUString aStr2(ImpGetResStr(STR_EditDelete));
+            OUString aStr2(SvxResId(STR_EditDelete));
 
             // UNICODE: delete point of ...
             aStr2 = aStr2.replaceFirst("%1", aStr);
@@ -1011,9 +1010,9 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
 
         aStr.clear();
         aStr += "dx="
-                + mrSdrPathObject.GetModel()->GetMetricString(aNow.X() - aBeg.X(), true)
+                + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(aNow.X() - aBeg.X(), true)
                 + " dy="
-                + mrSdrPathObject.GetModel()->GetMetricString(aNow.Y() - aBeg.Y(), true);
+                + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(aNow.Y() - aBeg.Y(), true);
 
         if(!pDragData->IsMultiPointDrag())
         {
@@ -1040,7 +1039,7 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
                 sal_Int32 nLen(GetLen(aNow));
                 sal_Int32 nAngle(GetAngle(aNow));
                 aStr += "  l="
-                        + mrSdrPathObject.GetModel()->GetMetricString(nLen, true)
+                        + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(nLen, true)
                         + " "
                         + SdrModel::GetAngleString(nAngle);
             }
@@ -1083,7 +1082,7 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
                     sal_Int32 nLen(GetLen(aPt));
                     sal_Int32 nAngle(GetAngle(aPt));
                     aStr += "  l="
-                            + mrSdrPathObject.GetModel()->GetMetricString(nLen, true)
+                            + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(nLen, true)
                             + " "
                             + SdrModel::GetAngleString(nAngle);
                 }
@@ -1101,7 +1100,7 @@ OUString ImpPathForDragAndCreate::getSpecialDragComment(const SdrDragStat& rDrag
                     sal_Int32 nLen(GetLen(aPt));
                     sal_Int32 nAngle(GetAngle(aPt));
                     aStr += "l="
-                            + mrSdrPathObject.GetModel()->GetMetricString(nLen, true)
+                            + mrSdrPathObject.getSdrModelFromSdrObject().GetMetricString(nLen, true)
                             + " "
                             + SdrModel::GetAngleString(nAngle);
                 }
@@ -1628,17 +1627,22 @@ sdr::contact::ViewContact* SdrPathObj::CreateObjectSpecificViewContact()
 }
 
 
-SdrPathObj::SdrPathObj(SdrObjKind eNewKind)
-:   meKind(eNewKind),
-    mdBrightness(0.0)
+SdrPathObj::SdrPathObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewKind)
+:   SdrTextObj(rSdrModel),
+    meKind(eNewKind)
 {
     bClosedObj = IsClosed();
 }
 
-SdrPathObj::SdrPathObj(SdrObjKind eNewKind, const basegfx::B2DPolyPolygon& rPathPoly, double dBrightness)
-:   maPathPolygon(rPathPoly),
-    meKind(eNewKind),
-    mdBrightness(dBrightness)
+SdrPathObj::SdrPathObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewKind,
+    const basegfx::B2DPolyPolygon& rPathPoly)
+:   SdrTextObj(rSdrModel),
+    maPathPolygon(rPathPoly),
+    meKind(eNewKind)
 {
     bClosedObj = IsClosed();
     ImpForceKind();
@@ -1823,9 +1827,9 @@ sal_uInt16 SdrPathObj::GetObjIdentifier() const
     return sal_uInt16(meKind);
 }
 
-SdrPathObj* SdrPathObj::Clone() const
+SdrPathObj* SdrPathObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrPathObj >();
+    return CloneHelper< SdrPathObj >(rTargetModel);
 }
 
 SdrPathObj& SdrPathObj::operator=(const SdrPathObj& rObj)
@@ -1874,7 +1878,7 @@ OUString SdrPathObj::TakeObjNameSingul() const
             }
         }
 
-        sName.append(ImpGetResStr(pId));
+        sName.append(SvxResId(pId));
     }
     else if(OBJ_PLIN == meKind || OBJ_POLY == meKind)
     {
@@ -1892,7 +1896,7 @@ OUString SdrPathObj::TakeObjNameSingul() const
                 pId = STR_ObjNameSingulPLIN;
             }
 
-            sName.append(ImpGetResStr(pId));
+            sName.append(SvxResId(pId));
         }
         else
         {
@@ -1914,7 +1918,7 @@ OUString SdrPathObj::TakeObjNameSingul() const
                 pId = STR_ObjNameSingulPLIN_PointCount;
             }
 
-            OUString sTemp(ImpGetResStr(pId));
+            OUString sTemp(SvxResId(pId));
             // #i96537#
             sName.append(sTemp.replaceFirst("%2", OUString::number(nPointCount)));
         }
@@ -1923,12 +1927,12 @@ OUString SdrPathObj::TakeObjNameSingul() const
     {
         switch (meKind)
         {
-            case OBJ_PATHLINE: sName.append(ImpGetResStr(STR_ObjNameSingulPATHLINE)); break;
-            case OBJ_FREELINE: sName.append(ImpGetResStr(STR_ObjNameSingulFREELINE)); break;
-            case OBJ_SPLNLINE: sName.append(ImpGetResStr(STR_ObjNameSingulNATSPLN)); break;
-            case OBJ_PATHFILL: sName.append(ImpGetResStr(STR_ObjNameSingulPATHFILL)); break;
-            case OBJ_FREEFILL: sName.append(ImpGetResStr(STR_ObjNameSingulFREEFILL)); break;
-            case OBJ_SPLNFILL: sName.append(ImpGetResStr(STR_ObjNameSingulPERSPLN)); break;
+            case OBJ_PATHLINE: sName.append(SvxResId(STR_ObjNameSingulPATHLINE)); break;
+            case OBJ_FREELINE: sName.append(SvxResId(STR_ObjNameSingulFREELINE)); break;
+            case OBJ_SPLNLINE: sName.append(SvxResId(STR_ObjNameSingulNATSPLN)); break;
+            case OBJ_PATHFILL: sName.append(SvxResId(STR_ObjNameSingulPATHFILL)); break;
+            case OBJ_FREEFILL: sName.append(SvxResId(STR_ObjNameSingulFREEFILL)); break;
+            case OBJ_SPLNFILL: sName.append(SvxResId(STR_ObjNameSingulPERSPLN)); break;
             default: break;
         }
     }
@@ -1950,15 +1954,15 @@ OUString SdrPathObj::TakeObjNamePlural() const
     OUString sName;
     switch(meKind)
     {
-        case OBJ_LINE    : sName=ImpGetResStr(STR_ObjNamePluralLINE    ); break;
-        case OBJ_PLIN    : sName=ImpGetResStr(STR_ObjNamePluralPLIN    ); break;
-        case OBJ_POLY    : sName=ImpGetResStr(STR_ObjNamePluralPOLY    ); break;
-        case OBJ_PATHLINE: sName=ImpGetResStr(STR_ObjNamePluralPATHLINE); break;
-        case OBJ_FREELINE: sName=ImpGetResStr(STR_ObjNamePluralFREELINE); break;
-        case OBJ_SPLNLINE: sName=ImpGetResStr(STR_ObjNamePluralNATSPLN); break;
-        case OBJ_PATHFILL: sName=ImpGetResStr(STR_ObjNamePluralPATHFILL); break;
-        case OBJ_FREEFILL: sName=ImpGetResStr(STR_ObjNamePluralFREEFILL); break;
-        case OBJ_SPLNFILL: sName=ImpGetResStr(STR_ObjNamePluralPERSPLN); break;
+        case OBJ_LINE    : sName=SvxResId(STR_ObjNamePluralLINE    ); break;
+        case OBJ_PLIN    : sName=SvxResId(STR_ObjNamePluralPLIN    ); break;
+        case OBJ_POLY    : sName=SvxResId(STR_ObjNamePluralPOLY    ); break;
+        case OBJ_PATHLINE: sName=SvxResId(STR_ObjNamePluralPATHLINE); break;
+        case OBJ_FREELINE: sName=SvxResId(STR_ObjNamePluralFREELINE); break;
+        case OBJ_SPLNLINE: sName=SvxResId(STR_ObjNamePluralNATSPLN); break;
+        case OBJ_PATHFILL: sName=SvxResId(STR_ObjNamePluralPATHFILL); break;
+        case OBJ_FREEFILL: sName=SvxResId(STR_ObjNamePluralFREEFILL); break;
+        case OBJ_SPLNFILL: sName=SvxResId(STR_ObjNamePluralPERSPLN); break;
         default: break;
     }
     return sName;
@@ -2671,7 +2675,7 @@ SdrObject* SdrPathObj::RipPoint(sal_uInt32 nHdlNum, sal_uInt32& rNewPt0Index)
                         basegfx::B2DPolygon aSplitPolyA(aCandidate, 0L, nPnt + 1);
                         SetPathPoly(basegfx::B2DPolyPolygon(aSplitPolyA));
 
-                        pNewObj = Clone();
+                        pNewObj = CloneSdrObject(getSdrModelFromSdrObject());
                         basegfx::B2DPolygon aSplitPolyB(aCandidate, nPnt, nPointCount - nPnt);
                         pNewObj->SetPathPoly(basegfx::B2DPolyPolygon(aSplitPolyB));
                     }
@@ -2881,42 +2885,11 @@ bool SdrPathObj::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B2DP
     }
 
     // position maybe relative to anchorpos, convert
-    if( pModel && pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {
             aTranslate -= basegfx::B2DTuple(GetAnchorPos().X(), GetAnchorPos().Y());
-        }
-    }
-
-    // force MapUnit to 100th mm
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplTwipsToMM(aTranslate.getX()));
-                aTranslate.setY(ImplTwipsToMM(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplTwipsToMM(aScale.getX()));
-                aScale.setY(ImplTwipsToMM(aScale.getY()));
-
-                // polygon
-                basegfx::B2DHomMatrix aTwipsToMM;
-                const double fFactorTwipsToMM(127.0 / 72.0);
-                aTwipsToMM.scale(fFactorTwipsToMM, fFactorTwipsToMM);
-                rPolyPolygon.transform(aTwipsToMM);
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRGetBaseGeometry: Missing unit translation to 100th mm!");
-            }
         }
     }
 
@@ -2959,38 +2932,7 @@ void SdrPathObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
     aGeo.nShearAngle = 0;
     aGeo.RecalcTan();
 
-    // force metric to pool metric
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplMMToTwips(aTranslate.getX()));
-                aTranslate.setY(ImplMMToTwips(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplMMToTwips(aScale.getX()));
-                aScale.setY(ImplMMToTwips(aScale.getY()));
-
-                // polygon
-                basegfx::B2DHomMatrix aMMToTwips;
-                const double fFactorMMToTwips(72.0 / 127.0);
-                aMMToTwips.scale(fFactorMMToTwips, fFactorMMToTwips);
-                aNewPolyPolygon.transform(aMMToTwips);
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRSetBaseGeometry: Missing unit translation to PoolMetric!");
-            }
-        }
-    }
-
-    if( pModel && pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         // if anchor is used, make position relative to it
         if(GetAnchorPos().X() || GetAnchorPos().Y())

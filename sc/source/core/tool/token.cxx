@@ -47,7 +47,6 @@
 #include <refupdatecontext.hxx>
 #include <tokenstringcontext.hxx>
 #include <types.hxx>
-#include <globstr.hrc>
 #include <addincol.hxx>
 #include <dbdata.hxx>
 #include <reordermap.hxx>
@@ -1319,7 +1318,8 @@ void ScTokenArray::CheckForThreading( OpCode eOp  )
         ocHLookup,
         ocMatch,
         ocCell,
-        ocInfo
+        ocInfo,
+        ocStyle
     });
 
     // We only call this if it was already disabled
@@ -1840,7 +1840,7 @@ bool ScTokenArray::IsFormulaVectorDisabled() const
 
 bool ScTokenArray::IsInvariant() const
 {
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -1950,8 +1950,9 @@ ScTokenArray* ScTokenArray::Clone() const
     FormulaToken** pp;
     if( nLen )
     {
-        pp = p->pCode = new FormulaToken*[ nLen ];
-        memcpy( pp, pCode, nLen * sizeof( formula::FormulaToken* ) );
+        p->pCode.reset(new FormulaToken*[ nLen ]);
+        pp = p->pCode.get();
+        memcpy( pp, pCode.get(), nLen * sizeof( formula::FormulaToken* ) );
         for( sal_uInt16 i = 0; i < nLen; i++, pp++ )
         {
             *pp = (*pp)->Clone();
@@ -1967,7 +1968,7 @@ ScTokenArray* ScTokenArray::Clone() const
             FormulaToken* t = *pp;
             if( t->GetRef() > 1 )
             {
-                FormulaToken** p2 = pCode;
+                FormulaToken** p2 = pCode.get();
                 sal_uInt16 nIdx = 0xFFFF;
                 for( sal_uInt16 j = 0; j < nLen; j++, p2++ )
                 {
@@ -2139,7 +2140,7 @@ FormulaToken* ScTokenArray::MergeArray( )
                 }
                 else if ( t->GetType() == svString )
                 {
-                    pArray->PutString(svl::SharedString(t->GetString()), nCol, nRow);
+                    pArray->PutString(t->GetString(), nCol, nRow);
                 }
             break;
 
@@ -2537,7 +2538,7 @@ void ScTokenArray::ReadjustAbsolute3DReferences( const ScDocument* pOldDoc, ScDo
 void ScTokenArray::AdjustAbsoluteRefs( const ScDocument* pOldDoc, const ScAddress& rOldPos, const ScAddress& rNewPos,
         bool bCheckCopyRange)
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN, true);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN, true);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -2584,7 +2585,7 @@ void ScTokenArray::AdjustAbsoluteRefs( const ScDocument* pOldDoc, const ScAddres
 
 void ScTokenArray::AdjustSheetLocalNameReferences( SCTAB nOldTab, SCTAB nNewTab )
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN, false);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN, false);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -2632,7 +2633,7 @@ void ScTokenArray::AdjustSheetLocalNameReferences( SCTAB nOldTab, SCTAB nNewTab 
 
 bool ScTokenArray::ReferencesSheet( SCTAB nTab, SCTAB nPosTab ) const
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN, false);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN, false);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken* const * pp = aPtrs.maPointerRange[j].mpStart;
@@ -3083,7 +3084,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnShift( const sc::RefUpdateCon
         }
     }
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -3315,7 +3316,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnMove(
         assert(!"can't move");
     }
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -3438,7 +3439,7 @@ sc::RefUpdateResult ScTokenArray::MoveReference( const ScAddress& rPos, const sc
         assert(!"can't move");
     }
 
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -3514,7 +3515,7 @@ sc::RefUpdateResult ScTokenArray::MoveReference( const ScAddress& rPos, const sc
 void ScTokenArray::MoveReferenceColReorder(
     const ScAddress& rPos, SCTAB nTab, SCROW nRow1, SCROW nRow2, const sc::ColRowReorderMapType& rColMap )
 {
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -3577,7 +3578,7 @@ void ScTokenArray::MoveReferenceColReorder(
 
 void ScTokenArray::MoveReferenceRowReorder( const ScAddress& rPos, SCTAB nTab, SCCOL nCol1, SCCOL nCol2, const sc::ColRowReorderMapType& rRowMap )
 {
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -3797,7 +3798,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceInName(
         // Copying cells does not modify named expressions.
         return aRes;
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4075,7 +4076,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceInMovedName( const sc::RefUpdat
 
     sc::RefUpdateResult aRes;
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4227,7 +4228,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnDeletedTab( const sc::RefUpda
     if (rCxt.mnDeletePos < rOldPos.Tab())
         aNewPos.IncTab(-1*rCxt.mnSheets);
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4300,7 +4301,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnInsertedTab( const sc::RefUpd
     if (rCxt.mnInsertPos <= rOldPos.Tab())
         aNewPos.IncTab(rCxt.mnSheets);
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4389,7 +4390,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnMovedTab( const sc::RefUpdate
     if (adjustTabOnMove(aNewPos, rCxt))
         aRes.mbReferenceModified = true;
 
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4462,7 +4463,7 @@ sc::RefUpdateResult ScTokenArray::AdjustReferenceOnMovedTab( const sc::RefUpdate
 
 void ScTokenArray::AdjustReferenceOnMovedOrigin( const ScAddress& rOldPos, const ScAddress& rNewPos )
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4500,7 +4501,7 @@ void ScTokenArray::AdjustReferenceOnMovedOrigin( const ScAddress& rOldPos, const
 
 void ScTokenArray::AdjustReferenceOnMovedOriginIfOtherSheet( const ScAddress& rOldPos, const ScAddress& rNewPos )
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4549,7 +4550,7 @@ void ScTokenArray::AdjustReferenceOnMovedOriginIfOtherSheet( const ScAddress& rO
 
 void ScTokenArray::AdjustReferenceOnCopy( const ScAddress& rNewPos )
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN, false);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN, false);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4594,7 +4595,7 @@ void ScTokenArray::ClearTabDeleted( const ScAddress& rPos, SCTAB nStartTab, SCTA
     if (nEndTab < nStartTab)
         return;
 
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -4730,7 +4731,7 @@ void checkBounds(
 void ScTokenArray::CheckRelativeReferenceBounds(
     const sc::RefUpdateContext& rCxt, const ScAddress& rPos, SCROW nGroupLen, std::vector<SCROW>& rBounds ) const
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4765,7 +4766,7 @@ void ScTokenArray::CheckRelativeReferenceBounds(
 void ScTokenArray::CheckRelativeReferenceBounds(
     const ScAddress& rPos, SCROW nGroupLen, const ScRange& rRange, std::vector<SCROW>& rBounds ) const
 {
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken** pp = aPtrs.maPointerRange[j].mpStart;
@@ -4802,7 +4803,7 @@ void ScTokenArray::CheckExpandReferenceBounds(
     const sc::RefUpdateContext& rCxt, const ScAddress& rPos, SCROW nGroupLen, std::vector<SCROW>& rBounds ) const
 {
     const SCROW nInsRow = rCxt.maRange.aStart.Row();
-    TokenPointers aPtrs( pCode, nLen, pRPN, nRPN);
+    TokenPointers aPtrs( pCode.get(), nLen, pRPN, nRPN);
     for (size_t j=0; j<2; ++j)
     {
         FormulaToken* const * pp = aPtrs.maPointerRange[j].mpStart;
@@ -5056,7 +5057,7 @@ void appendTokenByType( sc::TokenStringContext& rCxt, OUStringBuffer& rBuf, cons
                     {
                         // Skip it.
                     }
-                    else if (pMat->IsString(nC, nR))
+                    else if (pMat->IsStringOrEmpty(nC, nR))
                         appendString(rBuf, pMat->GetString(nC, nR).getString());
                 }
             }
@@ -5209,7 +5210,7 @@ OUString ScTokenArray::CreateString( sc::TokenStringContext& rCxt, const ScAddre
 
     OUStringBuffer aBuf;
 
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -5276,7 +5277,7 @@ void wrapRowRange( ScRange& rRange, SCROW nMaxRow )
 
 void ScTokenArray::WrapReference( const ScAddress& rPos, SCCOL nMaxCol, SCROW nMaxRow )
 {
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {
@@ -5319,7 +5320,7 @@ void ScTokenArray::WrapReference( const ScAddress& rPos, SCCOL nMaxCol, SCROW nM
 
 bool ScTokenArray::NeedsWrapReference( const ScAddress& rPos, SCCOL nMaxCol, SCROW nMaxRow ) const
 {
-    FormulaToken** p = pCode;
+    FormulaToken** p = pCode.get();
     FormulaToken** pEnd = p + static_cast<size_t>(nLen);
     for (; p != pEnd; ++p)
     {

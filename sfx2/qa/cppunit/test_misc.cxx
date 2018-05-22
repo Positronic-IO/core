@@ -9,6 +9,10 @@
 
 #include <sal/types.h>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 #include <memory>
 
 #include <cppunit/TestAssert.h>
@@ -31,6 +35,7 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/processfactory.hxx>
 #include <sfx2/app.hxx>
+#include <osl/file.hxx>
 
 
 using namespace ::com::sun::star;
@@ -47,6 +52,7 @@ public:
     virtual void setUp() override;
     void testODFCustomMetadata();
     void testNoThumbnail();
+    void testHardLinks();
 
     virtual void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override
     {
@@ -62,6 +68,7 @@ public:
     CPPUNIT_TEST_SUITE(MiscTest);
     CPPUNIT_TEST(testODFCustomMetadata);
     CPPUNIT_TEST(testNoThumbnail);
+    CPPUNIT_TEST(testHardLinks);
     CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -117,12 +124,60 @@ void MiscTest::testNoThumbnail()
     utl::TempFile aTempFile;
     uno::Sequence<beans::PropertyValue> aProperties(
         comphelper::InitPropertySequence({ { "NoThumbnail", uno::makeAny(true) } }));
+    osl::File::remove(aTempFile.GetURL());
     xStorable->storeToURL(aTempFile.GetURL(), aProperties);
     uno::Reference<packages::zip::XZipFileAccess2> xZipFile
         = packages::zip::ZipFileAccess::createWithURL(m_xContext, aTempFile.GetURL());
     CPPUNIT_ASSERT(!xZipFile->hasByName("Thumbnails/thumbnail.png"));
 
+#ifndef _WIN32
+    // Check permissions of the URL after store.
+    mode_t nMask = umask(022);
+    osl::DirectoryItem aItem;
+    CPPUNIT_ASSERT_EQUAL(osl::DirectoryItem::E_None,
+                         osl::DirectoryItem::get(aTempFile.GetURL(), aItem));
+
+    osl::FileStatus aStatus(osl_FileStatus_Mask_Attributes);
+    CPPUNIT_ASSERT_EQUAL(osl::DirectoryItem::E_None, aItem.getFileStatus(aStatus));
+
+    // This failed, osl_File_Attribute_GrpRead was not set even if umask
+    // requested so.
+    CPPUNIT_ASSERT(aStatus.getAttributes() & osl_File_Attribute_GrpRead);
+    CPPUNIT_ASSERT(aStatus.getAttributes() & osl_File_Attribute_OthRead);
+    umask(nMask);
+#endif
+
     xComponent->dispose();
+}
+
+void MiscTest::testHardLinks()
+{
+#ifndef _WIN32
+    OUString aSourceDir = m_directories.getURLFromSrc("/sfx2/qa/cppunit/misc/");
+    OUString aTargetDir = m_directories.getURLFromWorkdir("/CppunitTest/sfx2_misc.test.user/");
+    const OUString aURL(aTargetDir + "hello.odt");
+    osl::File::copy(aSourceDir + "hello.odt", aURL);
+    OUString aTargetPath;
+    osl::FileBase::getSystemPathFromFileURL(aURL, aTargetPath);
+    OString aOld = aTargetPath.toUtf8();
+    aTargetPath += ".2";
+    OString aNew = aTargetPath.toUtf8();
+    link(aOld.getStr(), aNew.getStr());
+
+    uno::Reference<lang::XComponent> xComponent = loadFromDesktop(aURL, "com.sun.star.text.TextDocument");
+    CPPUNIT_ASSERT(xComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(xComponent, uno::UNO_QUERY);
+    xStorable->store();
+
+    struct stat buf;
+    int nRet = stat(aOld.getStr(), &buf);
+    CPPUNIT_ASSERT_EQUAL(nRet, 0);
+    // This failed: hard link count was 1, the hard link broke on store.
+    CPPUNIT_ASSERT(buf.st_nlink > 1);
+
+    xComponent->dispose();
+#endif
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(MiscTest);

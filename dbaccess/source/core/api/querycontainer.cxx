@@ -34,11 +34,9 @@
 #include <connectivity/dbexception.hxx>
 
 #include <osl/diagnose.h>
-#include <comphelper/enumhelper.hxx>
 #include <comphelper/uno3.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/extract.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
 using namespace dbtools;
@@ -323,13 +321,11 @@ void SAL_CALL OQueryContainer::disposing( const css::lang::EventObject& _rSource
     {
         Reference< XContent > xSource(_rSource.Source, UNO_QUERY);
         // it's one of our documents ....
-        Documents::const_iterator aIter = m_aDocumentMap.begin();
-        Documents::const_iterator aEnd = m_aDocumentMap.end();
-        for (;aIter != aEnd;++aIter )
+        for (auto const& document : m_aDocumentMap)
         {
-            if ( xSource == aIter->second.get() )
+            if ( xSource == document.second.get() )
             {
-                m_xCommandDefinitions->removeByName(aIter->first);
+                m_xCommandDefinitions->removeByName(document.first);
                 break;
             }
         }

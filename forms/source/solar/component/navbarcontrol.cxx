@@ -32,7 +32,6 @@
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/frame/ModuleManager.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/svapp.hxx>
@@ -105,7 +104,7 @@ namespace frm
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("forms.component");
             }
             return nBits;
         }
@@ -271,7 +270,7 @@ namespace frm
         bool bVoid = !_rValue.hasValue();
 
         bool  bBoolValue = false;
-        sal_Int32 nColor(COL_TRANSPARENT);
+        Color nColor = COL_TRANSPARENT;
 
         // TODO: more generic mechanisms for this (the grid control implementation,
         // when used herein, will do the same stuff for lot of these)
@@ -346,11 +345,11 @@ namespace frm
 
         if ( _rPropertyName == PROPERTY_BACKGROUNDCOLOR )
         {
-            aReturn <<= static_cast<sal_Int32>(pNavBar->GetControlBackground().GetColor());
+            aReturn <<= pNavBar->GetControlBackground();
         }
         else if ( _rPropertyName == PROPERTY_TEXTLINECOLOR )
         {
-            aReturn <<= static_cast<sal_Int32>(pNavBar->GetTextLineColor().GetColor());
+            aReturn <<= pNavBar->GetTextLineColor();
         }
         else if ( _rPropertyName == PROPERTY_ICONSIZE )
         {

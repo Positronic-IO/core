@@ -69,7 +69,7 @@ void OutputDevice::ImplInitTextColor()
 
     if ( mbInitTextColor )
     {
-        mpGraphics->SetTextColor( ImplColorToSal( GetTextColor() ) );
+        mpGraphics->SetTextColor( GetTextColor() );
         mbInitTextColor = false;
     }
 }
@@ -145,7 +145,7 @@ void OutputDevice::ImplDrawTextBackground( const SalLayout& rSalLayout )
         mpGraphics->SetLineColor();
         mbInitLineColor = true;
     }
-    mpGraphics->SetFillColor( ImplColorToSal( GetTextFillColor() ) );
+    mpGraphics->SetFillColor( GetTextFillColor() );
     mbInitFillColor = true;
 
     ImplDrawTextRect( nX, nY, 0, -(mpFontInstance->mxFontMetric->GetAscent() + mnEmphasisAscent),
@@ -217,9 +217,10 @@ bool OutputDevice::ImplDrawRotateText( SalLayout& rSalLayout )
     if( !pVDev->SetOutputSizePixel( aBoundRect.GetSize() ) )
         return false;
 
+    const FontSelectPattern& rPattern = mpFontInstance->GetFontSelectPattern();
     vcl::Font aFont( GetFont() );
     aFont.SetOrientation( 0 );
-    aFont.SetFontSize( Size( mpFontInstance->maFontSelData.mnWidth, mpFontInstance->maFontSelData.mnHeight ) );
+    aFont.SetFontSize( Size( rPattern.mnWidth, rPattern.mnHeight ) );
     pVDev->SetFont( aFont );
     pVDev->SetTextColor( COL_BLACK );
     pVDev->SetTextFillColor();
@@ -935,7 +936,15 @@ long OutputDevice::GetTextHeight() const
 
 float OutputDevice::approximate_char_width() const
 {
+    //note pango uses "The quick brown fox jumps over the lazy dog." for english
+    //and has a bunch of per-language strings which corresponds somewhat with
+    //makeRepresentativeText in include/svtools/sampletext.hxx
     return GetTextWidth("aemnnxEM") / 8.0;
+}
+
+float OutputDevice::approximate_digit_width() const
+{
+    return GetTextWidth("0123456789") / 10.0;
 }
 
 void OutputDevice::DrawTextArray( const Point& rStartPt, const OUString& rStr,
@@ -1190,15 +1199,20 @@ ImplLayoutArgs OutputDevice::ImplPrepareLayoutArgs( OUString& rStr,
         nLayoutFlags |= SalLayoutFlags::BiDiStrong;
     else if( !(mnTextLayoutMode & ComplexTextLayoutFlags::BiDiRtl) )
     {
-        // disable Bidi if no RTL hint and no RTL codes used
-        const sal_Unicode* pStr = rStr.getStr() + nMinIndex;
-        const sal_Unicode* pEnd = rStr.getStr() + nEndIndex;
-        for( ; pStr < pEnd; ++pStr )
-            if( ((*pStr >= 0x0580) && (*pStr < 0x0800))   // middle eastern scripts
-            ||  ((*pStr >= 0xFB18) && (*pStr < 0xFE00))   // hebrew + arabic A presentation forms
-            ||  ((*pStr >= 0xFE70) && (*pStr < 0xFEFF)) ) // arabic presentation forms B
+        // Disable Bidi if no RTL hint and only known LTR codes used.
+        bool bAllLtr = true;
+        for (sal_Int32 i = nMinIndex; i < nEndIndex; i++)
+        {
+            // [0x0000, 0x052F] are Latin, Greek and Cyrillic.
+            // [0x0370, 0x03FF] has a few holes as if Unicode 10.0.0, but
+            //                  hopefully no RTL character will be encoded there.
+            if (rStr[i] > 0x052F)
+            {
+                bAllLtr = false;
                 break;
-        if( pStr >= pEnd )
+            }
+        }
+        if (bAllLtr)
             nLayoutFlags |= SalLayoutFlags::BiDiStrong;
     }
 
@@ -1345,7 +1359,7 @@ std::unique_ptr<SalLayout> OutputDevice::ImplLayout(const OUString& rOrigStr,
 
     // do glyph fallback if needed
     // #105768# avoid fallback for very small font sizes
-    if (aLayoutArgs.NeedFallback() && mpFontInstance->maFontSelData.mnHeight >= 3)
+    if (aLayoutArgs.NeedFallback() && mpFontInstance->GetFontSelectPattern().mnHeight >= 3)
         pSalLayout = ImplGlyphFallbackLayout(std::move(pSalLayout), aLayoutArgs);
 
     // position, justify, etc. the layout
@@ -2327,7 +2341,7 @@ SystemTextLayoutData OutputDevice::GetSysTextLayoutData(const Point& rStartPt, c
     Point aPos;
     const GlyphItem* pGlyph;
     int nStart = 0;
-    while (pLayout->GetNextGlyphs(1, &pGlyph, aPos, nStart))
+    while (pLayout->GetNextGlyph(&pGlyph, aPos, nStart))
     {
         SystemGlyphData aSystemGlyph;
         aSystemGlyph.index = pGlyph->maGlyphId;
@@ -2384,14 +2398,14 @@ bool OutputDevice::GetTextBoundRect( tools::Rectangle& rRect,
             if( nWidthFactor > 1 )
             {
                 double fFactor = 1.0 / nWidthFactor;
-                aPixelRect.Left()
-                    = static_cast< long >(aPixelRect.Left() * fFactor);
-                aPixelRect.Right()
-                    = static_cast< long >(aPixelRect.Right() * fFactor);
-                aPixelRect.Top()
-                    = static_cast< long >(aPixelRect.Top() * fFactor);
-                aPixelRect.Bottom()
-                    = static_cast< long >(aPixelRect.Bottom() * fFactor);
+                aPixelRect.SetLeft(
+                    static_cast< long >(aPixelRect.Left() * fFactor) );
+                aPixelRect.SetRight(
+                    static_cast< long >(aPixelRect.Right() * fFactor) );
+                aPixelRect.SetTop(
+                    static_cast< long >(aPixelRect.Top() * fFactor) );
+                aPixelRect.SetBottom(
+                    static_cast< long >(aPixelRect.Bottom() * fFactor) );
             }
 
             Point aRotatedOfs( mnTextOffX, mnTextOffY );

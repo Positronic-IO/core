@@ -126,11 +126,13 @@
 
 #include <sfx2/fcontnr.hxx>
 #include <svx/ClassificationDialog.hxx>
+#include <svtools/embedhlp.hxx>
 
 #include <swabstdlg.hxx>
 #include <watermarkdialog.hxx>
 
 #include <ndtxt.hxx>
+#include <iodetect.hxx>
 
 #include <memory>
 
@@ -375,7 +377,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 aSet.Put( *static_cast<const SfxBoolItem*>(pOpenSmartTagOptionsItem) );
 
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-            VclPtr<SfxAbstractTabDialog> pDlg = pFact->CreateAutoCorrTabDialog( &aSet );
+            VclPtr<SfxAbstractTabDialog> pDlg = pFact->CreateAutoCorrTabDialog(&GetView()->GetViewFrame()->GetWindow(), &aSet);
             pDlg->Execute();
             pDlg.disposeAndClear();
 
@@ -500,15 +502,14 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 if ( aFileName.isEmpty() )
                 {
                     SvtPathOptions aPathOpt;
-                    ScopedVclPtr<SfxNewFileDialog> pNewFileDlg(
-                        VclPtr<SfxNewFileDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), SfxNewFileDialogMode::LoadTemplate));
-                    pNewFileDlg->SetTemplateFlags(nFlags);
+                    SfxNewFileDialog aNewFileDlg(GetView()->GetViewFrame()->GetWindow().GetFrameWeld(), SfxNewFileDialogMode::LoadTemplate);
+                    aNewFileDlg.SetTemplateFlags(nFlags);
 
-                    nRet = pNewFileDlg->Execute();
+                    nRet = aNewFileDlg.run();
                     if(RET_TEMPLATE_LOAD == nRet)
                     {
                         FileDialogHelper aDlgHelper(TemplateDescription::FILEOPEN_SIMPLE,
-                                                    FileDialogFlags::NONE, &GetView()->GetViewFrame()->GetWindow());
+                                                    FileDialogFlags::NONE, GetView()->GetViewFrame()->GetWindow().GetFrameWeld());
                         uno::Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
 
                         xFP->setDisplayDirectory( aPathOpt.GetWorkPath() );
@@ -560,10 +561,10 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     }
                     else if( RET_OK == nRet)
                     {
-                        aFileName = pNewFileDlg->GetTemplateFileName();
+                        aFileName = aNewFileDlg.GetTemplateFileName();
                     }
 
-                    nFlags = pNewFileDlg->GetTemplateFlags();
+                    nFlags = aNewFileDlg.GetTemplateFlags();
                     rReq.AppendItem( SfxStringItem( SID_TEMPLATE_NAME, aFileName ) );
                     rReq.AppendItem( SfxInt32Item( SID_TEMPLATE_LOAD, static_cast<long>(nFlags) ) );
                 }
@@ -621,7 +622,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     {
                         FileDialogHelper aDlgHelper(TemplateDescription::FILESAVE_AUTOEXTENSION,
                                                     FileDialogFlags::NONE,
-                                                    &GetView()->GetViewFrame()->GetWindow());
+                                                    GetView()->GetViewFrame()->GetWindow().GetFrameWeld());
                         aDlgHelper.AddFilter( pHtmlFlt->GetFilterName(), pHtmlFlt->GetDefaultExtension() );
                         aDlgHelper.SetCurrentFilter( pHtmlFlt->GetFilterName() );
                         if( ERRCODE_NONE != aDlgHelper.Execute())
@@ -881,7 +882,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     bool bError = false;
 
                     FileDialogHelper aDlgHelper(TemplateDescription::FILESAVE_AUTOEXTENSION_TEMPLATE, FileDialogFlags::NONE,
-                                                &GetView()->GetViewFrame()->GetWindow());
+                                                GetView()->GetViewFrame()->GetWindow().GetFrameWeld());
 
                     const sal_Int16 nControlIds[] = {
                         CommonFilePickerElementIds::PUSHBUTTON_OK,
@@ -1172,22 +1173,22 @@ void SwDocShell::Execute(SfxRequest& rReq)
         break;
         case SID_CLASSIFICATION_DIALOG:
         {
-            ScopedVclPtr<svx::ClassificationDialog> pDialog(VclPtr<svx::ClassificationDialog>::Create(nullptr, false));
+            VclPtr<svx::ClassificationDialog> pDialog(VclPtr<svx::ClassificationDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), false));
 
             SwWrtShell* pShell = GetWrtShell();
             std::vector<svx::ClassificationResult> aInput = pShell->CollectAdvancedClassification();
             pDialog->setupValues(aInput);
 
-            if (RET_OK == pDialog->Execute())
-                pShell->ApplyAdvancedClassification(pDialog->getResult());
-
-            pDialog.disposeAndClear();
+            pDialog->StartExecuteAsync([pDialog, pShell](sal_Int32 nResult){
+                if (RET_OK == nResult)
+                    pShell->ApplyAdvancedClassification(pDialog->getResult());
+            });
         }
         break;
         case SID_PARAGRAPH_SIGN_CLASSIFY_DLG:
         {
             SwWrtShell* pShell = GetWrtShell();
-            ScopedVclPtr<svx::ClassificationDialog> pDialog(VclPtr<svx::ClassificationDialog>::Create(nullptr, true, [pShell]()
+            VclPtr<svx::ClassificationDialog> pDialog(VclPtr<svx::ClassificationDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), true, [pShell]()
             {
                 pShell->SignParagraph();
             }));
@@ -1195,10 +1196,10 @@ void SwDocShell::Execute(SfxRequest& rReq)
             std::vector<svx::ClassificationResult> aInput = pShell->CollectParagraphClassification();
             pDialog->setupValues(aInput);
 
-            if (RET_OK == pDialog->Execute())
-                pShell->ApplyParagraphClassification(pDialog->getResult());
-
-            pDialog.disposeAndClear();
+            pDialog->StartExecuteAsync([pDialog, pShell](sal_Int32 nResult){
+                if (RET_OK == nResult)
+                    pShell->ApplyParagraphClassification(pDialog->getResult());
+            });
         }
         break;
         case SID_WATERMARK:
@@ -1218,7 +1219,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     if ( pArgs->GetItemState( SID_WATERMARK_TRANSPARENCY, false, &pItem ) == SfxItemState::SET )
                         aItem.SetTransparency( static_cast<const SfxInt16Item*>( pItem )->GetValue() );
                     if ( pArgs->GetItemState( SID_WATERMARK_COLOR, false, &pItem ) == SfxItemState::SET )
-                        aItem.SetColor( static_cast<const SfxUInt32Item*>( pItem )->GetValue() );
+                        aItem.SetColor( Color(static_cast<const SfxUInt32Item*>( pItem )->GetValue()) );
 
                     pSh->SetWatermark( aItem );
                 }
@@ -1226,9 +1227,8 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 {
                     SfxViewShell* pViewShell = GetView()? GetView(): SfxViewShell::Current();
                     SfxBindings& rBindings( pViewShell->GetViewFrame()->GetBindings() );
-                    ScopedVclPtr<SwWatermarkDialog> pDlg( VclPtr<SwWatermarkDialog>::Create( nullptr, rBindings ) );
-                    pDlg->Execute();
-                    pDlg.disposeAndClear();
+                    VclPtr<SwWatermarkDialog> pDlg(VclPtr<SwWatermarkDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), rBindings));
+                    pDlg->StartExecuteAsync([](sal_Int32 /*nResult*/){});
                 }
             }
         }

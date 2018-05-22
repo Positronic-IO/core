@@ -79,7 +79,7 @@ inline bool isValidBitCount( sal_uInt16 nBitCount )
     return (nBitCount == 1) || (nBitCount == 4) || (nBitCount == 8) || (nBitCount == 16) || (nBitCount == 24) || (nBitCount == 32);
 }
 
-sal_uInt16 lclBytesPerRow(sal_uInt16 nBits, int nWidth)
+sal_uInt32 lclBytesPerRow(sal_uInt16 nBits, int nWidth)
 {
     switch(nBits)
     {
@@ -171,6 +171,15 @@ bool OpenGLSalBitmap::Create( const Size& rSize, sal_uInt16 nBits, const BitmapP
     mnBits = nBits;
     mnWidth = rSize.Width();
     mnHeight = rSize.Height();
+
+    // Limit size to what GL allows, so later glTexImage2D() won't fail.
+    GLint nMaxTextureSize;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &nMaxTextureSize);
+    if (mnWidth > nMaxTextureSize)
+        mnWidth = nMaxTextureSize;
+    if (mnHeight > nMaxTextureSize)
+        mnHeight = nMaxTextureSize;
+
     return false;
 }
 
@@ -261,7 +270,7 @@ bool OpenGLSalBitmap::AllocateUserData()
     {
         try
         {
-            size_t nToAllocate = static_cast<sal_uInt32>(mnBytesPerRow) * mnHeight;
+            size_t nToAllocate = mnBytesPerRow * mnHeight;
 #if OSL_DEBUG_LEVEL > 0
             nToAllocate += sizeof(CANARY);
 #endif
@@ -585,7 +594,7 @@ bool OpenGLSalBitmap::ReadTexture()
 #if OSL_DEBUG_LEVEL > 0
         // If we read over the end of pData we have a real hidden memory
         // corruption problem !
-        size_t nCanary = static_cast<sal_uInt32>(mnBytesPerRow) * mnHeight;
+        size_t nCanary = mnBytesPerRow * mnHeight;
         assert(!memcmp(pData + nCanary, CANARY, sizeof (CANARY)));
 #endif
         return true;
@@ -597,7 +606,7 @@ bool OpenGLSalBitmap::ReadTexture()
         sal_uInt8* pBuffer = aBuffer.data();
         determineTextureFormat(24, nFormat, nType);
         maTexture.Read(nFormat, nType, pBuffer);
-        sal_uInt16 nSourceBytesPerRow = lclBytesPerRow(24, mnWidth);
+        sal_uInt32 nSourceBytesPerRow = lclBytesPerRow(24, mnWidth);
 
         std::unique_ptr<ScanlineWriter> pWriter;
         switch(mnBits)
@@ -762,7 +771,7 @@ BitmapBuffer* OpenGLSalBitmap::AcquireBuffer( BitmapAccessMode nMode )
 
         mpUserBuffer.reset();
         AllocateUserData();
-        memcpy(mpUserBuffer.get(), aBuffer.get(), static_cast<sal_uInt32>(mnBytesPerRow) * mnHeight);
+        memcpy(mpUserBuffer.get(), aBuffer.get(), mnBytesPerRow * mnHeight);
     }
 
     BitmapBuffer* pBuffer = new BitmapBuffer;

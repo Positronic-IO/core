@@ -19,14 +19,10 @@
 
 #include <viewcontainer.hxx>
 #include <stringconstants.hxx>
-#include <core_resource.hxx>
-#include <strings.hrc>
 #include <View.hxx>
 
-#include <comphelper/enumhelper.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
-#include <comphelper/extract.hxx>
 #include <connectivity/dbexception.hxx>
 #include <rtl/ustrbuf.hxx>
 

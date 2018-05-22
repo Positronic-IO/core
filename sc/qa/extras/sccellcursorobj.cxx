@@ -9,8 +9,10 @@
 
 #include <test/calc_unoapi_test.hxx>
 #include <test/sheet/sheetcellrange.hxx>
+#include <test/sheet/xarrayformularange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
+#include <test/sheet/xcellrangeformula.hxx>
 #include <test/sheet/xcellseries.hxx>
 #include <test/sheet/xmultipleoperation.hxx>
 #include <test/sheet/xsheetcellrange.hxx>
@@ -18,8 +20,8 @@
 #include <test/sheet/xsheetfilterableex.hxx>
 #include <test/sheet/xsheetoperation.hxx>
 #include <test/sheet/xsubtotalcalculatable.hxx>
-#include <test/sheet/xusedareacursor.hxx>
 #include <test/sheet/xuniquecellformatrangessupplier.hxx>
+#include <test/sheet/xusedareacursor.hxx>
 
 #include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
 #include <com/sun/star/sheet/XSpreadsheet.hpp>
@@ -31,8 +33,10 @@ using namespace css::uno;
 namespace sc_apitest {
 
 class ScCellCursorObj : public CalcUnoApiTest, public apitest::SheetCellRange,
+                                               public apitest::XArrayFormulaRange,
                                                public apitest::XCellFormatRangesSupplier,
                                                public apitest::XCellRangeAddressable,
+                                               public apitest::XCellRangeFormula,
                                                public apitest::XCellSeries,
                                                public apitest::XMultipleOperation,
                                                public apitest::XSheetCellRange,
@@ -40,8 +44,8 @@ class ScCellCursorObj : public CalcUnoApiTest, public apitest::SheetCellRange,
                                                public apitest::XSheetFilterableEx,
                                                public apitest::XSheetOperation,
                                                public apitest::XSubTotalCalculatable,
-                                               public apitest::XUsedAreaCursor,
-                                               public apitest::XUniqueCellFormatRangesSupplier
+                                               public apitest::XUniqueCellFormatRangesSupplier,
+                                               public apitest::XUsedAreaCursor
 {
 public:
     ScCellCursorObj();
@@ -56,12 +60,8 @@ public:
     // SheetCellRange
     CPPUNIT_TEST(testSheetCellRangeProperties);
 
-    // XUsedAreaCursor
-    CPPUNIT_TEST(testGotoStartOfUsedArea);
-    CPPUNIT_TEST(testGotoEndOfUsedArea);
-
-    // XMultipleOperation
-    CPPUNIT_TEST(testSetTableOperation);
+    // XArrayFormulaRange
+    CPPUNIT_TEST(testGetSetArrayFormula);
 
     // XCellFormatRangesSupplier
     CPPUNIT_TEST(testGetCellFormatRanges);
@@ -69,9 +69,15 @@ public:
     // XCellRangeAddressable
     CPPUNIT_TEST(testGetRangeAddress);
 
+    // XCellRangeFormula
+    CPPUNIT_TEST(testGetSetFormulaArray);
+
     // XCellSeries
     CPPUNIT_TEST(testFillAuto);
     CPPUNIT_TEST(testFillSeries);
+
+    // XMultipleOperation
+    CPPUNIT_TEST(testSetTableOperation);
 
     // XSheetCellRange
     CPPUNIT_TEST(testGetSpreadsheet);
@@ -90,6 +96,10 @@ public:
     // XSubTotalCalculatable
     CPPUNIT_TEST(testCreateSubTotalDescriptor);
     CPPUNIT_TEST(testApplyRemoveSubTotals);
+
+    // XUsedAreaCursor
+    CPPUNIT_TEST(testGotoStartOfUsedArea);
+    CPPUNIT_TEST(testGotoEndOfUsedArea);
 
     // XUniqueCellFormatRangesSupplier
     CPPUNIT_TEST(testGetUniqueCellFormatRanges);

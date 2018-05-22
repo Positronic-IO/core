@@ -58,7 +58,6 @@
 #include <unotools/cmdoptions.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/mediadescriptor.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <svtools/miscopt.hxx>
 #include <svtools/imgdef.hxx>
@@ -355,20 +354,17 @@ void ToolBarManager::UpdateControllers()
     if ( !m_bUpdateControllers )
     {
         m_bUpdateControllers = true;
-        ToolBarControllerMap::iterator pIter = m_aControllerMap.begin();
-
-        while ( pIter != m_aControllerMap.end() )
+        for (auto const& controller : m_aControllerMap)
         {
             try
             {
-                Reference< XUpdatable > xUpdatable( pIter->second, UNO_QUERY );
+                Reference< XUpdatable > xUpdatable( controller.second, UNO_QUERY );
                 if ( xUpdatable.is() )
                     xUpdatable->update();
             }
             catch (const Exception&)
             {
             }
-            ++pIter;
         }
     }
     m_bUpdateControllers = false;
@@ -863,7 +859,7 @@ void ToolBarManager::CreateControllers()
             }
         }
 
-        //for update Controller via support visiable state
+        //for update Controller via support visible state
         Reference< XPropertySet > xPropSet( xController, UNO_QUERY );
         if ( xPropSet.is() )
         {
@@ -1556,7 +1552,8 @@ IMPL_LINK( ToolBarManager, MenuButton, ToolBox*, pToolBar, void )
 
     assert( !m_aOverflowManager.is() );
 
-    VclPtrInstance<ToolBox> pOverflowToolBar( pToolBar, WB_LINESPACING | WB_BORDER | WB_SCROLL );
+    VclPtrInstance<ToolBox> pOverflowToolBar( pToolBar, WB_BORDER | WB_SCROLL );
+    pOverflowToolBar->SetLineSpacing(true);
     pOverflowToolBar->SetOutStyle( pToolBar->GetOutStyle() );
     m_aOverflowManager.set( new ToolBarManager( m_xContext, m_xFrame, OUString(), pOverflowToolBar ) );
     m_aOverflowManager->FillOverflowToolbar( pToolBar );

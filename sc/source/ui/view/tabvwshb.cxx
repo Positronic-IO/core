@@ -51,7 +51,6 @@
 #include <tools/diagnose_ex.h>
 
 #include <tabvwsh.hxx>
-#include <globstr.hrc>
 #include <scmod.hxx>
 #include <document.hxx>
 #include <sc.hrc>
@@ -350,7 +349,7 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
             {
                 sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
                         FileDialogFlags::NONE, "com.sun.star.chart2.ChartDocument",
-                        SfxFilterFlags::NONE, SfxFilterFlags::NONE, pWin);
+                        SfxFilterFlags::NONE, SfxFilterFlags::NONE, pWin ? pWin->GetFrameWeld() : nullptr);
                 if(aDlg.Execute() == ERRCODE_NONE )
                 {
                     INetURLObject aURLObj( aDlg.GetPath() );
@@ -372,8 +371,7 @@ void ScTabViewShell::ExecDrawIns(SfxRequest& rReq)
 
                 if ( pClient && pClient->IsObjectInPlaceActive() )
                 {
-                    const SfxRectangleItem& rRect =
-                        static_cast<const SfxRectangleItem&>(rReq.GetArgs()->Get(SID_OBJECTRESIZE));
+                    const SfxRectangleItem& rRect = rReq.GetArgs()->Get(SID_OBJECTRESIZE);
                     tools::Rectangle aRect( pWin->PixelToLogic( rRect.GetValue() ) );
 
                     if ( pView->AreObjectsMarked() )

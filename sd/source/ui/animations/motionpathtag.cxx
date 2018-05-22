@@ -106,7 +106,7 @@ void PathDragMove::createSdrDragEntries()
 
     if(maPathPolyPolygon.count())
     {
-        addSdrDragEntry(new SdrDragEntryPolyPolygon(maPathPolyPolygon));
+        addSdrDragEntry(std::unique_ptr<SdrDragEntry>(new SdrDragEntryPolyPolygon(maPathPolyPolygon)));
     }
 }
 
@@ -167,7 +167,7 @@ void PathDragResize::createSdrDragEntries()
 
     if(maPathPolyPolygon.count())
     {
-        addSdrDragEntry(new SdrDragEntryPolyPolygon(maPathPolyPolygon));
+        addSdrDragEntry(std::unique_ptr<SdrDragEntry>(new SdrDragEntryPolyPolygon(maPathPolyPolygon)));
     }
 }
 
@@ -221,7 +221,7 @@ void PathDragObjOwn::createSdrDragEntries()
 
     if(maPathPolyPolygon.count())
     {
-        addSdrDragEntry(new SdrDragEntryPolyPolygon(maPathPolyPolygon));
+        addSdrDragEntry(std::unique_ptr<SdrDragEntry>(new SdrDragEntryPolyPolygon(maPathPolyPolygon)));
     }
 }
 
@@ -316,7 +316,7 @@ MotionPathTag::MotionPathTag( CustomAnimationPane& rPane, ::sd::View& rView, con
 , msLastPath( pEffect->getPath() )
 , mbInUpdatePath( false )
 {
-    mpPathObj = mpEffect->createSdrPathObjFromPath();
+    mpPathObj = mpEffect->createSdrPathObjFromPath(rView.getSdrModelFromSdrView());
     mxPolyPoly = mpPathObj->GetPathPoly();
     if (mxOrigin.is())
         maOriginPos = mxOrigin->getPosition();
@@ -325,14 +325,14 @@ MotionPathTag::MotionPathTag( CustomAnimationPane& rPane, ::sd::View& rView, con
     if( pPage )
     {
         mpPathObj->SetPage( pPage );
-        mpPathObj->SetObjList( pPage );
+        mpPathObj->setParentOfSdrObject( pPage );
     }
 
     XDash aDash( css::drawing::DashStyle_RECT, 1, 80, 1, 80, 80);
     OUString aEmpty( "?" );
     mpPathObj->SetMergedItem( XLineDashItem( aEmpty, aDash ) );
     mpPathObj->SetMergedItem( XLineStyleItem( drawing::LineStyle_DASH ) );
-    mpPathObj->SetMergedItem( XLineColorItem(aEmpty, ::COL_GRAY) );
+    mpPathObj->SetMergedItem( XLineColorItem(aEmpty, COL_GRAY) );
     mpPathObj->SetMergedItem( XFillStyleItem( drawing::FillStyle_NONE ) );
 
     ::basegfx::B2DPolygon aStartArrow;
@@ -986,10 +986,12 @@ void MotionPathTag::disposing()
 
     if( mpPathObj )
     {
-        SdrPathObj* pPathObj = mpPathObj;
+        SdrObject* pTemp(mpPathObj);
         mpPathObj = nullptr;
         mrView.updateHandles();
-        delete pPathObj;
+
+        // always use SdrObject::Free(...) for SdrObjects (!)
+        SdrObject::Free(pTemp);
     }
 
     if( mpMark )

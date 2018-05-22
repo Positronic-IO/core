@@ -27,7 +27,7 @@
 
 // FmFormObj
 
-class SVX_DLLPUBLIC FmFormObj: public SdrUnoObj
+class SVX_DLLPUBLIC FmFormObj : public SdrUnoObj
 {
     FmFormObj( const FmFormObj& ) = delete;
 
@@ -46,10 +46,15 @@ class SVX_DLLPUBLIC FmFormObj: public SdrUnoObj
                             // the last ref device we know, as set at the model
                             // only to be used for comparison with the current ref device!
 
-public:
-    FmFormObj(const OUString& rModelName);
-    FmFormObj();
+protected:
+    // protected destructor
+    SAL_DLLPRIVATE virtual ~FmFormObj() override;
 
+public:
+    FmFormObj(
+        SdrModel& rSdrModel,
+        const OUString& rModelName);
+    FmFormObj(SdrModel& rSdrModel);
 
     SAL_DLLPRIVATE const css::uno::Reference< css::container::XIndexContainer>&
         GetOriginalParent() const { return m_xParent; }
@@ -65,18 +70,14 @@ public:
     SAL_DLLPRIVATE void ClearObjEnv();
 
 public:
-    SAL_DLLPRIVATE virtual ~FmFormObj() override;
     SAL_DLLPRIVATE virtual void SetPage(SdrPage* pNewPage) override;
 
     SAL_DLLPRIVATE virtual SdrInventor GetObjInventor() const override;
     SAL_DLLPRIVATE virtual sal_uInt16 GetObjIdentifier() const override;
     SAL_DLLPRIVATE virtual void NbcReformatText() override;
 
-    SAL_DLLPRIVATE virtual FmFormObj* Clone() const override;
-    // #116235# virtual SdrObject*  Clone(SdrPage* pPage, SdrModel* pModel) const;
+    SAL_DLLPRIVATE virtual FmFormObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SAL_DLLPRIVATE FmFormObj& operator= (const FmFormObj& rObj);
-
-    SAL_DLLPRIVATE virtual void SetModel(SdrModel* pNewModel) override;
 
     SAL_DLLPRIVATE void clonedFrom(const FmFormObj* _pSource);
 

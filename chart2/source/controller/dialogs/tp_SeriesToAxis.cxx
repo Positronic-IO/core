@@ -19,7 +19,6 @@
 
 #include "tp_SeriesToAxis.hxx"
 
-#include <ResId.hxx>
 #include <chartview/ChartSfxItemIds.hxx>
 
 #include <editeng/sizeitem.hxx>
@@ -97,10 +96,10 @@ IMPL_LINK_NOARG(SchOptionTabPage, EnableHdl, Button*, void)
         m_pCBAxisSideBySide->Enable( m_pRbtAxis1->IsChecked());
 }
 
-VclPtr<SfxTabPage> SchOptionTabPage::Create(vcl::Window* pWindow,
+VclPtr<SfxTabPage> SchOptionTabPage::Create(TabPageParent pWindow,
                                             const SfxItemSet* rOutAttrs)
 {
-    return VclPtr<SchOptionTabPage>::Create(pWindow, *rOutAttrs);
+    return VclPtr<SchOptionTabPage>::Create(pWindow.pParent, *rOutAttrs);
 }
 
 bool SchOptionTabPage::FillItemSet(SfxItemSet* rOutAttrs)

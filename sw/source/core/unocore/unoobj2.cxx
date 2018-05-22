@@ -21,7 +21,20 @@
 
 #include <utility>
 
+#include <comphelper/servicehelper.hxx>
+#include <cppuhelper/supportsservice.hxx>
+#include <editeng/brushitem.hxx>
+#include <editeng/flstitem.hxx>
+#include <editeng/unolingu.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <svl/listener.hxx>
+#include <sfx2/docfile.hxx>
+#include <sfx2/docfilt.hxx>
+#include <sfx2/fcontnr.hxx>
+#include <sfx2/linkmgr.hxx>
+#include <svtools/ctrltool.hxx>
+#include <vcl/svapp.hxx>
+
 #include <swtypes.hxx>
 #include <hintids.hxx>
 #include <cmdid.h>
@@ -41,7 +54,6 @@
 #include <rootfrm.hxx>
 #include <flyfrm.hxx>
 #include <ftnidx.hxx>
-#include <sfx2/linkmgr.hxx>
 #include <docary.hxx>
 #include <paratr.hxx>
 #include <pam.hxx>
@@ -55,16 +67,12 @@
 #include <fmtfld.hxx>
 #include <fmtpdsc.hxx>
 #include <pagedesc.hxx>
-#include <strings.hrc>
 #include <poolfmt.hxx>
 #include <edimp.hxx>
 #include <fchrfmt.hxx>
 #include <cntfrm.hxx>
 #include <pagefrm.hxx>
 #include <doctxm.hxx>
-#include <sfx2/docfilt.hxx>
-#include <sfx2/docfile.hxx>
-#include <sfx2/fcontnr.hxx>
 #include <fmtrfmrk.hxx>
 #include <txtrfmrk.hxx>
 #include <unoparaframeenum.hxx>
@@ -82,9 +90,6 @@
 #include <unocoll.hxx>
 #include <unostyle.hxx>
 #include <fmtanchr.hxx>
-#include <editeng/flstitem.hxx>
-#include <editeng/unolingu.hxx>
-#include <svtools/ctrltool.hxx>
 #include <flypos.hxx>
 #include <txtftn.hxx>
 #include <fmtftn.hxx>
@@ -98,9 +103,7 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <unoframe.hxx>
 #include <fmthdft.hxx>
-#include <vcl/svapp.hxx>
 #include <fmtflcnt.hxx>
-#include <editeng/brushitem.hxx>
 #include <fmtclds.hxx>
 #include <dcontact.hxx>
 #include <dflyobj.hxx>
@@ -110,8 +113,6 @@
 #include <algorithm>
 #include <iterator>
 #include <calbck.hxx>
-#include <comphelper/servicehelper.hxx>
-#include <cppuhelper/supportsservice.hxx>
 
 using namespace ::com::sun::star;
 
@@ -680,27 +681,27 @@ uno::Any SAL_CALL SwXParagraphEnumerationImpl::nextElement()
 }
 
 class SwXTextRange::Impl
-    : public SwClient
+    : public SvtListener
 {
 public:
-    const SfxItemPropertySet &  m_rPropSet;
-    const enum RangePosition    m_eRangePosition;
-    SwDoc &                     m_rDoc;
+    const SfxItemPropertySet& m_rPropSet;
+    const enum RangePosition m_eRangePosition;
+    SwDoc& m_rDoc;
     uno::Reference<text::XText> m_xParentText;
-    SwDepend            m_ObjectDepend; // register at format of table or frame
-    ::sw::mark::IMark * m_pMark;
+    const SwFrameFormat* m_pTableFormat;
+    const ::sw::mark::IMark* m_pMark;
 
-    Impl(   SwDoc & rDoc, const enum RangePosition eRange,
-            SwFrameFormat *const pTableFormat,
-            const uno::Reference< text::XText > & xParent = nullptr)
-        : SwClient()
-        , m_rPropSet(*aSwMapProvider.GetPropertySet(PROPERTY_MAP_TEXT_CURSOR))
+    Impl(SwDoc& rDoc, const enum RangePosition eRange,
+            SwFrameFormat* const pTableFormat,
+            const uno::Reference<text::XText>& xParent = nullptr)
+        : m_rPropSet(*aSwMapProvider.GetPropertySet(PROPERTY_MAP_TEXT_CURSOR))
         , m_eRangePosition(eRange)
         , m_rDoc(rDoc)
         , m_xParentText(xParent)
-        , m_ObjectDepend(this, pTableFormat)
+        , m_pTableFormat(pTableFormat)
         , m_pMark(nullptr)
     {
+        m_pTableFormat && StartListening(pTableFormat->GetNotifier());
     }
 
     virtual ~Impl() override
@@ -716,36 +717,29 @@ public:
             m_rDoc.getIDocumentMarkAccess()->deleteMark(m_pMark);
             m_pMark = nullptr;
         }
+        m_pTableFormat = nullptr;
+        EndListeningAll();
     }
 
-    const ::sw::mark::IMark * GetBookmark() const { return m_pMark; }
+    const ::sw::mark::IMark* GetBookmark() const { return m_pMark; }
+    void SetMark(::sw::mark::IMark& rMark)
+    {
+        EndListeningAll();
+        m_pTableFormat = nullptr;
+        m_pMark = &rMark;
+        StartListening(rMark.GetNotifier());
+    }
 
 protected:
-    // SwClient
-    virtual void    Modify(const SfxPoolItem *pOld, const SfxPoolItem *pNew) override;
+    virtual void Notify(const SfxHint&) override;
 };
 
-void SwXTextRange::Impl::Modify(const SfxPoolItem *pOld, const SfxPoolItem *pNew)
+void SwXTextRange::Impl::Notify(const SfxHint& rHint)
 {
-    const bool bAlreadyRegistered = nullptr != GetRegisteredIn();
-    ClientModify(this, pOld, pNew);
-    if (m_ObjectDepend.GetRegisteredIn())
+    if(rHint.GetId() == SfxHintId::Dying)
     {
-        ClientModify(&m_ObjectDepend, pOld, pNew);
-        // if the depend was removed then the range must be removed too
-        if (!m_ObjectDepend.GetRegisteredIn())
-        {
-            EndListeningAll();
-        }
-        // or if the range has been removed but the depend is still
-        // connected then the depend must be removed
-        else if (bAlreadyRegistered && !GetRegisteredIn())
-        {
-            m_ObjectDepend.EndListeningAll();
-        }
-    }
-    if (!GetRegisteredIn())
-    {
+        EndListeningAll();
+        m_pTableFormat = nullptr;
         m_pMark = nullptr;
     }
 }
@@ -793,9 +787,8 @@ void SwXTextRange::SetPositions(const SwPaM& rPam)
 {
     m_pImpl->Invalidate();
     IDocumentMarkAccess* const pMA = m_pImpl->m_rDoc.getIDocumentMarkAccess();
-    m_pImpl->m_pMark = pMA->makeMark(rPam, OUString(),
-        IDocumentMarkAccess::MarkType::UNO_BOOKMARK, sw::mark::InsertMode::New);
-    m_pImpl->m_pMark->Add(m_pImpl.get());
+    auto pMark = pMA->makeMark(rPam, OUString(), IDocumentMarkAccess::MarkType::UNO_BOOKMARK, sw::mark::InsertMode::New);
+    m_pImpl->SetMark(*pMark);
 }
 
 void SwXTextRange::DeleteAndInsert(
@@ -887,11 +880,9 @@ SwXTextRange::getText()
     if (!m_pImpl->m_xParentText.is())
     {
         if (m_pImpl->m_eRangePosition == RANGE_IS_TABLE &&
-            m_pImpl->m_ObjectDepend.GetRegisteredIn())
+            m_pImpl->m_pTableFormat)
         {
-            SwFrameFormat const*const pTableFormat = static_cast<SwFrameFormat const*>(
-                    m_pImpl->m_ObjectDepend.GetRegisteredIn());
-            SwTable const*const pTable = SwTable::FindTable( pTableFormat );
+            SwTable const*const pTable = SwTable::FindTable( m_pImpl->m_pTableFormat );
             SwTableNode const*const pTableNode = pTable->GetTableNode();
             const SwPosition aPosition( *pTableNode );
             m_pImpl->m_xParentText =
@@ -1589,7 +1580,7 @@ struct SwXParaFrameEnumerationImpl final : public SwXParaFrameEnumeration
         }
         else
         {
-            // removing orphaned SwDepends
+            // removing orphaned Clients
             const auto iter = std::remove_if(m_vFrames.begin(), m_vFrames.end(),
                     [] (std::shared_ptr<sw::FrameClient>& rEntry) -> bool { return !rEntry->GetRegisteredIn(); });
             m_vFrames.erase(iter, m_vFrames.end());

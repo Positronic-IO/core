@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 #include <sal/macros.h>
+#include <sal/alloca.h>
 #include <formula/FormulaCompiler.hxx>
 #include <formula/errorcodes.hxx>
 #include <formula/token.hxx>
@@ -577,11 +578,11 @@ uno::Sequence< sheet::FormulaOpCodeMapEntry > FormulaCompiler::OpCodeMap::create
             // If AddIn functions are present in this mapping, use them, and only those.
             if (hasExternals())
             {
-                for (ExternalHashMap::const_iterator it( maExternalHashMap.begin());it != maExternalHashMap.end(); ++it)
+                for (auto const& elem : maExternalHashMap)
                 {
                     FormulaOpCodeMapEntry aEntry;
-                    aEntry.Name = (*it).first;
-                    aEntry.Token.Data <<= (*it).second;
+                    aEntry.Name = elem.first;
+                    aEntry.Token.Data <<= elem.second;
                     aEntry.Token.OpCode = ocExternal;
                     aVec.push_back( aEntry);
                 }
@@ -711,6 +712,7 @@ FormulaCompiler::FormulaCompiler( FormulaTokenArray& rArr )
         bAutoCorrect( false ),
         bCorrected( false ),
         glSubTotal( false ),
+        needsRPNTokenCheck( false ),
         mbJumpCommandReorder(true),
         mbStopOnError(true)
 {
@@ -733,6 +735,7 @@ FormulaCompiler::FormulaCompiler()
         bAutoCorrect( false ),
         bCorrected( false ),
         glSubTotal( false ),
+        needsRPNTokenCheck( false ),
         mbJumpCommandReorder(true),
         mbStopOnError(true)
 {
@@ -1327,7 +1330,14 @@ bool FormulaCompiler::GetToken()
                 glSubTotal = true;
                 break;
             case ocName:
-                return HandleRange();
+                if( HandleRange())
+                {
+                    // Expanding ocName might have introduced tokens such as ocStyle that prevent formula threading,
+                    // but those wouldn't be present in the raw tokens array, so ensure RPN tokens will be checked too.
+                    needsRPNTokenCheck = true;
+                    return true;
+                }
+                return false;
             case ocColRowName:
                 return HandleColRowName();
             case ocDBArea:
@@ -1596,7 +1606,21 @@ void FormulaCompiler::Factor()
             sal_uInt32 nSepCount = 0;
             if( !bNoParam )
             {
+                bool bDoIICompute = IsIIOpCode(eMyLastOp);
+                // Array of FormulaToken double pointers to collect the parameters of II opcodes.
+                FormulaToken*** pArgArray = nullptr;
+                if (bDoIICompute)
+                {
+                    pArgArray = static_cast<FormulaToken***>(alloca(sizeof(FormulaToken**)*FORMULA_MAXPARAMSII));
+                    if (!pArgArray)
+                        bDoIICompute = false;
+                }
+
                 nSepCount++;
+
+                if (bDoIICompute)
+                    pArgArray[nSepCount-1] = pCode - 1; // Add first argument
+
                 while ((eOp == ocSep) && (pArr->GetCodeError() == FormulaError::NONE || !mbStopOnError))
                 {
                     NextToken();
@@ -1605,7 +1629,12 @@ void FormulaCompiler::Factor()
                     if (nSepCount > FORMULA_MAXPARAMS)
                         SetError( FormulaError::CodeOverflow);
                     eOp = Expression();
+                    if (bDoIICompute && nSepCount <= FORMULA_MAXPARAMSII)
+                        pArgArray[nSepCount - 1] = pCode - 1; // Add rest of the arguments
                 }
+                if (bDoIICompute)
+                    HandleIIOpCode(eMyLastOp, pArgArray,
+                                   std::min(nSepCount, static_cast<sal_uInt32>(FORMULA_MAXPARAMSII)));
             }
             if (bBadName)
                 ;   // nothing, keep current token for return
@@ -1960,6 +1989,7 @@ bool FormulaCompiler::CompileTokenArray()
 {
     glSubTotal = false;
     bCorrected = false;
+    needsRPNTokenCheck = false;
     if (pArr->GetCodeError() == FormulaError::NONE || !mbStopOnError)
     {
         if ( bAutoCorrect )
@@ -1993,7 +2023,11 @@ bool FormulaCompiler::CompileTokenArray()
         while( pStack )
             PopTokenArray();
         if( pc )
+        {
             pArr->CreateNewRPNArrayFromData( pData, pc );
+            if( needsRPNTokenCheck )
+                pArr->CheckAllRPNTokens();
+        }
 
         // once an error, always an error
         if( pArr->GetCodeError() == FormulaError::NONE && nErrorBeforePop != FormulaError::NONE )
@@ -2579,9 +2613,11 @@ void FormulaCompiler::ForceArrayOperator( FormulaTokenRef const & rCurr )
     else if (eType == formula::ParamClass::ReferenceOrForceArray)
     {
         // Inherit further only if the return class of the nested function is
-        // not Reference.
+        // not Reference. Else flag as suppressed.
         if (GetForceArrayParameter( rCurr.get(), SAL_MAX_UINT16) != ParamClass::Reference)
             rCurr->SetInForceArray( eType);
+        else
+            rCurr->SetInForceArray( formula::ParamClass::SuppressedReferenceOrForceArray);
         return;
     }
 
@@ -2595,6 +2631,8 @@ void FormulaCompiler::ForceArrayOperator( FormulaTokenRef const & rCurr )
         {
             if (GetForceArrayParameter( rCurr.get(), SAL_MAX_UINT16) != ParamClass::Reference)
                 rCurr->SetInForceArray( eType);
+            else
+                rCurr->SetInForceArray( formula::ParamClass::SuppressedReferenceOrForceArray);
         }
     }
 }

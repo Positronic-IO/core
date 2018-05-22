@@ -236,6 +236,11 @@ const OUString& ResourceManager::GetLastActiveDeck( const Context& rContext )
         return maLastActiveDecks[rContext.msApplication];
 }
 
+void ResourceManager::SetLastActiveDeck( const Context& rContext, const OUString &rsDeckId )
+{
+    maLastActiveDecks[rContext.msApplication] = rsDeckId;
+}
+
 void ResourceManager::ReadDeckList()
 {
     const utl::OConfigurationTreeRoot aDeckRootNode(
@@ -717,7 +722,7 @@ utl::OConfigurationTreeRoot ResourceManager::GetLegacyAddonRootNode (const OUStr
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.sidebar");
     }
 
     return utl::OConfigurationTreeRoot();

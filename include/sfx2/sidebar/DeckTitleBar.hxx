@@ -31,8 +31,10 @@ public:
                  const std::function<void()>& rCloserAction);
 
     void SetCloserVisible(const bool bIsCloserVisible);
+    tools::Rectangle GetDragArea() const;
 
     virtual void DataChanged(const DataChangedEvent& rEvent) override;
+    virtual void MouseMove(const MouseEvent& rMouseEvent) override;
 
 protected:
     virtual tools::Rectangle GetTitleArea(const tools::Rectangle& rTitleBarBox) override;

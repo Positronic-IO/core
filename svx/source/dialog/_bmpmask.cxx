@@ -530,28 +530,28 @@ void SvxBmpMask::SetColor( const Color& rColor )
 
 void SvxBmpMask::PipetteClicked()
 {
-    if( m_pQSet1->GetSelectItemId() == 1 )
+    if( m_pQSet1->GetSelectedItemId() == 1 )
     {
         m_pCbx1->Check();
         pData->CbxHdl(m_pCbx1);
         m_pQSet1->SetItemColor( 1, aPipetteColor );
         m_pQSet1->SetFormat();
     }
-    else if( m_pQSet2->GetSelectItemId() == 1 )
+    else if( m_pQSet2->GetSelectedItemId() == 1 )
     {
         m_pCbx2->Check();
         pData->CbxHdl(m_pCbx2);
         m_pQSet2->SetItemColor( 1, aPipetteColor );
         m_pQSet2->SetFormat();
     }
-    else if( m_pQSet3->GetSelectItemId() == 1 )
+    else if( m_pQSet3->GetSelectedItemId() == 1 )
     {
         m_pCbx3->Check();
         pData->CbxHdl(m_pCbx3);
         m_pQSet3->SetItemColor( 1, aPipetteColor );
         m_pQSet3->SetFormat();
     }
-    else if( m_pQSet4->GetSelectItemId() == 1 )
+    else if( m_pQSet4->GetSelectedItemId() == 1 )
     {
         m_pCbx4->Check();
         pData->CbxHdl(m_pCbx4);
@@ -728,8 +728,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                     if( bReplace )
                         pAct = new MetaPixelAction( pAct->GetPoint(), aCol );
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -744,8 +742,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                     if( bReplace )
                         pAct = new MetaLineColorAction( aCol, !pTrans[ i ] );
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -760,8 +756,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                     if( bReplace )
                         pAct = new MetaFillColorAction( aCol, !pTrans[ i ] );
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -776,8 +770,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                     if( bReplace )
                         pAct = new MetaTextColorAction( aCol );
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -792,8 +784,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                     if( bReplace )
                         pAct = new MetaTextFillColorAction( aCol, !pTrans[ i ] );
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -812,8 +802,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
                         aFont.SetColor( aCol );
                         pAct = new MetaFontAction( aFont );
                     }
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -832,8 +820,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
                         aWall.SetColor( aCol );
                         pAct = new MetaWallpaperAction( pAct->GetRect(), aWall );
                     }
-                    else
-                        pAct->Duplicate();
 
                     aMtf.AddAction( pAct );
                 }
@@ -903,7 +889,6 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
 
                 default:
                 {
-                    pAction->Duplicate();
                     aMtf.AddAction( pAction );
                 }
                 break;
@@ -923,7 +908,7 @@ BitmapEx SvxBmpMask::ImpReplaceTransparency( const BitmapEx& rBmpEx, const Color
     {
         Bitmap aBmp( rBmpEx.GetBitmap() );
         aBmp.Replace( rBmpEx.GetMask(), rColor );
-        return aBmp;
+        return BitmapEx(aBmp);
     }
     else
         return rBmpEx;
@@ -967,8 +952,6 @@ GDIMetaFile SvxBmpMask::ImpReplaceTransparency( const GDIMetaFile& rMtf, const C
     for ( size_t i = 0; i < nActionCount; i++ )
     {
         MetaAction* pAct = rMtf.GetAction( i );
-
-        pAct->Duplicate();
         aMtf.AddAction( pAct );
     }
 

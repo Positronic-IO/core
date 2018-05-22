@@ -29,12 +29,10 @@
 
 SbiImage::SbiImage()
 {
-    pStringOff = nullptr;
     pStrings   = nullptr;
     pCode      = nullptr;
     pLegacyPCode = nullptr;
     nFlags     = SbiImageFlags::NONE;
-    nStrings   = 0;
     nStringSize= 0;
     nCodeSize  = 0;
     nLegacyCodeSize  =
@@ -54,15 +52,13 @@ SbiImage::~SbiImage()
 
 void SbiImage::Clear()
 {
-    delete[] pStringOff;
-    delete[] pStrings;
-    delete[] pCode;
-    ReleaseLegacyBuffer();
-    pStringOff = nullptr;
+    mvStringOffsets.clear();
+    pStrings.reset();
+    pCode.reset();
+    pLegacyPCode.reset();
     pStrings   = nullptr;
     pCode      = nullptr;
     nFlags     = SbiImageFlags::NONE;
-    nStrings   = 0;
     nStringSize= 0;
     nLegacyCodeSize  = 0;
     nCodeSize  = 0;
@@ -164,18 +160,17 @@ bool SbiImage::Load( SvStream& r, sal_uInt32& nVersion )
             }
             case FileOffset::PCode:
                 if( bBadVer ) break;
-                pCode = new char[ nLen ];
+                pCode.reset(new char[ nLen ]);
                 nCodeSize = nLen;
-                r.ReadBytes(pCode, nCodeSize);
+                r.ReadBytes(pCode.get(), nCodeSize);
                 if ( bLegacy )
                 {
-                    ReleaseLegacyBuffer(); // release any previously held buffer
                     nLegacyCodeSize = static_cast<sal_uInt16>(nCodeSize);
-                    pLegacyPCode = pCode;
+                    pLegacyPCode = std::move(pCode);
 
-                    PCodeBuffConvertor< sal_uInt16, sal_uInt32 > aLegacyToNew( reinterpret_cast<sal_uInt8*>(pLegacyPCode), nLegacyCodeSize );
+                    PCodeBuffConvertor< sal_uInt16, sal_uInt32 > aLegacyToNew( reinterpret_cast<sal_uInt8*>(pLegacyPCode.get()), nLegacyCodeSize );
                     aLegacyToNew.convert();
-                    pCode = reinterpret_cast<char*>(aLegacyToNew.GetBuffer());
+                    pCode.reset(reinterpret_cast<char*>(aLegacyToNew.GetBuffer()));
                     nCodeSize = aLegacyToNew.GetSize();
                     // we don't release the legacy buffer
                     // right now, that's because the module
@@ -205,26 +200,24 @@ bool SbiImage::Load( SvStream& r, sal_uInt32& nVersion )
                     nCount = nMaxStrings;
                 }
                 MakeStrings( nCount );
-                short i;
-                for( i = 0; i < nStrings && SbiGood( r ); i++ )
+                for( size_t i = 0; i < mvStringOffsets.size() && SbiGood( r ); i++ )
                 {
                     r.ReadUInt32( nOff );
-                    pStringOff[ i ] = static_cast<sal_uInt16>(nOff);
+                    mvStringOffsets[ i ] = static_cast<sal_uInt16>(nOff);
                 }
                 r.ReadUInt32( nLen );
                 if( SbiGood( r ) )
                 {
-                    delete [] pStrings;
-                    pStrings = new sal_Unicode[ nLen ];
+                    pStrings.reset(new sal_Unicode[ nLen ]);
                     nStringSize = static_cast<sal_uInt16>(nLen);
 
                     std::unique_ptr<char[]> pByteStrings(new char[ nLen ]);
                     r.ReadBytes(pByteStrings.get(), nStringSize);
-                    for( short j = 0; j < nStrings; j++ )
+                    for( size_t j = 0; j < mvStringOffsets.size(); j++ )
                     {
-                        sal_uInt16 nOff2 = static_cast<sal_uInt16>(pStringOff[ j ]);
+                        sal_uInt16 nOff2 = static_cast<sal_uInt16>(mvStringOffsets[ j ]);
                         OUString aStr( pByteStrings.get() + nOff2, strlen(pByteStrings.get() + nOff2), eCharSet );
-                        memcpy( pStrings + nOff2, aStr.getStr(), (aStr.getLength() + 1) * sizeof( sal_Unicode ) );
+                        memcpy( pStrings.get() + nOff2, aStr.getStr(), (aStr.getLength() + 1) * sizeof( sal_Unicode ) );
                     }
                 }
                 break;
@@ -410,37 +403,34 @@ bool SbiImage::Save( SvStream& r, sal_uInt32 nVer )
         nPos = SbiOpenRecord( r, FileOffset::PCode, 1 );
         if ( bLegacy )
         {
-            ReleaseLegacyBuffer(); // release any previously held buffer
-            PCodeBuffConvertor< sal_uInt32, sal_uInt16 > aNewToLegacy( reinterpret_cast<sal_uInt8*>(pCode), nCodeSize );
+            PCodeBuffConvertor< sal_uInt32, sal_uInt16 > aNewToLegacy( reinterpret_cast<sal_uInt8*>(pCode.get()), nCodeSize );
             aNewToLegacy.convert();
-            pLegacyPCode = reinterpret_cast<char*>(aNewToLegacy.GetBuffer());
+            pLegacyPCode.reset(reinterpret_cast<char*>(aNewToLegacy.GetBuffer()));
             nLegacyCodeSize = aNewToLegacy.GetSize();
-            r.WriteBytes(pLegacyPCode, nLegacyCodeSize);
+            r.WriteBytes(pLegacyPCode.get(), nLegacyCodeSize);
         }
         else
         {
-            r.WriteBytes(pCode, nCodeSize);
+            r.WriteBytes(pCode.get(), nCodeSize);
         }
         SbiCloseRecord( r, nPos );
     }
     // String-Pool?
-    if( nStrings )
+    if( !mvStringOffsets.empty() )
     {
-        nPos = SbiOpenRecord( r, FileOffset::StringPool, nStrings );
+        nPos = SbiOpenRecord( r, FileOffset::StringPool, mvStringOffsets.size() );
         // For every String:
         //  sal_uInt32 Offset of the Strings in the Stringblock
-        short i;
-
-        for( i = 0; i < nStrings && SbiGood( r ); i++ )
+        for( size_t i = 0; i < mvStringOffsets.size() && SbiGood( r ); i++ )
         {
-            r.WriteUInt32( pStringOff[ i ] );
+            r.WriteUInt32( mvStringOffsets[ i ] );
         }
         // Then the String-Block
         std::unique_ptr<char[]> pByteStrings(new char[ nStringSize ]);
-        for( i = 0; i < nStrings; i++ )
+        for( size_t i = 0; i < mvStringOffsets.size(); i++ )
         {
-            sal_uInt16 nOff = static_cast<sal_uInt16>(pStringOff[ i ]);
-            OString aStr(OUStringToOString(OUString(pStrings + nOff), eCharSet));
+            sal_uInt16 nOff = static_cast<sal_uInt16>(mvStringOffsets[ i ]);
+            OString aStr(OUStringToOString(OUString(pStrings.get() + nOff), eCharSet));
             memcpy( pByteStrings.get() + nOff, aStr.getStr(), (aStr.getLength() + 1) * sizeof( char ) );
         }
         r.WriteUInt32( nStringSize );
@@ -538,22 +528,20 @@ bool SbiImage::Save( SvStream& r, sal_uInt32 nVer )
 
 void SbiImage::MakeStrings( short nSize )
 {
-    nStrings = 0;
     nStringIdx = 0;
     nStringOff = 0;
     nStringSize = 1024;
-    pStrings = new sal_Unicode[ nStringSize ];
-    pStringOff = new sal_uInt32[ nSize ];
-    nStrings = nSize;
-    memset( pStringOff, 0, nSize * sizeof( sal_uInt32 ) );
-    memset( pStrings, 0, nStringSize * sizeof( sal_Unicode ) );
+    pStrings.reset( new sal_Unicode[ nStringSize ]);
+    mvStringOffsets.resize(nSize);
+    memset( mvStringOffsets.data(), 0, nSize * sizeof( sal_uInt32 ) );
+    memset( pStrings.get(), 0, nStringSize * sizeof( sal_Unicode ) );
 }
 
 // Add a string to StringPool. The String buffer is dynamically
 // growing in 1K-Steps
 void SbiImage::AddString( const OUString& r )
 {
-    if( nStringIdx >= nStrings )
+    if( nStringIdx >= short(mvStringOffsets.size()) )
     {
         bError = true;
     }
@@ -569,19 +557,18 @@ void SbiImage::AddString( const OUString& r )
         {
             sal_uInt32 nNewLen = needed + 1024;
             nNewLen &= 0xFFFFFC00;  // trim to 1K border
-            sal_Unicode* p = new sal_Unicode[nNewLen];
-            memcpy( p, pStrings, nStringSize * sizeof( sal_Unicode ) );
-            delete[] pStrings;
-            pStrings = p;
+            std::unique_ptr<sal_Unicode[]> p(new sal_Unicode[nNewLen]);
+            memcpy( p.get(), pStrings.get(), nStringSize * sizeof( sal_Unicode ) );
+            pStrings = std::move(p);
             nStringSize = sal::static_int_cast< sal_uInt16 >(nNewLen);
         }
         if( !bError )
         {
-            pStringOff[ nStringIdx++ ] = nStringOff;
-            memcpy( pStrings + nStringOff, r.getStr(), len * sizeof( sal_Unicode ) );
+            mvStringOffsets[ nStringIdx++ ] = nStringOff;
+            memcpy( pStrings.get() + nStringOff, r.getStr(), len * sizeof( sal_Unicode ) );
             nStringOff = nStringOff + len;
             // Last String? The update the size of the buffer
-            if( nStringIdx >= nStrings )
+            if( nStringIdx >= short(mvStringOffsets.size()) )
             {
                 nStringSize = nStringOff;
             }
@@ -593,9 +580,9 @@ void SbiImage::AddString( const OUString& r )
 // The block was fetched by the compiler from class SbBuffer and
 // is already created with new. Additionally it contains all Integers
 // in Big Endian format, so can be directly read/written.
-void SbiImage::AddCode( char* p, sal_uInt32 s )
+void SbiImage::AddCode( std::unique_ptr<char[]> p, sal_uInt32 s )
 {
-    pCode = p;
+    pCode = std::move(p);
     nCodeSize = s;
 }
 
@@ -622,15 +609,15 @@ void SbiImage::AddEnum(SbxObject* pObject) // Register enum type
 // Note: IDs start with 1
 OUString SbiImage::GetString( short nId ) const
 {
-    if( nId && nId <= nStrings )
+    if( nId && nId <= short(mvStringOffsets.size()) )
     {
-        sal_uInt32 nOff = pStringOff[ nId - 1 ];
-        sal_Unicode* pStr = pStrings + nOff;
+        sal_uInt32 nOff = mvStringOffsets[ nId - 1 ];
+        sal_Unicode* pStr = pStrings.get() + nOff;
 
         // #i42467: Special treatment for vbNullChar
         if( *pStr == 0 )
         {
-            sal_uInt32 nNextOff = (nId < nStrings) ? pStringOff[ nId ] : nStringOff;
+            sal_uInt32 nNextOff = (nId < short(mvStringOffsets.size())) ? mvStringOffsets[ nId ] : nStringOff;
             sal_uInt32 nLen = nNextOff - nOff - 1;
             if( nLen == 1 )
             {
@@ -654,18 +641,17 @@ const SbxObject* SbiImage::FindType (const OUString& aTypeName) const
 
 sal_uInt16 SbiImage::CalcLegacyOffset( sal_Int32 nOffset )
 {
-    return SbiCodeGen::calcLegacyOffSet( reinterpret_cast<sal_uInt8*>(pCode), nOffset ) ;
+    return SbiCodeGen::calcLegacyOffSet( reinterpret_cast<sal_uInt8*>(pCode.get()), nOffset ) ;
 }
 
 sal_uInt32 SbiImage::CalcNewOffset( sal_Int16 nOffset )
 {
-    return SbiCodeGen::calcNewOffSet( reinterpret_cast<sal_uInt8*>(pLegacyPCode), nOffset ) ;
+    return SbiCodeGen::calcNewOffSet( reinterpret_cast<sal_uInt8*>(pLegacyPCode.get()), nOffset ) ;
 }
 
 void  SbiImage::ReleaseLegacyBuffer()
 {
-    delete[] pLegacyPCode;
-    pLegacyPCode = nullptr;
+    pLegacyPCode.reset();
     nLegacyCodeSize = 0;
 }
 

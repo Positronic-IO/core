@@ -59,11 +59,8 @@ SvxHatchTabPage::SvxHatchTabPage
     m_rOutAttrs           ( rInAttrs ),
     m_pnHatchingListState ( nullptr ),
     m_pnColorListState    ( nullptr ),
-
-    m_aXHatchItem         ( OUString(), XHatch() ),
     m_aXFillAttr          ( rInAttrs.GetPool() ),
     m_rXFSet              ( m_aXFillAttr.GetItemSet() )
-
 {
     get(m_pMtrDistance, "distancemtr");
     get(m_pMtrAngle, "anglemtr");
@@ -105,7 +102,7 @@ SvxHatchTabPage::SvxHatchTabPage
 
     // setting the output device
     m_rXFSet.Put( XFillStyleItem(drawing::FillStyle_HATCH) );
-    m_rXFSet.Put( m_aXHatchItem );
+    m_rXFSet.Put( XFillHatchItem(OUString(), XHatch()) );
     m_pCtlPreview->SetAttributes( m_aXFillAttr.GetItemSet() );
     m_pHatchLB->SetSelectHdl( LINK( this, SvxHatchTabPage, ChangeHatchHdl ) );
     m_pHatchLB->SetRenameHdl( LINK( this, SvxHatchTabPage, ClickRenameHdl_Impl ) );
@@ -254,7 +251,7 @@ bool SvxHatchTabPage::FillItemSet( SfxItemSet* rSet )
     if( nPos != VALUESET_ITEM_NOTFOUND )
     {
         pXHatch.reset(new XHatch( m_pHatchingList->GetHatch( static_cast<sal_uInt16>(nPos) )->GetHatch() ));
-        aString = m_pHatchLB->GetItemText( m_pHatchLB->GetSelectItemId() );
+        aString = m_pHatchLB->GetItemText( m_pHatchLB->GetSelectedItemId() );
     }
     // unidentified hatch has been passed
     else
@@ -297,10 +294,10 @@ void SvxHatchTabPage::Reset( const SfxItemSet* rSet )
 }
 
 
-VclPtr<SfxTabPage> SvxHatchTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxHatchTabPage::Create( TabPageParent pWindow,
                                             const SfxItemSet* rSet )
 {
-    return VclPtr<SvxHatchTabPage>::Create( pWindow, *rSet );
+    return VclPtr<SvxHatchTabPage>::Create( pWindow.pParent, *rSet );
 }
 
 IMPL_LINK( SvxHatchTabPage, ModifiedListBoxHdl_Impl, ListBox&, rListBox, void )
@@ -445,7 +442,7 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickAddHdl_Impl, Button*, void)
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     assert(pFact && "Dialog creation failed!");
-    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
     assert(pDlg && "Dialog creation failed!");
     sal_uInt16         nError   = 1;
 
@@ -491,7 +488,7 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickAddHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxHatchTabPage, ClickModifyHdl_Impl, Button*, void)
 {
-    sal_uInt16 nId = m_pHatchLB->GetSelectItemId();
+    sal_uInt16 nId = m_pHatchLB->GetSelectedItemId();
     size_t nPos = m_pHatchLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -523,7 +520,7 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickModifyHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxHatchTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pHatchLB->GetSelectItemId();
+    sal_uInt16 nId = m_pHatchLB->GetSelectedItemId();
     size_t nPos = m_pHatchLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -549,7 +546,7 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 
 IMPL_LINK_NOARG(SvxHatchTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void )
 {
-    sal_uInt16 nId = m_pHatchLB->GetSelectItemId();
+    sal_uInt16 nId = m_pHatchLB->GetSelectedItemId();
     size_t nPos = m_pHatchLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -559,7 +556,7 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void )
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
         assert(pDlg && "Dialog creation failed!");
 
         bool bLoop = true;
@@ -591,6 +588,10 @@ IMPL_LINK_NOARG(SvxHatchTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void )
 }
 
 void SvxHatchTabPage::PointChanged( vcl::Window*, RectPoint )
+{
+}
+
+void SvxHatchTabPage::PointChanged( weld::DrawingArea*, RectPoint )
 {
 }
 

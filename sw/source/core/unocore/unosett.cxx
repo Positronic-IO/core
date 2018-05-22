@@ -59,6 +59,7 @@
 #include <editeng/flstitem.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/GraphicLoader.hxx>
 #include <svtools/ctrltool.hxx>
 #include <vcl/svapp.hxx>
 #include <editeng/unofdesc.hxx>
@@ -71,6 +72,8 @@
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <comphelper/propertyvalue.hxx>
+#include <svl/itemprop.hxx>
+#include <svl/listener.hxx>
 #include <paratr.hxx>
 
 using namespace ::com::sun::star;
@@ -80,6 +83,14 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::text;
 using namespace ::com::sun::star::style;
 
+
+namespace
+{
+    inline SvtBroadcaster& GetPageDescNotifier(SwDoc* pDoc)
+    {
+        return pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->GetNotifier();
+    }
+}
 // Constants for the css::text::ColumnSeparatorStyle
 #define API_COL_LINE_NONE               0
 #define API_COL_LINE_SOLID              1
@@ -490,17 +501,7 @@ uno::Any SwXFootnoteProperties::getPropertyValue(const OUString& rPropertyName)
         case WID_CHARACTER_STYLE:
         {
             OUString aString;
-            const SwCharFormat* pCharFormat = nullptr;
-            if( pEntry->nWID == WID_ANCHOR_CHARACTER_STYLE )
-            {
-                if( rFootnoteInfo.GetAnchorCharFormatDep()->GetRegisteredIn() )
-                    pCharFormat = rFootnoteInfo.GetAnchorCharFormat(*pDoc);
-            }
-            else
-            {
-                if( rFootnoteInfo.GetCharFormatDep()->GetRegisteredIn() )
-                    pCharFormat = rFootnoteInfo.GetCharFormat(*pDoc);
-            }
+            const SwCharFormat* pCharFormat = rFootnoteInfo.GetCurrentCharFormat(pEntry->nWID == WID_ANCHOR_CHARACTER_STYLE);
             if( pCharFormat )
             {
                 SwStyleNameMapper::FillProgName(
@@ -713,17 +714,7 @@ uno::Any SwXEndnoteProperties::getPropertyValue(const OUString& rPropertyName)
             case WID_CHARACTER_STYLE:
             {
                 OUString aString;
-                const SwCharFormat* pCharFormat = nullptr;
-                if( pEntry->nWID == WID_ANCHOR_CHARACTER_STYLE )
-                {
-                    if( rEndInfo.GetAnchorCharFormatDep()->GetRegisteredIn() )
-                        pCharFormat = rEndInfo.GetAnchorCharFormat(*pDoc);
-                }
-                else
-                {
-                    if( rEndInfo.GetCharFormatDep()->GetRegisteredIn() )
-                        pCharFormat = rEndInfo.GetCharFormat(*pDoc);
-                }
+                const SwCharFormat* pCharFormat = rEndInfo.GetCurrentCharFormat( pEntry->nWID == WID_ANCHOR_CHARACTER_STYLE );
                 if( pCharFormat )
                 {
                     SwStyleNameMapper::FillProgName(
@@ -1017,15 +1008,13 @@ OSL_FAIL("not implemented");
 
 static const char aInvalidStyle[] = "__XXX___invalid";
 
-class SwXNumberingRules::Impl : public SwClient
+class SwXNumberingRules::Impl
+    : public SvtListener
 {
-private:
     SwXNumberingRules& m_rParent;
-public:
-    explicit Impl(SwXNumberingRules& rParent) : m_rParent(rParent) {}
-protected:
-    //SwClient
-    virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew) override;
+    virtual void Notify(const SfxHint&) override;
+    public:
+        explicit Impl(SwXNumberingRules& rParent) : m_rParent(rParent) {}
 };
 
 bool SwXNumberingRules::isInvalidStyle(const OUString &rName)
@@ -1092,7 +1081,7 @@ SwXNumberingRules::SwXNumberingRules(const SwNumRule& rRule, SwDoc* doc) :
         }
     }
     if(pDoc)
-        pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->Add(&*m_pImpl);
+        m_pImpl->StartListening(GetPageDescNotifier(pDoc));
     for(sal_uInt16 i = 0; i < MAXLEVEL; ++i)
     {
         m_sNewCharStyleNames[i] = aInvalidStyle;
@@ -1108,7 +1097,7 @@ SwXNumberingRules::SwXNumberingRules(SwDocShell& rDocSh) :
     m_pPropertySet(GetNumberingRulesSet()),
     bOwnNumRuleCreated(false)
 {
-    pDocShell->GetDoc()->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->Add(&*m_pImpl);
+    m_pImpl->StartListening(GetPageDescNotifier(pDocShell->GetDoc()));
 }
 
 SwXNumberingRules::SwXNumberingRules(SwDoc& rDoc) :
@@ -1119,7 +1108,7 @@ SwXNumberingRules::SwXNumberingRules(SwDoc& rDoc) :
     m_pPropertySet(GetNumberingRulesSet()),
     bOwnNumRuleCreated(false)
 {
-    rDoc.getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->Add(&*m_pImpl);
+    m_pImpl->StartListening(GetPageDescNotifier(&rDoc));
     m_sCreatedNumRuleName = rDoc.GetUniqueNumRuleName();
     rDoc.MakeNumRule( m_sCreatedNumRuleName, nullptr, false,
                       // #i89178#
@@ -1387,6 +1376,10 @@ uno::Sequence<beans::PropertyValue> SwXNumberingRules::GetPropertiesForNumFormat
         {
             nINT16 = LabelFollow::NOTHING;
         }
+        else if ( rFormat.GetLabelFollowedBy() == SvxNumberFormat::NEWLINE )
+        {
+            nINT16 = LabelFollow::NEWLINE;
+        }
         aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_LABEL_FOLLOWED_BY, nINT16));
 
         // ListtabStopPosition
@@ -1432,30 +1425,18 @@ uno::Sequence<beans::PropertyValue> SwXNumberingRules::GetPropertiesForNumFormat
                 aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_BULLET_FONT, aDesc));
             }
         }
-        if(SVX_NUM_BITMAP == rFormat.GetNumberingType())
+        if (SVX_NUM_BITMAP == rFormat.GetNumberingType())
         {
-            //GraphicURL
             const SvxBrushItem* pBrush = rFormat.GetBrush();
-            if(pBrush)
+            const Graphic* pGraphic = pBrush ? pBrush->GetGraphic() : nullptr;
+            if (pGraphic)
             {
-                Any aAny;
-                pBrush->QueryValue( aAny, MID_GRAPHIC_URL );
-                aAny >>= aUString;
-            }
-            else
-                aUString.clear();
-            aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_GRAPHIC_URL, aUString));
-
-            //graphicbitmap
-            const Graphic* pGraphic = nullptr;
-            if(pBrush )
-                pGraphic = pBrush->GetGraphic();
-            if(pGraphic)
-            {
+                //GraphicBitmap
                 uno::Reference<awt::XBitmap> xBitmap(pGraphic->GetXGraphic(), uno::UNO_QUERY);
                 aPropertyValues.push_back(comphelper::makePropertyValue(UNO_NAME_GRAPHIC_BITMAP, xBitmap));
             }
-             Size aSize = rFormat.GetGraphicSize();
+
+            Size aSize = rFormat.GetGraphicSize();
             // #i101131#
             // adjust conversion due to type mismatch between <Size> and <awt::Size>
             awt::Size aAwtSize(convertTwipToMm100(aSize.Width()), convertTwipToMm100(aSize.Height()));
@@ -1580,7 +1561,7 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
         UNO_NAME_BULLET_FONT,                   // 17
         UNO_NAME_BULLET_FONT_NAME,              // 18
         UNO_NAME_BULLET_CHAR,                   // 19
-        UNO_NAME_GRAPHIC_URL,                   // 20
+        UNO_NAME_GRAPHIC,                       // 20
         UNO_NAME_GRAPHIC_BITMAP,                // 21
         UNO_NAME_GRAPHIC_SIZE,                  // 22
         UNO_NAME_VERT_ORIENT,                   // 23
@@ -1588,7 +1569,8 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
         UNO_NAME_HEADING_STYLE_NAME,            // 24
         // these two are accepted but ignored for some reason
         UNO_NAME_BULLET_REL_SIZE,               // 25
-        UNO_NAME_BULLET_COLOR                   // 26
+        UNO_NAME_BULLET_COLOR,                  // 26
+        UNO_NAME_GRAPHIC_URL                    // 27
     };
 
     enum {
@@ -1784,17 +1766,21 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
                 {
                     sal_Int16 nValue = 0;
                     pProp->Value >>= nValue;
-                    if ( nValue == 0 )
+                    if ( nValue == LabelFollow::LISTTAB )
                     {
                         aFormat.SetLabelFollowedBy( SvxNumberFormat::LISTTAB );
                     }
-                    else if ( nValue == 1 )
+                    else if ( nValue == LabelFollow::SPACE )
                     {
                         aFormat.SetLabelFollowedBy( SvxNumberFormat::SPACE );
                     }
-                    else if ( nValue == 2 )
+                    else if ( nValue == LabelFollow::NOTHING )
                     {
                         aFormat.SetLabelFollowedBy( SvxNumberFormat::NOTHING );
+                    }
+                    else if ( nValue == LabelFollow::NEWLINE )
+                    {
+                        aFormat.SetLabelFollowedBy( SvxNumberFormat::NEWLINE );
                     }
                     else
                     {
@@ -1925,22 +1911,27 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
                     }
                 }
                 break;
-                case 20: //UNO_NAME_GRAPHIC_URL,
+                case 20: //UNO_NAME_GRAPHIC,
                 {
                     assert( !pDocShell );
-                    OUString sBrushURL;
-                    pProp->Value >>= sBrushURL;
-                    if(!pSetBrush)
+                    uno::Reference<graphic::XGraphic> xGraphic;
+                    if (pProp->Value >>= xGraphic)
                     {
-                        const SvxBrushItem* pOrigBrush = aFormat.GetBrush();
-                        if(pOrigBrush)
+                        if (!pSetBrush)
                         {
-                            pSetBrush = new SvxBrushItem(*pOrigBrush);
+                            const SvxBrushItem* pOrigBrush = aFormat.GetBrush();
+                            if(pOrigBrush)
+                            {
+                                pSetBrush = new SvxBrushItem(*pOrigBrush);
+                            }
+                            else
+                                pSetBrush = new SvxBrushItem(OUString(), OUString(), GPOS_AREA, RES_BACKGROUND);
                         }
-                        else
-                            pSetBrush = new SvxBrushItem(OUString(), OUString(), GPOS_AREA, RES_BACKGROUND);
+                        Graphic aGraphic(xGraphic);
+                        pSetBrush->SetGraphic(aGraphic);
                     }
-                    pSetBrush->PutValue( pProp->Value, MID_GRAPHIC_URL );
+                    else
+                        bWrongArg = true;
                 }
                 break;
                 case 21: //UNO_NAME_GRAPHIC_BITMAP,
@@ -2013,6 +2004,31 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
                 case 25: // BulletRelSize - unsupported - only available in Impress
                 break;
                 case 26: // BulletColor - ignored too
+                break;
+                case 27: // UNO_NAME_GRAPHIC_URL
+                {
+                    assert( !pDocShell );
+                    OUString aURL;
+                    if (pProp->Value >>= aURL)
+                    {
+                        if(!pSetBrush)
+                        {
+                            const SvxBrushItem* pOrigBrush = aFormat.GetBrush();
+                            if(pOrigBrush)
+                            {
+                                pSetBrush = new SvxBrushItem(*pOrigBrush);
+                            }
+                            else
+                                pSetBrush = new SvxBrushItem(OUString(), OUString(), GPOS_AREA, RES_BACKGROUND);
+                        }
+
+                        Graphic aGraphic = vcl::graphic::loadFromURL(aURL);
+                        if (aGraphic)
+                            pSetBrush->SetGraphic(aGraphic);
+                    }
+                    else
+                        bWrongArg = true;
+                }
                 break;
             }
         }
@@ -2222,10 +2238,9 @@ void SwXNumberingRules::setName(const OUString& /*rName*/)
     throw aExcept;
 }
 
-void SwXNumberingRules::Impl::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew)
+void SwXNumberingRules::Impl::Notify(const SfxHint& rHint)
 {
-    ClientModify(this, pOld, pNew);
-    if(!GetRegisteredIn())
+    if(rHint.GetId() == SfxHintId::Dying)
     {
         if(m_rParent.bOwnNumRuleCreated)
             delete m_rParent.pNumRule;
@@ -2319,7 +2334,7 @@ SwXTextColumns::SwXTextColumns(const SwFormatCol& rFormatCol) :
         nReference = USHRT_MAX;
 
     nSepLineWidth = rFormatCol.GetLineWidth();
-    nSepLineColor = rFormatCol.GetLineColor().GetColor();
+    nSepLineColor = rFormatCol.GetLineColor();
     nSepLineHeightRelative = rFormatCol.GetLineHeight();
     bSepLineIsOn = rFormatCol.GetLineAdj() != COLADJ_NONE;
     sal_Int8 nStyle = API_COL_LINE_NONE;

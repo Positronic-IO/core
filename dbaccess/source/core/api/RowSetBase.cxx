@@ -22,6 +22,7 @@
 #include <connectivity/sdbcx/VCollection.hxx>
 #include "RowSetCache.hxx"
 #include <stringconstants.hxx>
+#include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
 #include <com/sun/star/lang/DisposedException.hpp>
@@ -107,11 +108,7 @@ ORowSetBase::~ORowSetBase()
         TDataColumns().swap(m_aDataColumns);
         m_pColumns->acquire();
         m_pColumns->disposing();
-        delete m_pColumns;
-        m_pColumns = nullptr;
     }
-
-    delete m_pEmptyCollection;
 }
 
 // css::lang::XTypeProvider
@@ -551,11 +548,11 @@ Reference< XNameAccess > SAL_CALL ORowSetBase::getColumns(  )
     if(!m_pColumns)
     {
         if (!m_pEmptyCollection)
-            m_pEmptyCollection = new OEmptyCollection(*m_pMySelf,m_aColumnsMutex);
-        return m_pEmptyCollection;
+            m_pEmptyCollection.reset( new OEmptyCollection(*m_pMySelf,m_aColumnsMutex) );
+        return m_pEmptyCollection.get();
     }
 
-    return m_pColumns;
+    return m_pColumns.get();
 }
 
 // XResultSet
@@ -1171,17 +1168,17 @@ void ORowSetBase::firePropertyChange(const ORowSetRow& _rOldRow)
     SAL_INFO("dbaccess", "ORowSetBase::firePropertyChange() Clone = " << m_bClone);
     OSL_ENSURE(m_pColumns,"Columns can not be NULL here!");
     sal_Int32 i=0;
-    TDataColumns::const_iterator aEnd = m_aDataColumns.end();
-    for(TDataColumns::const_iterator aIter = m_aDataColumns.begin();aIter != aEnd;++aIter,++i)
+    for (auto const& dataColumn : m_aDataColumns)
     {
         try
         {
-            (*aIter)->fireValueChange(_rOldRow.is() ? (_rOldRow->get())[i+1] : ::connectivity::ORowSetValue());
+            dataColumn->fireValueChange(_rOldRow.is() ? (_rOldRow->get())[i+1] : ::connectivity::ORowSetValue());
         }
         catch (const Exception&)
         {
             SAL_WARN("dbaccess", "firePropertyChange: Exception on column " << i);
         }
+        ++i;
     }
     SAL_INFO("dbaccess", "ORowSetBase::firePropertyChange() Clone = " << m_bClone);
 }
@@ -1202,10 +1199,6 @@ bool ORowSetBase::notifyAllListenersCursorBeforeMove(::osl::ResettableMutexGuard
 }
 
 void ORowSetBase::notifyAllListenersCursorMoved(::osl::ResettableMutexGuard& /*_rGuard*/)
-{
-}
-
-void ORowSetBase::notifyAllListeners(::osl::ResettableMutexGuard& /*_rGuard*/)
 {
 }
 

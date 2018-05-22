@@ -71,11 +71,13 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_ooxmlexport9 \
     CppunitTest_sw_ooxmlexport10 \
     CppunitTest_sw_ooxmlexport11 \
+    CppunitTest_sw_ooxmlexport12 \
     CppunitTest_sw_ooxmlfieldexport \
     CppunitTest_sw_ooxmllinks \
     CppunitTest_sw_ooxmlw14export \
     CppunitTest_sw_ooxmlencryption \
     CppunitTest_sw_ooxmlimport \
+    CppunitTest_sw_ooxmlimport2 \
     CppunitTest_sw_ww8export \
     CppunitTest_sw_ww8export2 \
     CppunitTest_sw_ww8import \
@@ -87,8 +89,11 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_odfimport \
     CppunitTest_sw_txtexport \
     CppunitTest_sw_uiwriter \
+    CppunitTest_sw_layoutwriter \
     CppunitTest_sw_mailmerge \
     CppunitTest_sw_globalfilter \
+    CppunitTest_sw_accessible_relation_set \
+    CppunitTest_sw_apitests \
 ))
 
 ifneq ($(ENABLE_HEADLESS),TRUE)

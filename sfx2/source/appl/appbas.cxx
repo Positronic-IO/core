@@ -39,7 +39,6 @@
 #include <basic/sbmeth.hxx>
 #include <basic/sbstar.hxx>
 #include <vcl/wrkwin.hxx>
-#include <vcl/msgbox.hxx>
 #include <basic/sbuno.hxx>
 #include <svtools/sfxecode.hxx>
 #include <svtools/ehdl.hxx>
@@ -49,7 +48,6 @@
 #include <arrdecl.hxx>
 #include <sfx2/app.hxx>
 #include <sfxtypes.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/msg.hxx>
 #include <sfx2/msgpool.hxx>
 #include <sfx2/progress.hxx>
@@ -60,13 +58,11 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/tplpitem.hxx>
 #include <sfx2/minfitem.hxx>
-#include <sfx2/strings.hrc>
 #include <sfx2/evntconf.hxx>
 #include <sfx2/request.hxx>
 #include <appdata.hxx>
 #include <sfx2/sfxhelp.hxx>
 #include <basic/basmgr.hxx>
-#include <svtools/strings.hrc>
 #include <unotools/configmgr.hxx>
 #include <sorgitm.hxx>
 #include <appbaslib.hxx>

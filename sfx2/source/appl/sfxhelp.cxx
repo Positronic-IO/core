@@ -154,7 +154,7 @@ bool impl_checkHelpLocalePath(OUString const & rpPath)
 }
 
 /// Check for built-in help
-/// Check if help//lang folder exist
+/// Check if help/<lang>/err.html file exist
 bool impl_hasHelpInstalled()
 {
     if (comphelper::LibreOfficeKit::isActive())
@@ -168,15 +168,19 @@ bool impl_hasHelpInstalled()
         aLocaleStr = HelpLocaleString();
     }
 
-    OUString helpRootURL = getHelpRootURL() + "/" + aLocaleStr;
+    OUString helpRootURL = getHelpRootURL() + "/" + aLocaleStr + "/err.html";
+    bool bOK = false;
+    osl::DirectoryItem directoryItem;
+    if(osl::DirectoryItem::get(helpRootURL, directoryItem) == osl::FileBase::E_None){
+        bOK=true;
+    }
 
-    bool bOK = impl_checkHelpLocalePath( helpRootURL );
+    SAL_INFO( "sfx.appl", "Checking old help installed " << bOK);
     return bOK;
 }
 
-
 /// Check for html built-in help
-/// Check if help/productversion/lang folder exist
+/// Check if help/lang/text folder exist. Only html has it.
 bool impl_hasHTMLHelpInstalled()
 {
     if (comphelper::LibreOfficeKit::isActive())
@@ -190,9 +194,9 @@ bool impl_hasHTMLHelpInstalled()
         aLocaleStr = HelpLocaleString();
     }
 
-    OUString helpRootURL = getHelpRootURL() + "/" + utl::ConfigManager::getProductVersion() + "/" + aLocaleStr;
-
+    OUString helpRootURL = getHelpRootURL() + "/" + aLocaleStr + "/text";
     bool bOK = impl_checkHelpLocalePath( helpRootURL );
+    SAL_INFO( "sfx.appl", "Checking new help (html) installed " << bOK);
     return bOK;
 }
 
@@ -268,11 +272,9 @@ static OUString  HelpLocaleString()
 
 
 
-void AppendConfigToken( OUStringBuffer& rURL, bool bQuestionMark, const OUString &rLang )
+void AppendConfigToken( OUStringBuffer& rURL, bool bQuestionMark )
 {
-    OUString aLocaleStr( rLang );
-    if ( aLocaleStr.isEmpty() )
-        aLocaleStr = HelpLocaleString();
+    OUString aLocaleStr = HelpLocaleString();
 
     // query part exists?
     if ( bQuestionMark )
@@ -691,7 +693,7 @@ static bool impl_showOfflineHelp( const OUString& rURL )
     OUString aBaseInstallPath = getHelpRootURL();
     OUString const aInternal( "vnd.sun.star.help://"  );
 
-    OUString aHelpLink( aBaseInstallPath + "/" + utl::ConfigManager::getProductVersion() + "/index.html?" );
+    OUString aHelpLink( aBaseInstallPath + "/index.html?" );
     aHelpLink += rURL.copy( aInternal.getLength() );
     aHelpLink = aHelpLink.replaceAll("%2F","/").replaceAll("%3A",":");
 
@@ -823,8 +825,8 @@ bool SfxHelp::Start_Impl(const OUString& rURL, const vcl::Window* pWindow, const
 
         LanguageTag aLangTag = Application::GetSettings().GetUILanguageTag();
         OUString sLocaleString = SvtLanguageTable::GetLanguageString( aLangTag.getLanguageType() );
-        OUString sPrimTex = xQueryBox->get_primary_text();
-        xQueryBox->set_primary_text(sPrimTex.replaceAll("$UILOCALE", sLocaleString));
+        OUString sPrimText = xQueryBox->get_primary_text();
+        xQueryBox->set_primary_text(sPrimText.replaceAll("$UILOCALE", sLocaleString));
         short OnlineHelpBox = xQueryBox->run();
 
         if(OnlineHelpBox == RET_OK)
@@ -966,8 +968,7 @@ bool SfxHelp::Start_Impl(const OUString& rURL, weld::Widget* pWidget, const OUSt
         LanguageTag aLangTag = Application::GetSettings().GetUILanguageTag();
         OUString sLocaleString = SvtLanguageTable::GetLanguageString( aLangTag.getLanguageType() );
         OUString sPrimText = xQueryBox->get_primary_text();
-        xQueryBox->set_primary_text(Translate::GetReadStringHook()(sPrimText).replaceAll("$UILOCALE", sLocaleString));
-        xQueryBox->set_title(Translate::GetReadStringHook()(xQueryBox->get_title()));
+        xQueryBox->set_primary_text(sPrimText.replaceAll("$UILOCALE", sLocaleString));
         xQueryBox->connect_help(LINK(nullptr, NoHelpErrorBox, HelpRequestHdl));
         short OnlineHelpBox = xQueryBox->run();
         xQueryBox->hide();
@@ -1038,6 +1039,11 @@ OUString SfxHelp::GetDefaultHelpModule()
 OUString SfxHelp::GetCurrentModuleIdentifier()
 {
     return getCurrentModuleIdentifier_Impl();
+}
+
+bool SfxHelp::IsHelpInstalled()
+{
+    return impl_hasHelpInstalled();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

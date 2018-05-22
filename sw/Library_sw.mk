@@ -59,6 +59,7 @@ $(eval $(call gb_Library_use_libraries,sw,\
     i18nlangtag \
     i18nutil \
     lng \
+    msfilter \
     sal \
     salhelper \
 	sax \
@@ -521,6 +522,7 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/filter/html/htmlnumreader \
     sw/source/filter/html/htmlnumwriter \
     sw/source/filter/html/htmlplug \
+    sw/source/filter/html/htmlreqifreader \
     sw/source/filter/html/htmlsect \
     sw/source/filter/html/htmltab \
     sw/source/filter/html/htmltabw \
@@ -588,7 +590,6 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/uibase/config/uinums \
     sw/source/uibase/config/usrpref \
     sw/source/uibase/config/viewopt \
-    sw/source/uibase/dialog/SignatureLineDialog \
     sw/source/uibase/dialog/SwSpellDialogChildWindow \
     sw/source/uibase/dialog/regionsw \
     sw/source/uibase/dialog/swabstdlg \

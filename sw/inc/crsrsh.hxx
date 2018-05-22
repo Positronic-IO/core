@@ -43,19 +43,8 @@
 class SfxItemSet;
 class SfxPoolItem;
 class SwContentFrame;
-class SwCursorShell;
-class SwCursor;
-class SwField;
-class SwFieldType;
-class SwFormat;
 class SwFormatField;
-class SwNodeIndex;
-class SwPaM;
-class SwShellCursor;
-class SwShellTableCursor;
-class SwTableNode;
 class SwTextFormatColl;
-class SwVisibleCursor;
 class SwTextINetFormat;
 class SwFormatINetFormat;
 class SwTextAttr;
@@ -63,10 +52,8 @@ class SwTableBox;
 class SwTOXMark;
 class SwRangeRedline;
 class SwBlockCursor;
-class SwContentNode;
 class SwPostItField;
 class SwTextField;
-struct SwPosition;
 
 namespace i18nutil {
     struct SearchOptions2;
@@ -191,9 +178,9 @@ private:
     long m_nUpDownX;              /**< try to move the cursor on up/down always
                                    in the same column */
     long m_nLeftFramePos;
-    sal_uLong m_nAktNode;             // save CursorPos at Start-Action
-    sal_Int32 m_nAktContent;
-    SwNodeType m_nAktNdTyp;
+    sal_uLong m_nCurrentNode;     // save CursorPos at Start-Action
+    sal_Int32 m_nCurrentContent;
+    SwNodeType m_nCurrentNdTyp;
 
     /*
      * Via the Method SttCursorMove and EndCursorMove this counter gets
@@ -427,7 +414,7 @@ public:
      *      stack
      *  @return <true> if there was one on the stack, <false> otherwise
      */
-    bool Pop(PopMode = PopMode::DeleteStack);
+    bool Pop(PopMode);
     /*
      * Combine 2 Cursors.
      * Delete the topmost from the stack and move its Mark into the current.

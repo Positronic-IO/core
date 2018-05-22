@@ -38,6 +38,7 @@
 #include <cellfrm.hxx>
 #include <rowfrm.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <svx/srchdlg.hxx>
 
 /// set cursor into next/previous cell
 bool SwCursorShell::GoNextCell( bool bAppendLine )
@@ -480,6 +481,8 @@ static bool lcl_FindPrevCell( SwNodeIndex& rIdx, bool bInReadOnly  )
 bool GotoPrevTable( SwPaM& rCurrentCursor, SwMoveFnCollection const & fnPosTable,
                     bool bInReadOnly )
 {
+    SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+
     SwNodeIndex aIdx( rCurrentCursor.GetPoint()->nNode );
 
     SwTableNode* pTableNd = aIdx.GetNode().FindTableNode();
@@ -497,12 +500,27 @@ bool GotoPrevTable( SwPaM& rCurrentCursor, SwMoveFnCollection const & fnPosTable
             aIdx.Assign( *pTableNd, - 1 );
     }
 
+    SwNodeIndex aOldIdx = aIdx;
+    sal_uLong nLastNd = rCurrentCursor.GetDoc()->GetNodes().Count() - 1;
     do {
         while( aIdx.GetIndex() &&
             nullptr == ( pTableNd = aIdx.GetNode().StartOfSectionNode()->GetTableNode()) )
+        {
             --aIdx;
+            if ( aIdx == aOldIdx )
+            {
+                SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
+                return false;
+            }
+        }
 
-        if( pTableNd ) // any further table node?
+        if ( !aIdx.GetIndex() )
+        {
+            SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::StartWrapped );
+            aIdx = nLastNd;
+            continue;
+        }
+
         {
             if( &fnPosTable == &fnMoveForward ) // at the beginning?
             {
@@ -535,7 +553,7 @@ bool GotoPrevTable( SwPaM& rCurrentCursor, SwMoveFnCollection const & fnPosTable
             }
             return true;
         }
-    } while( pTableNd );
+    } while( true );
 
     return false;
 }
@@ -543,51 +561,71 @@ bool GotoPrevTable( SwPaM& rCurrentCursor, SwMoveFnCollection const & fnPosTable
 bool GotoNextTable( SwPaM& rCurrentCursor, SwMoveFnCollection const & fnPosTable,
                     bool bInReadOnly )
 {
+    SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+
     SwNodeIndex aIdx( rCurrentCursor.GetPoint()->nNode );
     SwTableNode* pTableNd = aIdx.GetNode().FindTableNode();
 
     if( pTableNd )
         aIdx.Assign( *pTableNd->EndOfSectionNode(), 1 );
 
+    SwNodeIndex aOldIdx = aIdx;
     sal_uLong nLastNd = rCurrentCursor.GetDoc()->GetNodes().Count() - 1;
     do {
         while( aIdx.GetIndex() < nLastNd &&
                 nullptr == ( pTableNd = aIdx.GetNode().GetTableNode()) )
-            ++aIdx;
-        if( pTableNd ) // any further table node?
         {
-            if( &fnPosTable == &fnMoveForward ) // at the beginning?
+            ++aIdx;
+            if ( aIdx == aOldIdx )
             {
-                if( !lcl_FindNextCell( aIdx, bInReadOnly ))
-                {
-                    // skip table
-                    aIdx.Assign( *pTableNd->EndOfSectionNode(), + 1 );
-                    continue;
-                }
+                SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
+                return false;
             }
-            else
-            {
-                aIdx = *aIdx.GetNode().EndOfSectionNode();
-                // check protected cells
-                if( !lcl_FindNextCell( aIdx, bInReadOnly ))
-                {
-                    // skip table
-                    aIdx.Assign( *pTableNd->EndOfSectionNode(), + 1 );
-                    continue;
-                }
-            }
-
-            SwTextNode* pTextNode = aIdx.GetNode().GetTextNode();
-            if ( pTextNode )
-            {
-                rCurrentCursor.GetPoint()->nNode = *pTextNode;
-                rCurrentCursor.GetPoint()->nContent.Assign( pTextNode, &fnPosTable == &fnMoveBackward ?
-                                                      pTextNode->Len() :
-                                                      0 );
-            }
-            return true;
         }
-    } while( pTableNd );
+
+        if ( aIdx.GetIndex() == nLastNd )
+        {
+            SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::EndWrapped );
+            aIdx = 0;
+            continue;
+        }
+
+        assert( pTableNd );  // coverity, should never be nullptr
+
+        if( &fnPosTable == &fnMoveForward ) // at the beginning?
+        {
+            if( !lcl_FindNextCell( aIdx, bInReadOnly ))
+            {
+                // skip table
+                aIdx.Assign( *pTableNd->EndOfSectionNode(), + 1 );
+                continue;
+            }
+        }
+        else
+        {
+            aIdx = *aIdx.GetNode().EndOfSectionNode();
+            // check protected cells
+            if( !lcl_FindNextCell( aIdx, bInReadOnly ))
+            {
+                // skip table
+                aIdx.Assign( *pTableNd->EndOfSectionNode(), + 1 );
+                continue;
+            }
+        }
+
+        SwTextNode* pTextNode = aIdx.GetNode().GetTextNode();
+        if ( pTextNode )
+        {
+            rCurrentCursor.GetPoint()->nNode = *pTextNode;
+            rCurrentCursor.GetPoint()->nContent.Assign( pTextNode, &fnPosTable == &fnMoveBackward ?
+                                                  pTextNode->Len() :
+                                                  0 );
+        }
+        return true;
+
+    } while( true );
+
+    // the flow is such that it is not possible to get there
 
     return false;
 }

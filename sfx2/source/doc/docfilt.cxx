@@ -25,7 +25,6 @@
 #include <sot/exchange.hxx>
 #include <sot/storage.hxx>
 #include <comphelper/fileformat.h>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -43,7 +42,8 @@ SfxFilter::SfxFilter( const OUString& rProvider, const OUString &rFilterName ) :
     maProvider(rProvider),
     nFormatType(SfxFilterFlags::NONE),
     nVersion(0),
-    lFormat(SotClipboardFormatId::NONE)
+    lFormat(SotClipboardFormatId::NONE),
+    mbEnabled(true)
 {
 }
 
@@ -54,7 +54,8 @@ SfxFilter::SfxFilter( const OUString &rName,
                       const OUString &rTypNm,
                       const OUString &rMimeType,
                       const OUString &rUsrDat,
-                      const OUString &rServiceName ):
+                      const OUString &rServiceName,
+                      bool bEnabled ):
     aWildCard(rWildCard, ';'),
     aTypeName(rTypNm),
     aUserData(rUsrDat),
@@ -64,7 +65,8 @@ SfxFilter::SfxFilter( const OUString &rName,
     aUIName(maFilterName),
     nFormatType(nType),
     nVersion(SOFFICE_FILEFORMAT_50),
-    lFormat(lFmt)
+    lFormat(lFmt),
+    mbEnabled(bEnabled)
 {
     OUString aExts = GetWildcard().getGlob();
     OUString glob;

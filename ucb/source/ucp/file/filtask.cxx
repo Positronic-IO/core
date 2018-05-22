@@ -118,7 +118,6 @@ TaskManager::MyProperty::~MyProperty()
 TaskManager::TaskManager( const uno::Reference< uno::XComponentContext >& rxContext,
               FileProvider* pProvider, bool bWithConfig )
     : m_nCommandId( 0 ),
-      m_bWithConfig( bWithConfig ),
       m_pProvider( pProvider ),
       m_xContext( rxContext ),
       Title( "Title" ),
@@ -347,11 +346,11 @@ TaskManager::TaskManager( const uno::Reference< uno::XComponentContext >& rxCont
     m_sCommandInfo[7].Handle = -1;
     m_sCommandInfo[7].ArgType = cppu::UnoType<InsertCommandArgument>::get();
 
-    m_sCommandInfo[7].Name = "createNewContent";
-    m_sCommandInfo[7].Handle = -1;
-    m_sCommandInfo[7].ArgType = cppu::UnoType<ucb::ContentInfo>::get();
+    m_sCommandInfo[8].Name = "createNewContent";
+    m_sCommandInfo[8].Handle = -1;
+    m_sCommandInfo[8].ArgType = cppu::UnoType<ucb::ContentInfo>::get();
 
-    if(m_bWithConfig)
+    if(bWithConfig)
     {
         uno::Reference< XPropertySetRegistryFactory > xRegFac = ucb::Store::create( m_xContext );
         // Open/create a registry
@@ -385,7 +384,7 @@ TaskManager::endTask( sal_Int32 CommandId,
                       const OUString& aUncPath,
                       BaseContent* pContent)
 {
-    osl::MutexGuard aGuard( m_aMutex );
+    osl::ClearableMutexGuard aGuard( m_aMutex );
     TaskMap::iterator it = m_aTaskMap.find( CommandId );
     if( it == m_aTaskMap.end() )
         return;
@@ -398,6 +397,8 @@ TaskManager::endTask( sal_Int32 CommandId,
         = it->second.getCommandEnvironment();
 
     m_aTaskMap.erase( it );
+
+    aGuard.clear();
 
     if( ErrorCode != TASKHANDLER_NO_ERROR )
         throw_handler(

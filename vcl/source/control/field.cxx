@@ -19,7 +19,6 @@
 
 #include <sal/config.h>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 
 
@@ -453,13 +452,6 @@ void FormatterBase::ImplSetText( const OUString& rText, Selection const * pNewSe
             aSel.Min() = aSel.Max();
             mpField->SetText(rText, aSel);
         }
-        if (maOutputHdl.IsSet())
-        {
-            OUString sText(mpField->GetText());
-            mpField->SetText(OUString());
-            if (!maOutputHdl.Call(*mpField))
-                mpField->SetText(sText);
-        }
         MarkToBeReformatted( false );
     }
 }
@@ -476,18 +468,18 @@ bool FormatterBase::IsEmptyFieldValue() const
     return (!mpField || mpField->GetText().isEmpty());
 }
 
-bool NumericFormatter::ImplNumericReformat( const OUString& rStr, sal_Int64& rValue,
-                                                OUString& rOutStr )
+void NumericFormatter::FormatValue(Selection const * pNewSelection)
 {
-    if ( !ImplNumericGetValue( rStr, rValue, GetDecimalDigits(), ImplGetLocaleDataWrapper() ) )
-        return true;
-    else
-    {
-        sal_Int64 nTempVal = ClipAgainstMinMax(rValue);
+    mbFormatting = true;
+    if (!m_aOutputHdl.IsSet() || !m_aOutputHdl.Call(*GetField()))
+        ImplSetText(CreateFieldText(mnLastValue), pNewSelection);
+    mbFormatting = false;
+}
 
-        rOutStr = CreateFieldText( nTempVal );
-        return true;
-    }
+void NumericFormatter::ImplNumericReformat()
+{
+    mnLastValue = GetValue();
+    FormatValue();
 }
 
 void NumericFormatter::ImplInit()
@@ -502,6 +494,8 @@ void NumericFormatter::ImplInit()
     mbThousandSep       = true;
     mbShowTrailingZeros = true;
     mbWrapOnLimits      = false;
+    mbFormatting       = false;
+    mbDisableRemainderFactor = false;
 
     // for fields
     mnSpinSize          = 1;
@@ -574,7 +568,7 @@ void NumericFormatter::ImplSetUserValue( sal_Int64 nNewValue, Selection const * 
     mnLastValue = nNewValue;
 
     if ( GetField() )
-        ImplSetText( CreateFieldText( nNewValue ), pNewSelection );
+        FormatValue(pNewSelection);
 }
 
 void NumericFormatter::SetUserValue( sal_Int64 nNewValue )
@@ -597,6 +591,22 @@ sal_Int64 NumericFormatter::GetValueFromString(const OUString& rStr) const
 
 sal_Int64 NumericFormatter::GetValue() const
 {
+    if (mbFormatting) //don't parse the entry if we're currently formatting what to put in it
+        return mnLastValue;
+
+    if (m_aInputHdl.IsSet())
+    {
+        sal_Int64 nResult;
+        TriState eState = m_aInputHdl.Call(&nResult);
+        if (eState != TRISTATE_INDET)
+        {
+            if (eState == TRISTATE_TRUE)
+                return ClipAgainstMinMax(nResult);
+            else
+                return mnLastValue;
+        }
+    }
+
     return GetField() ? GetValueFromString(GetField()->GetText()) : 0;
 }
 
@@ -650,23 +660,18 @@ void NumericFormatter::Reformat()
     if ( GetField()->GetText().isEmpty() && ImplGetEmptyFieldValue() )
         return;
 
-    OUString aStr;
-    sal_Int64 nTemp = mnLastValue;
-    bool bOK = ImplNumericReformat( GetField()->GetText(), nTemp, aStr );
-    mnLastValue = nTemp;
-    if ( !bOK )
-        return;
+    ImplNumericReformat();
+}
 
-    if ( !aStr.isEmpty() )
-        ImplSetText( aStr );
-    else
-        SetValue( mnLastValue );
+void NumericFormatter::DisableRemainderFactor()
+{
+    mbDisableRemainderFactor = true;
 }
 
 void NumericFormatter::FieldUp()
 {
     sal_Int64 nValue = GetValue();
-    sal_Int64 nRemainder = nValue % mnSpinSize;
+    sal_Int64 nRemainder = mbDisableRemainderFactor ? 0 : (nValue % mnSpinSize);
     if (nValue >= 0)
         nValue = (nRemainder == 0) ? nValue + mnSpinSize : nValue + mnSpinSize - nRemainder;
     else
@@ -680,7 +685,7 @@ void NumericFormatter::FieldUp()
 void NumericFormatter::FieldDown()
 {
     sal_Int64 nValue = GetValue();
-    sal_Int64 nRemainder = nValue % mnSpinSize;
+    sal_Int64 nRemainder = mbDisableRemainderFactor ? 0 : (nValue % mnSpinSize);
     if (nValue >= 0)
         nValue = (nRemainder == 0) ? nValue - mnSpinSize : nValue - nRemainder;
     else
@@ -955,6 +960,16 @@ void NumericBox::Modify()
 {
     MarkToBeReformatted( true );
     ComboBox::Modify();
+}
+
+void NumericBox::ImplNumericReformat( const OUString& rStr, sal_Int64& rValue,
+                                                OUString& rOutStr )
+{
+    if (ImplNumericGetValue(rStr, rValue, GetDecimalDigits(), ImplGetLocaleDataWrapper()))
+    {
+        sal_Int64 nTempVal = ClipAgainstMinMax(rValue);
+        rOutStr = CreateFieldText( nTempVal );
+    }
 }
 
 void NumericBox::ReformatAll()
@@ -1382,7 +1397,7 @@ OUString MetricFormatter::CreateFieldText( sal_Int64 nValue ) const
     {
         double dValue = nValue;
         dValue /= ImplPower10(GetDecimalDigits());
-        return unicode::formatPercent(dValue, Application::GetSettings().GetUILanguageTag());
+        return unicode::formatPercent(dValue, GetLanguageTag());
     }
 
     OUString aStr = NumericFormatter::CreateFieldText( nValue );

@@ -17,17 +17,18 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/animate.hxx>
 #include <tools/stream.hxx>
 #include <rtl/crc.h>
+
+#include <vcl/animate.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/window.hxx>
 #include <vcl/dibtools.hxx>
+#include <vcl/BitmapColorQuantizationFilter.hxx>
 
 #include <impanmvw.hxx>
 
 #define MIN_TIMEOUT 2
-#define INC_TIMEOUT 0
 
 sal_uLong Animation::mnAnimCount = 0;
 
@@ -318,7 +319,7 @@ void Animation::Draw( OutputDevice* pOut, const Point& rDestPt, const Size& rDes
 
 void Animation::ImplRestartTimer( sal_uLong nTimeout )
 {
-    maTimer.SetTimeout( std::max( nTimeout, static_cast<sal_uLong>(MIN_TIMEOUT + ( mnAnimCount - 1 ) * INC_TIMEOUT) ) * 10 );
+    maTimer.SetTimeout( std::max( nTimeout, static_cast<sal_uLong>(MIN_TIMEOUT) ) * 10 );
     maTimer.Start();
 }
 
@@ -528,13 +529,17 @@ bool Animation::ReduceColors( sal_uInt16 nNewColorCount )
     {
         bRet = true;
 
-        for( size_t i = 0, n = maList.size(); ( i < n ) && bRet; ++i )
-            bRet = maList[ i ]->aBmpEx.ReduceColors( nNewColorCount );
+        for (size_t i = 0, n = maList.size(); (i < n) && bRet; ++i)
+        {
+            bRet = BitmapFilter::Filter(maList[i]->aBmpEx, BitmapColorQuantizationFilter(nNewColorCount));
+        }
 
-        maBitmapEx.ReduceColors( nNewColorCount );
+        BitmapFilter::Filter(maBitmapEx, BitmapColorQuantizationFilter(nNewColorCount));
     }
     else
+    {
         bRet = false;
+    }
 
     return bRet;
 }
@@ -618,27 +623,6 @@ void Animation::Adjust( short nLuminancePercent, short nContrastPercent,
                            nChannelRPercent, nChannelGPercent, nChannelBPercent,
                            fGamma, bInvert );
     }
-}
-
-bool Animation::Filter( BmpFilter eFilter, const BmpFilterParam* pFilterParam )
-{
-    SAL_WARN_IF( IsInAnimation(), "vcl", "Animation modified while it is animated" );
-
-    bool bRet;
-
-    if( !IsInAnimation() && !maList.empty() )
-    {
-        bRet = true;
-
-        for( size_t i = 0, n = maList.size(); ( i < n ) && bRet; ++i )
-            bRet = maList[ i ]->aBmpEx.Filter( eFilter, pFilterParam );
-
-        (void)maBitmapEx.Filter(eFilter, pFilterParam);
-    }
-    else
-        bRet = false;
-
-    return bRet;
 }
 
 SvStream& WriteAnimation( SvStream& rOStm, const Animation& rAnimation )

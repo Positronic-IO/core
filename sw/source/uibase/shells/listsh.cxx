@@ -37,14 +37,13 @@
 #include <swmodule.hxx>
 #include <frmatr.hxx>
 #include <globals.hrc>
-#include <strings.hrc>
 #include <uinums.hxx>
 #include <listsh.hxx>
 #include <poolfmt.hxx>
 #include <view.hxx>
 #include <edtwin.hxx>
 
-#define SwListShell
+#define ShellClass_SwListShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 

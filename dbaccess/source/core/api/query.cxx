@@ -130,7 +130,7 @@ void OQuery::rebuildColumns()
         {
             xColumnDefinitions = xColSup->getColumns();
             if ( xColumnDefinitions.is() )
-                m_pColumnMediator = new OContainerMediator( m_pColumns, xColumnDefinitions );
+                m_pColumnMediator = new OContainerMediator( m_pColumns.get(), xColumnDefinitions );
         }
 
         // fill the columns with columns from the statement
@@ -165,7 +165,7 @@ void OQuery::rebuildColumns()
             ::rtl::Reference< OSQLColumns > aParseColumns(
                 ::connectivity::parse::OParseColumn::createColumnsForResultSet( xResultSetMeta, xDBMeta,xColumnDefinitions ) );
             xColumns = OPrivateColumns::createWithIntrinsicNames(
-                aParseColumns, xDBMeta->supportsMixedCaseQuotedIdentifiers(), *this, m_aMutex );
+                aParseColumns, xDBMeta->supportsMixedCaseQuotedIdentifiers(), *this, m_aMutex ).release();
             if ( !xColumns.is() )
                 throw RuntimeException();
         }
@@ -206,7 +206,7 @@ void OQuery::rebuildColumns()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

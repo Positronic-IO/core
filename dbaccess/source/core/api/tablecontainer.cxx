@@ -23,7 +23,6 @@
 #include <comphelper/property.hxx>
 #include <comphelper/processfactory.hxx>
 #include <tools/debug.hxx>
-#include <comphelper/enumhelper.hxx>
 #include <core_resource.hxx>
 #include <strings.hrc>
 #include <com/sun/star/sdb/CommandType.hpp>
@@ -41,7 +40,6 @@
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
-#include <comphelper/extract.hxx>
 #include <connectivity/dbexception.hxx>
 #include <TableDeco.hxx>
 #include <sdbcoretools.hxx>
@@ -121,7 +119,7 @@ void OTableContainer::removeMasterContainerListener()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -442,7 +440,7 @@ void OTableContainer::addMasterContainerListener()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

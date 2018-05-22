@@ -24,6 +24,7 @@
 #include <vcl/dllapi.h>
 #include <vcl/syswin.hxx>
 #include <o3tl/typed_flags_set.hxx>
+#include <memory>
 
 class ToolBox;
 
@@ -86,7 +87,7 @@ private:
     VclPtr<FloatingWindow>  mpNextFloat;
     VclPtr<vcl::Window>     mpFirstPopupModeWin;
     VclPtr<vcl::Window>     mxPrevFocusWin;
-    ImplData*       mpImplData;
+    std::unique_ptr<ImplData> mpImplData;
     tools::Rectangle       maFloatRect;
     ImplSVEvent *   mnPostId;
     FloatWinPopupFlags   mnPopupModeFlags;
@@ -120,16 +121,16 @@ public:
     SAL_DLLPRIVATE bool             ImplIsFloatPopupModeWindow( const vcl::Window* pWindow );
     SAL_DLLPRIVATE void             ImplSetMouseDown() { mbMouseDown = true; }
     SAL_DLLPRIVATE bool             ImplIsMouseDown() const  { return mbMouseDown; }
-                   static Point     ImplCalcPos( vcl::Window* pWindow,
-                                                 const tools::Rectangle& rRect, FloatWinPopupFlags nFlags,
-                                                 sal_uInt16& rArrangeIndex );
+                   static Point     ImplCalcPos(vcl::Window* pWindow,
+                                                const tools::Rectangle& rRect, FloatWinPopupFlags nFlags,
+                                                sal_uInt16& rArrangeIndex, Point* pLOKTwipsPos = nullptr);
                    static Point     ImplConvertToAbsPos(vcl::Window* pReference, const Point& rPos);
                    static tools::Rectangle ImplConvertToAbsPos(vcl::Window* pReference, const tools::Rectangle& rRect);
     SAL_DLLPRIVATE void             ImplEndPopupMode( FloatWinPopupEndFlags nFlags, const VclPtr<vcl::Window>& xFocusId );
     SAL_DLLPRIVATE tools::Rectangle&       ImplGetItemEdgeClipRect();
     SAL_DLLPRIVATE bool             ImplIsInPrivatePopupMode() const { return mbInPopupMode; }
     virtual        void             doDeferredInit(WinBits nBits) override;
-                   void             LogicInvalidate(const tools::Rectangle* pRectangle) override;
+                   void             PixelInvalidate(const tools::Rectangle* pRectangle) override;
 
 public:
     explicit        FloatingWindow(vcl::Window* pParent, WinBits nStyle);
@@ -148,7 +149,7 @@ public:
     FloatWinTitleType GetTitleType() const { return mnTitle; }
 
     void            StartPopupMode( const tools::Rectangle& rRect, FloatWinPopupFlags nFlags );
-    void            StartPopupMode( ToolBox* pBox, FloatWinPopupFlags nFlags = FloatWinPopupFlags::NONE  );
+    void            StartPopupMode( ToolBox* pBox, FloatWinPopupFlags nFlags  );
     void            EndPopupMode( FloatWinPopupEndFlags nFlags = FloatWinPopupEndFlags::NONE );
     void            AddPopupModeWindow( vcl::Window* pWindow );
     FloatWinPopupFlags GetPopupModeFlags() const { return mnPopupModeFlags; }

@@ -22,6 +22,7 @@
 #include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/text/TextGridMode.hpp>
 #include <o3tl/any.hxx>
+#include <o3tl/safeint.hxx>
 #include <svtools/unoimap.hxx>
 #include <svtools/imap.hxx>
 #include <svtools/imapobj.hxx>
@@ -70,7 +71,7 @@
 #include <unotextbodyhf.hxx>
 #include <SwStyleNameMapper.hxx>
 #include <editeng/brushitem.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <unomid.h>
 #include <strings.hrc>
 #include <svx/svdundo.hxx>
@@ -121,7 +122,7 @@ static void lcl_DelHFFormat( SwClient *pToRemove, SwFrameFormat *pFormat )
         // It's suboptimal if the format is deleted beforehand.
         SwIterator<SwClient,SwFrameFormat> aIter(*pFormat);
         for(SwClient* pLast = aIter.First(); bDel && pLast; pLast = aIter.Next())
-            if (dynamic_cast<const SwFrame*>(pLast) == nullptr && !SwXHeadFootText::IsXHeadFootText(pLast))
+            if (dynamic_cast<const SwFrame*>(pLast) == nullptr)
                 bDel = false;
     }
 
@@ -994,16 +995,23 @@ sal_uInt16 SwFormatCol::CalcPrtColWidth( sal_uInt16 nCol, sal_uInt16 nAct ) cons
 
 void SwFormatCol::Calc( sal_uInt16 nGutterWidth, sal_uInt16 nAct )
 {
-    if(!GetNumCols())
+    if (!GetNumCols())
         return;
+
     //First set the column widths with the current width, then calculate the
     //column's requested width using the requested total width.
-
     const sal_uInt16 nGutterHalf = nGutterWidth ? nGutterWidth / 2 : 0;
 
     //Width of PrtAreas is totalwidth - spacings / count
-    const sal_uInt16 nPrtWidth =
-                (nAct - ((GetNumCols()-1) * nGutterWidth)) / GetNumCols();
+    sal_uInt16 nSpacings;
+    bool bFail = o3tl::checked_multiply<sal_uInt16>(GetNumCols() - 1, nGutterWidth, nSpacings);
+    if (bFail)
+    {
+        SAL_WARN("sw.core", "SwFormatVertOrient::Calc: overflow");
+        return;
+    }
+
+    const sal_uInt16 nPrtWidth = (nAct - nSpacings) / GetNumCols();
     sal_uInt16 nAvail = nAct;
 
     //The first column is PrtWidth + (gap width / 2)
@@ -2233,7 +2241,7 @@ bool SwTextGridItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
     switch( nMemberId & ~CONVERT_TWIPS )
     {
         case MID_GRID_COLOR:
-            rVal <<= GetColor().GetColor();
+            rVal <<= GetColor();
             break;
         case MID_GRID_LINES:
             rVal <<= GetLines();
@@ -2845,6 +2853,9 @@ void SwFrameFormat::dumpAsXml(xmlTextWriterPtr pWriter) const
 
     GetAttrSet().dumpAsXml(pWriter);
 
+    if (const SdrObject* pSdrObject = FindSdrObject())
+        pSdrObject->dumpAsXml(pWriter);
+
     xmlTextWriterEndElement(pWriter);
 }
 
@@ -2883,7 +2894,11 @@ SwFlyFrameFormat::~SwFlyFrameFormat()
 SwFlyDrawContact* SwFlyFrameFormat::GetOrCreateContact()
 {
     if(!m_pContact)
-        m_pContact.reset(new SwFlyDrawContact(this));
+    {
+        SwDrawModel* pDrawModel(GetDoc()->getIDocumentDrawModelAccess().GetOrCreateDrawModel());
+        m_pContact.reset(new SwFlyDrawContact(this, *pDrawModel));
+    }
+
     return m_pContact.get();
 }
 
@@ -3382,7 +3397,7 @@ OUString SwDrawFrameFormat::GetDescription() const
     {
         if (pSdrObj != m_pSdrObjectCached)
         {
-            SdrObject * pSdrObjCopy = pSdrObj->Clone();
+            SdrObject * pSdrObjCopy(pSdrObj->CloneSdrObject(pSdrObj->getSdrModelFromSdrObject()));
             SdrUndoNewObj * pSdrUndo = new SdrUndoNewObj(*pSdrObjCopy);
             m_sSdrObjectCachedComment = pSdrUndo->GetComment();
 

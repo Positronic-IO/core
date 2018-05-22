@@ -57,9 +57,9 @@ namespace sdr
         {
         }
 
-        BaseProperties& GroupProperties::Clone(SdrObject& rObj) const
+        std::unique_ptr<BaseProperties> GroupProperties::Clone(SdrObject& rObj) const
         {
-            return *(new GroupProperties(*this, rObj));
+            return std::unique_ptr<BaseProperties>(new GroupProperties(*this, rObj));
         }
 
         const SfxItemSet& GroupProperties::GetObjectItemSet() const
@@ -83,8 +83,9 @@ namespace sdr
             }
 
             // collect all ItemSets in mpItemSet
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -107,7 +108,7 @@ namespace sdr
                 }
             }
 
-            // For group proerties, do not call parent since groups do
+            // For group properties, do not call parent since groups do
             // not have local ItemSets.
             return *mpItemSet;
         }
@@ -115,8 +116,9 @@ namespace sdr
         void GroupProperties::SetMergedItemSet(const SfxItemSet& rSet, bool bClearAllItems)
         {
             // iterate over contained SdrObjects
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -156,8 +158,9 @@ namespace sdr
 
         void GroupProperties::SetMergedItem(const SfxPoolItem& rItem)
         {
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -167,8 +170,9 @@ namespace sdr
 
         void GroupProperties::ClearMergedItem(const sal_uInt16 nWhich)
         {
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -206,8 +210,9 @@ namespace sdr
         {
             SfxStyleSheet* pRetval = nullptr;
 
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -232,8 +237,9 @@ namespace sdr
 
         void GroupProperties::SetStyleSheet(SfxStyleSheet* pNewStyleSheet, bool bDontRemoveHardAttr)
         {
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {
@@ -246,35 +252,11 @@ namespace sdr
             // nothing to do here, groups have no items and thus no default items, too.
         }
 
-        void GroupProperties::MoveToItemPool(SfxItemPool* pSrcPool, SfxItemPool* pDestPool, SdrModel* pNewModel)
-        {
-            if(pSrcPool && pDestPool && (pSrcPool != pDestPool))
-            {
-                const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-                const size_t nCount(pSub->GetObjCount());
-
-                for(size_t a = 0; a < nCount; ++a)
-                {
-                    pSub->GetObj(a)->GetProperties().MoveToItemPool(pSrcPool, pDestPool, pNewModel);
-                }
-
-                // also clear local ItemSet, it's only temporary for group objects anyways.
-                if(mpItemSet)
-                {
-                    // copy/paste is still using clone operators and MoveToItemPool functionality.
-                    // Since SfxItemSet contains a pool pointer, ClearItem is not enough here.
-                    // The ItemSet for merge is constructed on demand, so it's enough here to
-                    // just delete it and set to 0L.
-                    // mpItemSet->ClearItem();
-                    mpItemSet.reset();
-                }
-            }
-        }
-
         void GroupProperties::ForceStyleToHardAttributes()
         {
-            const SdrObjList* pSub = static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList();
-            const size_t nCount(pSub->GetObjCount());
+            const SdrObjList* pSub(static_cast<const SdrObjGroup&>(GetSdrObject()).GetSubList());
+            OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
+            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
             for(size_t a = 0; a < nCount; ++a)
             {

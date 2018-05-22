@@ -37,7 +37,7 @@
 #include <svx/svdouno.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdmodel.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <svx/svdetc.hxx>
 #include <svx/svdview.hxx>
@@ -145,9 +145,11 @@ namespace
     }
 }
 
-
-SdrUnoObj::SdrUnoObj(const OUString& rModelName)
-:   m_pImpl( new SdrUnoObjDataHolder )
+SdrUnoObj::SdrUnoObj(
+    SdrModel& rSdrModel,
+    const OUString& rModelName)
+:   SdrRectObj(rSdrModel),
+    m_pImpl( new SdrUnoObjDataHolder )
 {
     bIsUnoObj = true;
 
@@ -158,9 +160,12 @@ SdrUnoObj::SdrUnoObj(const OUString& rModelName)
         CreateUnoControlModel(rModelName);
 }
 
-SdrUnoObj::SdrUnoObj(const OUString& rModelName,
-                     const uno::Reference< lang::XMultiServiceFactory >& rxSFac)
-:   m_pImpl( new SdrUnoObjDataHolder )
+SdrUnoObj::SdrUnoObj(
+    SdrModel& rSdrModel,
+    const OUString& rModelName,
+    const uno::Reference< lang::XMultiServiceFactory >& rxSFac)
+:   SdrRectObj(rSdrModel),
+    m_pImpl( new SdrUnoObjDataHolder )
 {
     bIsUnoObj = true;
 
@@ -225,13 +230,13 @@ void SdrUnoObj::SetContextWritingMode( const sal_Int16 _nContextWritingMode )
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
 OUString SdrUnoObj::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulUno));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulUno));
 
     OUString aName(GetName());
     if (!aName.isEmpty())
@@ -247,12 +252,12 @@ OUString SdrUnoObj::TakeObjNameSingul() const
 
 OUString SdrUnoObj::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralUno);
+    return SvxResId(STR_ObjNamePluralUno);
 }
 
-SdrUnoObj* SdrUnoObj::Clone() const
+SdrUnoObj* SdrUnoObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrUnoObj >();
+    return CloneHelper< SdrUnoObj >(rTargetModel);
 }
 
 SdrUnoObj& SdrUnoObj::operator= (const SdrUnoObj& rObj)
@@ -278,7 +283,7 @@ SdrUnoObj& SdrUnoObj::operator= (const SdrUnoObj& rObj)
         }
         catch( const uno::Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -327,38 +332,6 @@ bool SdrUnoObj::hasSpecialDrag() const
     // do want frame handles
     return false;
 }
-
-bool SdrUnoObj::supportsFullDrag() const
-{
-    // override to have the possibility to enable/disable in debug and
-    // to check some things out. Current solution is working, so default is
-    // enabled
-    static bool bDoSupportFullDrag(true);
-
-    return bDoSupportFullDrag;
-}
-
-SdrObject* SdrUnoObj::getFullDragClone() const
-{
-    SdrObject* pRetval = nullptr;
-    static bool bHandleSpecial(false);
-
-    if(bHandleSpecial)
-    {
-        // special handling for SdrUnoObj (FormControl). Create a SdrGrafObj
-        // for drag containing the graphical representation. This does not work too
-        // well, so the default is to simply clone
-        pRetval = new SdrGrafObj(SdrDragView::GetObjGraphic(GetModel(), this), GetLogicRect());
-    }
-    else
-    {
-        // call parent (simply clone)
-        pRetval = SdrRectObj::getFullDragClone();
-    }
-
-    return pRetval;
-}
-
 
 void SdrUnoObj::NbcSetLayer( SdrLayerID _nLayer )
 {

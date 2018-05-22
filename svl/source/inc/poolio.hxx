@@ -30,10 +30,6 @@
 class SfxPoolItem;
 class SfxItemPoolUser;
 
-#ifndef DELETEZ
-#define DELETEZ(pPtr) { delete pPtr; pPtr = 0; }
-#endif
-
 static const sal_uInt32 SFX_ITEMS_DEFAULT = 0xfffffffe;
 
 /**
@@ -71,14 +67,14 @@ public:
 struct SfxItemPool_Impl
 {
     SfxBroadcaster                  aBC;
-    std::vector<SfxPoolItemArray_Impl*> maPoolItems;
+    std::vector<std::unique_ptr<SfxPoolItemArray_Impl>> maPoolItems;
     std::vector<SfxItemPoolUser*>   maSfxItemPoolUsers; /// ObjectUser section
     OUString                        aName;
     std::vector<SfxPoolItem*>       maPoolDefaults;
     std::vector<SfxPoolItem*>*      mpStaticDefaults;
     SfxItemPool*                    mpMaster;
     SfxItemPool*                    mpSecondary;
-    sal_uInt16*                     mpPoolRanges;
+    std::unique_ptr<sal_uInt16[]>   mpPoolRanges;
     sal_uInt16                      mnStart;
     sal_uInt16                      mnEnd;
     MapUnit                         eDefMetric;
@@ -105,13 +101,9 @@ struct SfxItemPool_Impl
 
     void DeleteItems()
     {
-        for (auto pPoolItemArray : maPoolItems)
-            delete pPoolItemArray;
         maPoolItems.clear();
         maPoolDefaults.clear();
-
-        delete[] mpPoolRanges;
-        mpPoolRanges = nullptr;
+        mpPoolRanges.reset();
     }
 
     // unit testing

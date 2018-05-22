@@ -21,7 +21,6 @@
 #include <editeng/editeng.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/editdata.hxx>
-#include <editeng/eerdll.hxx>
 #include <editeng/lrspitem.hxx>
 #include <editeng/fhgtitem.hxx>
 
@@ -35,13 +34,13 @@
 #include <o3tl/cow_wrapper.hxx>
 #include <libxml/xmlwriter.h>
 
-OutlinerParaObjData::OutlinerParaObjData( EditTextObject* pEditTextObject, const ParagraphDataVector& rParagraphDataVector, bool bIsEditDoc ) :
-    mpEditTextObject(pEditTextObject),
+OutlinerParaObjData::OutlinerParaObjData( std::unique_ptr<EditTextObject> pEditTextObject, const ParagraphDataVector& rParagraphDataVector, bool bIsEditDoc ) :
+    mpEditTextObject(std::move(pEditTextObject)),
     maParagraphDataVector(rParagraphDataVector),
     mbIsEditDoc(bIsEditDoc)
 {
-    if( maParagraphDataVector.empty() && (pEditTextObject->GetParagraphCount() != 0) )
-        maParagraphDataVector.resize(pEditTextObject->GetParagraphCount());
+    if( maParagraphDataVector.empty() && (mpEditTextObject->GetParagraphCount() != 0) )
+        maParagraphDataVector.resize(mpEditTextObject->GetParagraphCount());
 }
 
 OutlinerParaObjData::OutlinerParaObjData( const OutlinerParaObjData& r ):

@@ -93,8 +93,6 @@ OInterceptor::OInterceptor( ODocumentDefinition* _pContentHolder )
 
 OInterceptor::~OInterceptor()
 {
-    delete m_pDisposeEventListeners;
-    delete m_pStatCL;
 }
 
 struct DispatchHelper
@@ -191,7 +189,7 @@ IMPL_LINK( OInterceptor, OnDispatch, void*, _pDispatcher, void )
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -220,7 +218,7 @@ void SAL_CALL OInterceptor::addStatusListener(
         {
             osl::MutexGuard aGuard(m_aMutex);
             if(!m_pStatCL)
-                m_pStatCL = new PropertyChangeListenerContainer(m_aMutex);
+                m_pStatCL.reset( new PropertyChangeListenerContainer(m_aMutex) );
         }
 
         m_pStatCL->addInterface(URL.Complete,Control);
@@ -237,7 +235,7 @@ void SAL_CALL OInterceptor::addStatusListener(
         {
             osl::MutexGuard aGuard(m_aMutex);
             if(!m_pStatCL)
-                m_pStatCL = new PropertyChangeListenerContainer(m_aMutex);
+                m_pStatCL.reset( new PropertyChangeListenerContainer(m_aMutex) );
         }
 
         m_pStatCL->addInterface(URL.Complete,Control);
@@ -261,7 +259,7 @@ void SAL_CALL OInterceptor::addStatusListener(
             {
                 osl::MutexGuard aGuard(m_aMutex);
                 if(!m_pStatCL)
-                    m_pStatCL = new PropertyChangeListenerContainer(m_aMutex);
+                    m_pStatCL.reset( new PropertyChangeListenerContainer(m_aMutex) );
             }
 
             m_pStatCL->addInterface(URL.Complete,Control);

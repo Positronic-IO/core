@@ -106,7 +106,7 @@ SwPageNumberFieldType::SwPageNumberFieldType()
 
 OUString SwPageNumberFieldType::Expand( SvxNumType nFormat, short nOff,
          sal_uInt16 const nPageNumber, sal_uInt16 const nMaxPage,
-         const OUString& rUserStr ) const
+         const OUString& rUserStr, LanguageType nLang ) const
 {
     SvxNumType nTmpFormat = (SVX_NUM_PAGEDESC == nFormat) ? m_nNumberingType : nFormat;
     int const nTmp = nPageNumber + nOff;
@@ -117,7 +117,7 @@ OUString SwPageNumberFieldType::Expand( SvxNumType nFormat, short nOff,
     if( SVX_NUM_CHAR_SPECIAL == nTmpFormat )
         return rUserStr;
 
-    return FormatNumber( nTmp, nTmpFormat );
+    return FormatNumber( nTmp, nTmpFormat, nLang );
 }
 
 SwFieldType* SwPageNumberFieldType::Copy() const
@@ -189,22 +189,22 @@ OUString SwPageNumberField::Expand() const
 
     if( PG_NEXT == m_nSubType && 1 != m_nOffset )
     {
-        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), 1, m_nPageNumber, m_nMaxPage, m_sUserStr);
+        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), 1, m_nPageNumber, m_nMaxPage, m_sUserStr, GetLanguage());
         if (!sRet.isEmpty())
         {
-            sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr);
+            sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr, GetLanguage());
         }
     }
     else if( PG_PREV == m_nSubType && -1 != m_nOffset )
     {
-        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), -1, m_nPageNumber, m_nMaxPage, m_sUserStr);
+        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), -1, m_nPageNumber, m_nMaxPage, m_sUserStr, GetLanguage());
         if (!sRet.isEmpty())
         {
-            sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr);
+            sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr, GetLanguage());
         }
     }
     else
-        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr);
+        sRet = pFieldType->Expand(static_cast<SvxNumType>(GetFormat()), m_nOffset, m_nPageNumber, m_nMaxPage, m_sUserStr, GetLanguage());
     return sRet;
 }
 
@@ -2394,7 +2394,7 @@ bool SwRefPageGetField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
 // field type to jump to and edit
 
 SwJumpEditFieldType::SwJumpEditFieldType( SwDoc* pD )
-    : SwFieldType( SwFieldIds::JumpEdit ), m_pDoc( pD ), m_aDep( this, nullptr )
+    : SwFieldType( SwFieldIds::JumpEdit ), m_pDoc( pD ), m_aDep( *this )
 {
 }
 
@@ -2406,11 +2406,7 @@ SwFieldType* SwJumpEditFieldType::Copy() const
 SwCharFormat* SwJumpEditFieldType::GetCharFormat()
 {
     SwCharFormat* pFormat = m_pDoc->getIDocumentStylePoolAccess().GetCharFormatFromPool( RES_POOLCHR_JUMPEDIT );
-
-    // not registered yet?
-    if( !m_aDep.GetRegisteredIn() )
-        pFormat->Add( &m_aDep );     // register
-
+    m_aDep.StartListening(pFormat);
     return pFormat;
 }
 

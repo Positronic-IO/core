@@ -46,6 +46,7 @@
 #include <sfx2/tabdlg.hxx>
 
 #include <boost/optional/optional.hpp>
+#include <memory>
 
 namespace com { namespace sun { namespace star {
     namespace document {
@@ -81,7 +82,7 @@ private:
     bool                         m_bDeleteUserData;
     bool                         m_bUseUserData;
     bool                         m_bUseThumbnailSave;
-    std::vector< CustomProperty* >    m_aCustomProperties;
+    std::vector< std::unique_ptr<CustomProperty> >    m_aCustomProperties;
     css::uno::Sequence< css::document::CmisProperty > m_aCmisProperties;
 
 public:
@@ -150,7 +151,7 @@ public:
     bool        IsUseThumbnailSave() const { return m_bUseThumbnailSave;}
 
 
-    std::vector< CustomProperty* >  GetCustomProperties() const;
+    std::vector< std::unique_ptr<CustomProperty> > GetCustomProperties() const;
     void        ClearCustomProperties();
     void        AddCustomProperty(  const OUString& sName,
                                     const css::uno::Any& rValue );
@@ -201,7 +202,7 @@ private:
 
     DECL_LINK(DeleteHdl, Button*, void);
     DECL_LINK(SignatureHdl, Button*, void);
-    DECL_STATIC_LINK(SfxDocumentPage, ChangePassHdl, Button*, void);
+    DECL_LINK(ChangePassHdl, Button*, void);
     void                ImplUpdateSignatures();
     void                ImplCheckPasswordState();
 
@@ -214,7 +215,7 @@ protected:
 
 public:
     SfxDocumentPage( vcl::Window* pParent, const SfxItemSet& );
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* );
 
     void                EnableUseUserData();
 };
@@ -239,7 +240,7 @@ protected:
 
 public:
     SfxDocumentDescPage( vcl::Window* pParent, const SfxItemSet& );
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* );
 };
 
 // class SfxDocumentInfoDialog -------------------------------------------
@@ -402,7 +403,7 @@ private:
     sal_Int32                           m_nTypeBoxWidth;
     sal_Int32                           m_nLineHeight;
     sal_Int32                           m_nScrollPos;
-    std::vector<CustomProperty*>        m_aCustomProperties;
+    std::vector<std::unique_ptr<CustomProperty>> m_aCustomProperties;
     std::vector<CustomPropertyLine*>    m_aCustomPropertiesLines;
     CustomPropertyLine*                 m_pCurrentLine;
     SvNumberFormatter                   m_aNumberFormatter;
@@ -455,7 +456,7 @@ public:
 
     css::uno::Sequence< css::beans::PropertyValue >
                         GetCustomProperties();
-    void                SetCustomProperties(const std::vector<CustomProperty*>& rProperties);
+    void                SetCustomProperties(std::vector< std::unique_ptr<CustomProperty> >&& rProperties);
     void                SetRemovedHdl( const Link<void*,void>& rLink ) { m_aRemovedHdl = rLink; }
 };
 
@@ -480,7 +481,7 @@ public:
     virtual ~CustomPropertiesControl() override;
     virtual void dispose() override;
 
-    void         AddLine(const OUString& sName, css::uno::Any const & rAny, bool bInteractive);
+    void         AddLine(css::uno::Any const & rAny);
 
     bool         AreAllLinesValid() const { return m_pPropertiesWin->AreAllLinesValid(); }
     void         ClearAllLines() { m_pPropertiesWin->ClearAllLines(); }
@@ -488,7 +489,7 @@ public:
     css::uno::Sequence<css::beans::PropertyValue>
                  GetCustomProperties() const
                         { return m_pPropertiesWin->GetCustomProperties(); }
-    void         SetCustomProperties(const std::vector<CustomProperty*>& rProperties);
+    void         SetCustomProperties(std::vector< std::unique_ptr<CustomProperty> >&& rProperties);
 
     void         Init(VclBuilderContainer& rParent);
     virtual void Resize() override;
@@ -515,7 +516,7 @@ protected:
 
 public:
     SfxCustomPropertiesPage( vcl::Window* pParent, const SfxItemSet& );
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* );
 };
 
 struct CmisValue : public VclBuilderContainer
@@ -637,7 +638,7 @@ public:
     virtual ~SfxCmisPropertiesPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* );
     virtual void SetPosSizePixel(const Point& rAllocPos, const Size& rAllocation) override;
     virtual void SetSizePixel(const Size& rAllocation) override;
     virtual void SetPosPixel(const Point& rAllocPos) override;

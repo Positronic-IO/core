@@ -22,14 +22,14 @@
 #include <i18nlangtag/lang.h>
 #include "swdllapi.h"
 #include "calbck.hxx"
-#include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/uno/Any.hxx>
 #include <cppuhelper/weakref.hxx>
 #include <editeng/svxenum.hxx>
 #include <vector>
 
 class SwDoc;
 class SvNumberFormatter;
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySet; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class Any; } } } }
 
 enum class SwFieldIds : sal_uInt16 {
 /// For old documents the Field-Which IDs must be preserved !!!
@@ -221,7 +221,7 @@ enum SwDateTimeSubType {
 };
 
 /// General tools.
-OUString  FormatNumber(sal_uInt32 nNum, SvxNumType nFormat);
+OUString  FormatNumber(sal_uInt32 nNum, SvxNumType nFormat, LanguageType nLang = LANGUAGE_NONE);
 
 /** Instances of SwFields and those derived from it occur 0 to n times.
  For each class there is one instance of the associated type class.

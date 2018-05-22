@@ -34,7 +34,8 @@ namespace {
 // Last element of Key becomes prop, first part is the path and optionally nodes,
 // when the node has oor:op attribute.
 // Values can be the following: Value (string), Type (string, optional),
-// Final (dword, optional), External (dword, optional)
+// Final (dword, optional), External (dword, optional), ExternalBackend (string, optional),
+// Nil (dword, optional)
 //
 // For example the following registry setting:
 // [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\LibreOffice\org.openoffice.UserProfile\Data\o]
@@ -79,15 +80,38 @@ namespace {
 //
 // External (component data) example:
 // [HKEY_CURRENT_USER\Software\Policies\LibreOffice\org.openoffice.UserProfile\Data\o]
-// "Value"="com.sun.star.configuration.backend.LdapUserProfileBe company"
+// "Value"="company"
 // "Final"=dword:00000001
 // "External"=dword:00000001
+// "ExternalBackend"="com.sun.star.configuration.backend.LdapUserProfileBe"
 // becomes the following in configuration:
 // <item oor:path="/org.openoffice.UserProfile/Data">
 //     <prop oor:name="o" oor:finalized="true">
 //         <value oor:external="com.sun.star.configuration.backend.LdapUserProfileBe company"/>
 //     </prop>
 // </item>
+//
+// Nil example:
+// Empty value (<value></value>) and nil value (<value xsi:nil="true"/>) are different.
+// In case of some path settings, the base path setting has to be cleared.
+// [HKEY_CURRENT_USER\Software\Policies\LibreOffice\org.openoffice.Office.Common\Path\Current\Work]
+// "Value"=""
+// "Final"=dword:00000001
+// "Nil"=dword:00000001
+// [HKEY_CURRENT_USER\Software\Policies\LibreOffice\org.openoffice.Office.Paths\Paths\org.openoffice.Office.Paths:NamedPath['Work']\WritePath]
+// "Value"="file:///H:/"
+// "Final"=dword:00000001
+// becomes the following in configuration:
+// <item oor:path="/org.openoffice.Office.Common/Path/Current">
+//     <prop oor:name="Work" oor:finalized="true">
+//         <value xsi:nil="true"/>
+//      </prop>
+// </item>
+// <item oor:path="/org.openoffice.Office.Paths/Paths/org.openoffice.Office.Paths:NamedPath['Work']">
+//     <prop oor:name="WritePath" oor:finalized="true">
+//         <value>file:///H:/</value>
+//     </prop>
+//  </item>
 
 void dumpWindowsRegistryKey(HKEY hKey, OUString const & aKeyName, TempFile &aFileHandle)
 {
@@ -135,8 +159,10 @@ void dumpWindowsRegistryKey(HKEY hKey, OUString const & aKeyName, TempFile &aFil
 
             bool bFinal = false;
             bool bExternal = false;
+            bool bNil = false;
             OUString aValue;
             OUString aType;
+            OUString aExternalBackend;
 
             for(DWORD i = 0; i < nValues; ++i)
             {
@@ -154,15 +180,29 @@ void dumpWindowsRegistryKey(HKEY hKey, OUString const & aKeyName, TempFile &aFil
                     if (*reinterpret_cast<DWORD*>(pValue.get()) == 1)
                         bFinal = true;
                 }
+                else if (!wcscmp(pValueName.get(), L"Nil"))
+                {
+                    if (*reinterpret_cast<DWORD*>(pValue.get()) == 1)
+                        bNil = true;
+                }
                 else if (!wcscmp(pValueName.get(), L"External"))
                 {
                     if (*reinterpret_cast<DWORD*>(pValue.get()) == 1)
                         bExternal = true;
                 }
+                else if (!wcscmp(pValueName.get(), L"ExternalBackend"))
+                    aExternalBackend = o3tl::toU(pValue.get());
             }
-            // type and external are mutually exclusive
             if (bExternal)
+            {
+                // type and external are mutually exclusive
                 aType.clear();
+
+                // Prepend backend, like in
+                // "com.sun.star.configuration.backend.LdapUserProfileBe company"
+                if (!aExternalBackend.isEmpty())
+                    aValue = aExternalBackend + " " + aValue;
+            }
 
             sal_Int32 aLastSeparator = aKeyName.lastIndexOf('\\');
             OUString aPathAndNodes = aKeyName.copy(0, aLastSeparator);
@@ -220,7 +260,11 @@ void dumpWindowsRegistryKey(HKEY hKey, OUString const & aKeyName, TempFile &aFil
             if(bFinal)
                 aFileHandle.writeString(" oor:finalized=\"true\"");
             aFileHandle.writeString("><value");
-            if (bExternal)
+            if (aValue.isEmpty() && bNil)
+            {
+                aFileHandle.writeString(" xsi:nil=\"true\"/");
+            }
+            else if (bExternal)
             {
                 aFileHandle.writeString(" oor:external=\"");
                 writeAttributeValue(aFileHandle, aValue);

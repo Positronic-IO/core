@@ -82,6 +82,7 @@ struct LOKDocViewPrivateImpl
     std::string m_aRenderingArguments;
     gdouble m_nLoadProgress;
     gboolean m_bIsLoading;
+    gboolean m_bInit; // initializeForRendering() has been called
     gboolean m_bCanZoomIn;
     gboolean m_bCanZoomOut;
     LibreOfficeKit* m_pOffice;
@@ -194,6 +195,7 @@ struct LOKDocViewPrivateImpl
     LOKDocViewPrivateImpl()
         : m_nLoadProgress(0),
         m_bIsLoading(false),
+        m_bInit(false),
         m_bCanZoomIn(true),
         m_bCanZoomOut(true),
         m_pOffice(nullptr),
@@ -293,6 +295,7 @@ enum
     PROP_LOAD_PROGRESS,
     PROP_ZOOM,
     PROP_IS_LOADING,
+    PROP_IS_INITIALIZED,
     PROP_DOC_WIDTH,
     PROP_DOC_HEIGHT,
     PROP_CAN_ZOOM_IN,
@@ -970,6 +973,9 @@ static gboolean postDocumentLoad(gpointer pData)
     gtk_widget_grab_focus(GTK_WIDGET(pLOKDocView));
     lok_doc_view_set_zoom(pLOKDocView, 1.0);
 
+    // we are completely loaded
+    priv->m_bInit = TRUE;
+
     return G_SOURCE_REMOVE;
 }
 
@@ -1157,13 +1163,25 @@ callback (gpointer pData)
     break;
     case LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR:
     {
-        priv->m_aVisibleCursor = payloadToRectangle(pDocView, pCallback->m_aPayload.c_str());
+
+        std::stringstream aStream(pCallback->m_aPayload);
+        boost::property_tree::ptree aTree;
+        boost::property_tree::read_json(aStream, aTree);
+        const std::string& rRectangle = aTree.get<std::string>("rectangle");
+        int nViewId = aTree.get<int>("viewId");
+
+        priv->m_aVisibleCursor = payloadToRectangle(pDocView, rRectangle.c_str());
         priv->m_bCursorOverlayVisible = true;
-        g_signal_emit(pDocView, doc_view_signals[CURSOR_CHANGED], 0,
+        std::cerr << nViewId;
+        std::cerr << priv->m_nViewId;
+        if(nViewId == priv->m_nViewId)
+        {
+            g_signal_emit(pDocView, doc_view_signals[CURSOR_CHANGED], 0,
                       priv->m_aVisibleCursor.x,
                       priv->m_aVisibleCursor.y,
                       priv->m_aVisibleCursor.width,
                       priv->m_aVisibleCursor.height);
+        }
         gtk_widget_queue_draw(GTK_WIDGET(pDocView));
     }
     break;
@@ -1680,7 +1698,7 @@ static const GdkRGBA& getDarkColor(int nViewId, LOKDocViewPrivate& priv)
     }
     else
     {
-        // Based on tools/colordata.hxx, COL_AUTHOR1_DARK..COL_AUTHOR9_DARK.
+        // Based on tools/color.hxx, COL_AUTHOR1_DARK..COL_AUTHOR9_DARK.
         static std::vector<GdkRGBA> aColors =
         {
             {(double(198))/255, (double(146))/255, (double(0))/255, 0},
@@ -2575,6 +2593,9 @@ static void lok_doc_view_get_property (GObject* object, guint propId, GValue *va
     case PROP_IS_LOADING:
         g_value_set_boolean (value, priv->m_bIsLoading);
         break;
+    case PROP_IS_INITIALIZED:
+        g_value_set_boolean (value, priv->m_bInit);
+        break;
     case PROP_DOC_WIDTH:
         g_value_set_long (value, priv->m_nDocumentWidthTwips);
         break;
@@ -2692,6 +2713,7 @@ static gboolean lok_doc_view_initable_init (GInitable *initable, GCancellable* /
         return FALSE;
     }
     priv->m_nLOKFeatures |= LOK_FEATURE_PART_IN_INVALIDATION_CALLBACK;
+    priv->m_nLOKFeatures |= LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK;
     priv->m_pOffice->pClass->setOptionalFeatures(priv->m_pOffice, priv->m_nLOKFeatures);
 
     return TRUE;
@@ -2840,6 +2862,19 @@ static void lok_doc_view_class_init (LOKDocViewClass* pClass)
         g_param_spec_boolean("is-loading",
                              "Is Loading",
                              "Whether the view is loading a document",
+                             FALSE,
+                             static_cast<GParamFlags>(G_PARAM_READABLE |
+                                                      G_PARAM_STATIC_STRINGS));
+
+    /**
+     * LOKDocView:is-initialized:
+     *
+     * Whether the requested document has completely loaded or not.
+     */
+    properties[PROP_IS_INITIALIZED] =
+        g_param_spec_boolean("is-initialized",
+                             "Has initialized",
+                             "Whether the view has completely initialized",
                              FALSE,
                              static_cast<GParamFlags>(G_PARAM_READABLE |
                                                       G_PARAM_STATIC_STRINGS));

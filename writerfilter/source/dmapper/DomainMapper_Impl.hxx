@@ -474,7 +474,7 @@ private:
     PropertyMapPtr           m_pLastCharacterContext;
 
     ::std::vector<DeletableTabStop> m_aCurrentTabStops;
-    OUString                 m_sCurrentParaStyleId;
+    OUString                        m_sCurrentParaStyleName; //highly inaccurate. Overwritten by "overlapping" paragraphs like comments, flys.
     bool                            m_bInStyleSheetImport; //in import of fonts, styles, lists or lfos
     bool                            m_bInAnyTableImport; //in import of fonts, styles, lists or lfos
     bool                            m_bInHeaderFooterImport;
@@ -692,8 +692,8 @@ public:
     void    IncorporateTabStop( const DeletableTabStop &aTabStop );
     css::uno::Sequence<css::style::TabStop> GetCurrentTabStopAndClear();
 
-    void        SetCurrentParaStyleId(const OUString& sStringValue) {m_sCurrentParaStyleId = sStringValue;}
-    const OUString& GetCurrentParaStyleId() const {return m_sCurrentParaStyleId;}
+    void            SetCurrentParaStyleName(const OUString& sStringValue) {m_sCurrentParaStyleName = sStringValue;}
+    const OUString  GetCurrentParaStyleName();
 
     css::uno::Any GetPropertyFromStyleSheet(PropertyIds eId);
     void        SetStyleSheetImport( bool bSet ) { m_bInStyleSheetImport = bSet;}
@@ -877,7 +877,7 @@ public:
     /// If the current paragraph has a numbering style associated, this method returns its character style (part of the numbering rules)
     css::uno::Reference<css::beans::XPropertySet> GetCurrentNumberingCharStyle();
     /// If the current paragraph has a numbering style associated, this method returns its numbering rules
-    css::uno::Reference<css::container::XIndexAccess> GetCurrentNumberingRules(sal_Int32* pListLevel = nullptr);
+    css::uno::Reference<css::container::XIndexAccess> GetCurrentNumberingRules(sal_Int32* pListLevel);
 
     /**
      Used for attributes/sprms which cannot be evaluated immediately (e.g. they depend
@@ -927,6 +927,7 @@ public:
     /// If the next newline should be ignored, used by the special footnote separator paragraph.
     bool m_bIgnoreNextPara;
     /// If the next tab should be ignored, used for footnotes.
+    bool m_bCheckFirstFootnoteTab;
     bool m_bIgnoreNextTab;
     bool m_bFrameBtLr; ///< Bottom to top, left to right text frame direction is requested for the current text frame.
     /// Pending floating tables: they may be converted to text frames at the section end.

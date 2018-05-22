@@ -61,6 +61,10 @@ $(eval $(call gb_CppunitTest_set_include,sc_parallelism,\
 
 $(eval $(call gb_CppunitTest_use_sdk_api,sc_parallelism))
 
+$(eval $(call gb_CppunitTest_use_custom_headers,sc_parallelism,\
+        officecfg/registry \
+))
+
 $(eval $(call gb_CppunitTest_use_ure,sc_parallelism))
 $(eval $(call gb_CppunitTest_use_vcl,sc_parallelism))
 
@@ -100,6 +104,7 @@ $(eval $(call gb_CppunitTest_use_components,sc_parallelism,\
     unotools/util/utl \
     unoxml/source/rdf/unordf \
     unoxml/source/service/unoxml \
+    vcl/vcl.common \
     xmloff/util/xo \
 ))
 

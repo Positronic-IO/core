@@ -768,19 +768,10 @@ sub replace_variables_in_ziplist_variables
 {
     my ($blockref) = @_;
 
-    my $milestonevariable = $installer::globals::lastminor;
-    $milestonevariable =~ s/m//;
-    $milestonevariable =~ s/s/\./;
-
-    my $localminor = $installer::globals::lastminor;
-    if ( $installer::globals::minor ) { $localminor = $installer::globals::minor; }
-
     for ( my $i = 0; $i <= $#{$blockref}; $i++ )
     {
-        if ($installer::globals::lastminor) { ${$blockref}[$i] =~ s/\{milestone\}/$milestonevariable/; }
-        else { ${$blockref}[$i] =~ s/\{milestone\}//; }
-        if ( $localminor ) { ${$blockref}[$i] =~ s/\{minor\}/$localminor/; }
-        else { ${$blockref}[$i] =~ s/\{minor\}//; }
+        ${$blockref}[$i] =~ s/\{milestone\}//;
+        ${$blockref}[$i] =~ s/\{minor\}//;
         if ( $installer::globals::buildid ) { ${$blockref}[$i] =~ s/\{buildid\}/$installer::globals::buildid/; }
         else { ${$blockref}[$i] =~ s/\{buildid\}//; }
         if ( $installer::globals::build ) { ${$blockref}[$i] =~ s/\{buildsource\}/$installer::globals::build/; }
@@ -830,12 +821,6 @@ sub add_variables_to_allvariableshashref
     my $localbuild = $installer::globals::build;
     if ( $localbuild =~ /^\s*(\w+?)(\d+)\s*$/ ) { $localbuild = $2; }   # using "680" instead of "src680"
     $variableshashref->{'PRODUCTMAJOR'} = $localbuild;
-
-    my $localminor = "";
-    if ( $installer::globals::minor ne "" ) { $localminor = $installer::globals::minor; }
-    else { $localminor = $installer::globals::lastminor; }
-    if ( $localminor =~ /^\s*\w(\d+)\w*\s*$/ ) { $localminor = $1; }
-    $variableshashref->{'PRODUCTMINOR'} = $localminor;
 
     $variableshashref->{'PRODUCTBUILDID'} = $installer::globals::buildid;
 }

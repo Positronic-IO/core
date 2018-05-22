@@ -31,16 +31,15 @@
 void SdrViewIter::ImpInitVars()
 {
     mnListenerNum = 0;
-    mpAktView = nullptr;
+    mpCurrentView = nullptr;
 }
 
 
 SdrViewIter::SdrViewIter(const SdrPage* pPage)
 {
     mpPage = pPage;
-    mpModel = pPage ? pPage->GetModel() : nullptr;
+    mpModel = pPage ? &pPage->getSdrModelFromSdrPage() : nullptr;
     mpObject = nullptr;
-    mbNoMasterPage = false;
     ImpInitVars();
 }
 
@@ -48,9 +47,8 @@ SdrViewIter::SdrViewIter(const SdrPage* pPage)
 SdrViewIter::SdrViewIter(const SdrObject* pObject)
 {
     mpObject = pObject;
-    mpModel = pObject ? pObject->GetModel() : nullptr;
+    mpModel = pObject ? &pObject->getSdrModelFromSdrObject() : nullptr;
     mpPage = pObject ? pObject->GetPage() : nullptr;
-    mbNoMasterPage = false;
 
     if(!mpModel || !mpPage)
     {
@@ -86,7 +84,7 @@ bool SdrViewIter::ImpCheckPageView(SdrPageView const * pPV) const
             return true;
         }
     }
-    else if(!mbNoMasterPage && bMaster && (!mpObject || !mpObject->IsNotVisibleAsMaster()))
+    else if(bMaster && (!mpObject || !mpObject->IsNotVisibleAsMaster()))
     {
         if(pPg->TRG_HasMasterPage())
         {
@@ -130,25 +128,25 @@ SdrView* SdrViewIter::ImpFindView()
         while(mnListenerNum < nLsCnt)
         {
             SfxListener* pLs = mpModel->GetListener(mnListenerNum);
-            mpAktView = dynamic_cast<SdrView*>( pLs );
+            mpCurrentView = dynamic_cast<SdrView*>( pLs );
 
-            if(mpAktView)
+            if(mpCurrentView)
             {
                 if(mpPage)
                 {
-                    SdrPageView* pPV = mpAktView->GetSdrPageView();
+                    SdrPageView* pPV = mpCurrentView->GetSdrPageView();
 
                     if(pPV)
                     {
                         if(ImpCheckPageView(pPV))
                         {
-                            return mpAktView;
+                            return mpCurrentView;
                         }
                     }
                 }
                 else
                 {
-                    return mpAktView;
+                    return mpCurrentView;
                 }
             }
 
@@ -156,8 +154,8 @@ SdrView* SdrViewIter::ImpFindView()
         }
     }
 
-    mpAktView = nullptr;
-    return mpAktView;
+    mpCurrentView = nullptr;
+    return mpCurrentView;
 }
 
 

@@ -21,6 +21,7 @@
 
 #include <rtl/ustring.hxx>
 #include <tools/link.hxx>
+#include <tools/solar.h>
 #include <i18nlangtag/lang.h>
 #include <com/sun/star/util/Date.hpp>
 #include "swdllapi.h"
@@ -28,8 +29,8 @@
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/lang/Locale.hpp>
-#include <com/sun/star/frame/XStorable.hpp>
-#include <com/sun/star/embed/XStorage.hpp>
+#include <com/sun/star/beans/PropertyValue.hpp>
+#include <vcl/weld.hxx>
 
 #include <memory>
 #include <vector>
@@ -44,7 +45,6 @@ namespace com{namespace sun{namespace star{
     namespace beans{
 
         class XPropertySet;
-        struct PropertyValue;
     }
     namespace sdbcx{
         class XColumnsSupplier;
@@ -55,6 +55,8 @@ namespace com{namespace sun{namespace star{
     namespace mail{
         class XSmtpService;
     }
+    namespace embed { class XStorage; }
+    namespace frame { class XStorable; }
 }}}
 namespace svx {
     class ODataAccessDescriptor;
@@ -67,13 +69,13 @@ struct SwDBFormatData
     css::lang::Locale aLocale;
 };
 
-namespace vcl {
+namespace weld {
+    class ComboBoxText;
     class Window;
 }
 
 class SwView;
 class SwWrtShell;
-class SfxProgress;
 class ListBox;
 class Button;
 class SvNumberFormatter;
@@ -231,7 +233,6 @@ struct SwMergeDescriptor
     }
 };
 
-class AbstractMailMergeDlg;
 class SwDoc;
 
 class SW_DLLPUBLIC SwDBManager
@@ -269,8 +270,6 @@ class SW_DLLPUBLIC SwDBManager
 
     SAL_DLLPRIVATE SwDSParam*          FindDSData(const SwDBData& rData, bool bCreate);
     SAL_DLLPRIVATE SwDSParam*          FindDSConnection(const OUString& rSource, bool bCreate);
-
-    DECL_DLLPRIVATE_LINK( PrtCancelHdl, Button *, void );
 
     /// Insert data record as text into document.
     SAL_DLLPRIVATE void ImportFromConnection( SwWrtShell* pSh);
@@ -314,11 +313,17 @@ public:
 
     /// Fill listbox with all table names of a database.
     bool            GetTableNames(ListBox* pListBox, const OUString& rDBName );
+    bool            GetTableNames(weld::ComboBoxText& rBox, const OUString& rDBName);
 
     /// Fill listbox with all column names of a database table.
     void            GetColumnNames(ListBox* pListBox,
                             const OUString& rDBName, const OUString& rTableName);
+    void            GetColumnNames(weld::ComboBoxText& rBox,
+                            const OUString& rDBName, const OUString& rTableName);
     static void GetColumnNames(ListBox* pListBox,
+                            css::uno::Reference< css::sdbc::XConnection> const & xConnection,
+                            const OUString& rTableName);
+    static void GetColumnNames(weld::ComboBoxText& rBox,
                             css::uno::Reference< css::sdbc::XConnection> const & xConnection,
                             const OUString& rTableName);
 
@@ -401,7 +406,7 @@ public:
      the filename returned by a file picker and additional settings dialog.
      In case of success it returns the registered name, otherwise an empty string.
      */
-    static OUString            LoadAndRegisterDataSource(const vcl::Window* pParent, SwDocShell* pDocShell = nullptr);
+    static OUString            LoadAndRegisterDataSource(weld::Window* pParent, SwDocShell* pDocShell = nullptr);
 
     /**
      Loads a data source from file and registers it.

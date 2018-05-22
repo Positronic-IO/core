@@ -39,7 +39,6 @@
 #include <com/sun/star/i18n/ScriptType.hpp>
 
 #include <com/sun/star/frame/XFrame.hpp>
-#include <comphelper/processfactory.hxx>
 
 #include <tools/gen.hxx>
 #include <com/sun/star/awt/Command.hpp>
@@ -145,23 +144,21 @@ void LangSelectionStatusbarController::LangMenu(
     const OUString sAsterisk("*");  // multiple languages in current selection
     const OUString sNone( SvtLanguageTable::GetLanguageString( LANGUAGE_NONE ));
     std::map< sal_Int16, OUString > aLangMap;
-    std::set< OUString >::const_iterator it;
-    for (it = aLangItems.begin(); it != aLangItems.end(); ++it)
+    for (auto const& langItem : aLangItems)
     {
-        const OUString & rStr( *it );
-        if ( rStr != sNone &&
-             rStr != sAsterisk &&
-             !rStr.isEmpty()) // 'no language found' from language guessing
+        if ( langItem != sNone &&
+             langItem != sAsterisk &&
+             !langItem.isEmpty()) // 'no language found' from language guessing
         {
             SAL_WARN_IF( MID_LANG_SEL_1 > nItemId || nItemId > MID_LANG_SEL_9,
                     "fwk.uielement", "nItemId outside of expected range!" );
-            xPopupMenu->insertItem( nItemId, rStr, 0, nItemId );
-            if ( rStr == m_aCurLang )
+            xPopupMenu->insertItem( nItemId, langItem, 0, nItemId );
+            if ( langItem == m_aCurLang )
             {
                 //make a sign for the current language
                 xPopupMenu->checkItem( nItemId, true );
             }
-            aLangMap[ nItemId ] = rStr;
+            aLangMap[ nItemId ] = langItem;
             ++nItemId;
         }
     }
@@ -176,17 +173,16 @@ void LangSelectionStatusbarController::LangMenu(
 
         // add entries to submenu ('set language for paragraph')
         nItemId = static_cast< sal_Int16 >(MID_LANG_PARA_1);
-        for (it = aLangItems.begin(); it != aLangItems.end(); ++it)
+        for (auto const& langItem : aLangItems)
         {
-            const OUString & rStr( *it );
-            if( rStr != sNone &&
-                rStr != sAsterisk &&
-                !rStr.isEmpty()) // 'no language found' from language guessing
+            if( langItem != sNone &&
+                langItem != sAsterisk &&
+                !langItem.isEmpty()) // 'no language found' from language guessing
             {
                 SAL_WARN_IF( MID_LANG_PARA_1 > nItemId || nItemId > MID_LANG_PARA_9,
                         "fwk.uielement", "nItemId outside of expected range!" );
-                subPopupMenu->insertItem( nItemId, rStr, 0, nItemId );
-                aLangMap[nItemId] = rStr;
+                subPopupMenu->insertItem( nItemId, langItem, 0, nItemId );
+                aLangMap[nItemId] = langItem;
                 ++nItemId;
             }
         }

@@ -49,6 +49,7 @@
 #include <editeng/opaqitem.hxx>
 #include <editeng/charhiddenitem.hxx>
 #include <editeng/fontitem.hxx>
+#include <editeng/editeng.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/svdoole2.hxx>
 #include <svx/svdoashp.hxx>
@@ -87,7 +88,6 @@
 #include <viewopt.hxx>
 #include <shellres.hxx>
 #include <mdiexp.hxx>
-#include <strings.hrc>
 #include <swerror.h>
 #include <swtable.hxx>
 #include <fchrfmt.hxx>
@@ -128,6 +128,7 @@
 #endif
 
 #include <svx/hlnkitem.hxx>
+#include <sfx2/docfile.hxx>
 #include <swdll.hxx>
 #include "WW8Sttbf.hxx"
 #include "WW8FibData.hxx"
@@ -149,6 +150,7 @@ using namespace nsHdFtFlags;
 #include <oox/ole/olestorage.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <sfx2/DocumentMetadataAccess.hxx>
+#include <tools/diagnose_ex.h>
 
 static SwMacroInfo* GetMacroInfo( SdrObject* pObj )
 {
@@ -165,7 +167,7 @@ static SwMacroInfo* GetMacroInfo( SdrObject* pObj )
             }
         }
         SwMacroInfo* pData = new SwMacroInfo;
-        pObj->AppendUserData(pData);
+        pObj->AppendUserData(std::unique_ptr<SdrObjUserData>(pData));
         return pData;
     }
 
@@ -495,9 +497,19 @@ SdrObject* SwMSDffManager::ImportOLE( sal_uInt32 nOLEId,
         else
         {
             ErrCode nError = ERRCODE_NONE;
-            pRet = CreateSdrOLEFromStorage( sStorageName, xSrcStg, xDstStg,
-                rGrf, rBoundRect, rVisArea, pStData, nError,
-                nSvxMSDffOLEConvFlags, css::embed::Aspects::MSOLE_CONTENT, rReader.GetBaseURL());
+            pRet = CreateSdrOLEFromStorage(
+                *pSdrModel,
+                sStorageName,
+                xSrcStg,
+                xDstStg,
+                rGrf,
+                rBoundRect,
+                rVisArea,
+                pStData,
+                nError,
+                nSvxMSDffOLEConvFlags,
+                css::embed::Aspects::MSOLE_CONTENT,
+                rReader.GetBaseURL());
         }
     }
     return pRet;
@@ -731,7 +743,10 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
             if (bIsSimpleDrawingTextBox)
             {
                 SdrObject::Free( pObj );
-                pObj = new SdrRectObj(OBJ_TEXT, rTextRect);
+                pObj = new SdrRectObj(
+                    *pSdrModel,
+                    OBJ_TEXT,
+                    rTextRect);
             }
 
             // The vertical paragraph justification are contained within the
@@ -855,7 +870,6 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
             if (pObj != nullptr)
             {
                 pObj->SetMergedItemSet(aSet);
-                pObj->SetModel(pSdrModel);
 
                 if (bVerticalText)
                 {
@@ -921,8 +935,10 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
             // simple rectangular objects are ignored by ImportObj()  :-(
             // this is OK for Draw but not for Calc and Writer
             // cause here these objects have a default border
-            pObj = new SdrRectObj(rTextRect);
-            pObj->SetModel( pSdrModel );
+            pObj = new SdrRectObj(
+                *pSdrModel,
+                rTextRect);
+
             SfxItemSet aSet( pSdrModel->GetItemPool() );
             ApplyAttributes( rSt, aSet, rObjData );
 
@@ -1024,7 +1040,7 @@ SdrObject* SwMSDffManager::ProcessObj(SvStream& rSt,
         {
             // Complement Import Record List
             pImpRec->pObj = pObj;
-            rImportData.m_Records.insert(std::unique_ptr<SvxMSDffImportRec>(pImpRec));
+            rImportData.insert(pImpRec);
 
             // Complement entry in Z Order List with a pointer to this Object
             // Only store objects which are not deep inside the tree
@@ -2012,6 +2028,7 @@ void WW8ReaderSave::Restore( SwWW8ImplReader* pRdr )
     pRdr->m_xCtrlStck = std::move(mxOldStck);
 
     pRdr->m_xRedlineStack->closeall(*pRdr->m_pPaM->GetPoint());
+    pRdr->m_aFrameRedlines.emplace(std::move(pRdr->m_xRedlineStack));
     pRdr->m_xRedlineStack = std::move(mxOldRedlines);
 
     pRdr->DeleteAnchorStack();
@@ -3699,7 +3716,7 @@ bool SwWW8ImplReader::ReadChar(long nPosCp, long nCpOfs)
     return bParaMark;
 }
 
-void SwWW8ImplReader::ProcessAktCollChange(WW8PLCFManResult& rRes,
+void SwWW8ImplReader::ProcessCurrentCollChange(WW8PLCFManResult& rRes,
     bool* pStartAttr, bool bCallProcessSpecial)
 {
     sal_uInt16 nOldColl = m_nCurrentColl;
@@ -3764,7 +3781,7 @@ long SwWW8ImplReader::ReadTextAttr(WW8_CP& rTextPos, long nTextEnd, bool& rbStar
     // New paragraph over Plcx.Fkp.papx
     if ( (aRes.nFlags & MAN_MASK_NEW_PAP)|| rbStartLine )
     {
-        ProcessAktCollChange( aRes, &bStartAttr,
+        ProcessCurrentCollChange( aRes, &bStartAttr,
             MAN_MASK_NEW_PAP == (aRes.nFlags & MAN_MASK_NEW_PAP) &&
             !m_bIgnoreText );
         rbStartLine = false;
@@ -3849,7 +3866,7 @@ long SwWW8ImplReader::ReadTextAttr(WW8_CP& rTextPos, long nTextEnd, bool& rbStar
     {
         m_xCtrlStck->KillUnlockedAttrs( *m_pPaM->GetPoint() );
         if( nOldColl != m_xPlcxMan->GetColl() )
-            ProcessAktCollChange(aRes, nullptr, false);
+            ProcessCurrentCollChange(aRes, nullptr, false);
     }
 
     return nNext;
@@ -3954,7 +3971,7 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
     long nCpOfs = m_xPlcxMan->GetCpOfs(); // Offset for Header/Footer, Footnote
 
     WW8_CP nNext = m_xPlcxMan->Where();
-    SwTextNode* pPreviousNode = nullptr;
+    m_pPreviousNode = nullptr;
     sal_uInt8 nDropLines = 0;
     SwCharFormat* pNewSwCharFormat = nullptr;
     const SwCharFormat* pFormat = nullptr;
@@ -3986,7 +4003,7 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
 
         // If the previous paragraph was a dropcap then do not
         // create a new txtnode and join the two paragraphs together
-        if (bStartLine && !pPreviousNode) // Line end
+        if (bStartLine && !m_pPreviousNode) // Line end
         {
             bool bSplit = true;
             if (m_bCareFirstParaEndInToc)
@@ -4010,10 +4027,10 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
             }
         }
 
-        if (pPreviousNode && bStartLine)
+        if (m_pPreviousNode && bStartLine)
         {
             SwTextNode* pEndNd = m_pPaM->GetNode().GetTextNode();
-            const sal_Int32 nDropCapLen = pPreviousNode->GetText().getLength();
+            const sal_Int32 nDropCapLen = m_pPreviousNode->GetText().getLength();
 
             // Need to reset the font size and text position for the dropcap
             {
@@ -4040,12 +4057,12 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
             SwPosition aStart(*pEndNd);
             m_xCtrlStck->NewAttr(aStart, aDrop);
             m_xCtrlStck->SetAttr(*m_pPaM->GetPoint(), RES_PARATR_DROP);
-            pPreviousNode = nullptr;
+            m_pPreviousNode = nullptr;
         }
         else if (m_bDropCap)
         {
             // If we have found a dropcap store the textnode
-            pPreviousNode = m_pPaM->GetNode().GetTextNode();
+            m_pPreviousNode = m_pPaM->GetNode().GetTextNode();
 
             SprmResult aDCS;
             if (m_bVer67)
@@ -4056,7 +4073,7 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
             if (aDCS.pSprm && aDCS.nRemainingData >= 1)
                 nDropLines = (*aDCS.pSprm) >> 3;
             else    // There is no Drop Cap Specifier hence no dropcap
-                pPreviousNode = nullptr;
+                m_pPreviousNode = nullptr;
 
             SprmResult aDistance = m_xPlcxMan->GetPapPLCF()->HasSprm(0x842F);
             if (aDistance.pSprm && aDistance.nRemainingData >= 2)
@@ -4128,6 +4145,8 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
         }
     }
 
+    m_pPreviousNode = nullptr;
+
     if (m_pPaM->GetPoint()->nContent.GetIndex())
         AppendTextNode(*m_pPaM->GetPoint());
 
@@ -4168,7 +4187,6 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     , m_pStandardFormatColl(nullptr)
     , m_pDrawModel(nullptr)
     , m_pDrawPg(nullptr)
-    , m_pDrawEditEngine(nullptr)
     , m_pNumFieldType(nullptr)
     , m_pAtnNames(nullptr)
     , m_sBaseURL(rBaseURL)
@@ -4243,6 +4261,7 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     , m_nEmbeddedTOXLevel(0)
     , m_bLoadingTOXHyperlink(false)
     , m_pPosAfterTOC(nullptr)
+    , m_pPreviousNode(nullptr)
     , m_bCareFirstParaEndInToc(false)
     , m_bCareLastParaEndInToc(false)
     , m_aTOXEndCps()
@@ -4253,6 +4272,10 @@ SwWW8ImplReader::SwWW8ImplReader(sal_uInt8 nVersionPara, SotStorage* pStorage,
     m_aApos.push_back(false);
 
     mpCursor = m_rDoc.CreateUnoCursor(rPos);
+}
+
+SwWW8ImplReader::~SwWW8ImplReader()
+{
 }
 
 void SwWW8ImplReader::DeleteStack(SwFltControlStack* pStck)
@@ -4883,9 +4906,9 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
             uno::Reference<task::XInteractionHandler> xHandler;
             xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
         }
-        catch (const uno::Exception& rException)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("sw.ww8", "SwWW8ImplReader::CoreLoad: failed to initialize RDF metadata: " << rException);
+            DBG_UNHANDLED_EXCEPTION("sw.ww8", "failed to initialize RDF metadata");
         }
         ReadDocInfo();
     }
@@ -5276,6 +5299,8 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
     // are updated
     m_aExtraneousParas.delete_all_from_doc();
     m_xRedlineStack->closeall(*m_pPaM->GetPoint());
+    while (!m_aFrameRedlines.empty())
+        m_aFrameRedlines.pop();
     m_xRedlineStack.reset();
 
     // For i120928,achieve the graphics from the special bookmark with is for graphic bullet
@@ -6173,7 +6198,7 @@ bool TestImportDOC(SvStream &rStream, const OUString &rFltName)
     std::unique_ptr<Reader> xReader(ImportDOC());
 
     tools::SvRef<SotStorage> xStorage;
-    xReader->pStrm = &rStream;
+    xReader->m_pStream = &rStream;
     if (rFltName != "WW6")
     {
         try
@@ -6186,7 +6211,7 @@ bool TestImportDOC(SvStream &rStream, const OUString &rFltName)
         {
             return false;
         }
-        xReader->pStg = xStorage.get();
+        xReader->m_pStorage = xStorage.get();
     }
     xReader->SetFltName(rFltName);
 
@@ -6224,8 +6249,8 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportWW2(SvStream &rStream)
 ErrCode WW8Reader::OpenMainStream( tools::SvRef<SotStorageStream>& rRef, sal_uInt16& rBuffSize )
 {
     ErrCode nRet = ERR_SWG_READ_ERROR;
-    OSL_ENSURE( pStg.get(), "Where is my Storage?" );
-    rRef = pStg->OpenSotStream( "WordDocument", StreamMode::READ | StreamMode::SHARE_DENYALL);
+    OSL_ENSURE( m_pStorage.get(), "Where is my Storage?" );
+    rRef = m_pStorage->OpenSotStream( "WordDocument", StreamMode::READ | StreamMode::SHARE_DENYALL);
 
     if( rRef.is() )
     {
@@ -6245,10 +6270,10 @@ ErrCode WW8Reader::OpenMainStream( tools::SvRef<SotStorageStream>& rRef, sal_uIn
 ErrCode WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, const OUString & /* FileName */)
 {
     sal_uInt16 nOldBuffSize = 32768;
-    bool bNew = !bInsertMode; // New Doc (no inserting)
+    bool bNew = !m_bInsertMode; // New Doc (no inserting)
 
     tools::SvRef<SotStorageStream> refStrm; // So that no one else can steal the Stream
-    SvStream* pIn = pStrm;
+    SvStream* pIn = m_pStream;
 
     ErrCode nRet = ERRCODE_NONE;
     sal_uInt8 nVersion = 8;
@@ -6256,7 +6281,7 @@ ErrCode WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, cons
     const OUString sFltName = GetFltName();
     if ( sFltName=="WW6" )
     {
-        if (pStrm)
+        if (m_pStream)
             nVersion = 6;
         else
         {
@@ -6271,7 +6296,7 @@ ErrCode WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, cons
         else if ( sFltName=="CWW7" )
             nVersion = 7;
 
-        if( pStg.is() )
+        if( m_pStorage.is() )
         {
             nRet = OpenMainStream( refStrm, nOldBuffSize );
             pIn = refStrm.get();
@@ -6285,8 +6310,8 @@ ErrCode WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, cons
 
     if( !nRet )
     {
-        std::unique_ptr<SwWW8ImplReader> pRdr(new SwWW8ImplReader(nVersion, pStg.get(), pIn, rDoc,
-            rBaseURL, bNew, bSkipImages, *rPaM.GetPoint()));
+        std::unique_ptr<SwWW8ImplReader> pRdr(new SwWW8ImplReader(nVersion, m_pStorage.get(), pIn, rDoc,
+            rBaseURL, bNew, m_bSkipImages, *rPaM.GetPoint()));
         if (bNew)
         {
             // Remove Frame and offsets from Frame Template
@@ -6339,7 +6364,7 @@ bool WW8Reader::ReadGlossaries(SwTextBlocks& rBlocks, bool bSaveRelFiles) const
     tools::SvRef<SotStorageStream> refStrm;
     if (!pThis->OpenMainStream(refStrm, nOldBuffSize))
     {
-        WW8Glossary aGloss( refStrm, 8, pStg.get() );
+        WW8Glossary aGloss( refStrm, 8, m_pStorage.get() );
         bRet = aGloss.Load( rBlocks, bSaveRelFiles );
     }
     return bRet;
@@ -6496,12 +6521,12 @@ SwMacroInfo::~SwMacroInfo()
 {
 }
 
-SdrObjUserData* SwMacroInfo::Clone( SdrObject* /*pObj*/ ) const
+std::unique_ptr<SdrObjUserData> SwMacroInfo::Clone( SdrObject* /*pObj*/ ) const
 {
-   return new SwMacroInfo( *this );
+   return std::unique_ptr<SdrObjUserData>(new SwMacroInfo( *this ));
 }
 
-std::unique_ptr<SfxItemSet> SwWW8ImplReader::SetAktItemSet(SfxItemSet* pItemSet)
+std::unique_ptr<SfxItemSet> SwWW8ImplReader::SetCurrentItemSet(SfxItemSet* pItemSet)
 {
     std::unique_ptr<SfxItemSet> xRet(std::move(m_xCurrentItemSet));
     m_xCurrentItemSet.reset(pItemSet);

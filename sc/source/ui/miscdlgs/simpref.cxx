@@ -17,13 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/msgbox.hxx>
 #include <sfx2/app.hxx>
 
 #include <reffact.hxx>
 #include <document.hxx>
-#include <scresid.hxx>
-#include <globstr.hrc>
 #include <rangenam.hxx>
 #include <simpref.hxx>
 #include <scmod.hxx>

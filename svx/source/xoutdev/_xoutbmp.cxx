@@ -19,6 +19,7 @@
 
 #include <sal/config.h>
 
+#include <comphelper/base64.hxx>
 #include <tools/poly.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/virdev.hxx>
@@ -205,10 +206,10 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
             if( ( nFlags & XOutFlags::UseNativeIfPossible ) &&
                 !( nFlags & XOutFlags::MirrorHorz ) &&
                 !( nFlags & XOutFlags::MirrorVert ) &&
-                ( rGraphic.GetType() != GraphicType::GdiMetafile ) && rGraphic.IsLink() )
+                ( rGraphic.GetType() != GraphicType::GdiMetafile ) && rGraphic.IsGfxLink() )
             {
                 // try to write native link
-                const GfxLink aGfxLink( rGraphic.GetLink() );
+                const GfxLink aGfxLink( rGraphic.GetGfxLink() );
 
                 switch( aGfxLink.GetType() )
                 {
@@ -356,11 +357,11 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
     }
 }
 
-bool XOutBitmap::GraphicToBase64(const Graphic& rGraphic, OUString& rOUString)
+bool XOutBitmap::GraphicToBase64(const Graphic& rGraphic, OUString& rOUString, bool bAddPrefix)
 {
     SvMemoryStream aOStm;
     OUString aMimeType;
-    GfxLink aLink = rGraphic.GetLink();
+    GfxLink aLink = rGraphic.GetGfxLink();
     ConvertDataFormat aCvtType;
     switch(  aLink.GetType() )
     {
@@ -391,26 +392,12 @@ bool XOutBitmap::GraphicToBase64(const Graphic& rGraphic, OUString& rOUString)
     aOStm.Seek(STREAM_SEEK_TO_END);
     css::uno::Sequence<sal_Int8> aOStmSeq( static_cast<sal_Int8 const *>(aOStm.GetData()),aOStm.Tell() );
     OUStringBuffer aStrBuffer;
-    ::sax::Converter::encodeBase64(aStrBuffer,aOStmSeq);
-    OUString aEncodedBase64Image = aStrBuffer.makeStringAndClear();
-    if( aLink.GetType() == GfxLinkType::NativeSvg )
-    {
-      sal_Int32 ite(8);
-      sal_Int32 nBufferLength(aOStmSeq.getLength());
-      const sal_Int8* pBuffer = aOStmSeq.getConstArray();
-      css::uno::Sequence<sal_Int8> newTempSeq = aOStmSeq;        // creates new Sequence to remove front 8 bits of garbage and encodes in base64
-      sal_Int8 *pOutBuffer = newTempSeq.getArray();
-      while(ite < nBufferLength)
-      {
-        *pOutBuffer++ = pBuffer[ite];
-        ite++;
-      }
-      ::sax::Converter::encodeBase64(aStrBuffer, newTempSeq);
-      aEncodedBase64Image = aStrBuffer.makeStringAndClear();
-      sal_Int32 SVGFixLength = aEncodedBase64Image.getLength();
-      aEncodedBase64Image = aEncodedBase64Image.replaceAt(SVGFixLength - 12, SVGFixLength, "") + "PC9zdmc+Cg=="; // removes rear 12 bits of garbage and adds svg closing tag in base64
-    }
-    rOUString = aMimeType + ";base64," + aEncodedBase64Image;
+    ::comphelper::Base64::encode(aStrBuffer,aOStmSeq);
+    rOUString = aStrBuffer.makeStringAndClear();
+
+    if (bAddPrefix)
+        rOUString = aMimeType + ";base64," + rOUString;
+
     return true;
 }
 
@@ -527,9 +514,9 @@ Bitmap XOutBitmap::DetectEdges( const Bitmap& rBmp, const sal_uInt8 cThreshold )
 }
 
 tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlags,
-                                        const sal_uInt8 cEdgeDetectThreshold,
                                         const tools::Rectangle* pWorkRectPixel )
 {
+    const sal_uInt8 cEdgeDetectThreshold = 128;
     Bitmap      aWorkBmp;
     tools::Polygon aRetPoly;
     tools::Rectangle   aWorkRect( Point(), rBmp.GetSizePixel() );
@@ -590,6 +577,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                             // this loop always breaks eventually as there is at least one pixel
                             while( true )
                             {
+                                // coverity[copy_paste_error] - this is correct nX, not nY
                                 if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                                 {
                                     pPoints2[ nPolyPos ] = Point( nX, nY );
@@ -663,18 +651,6 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
     }
 
     return aRetPoly;
-}
-
-bool DitherBitmap( Bitmap& rBitmap )
-{
-    bool bRet = false;
-
-    if( ( rBitmap.GetBitCount() >= 8 ) && ( Application::GetDefaultDevice()->GetColorCount() < 257 ) )
-        bRet = rBitmap.Dither( BmpDitherFlags::Floyd );
-    else
-        bRet = false;
-
-    return bRet;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -21,6 +21,7 @@
 #include "gifread.hxx"
 #include <memory>
 #include <o3tl/make_unique.hxx>
+#include <bitmapwriteaccess.hxx>
 
 #define NO_PENDING( rStm ) ( ( rStm ).GetError() != ERRCODE_IO_PENDING )
 
@@ -59,8 +60,8 @@ class GIFReader : public GraphicReader
     SvStream&           rIStm;
     std::vector<sal_uInt8> aSrcBuf;
     std::unique_ptr<GIFLZWDecompressor> pDecomp;
-    Bitmap::ScopedWriteAccess pAcc8;
-    Bitmap::ScopedWriteAccess pAcc1;
+    BitmapScopedWriteAccess pAcc8;
+    BitmapScopedWriteAccess pAcc1;
     long                nYAcc;
     long                nLastPos;
     sal_uInt64          nMaxStreamData;
@@ -105,6 +106,7 @@ class GIFReader : public GraphicReader
 public:
 
     ReadState           ReadGIF( Graphic& rGraphic );
+    bool                ReadIsAnimated();
     Graphic             GetIntermediateGraphic();
 
     explicit            GIFReader( SvStream& rStm );
@@ -205,7 +207,7 @@ void GIFReader::CreateBitmaps(long nWidth, long nHeight, BitmapPalette* pPal,
         if (!aAnimation.Count())
             aBmp1.Erase(aWhite);
 
-        pAcc1 = Bitmap::ScopedWriteAccess(aBmp1);
+        pAcc1 = BitmapScopedWriteAccess(aBmp1);
 
         if (pAcc1)
         {
@@ -227,7 +229,7 @@ void GIFReader::CreateBitmaps(long nWidth, long nHeight, BitmapPalette* pPal,
         else
             aBmp8.Erase(COL_WHITE);
 
-        pAcc8 = Bitmap::ScopedWriteAccess(aBmp8);
+        pAcc8 = BitmapScopedWriteAccess(aBmp8);
         bStatus = bool(pAcc8);
     }
 }
@@ -690,13 +692,13 @@ Graphic GIFReader::GetIntermediateGraphic()
             pAcc1.reset();
             aImGraphic = BitmapEx( aBmp8, aBmp1 );
 
-            pAcc1 = Bitmap::ScopedWriteAccess(aBmp1);
+            pAcc1 = BitmapScopedWriteAccess(aBmp1);
             bStatus = bStatus && pAcc1;
         }
         else
             aImGraphic = aBmp8;
 
-        pAcc8 = Bitmap::ScopedWriteAccess(aBmp8);
+        pAcc8 = BitmapScopedWriteAccess(aBmp8);
         bStatus = bStatus && pAcc8;
     }
 
@@ -867,6 +869,31 @@ bool GIFReader::ProcessGIF()
     return bRead;
 }
 
+bool GIFReader::ReadIsAnimated()
+{
+    ReadState eReadState;
+
+    bStatus = true;
+
+    while( ProcessGIF() && ( eActAction != END_READING ) ) {}
+
+    if( !bStatus )
+        eReadState = GIFREAD_ERROR;
+    else if( eActAction == END_READING )
+        eReadState = GIFREAD_OK;
+    else
+    {
+        if ( rIStm.GetError() == ERRCODE_IO_PENDING )
+            rIStm.ResetError();
+
+        eReadState = GIFREAD_NEED_MORE;
+    }
+
+    if (eReadState == GIFREAD_OK)
+        return aAnimation.Count() > 1;
+    return false;
+}
+
 ReadState GIFReader::ReadGIF( Graphic& rGraphic )
 {
     ReadState eReadState;
@@ -901,6 +928,18 @@ ReadState GIFReader::ReadGIF( Graphic& rGraphic )
         rGraphic = aAnimation;
 
     return eReadState;
+}
+
+VCL_DLLPUBLIC bool IsGIFAnimated(SvStream & rStm)
+{
+    GIFReader aReader(rStm);
+
+    SvStreamEndian nOldFormat = rStm.GetEndian();
+    rStm.SetEndian(SvStreamEndian::LITTLE);
+    bool bResult = aReader.ReadIsAnimated();
+    rStm.SetEndian(nOldFormat);
+
+    return bResult;
 }
 
 VCL_DLLPUBLIC bool ImportGIF( SvStream & rStm, Graphic& rGraphic )

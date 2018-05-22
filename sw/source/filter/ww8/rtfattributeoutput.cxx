@@ -90,6 +90,7 @@
 #include <o3tl/make_unique.hxx>
 #include <svl/grabbagitem.hxx>
 #include <frmatr.hxx>
+#include <swtable.hxx>
 #include "rtfexport.hxx"
 
 using namespace ::com::sun::star;
@@ -1618,7 +1619,7 @@ void RtfAttributeOutput::WriteHeaderFooter_Impl(const SwFrameFormat& rFormat, bo
     m_aSectionHeaders.append(bHeader ? OOO_STRING_SVTOOLS_RTF_HEADERY
                                      : OOO_STRING_SVTOOLS_RTF_FOOTERY);
     m_aSectionHeaders.append(
-        static_cast<sal_Int32>(m_rExport.m_pAktPageDesc->GetMaster().GetULSpace().GetUpper()));
+        static_cast<sal_Int32>(m_rExport.m_pCurrentPageDesc->GetMaster().GetULSpace().GetUpper()));
     if (bTitlepg)
         m_aSectionHeaders.append(OOO_STRING_SVTOOLS_RTF_TITLEPG);
     m_aSectionHeaders.append('{');
@@ -1646,7 +1647,7 @@ void lcl_TextFrameShadow(std::vector<std::pair<OString, OString>>& rFlyPropertie
     const Color& rColor = aShadowItem.GetColor();
     // We in fact need RGB to BGR, but the transformation is symmetric.
     rFlyProperties.push_back(std::make_pair<OString, OString>(
-        "shadowColor", OString::number(msfilter::util::BGRToRGB(rColor.GetColor()))));
+        "shadowColor", OString::number(wwUtility::RGBToBGR(rColor))));
 
     // Twips -> points -> EMUs -- hacky, the intermediate step hides rounding errors on roundtrip.
     OString aShadowWidth = OString::number(sal_Int32(aShadowItem.GetWidth() / 20) * 12700);
@@ -3267,7 +3268,7 @@ void RtfAttributeOutput::FormatBackground(const SvxBrushItem& rBrush)
         const Color& rColor = rBrush.GetColor();
         // We in fact need RGB to BGR, but the transformation is symmetric.
         m_aFlyProperties.push_back(std::make_pair<OString, OString>(
-            "fillColor", OString::number(msfilter::util::BGRToRGB(rColor.GetColor()))));
+            "fillColor", OString::number(wwUtility::RGBToBGR(rColor))));
     }
     else if (!rBrush.GetColor().GetTransparency())
     {
@@ -3291,11 +3292,11 @@ void RtfAttributeOutput::FormatFillGradient(const XFillGradientItem& rFillGradie
         const XGradient& rGradient = rFillGradient.GetGradientValue();
         const Color& rStartColor = rGradient.GetStartColor();
         m_aFlyProperties.push_back(std::make_pair<OString, OString>(
-            "fillBackColor", OString::number(msfilter::util::BGRToRGB(rStartColor.GetColor()))));
+            "fillBackColor", OString::number(wwUtility::RGBToBGR(rStartColor))));
 
         const Color& rEndColor = rGradient.GetEndColor();
         m_aFlyProperties.push_back(std::make_pair<OString, OString>(
-            "fillColor", OString::number(msfilter::util::BGRToRGB(rEndColor.GetColor()))));
+            "fillColor", OString::number(wwUtility::RGBToBGR(rEndColor))));
 
         switch (rGradient.GetGradientStyle())
         {
@@ -3351,7 +3352,7 @@ void RtfAttributeOutput::FormatBox(const SvxBoxItem& rBox)
             const Color& rColor = pTop->GetColor();
             // We in fact need RGB to BGR, but the transformation is symmetric.
             m_aFlyProperties.push_back(std::make_pair<OString, OString>(
-                "lineColor", OString::number(msfilter::util::BGRToRGB(rColor.GetColor()))));
+                "lineColor", OString::number(wwUtility::RGBToBGR(rColor))));
 
             if (pTop->GetBorderLineStyle() != SvxBorderLineStyle::NONE)
             {
@@ -3724,39 +3725,6 @@ static bool StripMetafileHeader(const sal_uInt8*& rpGraphicAry, unsigned long& r
     return false;
 }
 
-OString RtfAttributeOutput::WriteHex(const sal_uInt8* pData, sal_uInt32 nSize, SvStream* pStream,
-                                     sal_uInt32 nLimit)
-{
-    OStringBuffer aRet;
-
-    sal_uInt32 nBreak = 0;
-    for (sal_uInt32 i = 0; i < nSize; i++)
-    {
-        OString sNo = OString::number(pData[i], 16);
-        if (sNo.getLength() < 2)
-        {
-            if (pStream)
-                pStream->WriteChar('0');
-            else
-                aRet.append('0');
-        }
-        if (pStream)
-            pStream->WriteCharPtr(sNo.getStr());
-        else
-            aRet.append(sNo);
-        if (++nBreak == nLimit)
-        {
-            if (pStream)
-                pStream->WriteCharPtr(SAL_NEWLINE_STRING);
-            else
-                aRet.append(SAL_NEWLINE_STRING);
-            nBreak = 0;
-        }
-    }
-
-    return aRet.makeStringAndClear();
-}
-
 static void lcl_AppendSP(OStringBuffer& rBuffer, const char cName[], const OUString& rValue,
                          const RtfExport& rExport)
 {
@@ -3849,9 +3817,9 @@ static OString ExportPICT(const SwFlyFrameFormat* pFlyFrameFormat, const Size& r
         if (pStream)
             pStream->WriteCharPtr(aRet.makeStringAndClear().getStr());
         if (pStream)
-            RtfAttributeOutput::WriteHex(pGraphicAry, nSize, pStream);
+            msfilter::rtfutil::WriteHex(pGraphicAry, nSize, pStream);
         else
-            aRet.append(RtfAttributeOutput::WriteHex(pGraphicAry, nSize));
+            aRet.append(msfilter::rtfutil::WriteHex(pGraphicAry, nSize));
         aRet.append('}');
         if (pStream)
             pStream->WriteCharPtr(aRet.makeStringAndClear().getStr());
@@ -3955,9 +3923,9 @@ void RtfAttributeOutput::FlyFrameGraphic(const SwFlyFrameFormat* pFlyFrameFormat
 
     GfxLink aGraphicLink;
     const sal_Char* pBLIPType = nullptr;
-    if (rGraphic.IsLink())
+    if (rGraphic.IsGfxLink())
     {
-        aGraphicLink = rGraphic.GetLink();
+        aGraphicLink = rGraphic.GetGfxLink();
         nSize = aGraphicLink.GetDataSize();
         pGraphicAry = aGraphicLink.GetData();
         switch (aGraphicLink.GetType())
@@ -4178,7 +4146,7 @@ void RtfAttributeOutput::BulletDefinition(int /*nId*/, const Graphic& rGraphic, 
     aStream.Seek(STREAM_SEEK_TO_END);
     sal_uInt32 nSize = aStream.Tell();
     pGraphicAry = static_cast<sal_uInt8 const*>(aStream.GetData());
-    RtfAttributeOutput::WriteHex(pGraphicAry, nSize, &m_rExport.Strm());
+    msfilter::rtfutil::WriteHex(pGraphicAry, nSize, &m_rExport.Strm());
     m_rExport.Strm().WriteCharPtr("}}"); // pict, shppict
 }
 

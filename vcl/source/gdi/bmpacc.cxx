@@ -21,8 +21,10 @@
 #include <vcl/bitmap.hxx>
 #include <vcl/bitmapaccess.hxx>
 
-#include <impbmp.hxx>
-
+#include <bitmapwriteaccess.hxx>
+#include <salbmp.hxx>
+#include <svdata.hxx>
+#include <salinst.hxx>
 
 #include <string.h>
 
@@ -30,17 +32,17 @@ BitmapInfoAccess::BitmapInfoAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
             mpBuffer        ( nullptr ),
             mnAccessMode    ( nMode )
 {
-    std::shared_ptr<ImpBitmap> xImpBmp = rBitmap.ImplGetImpBitmap();
+    std::shared_ptr<SalBitmap> xImpBmp = rBitmap.ImplGetSalBitmap();
 
     SAL_WARN_IF( !xImpBmp, "vcl", "Forbidden Access to empty bitmap!" );
 
     if( xImpBmp )
     {
-        if( mnAccessMode == BitmapAccessMode::Write && !maBitmap.ImplGetImpBitmap() )
+        if( mnAccessMode == BitmapAccessMode::Write && !maBitmap.ImplGetSalBitmap() )
         {
             xImpBmp.reset();
             rBitmap.ImplMakeUnique();
-            xImpBmp = rBitmap.ImplGetImpBitmap();
+            xImpBmp = rBitmap.ImplGetSalBitmap();
         }
         else
         {
@@ -49,16 +51,16 @@ BitmapInfoAccess::BitmapInfoAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
                         "Unpredictable results: bitmap is referenced more than once!" );
         }
 
-        mpBuffer = xImpBmp->ImplAcquireBuffer( mnAccessMode );
+        mpBuffer = xImpBmp->AcquireBuffer( mnAccessMode );
 
         if( !mpBuffer )
         {
-            std::shared_ptr<ImpBitmap> xNewImpBmp(new ImpBitmap);
-            if (xNewImpBmp->ImplCreate(*xImpBmp, rBitmap.GetBitCount()))
+            std::shared_ptr<SalBitmap> xNewImpBmp(ImplGetSVData()->mpDefInst->CreateSalBitmap());
+            if (xNewImpBmp->Create(*xImpBmp, rBitmap.GetBitCount()))
             {
                 xImpBmp = xNewImpBmp;
-                rBitmap.ImplSetImpBitmap( xImpBmp );
-                mpBuffer = xImpBmp->ImplAcquireBuffer( mnAccessMode );
+                rBitmap.ImplSetSalBitmap( xImpBmp );
+                mpBuffer = xImpBmp->AcquireBuffer( mnAccessMode );
             }
         }
 
@@ -68,11 +70,11 @@ BitmapInfoAccess::BitmapInfoAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
 
 BitmapInfoAccess::~BitmapInfoAccess()
 {
-    std::shared_ptr<ImpBitmap> xImpBmp = maBitmap.ImplGetImpBitmap();
+    std::shared_ptr<SalBitmap> xImpBmp = maBitmap.ImplGetSalBitmap();
 
     if (mpBuffer && xImpBmp)
     {
-        xImpBmp->ImplReleaseBuffer( mpBuffer, mnAccessMode );
+        xImpBmp->ReleaseBuffer( mpBuffer, mnAccessMode );
         mpBuffer = nullptr;
     }
 }
@@ -90,7 +92,7 @@ BitmapReadAccess::BitmapReadAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
     if (!mpBuffer)
         return;
 
-    std::shared_ptr<ImpBitmap> xImpBmp = rBitmap.ImplGetImpBitmap();
+    std::shared_ptr<SalBitmap> xImpBmp = rBitmap.ImplGetSalBitmap();
     if (!xImpBmp)
         return;
 
@@ -100,7 +102,7 @@ BitmapReadAccess::BitmapReadAccess( Bitmap& rBitmap, BitmapAccessMode nMode ) :
 
     if (!bOk)
     {
-        xImpBmp->ImplReleaseBuffer( mpBuffer, mnAccessMode );
+        xImpBmp->ReleaseBuffer( mpBuffer, mnAccessMode );
         mpBuffer = nullptr;
     }
 }
@@ -323,8 +325,6 @@ BitmapColor BitmapReadAccess::GetColorWithFallback( double fY, double fX, const 
 
 BitmapWriteAccess::BitmapWriteAccess(Bitmap& rBitmap)
     : BitmapReadAccess(rBitmap, BitmapAccessMode::Write)
-    , mpLineColor()
-    , mpFillColor()
 {
 }
 

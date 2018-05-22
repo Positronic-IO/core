@@ -37,6 +37,7 @@
 #include <osl/diagnose.h>
 
 #include <tools/fontenum.hxx>
+#include <tools/color.hxx>
 
 #include <sax/tools/converter.hxx>
 
@@ -174,7 +175,7 @@ class SvxXMLListLevelStyleContext_Impl : public SvXMLImportContext
     sal_Unicode         cBullet;
 
     sal_Int16           nRelSize;
-    sal_Int32           m_nColor;
+    Color               m_nColor;
 
     sal_Int16           ePosAndSpaceMode;
     sal_Int16           eLabelFollowedBy;
@@ -188,7 +189,7 @@ class SvxXMLListLevelStyleContext_Impl : public SvXMLImportContext
     bool            bHasColor : 1;
 
     void SetRelSize( sal_Int16 nRel ) { nRelSize = nRel; }
-    void SetColor( sal_Int32 nColor )
+    void SetColor( Color nColor )
         { m_nColor = nColor; bHasColor = true; }
     void SetSpaceBefore( sal_Int32 nSet ) { nSpaceBefore = nSet; }
     void SetMinLabelWidth( sal_Int32 nSet ) { nMinLabelWidth = nSet; }
@@ -738,14 +739,14 @@ SvxXMLListLevelStyleAttrContext_Impl::SvxXMLListLevelStyleAttrContext_Impl(
                 sal_Int32 nColor(0);
                 if (::sax::Converter::convertColor( nColor, rValue ))
                 {
-                    rListLevel.SetColor( nColor );
+                    rListLevel.SetColor( Color(nColor) );
                 }
             }
             break;
         case XML_TOK_STYLE_ATTRIBUTES_ATTR_WINDOW_FONT_COLOR:
             {
                 if( IsXMLToken( rValue, XML_TRUE ) )
-                    rListLevel.SetColor( sal_Int32(0xffffffff) );
+                    rListLevel.SetColor( Color(0xffffffff) );
             }
             break;
         case XML_TOK_STYLE_ATTRIBUTES_ATTR_FONT_SIZE:
@@ -927,6 +928,8 @@ static const SvXMLTokenMapEntry* lcl_getStyleAlignmentAttributesAttrTokenMap()
     {
         { XML_NAMESPACE_TEXT, XML_LABEL_FOLLOWED_BY,
                 XML_TOK_STYLE_ATTRIBUTES_ATTR_LABEL_FOLLOWED_BY },
+        { XML_NAMESPACE_LO_EXT, XML_LABEL_FOLLOWED_BY,
+                XML_TOK_STYLE_ATTRIBUTES_ATTR_LABEL_FOLLOWED_BY },
         { XML_NAMESPACE_TEXT, XML_LIST_TAB_STOP_POSITION,
                 XML_TOK_STYLE_ATTRIBUTES_ATTR_LISTTAB_STOP_POSITION },
         { XML_NAMESPACE_FO, XML_TEXT_INDENT,
@@ -950,6 +953,7 @@ SvxXMLListLevelStyleLabelAlignmentAttrContext_Impl::SvxXMLListLevelStyleLabelAli
     SvXMLUnitConverter& rUnitConv = GetImport().GetMM100UnitConverter();
 
     sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
+    sal_Int16 eLabelFollowedBy = LabelFollow::LISTTAB;
     for( sal_Int16 i=0; i < nAttrCount; i++ )
     {
         const OUString& rAttrName = xAttrList->getNameByIndex( i );
@@ -964,12 +968,15 @@ SvxXMLListLevelStyleLabelAlignmentAttrContext_Impl::SvxXMLListLevelStyleLabelAli
         {
         case XML_TOK_STYLE_ATTRIBUTES_ATTR_LABEL_FOLLOWED_BY:
             {
-                sal_Int16 eLabelFollowedBy = LabelFollow::LISTTAB;
+                if( eLabelFollowedBy == LabelFollow::NEWLINE)
+                    //NewLine from LO_EXT has precedence over other values of the Non LO_EXT namespace
+                    break;
                 if( IsXMLToken( rValue, XML_SPACE ) )
                     eLabelFollowedBy = LabelFollow::SPACE;
                 else if( IsXMLToken( rValue, XML_NOTHING ) )
                     eLabelFollowedBy = LabelFollow::NOTHING;
-                rListLevel.SetLabelFollowedBy( eLabelFollowedBy );
+                else if( IsXMLToken( rValue, XML_NEWLINE ) )
+                    eLabelFollowedBy = LabelFollow::NEWLINE;
             }
             break;
         case XML_TOK_STYLE_ATTRIBUTES_ATTR_LISTTAB_STOP_POSITION:
@@ -986,6 +993,7 @@ SvxXMLListLevelStyleLabelAlignmentAttrContext_Impl::SvxXMLListLevelStyleLabelAli
             break;
         }
     }
+    rListLevel.SetLabelFollowedBy( eLabelFollowedBy );
 }
 
 void SvxXMLListStyleContext::SetAttribute( sal_uInt16 nPrefixKey,

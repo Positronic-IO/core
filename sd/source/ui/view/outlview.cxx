@@ -35,7 +35,6 @@
 #include <svl/style.hxx>
 #include <svx/svdorect.hxx>
 #include <svx/svdundo.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/adjustitem.hxx>
 #include <editeng/tstpitem.hxx>
 #include <editeng/lspcitem.hxx>
@@ -106,16 +105,10 @@ OutlineView::OutlineView( DrawDocShell& rDocSh, vcl::Window* pWindow, OutlineVie
         mnPaperWidth = 19000;
     }
 
-    // insert View into Outliner
-    for (OutlinerView* & rp : mpOutlinerView)
-    {
-        rp = nullptr;
-    }
-
-    mpOutlinerView[0] = new OutlinerView(&mrOutliner, pWindow);
-    mpOutlinerView[0]->SetOutputArea(::tools::Rectangle());
+    mpOutlinerViews[0].reset( new OutlinerView(&mrOutliner, pWindow) );
+    mpOutlinerViews[0]->SetOutputArea(::tools::Rectangle());
     mrOutliner.SetUpdateMode(false);
-    mrOutliner.InsertView(mpOutlinerView[0], EE_APPEND);
+    mrOutliner.InsertView(mpOutlinerViews[0].get(), EE_APPEND);
 
     onUpdateStyleSettings( true );
 
@@ -127,21 +120,6 @@ OutlineView::OutlineView( DrawDocShell& rDocSh, vcl::Window* pWindow, OutlineVie
 
     Link<tools::EventMultiplexerEvent&,void> aLink( LINK(this,OutlineView,EventMultiplexerListener) );
     mrOutlineViewShell.GetViewShellBase().GetEventMultiplexer()->AddEventListener(aLink);
-
-    LanguageType eLang = mrOutliner.GetDefaultLanguage();
-    maPageNumberFont = OutputDevice::GetDefaultFont( DefaultFontType::SANS_UNICODE, eLang, GetDefaultFontFlags::NONE );
-    maPageNumberFont.SetFontHeight( 500 );
-
-    maBulletFont.SetColor( COL_AUTO );
-    maBulletFont.SetFontHeight( 1000 );
-    maBulletFont.SetCharSet(RTL_TEXTENCODING_MS_1252);   // and replacing other values by standard
-    maBulletFont.SetFamilyName( "StarSymbol" );
-    maBulletFont.SetWeight(WEIGHT_NORMAL);
-    maBulletFont.SetUnderline(LINESTYLE_NONE);
-    maBulletFont.SetStrikeout(STRIKEOUT_NONE);
-    maBulletFont.SetItalic(ITALIC_NONE);
-    maBulletFont.SetOutline(false);
-    maBulletFont.SetShadow(false);
 
     Reference<XFrame> xFrame (mrOutlineViewShell.GetViewShellBase().GetFrame()->GetFrame().GetFrameInterface(), UNO_QUERY);
     maSlideImage = vcl::CommandInfoProvider::GetImageForCommand(".uno:ShowSlide", xFrame, vcl::ImageType::Size26);
@@ -164,16 +142,15 @@ OutlineView::~OutlineView()
     mrOutlineViewShell.GetViewShellBase().GetEventMultiplexer()->RemoveEventListener( aLink );
     DisconnectFromApplication();
 
-    delete mpProgress;
+    mpProgress.reset();
 
     // unregister OutlinerViews and destroy them
-    for (OutlinerView* & rpView : mpOutlinerView)
+    for (auto & rpView : mpOutlinerViews)
     {
-        if (rpView != nullptr)
+        if (rpView)
         {
-            mrOutliner.RemoveView( rpView );
-            delete rpView;
-            rpView = nullptr;
+            mrOutliner.RemoveView( rpView.get() );
+            rpView.reset();
         }
     }
 
@@ -234,21 +211,21 @@ void OutlineView::AddWindowToPaintView(OutputDevice* pWin, vcl::Window* pWindow)
 
     while (nView < MAX_OUTLINERVIEWS && !bAdded)
     {
-        if (mpOutlinerView[nView] == nullptr)
+        if (mpOutlinerViews[nView] == nullptr)
         {
-            mpOutlinerView[nView] = new OutlinerView(&mrOutliner, dynamic_cast< ::sd::Window* >(pWin));
-            mpOutlinerView[nView]->SetBackgroundColor( aWhiteColor );
-            mrOutliner.InsertView(mpOutlinerView[nView], EE_APPEND);
+            mpOutlinerViews[nView].reset( new OutlinerView(&mrOutliner, dynamic_cast< ::sd::Window* >(pWin)) );
+            mpOutlinerViews[nView]->SetBackgroundColor( aWhiteColor );
+            mrOutliner.InsertView(mpOutlinerViews[nView].get(), EE_APPEND);
             bAdded = true;
 
             if (bValidArea)
             {
-                mpOutlinerView[nView]->SetOutputArea(aOutputArea);
+                mpOutlinerViews[nView]->SetOutputArea(aOutputArea);
             }
         }
         else if (!bValidArea)
         {
-            aOutputArea = mpOutlinerView[nView]->GetOutputArea();
+            aOutputArea = mpOutlinerViews[nView]->GetOutputArea();
             bValidArea = true;
         }
 
@@ -269,15 +246,14 @@ void OutlineView::DeleteWindowFromPaintView(OutputDevice* pWin)
 
     while (nView < MAX_OUTLINERVIEWS && !bRemoved)
     {
-        if (mpOutlinerView[nView] != nullptr)
+        if (mpOutlinerViews[nView] != nullptr)
         {
-            pWindow = mpOutlinerView[nView]->GetWindow();
+            pWindow = mpOutlinerViews[nView]->GetWindow();
 
             if (pWindow == pWin)
             {
-                mrOutliner.RemoveView( mpOutlinerView[nView] );
-                delete mpOutlinerView[nView];
-                mpOutlinerView[nView] = nullptr;
+                mrOutliner.RemoveView( mpOutlinerViews[nView].get() );
+                mpOutlinerViews[nView].reset();
                 bRemoved = true;
             }
         }
@@ -294,13 +270,13 @@ void OutlineView::DeleteWindowFromPaintView(OutputDevice* pWin)
 OutlinerView* OutlineView::GetViewByWindow (vcl::Window const * pWin) const
 {
     OutlinerView* pOlView = nullptr;
-    for (OutlinerView* pView : mpOutlinerView)
+    for (std::unique_ptr<OutlinerView> const & pView : mpOutlinerViews)
     {
         if (pView != nullptr)
         {
             if ( pWin == pView->GetWindow() )
             {
-                pOlView = pView;
+                pOlView = pView.get();
             }
         }
     }
@@ -530,11 +506,7 @@ IMPL_LINK( OutlineView, ParagraphRemovingHdl, ::Outliner::ParagraphHdlParam, aPa
 
             if (mnPagesProcessed == mnPagesToProcess)
             {
-                if(mpProgress)
-                {
-                    delete mpProgress;
-                    mpProgress = nullptr;
-                }
+                mpProgress.reset();
                 mnPagesToProcess = 0;
                 mnPagesProcessed = 0;
             }
@@ -587,8 +559,7 @@ IMPL_LINK( OutlineView, DepthChangedHdl, ::Outliner::DepthChangeHdlParam, aParam
 
             if (mnPagesToProcess > PROCESS_WITH_PROGRESS_THRESHOLD)
             {
-                delete mpProgress;
-                mpProgress = new SfxProgress( GetDocSh(), SdResId(STR_CREATE_PAGES), mnPagesToProcess );
+                mpProgress.reset( new SfxProgress( GetDocSh(), SdResId(STR_CREATE_PAGES), mnPagesToProcess ) );
             }
             else
             {
@@ -612,8 +583,7 @@ IMPL_LINK( OutlineView, DepthChangedHdl, ::Outliner::DepthChangeHdlParam, aParam
         {
             if (mnPagesToProcess > PROCESS_WITH_PROGRESS_THRESHOLD && mpProgress)
             {
-                delete mpProgress;
-                mpProgress = nullptr;
+                mpProgress.reset();
             }
             else
                 mpDocSh->SetWaitCursor( false );
@@ -663,11 +633,7 @@ IMPL_LINK( OutlineView, DepthChangedHdl, ::Outliner::DepthChangeHdlParam, aParam
 
             if (mnPagesProcessed == mnPagesToProcess)
             {
-                if(mpProgress)
-                {
-                    delete mpProgress;
-                    mpProgress = nullptr;
-                }
+                mpProgress.reset();
                 mnPagesToProcess = 0;
                 mnPagesProcessed = 0;
             }
@@ -803,7 +769,7 @@ IMPL_LINK( OutlineView, BeginMovingHdl, ::Outliner *, pOutliner, void )
     OutlineViewPageChangesGuard aGuard(this);
 
     // list of selected title paragraphs
-    mpOutlinerView[0]->CreateSelectionList(maSelectedParas);
+    mpOutlinerViews[0]->CreateSelectionList(maSelectedParas);
 
     for (std::vector<Paragraph*>::iterator it = maSelectedParas.begin(); it != maSelectedParas.end();)
     {
@@ -1136,12 +1102,12 @@ void OutlineView::FillOutliner()
 
     // place cursor at the start
     Paragraph* pFirstPara = mrOutliner.GetParagraph( 0 );
-    mpOutlinerView[0]->Select( pFirstPara );
-    mpOutlinerView[0]->Select( pFirstPara, false );
+    mpOutlinerViews[0]->Select( pFirstPara );
+    mpOutlinerViews[0]->Select( pFirstPara, false );
 
     // select title of slide that was selected
     if (pTitleToSelect)
-        mpOutlinerView[0]->Select(pTitleToSelect);
+        mpOutlinerViews[0]->Select(pTitleToSelect);
 
     SetLinks();
 
@@ -1165,8 +1131,7 @@ IMPL_LINK_NOARG(OutlineView, RemovingPagesHdl, OutlinerView*, bool)
 
     if (mnPagesToProcess)
     {
-        delete mpProgress;
-        mpProgress = new SfxProgress( GetDocSh(), SdResId(STR_DELETE_PAGES), mnPagesToProcess );
+        mpProgress.reset( new SfxProgress( GetDocSh(), SdResId(STR_DELETE_PAGES), mnPagesToProcess ) );
     }
     mrOutliner.UpdateFields();
 
@@ -1260,7 +1225,7 @@ void OutlineView::SetActualPage( SdPage const * pActual )
         // if we found a paragraph, select its text at the outliner view
         Paragraph* pPara = GetParagraphForPage( mrOutliner, pActual );
         if( pPara )
-            mpOutlinerView[0]->Select( pPara );
+            mpOutlinerViews[0]->Select( pPara );
     }
 }
 
@@ -1282,7 +1247,7 @@ void OutlineView::SetSelectedPages()
 {
     // list of selected title paragraphs
     std::vector<Paragraph*> aSelParas;
-    mpOutlinerView[0]->CreateSelectionList(aSelParas);
+    mpOutlinerViews[0]->CreateSelectionList(aSelParas);
 
     for (std::vector<Paragraph*>::iterator it = aSelParas.begin(); it != aSelParas.end();)
     {
@@ -1392,11 +1357,11 @@ void OutlineView::onUpdateStyleSettings( bool bForceUpdate /* = false */ )
         sal_uInt16 nView;
         for( nView = 0; nView < MAX_OUTLINERVIEWS; nView++ )
         {
-            if (mpOutlinerView[nView] != nullptr)
+            if (mpOutlinerViews[nView] != nullptr)
             {
-                mpOutlinerView[nView]->SetBackgroundColor( aDocColor );
+                mpOutlinerViews[nView]->SetBackgroundColor( aDocColor );
 
-                vcl::Window* pWindow = mpOutlinerView[nView]->GetWindow();
+                vcl::Window* pWindow = mpOutlinerViews[nView]->GetWindow();
 
                 if( pWindow )
                     pWindow->SetBackground( Wallpaper( aDocColor ) );

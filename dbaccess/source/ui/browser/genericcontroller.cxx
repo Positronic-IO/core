@@ -18,7 +18,6 @@
  */
 
 #include <dbaccess/genericcontroller.hxx>
-#include <comphelper/uno3.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <browserids.hxx>
 #include <vcl/svapp.hxx>
@@ -29,11 +28,9 @@
 #include <osl/diagnose.h>
 #include <stringconstants.hxx>
 #include <vcl/stdtext.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <framework/titlehelper.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/extract.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/sdbc/XDataSource.hpp>
 #include <com/sun/star/sdb/DatabaseContext.hpp>
@@ -127,7 +124,7 @@ void UserDefinedFeatures::execute( const URL& _rFeatureURL, const Sequence< Prop
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -173,7 +170,7 @@ OGenericUnoController::OGenericUnoController(const Reference< XComponentContext 
     }
     catch(Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -366,12 +363,9 @@ namespace
 
     void    lcl_notifyMultipleStates( XStatusListener& _rListener, FeatureStateEvent& _rEvent, const States& _rStates )
     {
-        for (   States::const_iterator state = _rStates.begin();
-                state != _rStates.end();
-                ++state
-            )
+        for (auto const& elem : _rStates)
         {
-            _rEvent.State = *state;
+            _rEvent.State = elem;
             _rListener.statusChanged( _rEvent );
         }
     }
@@ -445,18 +439,14 @@ void OGenericUnoController::ImplBroadcastFeatureState(const OUString& _rFeature,
         // we are notifying them, so we must use a copy of m_arrStatusListener, not
         // m_arrStatusListener itself
         Dispatch aNotifyLoop( m_arrStatusListener );
-        Dispatch::iterator iterSearch = aNotifyLoop.begin();
-        Dispatch::const_iterator iterEnd = aNotifyLoop.end();
 
-        while (iterSearch != iterEnd)
+        for (auto const& elem : aNotifyLoop)
         {
-            DispatchTarget& rCurrent = *iterSearch;
-            if ( aFeatureCommands.find( rCurrent.aURL.Complete ) != aFeatureCommands.end() )
+            if ( aFeatureCommands.find( elem.aURL.Complete ) != aFeatureCommands.end() )
             {
-                aEvent.FeatureURL = rCurrent.aURL;
-                lcl_notifyMultipleStates( *rCurrent.xListener.get(), aEvent, aStates );
+                aEvent.FeatureURL = elem.aURL;
+                lcl_notifyMultipleStates( *elem.xListener.get(), aEvent, aStates );
             }
-            ++iterSearch;
         }
     }
 
@@ -571,12 +561,8 @@ void OGenericUnoController::InvalidateAll()
 void OGenericUnoController::InvalidateAll_Impl()
 {
     // invalidate all supported features
-
-    for (   SupportedFeatures::const_iterator aIter = m_aSupportedFeatures.begin();
-            aIter != m_aSupportedFeatures.end();
-            ++aIter
-        )
-        ImplBroadcastFeatureState( aIter->first, nullptr, true );
+    for (auto const& supportedFeature : m_aSupportedFeatures)
+        ImplBroadcastFeatureState( supportedFeature.first, nullptr, true );
 
     {
         ::osl::MutexGuard aGuard( m_aFeatureMutex);
@@ -745,10 +731,9 @@ void OGenericUnoController::disposing()
         EventObject aDisposeEvent;
         aDisposeEvent.Source = static_cast<XWeak*>(this);
         Dispatch aStatusListener = m_arrStatusListener;
-        Dispatch::const_iterator aEnd = aStatusListener.end();
-        for (Dispatch::const_iterator aIter = aStatusListener.begin(); aIter != aEnd; ++aIter)
+        for (auto const& statusListener : aStatusListener)
         {
-            aIter->xListener->disposing(aDisposeEvent);
+            statusListener.xListener->disposing(aDisposeEvent);
         }
         m_arrStatusListener.clear();
     }
@@ -1001,7 +986,7 @@ IMPL_LINK_NOARG(OGenericUnoController, OnAsyncCloseTask, void*, void)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1211,12 +1196,9 @@ bool OGenericUnoController::isCommandEnabled( const OUString& _rCompleteCommandU
 Sequence< ::sal_Int16 > SAL_CALL OGenericUnoController::getSupportedCommandGroups()
 {
     CommandHashMap aCmdHashMap;
-    for (   SupportedFeatures::const_iterator aIter = m_aSupportedFeatures.begin();
-            aIter != m_aSupportedFeatures.end();
-            ++aIter
-        )
-        if ( aIter->second.GroupId != CommandGroup::INTERNAL )
-            aCmdHashMap.emplace( aIter->second.GroupId, 0 );
+    for (auto const& supportedFeature : m_aSupportedFeatures)
+        if ( supportedFeature.second.GroupId != CommandGroup::INTERNAL )
+            aCmdHashMap.emplace( supportedFeature.second.GroupId, 0 );
 
     return comphelper::mapKeysToSequence( aCmdHashMap );
 }
@@ -1235,14 +1217,11 @@ Sequence< DispatchInformation > SAL_CALL OGenericUnoController::getConfigurableD
 {
     std::vector< DispatchInformation > aInformationVector;
     DispatchInformation aDispatchInfo;
-    for (   SupportedFeatures::const_iterator aIter = m_aSupportedFeatures.begin();
-            aIter != m_aSupportedFeatures.end();
-            ++aIter
-        )
+    for (auto const& supportedFeature : m_aSupportedFeatures)
     {
-        if ( sal_Int16( aIter->second.GroupId ) == CommandGroup )
+        if ( sal_Int16( supportedFeature.second.GroupId ) == CommandGroup )
         {
-            aDispatchInfo = aIter->second;
+            aDispatchInfo = supportedFeature.second;
             aInformationVector.push_back( aDispatchInfo );
         }
     }

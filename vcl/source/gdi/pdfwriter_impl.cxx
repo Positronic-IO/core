@@ -83,6 +83,7 @@
 #include <sallayout.hxx>
 #include <textlayout.hxx>
 #include <textlineinfo.hxx>
+#include <bitmapwriteaccess.hxx>
 
 #include "pdfwriter_impl.hxx"
 
@@ -291,7 +292,7 @@ void doTestCode()
 
     // prepare an alpha mask
     Bitmap aTransMask( Size( 256, 256 ), 8, &Bitmap::GetGreyPalette( 256 ) );
-    Bitmap::ScopedWriteAccess pAcc(aTransMask);
+    BitmapScopedWriteAccess pAcc(aTransMask);
     for( int nX = 0; nX < 256; nX++ )
         for( int nY = 0; nY < 256; nY++ )
             pAcc->SetPixel( nX, nY, BitmapColor( (sal_uInt8)((nX+nY)/2) ) );
@@ -315,7 +316,7 @@ void doTestCode()
     aWriter.DrawRect( aTranspRect );
 
     Bitmap aImageBmp( Size( 256, 256 ), 24 );
-    pAcc = Bitmap::ScopedWriteAccess(aImageBmp);
+    pAcc = BitmapScopedWriteAccess(aImageBmp);
     pAcc->SetFillColor( Color( 0xff, 0, 0xff ) );
     pAcc->FillRect( Rectangle( Point( 0, 0 ), Size( 256, 256 ) ) );
     pAcc.reset();
@@ -1800,8 +1801,8 @@ void PDFWriterImpl::PDFPage::appendWaveLine( sal_Int32 nWidth, sal_Int32 nY, sal
         case PDFWriter::PDFVersion::PDF_1_2: aBuffer.append( "1.2" );break;
         case PDFWriter::PDFVersion::PDF_1_3: aBuffer.append( "1.3" );break;
         case PDFWriter::PDFVersion::PDF_A_1:
-        default:
         case PDFWriter::PDFVersion::PDF_1_4: aBuffer.append( "1.4" );break;
+        default:
         case PDFWriter::PDFVersion::PDF_1_5: aBuffer.append( "1.5" );break;
     }
     // append something binary as comment (suggested in PDF Reference)
@@ -6218,7 +6219,7 @@ sal_Int32 PDFWriterImpl::getSystemFont( const vcl::Font& i_rFont )
     getReferenceDevice()->SetFont( i_rFont );
     getReferenceDevice()->ImplNewFont();
 
-    const PhysicalFontFace* pDevFont = m_pReferenceDevice->mpFontInstance->maFontSelData.mpFontData;
+    const PhysicalFontFace* pDevFont = m_pReferenceDevice->mpFontInstance->GetFontFace();
     sal_Int32 nFontID = 0;
     FontEmbedData::iterator it = m_aSystemFonts.find( pDevFont );
     if( it != m_aSystemFonts.end() )
@@ -6236,67 +6237,46 @@ sal_Int32 PDFWriterImpl::getSystemFont( const vcl::Font& i_rFont )
     return nFontID;
 }
 
-void PDFWriterImpl::registerGlyphs( int nGlyphs,
-                                    const GlyphItem** pGlyphs,
-                                    sal_Int32* pGlyphWidths,
-                                    sal_Ucs* pCodeUnits,
-                                    sal_Int32 const * pCodeUnitsPerGlyph,
-                                    sal_uInt8* pMappedGlyphs,
-                                    sal_Int32* pMappedFontObjects,
-                                    const PhysicalFontFace* pFallbackFonts[] )
+void PDFWriterImpl::registerGlyph(const GlyphItem* pGlyph,
+                                  const PhysicalFontFace* pFont,
+                                  const std::vector<sal_Ucs>& rCodeUnits,
+                                  sal_uInt8& nMappedGlyph,
+                                  sal_Int32& nMappedFontObject)
 {
-    SalGraphics *pGraphics = m_pReferenceDevice->GetGraphics();
-
-    if (!pGraphics)
-        return;
-
-    const PhysicalFontFace* pDevFont = m_pReferenceDevice->mpFontInstance->maFontSelData.mpFontData;
-    sal_Ucs* pCurUnicode = pCodeUnits;
-    for( int i = 0; i < nGlyphs; pCurUnicode += pCodeUnitsPerGlyph[i] , i++ )
+    const int nFontGlyphId = pGlyph->maGlyphId;
+    FontSubset& rSubset = m_aSubsets[ pFont ];
+    // search for font specific glyphID
+    FontMapping::iterator it = rSubset.m_aMapping.find( nFontGlyphId );
+    if( it != rSubset.m_aMapping.end() )
     {
-        const int nFontGlyphId = pGlyphs[i]->maGlyphId;
-        const PhysicalFontFace* pCurrentFont = pFallbackFonts[i] ? pFallbackFonts[i] : pDevFont;
-
-        FontSubset& rSubset = m_aSubsets[ pCurrentFont ];
-        // search for font specific glyphID
-        FontMapping::iterator it = rSubset.m_aMapping.find( nFontGlyphId );
-        if( it != rSubset.m_aMapping.end() )
+        nMappedFontObject = it->second.m_nFontID;
+        nMappedGlyph = it->second.m_nSubsetGlyphID;
+    }
+    else
+    {
+        // create new subset if necessary
+        if( rSubset.m_aSubsets.empty()
+        || (rSubset.m_aSubsets.back().m_aMapping.size() > 254) )
         {
-            pMappedFontObjects[i] = it->second.m_nFontID;
-            pMappedGlyphs[i] = it->second.m_nSubsetGlyphID;
+            rSubset.m_aSubsets.emplace_back( m_nNextFID++ );
         }
-        else
-        {
-            // create new subset if necessary
-            if( rSubset.m_aSubsets.empty()
-            || (rSubset.m_aSubsets.back().m_aMapping.size() > 254) )
-            {
-                rSubset.m_aSubsets.emplace_back( m_nNextFID++ );
-            }
 
-            // copy font id
-            pMappedFontObjects[i] = rSubset.m_aSubsets.back().m_nFontID;
-            // create new glyph in subset
-            sal_uInt8 nNewId = sal::static_int_cast<sal_uInt8>(rSubset.m_aSubsets.back().m_aMapping.size()+1);
-            pMappedGlyphs[i] = nNewId;
+        // copy font id
+        nMappedFontObject = rSubset.m_aSubsets.back().m_nFontID;
+        // create new glyph in subset
+        sal_uInt8 nNewId = sal::static_int_cast<sal_uInt8>(rSubset.m_aSubsets.back().m_aMapping.size()+1);
+        nMappedGlyph = nNewId;
 
-            // add new glyph to emitted font subset
-            GlyphEmit& rNewGlyphEmit = rSubset.m_aSubsets.back().m_aMapping[ nFontGlyphId ];
-            rNewGlyphEmit.setGlyphId( nNewId );
-            for( sal_Int32 n = 0; n < pCodeUnitsPerGlyph[i]; n++ )
-                rNewGlyphEmit.addCode( pCurUnicode[n] );
+        // add new glyph to emitted font subset
+        GlyphEmit& rNewGlyphEmit = rSubset.m_aSubsets.back().m_aMapping[ nFontGlyphId ];
+        rNewGlyphEmit.setGlyphId( nNewId );
+        for (const auto nCode : rCodeUnits)
+            rNewGlyphEmit.addCode(nCode);
 
-            // add new glyph to font mapping
-            Glyph& rNewGlyph = rSubset.m_aMapping[ nFontGlyphId ];
-            rNewGlyph.m_nFontID = pMappedFontObjects[i];
-            rNewGlyph.m_nSubsetGlyphID = nNewId;
-        }
-        if (!getReferenceDevice()->AcquireGraphics())
-            return;
-        pGlyphWidths[i] = m_aFontCache.getGlyphWidth( pCurrentFont,
-                                                      nFontGlyphId,
-                                                      pGlyphs[i]->IsVertical(),
-                                                      pGraphics );
+        // add new glyph to font mapping
+        Glyph& rNewGlyph = rSubset.m_aMapping[ nFontGlyphId ];
+        rNewGlyph.m_nFontID = nMappedFontObject;
+        rNewGlyph.m_nSubsetGlyphID = nNewId;
     }
 }
 
@@ -6402,7 +6382,7 @@ void PDFWriterImpl::drawVerticalGlyphs(
         double fSkewA = 0.0;
 
         Point aDeltaPos;
-        if (rGlyphs[i].m_bVertical)
+        if (rGlyphs[i].m_pGlyph->IsVertical())
         {
             fDeltaAngle = M_PI/2.0;
             aDeltaPos.setX( m_pReferenceDevice->GetFontMetric().GetAscent() );
@@ -6420,7 +6400,7 @@ void PDFWriterImpl::drawVerticalGlyphs(
             long nOffsetY = rGlyphs[i+1].m_aPos.Y() - rGlyphs[i].m_aPos.Y();
             nXOffset += static_cast<int>(sqrt(double(nOffsetX*nOffsetX + nOffsetY*nOffsetY)));
         }
-        if( ! rGlyphs[i].m_nGlyphId )
+        if( ! rGlyphs[i].m_pGlyph->maGlyphId )
             continue;
 
         aDeltaPos = rRotScale.transform( aDeltaPos );
@@ -6451,6 +6431,7 @@ void PDFWriterImpl::drawHorizontalGlyphs(
         const std::vector<PDFWriterImpl::PDFGlyph>& rGlyphs,
         OStringBuffer& rLine,
         const Point& rAlignOffset,
+        bool bFirst,
         double fAngle,
         double fXScale,
         double fSkew,
@@ -6490,7 +6471,7 @@ void PDFWriterImpl::drawHorizontalGlyphs(
         // the textline matrix relative to what was set before
         // making use of that would drive us into rounding issues
         Matrix3 aMat;
-        if( nRun == 0 && fAngle == 0.0 && fXScale == 1.0 && fSkew == 0.0 )
+        if( bFirst && nRun == 0 && fAngle == 0.0 && fXScale == 1.0 && fSkew == 0.0 )
         {
             m_aPages.back().appendPoint( aCurPos, rLine );
             rLine.append( " Td " );
@@ -6565,22 +6546,14 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
 
     const int nMaxGlyphs = 256;
 
-    const GlyphItem* pGlyphs[nMaxGlyphs] = { nullptr };
-    const PhysicalFontFace* pFallbackFonts[nMaxGlyphs] = { nullptr };
-    sal_Int32 pGlyphWidths[nMaxGlyphs];
-    sal_uInt8 pMappedGlyphs[nMaxGlyphs];
-    sal_Int32 pMappedFontObjects[nMaxGlyphs];
+    const GlyphItem* pGlyph = nullptr;
+    const PhysicalFontFace* pFallbackFont = nullptr;
     std::vector<sal_Ucs> aCodeUnits;
-    aCodeUnits.reserve(nMaxGlyphs);
-    std::vector<sal_Int32> aCodeUnitsPerGlyph;
-    aCodeUnits.reserve(nMaxGlyphs);
     bool bVertical = m_aCurrentPDFState.m_aFont.IsVertical();
-    int nGlyphs;
     int nIndex = 0;
-    int nMaxCharPos = rText.getLength()-1;
     double fXScale = 1.0;
     double fSkew = 0.0;
-    sal_Int32 nPixelFontHeight = m_pReferenceDevice->mpFontInstance->maFontSelData.mnHeight;
+    sal_Int32 nPixelFontHeight = m_pReferenceDevice->mpFontInstance->GetFontSelectPattern().mnHeight;
     TextAlign eAlign = m_aCurrentPDFState.m_aFont.GetAlignment();
 
     // transform font height back to current units
@@ -6604,8 +6577,8 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     // perform artificial italics if necessary
     if( ( m_aCurrentPDFState.m_aFont.GetItalic() == ITALIC_NORMAL ||
           m_aCurrentPDFState.m_aFont.GetItalic() == ITALIC_OBLIQUE ) &&
-        !( m_pReferenceDevice->mpFontInstance->maFontSelData.mpFontData->GetItalic() == ITALIC_NORMAL ||
-           m_pReferenceDevice->mpFontInstance->maFontSelData.mpFontData->GetItalic() == ITALIC_OBLIQUE )
+        !( m_pReferenceDevice->mpFontInstance->GetFontFace()->GetItalic() == ITALIC_NORMAL ||
+           m_pReferenceDevice->mpFontInstance->GetFontFace()->GetItalic() == ITALIC_OBLIQUE )
         )
     {
         fSkew = M_PI/12.0;
@@ -6632,8 +6605,8 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     bool bPop = false;
     bool bABold = false;
     // artificial bold necessary ?
-    if( m_pReferenceDevice->mpFontInstance->maFontSelData.mpFontData->GetWeight() <= WEIGHT_MEDIUM &&
-        m_pReferenceDevice->mpFontInstance->maFontSelData.GetWeight() > WEIGHT_MEDIUM )
+    if( m_pReferenceDevice->mpFontInstance->GetFontFace()->GetWeight() <= WEIGHT_MEDIUM &&
+        m_pReferenceDevice->mpFontInstance->GetFontSelectPattern().GetWeight() > WEIGHT_MEDIUM )
     {
         if( ! bPop )
             aLine.append( "q " );
@@ -6694,73 +6667,94 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     }
 
     FontMetric aRefDevFontMetric = m_pReferenceDevice->GetFontMetric();
+    const PhysicalFontFace* pDevFont = m_pReferenceDevice->mpFontInstance->GetFontFace();
 
     // collect the glyphs into a single array
-    const int nTmpMaxGlyphs = rLayout.GetOrientation() ? 1 : nMaxGlyphs; // #i97991# temporary workaround for #i87686#
     std::vector< PDFGlyph > aGlyphs;
-    aGlyphs.reserve( nTmpMaxGlyphs );
+    aGlyphs.reserve( nMaxGlyphs );
     // first get all the glyphs and register them; coordinates still in Pixel
-    Point aGNGlyphPos;
-    while ((nGlyphs = rLayout.GetNextGlyphs(nTmpMaxGlyphs, pGlyphs, aGNGlyphPos, nIndex, pFallbackFonts)) != 0)
+    Point aPos;
+    while (rLayout.GetNextGlyph(&pGlyph, aPos, nIndex, &pFallbackFont))
     {
+        const auto* pFont = pFallbackFont ? pFallbackFont : pDevFont;
+
         aCodeUnits.clear();
-        for( int i = 0; i < nGlyphs; i++ )
+
+        // tdf#66597, tdf#115117
+        //
+        // Here is how we embed textual content in PDF files, to allow for
+        // better text extraction for complex and typography-rich text.
+        //
+        // * If there is many to one or many to many mapping, use an
+        //   ActualText span embedding the original string, since ToUnicode
+        //   can’t handle these.
+        // * If the one glyph is used for several Unicode code points, also
+        //   use ActualText since ToUnicode can map each glyph in the font
+        //   only once.
+        // * Limit ActualText to single cluster at a time, since using it
+        //   for whole words or sentences breaks text selection and
+        //   highlighting in PDF viewers (there will be no way to tell
+        //   which glyphs belong to which characters).
+        // * Keep generating (now) redundant ToUnicode entries for
+        //   compatibility with old tools not supporting ActualText.
+
+        assert(pGlyph->mnCharCount >= 0);
+        for (int n = 0; n < pGlyph->mnCharCount; n++)
+            aCodeUnits.push_back(rText[pGlyph->mnCharPos + n]);
+
+        bool bUseActualText = false;
+
+        // If this is a start of complex cluster, use ActualText.
+        if (pGlyph->IsClusterStart())
+            bUseActualText = true;
+
+        // Or part of a complex cluster, will be handled by the ActualText
+        // of its cluster start.
+        if (pGlyph->IsInCluster())
+            assert(aCodeUnits.empty());
+
+        // A glyph can’t have more than one ToUnicode entry, use ActualText
+        // instead.
+        if (!aCodeUnits.empty() && !bUseActualText)
         {
-            // default case: 1 glyph is one unicode
-            aCodeUnitsPerGlyph.push_back(1);
-            if (pGlyphs[i]->mnCharPos >= 0 && pGlyphs[i]->mnCharPos <= nMaxCharPos)
+            for (const auto& rSubset : m_aSubsets[pFont].m_aSubsets)
             {
-                int nChars = 1;
-                // try to handle ligatures and such
-                if( i < nGlyphs-1 )
+                const auto& it = rSubset.m_aMapping.find(pGlyph->maGlyphId);
+                if (it != rSubset.m_aMapping.cend() && it->second.codes() != aCodeUnits)
                 {
-                    nChars = pGlyphs[i+1]->mnCharPos - pGlyphs[i]->mnCharPos;
-                    int start = pGlyphs[i]->mnCharPos;
-                    // #i115618# fix for simple RTL+CTL cases
-                    // supports RTL ligatures. TODO: more complex CTL, etc.
-                    if( nChars < 0 )
-                    {
-                        nChars = -nChars;
-                        start = pGlyphs[i+1]->mnCharPos + 1;
-                    }
-                    else if (nChars == 0)
-                        nChars = 1;
-                    aCodeUnitsPerGlyph.back() = nChars;
-                    for( int n = 0; n < nChars; n++ )
-                        aCodeUnits.push_back( rText[ start + n ] );
+                    bUseActualText = true;
+                    aCodeUnits.clear();
                 }
-                else
-                    aCodeUnits.push_back(rText[pGlyphs[i]->mnCharPos]);
             }
-            else
-                aCodeUnits.push_back( 0 );
-            // note: in case of ctl one character may result
-            // in multiple glyphs. The current SalLayout
-            // implementations set -1 then to indicate that no direct
-            // mapping is possible
         }
 
-        registerGlyphs( nGlyphs, pGlyphs, pGlyphWidths, aCodeUnits.data(), aCodeUnitsPerGlyph.data(), pMappedGlyphs, pMappedFontObjects, pFallbackFonts );
+        assert(!aCodeUnits.empty() || bUseActualText || pGlyph->IsInCluster());
 
-        for( int i = 0; i < nGlyphs; i++ )
+        sal_uInt8 nMappedGlyph;
+        sal_Int32 nMappedFontObject;
+        registerGlyph(pGlyph, pFont, aCodeUnits, nMappedGlyph, nMappedFontObject);
+
+        sal_Int32 nGlyphWidth = 0;
+        if (m_pReferenceDevice->AcquireGraphics())
         {
-            // tdf#113428: calculate the position of the next glyphs the same
-            // way GetNextGlyphs() would do if we asked for a single glyph at
-            // time.
-            if (i > 0)
-            {
-                Point aPos = pGlyphs[i]->maLinearPos;
-                aPos.setX( aPos.X() / ( rLayout.GetUnitsPerPixel()) );
-                aPos.setY( aPos.Y() / ( rLayout.GetUnitsPerPixel()) );
-                aGNGlyphPos = rLayout.GetDrawPosition(aPos);
-            }
-            aGlyphs.emplace_back( aGNGlyphPos,
-                                         pGlyphWidths[i],
-                                         pGlyphs[i]->maGlyphId,
-                                         pMappedFontObjects[i],
-                                         pMappedGlyphs[i],
-                                         pGlyphs[i]->IsVertical() );
+            SalGraphics *pGraphics = m_pReferenceDevice->GetGraphics();
+            if (pGraphics)
+                nGlyphWidth = m_aFontCache.getGlyphWidth(pFont,
+                                                         pGlyph->maGlyphId,
+                                                         pGlyph->IsVertical(),
+                                                         pGraphics);
         }
+
+        int nCharPos = -1;
+        if (bUseActualText || pGlyph->IsInCluster())
+            nCharPos = pGlyph->mnCharPos;
+
+        aGlyphs.emplace_back(aPos,
+                             pGlyph,
+                             nGlyphWidth,
+                             nMappedFontObject,
+                             nMappedGlyph,
+                             nCharPos);
     }
 
     // Avoid fill color when map mode is in pixels, the below code assumes
@@ -6812,10 +6806,49 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     */
     if( ! aGlyphs.empty() )
     {
-        if( bVertical )
-            drawVerticalGlyphs( aGlyphs, aLine, aAlignOffset, aRotScale, fAngle, fXScale, fSkew, nFontHeight );
-        else
-            drawHorizontalGlyphs( aGlyphs, aLine, aAlignOffset, fAngle, fXScale, fSkew, nFontHeight, nPixelFontHeight );
+        size_t nStart = 0;
+        size_t nEnd = 0;
+        while (nStart < aGlyphs.size())
+        {
+            while (nEnd < aGlyphs.size() && aGlyphs[nEnd].m_nCharPos == aGlyphs[nStart].m_nCharPos)
+                nEnd++;
+
+            std::vector<PDFGlyph> aRun(aGlyphs.begin() + nStart, aGlyphs.begin() + nEnd);
+
+            int nCharPos, nCharCount;
+            if (!aRun.front().m_pGlyph->IsRTLGlyph())
+            {
+                nCharPos = aRun.front().m_nCharPos;
+                nCharCount = aRun.front().m_pGlyph->mnCharCount;
+            }
+            else
+            {
+                nCharPos = aRun.back().m_nCharPos;
+                nCharCount = aRun.back().m_pGlyph->mnCharCount;
+            }
+
+            if (nCharPos >= 0 && nCharCount)
+            {
+                aLine.append("/Span<</ActualText<FEFF");
+                for (int i = 0; i < nCharCount; i++)
+                {
+                    sal_Unicode aChar = rText[nCharPos + i];
+                    appendHex(static_cast<sal_Int8>(aChar >> 8), aLine);
+                    appendHex(static_cast<sal_Int8>(aChar & 255), aLine);
+                }
+                aLine.append( ">>>\nBDC\n" );
+            }
+
+            if (bVertical)
+                drawVerticalGlyphs(aRun, aLine, aAlignOffset, aRotScale, fAngle, fXScale, fSkew, nFontHeight);
+            else
+                drawHorizontalGlyphs(aRun, aLine, aAlignOffset, nStart == 0, fAngle, fXScale, fSkew, nFontHeight, nPixelFontHeight);
+
+            if (nCharPos >= 0 && nCharCount)
+                aLine.append( "EMC\n" );
+
+            nStart = nEnd;
+        }
     }
 
     // end textobject
@@ -6840,11 +6873,10 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
         bool bUnderlineAbove = OutputDevice::ImplIsUnderlineAbove( m_aCurrentPDFState.m_aFont );
         if( m_aCurrentPDFState.m_aFont.IsWordLineMode() )
         {
-            Point aPos, aStartPt;
+            Point aStartPt;
             sal_Int32 nWidth = 0;
-            const GlyphItem* pGlyph;
-            int nStart = 0;
-            while (rLayout.GetNextGlyphs(1, &pGlyph, aPos, nStart))
+            nIndex = 0;
+            while (rLayout.GetNextGlyph(&pGlyph, aPos, nIndex))
             {
                 if (!pGlyph->IsSpacing())
                 {
@@ -6938,10 +6970,8 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
     else if ( eAlign == ALIGN_TOP )
         aOffset.AdjustY(m_pReferenceDevice->mpFontInstance->mxFontMetric->GetAscent() );
 
-    Point aPos;
-    const GlyphItem* pGlyph;
-    int nStart = 0;
-    while (rLayout.GetNextGlyphs(1, &pGlyph, aPos, nStart))
+    nIndex = 0;
+    while (rLayout.GetNextGlyph(&pGlyph, aPos, nIndex))
     {
         if (pGlyph->IsSpacing())
         {
@@ -8776,7 +8806,8 @@ bool PDFWriterImpl::writeGradientFunction( GradientEmit const & rObject )
     // Determination of shading axis
     // See: OutputDevice::ImplDrawLinearGradient for reference
     tools::Rectangle aRect;
-    aRect.Left() = aRect.Top() = 0;
+    aRect.SetLeft(0);
+    aRect.SetTop(0);
     aRect.SetRight( aSize.Width() );
     aRect.SetBottom( aSize.Height() );
 
@@ -9371,7 +9402,7 @@ namespace
         if (eFormat != ScanlineFormat::N1BitLsbPal)
             return rBitmap;
         Bitmap aNewBmp(rBitmap);
-        Bitmap::ScopedWriteAccess xWriteAcc(aNewBmp);
+        BitmapScopedWriteAccess xWriteAcc(aNewBmp);
         const int nScanLineBytes = (pAccess->Width() + 7U) / 8U;
         for (long nY = 0L; nY < xWriteAcc->Height(); ++nY)
         {
@@ -9749,7 +9780,7 @@ void PDFWriterImpl::drawJPGBitmap( SvStream& rDCTData, bool bIsTrueColor, const 
             drawBitmap( rTargetArea.TopLeft(), rTargetArea.GetSize(), aBmpEx );
         }
         else
-            drawBitmap( rTargetArea.TopLeft(), rTargetArea.GetSize(), aBmp );
+            drawBitmap( rTargetArea.TopLeft(), rTargetArea.GetSize(), BitmapEx(aBmp) );
         return;
     }
 

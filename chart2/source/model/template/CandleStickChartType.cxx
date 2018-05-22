@@ -23,6 +23,7 @@
 #include <servicenames_charttypes.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <cppuhelper/supportsservice.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -142,9 +143,7 @@ struct StaticCandleStickChartTypeInfo : public rtl::StaticAggregate< uno::Refere
 namespace chart
 {
 
-CandleStickChartType::CandleStickChartType(
-    const uno::Reference< uno::XComponentContext > & xContext ) :
-        ChartType( xContext )
+CandleStickChartType::CandleStickChartType()
 {
     Reference< beans::XPropertySet > xWhiteDayProps( new ::chart::StockBar( true ));
     Reference< beans::XPropertySet > xBlackDayProps( new ::chart::StockBar( false ));
@@ -192,9 +191,9 @@ CandleStickChartType::~CandleStickChartType()
             && xPropertySet.is())
             ModifyListenerHelper::removeListener( xPropertySet, m_xModifyEventForwarder );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -331,10 +330,10 @@ css::uno::Sequence< OUString > SAL_CALL CandleStickChartType::getSupportedServic
 } //  namespace chart
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface *
-com_sun_star_comp_chart_CandleStickChartType_get_implementation(css::uno::XComponentContext *context,
+com_sun_star_comp_chart_CandleStickChartType_get_implementation(css::uno::XComponentContext * /*context*/,
                                                          css::uno::Sequence<css::uno::Any> const &)
 {
-    return cppu::acquire(new ::chart::CandleStickChartType(context));
+    return cppu::acquire(new ::chart::CandleStickChartType);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

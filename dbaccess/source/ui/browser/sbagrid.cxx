@@ -69,7 +69,6 @@
 #include <comphelper/servicehelper.hxx>
 #include <com/sun/star/sdbcx/XTablesSupplier.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
-#include <vcl/msgbox.hxx>
 #include <browserids.hxx>
 #include <stringconstants.hxx>
 #include <strings.hrc>
@@ -205,12 +204,10 @@ void SAL_CALL SbaXGridControl::createPeer(const Reference< css::awt::XToolkit > 
     // TODO: why the hell this whole class does not use any mutex?
 
         Reference< css::frame::XDispatch >  xDisp(getPeer(), UNO_QUERY);
-        for (   StatusMultiplexerArray::const_iterator aIter = m_aStatusMultiplexer.begin();
-                aIter != m_aStatusMultiplexer.end();
-                ++aIter)
+        for (auto const& elem : m_aStatusMultiplexer)
         {
-            if ((*aIter).second.is() && (*aIter).second->getLength())
-                xDisp->addStatusListener((*aIter).second.get(), (*aIter).first);
+            if (elem.second.is() && elem.second->getLength())
+                xDisp->addStatusListener(elem.second.get(), elem.first);
         }
 }
 
@@ -273,14 +270,12 @@ void SAL_CALL SbaXGridControl::dispose()
     EventObject aEvt;
     aEvt.Source = *this;
 
-    for (   StatusMultiplexerArray::iterator aIter = m_aStatusMultiplexer.begin();
-            aIter != m_aStatusMultiplexer.end();
-            ++aIter)
+    for (auto & elem : m_aStatusMultiplexer)
     {
-        if ((*aIter).second.is())
+        if (elem.second.is())
         {
-            (*aIter).second->disposeAndClear(aEvt);
-            (*aIter).second.clear();
+            elem.second->disposeAndClear(aEvt);
+            elem.second.clear();
         }
     }
     StatusMultiplexerArray().swap(m_aStatusMultiplexer);
@@ -885,7 +880,7 @@ void SbaGridControl::SetBrowserAttrs()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -1310,7 +1305,7 @@ sal_Int8 SbaGridControl::AcceptDrop( const BrowserAcceptDropEvent& rEvt )
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
     } while (false);
@@ -1441,10 +1436,10 @@ IMPL_LINK_NOARG(SbaGridControl, AsynchDropEvent, void*, void)
         }
         catch(const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
             if (m_pMasterListener)
                 m_pMasterListener->AfterDrop();
             Show();
-            DBG_UNHANDLED_EXCEPTION();
         }
         if ( !bCountFinal )
             setDataSource(Reference< XRowSet >(xDataSource,UNO_QUERY));

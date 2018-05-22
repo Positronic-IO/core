@@ -22,7 +22,7 @@
 
 #include <cppuhelper/compbase.hxx>
 #include <osl/mutex.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <vector>
 #include <set>
 #include <utility>
@@ -49,25 +49,18 @@ class SVX_DLLPUBLIC SvXMLGraphicHelper final : public cppu::WeakComponentImplHel
                                                                                     css::document::XBinaryStreamResolver>
 {
 private:
-    typedef ::std::pair< OUString, OUString >                                             URLPair;
-    typedef ::std::vector< URLPair >                                                                    URLPairVector;
-    typedef ::std::vector< GraphicObject >                                                              GraphicObjectVector;
     typedef ::std::vector< css::uno::Reference< css::io::XOutputStream > >    GraphicOutputStreamVector;
 
     ::osl::Mutex                maMutex;
     css::uno::Reference < css::embed::XStorage > mxRootStorage;
     OUString             maCurStorageName;
-    URLPairVector               maGrfURLs;
-    GraphicObjectVector         maGrfObjs;
     GraphicOutputStreamVector   maGrfStms;
-    ::std::set< OUString >      maURLSet;
 
     std::unordered_map<OUString, css::uno::Reference<css::graphic::XGraphic>> maGraphicObjects;
-    std::unordered_map<Graphic, OUString> maExportGraphics;
+    std::unordered_map<Graphic, std::pair<OUString, OUString>> maExportGraphics;
 
     SvXMLGraphicHelperMode      meCreateMode;
     OUString                    maOutputMimeType;
-    bool                        mbDirect;
 
     SVX_DLLPRIVATE static bool          ImplGetStreamNames( const OUString& rURLStr,
                                                     OUString& rPictureStorageName,
@@ -80,17 +73,11 @@ private:
     SVX_DLLPRIVATE static OUString      ImplGetGraphicMimeType( const OUString& rFileName );
     SVX_DLLPRIVATE Graphic                  ImplReadGraphic( const OUString& rPictureStorageName,
                                                  const OUString& rPictureStreamName );
-    SVX_DLLPRIVATE bool                 ImplWriteGraphic( const OUString& rPictureStorageName,
-                                                  const OUString& rPictureStreamName,
-                                                  const OUString& rGraphicId,
-                                                  bool bUseGfxLink );
-    SVX_DLLPRIVATE void                     ImplInsertGraphicURL( const OUString& rURLStr, sal_uInt32 nInsertPos, OUString const & rRequestedFileName );
 
                                 SvXMLGraphicHelper();
                                 virtual ~SvXMLGraphicHelper() override;
     void                        Init( const css::uno::Reference < css::embed::XStorage >& xXMLStorage,
                                       SvXMLGraphicHelperMode eCreateMode,
-                                      bool bDirect,
                                       const OUString& rGraphicMimeType = OUString() );
 
     virtual void SAL_CALL       disposing() override;
@@ -103,7 +90,6 @@ public:
 
     static rtl::Reference<SvXMLGraphicHelper> Create( const css::uno::Reference < css::embed::XStorage >& rXMLStorage,
                                         SvXMLGraphicHelperMode eCreateMode,
-                                        bool bDirect = true,
                                         const OUString& rGraphicMimeType = OUString() );
     static rtl::Reference<SvXMLGraphicHelper>  Create( SvXMLGraphicHelperMode eCreateMode,
                                         const OUString& rMimeType = OUString() );

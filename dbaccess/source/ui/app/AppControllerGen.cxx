@@ -51,7 +51,6 @@
 #include <com/sun/star/util/XRefreshable.hpp>
 
 #include <cppuhelper/exc_hlp.hxx>
-#include <comphelper/processfactory.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/sqlerror.hxx>
@@ -130,7 +129,7 @@ void OApplicationController::convertToView(const OUString& _sName)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -152,7 +151,7 @@ void OApplicationController::pasteFormat(SotClipboardFormatId _nFormatId)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -213,7 +212,7 @@ void OApplicationController::openDialog( const OUString& _sServiceName )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -502,7 +501,7 @@ void OApplicationController::previewChanged( sal_Int32 _nMode )
         }
         catch ( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     InvalidateFeature(SID_DB_APP_DISABLE_PREVIEW);
@@ -555,7 +554,7 @@ OUString OApplicationController::getDatabaseName() const
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return sDatabaseName;
 }
@@ -586,7 +585,7 @@ void OApplicationController::onDocumentOpened( const OUString& _rName, const sal
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -690,15 +689,14 @@ void OApplicationController::doAction(sal_uInt16 _nId, const ElementOpenMode _eO
     }
 
     std::vector< std::pair< OUString ,Reference< XModel > > > aComponents;
-    std::vector< OUString>::const_iterator aEnd = aList.end();
-    for (std::vector< OUString>::const_iterator aIter = aList.begin(); aIter != aEnd; ++aIter)
+    for (auto const& elem : aList)
     {
         if ( SID_DB_APP_CONVERTTOVIEW == _nId )
-            convertToView(*aIter);
+            convertToView(elem);
         else
         {
-            Reference< XModel > xModel( openElementWithArguments( *aIter, eType, eOpenMode, _nId,aArguments ), UNO_QUERY );
-            aComponents.emplace_back( *aIter, xModel );
+            Reference< XModel > xModel( openElementWithArguments( elem, eType, eOpenMode, _nId,aArguments ), UNO_QUERY );
+            aComponents.emplace_back( elem, xModel );
         }
     }
 
@@ -706,23 +704,23 @@ void OApplicationController::doAction(sal_uInt16 _nId, const ElementOpenMode _eO
     if ( _eOpenMode == E_OPEN_FOR_MAIL )
     {
 
-        std::vector< std::pair< OUString ,Reference< XModel > > >::const_iterator componentIter = aComponents.begin();
-        std::vector< std::pair< OUString ,Reference< XModel > > >::const_iterator componentEnd = aComponents.end();
         SfxMailModel aSendMail;
         SfxMailModel::SendMailResult eResult = SfxMailModel::SEND_MAIL_OK;
-        for (; componentIter != componentEnd && SfxMailModel::SEND_MAIL_OK == eResult; ++componentIter)
+        for (auto const& component : aComponents)
         {
             try
             {
-                Reference< XModel > xModel(componentIter->second,UNO_QUERY);
+                Reference< XModel > xModel(component.second,UNO_QUERY);
 
                 // Send document as e-Mail using stored/default type
-                eResult = aSendMail.AttachDocument(xModel,componentIter->first);
+                eResult = aSendMail.AttachDocument(xModel,component.first);
                 ::comphelper::disposeComponent(xModel);
+                if (eResult != SfxMailModel::SEND_MAIL_OK)
+                    break;
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
         if ( !aSendMail.IsEmpty() )

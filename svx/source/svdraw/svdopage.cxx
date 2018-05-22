@@ -19,7 +19,7 @@
 
 
 #include <svx/svdopage.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <svx/svdtrans.hxx>
 #include <svx/svdetc.hxx>
@@ -64,9 +64,11 @@ void SdrPageObj::PageInDestruction(const SdrPage& rPage)
     }
 }
 
-
-SdrPageObj::SdrPageObj(SdrPage* pNewPage)
-:   mpShownPage(pNewPage)
+SdrPageObj::SdrPageObj(
+    SdrModel& rSdrModel,
+    SdrPage* pNewPage)
+:   SdrObject(rSdrModel),
+    mpShownPage(pNewPage)
 {
     if(mpShownPage)
     {
@@ -74,8 +76,12 @@ SdrPageObj::SdrPageObj(SdrPage* pNewPage)
     }
 }
 
-SdrPageObj::SdrPageObj(const tools::Rectangle& rRect, SdrPage* pNewPage)
-:   mpShownPage(pNewPage)
+SdrPageObj::SdrPageObj(
+    SdrModel& rSdrModel,
+    const tools::Rectangle& rRect,
+    SdrPage* pNewPage)
+:   SdrObject(rSdrModel),
+    mpShownPage(pNewPage)
 {
     if(mpShownPage)
     {
@@ -144,9 +150,9 @@ void SdrPageObj::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
     rInfo.bCanConvToPolyLineToArea=false;
 }
 
-SdrPageObj* SdrPageObj::Clone() const
+SdrPageObj* SdrPageObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrPageObj >();
+    return CloneHelper< SdrPageObj >(rTargetModel);
 }
 
 SdrPageObj& SdrPageObj::operator=(const SdrPageObj& rObj)
@@ -160,7 +166,7 @@ SdrPageObj& SdrPageObj::operator=(const SdrPageObj& rObj)
 
 OUString SdrPageObj::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulPAGE));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulPAGE));
 
     OUString aName(GetName());
     if (!aName.isEmpty())
@@ -176,7 +182,7 @@ OUString SdrPageObj::TakeObjNameSingul() const
 
 OUString SdrPageObj::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralPAGE);
+    return SvxResId(STR_ObjNamePluralPAGE);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

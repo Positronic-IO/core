@@ -675,7 +675,7 @@ void Test::testSharedFormulasRefUpdateRangeDeleteRow()
     ScDocFunc& rFunc = getDocShell().GetDocFunc();
     ScMarkData aMark;
     aMark.SelectOneTable(0);
-    rFunc.DeleteCells(ScRange(0,2,0,MAXCOL,2,0), &aMark, DEL_DELROWS, true);
+    rFunc.DeleteCells(ScRange(0,2,0,MAXCOL,2,0), &aMark, DelCellCmd::Rows, true);
 
     // Make sure C1:C4 belong to the same group.
     pFC = m_pDoc->GetFormulaCell(ScAddress(2,0,0));
@@ -777,7 +777,7 @@ void Test::testSharedFormulasRefUpdateExternal()
     ScDocFunc& rDocFunc = getDocShell().GetDocFunc();
     ScMarkData aMark;
     aMark.SelectOneTable(0);
-    rDocFunc.DeleteCells(ScRange(0,0,0,MAXCOL,1,0), &aMark, DEL_CELLSUP, true);
+    rDocFunc.DeleteCells(ScRange(0,0,0,MAXCOL,1,0), &aMark, DelCellCmd::CellsUp, true);
 
     // Check the shifted formula cells now in A5:A8.
     ASSERT_FORMULA_EQUAL(*m_pDoc, ScAddress(0,4,0), "'file:///extdata.fake'#$Data.A1", "Wrong formula!");
@@ -1019,7 +1019,7 @@ void Test::testSharedFormulasDeleteColumns()
     CPPUNIT_ASSERT_EQUAL(11.0, m_pDoc->GetValue(ScAddress(2,0,0)));
 
     // Delete column B.
-    rFunc.DeleteCells(ScRange(1,0,0,1,MAXROW,0), &aMark, DEL_CELLSLEFT, true);
+    rFunc.DeleteCells(ScRange(1,0,0,1,MAXROW,0), &aMark, DelCellCmd::CellsLeft, true);
     CPPUNIT_ASSERT_EQUAL(OUString("#REF!"), m_pDoc->GetString(ScAddress(1,0,0)));
 
     // The reference should still point to row 1 but the column status should be set to 'deleted'.
@@ -1062,7 +1062,7 @@ void Test::testSharedFormulasDeleteColumns()
     }
 
     // Delete column B.
-    rFunc.DeleteCells(ScRange(1,0,0,1,MAXROW,0), &aMark, DEL_CELLSLEFT, true);
+    rFunc.DeleteCells(ScRange(1,0,0,1,MAXROW,0), &aMark, DelCellCmd::CellsLeft, true);
 
     for (SCROW i = 0; i <= 1; ++i)
     {
@@ -1473,11 +1473,11 @@ void Test::testSharedFormulaUpdateOnNamedRangeChange()
     aName.mpName = pName;
     aName.mpExpr = pExpr1;
     aName.mnIndex = 1;
-    ScRangeName* pNames = new ScRangeName;
-    bool bSuccess = insertRangeNames(m_pDoc, pNames, &aName, &aName + 1);
+    std::unique_ptr<ScRangeName> pNames(new ScRangeName);
+    bool bSuccess = insertRangeNames(m_pDoc, pNames.get(), &aName, &aName + 1);
     CPPUNIT_ASSERT(bSuccess);
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pNames->size());
-    m_pDoc->SetRangeName(pNames);
+    m_pDoc->SetRangeName(std::move(pNames));
 
     // Set values to A1:A4.
     m_pDoc->SetValue(ScAddress(0,0,0), 1.0);
@@ -1525,9 +1525,9 @@ void Test::testSharedFormulaUpdateOnNamedRangeChange()
     CPPUNIT_ASSERT_EQUAL(2.0, m_pDoc->GetValue(ScAddress(2,0,0)));
 
     // Update the range of MyRange.
-    pNames = new ScRangeName;
+    pNames.reset(new ScRangeName);
     aName.mpExpr = pExpr2;
-    bSuccess = insertRangeNames(m_pDoc, pNames, &aName, &aName + 1);
+    bSuccess = insertRangeNames(m_pDoc, pNames.get(), &aName, &aName + 1);
     CPPUNIT_ASSERT(bSuccess);
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pNames->size());
     ScDocFunc& rFunc = getDocShell().GetDocFunc();
@@ -1535,7 +1535,7 @@ void Test::testSharedFormulaUpdateOnNamedRangeChange()
     typedef std::map<OUString, std::unique_ptr<ScRangeName>> NameMapType;
     NameMapType aNewNames;
     OUString aScope(STR_GLOBAL_RANGE_NAME);
-    aNewNames.insert(std::make_pair(aScope, std::unique_ptr<ScRangeName>(pNames)));
+    aNewNames.insert(std::make_pair(aScope, std::move(pNames)));
     rFunc.ModifyAllRangeNames(aNewNames);
 
     // Check to make sure all displayed formulas are still good.
@@ -1581,8 +1581,6 @@ void Test::testSharedFormulaUpdateOnDBChange()
     // Define database range 'MyRange' for A1:A2.
     ScDBData* pData = new ScDBData("MyRange", 0, 0, 0, 0, 1);
     bool bInserted = pDBs->getNamedDBs().insert(pData);
-    if (!bInserted)
-        delete pData;
     CPPUNIT_ASSERT_MESSAGE("Failed to insert a new database range.", bInserted);
 
     // Insert in C2:C4 a group of formula cells that reference MyRange.
@@ -1606,8 +1604,6 @@ void Test::testSharedFormulaUpdateOnDBChange()
     ScDBCollection aNewDBs(m_pDoc);
     ScDBData* pNewData = new ScDBData("MyRange", 0, 0, 0, 0, 3);
     bInserted = aNewDBs.getNamedDBs().insert(pNewData);
-    if (!bInserted)
-        delete pNewData;
     CPPUNIT_ASSERT_MESSAGE("Failed to insert a new database range.", bInserted);
 
     std::vector<ScRange> aDeleted;

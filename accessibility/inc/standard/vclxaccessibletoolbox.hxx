@@ -53,6 +53,7 @@ private:
     void                        UpdateCustomPopupItemp_Impl( vcl::Window* pWindow, bool bOpen );
     void                        HandleSubToolBarEvent( const VclWindowEvent& rVclWindowEvent );
     void                        ReleaseSubToolBox( ToolBox* _pSubToolBox );
+    sal_Int32                   implGetAccessibleChildCount();
 
     virtual ~VCLXAccessibleToolBox() override;
 

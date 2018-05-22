@@ -44,6 +44,9 @@ XSecParser::XSecParser(XMLSignatureHelper& rXMLSignatureHelper,
     , m_bInSignatureValue(false)
     , m_bInDate(false)
     , m_bInDescription(false)
+    , m_bInSignatureLineId(false)
+    , m_bInSignatureLineValidImage(false)
+    , m_bInSignatureLineInvalidImage(false)
     , m_pXSecController(pXSecController)
     , m_bReferenceUnresolved(false)
     , m_nReferenceDigestID(cssxc::DigestID::SHA1)
@@ -113,6 +116,13 @@ void SAL_CALL XSecParser::startElement(
             {
                 m_pXSecController->setId( ouIdAttr );
             }
+        }
+        else if (aName == "SignatureMethod")
+        {
+            OUString ouAlgorithm = xAttribs->getValueByName("Algorithm");
+            if (ouAlgorithm == ALGO_ECDSASHA1 || ouAlgorithm == ALGO_ECDSASHA256
+                || ouAlgorithm == ALGO_ECDSASHA512)
+                m_pXSecController->setSignatureMethod(svl::crypto::SignatureMethodAlgorithm::ECDSA);
         }
         else if ( aName == "Reference" )
         {
@@ -252,6 +262,21 @@ void SAL_CALL XSecParser::startElement(
             m_ouDescription.clear();
             m_bInDescription = true;
         }
+        else if (aName == "loext:SignatureLineId")
+        {
+            m_ouSignatureLineId.clear();
+            m_bInSignatureLineId = true;
+        }
+        else if (aName == "loext:SignatureLineValidImage")
+        {
+            m_ouSignatureLineValidImage.clear();
+            m_bInSignatureLineValidImage = true;
+        }
+        else if (aName == "loext:SignatureLineInvalidImage")
+        {
+            m_ouSignatureLineInvalidImage.clear();
+            m_bInSignatureLineInvalidImage = true;
+        }
 
         if (m_xNextHandler.is())
         {
@@ -361,6 +386,21 @@ void SAL_CALL XSecParser::endElement( const OUString& aName )
             m_pXSecController->setDescription( m_ouDescription );
             m_bInDescription = false;
         }
+        else if (aName == "loext:SignatureLineId")
+        {
+            m_pXSecController->setSignatureLineId( m_ouSignatureLineId );
+            m_bInSignatureLineId = false;
+        }
+        else if (aName == "loext:SignatureLineValidImage")
+        {
+            m_pXSecController->setValidSignatureImage( m_ouSignatureLineValidImage );
+            m_bInSignatureLineValidImage = false;
+        }
+        else if (aName == "loext:SignatureLineInvalidImage")
+        {
+            m_pXSecController->setInvalidSignatureImage( m_ouSignatureLineInvalidImage );
+            m_bInSignatureLineInvalidImage = false;
+        }
 
         if (m_xNextHandler.is())
         {
@@ -435,6 +475,18 @@ void SAL_CALL XSecParser::characters( const OUString& aChars )
     else if (m_bInSigningTime)
     {
         m_ouDate += aChars;
+    }
+    else if (m_bInSignatureLineId)
+    {
+        m_ouSignatureLineId += aChars;
+    }
+    else if (m_bInSignatureLineValidImage)
+    {
+        m_ouSignatureLineValidImage += aChars;
+    }
+    else if (m_bInSignatureLineInvalidImage)
+    {
+        m_ouSignatureLineInvalidImage += aChars;
     }
 
     if (m_xNextHandler.is())

@@ -53,13 +53,11 @@
 #include <sot/exchange.hxx>
 #include <svtools/cliplistener.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 #include <sot/formats.hxx>
 #include <svtools/transfer.hxx>
 #include <svl/stritem.hxx>
 
 #include <editsh.hxx>
-#include <scresid.hxx>
 #include <global.hxx>
 #include <sc.hrc>
 #include <scmod.hxx>
@@ -71,9 +69,10 @@
 #include <tabvwsh.hxx>
 #include <editutil.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <gridwin.hxx>
 
-#define ScEditShell
+#define ShellClass_ScEditShell
 #include <scslots.hxx>
 
 #include <scui_def.hxx>
@@ -134,7 +133,7 @@ static void lcl_RemoveAttribs( EditView& rEditView )
     bool bOld = pEngine->GetUpdateMode();
     pEngine->SetUpdateMode(false);
 
-    OUString aName = ScGlobal::GetRscString( STR_UNDO_DELETECONTENTS );
+    OUString aName = ScResId( STR_UNDO_DELETECONTENTS );
     ViewShellId nViewShellId(-1);
     if (ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell())
         nViewShellId = pViewSh->GetViewShellId();
@@ -219,10 +218,18 @@ void ScEditShell::Execute( SfxRequest& rReq )
             break;
 
         case SID_PASTE:
-            pTableView->PasteSpecial();
+        {
+            EVControlBits nControl = pTableView->GetControlWord();
             if (pTopView)
+            {
                 pTopView->Paste();
-            break;
+                pTableView->SetControlWord(nControl | EVControlBits::SINGLELINEPASTE);
+            }
+
+            pTableView->PasteSpecial();
+            pTableView->SetControlWord(nControl);
+        }
+        break;
 
         case SID_DELETE:
             pTableView->DeleteSelected();
@@ -263,7 +270,8 @@ void ScEditShell::Execute( SfxRequest& rReq )
         case SID_PASTE_SPECIAL:
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog( pViewData->GetDialogParent() ));
+                vcl::Window* pWin = pViewData->GetDialogParent();
+                ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(pWin ? pWin->GetFrameWeld() : nullptr));
                 SotClipboardFormatId nFormat = SotClipboardFormatId::NONE;
                 if ( pDlg )
                 {
@@ -412,7 +420,7 @@ void ScEditShell::Execute( SfxRequest& rReq )
                 }
                 else
                 {
-                    ScViewUtil::ExecuteCharMap( rItem, *pViewData->GetViewShell()->GetViewFrame(), aNewItem, aString );
+                    ScViewUtil::ExecuteCharMap( rItem, *pViewData->GetViewShell()->GetViewFrame() );
 
                     // while the dialog was open, edit mode may have been stopped
                     if (!SC_MOD()->IsInputMode())

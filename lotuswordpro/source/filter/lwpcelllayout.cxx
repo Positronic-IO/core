@@ -76,6 +76,7 @@
 
 LwpCellLayout::LwpCellLayout(LwpObjectHeader const &objHdr, LwpSvStream* pStrm)
     : LwpMiddleLayout(objHdr, pStrm)
+    , m_bConvertCell(false)
     , crowid(0)
     , ccolid(0)
     , cType(LDT_NONE)
@@ -209,10 +210,10 @@ void LwpCellLayout::ApplyBorders(XFCellStyle *pCellStyle)
  */
 void LwpCellLayout::ApplyWatermark(XFCellStyle *pCellStyle)
 {
-    XFBGImage* pBGImage = GetXFBGImage();
-    if(pBGImage)
+    std::unique_ptr<XFBGImage> xBGImage(GetXFBGImage());
+    if (xBGImage)
     {
-        pCellStyle->SetBackImage(pBGImage);
+        pCellStyle->SetBackImage(xBGImage);
     }
 }
 
@@ -223,10 +224,10 @@ void LwpCellLayout::ApplyWatermark(XFCellStyle *pCellStyle)
  */
 void LwpCellLayout::ApplyPatternFill(XFCellStyle* pCellStyle)
 {
-    XFBGImage* pXFBGImage = GetFillPattern();
-    if (pXFBGImage)
+    std::unique_ptr<XFBGImage> xXFBGImage(GetFillPattern());
+    if (xXFBGImage)
     {
-        pCellStyle->SetBackImage(pXFBGImage);
+        pCellStyle->SetBackImage(xXFBGImage);
     }
 }
 
@@ -285,7 +286,7 @@ void LwpCellLayout::ApplyFmtStyle(XFCellStyle *pCellStyle)
         if (pStyle)
         {
             XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-            m_NumfmtName = pXFStyleManager->AddStyle(pStyle).m_pStyle->GetStyleName();
+            m_NumfmtName = pXFStyleManager->AddStyle(std::unique_ptr<XFStyle>(pStyle)).m_pStyle->GetStyleName();
             pCellStyle->SetDataStyle(m_NumfmtName);
         }
     }
@@ -555,7 +556,7 @@ void LwpCellLayout::RegisterDefaultCell()
             }
             xCellStyle->SetBorders(xBorders.release());
         }
-        m_CellStyleNames[eLoop] = pXFStyleManager->AddStyle(xCellStyle.release()).m_pStyle->GetStyleName();
+        m_CellStyleNames[eLoop] = pXFStyleManager->AddStyle(std::move(xCellStyle)).m_pStyle->GetStyleName();
     }
 }
 /**
@@ -587,7 +588,7 @@ void LwpCellLayout::RegisterStyle()
     xCellStyle->SetAlignType(enumXFAlignNone, GetVerticalAlignmentType());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    m_StyleName = pXFStyleManager->AddStyle(xCellStyle.release()).m_pStyle->GetStyleName();
+    m_StyleName = pXFStyleManager->AddStyle(std::move(xCellStyle)).m_pStyle->GetStyleName();
 
     // content object register styles
     rtl::Reference<LwpObject> pObj = m_Content.obj();
@@ -891,11 +892,11 @@ rtl::Reference<XFCell> LwpHiddenCellLayout::ConvertCell(LwpObjectID aTableID, sa
         LwpCellLayout *pDefault = dynamic_cast<LwpCellLayout *>(pTable->GetDefaultCellStyle().obj().get());
         if (pDefault)
         {
-            xXFCell = pDefault->ConvertCell(aTableID, nRow, nCol);
+            xXFCell = pDefault->DoConvertCell(aTableID, nRow, nCol);
         }
         else
         {
-            xXFCell = pConnCell->ConvertCell(aTableID, nRow, nCol);
+            xXFCell = pConnCell->DoConvertCell(aTableID, nRow, nCol);
         }
         xXFCell->SetColumnSpaned(pConnCell->GetNumcols());
     }

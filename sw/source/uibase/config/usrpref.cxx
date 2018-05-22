@@ -103,10 +103,11 @@ Sequence<OUString> SwContentViewConfig::GetPropertyNames()
         "NonprintingCharacter/HiddenCharacter",      // 15
         "Update/Link",                          // 16
         "Update/Field",                         // 17
-        "Update/Chart"                          // 18
+        "Update/Chart",                         // 18
+        "Display/ShowInlineTooltips"            //19
 
     };
-    const int nCount = bWeb ? 12 : 19;
+    const int nCount = bWeb ? 12 : 20;
     Sequence<OUString> aNames(nCount);
     OUString* pNames = aNames.getArray();
     for(int i = 0; i < nCount; i++)
@@ -165,6 +166,7 @@ void SwContentViewConfig::ImplCommit()
             case 16: pValues[nProp] <<= rParent.GetUpdateLinkMode();    break;// "Update/Link",
             case 17: bVal = rParent.IsUpdateFields(); break;// "Update/Field",
             case 18: bVal = rParent.IsUpdateCharts(); break;// "Update/Chart"
+            case 19: bVal = rParent.IsShowInlineTooltips(); break;// "Display/ShowInlineTooltips"
         }
         if(nProp != 16)
             pValues[nProp] <<= bVal;
@@ -212,6 +214,7 @@ void SwContentViewConfig::Load()
                     break;// "Update/Link",
                     case 17: rParent.SetUpdateFields(bSet); break;// "Update/Field",
                     case 18: rParent.SetUpdateCharts(bSet); break;// "Update/Chart"
+                    case 19: rParent.SetShowInlineTooltips(bSet); break;// "Display/ShowInlineTooltips"
                 }
             }
         }
@@ -559,7 +562,7 @@ void SwWebColorConfig::ImplCommit()
     {
         switch(nProp)
         {
-            case  0: pValues[nProp] <<= static_cast<sal_Int32>(rParent.GetRetoucheColor().GetColor());   break;// "Color",
+            case  0: pValues[nProp] <<= rParent.GetRetoucheColor();   break;// "Color",
         }
     }
     PutProperties(aPropNames, aValues);
@@ -581,7 +584,7 @@ void SwWebColorConfig::Load()
                 switch(nProp)
                 {
                     case  0:
-                        sal_Int32 nSet = 0;
+                        Color nSet;
                         pValues[nProp] >>= nSet; rParent.SetRetoucheColor(nSet);
                     break;// "Color",
                 }

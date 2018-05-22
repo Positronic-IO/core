@@ -120,21 +120,21 @@ sal_uInt16 SwDoc::GetCurTOXMark( const SwPosition& rPos,
     sal_Int32 nSttIdx;
     const sal_Int32 *pEndIdx;
 
-    const sal_Int32 nAktPos = rPos.nContent.GetIndex();
+    const sal_Int32 nCurrentPos = rPos.nContent.GetIndex();
 
     for( size_t n = 0; n < rHts.Count(); ++n )
     {
         const SwTextAttr* pHt = rHts.Get(n);
         if( RES_TXTATR_TOXMARK != pHt->Which() )
             continue;
-        if( ( nSttIdx = pHt->GetStart() ) < nAktPos )
+        if( ( nSttIdx = pHt->GetStart() ) < nCurrentPos )
         {
             // also check the end
             if( nullptr == ( pEndIdx = pHt->End() ) ||
-                *pEndIdx <= nAktPos )
+                *pEndIdx <= nCurrentPos )
                 continue;       // keep searching
         }
-        else if( nSttIdx > nAktPos )
+        else if( nSttIdx > nCurrentPos )
             // If Hint's Start is greater than rPos, break, because
             // the attributes are sorted by Start!
             break;
@@ -449,7 +449,7 @@ const SwAttrSet& SwDoc::GetTOXBaseAttrSet(const SwTOXBase& rTOXBase)
 
 const SwTOXBase* SwDoc::GetDefaultTOXBase( TOXTypes eTyp, bool bCreate )
 {
-    SwTOXBase** prBase = nullptr;
+    std::unique_ptr<SwTOXBase>* prBase = nullptr;
     switch(eTyp)
     {
     case  TOX_CONTENT:          prBase = &mpDefTOXBases->pContBase; break;
@@ -468,14 +468,14 @@ const SwTOXBase* SwDoc::GetDefaultTOXBase( TOXTypes eTyp, bool bCreate )
     {
         SwForm aForm(eTyp);
         const SwTOXType* pType = GetTOXType(eTyp, 0);
-        (*prBase) = new SwTOXBase(pType, aForm, SwTOXElement::NONE, pType->GetTypeName());
+        prBase->reset(new SwTOXBase(pType, aForm, SwTOXElement::NONE, pType->GetTypeName()));
     }
-    return (*prBase);
+    return prBase->get();
 }
 
 void    SwDoc::SetDefaultTOXBase(const SwTOXBase& rBase)
 {
-    SwTOXBase** prBase = nullptr;
+    std::unique_ptr<SwTOXBase>* prBase = nullptr;
     switch(rBase.GetType())
     {
     case  TOX_CONTENT:          prBase = &mpDefTOXBases->pContBase; break;
@@ -490,8 +490,7 @@ void    SwDoc::SetDefaultTOXBase(const SwTOXBase& rBase)
     }
     if (!prBase)
         return;
-    delete *prBase;
-    (*prBase) = new SwTOXBase(rBase);
+    prBase->reset(new SwTOXBase(rBase));
 }
 
 /// Delete table of contents
@@ -1153,7 +1152,7 @@ void SwTOXBaseSection::UpdateMarks( const SwTOXInternational& rIntl,
                 pTOXSrc->GetText().getLength() && pTOXSrc->HasWriterListeners() &&
                 pTOXSrc->getLayoutFrame( pDoc->getIDocumentLayoutAccess().GetCurrentLayout() ) &&
                (!IsFromChapter() || ::lcl_FindChapterNode( *pTOXSrc ) == pOwnChapterNode ) &&
-               !pTOXSrc->HasHiddenParaField() &&
+               !pTOXSrc->IsHiddenByParaField() &&
                !SwScriptInfo::IsInHiddenRange( *pTOXSrc, pTextMark->GetStart() ) )
             {
                 SwTOXSortTabBase* pBase = nullptr;
@@ -1206,7 +1205,7 @@ void SwTOXBaseSection::UpdateOutline( const SwTextNode* pOwnChapterNode )
         if( pTextNd && pTextNd->Len() && pTextNd->HasWriterListeners() &&
             sal_uInt16( pTextNd->GetAttrOutlineLevel()) <= GetLevel() &&
             pTextNd->getLayoutFrame( pDoc->getIDocumentLayoutAccess().GetCurrentLayout() ) &&
-           !pTextNd->HasHiddenParaField() &&
+           !pTextNd->IsHiddenByParaField() &&
            !pTextNd->HasHiddenCharAttribute( true ) &&
             ( !IsFromChapter() ||
                ::lcl_FindChapterNode( *pTextNd ) == pOwnChapterNode ))
@@ -1536,7 +1535,7 @@ void SwTOXBaseSection::UpdatePageNum()
         return ;
 
     // Insert the current PageNumber into the TOC
-    SwPageFrame*  pAktPage    = nullptr;
+    SwPageFrame*  pCurrentPage    = nullptr;
     sal_uInt16      nPage       = 0;
     SwDoc* pDoc = GetFormat()->GetDoc();
 
@@ -1596,10 +1595,10 @@ void SwTOXBaseSection::UpdatePageNum()
                     }
 
                     SwPageFrame*  pTmpPage = pFrame->FindPageFrame();
-                    if( pTmpPage != pAktPage )
+                    if( pTmpPage != pCurrentPage )
                     {
                         nPage       = pTmpPage->GetVirtPageNum();
-                        pAktPage    = pTmpPage;
+                        pCurrentPage    = pTmpPage;
                     }
 
                     // Insert as sorted
@@ -1610,7 +1609,7 @@ void SwTOXBaseSection::UpdatePageNum()
                     if( i >= aNums.size() || aNums[ i ] != nPage )
                     {
                         aNums.insert(aNums.begin() + i, nPage);
-                        aDescs.insert(aDescs.begin() + i, pAktPage->GetPageDesc() );
+                        aDescs.insert(aDescs.begin() + i, pCurrentPage->GetPageDesc() );
                     }
                     // is it a main entry?
                     if(TOX_SORT_INDEX == pSortBase->GetType() &&

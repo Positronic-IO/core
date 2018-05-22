@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="flt">
-  <requires lib="gtk+" version="3.6"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">1</property>
     <property name="upper">2147483647</property>
@@ -116,7 +116,6 @@
                           <object class="GtkSpinButton" id="page">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">●</property>
                             <property name="adjustment">adjustment1</property>
                           </object>
                           <packing>
@@ -261,7 +260,6 @@
                           <object class="GtkSpinButton" id="zoom">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="invisible_char">●</property>
                             <property name="adjustment">adjustment2</property>
                             <accessibility>
                               <relation type="labelled-by" target="fitzoom"/>

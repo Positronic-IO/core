@@ -23,37 +23,49 @@
 #include <sfx2/tabdlg.hxx>
 
 #include <vcl/fixed.hxx>
-
 #include <vcl/edit.hxx>
-
 #include <vcl/lstbox.hxx>
-
 #include <vcl/button.hxx>
+#include <vcl/weld.hxx>
 
 #include "envimg.hxx"
 
 #define GetFieldVal(rField)         (rField).Denormalize((rField).GetValue(FUNIT_TWIP))
 #define SetFieldVal(rField, lValue) (rField).SetValue((rField).Normalize(lValue), FUNIT_TWIP)
 
+inline int getfieldval(weld::MetricSpinButton& rField)
+{
+    return rField.denormalize(rField.get_value(FUNIT_TWIP));
+}
+
+inline void setfieldval(weld::MetricSpinButton& rField, int lValue)
+{
+    rField.set_value(rField.normalize(lValue), FUNIT_TWIP);
+}
+
+class SwEnvDlg;
 class SwEnvPage;
 class SwEnvFormatPage;
 class SwWrtShell;
 class Printer;
 
-class SwEnvPreview : public vcl::Window
+class SwEnvPreview
 {
-    void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override;
+private:
+    std::unique_ptr<weld::DrawingArea> m_xDrawingArea;
+    SwEnvDlg* m_pDialog;
+    Size m_aSize;
+
+    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
+    DECL_LINK(DoResize, const Size& rSize, void);
 
 public:
-
-    SwEnvPreview(vcl::Window * pParent, WinBits nStyle);
-
-protected:
-    virtual void DataChanged( const DataChangedEvent& rDCEvt ) override;
-    virtual Size GetOptimalSize() const override;
+    SwEnvPreview(weld::DrawingArea* pDrawingArea);
+    void SetDialog(SwEnvDlg* pDialog) { m_pDialog = pDialog; }
+    void queue_draw() { m_xDrawingArea->queue_draw(); }
 };
 
-class SwEnvDlg : public SfxTabDialog
+class SwEnvDlg : public SfxTabDialogController
 {
 friend class SwEnvPage;
 friend class SwEnvFormatPage;
@@ -65,48 +77,49 @@ friend class SwEnvPreview;
     VclPtr<Printer> pPrinter;
     SfxItemSet      *pAddresseeSet;
     SfxItemSet      *pSenderSet;
-    sal_uInt16      m_nEnvPrintId;
 
-    virtual void    PageCreated( sal_uInt16 nId, SfxTabPage &rPage ) override;
+    std::unique_ptr<weld::Button> m_xModify;
+
+    virtual void    PageCreated(const OString& rId, SfxTabPage &rPage) override;
     virtual short   Ok() override;
 
 public:
-     SwEnvDlg(vcl::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert);
+    SwEnvDlg(weld::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert);
     virtual ~SwEnvDlg() override;
-    virtual void dispose() override;
 };
 
 class SwEnvPage : public SfxTabPage
 {
-    VclPtr<VclMultiLineEdit> m_pAddrEdit;
-    VclPtr<ListBox>      m_pDatabaseLB;
-    VclPtr<ListBox>      m_pTableLB;
-    VclPtr<ListBox>      m_pDBFieldLB;
-    VclPtr<PushButton>   m_pInsertBT;
-    VclPtr<CheckBox>     m_pSenderBox;
-    VclPtr<VclMultiLineEdit> m_pSenderEdit;
-    VclPtr<SwEnvPreview> m_pPreview;
+    SwEnvDlg* m_pDialog;
+    SwWrtShell*   m_pSh;
+    OUString      m_sActDBName;
 
-    SwWrtShell*   pSh;
-    OUString      sActDBName;
+    std::unique_ptr<weld::TextView> m_xAddrEdit;
+    std::unique_ptr<weld::ComboBoxText> m_xDatabaseLB;
+    std::unique_ptr<weld::ComboBoxText> m_xTableLB;
+    std::unique_ptr<weld::ComboBoxText> m_xDBFieldLB;
+    std::unique_ptr<weld::Button> m_xInsertBT;
+    std::unique_ptr<weld::CheckButton> m_xSenderBox;
+    std::unique_ptr<weld::TextView> m_xSenderEdit;
+    std::unique_ptr<SwEnvPreview> m_xPreview;
 
-    DECL_LINK( DatabaseHdl, ListBox&, void );
-    DECL_LINK(FieldHdl, Button*, void );
-    DECL_LINK(SenderHdl, Button*, void );
+    DECL_LINK(DatabaseHdl, weld::ComboBoxText&, void);
+    DECL_LINK(FieldHdl, weld::Button&, void);
+    DECL_LINK(SenderHdl, weld::Button&, void);
 
     void InitDatabaseBox();
 
-    SwEnvDlg* GetParentSwEnvDlg() {return static_cast<SwEnvDlg*>(GetParentDialog());}
+    SwEnvDlg* GetParentSwEnvDlg() { return m_pDialog; }
 
     using SfxTabPage::ActivatePage;
     using SfxTabPage::DeactivatePage;
 
 public:
-    SwEnvPage(vcl::Window* pParent, const SfxItemSet& rSet);
+    SwEnvPage(TabPageParent pParent, const SfxItemSet& rSet);
+    void Init(SwEnvDlg* pDialog);
     virtual ~SwEnvPage() override;
-    virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create(vcl::Window* pParent, const SfxItemSet* rSet);
+    static VclPtr<SfxTabPage> Create(TabPageParent pParent, const SfxItemSet* rSet);
 
     virtual void ActivatePage(const SfxItemSet& rSet) override;
     virtual DeactivateRC DeactivatePage(SfxItemSet* pSet) override;

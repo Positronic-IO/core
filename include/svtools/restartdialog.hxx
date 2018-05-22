@@ -15,7 +15,7 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <svtools/svtdllapi.h>
 
-namespace vcl { class Window; }
+namespace weld { class Window; }
 namespace com { namespace sun { namespace star { namespace uno {
     class XComponentContext;
 } } } }
@@ -54,12 +54,14 @@ enum RestartReason {
         // "For the extension to work properly,
         // %PRODUCTNAME must be restarted."
     RESTART_REASON_OPENGL,
+        // No particular reason
+    RESTART_REASON_NONE
 };
 
 // Must be called with the solar mutex locked:
 SVT_DLLPUBLIC void executeRestartDialog(
     css::uno::Reference< css::uno::XComponentContext > const & context,
-    vcl::Window * parent, RestartReason reason);
+    weld::Window* parent, RestartReason reason);
 
 }
 

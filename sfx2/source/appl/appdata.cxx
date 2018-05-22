@@ -23,7 +23,6 @@
 #include <svl/stritem.hxx>
 
 #include <vcl/menu.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/wrkwin.hxx>
 #include <comphelper/processfactory.hxx>
 
@@ -39,12 +38,11 @@
 #include <sfx2/request.hxx>
 #include <sfx2/sidebar/Theme.hxx>
 #include <sfx2/unoctitm.hxx>
-#include <sfx2/strings.hrc>
-#include <sfx2/sfxresid.hxx>
 #include <objshimp.hxx>
 #include "imestatuswindow.hxx"
 #include <appbaslib.hxx>
 #include <childwinimpl.hxx>
+#include <svl/svdde.hxx>
 
 #include <basic/basicmanagerrepository.hxx>
 #include <basic/basmgr.hxx>

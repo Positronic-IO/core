@@ -27,6 +27,7 @@
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/xml/sax/XDocumentHandler.hpp>
 #include <com/sun/star/xml/sax/XAttributeList.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/xml/crypto/XXMLSignature.hpp>
 #include <com/sun/star/xml/crypto/XSEInitializer.hpp>
 #include <com/sun/star/xml/crypto/sax/XSecuritySAXEventKeeper.hpp>
@@ -57,6 +58,9 @@
 #define ALGO_RSASHA1       "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
 #define ALGO_RSASHA256     "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 #define ALGO_RSASHA512     "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"
+#define ALGO_ECDSASHA1     "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha1"
+#define ALGO_ECDSASHA256   "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"
+#define ALGO_ECDSASHA512   "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512"
 #define ALGO_XMLDSIGSHA1   "http://www.w3.org/2000/09/xmldsig#sha1"
 #define ALGO_XMLDSIGSHA256 "http://www.w3.org/2001/04/xmlenc#sha256"
 #define ALGO_XMLDSIGSHA512 "http://www.w3.org/2001/04/xmlenc#sha512"
@@ -66,6 +70,7 @@ class XSecParser;
 class XMLDocumentWrapper_XmlSecImpl;
 class SAXEventKeeperImpl;
 class XMLSignatureHelper;
+namespace svl { namespace crypto { enum class SignatureMethodAlgorithm; } }
 
 class InternalSignatureInformation
 {
@@ -251,6 +256,8 @@ private:
      * For signature verification
      */
     void addSignature();
+    /// Sets algorithm from <SignatureMethod Algorithm="...">.
+    void setSignatureMethod(svl::crypto::SignatureMethodAlgorithm eAlgorithmID);
     void switchGpgSignature();
     void addReference(
         const OUString& ouUri,
@@ -338,7 +345,8 @@ public:
         const OUString& ouX509IssuerName,
         const OUString& ouX509SerialNumber,
         const OUString& ouX509Cert,
-        const OUString& ouX509CertDigest);
+        const OUString& ouX509CertDigest,
+        svl::crypto::SignatureMethodAlgorithm eAlgorithmID);
 
     void addEncapsulatedX509Certificate(const OUString& rEncapsulatedX509Certificate);
 
@@ -352,6 +360,12 @@ public:
         sal_Int32 nSecurityId,
         const css::util::DateTime& rDateTime );
     void setDescription(sal_Int32 nSecurityId, const OUString& rDescription);
+    void setSignatureLineId(sal_Int32 nSecurityId, const OUString& rSignatureLineId);
+    void
+    setSignatureLineValidGraphic(sal_Int32 nSecurityId,
+                                 const css::uno::Reference<css::graphic::XGraphic>& xValidGraphic);
+    void setSignatureLineInvalidGraphic(
+        sal_Int32 nSecurityId, const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic);
 
     bool WriteSignature(
         const css::uno::Reference< css::xml::sax::XDocumentHandler >& xDocumentHandler,

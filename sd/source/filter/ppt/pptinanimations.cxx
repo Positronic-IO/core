@@ -750,7 +750,7 @@ bool AnimationImporter::convertAnimationValue( oox::ppt::MS_AttributeNames eAttr
                 aColor.SetRed( static_cast<sal_uInt8>(lcl_gethex( aString[1] ) * 16 + lcl_gethex( aString[2] )) );
                 aColor.SetGreen( static_cast<sal_uInt8>(lcl_gethex( aString[3] ) * 16 + lcl_gethex( aString[4] )) );
                 aColor.SetBlue( static_cast<sal_uInt8>(lcl_gethex( aString[5] ) * 16 + lcl_gethex( aString[6] )) );
-                rValue <<= static_cast<sal_Int32>(aColor.GetColor());
+                rValue <<= aColor;
                 bRet = true;
             }
             else if( aString.startsWith( "rgb(" ) )
@@ -761,7 +761,7 @@ bool AnimationImporter::convertAnimationValue( oox::ppt::MS_AttributeNames eAttr
                 aColor.SetRed( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
                 aColor.SetGreen( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
                 aColor.SetRed( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
-                rValue <<= static_cast<sal_Int32>(aColor.GetColor());
+                rValue <<= aColor;
                 bRet = true;
             }
             else if( aString.startsWith( "hsl(" ) )
@@ -1227,7 +1227,7 @@ int AnimationImporter::importTimeContainer( const Atom* pAtom, const Reference< 
                 {
 #ifdef DBG_ANIM_LOG
                     sal_uInt32 nU1, nU2;
-                    mrStCtrl >> nU1 >> nU2;
+                    mrStCtrl.ReadUInt32(nU1).ReadUInt32(nU2);
 
                     fprintf( mpFile, "<unknown_0xf136 nU1=\"%ld\" nU2=\"%ld\"/>\n", nU1, nU2 );
 #endif
@@ -2384,15 +2384,17 @@ void AnimationImporter::importAnimateKeyPoints( const Atom* pAtom, const Referen
         OUString aFormula;
 
         pIter = pAtom->findFirstChildAtom(DFF_msofbtAnimKeyTime);
-        int nKeyTime;
         sal_Int32 nTemp;
-        for( nKeyTime = 0; (nKeyTime < nKeyTimes) && pIter; nKeyTime++ )
+        bool bToNormalize = false;
+        for( int nKeyTime = 0; (nKeyTime < nKeyTimes) && pIter; nKeyTime++ )
         {
             if( pIter->seekToContent() )
             {
                 mrStCtrl.ReadInt32( nTemp );
                 double fTemp = static_cast<double>(nTemp) / 1000.0;
                 aKeyTimes[nKeyTime] = fTemp;
+                if( fTemp == -1 )
+                    bToNormalize = true;
 
                 const Atom* pValue = Atom::findNextChildAtom(pIter);
                 if( pValue && pValue->getType() == DFF_msofbtAnimAttributeValue )
@@ -2489,7 +2491,14 @@ void AnimationImporter::importAnimateKeyPoints( const Atom* pAtom, const Referen
         }
         dump( "\"" );
 #endif
-
+        if( bToNormalize && nKeyTimes >= 2 )
+        {
+            // if TimeAnimationValueList contains time -1000, key points must be evenly distributed between 0 and 1 ([MS-PPT] 2.8.31)
+            for( int nKeyTime = 0; nKeyTime < nKeyTimes; ++nKeyTime )
+            {
+                aKeyTimes[nKeyTime] = static_cast<double>(nKeyTime) / static_cast<double>(nKeyTimes - 1);
+            }
+        }
         xAnim->setKeyTimes( aKeyTimes );
         xAnim->setValues( aValues );
         xAnim->setFormula( aFormula );
@@ -2932,11 +2941,11 @@ void AnimationImporter::dump( sal_uInt32 nLen, bool bNewLine )
 
     sal_uInt32 i = 0;
     int b = 0;
-    sal_Int8 nData;
+    char nData;
 
     for( i = 0; i < nLen; i++ )
     {
-        mrStCtrl >> nData;
+        mrStCtrl.ReadChar(nData);
 
         fprintf( mpFile, "%c%c ", faul[ (nData >> 4) & 0x0f ], faul[ nData & 0x0f ] );
 

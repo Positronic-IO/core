@@ -34,6 +34,7 @@
 #include <dbdata.hxx>
 #include <undoblk.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <markdata.hxx>
 #include <hints.hxx>
 #include <filter.hxx>
@@ -73,7 +74,7 @@ ScAreaLink::~ScAreaLink()
     StopRefreshTimer();
 }
 
-void ScAreaLink::Edit(vcl::Window* pParent, const Link<SvBaseLink&,void>& /* rEndEditHdl */ )
+void ScAreaLink::Edit(weld::Window* pParent, const Link<SvBaseLink&,void>& /* rEndEditHdl */ )
 {
     //  use own dialog instead of SvBaseLink::Edit...
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
@@ -281,7 +282,7 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
         SCROW nEndRow = 0;
         if (rSrcDoc.GetCellArea( 0, nEndCol, nEndRow))
         {
-            aSourceRanges.Append( ScRange( 0,0,0, nEndCol, nEndRow, 0));
+            aSourceRanges.push_back( ScRange( 0,0,0, nEndCol, nEndRow, 0));
             nWidth = nEndCol + 1;
             nHeight = nEndRow + 2;
         }
@@ -295,7 +296,7 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
         ScRange aTokenRange;
         if( FindExtRange( aTokenRange, &rSrcDoc, aToken ) )
         {
-            aSourceRanges.Append( aTokenRange);
+            aSourceRanges.push_back( aTokenRange);
             // columns: find maximum
             nWidth = std::max( nWidth, static_cast<SCCOL>(aTokenRange.aEnd.Col() - aTokenRange.aStart.Col() + 1) );
             // rows: add row range + 1 empty row
@@ -373,13 +374,13 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
             ScRange aNewTokenRange( aNewRange.aStart );
             for (size_t nRange = 0; nRange < aSourceRanges.size(); ++nRange)
             {
-                ScRange aTokenRange( *aSourceRanges[nRange]);
-                SCTAB nSrcTab = aTokenRange.aStart.Tab();
+                ScRange const & rTokenRange( aSourceRanges[nRange]);
+                SCTAB nSrcTab = rTokenRange.aStart.Tab();
                 ScMarkData aSourceMark;
                 aSourceMark.SelectOneTable( nSrcTab );      // selecting for CopyToClip
-                aSourceMark.SetMarkArea( aTokenRange );
+                aSourceMark.SetMarkArea( rTokenRange );
 
-                ScClipParam aClipParam(aTokenRange, false);
+                ScClipParam aClipParam(rTokenRange, false);
                 rSrcDoc.CopyToClip(aClipParam, &aClipDoc, &aSourceMark, false, false);
 
                 if ( aClipDoc.HasAttrib( 0,0,nSrcTab, MAXCOL,MAXROW,nSrcTab,
@@ -393,8 +394,8 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
                     aClipDoc.ApplyPatternAreaTab( 0,0, MAXCOL,MAXROW, nSrcTab, aPattern );
                 }
 
-                aNewTokenRange.aEnd.SetCol( aNewTokenRange.aStart.Col() + (aTokenRange.aEnd.Col() - aTokenRange.aStart.Col()) );
-                aNewTokenRange.aEnd.SetRow( aNewTokenRange.aStart.Row() + (aTokenRange.aEnd.Row() - aTokenRange.aStart.Row()) );
+                aNewTokenRange.aEnd.SetCol( aNewTokenRange.aStart.Col() + (rTokenRange.aEnd.Col() - rTokenRange.aStart.Col()) );
+                aNewTokenRange.aEnd.SetRow( aNewTokenRange.aStart.Row() + (rTokenRange.aEnd.Row() - rTokenRange.aStart.Row()) );
                 ScMarkData aDestMark;
                 aDestMark.SelectOneTable( nDestTab );
                 aDestMark.SetMarkArea( aNewTokenRange );
@@ -404,7 +405,7 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
         }
         else
         {
-            OUString aErr = ScGlobal::GetRscString(STR_LINKERROR);
+            OUString aErr = ScResId(STR_LINKERROR);
             rDoc.SetString( aDestPos.Col(), aDestPos.Row(), aDestPos.Tab(), aErr );
         }
 
@@ -466,7 +467,7 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
         vcl::Window* pWin = Application::GetDefDialogParent();
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_2)));
+                                                      ScResId(STR_MSSG_DOSUBTOTALS_2)));
         xInfoBox->run();
     }
 

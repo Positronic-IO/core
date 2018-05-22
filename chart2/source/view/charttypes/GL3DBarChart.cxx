@@ -82,16 +82,14 @@ double findMaxValue(const std::vector<std::unique_ptr<VDataSeries> >& rDataSerie
 class SharedResourceAccess
 {
 private:
-    osl::Condition& mrCond1;
     osl::Condition& mrCond2;
 
 public:
 
     SharedResourceAccess(osl::Condition& rCond1, osl::Condition& rCond2):
-        mrCond1(rCond1),
         mrCond2(rCond2)
     {
-        mrCond1.set();
+        rCond1.set();
     }
 
     ~SharedResourceAccess()
@@ -690,14 +688,14 @@ void GL3DBarChart::create3DShapes(const std::vector<std::unique_ptr<VDataSeries>
             p->setPosition(aTopLeft, aTopRight, aBottomRight);
         }
 
-        sal_Int32 nColor = aSeriesColor[nSeriesIndex % SAL_N_ELEMENTS(aSeriesColor)].GetColor();
+        Color nColor = aSeriesColor[nSeriesIndex % SAL_N_ELEMENTS(aSeriesColor)];
         for(sal_Int32 nIndex = 0; nIndex < nPointCount; ++nIndex)
         {
             if(bMappedFillProperty)
             {
                 double nPropVal = rDataSeries->getValueByProperty(nIndex, "FillColor");
                 if(!rtl::math::isNan(nPropVal))
-                    nColor = static_cast<sal_uInt32>(nPropVal);
+                    nColor = Color(static_cast<sal_uInt32>(nPropVal));
             }
 
             float nVal = rDataSeries->getYValue(nIndex);
@@ -716,7 +714,7 @@ void GL3DBarChart::create3DShapes(const std::vector<std::unique_ptr<VDataSeries>
             recordBarHistory(nId, nVal);
             if (mbBenchMarkMode)
             {
-                std::map<sal_uInt32, sal_uInt32>::const_iterator it = maBarColorMap.find(nId);
+                auto it = maBarColorMap.find(nId);
                 if (it == maBarColorMap.end())
                 {
                     maBarColorMap[nId] = nColor;
@@ -919,7 +917,7 @@ sal_uInt32 GL3DBarChart::barIdAtPosition(const Point& rPos)
         mpWindow->getContext().makeCurrent();
         mpRenderer->SetPickingMode(true);
         renderFrame();
-        nId = mpRenderer->GetPixelColorFromPoint(rPos.X(), rPos.Y());
+        nId = sal_uInt32(mpRenderer->GetPixelColorFromPoint(rPos.X(), rPos.Y()));
         mpRenderer->SetPickingMode(false);
         mpWindow->getContext().resetCurrent();
     }
@@ -1283,7 +1281,7 @@ void GL3DBarChart::updateClickEvent()
             nMaxXCoord = std::max(nMaxXCoord, 0.55f + nTextWidth);
         }
         getNeighborBarID(mnSelectBarId, nBarIdArray);
-        for (std::deque<float>::iterator it = aList.begin();it != aList.end();++it)
+        for (auto const& elem : aList)
         {
             if (nIdex + 1 < aList.size())
             {
@@ -1305,7 +1303,7 @@ void GL3DBarChart::updateClickEvent()
                 nMaxHight = std::max(nMaxHight, nYCoordStart + 0.07f);
                 nTextWidth = addScreenTextShape(aTitle, glm::vec2(nXCoordStart, 0.99f - nYCoordStart), 0.07f, false, glm::vec4(0.0f, 1.0f, 1.0f, 0.5f));
                 nMinXCoord = std::min(nMinXCoord, nXCoordStart - nTextWidth);
-                aBarValue = OUString::number(*it);
+                aBarValue = OUString::number(elem);
                 nTextWidth = addScreenTextShape(aBarValue, glm::vec2(nXCoordStart, 0.99f - nYCoordStart), 0.07f, true, glm::vec4(0.0f, 1.0f, 1.0f, 0.5f));
                 nMaxXCoord = std::max(nMaxXCoord, nXCoordStart + nTextWidth);
             }
@@ -1337,18 +1335,17 @@ void GL3DBarChart::calcDistance(std::vector<sal_uInt32> & rVectorNearest)
     glm::mat4 aView = mpRenderer->GetViewMatrix();
     glm::mat4 aScale = mpRenderer->GetGlobalScaleMatrix();
     glm::mat4 aMVP = aProjection * aView * aScale;
-    std::map<sal_uInt32, const BarInformation>::iterator it;
-    for(it= maBarMap.begin(); it!= maBarMap.end(); ++it)
+    for (auto const& elem : maBarMap)
     {
-        sal_uInt32 nId = it->first;
+        sal_uInt32 nId = elem.first;
         if(i < SHOW_VALUE_COUNT)
         {
             rVectorNearest.push_back(nId);
             i++;
         }
-        maDistanceMap[nId] = calcScrollDistance(aMVP, glm::vec3(it->second.maPos.x + BAR_SIZE_X / 2.0f,
-                                                               it->second.maPos.y + BAR_SIZE_Y / 2.0f,
-                                                               it->second.maPos.z));
+        maDistanceMap[nId] = calcScrollDistance(aMVP, glm::vec3(elem.second.maPos.x + BAR_SIZE_X / 2.0f,
+                                                               elem.second.maPos.y + BAR_SIZE_Y / 2.0f,
+                                                               elem.second.maPos.z));
     }
 }
 
@@ -1403,18 +1400,17 @@ void GL3DBarChart::getNearestBars(std::vector<sal_uInt32> &rVectorNearest)
 {
     calcDistance(rVectorNearest);
     initDistanceHeap(rVectorNearest);
-    std::map<sal_uInt32, float>::iterator it;
     int i = 0;
-    for(it= maDistanceMap.begin(); it!= maDistanceMap.end(); ++it)
+    for (auto const& elem : maDistanceMap)
     {
-        i++;
+        ++i;
         if(i <= SHOW_VALUE_COUNT)
             continue;
-        float nDistance = it->second;
+        float nDistance = elem.second;
         float nHeaphead = maDistanceMap[rVectorNearest[0]];
         if(nDistance < nHeaphead)
         {
-            rVectorNearest[0] = it->first;
+            rVectorNearest[0] = elem.first;
             keepHeap(rVectorNearest, 0);
         }
     }
@@ -1456,10 +1452,10 @@ void GL3DBarChart::updateScroll()
     }
 }
 
-void GL3DBarChart::processAutoFly(sal_uInt32 nId, sal_uInt32 nColor)
+void GL3DBarChart::processAutoFly(sal_uInt32 nId, Color nColor)
 {
     //record the color
-    sal_uInt32 nPreColor = maBarColorMap[nId];
+    Color nPreColor = maBarColorMap[nId];
     maBarColorMap[nId] = nColor;
     //if has manul event, just record the color and process manul event first
     if (maRenderEvent != EVENT_NONE)
@@ -1467,7 +1463,7 @@ void GL3DBarChart::processAutoFly(sal_uInt32 nId, sal_uInt32 nColor)
         return;
     }
     //calc the percentage of color change
-    int nColorRate = (nColor - nPreColor) * 100 / nPreColor;
+    int nColorRate = (sal_uInt32(nColor) - sal_uInt32(nPreColor)) * 100 / sal_uInt32(nPreColor);
     nColorRate = abs(nColorRate);
     if (nColorRate >= FLY_THRESHOLD)
     {

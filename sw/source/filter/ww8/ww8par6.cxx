@@ -330,6 +330,10 @@ bool wwSectionManager::SetCols(SwFrameFormat &rFormat, const wwSection &rSection
     if (nCols < 2)          //check for no columns or other weird state
         return false;
 
+    const sal_uInt16 nNetWriterWidth = writer_cast<sal_uInt16>(nNetWidth);
+    if (nNetWriterWidth == 0)
+        return false;
+
     SwFormatCol aCol;                      // Create SwFormatCol
 
     //sprmSDxaColumns   - Default distance is 1.25 cm
@@ -346,8 +350,7 @@ bool wwSectionManager::SetCols(SwFrameFormat &rFormat, const wwSection &rSection
         aCol.SetLineWidth(1);
     }
 
-    aCol.Init(nCols, writer_cast<sal_uInt16>(nColSpace),
-        writer_cast<sal_uInt16>(nNetWidth));
+    aCol.Init(nCols, writer_cast<sal_uInt16>(nColSpace), nNetWriterWidth);
 
     // sprmSFEvenlySpaced
     if (!rSep.fEvenlySpaced)
@@ -365,7 +368,7 @@ bool wwSectionManager::SetCols(SwFrameFormat &rFormat, const wwSection &rSection
             pCol->SetLeft(writer_cast<sal_uInt16>(nLeft));
             pCol->SetRight(writer_cast<sal_uInt16>(nRight));
         }
-        aCol.SetWishWidth(writer_cast<sal_uInt16>(nNetWidth));
+        aCol.SetWishWidth(nNetWriterWidth);
     }
     rFormat.SetFormatAttr(aCol);
     return true;
@@ -430,11 +433,22 @@ void wwSectionManager::SetPage(SwPageDesc &rInPageDesc, SwFrameFormat &rFormat,
         SetCols(rFormat, rSection, rSection.GetTextAreaWidth());
 }
 
-static sal_uInt16 lcl_MakeSafeNegativeSpacing(sal_uInt16 nIn)
+namespace {
+// Returns corrected (ODF) margin size
+long SetBorderDistance(bool bFromEdge, SvxBoxItem& aBox, SvxBoxItemLine eLine, long nMSMargin)
 {
-    if (nIn > SHRT_MAX)
-        nIn = 0;
-    return nIn;
+    const editeng::SvxBorderLine* pLine = aBox.GetLine(eLine);
+    if (!pLine)
+        return nMSMargin;
+    sal_Int32 nNewMargin = nMSMargin;
+    sal_Int32 nNewDist = aBox.GetDistance(eLine);
+    sal_Int32 nLineWidth = pLine->GetScaledWidth();
+
+    editeng::BorderDistanceFromWord(bFromEdge, nNewMargin, nNewDist, nLineWidth);
+    aBox.SetDistance(nNewDist, eLine);
+
+    return nNewMargin;
+}
 }
 
 void SwWW8ImplReader::SetPageBorder(SwFrameFormat &rFormat, const wwSection &rSection)
@@ -447,65 +461,15 @@ void SwWW8ImplReader::SetPageBorder(SwFrameFormat &rFormat, const wwSection &rSe
     SetFlyBordersShadow(aSet, rSection.brc, &aSizeArray[0]);
     SvxLRSpaceItem aLR(ItemGet<SvxLRSpaceItem>(aSet, RES_LR_SPACE));
     SvxULSpaceItem aUL(ItemGet<SvxULSpaceItem>(aSet, RES_UL_SPACE));
-
     SvxBoxItem aBox(ItemGet<SvxBoxItem>(aSet, RES_BOX));
-    short aOriginalBottomMargin = aBox.GetDistance(SvxBoxItemLine::BOTTOM);
+    bool bFromEdge = rSection.maSep.pgbOffsetFrom == 1;
 
-    if (rSection.maSep.pgbOffsetFrom == 1)
-    {
-        sal_uInt16 nDist;
-        if (aBox.GetLeft())
-        {
-            nDist = aBox.GetDistance(SvxBoxItemLine::LEFT);
-            aBox.SetDistance(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aLR.GetLeft() - nDist)), SvxBoxItemLine::LEFT);
-            aSizeArray[WW8_LEFT] =
-                aSizeArray[WW8_LEFT] - nDist + aBox.GetDistance(SvxBoxItemLine::LEFT);
-        }
+    aLR.SetLeft(SetBorderDistance(bFromEdge, aBox, SvxBoxItemLine::LEFT, aLR.GetLeft()));
+    aLR.SetRight(SetBorderDistance(bFromEdge, aBox, SvxBoxItemLine::RIGHT, aLR.GetRight()));
+    aUL.SetUpper(SetBorderDistance(bFromEdge, aBox, SvxBoxItemLine::TOP, aUL.GetUpper()));
+    aUL.SetLower(SetBorderDistance(bFromEdge, aBox, SvxBoxItemLine::BOTTOM, aUL.GetLower()));
 
-        if (aBox.GetRight())
-        {
-            nDist = aBox.GetDistance(SvxBoxItemLine::RIGHT);
-            aBox.SetDistance(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aLR.GetRight() - nDist)), SvxBoxItemLine::RIGHT);
-            aSizeArray[WW8_RIGHT] =
-                aSizeArray[WW8_RIGHT] - nDist + aBox.GetDistance(SvxBoxItemLine::RIGHT);
-        }
-
-        if (aBox.GetTop())
-        {
-            nDist = aBox.GetDistance(SvxBoxItemLine::TOP);
-            aBox.SetDistance(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aUL.GetUpper() - nDist)), SvxBoxItemLine::TOP);
-            aSizeArray[WW8_TOP] =
-                aSizeArray[WW8_TOP] - nDist + aBox.GetDistance(SvxBoxItemLine::TOP);
-        }
-
-        if (aBox.GetBottom())
-        {
-            nDist = aBox.GetDistance(SvxBoxItemLine::BOTTOM);
-            aBox.SetDistance(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aUL.GetLower() - nDist)), SvxBoxItemLine::BOTTOM);
-            aSizeArray[WW8_BOT] =
-                aSizeArray[WW8_BOT] - nDist + aBox.GetDistance(SvxBoxItemLine::BOTTOM);
-        }
-
-        aSet.Put(aBox);
-    }
-
-    if (aBox.GetLeft())
-        aLR.SetLeft(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aLR.GetLeft() - aSizeArray[WW8_LEFT])));
-    if (aBox.GetRight())
-        aLR.SetRight(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aLR.GetRight() - aSizeArray[WW8_RIGHT])));
-    if (aBox.GetTop())
-        aUL.SetUpper(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aUL.GetUpper() - aSizeArray[WW8_TOP])));
-    if (aBox.GetBottom())
-    {
-        //#i30088# and #i30074# - do a final sanity check on
-        //bottom value. Do not allow a resulting zero if bottom
-        //Border margin value was not originally zero.
-        if(aUL.GetLower() != 0)
-            aUL.SetLower(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aUL.GetLower() - aSizeArray[WW8_BOT])));
-        else
-            aUL.SetLower(lcl_MakeSafeNegativeSpacing(static_cast<sal_uInt16>(aOriginalBottomMargin - aSizeArray[WW8_BOT])));
-    }
-
+    aSet.Put(aBox);
     aSet.Put(aLR);
     aSet.Put(aUL);
     rFormat.SetFormatAttr(aSet);
@@ -1828,7 +1792,7 @@ bToggelPos(false)
         eSurround = css::text::WrapTextMode_PARALLEL;
 
     /*
-     #95905#, #83307# seems to have gone away now, so reenable parallel
+     #95905#, #83307# seems to have gone away now, so re-enable parallel
      wrapping support for frames in headers/footers. I don't know if we truly
      have an explicitly specified behaviour for these circumstances.
     */
@@ -2278,7 +2242,7 @@ SwTwips SwWW8ImplReader::MoveOutsideFly(SwFrameFormat *pFlyFormat,
                                 aSize.SetHeight(MINLAY);
                                 pFlyFormat->SetFormatAttr(aSize);
                                 SwFormatHoriOrient aHori = pTableFormat->GetHoriOrient();
-                                // passing the table orientaion of
+                                // passing the table orientation of
                                 // LEFT_AND_WIDTH to the frame seems to
                                 // work better than FULL, especially if the
                                 // table width exceeds the page width, however
@@ -2452,6 +2416,33 @@ bool SwWW8ImplReader::JoinNode(SwPaM &rPam, bool bStealAttr)
         rPam.GetPoint()->nContent.Assign(pNode, pNode->GetText().getLength());
         if (bStealAttr)
             m_xCtrlStck->StealAttr(rPam.GetPoint()->nNode);
+
+        if (m_pLastAnchorPos || m_pPreviousNode)
+        {
+            SwNodeIndex aToBeJoined(aPref, 1);
+
+            if (m_pLastAnchorPos)
+            {
+                //If the last anchor pos is here, then clear the anchor pos.
+                //This "last anchor pos" is only used for fixing up the
+                //positions of things anchored to page breaks and here
+                //we are removing the last paragraph of a frame, so there
+                //cannot be a page break at this point so we can
+                //safely reset m_pLastAnchorPos to avoid any dangling
+                //SwIndex's pointing into the deleted paragraph
+                SwNodeIndex aLastAnchorPos(m_pLastAnchorPos->nNode);
+                if (aLastAnchorPos == aToBeJoined)
+                    m_pLastAnchorPos.reset();
+            }
+
+            if (m_pPreviousNode)
+            {
+                //If the drop character start pos is here, then clear it.
+                SwNodeIndex aDropCharPos(*m_pPreviousNode);
+                if (aDropCharPos == aToBeJoined)
+                    m_pPreviousNode = nullptr;
+            }
+        }
 
         pNode->JoinNext();
 
@@ -3474,7 +3465,7 @@ void SwWW8ImplReader::Read_TextColor( sal_uInt16, const sal_uInt8* pData, short 
 
         NewAttr( SvxColorItem(GetCol(b), RES_CHRATR_COLOR));
         if (m_pCurrentColl && m_xStyles)
-            m_xStyles->bTextColChanged = true;
+            m_xStyles->mbTextColChanged = true;
     }
 }
 
@@ -3487,7 +3478,7 @@ void SwWW8ImplReader::Read_TextForeColor(sal_uInt16, const sal_uInt8* pData, sho
         Color aColor(msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)));
         NewAttr(SvxColorItem(aColor, RES_CHRATR_COLOR));
         if (m_pCurrentColl && m_xStyles)
-            m_xStyles->bTextColChanged = true;
+            m_xStyles->mbTextColChanged = true;
     }
 }
 
@@ -3512,7 +3503,7 @@ void SwWW8ImplReader::Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, sh
                     = static_cast<SvxUnderlineItem *>(aSet.Get( RES_CHRATR_UNDERLINE, false ).Clone());
                 if (pUnderline && nLen >= 4)
                 {
-                    pUnderline->SetColor( Color( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) ) );
+                    pUnderline->SetColor( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) );
                     m_pCurrentColl->SetFormatAttr( *pUnderline );
                     delete pUnderline;
                 }
@@ -3526,7 +3517,7 @@ void SwWW8ImplReader::Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, sh
                     = static_cast<SvxUnderlineItem*>(m_xCurrentItemSet->Get(RES_CHRATR_UNDERLINE, false).Clone());
                 if (pUnderline && nLen >= 4)
                 {
-                    pUnderline->SetColor( Color( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) ) );
+                    pUnderline->SetColor( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) );
                     m_xCurrentItemSet->Put( *pUnderline );
                     delete pUnderline;
                 }
@@ -3536,7 +3527,7 @@ void SwWW8ImplReader::Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, sh
         {
             SvxUnderlineItem* pUnderlineAttr = const_cast<SvxUnderlineItem*>(static_cast<const SvxUnderlineItem*>(m_xCtrlStck->GetOpenStackAttr( *m_pPaM->GetPoint(), RES_CHRATR_UNDERLINE )));
             if (pUnderlineAttr && nLen >= 4)
-                pUnderlineAttr->SetColor( Color( msfilter::util::BGRToRGB(SVBT32ToUInt32( pData ))));
+                pUnderlineAttr->SetColor( msfilter::util::BGRToRGB(SVBT32ToUInt32( pData ) ));
         }
     }
 }
@@ -3712,11 +3703,11 @@ void SwWW8ImplReader::openFont(sal_uInt16 nFCode, sal_uInt16 nId)
     {
         // remember for simulating default font
         if (RES_CHRATR_CJK_FONT == nId)
-            m_xStyles->bCJKFontChanged = true;
+            m_xStyles->mbCJKFontChanged = true;
         else if (RES_CHRATR_CTL_FONT == nId)
-            m_xStyles->bCTLFontChanged = true;
+            m_xStyles->mbCTLFontChanged = true;
         else
-            m_xStyles->bFontChanged = true;
+            m_xStyles->mbFontChanged = true;
     }
 }
 
@@ -3830,12 +3821,12 @@ void SwWW8ImplReader::Read_FontSize( sal_uInt16 nId, const sal_uInt8* pData, sho
         {
             // remember for simulating default font size
             if (nId == RES_CHRATR_CTL_FONTSIZE)
-                m_xStyles->bFCTLSizeChanged = true;
+                m_xStyles->mbFCTLSizeChanged = true;
             else
             {
-                m_xStyles->bFSizeChanged = true;
+                m_xStyles->mbFSizeChanged = true;
                 if (eVersion <= ww::eWW6)
-                    m_xStyles->bFCTLSizeChanged= true;
+                    m_xStyles->mbFCTLSizeChanged= true;
             }
         }
     }
@@ -4233,9 +4224,8 @@ void SwWW8ImplReader::Read_LineSpace( sal_uInt16, const sal_uInt8* pData, short 
     {
         long n = nSpace * 10 / 24;  // WW: 240 = 100%, SW: 100 = 100%
 
-        // as discussed with AMA, the limit is nonsensical
-        if( n>200 ) n = 200;        // SW_UI maximum
-        aLSpc.SetPropLineSpace( static_cast<sal_uInt8>(n) );
+        if( n>SAL_MAX_UINT16 ) n = SAL_MAX_UINT16;
+        aLSpc.SetPropLineSpace( static_cast<sal_uInt16>(n) );
         const SvxFontHeightItem* pH = static_cast<const SvxFontHeightItem*>(
             GetFormatAttr( RES_CHRATR_FONTSIZE ));
         nSpaceTw = static_cast<sal_uInt16>( n * pH->GetHeight() / 100 );
@@ -4802,27 +4792,27 @@ void SwWW8ImplReader::Read_ParaBackColor(sal_uInt16, const sal_uInt8* pData, sho
         OSL_ENSURE(nLen == 10, "Len of para back colour not 10!");
         if (nLen != 10)
             return;
-        NewAttr(SvxBrushItem(Color(ExtractColour(pData, m_bVer67)), RES_BACKGROUND));
+        NewAttr(SvxBrushItem(ExtractColour(pData, m_bVer67), RES_BACKGROUND));
     }
 }
 
-sal_uInt32 SwWW8ImplReader::ExtractColour(const sal_uInt8* &rpData, bool bVer67)
+Color SwWW8ImplReader::ExtractColour(const sal_uInt8* &rpData, bool bVer67)
 {
     OSL_ENSURE(!bVer67, "Impossible");
-    sal_uInt32 nFore = msfilter::util::BGRToRGB(SVBT32ToUInt32(rpData));
+    Color nFore = msfilter::util::BGRToRGB(SVBT32ToUInt32(rpData));
     rpData+=4;
-    sal_uInt32 nBack = msfilter::util::BGRToRGB(SVBT32ToUInt32(rpData));
+    Color nBack = msfilter::util::BGRToRGB(SVBT32ToUInt32(rpData));
     rpData+=4;
     sal_uInt16 nIndex = SVBT16ToShort(rpData);
     rpData+=2;
     //Being a transparent background colour doesn't actually show the page
     //background through, it merely acts like white
-    if (nBack == 0xFF000000)
-        nBack = sal_uInt32(COL_AUTO);
-    OSL_ENSURE(nBack == sal_uInt32(COL_AUTO) || !(nBack & 0xFF000000),
+    if (nBack == Color(0xFF000000))
+        nBack = COL_AUTO;
+    OSL_ENSURE(nBack == COL_AUTO || (nBack.GetTransparency() == 0),
         "ww8: don't know what to do with such a transparent bg colour, report");
     SwWW8Shade aShade(nFore, nBack, nIndex);
-    return aShade.aColor.GetColor();
+    return aShade.aColor;
 }
 
 void SwWW8ImplReader::Read_TextVerticalAdjustment( sal_uInt16, const sal_uInt8* pData, short nLen )
@@ -5001,7 +4991,7 @@ void SwWW8ImplReader::Read_WidowControl( sal_uInt16, const sal_uInt8* pData, sho
         NewAttr( SvxOrphansItem( nL, RES_PARATR_ORPHANS ) );
 
         if( m_pCurrentColl && m_xStyles )           // Style-Def ?
-            m_xStyles->bWidowsChanged = true; // save for simulation
+            m_xStyles->mbWidowsChanged = true; // save for simulation
                                             // Default-Widows
     }
 }

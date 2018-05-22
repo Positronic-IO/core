@@ -101,6 +101,7 @@ void ScDrawShell::GetState( SfxItemSet& rSet )          // Conditions / Toggles
             bDisableAnchor = true;
             rSet.DisableItem( SID_ANCHOR_PAGE );
             rSet.DisableItem( SID_ANCHOR_CELL );
+            rSet.DisableItem( SID_ANCHOR_CELL_RESIZE );
         }
     }
 
@@ -111,16 +112,25 @@ void ScDrawShell::GetState( SfxItemSet& rSet )          // Conditions / Toggles
         case SCA_PAGE:
             rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, true ) );
             rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL_RESIZE, false ) );
         break;
 
         case SCA_CELL:
-        rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, false ) );
-        rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, true ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, true ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL_RESIZE, false ) );
+        break;
+
+        case SCA_CELL_RESIZE:
+            rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL_RESIZE, true ) );
         break;
 
         default:
-        rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, false ) );
-        rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_PAGE, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL, false ) );
+            rSet.Put( SfxBoolItem( SID_ANCHOR_CELL_RESIZE, false ) );
         break;
         }
     }
@@ -198,6 +208,8 @@ void ScDrawShell::GetDrawFuncState( SfxItemSet& rSet )      // disable functions
         rSet.DisableItem( SID_DRAW_HLINK_EDIT );
         rSet.DisableItem( SID_DRAW_HLINK_DELETE );
         rSet.DisableItem( SID_OPEN_HYPERLINK );
+        // Fit to cell only works with a single graphic
+        rSet.DisableItem( SID_FITCELLSIZE );
     }
     else if ( nMarkCount == 1 )
     {
@@ -232,8 +244,14 @@ void ScDrawShell::GetDrawFuncState( SfxItemSet& rSet )      // disable functions
                 rSet.DisableItem( SID_COPY );
                 // Notes always default to Page anchor.
                 rSet.DisableItem( SID_ANCHOR_TOGGLE );
+                rSet.DisableItem( SID_ANCHOR_MENU );
             }
         }
+
+        // Fit to cell is only available for cell anchored graphics obviously
+        if (pView->GetAnchorType() != SCA_CELL &&
+            pView->GetAnchorType() != SCA_CELL_RESIZE)
+            rSet.DisableItem( SID_FITCELLSIZE );
     }
     if ( !bCanRename )
     {
@@ -256,7 +274,9 @@ void ScDrawShell::GetDrawFuncState( SfxItemSet& rSet )      // disable functions
         rSet.DisableItem( SID_COPY );
             //  other
         rSet.DisableItem( SID_ANCHOR_TOGGLE );
+        rSet.DisableItem( SID_ANCHOR_MENU );
         rSet.DisableItem( SID_ORIGINALSIZE );
+        rSet.DisableItem( SID_FITCELLSIZE );
         rSet.DisableItem( SID_ATTR_TRANSFORM );
     }
 

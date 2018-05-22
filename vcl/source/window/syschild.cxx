@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_java.h>
 
 #include <rtl/process.h>
 #include <rtl/ref.hxx>
@@ -35,11 +35,6 @@
 
 #if HAVE_FEATURE_JAVA
 #include <jni.h>
-#endif
-
-#include <comphelper/processfactory.hxx>
-
-#if HAVE_FEATURE_JAVA
 #include <jvmaccess/virtualmachine.hxx>
 #include <com/sun/star/java/JavaVirtualMachine.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>

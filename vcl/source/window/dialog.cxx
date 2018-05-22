@@ -50,14 +50,13 @@
 #include <vcl/tabctrl.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/decoview.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/unowrap.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/uitest/uiobject.hxx>
 #include <vcl/uitest/logger.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/IDialogRenderable.hxx>
-#include <vcl/messagedialog.hxx>
+#include <messagedialog.hxx>
 #include <salframe.hxx>
 
 #include <iostream>
@@ -347,6 +346,7 @@ struct DialogImpl
 
     DialogImpl() : mnResult( -1 ), mbStartedModal( false ) {}
 
+#ifndef NDEBUG
     short get_response(vcl::Window *pWindow) const
     {
         auto aFind = maResponses.find(pWindow);
@@ -354,6 +354,7 @@ struct DialogImpl
             return aFind->second;
         return RET_CANCEL;
     }
+#endif
 
     ~DialogImpl()
     {
@@ -372,6 +373,7 @@ void Dialog::ImplInitDialogData()
 {
     mpWindowImpl->mbDialog  = true;
     mbInExecute             = false;
+    mbInSyncExecute         = false;
     mbInClose               = false;
     mbModalMode             = false;
     mbPaintComplete         = false;
@@ -1036,6 +1038,7 @@ bool Dialog::StartExecuteAsync( VclAbstractDialog::AsyncContext &rCtx )
     if ( !ImplStartExecuteModal() )
     {
         rCtx.mxOwner.disposeAndClear();
+        rCtx.mxOwnerDialog.reset();
         return false;
     }
 
@@ -1103,7 +1106,9 @@ void Dialog::EndDialog( long nResult )
     mbInExecute = false;
 
     // Destroy ourselves (if we have a context with VclPtr owner)
+    std::shared_ptr<weld::DialogController> xOwnerDialog = std::move(mpDialogImpl->maEndCtx.mxOwnerDialog);
     mpDialogImpl->maEndCtx.mxOwner.disposeAndClear();
+    xOwnerDialog.reset();
 }
 
 long Dialog::GetResult() const
@@ -1164,7 +1169,7 @@ void Dialog::ImplSetModalInputMode( bool bModal )
             // #115933# disable the whole frame hierarchy, useful if our parent
             // is a modeless dialog
             mpDialogParent = pParent->mpWindowImpl->mpFrameWindow;
-            mpDialogParent->ImplIncModalCount();
+            mpDialogParent->IncModalCount();
         }
     }
     else
@@ -1174,7 +1179,7 @@ void Dialog::ImplSetModalInputMode( bool bModal )
             // #115933# re-enable the whole frame hierarchy again (see above)
             // note that code in getfocus assures that we do not accidentally enable
             // windows that were disabled before
-            mpDialogParent->ImplDecModalCount();
+            mpDialogParent->DecModalCount();
         }
 
         // Enable the prev Modal Dialog
@@ -1350,6 +1355,42 @@ void Dialog::add_button(PushButton* pButton, int response, bool bTransferOwnersh
     }
 }
 
+vcl::Window* Dialog::get_widget_for_response(int response)
+{
+    //copy explicit responses
+    std::map<VclPtr<vcl::Window>, short> aResponses(mpDialogImpl->maResponses);
+
+    //add implicit responses
+    for (vcl::Window* pChild = mpActionArea->GetWindow(GetWindowType::FirstChild); pChild;
+         pChild = pChild->GetWindow(GetWindowType::Next))
+    {
+        if (aResponses.find(pChild) != aResponses.end())
+            continue;
+        switch (pChild->GetType())
+        {
+            case WindowType::OKBUTTON:
+                aResponses[pChild] = RET_OK;
+                break;
+            case WindowType::CANCELBUTTON:
+                aResponses[pChild] = RET_CANCEL;
+                break;
+            case WindowType::HELPBUTTON:
+                aResponses[pChild] = RET_HELP;
+                break;
+            default:
+                break;
+        }
+    }
+
+    for (auto& a : aResponses)
+    {
+        if (a.second == response)
+           return a.first;
+    }
+
+    return nullptr;
+}
+
 void Dialog::set_default_response(int response)
 {
     //copy explicit responses
@@ -1403,12 +1444,6 @@ VclBuilderContainer::~VclBuilderContainer()
 ModelessDialog::ModelessDialog(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, InitFlag eFlag)
     : Dialog(pParent, rID, rUIXMLDescription, WindowType::MODELESSDIALOG, eFlag)
 {
-}
-
-ModalDialog::ModalDialog( vcl::Window* pParent, WinBits nStyle ) :
-    Dialog( WindowType::MODALDIALOG )
-{
-    ImplInit( pParent, nStyle );
 }
 
 ModalDialog::ModalDialog( vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, bool bBorder ) :

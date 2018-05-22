@@ -28,7 +28,6 @@
 #include <com/sun/star/document/XDocumentProperties.hpp>
 
 #include <sharedocdlg.hxx>
-#include <scresid.hxx>
 #include <viewdata.hxx>
 
 using namespace ::com::sun::star;
@@ -61,9 +60,8 @@ public:
         long nWebSiteWidth = std::max(
             12 + rBar.GetTextWidth(rBar.GetItemText(1)),
             GetSizePixel().Width() - nAccessedWidth);
-        long aStaticTabs[]= { 2, 0, 0 };
-        aStaticTabs[2] = nWebSiteWidth;
-        SvSimpleTable::SetTabs(aStaticTabs, MapUnit::MapPixel);
+        long aStaticTabs[]= { 0, nWebSiteWidth };
+        SvSimpleTable::SetTabs(SAL_N_ELEMENTS(aStaticTabs), aStaticTabs, MapUnit::MapPixel);
     }
 };
 
@@ -71,11 +69,10 @@ public:
 
 ScShareDocumentDlg::ScShareDocumentDlg( vcl::Window* pParent, ScViewData* pViewData )
     : ModalDialog(pParent, "ShareDocumentDialog", "modules/scalc/ui/sharedocumentdlg.ui")
-    , mpViewData(pViewData)
     , mpDocShell(nullptr)
 {
-    OSL_ENSURE( mpViewData, "ScShareDocumentDlg CTOR: mpViewData is null!" );
-    mpDocShell = ( mpViewData ? mpViewData->GetDocShell() : nullptr );
+    OSL_ENSURE( pViewData, "ScShareDocumentDlg CTOR: mpViewData is null!" );
+    mpDocShell = ( pViewData ? pViewData->GetDocShell() : nullptr );
     OSL_ENSURE( mpDocShell, "ScShareDocumentDlg CTOR: mpDocShell is null!" );
 
     get(m_pCbShare, "share");
@@ -94,8 +91,8 @@ ScShareDocumentDlg::ScShareDocumentDlg( vcl::Window* pParent, ScViewData* pViewD
     m_pCbShare->SetToggleHdl( LINK( this, ScShareDocumentDlg, ToggleHandle ) );
     m_pFtWarning->Enable( bIsDocShared );
 
-    long const nTabs[] = { 2, 0, 0 };
-    m_pLbUsers->SetTabs( nTabs );
+    long const nTabs[] = { 0, 0 };
+    m_pLbUsers->SetTabs( SAL_N_ELEMENTS(nTabs), nTabs );
 
     OUString aHeader(get<FixedText>("name")->GetText());
     aHeader += "\t";

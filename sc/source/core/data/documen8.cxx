@@ -44,7 +44,6 @@
 #include <unotools/securityoptions.hxx>
 
 #include <vcl/virdev.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 
 #include <inputopt.hxx>
@@ -341,7 +340,7 @@ bool ScDocument::RemovePageStyleInUse( const OUString& rStyle )
         if ( maTabs[i]->GetPageStyle() == rStyle )
         {
             bWasInUse = true;
-            maTabs[i]->SetPageStyle( ScGlobal::GetRscString(STR_STYLENAME_STANDARD) );
+            maTabs[i]->SetPageStyle( ScResId(STR_STYLENAME_STANDARD) );
         }
 
     return bWasInUse;
@@ -486,7 +485,7 @@ class IdleCalcTextWidthScope
     MapMode maOldMapMode;
     sal_uInt64 mnStartTime;
     ScStyleSheetPool* mpStylePool;
-    sal_uInt16 mnOldSearchMask;
+    SfxStyleSearchBits mnOldSearchMask;
     SfxStyleFamily meOldFamily;
     bool mbNeedMore;
     bool mbProgress;

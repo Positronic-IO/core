@@ -215,7 +215,7 @@ void SAL_CALL ScDocumentConfiguration::setPropertyValue(
 
             if (pPrinter->GetName() != sPrinterName)
             {
-                VclPtrInstance<SfxPrinter> pNewPrinter( std::unique_ptr<SfxItemSet>(pPrinter->GetOptions().Clone()), sPrinterName );
+                VclPtrInstance<SfxPrinter> pNewPrinter( pPrinter->GetOptions().Clone(), sPrinterName );
                 if (pNewPrinter->IsKnown())
                     pDocShell->SetPrinter( pNewPrinter, SfxPrinterChangeFlags::PRINTER );
                 else
@@ -422,7 +422,7 @@ uno::Any SAL_CALL ScDocumentConfiguration::getPropertyValue( const OUString& aPr
     {
         OUString aColorName;
         Color aColor = aViewOpt.GetGridColor(&aColorName);
-        aRet <<= static_cast<sal_Int64>(aColor.GetColor());
+        aRet <<= aColor;
     }
     else if ( aPropertyName == SC_UNO_SHOWPAGEBR )
         aRet <<= aViewOpt.GetOption( VOPT_PAGEBREAKS );

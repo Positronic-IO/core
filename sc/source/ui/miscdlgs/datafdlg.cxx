@@ -10,7 +10,6 @@
 #undef SC_DLLIMPLEMENTATION
 
 #include <datafdlg.hxx>
-#include <scresid.hxx>
 #include <viewdata.hxx>
 #include <docsh.hxx>
 #include <refundo.hxx>
@@ -30,7 +29,6 @@ ScDataFormDlg::ScDataFormDlg(vcl::Window* pParent, ScTabViewShell* pTabViewShell
     , nStartRow(0)
     , nEndRow(0)
     , nTab(0)
-    , bNoSelection(false)
 {
     get(m_pBtnNew, "new");
     get(m_pBtnDelete, "delete");
@@ -61,6 +59,7 @@ ScDataFormDlg::ScDataFormDlg(vcl::Window* pParent, ScTabViewShell* pTabViewShell
         nEndRow = aEnd.Row();
 
         nTab = rViewData.GetTabNo();
+        bool bNoSelection(false);
         //if there is no selection
         if ((nStartCol == nEndCol) && (nStartRow == nEndRow))
             bNoSelection = true;

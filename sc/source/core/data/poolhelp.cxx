@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/processfactory.hxx>
 #include <svl/zforlist.hxx>
 #include <editeng/editeng.hxx>
 
@@ -42,7 +43,7 @@ ScPoolHelper::~ScPoolHelper()
 {
     SfxItemPool::Free(pEnginePool);
     SfxItemPool::Free(pEditPool);
-    delete pFormTable;
+    pFormTable.reset();
     mxStylePool.clear();
     SfxItemPool::Free(pDocPool);
 }
@@ -70,7 +71,7 @@ SvNumberFormatter*  ScPoolHelper::GetFormTable() const
 {
     if (!pFormTable)
         pFormTable = CreateNumberFormatter();
-    return pFormTable;
+    return pFormTable.get();
 }
 
 void ScPoolHelper::SetFormTableOpt(const ScDocOptions& rOpt)
@@ -88,12 +89,12 @@ void ScPoolHelper::SetFormTableOpt(const ScDocOptions& rOpt)
     }
 }
 
-SvNumberFormatter* ScPoolHelper::CreateNumberFormatter() const
+std::unique_ptr<SvNumberFormatter> ScPoolHelper::CreateNumberFormatter() const
 {
-    SvNumberFormatter* p = nullptr;
+    std::unique_ptr<SvNumberFormatter> p;
     {
         osl::MutexGuard aGuard(&maMtxCreateNumFormatter);
-        p = new SvNumberFormatter(comphelper::getProcessComponentContext(), LANGUAGE_SYSTEM);
+        p.reset(new SvNumberFormatter(comphelper::getProcessComponentContext(), LANGUAGE_SYSTEM));
     }
     p->SetColorLink( LINK(m_pSourceDoc, ScDocument, GetUserDefinedColor) );
     p->SetEvalDateFormat(NF_EVALDATEFORMAT_INTL_FORMAT);

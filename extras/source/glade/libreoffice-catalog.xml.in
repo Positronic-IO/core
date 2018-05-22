@@ -27,9 +27,6 @@
     <glade-widget-class title="Search Results Box" name="sfxlo-SearchResultsBox"
                         generic-name="SearchResultsBox" parent="GtkComboBoxText"
                         icon-name="widget-gtk-comboboxtext"/>
-    <glade-widget-class title="Font PickListBox" name="smlo-SmFontPickListBox"
-                        generic-name="SmFontPickListBox" parent="GtkComboBoxText"
-                        icon-name="widget-gtk-comboboxtext"/>
     <glade-widget-class title="Address Control" name="swuilo-SwAddressControlImpl"
                         generic-name="SwAddressControlImpl" parent="GtkComboBoxText"
                         icon-name="widget-gtk-comboboxtext"/>
@@ -247,9 +244,6 @@
     <glade-widget-class title="Token Window" name="swuilo-SwTokenWindow"
                         generic-name="Token Window" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Template Preview Window" name="sfxlo-SfxPreviewWin"
-                        generic-name="Template Preview Window" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Template Local View" name="sfxlo-TemplateLocalView"
                         generic-name="Template Local View" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
@@ -257,41 +251,17 @@
     <glade-widget-class title="Mark Preview" name="swuilo-SwMarkPreview"
                         generic-name="Mark Preview Window" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Show Math Symbol" name="smlo-SmShowSymbol"
-                        generic-name="Show Math Symbol" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Show Math Char" name="smlo-SmShowChar"
-                        generic-name="Show Math Char" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Gallery Preview" name="svxcorelo-GalleryPreview"
                         generic-name="Gallery Preview" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Show Math Font" name="smlo-SmShowFont"
                         generic-name="Show Math Font" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Math Symbol Selection" name="smlo-SmShowSymbolSet"
-                        generic-name="Math Symbol Selection" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Math Char Selection" name="svxlo-SvxShowCharSet"
-                        generic-name="Math Char Selection" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Math Char Selection" name="svxlo-SvxSearchCharSet"
-                        generic-name="Math Char Selection" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Number Preview" name="cuilo-SvxNumberPreview"
                         generic-name="Number Preview Window" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Graphic Preview" name="cuilo-GraphicPreviewWindow"
                         generic-name="Graphic Preview Window" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Color Field Control" name="cuilo-ColorFieldControl"
-                        generic-name="Color Field Control" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Color Slider Control" name="cuilo-ColorSliderControl"
-                        generic-name="Color Slider Control" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Color Preview Control" name="cuilo-ColorPreviewControl"
-                        generic-name="Color Preview Control" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Html Attribute Preview" name="sduilo-SdHtmlAttrPreview"
                         generic-name="Html Attribute Preview" parent="GtkDrawingArea"
@@ -442,12 +412,6 @@
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="NUP Preview" name="vcllo-ShowNupOrderWindow"
                         generic-name="NUP Preview" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Label Preview" name="swuilo-SwLabPreview"
-                        generic-name="Label Preview" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Envelope Preview" name="swuilo-SwEnvPreview"
-                        generic-name="Envelope Preview" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Frame Preview" name="svxlo-SvxSwFrameExample"
                         generic-name="Frame Preview" parent="GtkDrawingArea"
@@ -823,10 +787,7 @@
     <glade-widget-class title="Ruby RadioButton" name="cuilo-RubyRadioButton"
                         generic-name="RubyRadioButton" parent="GtkRadioButton"
                         icon-name="widget-gtk-radiobutton"/>
-    <glade-widget-class title="Show Text" name="cuilo-SvxShowText"
-                        generic-name="ShowText" parent="GtkDrawingArea"
-                        icon-name="widget-gtk-drawingarea"/>
-    <glade-widget-class title="Char Win" name="sfxlo-SvxCharView"
+    <glade-widget-class title="Char Win" name="sfxlo-SvxCharViewControl"
                         generic-name="ShowText" parent="GtkDrawingArea"
                         icon-name="widget-gtk-drawingarea"/>
     <glade-widget-class title="Notebook switching tabs depending on context" name="sfxlo-NotebookbarTabControl"

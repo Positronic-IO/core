@@ -38,10 +38,14 @@ public:
 
     void testUndoAnchor();
     void testTdf76183();
+    void testODFAnchorTypes();
+    void testCopyColumnWithImages();
 
     CPPUNIT_TEST_SUITE(ScAnchorTest);
     CPPUNIT_TEST(testUndoAnchor);
     CPPUNIT_TEST(testTdf76183);
+    CPPUNIT_TEST(testODFAnchorTypes);
+    CPPUNIT_TEST(testCopyColumnWithImages);
     CPPUNIT_TEST_SUITE_END();
 private:
 
@@ -82,9 +86,8 @@ void ScAnchorTest::testUndoAnchor()
     CPPUNIT_ASSERT(pObject->IsLinkedGraphic());
 
     const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
-    CPPUNIT_ASSERT(!rGraphicObj.IsSwappedOut());
     CPPUNIT_ASSERT_EQUAL(int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetSizeBytes());
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
     // Get the document controller
     ScTabViewShell* pViewShell = pDocSh->GetBestViewShell(false);
@@ -99,7 +102,7 @@ void ScAnchorTest::testUndoAnchor()
     CPPUNIT_ASSERT(pDrawView->AreObjectsMarked() );
 
     // Set Cell Anchor
-    ScDrawLayer::SetCellAnchoredFromPosition(*pObject, rDoc, 0);
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObject, rDoc, 0, false);
     // Check state
     ScAnchorType oldType = ScDrawLayer::GetAnchorType(*pObject);
     CPPUNIT_ASSERT_EQUAL(SCA_CELL, oldType);
@@ -118,14 +121,14 @@ void ScAnchorTest::testUndoAnchor()
     // Check anchor type
     CPPUNIT_ASSERT_EQUAL(oldType, ScDrawLayer::GetAnchorType(*pObject));
     CPPUNIT_ASSERT_EQUAL(int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetSizeBytes());
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
     pUndoMgr->Redo();
 
     // Check anchor type
     CPPUNIT_ASSERT_EQUAL(newType, ScDrawLayer::GetAnchorType(*pObject));
     CPPUNIT_ASSERT_EQUAL(int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetSizeBytes());
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
     ScDrawLayer::SetPageAnchored(*pObject);
     // Check state
@@ -143,14 +146,14 @@ void ScAnchorTest::testUndoAnchor()
     // Check anchor type
     CPPUNIT_ASSERT_EQUAL(oldType, ScDrawLayer::GetAnchorType(*pObject));
     CPPUNIT_ASSERT_EQUAL(int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetSizeBytes());
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
     pUndoMgr->Redo();
 
     // Check anchor type
     CPPUNIT_ASSERT_EQUAL(newType, ScDrawLayer::GetAnchorType(*pObject));
     CPPUNIT_ASSERT_EQUAL(int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetSizeBytes());
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
     xComponent->dispose();
 }
@@ -166,10 +169,10 @@ void ScAnchorTest::testTdf76183()
 
     // Add a circle somewhere below first row.
     const tools::Rectangle aOrigRect = tools::Rectangle(1000, 1000, 1200, 1200);
-    SdrCircObj* pObj = new SdrCircObj(OBJ_CIRC, aOrigRect);
+    SdrCircObj* pObj = new SdrCircObj(*pDrawLayer, OBJ_CIRC, aOrigRect);
     pPage->InsertObject(pObj);
     // Anchor to cell
-    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, rDoc, 0);
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, rDoc, 0, false);
     const tools::Rectangle& rNewRect = pObj->GetLogicRect();
 
     // Set word wrap to true
@@ -183,6 +186,123 @@ void ScAnchorTest::testTdf76183()
 
     // The resize of first row must have moved the object down after its anchor cell
     CPPUNIT_ASSERT(aOrigRect.Top() < rNewRect.Top());
+
+    pDocSh->DoClose();
+}
+
+void ScAnchorTest::testODFAnchorTypes()
+{
+    OUString aFileURL;
+    createFileURL("3AnchorTypes.ods", aFileURL);
+    // open the document with graphic included
+    uno::Reference< css::lang::XComponent > xComponent = loadFromDesktop(aFileURL);
+    CPPUNIT_ASSERT(xComponent.is());
+
+    // Get the document model
+    SfxObjectShell* pFoundShell = SfxObjectShell::GetShellFromComponent(xComponent);
+    CPPUNIT_ASSERT_MESSAGE("Failed to access document shell", pFoundShell);
+
+    ScDocShell* pDocSh = dynamic_cast<ScDocShell*>(pFoundShell);
+    CPPUNIT_ASSERT(pDocSh);
+
+    // Check whether graphic imported well
+    ScDocument& rDoc = pDocSh->GetDocument();
+    ScDrawLayer* pDrawLayer = rDoc.GetDrawLayer();
+    CPPUNIT_ASSERT(pDrawLayer);
+
+    const SdrPage *pPage = pDrawLayer->GetPage(0);
+    CPPUNIT_ASSERT(pPage);
+
+    // Check 1st object: Page anchored
+    SdrGrafObj* pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(0));
+    CPPUNIT_ASSERT(pObject);
+    ScAnchorType anchorType = ScDrawLayer::GetAnchorType(*pObject);
+    CPPUNIT_ASSERT_EQUAL(SCA_PAGE, anchorType);
+
+    // Check 2nd object: Cell anchored, resize with cell
+    pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(1));
+    CPPUNIT_ASSERT(pObject);
+    anchorType = ScDrawLayer::GetAnchorType(*pObject);
+    CPPUNIT_ASSERT_EQUAL(SCA_CELL_RESIZE, anchorType);
+
+     // Check 3rd object: Cell anchored
+    pObject = dynamic_cast<SdrGrafObj*>(pPage->GetObj(2));
+    CPPUNIT_ASSERT(pObject);
+    anchorType = ScDrawLayer::GetAnchorType(*pObject);
+    CPPUNIT_ASSERT_EQUAL(SCA_CELL, anchorType);
+
+    pDocSh->DoClose();
+}
+
+/// Test that copying a column with an image anchored to it also copies the image
+void ScAnchorTest::testCopyColumnWithImages()
+{
+    OUString aFileURL;
+    createFileURL("3AnchorTypes.ods", aFileURL);
+    // open the document with graphic included
+    uno::Reference<css::lang::XComponent> xComponent = loadFromDesktop(aFileURL);
+    CPPUNIT_ASSERT(xComponent.is());
+
+    // Get the document model
+    SfxObjectShell* pFoundShell = SfxObjectShell::GetShellFromComponent(xComponent);
+    CPPUNIT_ASSERT_MESSAGE("Failed to access document shell", pFoundShell);
+
+    ScDocShell* pDocSh = dynamic_cast<ScDocShell*>(pFoundShell);
+    CPPUNIT_ASSERT(pDocSh);
+
+    ScDocument* pDoc = &(pDocSh->GetDocument());
+    ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
+    CPPUNIT_ASSERT(pDrawLayer);
+
+    // Get the document controller
+    ScTabViewShell* pViewShell = pDocSh->GetBestViewShell(false);
+    CPPUNIT_ASSERT(pViewShell != nullptr);
+
+    ScDocument aClipDoc(SCDOCMODE_CLIP);
+
+    // Copy whole column
+    {
+        // 1. Copy source range
+        ScRange aSrcRange;
+        aSrcRange.Parse("A1:A11", pDoc, pDoc->GetAddressConvention());
+        pViewShell->GetViewData().GetMarkData().SetMarkArea(aSrcRange);
+        pViewShell->GetViewData().GetView()->CopyToClip(&aClipDoc, false, false, true, false);
+
+        // 2. Paste to target range
+        ScRange aDstRange;
+        aDstRange.Parse("D1:D11", pDoc, pDoc->GetAddressConvention());
+        pViewShell->GetViewData().GetMarkData().SetMarkArea(aDstRange);
+        pViewShell->GetViewData().GetView()->PasteFromClip(InsertDeleteFlags::ALL, &aClipDoc);
+
+        // 3. Make sure the images have been copied too
+        std::map<SCROW, std::vector<SdrObject*>> aRowObjects
+            = pDrawLayer->GetObjectsAnchoredToRange(0, 3, 0, 11);
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("There should be an image anchored to D3", 1,
+                                     static_cast<int>(aRowObjects[2].size()));
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("There should be an image anchored to D11", 1,
+                                     static_cast<int>(aRowObjects[10].size()));
+    }
+
+    // Copy individual cells
+    {
+        // 1. Copy source cells
+        ScRange aSrcRange;
+        aSrcRange.Parse("A3:B3", pDoc, pDoc->GetAddressConvention());
+        pViewShell->GetViewData().GetMarkData().SetMarkArea(aSrcRange);
+        pViewShell->GetViewData().GetView()->CopyToClip(&aClipDoc, false, false, true, false);
+
+        // 2. Paste to target cells
+        ScRange aDstRange;
+        aDstRange.Parse("G3:H3", pDoc, pDoc->GetAddressConvention());
+        pViewShell->GetViewData().GetMarkData().SetMarkArea(aDstRange);
+        pViewShell->GetViewData().GetView()->PasteFromClip(InsertDeleteFlags::ALL, &aClipDoc);
+
+        // 3. Make sure the image has been copied too
+        std::map<SCROW, std::vector<SdrObject*>> aRowObjects
+            = pDrawLayer->GetObjectsAnchoredToRange(0, 6, 2, 2);
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("There should be an image anchored to G3", 1,
+                                     static_cast<int>(aRowObjects[2].size()));
+    }
 
     pDocSh->DoClose();
 }

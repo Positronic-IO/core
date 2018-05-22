@@ -167,7 +167,7 @@ class ScUnoEditEngine : public ScEditEngineDefaulter
     ScUnoCollectMode    eMode;
     sal_uInt16          nFieldCount;
     sal_Int32           mnFieldType;
-    std::unique_ptr<SvxFieldData>
+    tools::SvRef<SvxFieldData>
                         pFound;         // local copy
     sal_Int32           nFieldPar;
     sal_Int32           nFieldPos;
@@ -177,7 +177,7 @@ public:
     explicit ScUnoEditEngine(ScEditEngineDefaulter* pSource);
 
     virtual OUString  CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos,
-                                    Color*& rTxtColor, Color*& rFldColor ) override;
+                                   boost::optional<Color>& rTxtColor, boost::optional<Color>& rFldColor ) override;
 
     sal_uInt16 CountFields();
     SvxFieldData* FindByIndex(sal_uInt16 nIndex);
@@ -197,13 +197,12 @@ ScUnoEditEngine::ScUnoEditEngine(ScEditEngineDefaulter* pSource)
     , nFieldPos(0)
     , nFieldIndex(0)
 {
-    EditTextObject* pData = pSource->CreateTextObject();
+    std::unique_ptr<EditTextObject> pData = pSource->CreateTextObject();
     SetText( *pData );
-    delete pData;
 }
 
 OUString ScUnoEditEngine::CalcFieldValue( const SvxFieldItem& rField,
-            sal_Int32 nPara, sal_Int32 nPos, Color*& rTxtColor, Color*& rFldColor )
+            sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rTxtColor, boost::optional<Color>& rFldColor )
 {
     OUString aRet(EditEngine::CalcFieldValue( rField, nPara, nPos, rTxtColor, rFldColor ));
     if (eMode != SC_UNO_COLLECT_NONE)
@@ -215,14 +214,14 @@ OUString ScUnoEditEngine::CalcFieldValue( const SvxFieldItem& rField,
             {
                 if ( eMode == SC_UNO_COLLECT_FINDINDEX && !pFound && nFieldCount == nFieldIndex )
                 {
-                    pFound.reset( pFieldData->Clone() );
+                    pFound = pFieldData->Clone();
                     nFieldPar = nPara;
                     nFieldPos = nPos;
                 }
                 if ( eMode == SC_UNO_COLLECT_FINDPOS && !pFound &&
                         nPara == nFieldPar && nPos == nFieldPos )
                 {
-                    pFound.reset( pFieldData->Clone() );
+                    pFound = pFieldData->Clone();
                     nFieldIndex = nFieldCount;
                 }
                 ++nFieldCount;

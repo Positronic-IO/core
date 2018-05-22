@@ -33,10 +33,8 @@
 #include <tools/debug.hxx>
 #include <tools/gen.hxx>
 
-#include <svx/strings.hrc>
 #include <svx/dlgctrl.hxx>
 
-#include <svx/dialmgr.hxx>
 #include <comphelper/accessibleeventnotifier.hxx>
 
 #include <unotools/accessiblerelationsethelper.hxx>
@@ -264,13 +262,13 @@ void SvxPixelCtlAccessible::grabFocus(  )
 sal_Int32 SvxPixelCtlAccessible::getForeground(  )
 {
     ::osl::MutexGuard   aGuard( m_aMutex );
-    return mrPixelCtl.GetControlForeground().GetColor();
+    return sal_Int32(mrPixelCtl.GetControlForeground());
 }
 
 sal_Int32 SvxPixelCtlAccessible::getBackground(  )
 {
     ::osl::MutexGuard   aGuard( m_aMutex );
-    return mrPixelCtl.GetControlBackground().GetColor();
+    return sal_Int32(mrPixelCtl.GetControlBackground());
 }
 
 OUString SvxPixelCtlAccessible::getImplementationName(  )
@@ -285,12 +283,11 @@ sal_Bool SvxPixelCtlAccessible::supportsService( const OUString& rServiceName )
 
 uno::Sequence< OUString > SvxPixelCtlAccessible::getSupportedServiceNames(  )
 {
-    uno::Sequence< OUString > aRet(2);
-    OUString* pArray = aRet.getArray();
-    pArray[0] = "Accessible";
-    pArray[1] = "AccessibleContext";
-    pArray[2] = "AccessibleComponent";
-    return aRet;
+    return uno::Sequence< OUString >{
+        "Accessible",
+        "AccessibleContext",
+        "AccessibleComponent"
+    };
 }
 
 
@@ -596,14 +593,14 @@ sal_Int32 SvxPixelCtlAccessibleChild::getForeground(  )
 {
     ::osl::MutexGuard   aGuard( m_aMutex );
     ThrowExceptionIfNotAlive();
-    return mrParentWindow.GetControlForeground().GetColor();
+    return sal_Int32(mrParentWindow.GetControlForeground());
 }
 sal_Int32 SvxPixelCtlAccessibleChild::getBackground(  )
 {
     ::osl::MutexGuard   aGuard( m_aMutex );
 
     ThrowExceptionIfNotAlive();
-    return mrParentWindow.GetControlBackground().GetColor();
+    return sal_Int32(mrParentWindow.GetControlBackground());
 }
 
 // XAccessibleContext

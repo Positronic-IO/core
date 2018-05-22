@@ -194,7 +194,6 @@ class SfxWorkWindow final
                             aChildWins;
     SfxBindings*            pBindings;
     VclPtr<vcl::Window>     pWorkWin;
-    SfxShell*               pConfigShell;
     VclPtr<vcl::Window>     pActiveChild;
     SfxVisibilityFlags      nUpdateMode;
     sal_uInt16              nChildren;
@@ -223,6 +222,8 @@ class SfxWorkWindow final
     SvBorder                Arrange_Impl();
     void                    SaveStatus_Impl(SfxChildWindow*, const SfxChildWinInfo&);
     static bool             IsPluginMode( SfxObjectShell const * pObjShell );
+
+    void                    FlushPendingChildSizes();
 
 public:
                             SfxWorkWindow( vcl::Window* pWin, SfxFrame* pFrm, SfxFrame* pMaster );

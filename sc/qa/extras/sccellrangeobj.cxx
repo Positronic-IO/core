@@ -10,9 +10,11 @@
 #include <test/calc_unoapi_test.hxx>
 #include <test/sheet/cellproperties.hxx>
 #include <test/sheet/sheetcellrange.hxx>
+#include <test/sheet/xarrayformularange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
 #include <test/sheet/xcellrangedata.hxx>
+#include <test/sheet/xcellrangeformula.hxx>
 #include <test/sheet/xcellrangesquery.hxx>
 #include <test/sheet/xcellseries.hxx>
 #include <test/sheet/xmultipleoperation.hxx>
@@ -49,9 +51,11 @@ namespace sc_apitest {
 
 class ScCellRangeObj : public CalcUnoApiTest, public apitest::CellProperties,
                                               public apitest::SheetCellRange,
+                                              public apitest::XArrayFormulaRange,
                                               public apitest::XCellFormatRangesSupplier,
                                               public apitest::XCellRangeAddressable,
                                               public apitest::XCellRangeData,
+                                              public apitest::XCellRangeFormula,
                                               public apitest::XCellRangesQuery,
                                               public apitest::XCellSeries,
                                               public apitest::XMultipleOperation,
@@ -83,12 +87,11 @@ public:
     // SheetCellRange
     CPPUNIT_TEST(testSheetCellRangeProperties);
 
+    // XArrayFormulaRange
+    CPPUNIT_TEST(testGetSetArrayFormula);
+
     // XCellFormatRangesSupplier
     CPPUNIT_TEST(testGetCellFormatRanges);
-
-    // XCellSeries
-    CPPUNIT_TEST(testFillAuto);
-    CPPUNIT_TEST(testFillSeries);
 
     // XCellRangeAddressable
     CPPUNIT_TEST(testGetRangeAddress);
@@ -96,6 +99,9 @@ public:
     // XCellRangeData
     CPPUNIT_TEST(testGetDataArray);
     CPPUNIT_TEST(testSetDataArray);
+
+    // XCellRangeFormula
+    CPPUNIT_TEST(testGetSetFormulaArray);
 
     // XCellRangesQuery
     CPPUNIT_TEST(testQueryColumnDifference);
@@ -106,22 +112,27 @@ public:
     CPPUNIT_TEST(testQueryRowDifference);
     CPPUNIT_TEST(testQueryVisibleCells);
 
-    // XSearchable
-    CPPUNIT_TEST(testFindAll);
-    CPPUNIT_TEST(testFindFirst);
+    // XCellSeries
+    CPPUNIT_TEST(testFillAuto);
+    CPPUNIT_TEST(testFillSeries);
 
     // XMultipleOperation
     CPPUNIT_TEST(testSetTableOperation);
-
-    // XSheetCellRange
-    CPPUNIT_TEST(testGetSpreadsheet);
 
     // XReplaceable
     CPPUNIT_TEST(testReplaceAll);
     CPPUNIT_TEST(testCreateReplaceDescriptor);
 
-    // XUniqueCellFormatRangesSupplier
-    CPPUNIT_TEST(testGetUniqueCellFormatRanges);
+    // XSearchable
+    CPPUNIT_TEST(testFindAll);
+    CPPUNIT_TEST(testFindFirst);
+
+    // XSheetCellRange
+    CPPUNIT_TEST(testGetSpreadsheet);
+
+    // XSheetFilterable
+    CPPUNIT_TEST(testCreateFilterDescriptor);
+    CPPUNIT_TEST(testFilter);
 
     // XSheetFilterableEx
     CPPUNIT_TEST(testCreateFilterDescriptorByObject);
@@ -134,11 +145,10 @@ public:
     CPPUNIT_TEST(testCreateSubTotalDescriptor);
     CPPUNIT_TEST(testApplyRemoveSubTotals);
 
-    CPPUNIT_TEST(testSortOOB);
+    // XUniqueCellFormatRangesSupplier
+    CPPUNIT_TEST(testGetUniqueCellFormatRanges);
 
-    // XSheetFilterable (has to be last tests; otherwise it'll crash)
-    CPPUNIT_TEST(testCreateFilterDescriptor);
-    CPPUNIT_TEST(testFilter);
+    CPPUNIT_TEST(testSortOOB);
 
     CPPUNIT_TEST_SUITE_END();
 

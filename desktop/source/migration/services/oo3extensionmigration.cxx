@@ -25,10 +25,8 @@
 #include <osl/thread.h>
 #include <tools/urlobj.hxx>
 #include <unotools/bootstrap.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <unotools/textsearch.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <ucbhelper/content.hxx>
 
@@ -152,11 +150,11 @@ OO3ExtensionMigration::ScanResult OO3ExtensionMigration::scanExtensionFolder( co
             }
         }
 
-        TStringVector::const_iterator pIter = aDirectories.begin();
-        while ( pIter != aDirectories.end() && aResult == SCANRESULT_NOTFOUND )
+        for (auto const& directory : aDirectories)
         {
-            aResult = scanExtensionFolder( *pIter );
-            ++pIter;
+            aResult = scanExtensionFolder(directory);
+            if (aResult != SCANRESULT_NOTFOUND)
+                break;
         }
     }
     return aResult;
@@ -345,13 +343,11 @@ Any OO3ExtensionMigration::execute( const Sequence< beans::NamedValue >& )
         sSourceDir += "/user/uno_packages/cache/uno_packages";
         TStringVector aExtensionToMigrate;
         scanUserExtensions( sSourceDir, aExtensionToMigrate );
-        if ( aExtensionToMigrate.size() > 0 )
+        if (!aExtensionToMigrate.empty())
         {
-            TStringVector::iterator pIter = aExtensionToMigrate.begin();
-            while ( pIter != aExtensionToMigrate.end() )
+            for (auto const& extensionToMigrate : aExtensionToMigrate)
             {
-                migrateExtension( *pIter );
-                ++pIter;
+                migrateExtension(extensionToMigrate);
             }
         }
     }

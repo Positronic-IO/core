@@ -20,20 +20,59 @@
 #ifndef INCLUDED_VCL_INC_IMPGRAPH_HXX
 #define INCLUDED_VCL_INC_IMPGRAPH_HXX
 
+#include <vcl/GraphicExternalLink.hxx>
+#include "graphic/Manager.hxx"
+
 struct ImpSwapInfo
 {
     MapMode     maPrefMapMode;
     Size        maPrefSize;
+    Size        maSizePixel;
+
+    bool mbIsAnimated;
+    bool mbIsEPS;
+    bool mbIsTransparent;
+    bool mbIsAlpha;
+
+    sal_uInt32 mnAnimationLoopCount;
 };
 
 class OutputDevice;
 class GfxLink;
 struct ImpSwapFile;
 class GraphicConversionParameters;
+class ImpGraphic;
+
+class GraphicID
+{
+private:
+    sal_uInt32  mnID1;
+    sal_uInt32  mnID2;
+    sal_uInt32  mnID3;
+    BitmapChecksum  mnID4;
+
+public:
+    GraphicID(ImpGraphic const & rGraphic);
+
+    bool operator==(const GraphicID& rID) const
+    {
+        return rID.mnID1 == mnID1 && rID.mnID2 == mnID2 &&
+               rID.mnID3 == mnID3 && rID.mnID4 == mnID4;
+    }
+
+    bool IsEmpty() const
+    {
+        return 0 == mnID4;
+    }
+
+    OString getIDString() const;
+};
 
 class ImpGraphic final
 {
     friend class Graphic;
+    friend class GraphicID;
+    friend class vcl::graphic::Manager;
 
 private:
 
@@ -50,20 +89,26 @@ private:
     bool                         mbDummyContext;
     VectorGraphicDataPtr         maVectorGraphicData;
     css::uno::Sequence<sal_Int8> maPdfData;
-    OUString msOriginURL;
+    std::unique_ptr<GraphicID>   mpGraphicID;
+    GraphicExternalLink          maGraphicExternalLink;
 
-private:
+    std::chrono::high_resolution_clock::time_point maLastUsed;
+    bool mbPrepared;
 
-                        ImpGraphic();
-                        ImpGraphic( const ImpGraphic& rImpGraphic );
-                        ImpGraphic( ImpGraphic&& rImpGraphic );
-                        ImpGraphic( const Bitmap& rBmp );
-                        ImpGraphic( const BitmapEx& rBmpEx );
-                        ImpGraphic(const VectorGraphicDataPtr& rVectorGraphicDataPtr);
-                        ImpGraphic( const Animation& rAnimation );
-                        ImpGraphic( const GDIMetaFile& rMtf );
 public:
-                        ~ImpGraphic();
+    ImpGraphic();
+    ImpGraphic( const ImpGraphic& rImpGraphic );
+    ImpGraphic( ImpGraphic&& rImpGraphic );
+    ImpGraphic( const GraphicExternalLink& rExternalLink);
+    ImpGraphic( const Bitmap& rBmp );
+    ImpGraphic( const BitmapEx& rBmpEx );
+    ImpGraphic(const VectorGraphicDataPtr& rVectorGraphicDataPtr);
+    ImpGraphic( const Animation& rAnimation );
+    ImpGraphic( const GDIMetaFile& rMtf );
+    ~ImpGraphic();
+
+    void ImplSetPrepared(bool bAnimated);
+
 private:
 
     ImpGraphic&         operator=( const ImpGraphic& rImpGraphic );
@@ -73,12 +118,19 @@ private:
 
     OUString getOriginURL() const
     {
-        return msOriginURL;
+        return maGraphicExternalLink.msURL;
     }
 
     void setOriginURL(OUString const & rOriginURL)
     {
-        msOriginURL = rOriginURL;
+        maGraphicExternalLink.msURL = rOriginURL;
+    }
+
+    OString getUniqueID()
+    {
+        if (!mpGraphicID)
+            mpGraphicID.reset(new GraphicID(*this));
+        return mpGraphicID->getIDString();
     }
 
     void                ImplCreateSwapInfo();
@@ -94,12 +146,17 @@ private:
     bool                ImplIsAnimated() const;
     bool                ImplIsEPS() const;
 
+    bool isAvailable() const;
+    bool makeAvailable();
+
     Bitmap              ImplGetBitmap(const GraphicConversionParameters& rParameters) const;
     BitmapEx            ImplGetBitmapEx(const GraphicConversionParameters& rParameters) const;
     /// Gives direct access to the contained BitmapEx.
     const BitmapEx&     ImplGetBitmapExRef() const;
     Animation           ImplGetAnimation() const;
     const GDIMetaFile&  ImplGetGDIMetaFile() const;
+
+    Size                ImplGetSizePixel() const;
 
     Size                ImplGetPrefSize() const;
     void                ImplSetPrefSize( const Size& rPrefSize );
@@ -140,7 +197,6 @@ private:
     bool                ImplSwapIn( SvStream* pIStm );
 
     bool                ImplSwapOut();
-    void                ImplSwapOutAsLink();
     bool                ImplSwapOut( SvStream* pOStm );
 
     bool                ImplIsSwapOut() const { return mbSwapOut;}
@@ -156,7 +212,15 @@ private:
     friend void         WriteImpGraphic(SvStream& rOStm, const ImpGraphic& rImpGraphic);
     friend void         ReadImpGraphic(SvStream& rIStm, ImpGraphic& rImpGraphic);
 
-    const VectorGraphicDataPtr& getVectorGraphicData() const { return maVectorGraphicData; }
+    const VectorGraphicDataPtr& getVectorGraphicData() const;
+
+    const css::uno::Sequence<sal_Int8>& getPdfData() const;
+
+    void setPdfData(const css::uno::Sequence<sal_Int8>& rPdfData);
+
+    bool ensureAvailable () const;
+
+    bool loadPrepared();
 };
 
 #endif // INCLUDED_VCL_INC_IMPGRAPH_HXX

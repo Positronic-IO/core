@@ -20,7 +20,6 @@
 #undef SC_DLLIMPLEMENTATION
 
 #include <strindlg.hxx>
-#include <scresid.hxx>
 #include <vcl/svapp.hxx>
 
 ScStringInputDlg::ScStringInputDlg(weld::Window* pParent,
@@ -28,8 +27,8 @@ ScStringInputDlg::ScStringInputDlg(weld::Window* pParent,
                                    const OUString& rEditTitle,
                                    const OUString& rDefault,
                                    const OString& rHelpId, const OString& rEditHelpId)
-    : m_xBuilder(Application::CreateBuilder(pParent, "modules/scalc/ui/inputstringdialog.ui"))
-    , m_xDialog(m_xBuilder->weld_dialog("InputStringDialog"))
+    : GenericDialogController(pParent, "modules/scalc/ui/inputstringdialog.ui",
+            "InputStringDialog")
     , m_xLabel(m_xBuilder->weld_label("description_label"))
     , m_xEdInput(m_xBuilder->weld_entry("name_entry"))
 {

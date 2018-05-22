@@ -19,8 +19,9 @@
 #include <unotools/streamwrap.hxx>
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include <filter/msfilter/util.hxx>
+#include <filter/msfilter/rtfutil.hxx>
 #include <comphelper/string.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <tools/globname.hxx>
 #include <tools/datetimeutils.hxx>
 #include <comphelper/classids.hxx>
@@ -86,8 +87,10 @@ void putNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId, const RTFValue::Po
         if (nParent == NS_ooxml::LN_CT_TcPrBase_shd)
         {
             // RTF default is 'auto', see writerfilter::dmapper::CellColorHandler
-            aAttributes.set(NS_ooxml::LN_CT_Shd_color, std::make_shared<RTFValue>(0x0a));
-            aAttributes.set(NS_ooxml::LN_CT_Shd_fill, std::make_shared<RTFValue>(0x0a));
+            aAttributes.set(NS_ooxml::LN_CT_Shd_color,
+                            std::make_shared<RTFValue>(sal_uInt32(COL_AUTO)));
+            aAttributes.set(NS_ooxml::LN_CT_Shd_fill,
+                            std::make_shared<RTFValue>(sal_uInt32(COL_AUTO)));
         }
         auto pParentValue = std::make_shared<RTFValue>(aAttributes);
         rSprms.set(nParent, pParentValue, eOverwrite);
@@ -110,6 +113,15 @@ RTFValue::Pointer_t getNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId)
         return RTFValue::Pointer_t();
     RTFSprms& rAttributes = pParent->getAttributes();
     return rAttributes.find(nId);
+}
+
+RTFValue::Pointer_t getNestedSprm(RTFSprms& rSprms, Id nParent, Id nId)
+{
+    RTFValue::Pointer_t pParent = rSprms.find(nParent);
+    if (!pParent)
+        return RTFValue::Pointer_t();
+    RTFSprms& rInner = pParent->getSprms();
+    return rInner.find(nId);
 }
 
 bool eraseNestedAttribute(RTFSprms& rSprms, Id nParent, Id nId)
@@ -429,8 +441,34 @@ static void lcl_copyFlatten(RTFReferenceProperties& rProps, RTFSprms& rStyleAttr
 }
 
 writerfilter::Reference<Properties>::Pointer_t
-RTFDocumentImpl::getProperties(RTFSprms& rAttributes, RTFSprms& rSprms, Id nStyleType)
+RTFDocumentImpl::getProperties(RTFSprms& rAttributes, RTFSprms const& rSprms, Id nStyleType)
 {
+    RTFSprms aSprms(rSprms);
+    RTFValue::Pointer_t pAbstractList;
+    int nAbstractListId = -1;
+    RTFValue::Pointer_t pNumId
+        = getNestedSprm(aSprms, NS_ooxml::LN_CT_PPrBase_numPr, NS_ooxml::LN_CT_NumPr_numId);
+    if (pNumId)
+    {
+        // We have a numbering, look up the abstract list for property
+        // deduplication and duplication.
+        auto itNumId = m_aListOverrideTable.find(pNumId->getInt());
+        if (itNumId != m_aListOverrideTable.end())
+        {
+            nAbstractListId = itNumId->second;
+            auto itAbstract = m_aListTable.find(nAbstractListId);
+            if (itAbstract != m_aListTable.end())
+                pAbstractList = itAbstract->second;
+        }
+    }
+
+    if (pAbstractList)
+    {
+        auto it = m_aInvalidListTableFirstIndents.find(nAbstractListId);
+        if (it != m_aInvalidListTableFirstIndents.end())
+            aSprms.deduplicateList(it->second);
+    }
+
     int nStyle = 0;
     if (!m_aStates.empty())
         nStyle = m_aStates.top().nCurrentStyleIndex;
@@ -464,12 +502,15 @@ RTFDocumentImpl::getProperties(RTFSprms& rAttributes, RTFSprms& rSprms, Id nStyl
         }
 
         // Get rid of direct formatting what is already in the style.
-        RTFSprms const sprms(rSprms.cloneAndDeduplicate(aStyleSprms));
+        RTFSprms const sprms(aSprms.cloneAndDeduplicate(aStyleSprms));
         RTFSprms const attributes(rAttributes.cloneAndDeduplicate(aStyleAttributes));
         return std::make_shared<RTFReferenceProperties>(attributes, sprms);
     }
+
+    if (pAbstractList)
+        aSprms.duplicateList(pAbstractList);
     writerfilter::Reference<Properties>::Pointer_t pRet
-        = std::make_shared<RTFReferenceProperties>(rAttributes, rSprms);
+        = std::make_shared<RTFReferenceProperties>(rAttributes, aSprms);
     return pRet;
 }
 
@@ -789,7 +830,7 @@ void RTFDocumentImpl::resolvePict(bool const bInline, uno::Reference<drawing::XS
             if (ch != 0x0d && ch != 0x0a && ch != 0x20)
             {
                 b = b << 4;
-                sal_Int8 parsed = RTFTokenizer::asHex(ch);
+                sal_Int8 parsed = msfilter::rtfutil::AsHex(ch);
                 if (parsed == -1)
                     return;
                 b += parsed;
@@ -840,27 +881,24 @@ void RTFDocumentImpl::resolvePict(bool const bInline, uno::Reference<drawing::XS
                                                     uno::UNO_QUERY);
     if (xServiceInfo.is() && xServiceInfo->supportsService("com.sun.star.text.TextFrame"))
         pExtHeader = nullptr;
-    OUString aGraphicUrl = m_pGraphicHelper->importGraphicObject(xInputStream, pExtHeader);
+
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xGraphic = m_pGraphicHelper->importGraphic(xInputStream, pExtHeader);
 
     if (m_aStates.top().aPicture.eStyle != RTFBmpStyle::NONE)
     {
         // In case of PNG/JPEG, the real size is known, don't use the values
         // provided by picw and pich.
-        OString aURLBS(OUStringToOString(aGraphicUrl, RTL_TEXTENCODING_UTF8));
-        const char aURLBegin[] = "vnd.sun.star.GraphicObject:";
-        if (aURLBS.startsWith(aURLBegin))
-        {
-            Graphic aGraphic = GraphicObject(aURLBS.copy(RTL_CONSTASCII_LENGTH(aURLBegin)))
-                                   .GetTransformedGraphic();
-            Size aSize(aGraphic.GetPrefSize());
-            MapMode aMap(MapUnit::Map100thMM);
-            if (aGraphic.GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel)
-                aSize = Application::GetDefaultDevice()->PixelToLogic(aSize, aMap);
-            else
-                aSize = OutputDevice::LogicToLogic(aSize, aGraphic.GetPrefMapMode(), aMap);
-            m_aStates.top().aPicture.nWidth = aSize.Width();
-            m_aStates.top().aPicture.nHeight = aSize.Height();
-        }
+
+        Graphic aGraphic(xGraphic);
+        Size aSize(aGraphic.GetPrefSize());
+        MapMode aMap(MapUnit::Map100thMM);
+        if (aGraphic.GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel)
+            aSize = Application::GetDefaultDevice()->PixelToLogic(aSize, aMap);
+        else
+            aSize = OutputDevice::LogicToLogic(aSize, aGraphic.GetPrefMapMode(), aMap);
+        m_aStates.top().aPicture.nWidth = aSize.Width();
+        m_aStates.top().aPicture.nHeight = aSize.Height();
     }
 
     // Wrap it in an XShape.
@@ -895,20 +933,13 @@ void RTFDocumentImpl::resolvePict(bool const bInline, uno::Reference<drawing::XS
 
     uno::Reference<beans::XPropertySet> xPropertySet(xShape, uno::UNO_QUERY);
 
+    if (xPropertySet.is())
+        xPropertySet->setPropertyValue("Graphic", uno::Any(xGraphic));
+
     // check if the picture is in an OLE object and if the \objdata element is used
     // (see RTF_OBJECT in RTFDocumentImpl::dispatchDestination)
     if (m_bObject)
     {
-        // Set bitmap
-        beans::PropertyValues aMediaProperties(1);
-        aMediaProperties[0].Name = "URL";
-        aMediaProperties[0].Value <<= aGraphicUrl;
-        uno::Reference<graphic::XGraphicProvider> xGraphicProvider(
-            graphic::GraphicProvider::create(m_xContext));
-        uno::Reference<graphic::XGraphic> xGraphic
-            = xGraphicProvider->queryGraphic(aMediaProperties);
-        xPropertySet->setPropertyValue("Graphic", uno::Any(xGraphic));
-
         // Set the object size
         awt::Size aSize;
         aSize.Width = (m_aStates.top().aPicture.nGoalWidth ? m_aStates.top().aPicture.nGoalWidth
@@ -925,9 +956,6 @@ void RTFDocumentImpl::resolvePict(bool const bInline, uno::Reference<drawing::XS
         m_aObjectAttributes.set(NS_ooxml::LN_shape, pShapeValue);
         return;
     }
-
-    if (xPropertySet.is())
-        xPropertySet->setPropertyValue("GraphicURL", uno::Any(aGraphicUrl));
 
     if (m_aStates.top().bInListpicture)
     {
@@ -2328,7 +2356,7 @@ RTFError RTFDocumentImpl::popState()
                     if (ch != 0x0d && ch != 0x0a)
                     {
                         b = b << 4;
-                        sal_Int8 parsed = RTFTokenizer::asHex(ch);
+                        sal_Int8 parsed = msfilter::rtfutil::AsHex(ch);
                         if (parsed == -1)
                             return RTFError::HEX_INVALID;
                         b += parsed;
@@ -3007,6 +3035,11 @@ RTFError RTFDocumentImpl::popState()
             auto pValue = std::make_shared<RTFValue>(aState.aTableAttributes, aState.aTableSprms);
             m_aListTableSprms.set(NS_ooxml::LN_CT_Numbering_abstractNum, pValue,
                                   RTFOverwrite::NO_APPEND);
+            m_aListTable[aState.nCurrentListIndex] = pValue;
+            m_nListLevel = -1;
+            m_aInvalidListTableFirstIndents[aState.nCurrentListIndex]
+                = m_aInvalidListLevelFirstIndents;
+            m_aInvalidListLevelFirstIndents.clear();
         }
         break;
         case Destination::PARAGRAPHNUMBERING:
@@ -3157,6 +3190,8 @@ RTFError RTFDocumentImpl::popState()
                         = std::make_shared<RTFValue>(aState.aTableAttributes, aState.aTableSprms);
                     m_aListTableSprms.set(NS_ooxml::LN_CT_Numbering_num, pValue,
                                           RTFOverwrite::NO_APPEND);
+                    m_aListOverrideTable[aState.nCurrentListOverrideIndex]
+                        = aState.nCurrentListIndex;
                 }
             }
             break;
@@ -3297,60 +3332,25 @@ RTFError RTFDocumentImpl::popState()
         // don't do it again in the outer state later.
         m_aStates.top().nTableRowWidthAfter = 0;
 
+    if (m_nResetBreakOnSectBreak != RTF_invalid && !m_aStates.empty())
+    {
+        // Section break type created for \page still has an effect in the
+        // outer state as well.
+        RTFValue::Pointer_t pType = aState.aSectionSprms.find(NS_ooxml::LN_EG_SectPrContents_type);
+        if (pType)
+            m_aStates.top().aSectionSprms.set(NS_ooxml::LN_EG_SectPrContents_type, pType);
+    }
+
     return RTFError::OK;
 }
 
 RTFError RTFDocumentImpl::handleEmbeddedObject()
 {
-    SvMemoryStream aStream;
-    int b = 0, count = 2;
-
-    // Feed the destination text to a stream.
     OString aStr = OUStringToOString(m_aStates.top().pDestinationText->makeStringAndClear(),
                                      RTL_TEXTENCODING_ASCII_US);
-    for (int i = 0; i < aStr.getLength(); ++i)
-    {
-        char ch = aStr[i];
-        if (ch != 0x0d && ch != 0x0a)
-        {
-            b = b << 4;
-            sal_Int8 parsed = RTFTokenizer::asHex(ch);
-            if (parsed == -1)
-                return RTFError::HEX_INVALID;
-            b += parsed;
-            count--;
-            if (!count)
-            {
-                aStream.WriteChar(b);
-                count = 2;
-                b = 0;
-            }
-        }
-    }
-
     std::unique_ptr<SvStream> pStream(new SvMemoryStream());
-
-    // Skip ObjectHeader, see [MS-OLEDS] 2.2.4.
-    if (aStream.Tell())
-    {
-        aStream.Seek(0);
-        sal_uInt32 nData;
-        aStream.ReadUInt32(nData); // OLEVersion
-        aStream.ReadUInt32(nData); // FormatID
-        aStream.ReadUInt32(nData); // ClassName
-        aStream.SeekRel(nData);
-        aStream.ReadUInt32(nData); // TopicName
-        aStream.SeekRel(nData);
-        aStream.ReadUInt32(nData); // ItemName
-        aStream.SeekRel(nData);
-        aStream.ReadUInt32(nData); // NativeDataSize
-
-        if (nData)
-        {
-            pStream->WriteStream(aStream);
-            pStream->Seek(0);
-        }
-    }
+    if (!msfilter::rtfutil::ExtractOLE2FromObjdata(aStr, *pStream))
+        return RTFError::HEX_INVALID;
 
     uno::Reference<io::XInputStream> xInputStream(
         new utl::OSeekableInputStreamWrapper(pStream.release(), /*_bOwner=*/true));

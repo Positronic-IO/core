@@ -36,7 +36,7 @@
 #include <svx/svdpagv.hxx>
 #include <svx/svdtrans.hxx>
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/xoutbmp.hxx>
 #include <vcl/metaact.hxx>
 #include <svl/poolitem.hxx>
@@ -54,11 +54,14 @@
 #include <svx/sdr/contact/viewcontact.hxx>
 #include <svx/sdr/contact/objectcontactofobjlistpainter.hxx>
 #include <svx/sdr/contact/displayinfo.hxx>
+#include <svx/svdotable.hxx>
 
 using namespace com::sun::star;
 
-SdrExchangeView::SdrExchangeView(SdrModel* pModel1, OutputDevice* pOut):
-    SdrObjEditView(pModel1,pOut)
+SdrExchangeView::SdrExchangeView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrObjEditView(rSdrModel, pOut)
 {
 }
 
@@ -143,8 +146,11 @@ bool SdrExchangeView::Paste(const OUString& rStr, const Point& rPos, SdrObjList*
     if (pPage!=nullptr) {
         aTextRect.SetSize(pPage->GetSize());
     }
-    SdrRectObj* pObj=new SdrRectObj(OBJ_TEXT,aTextRect);
-    pObj->SetModel(mpModel);
+    SdrRectObj* pObj = new SdrRectObj(
+        getSdrModelFromSdrView(),
+        OBJ_TEXT,
+        aTextRect);
+
     pObj->SetLayer(nLayer);
     pObj->NbcSetText(rStr); // SetText before SetAttr, else SetAttr doesn't work!
     if (mpDefaultStyleSheet!=nullptr) pObj->NbcSetStyleSheet(mpDefaultStyleSheet, false);
@@ -180,8 +186,11 @@ bool SdrExchangeView::Paste(SvStream& rInput, EETextFormat eFormat, const Point&
     if (pPage!=nullptr) {
         aTextRect.SetSize(pPage->GetSize());
     }
-    SdrRectObj* pObj=new SdrRectObj(OBJ_TEXT,aTextRect);
-    pObj->SetModel(mpModel);
+    SdrRectObj* pObj = new SdrRectObj(
+        getSdrModelFromSdrView(),
+        OBJ_TEXT,
+        aTextRect);
+
     pObj->SetLayer(nLayer);
     if (mpDefaultStyleSheet!=nullptr) pObj->NbcSetStyleSheet(mpDefaultStyleSheet, false);
 
@@ -201,9 +210,9 @@ bool SdrExchangeView::Paste(SvStream& rInput, EETextFormat eFormat, const Point&
     ImpPasteObject(pObj,*pLst,aPos,aSiz,MapMode(eMap,Point(0,0),aMap,aMap),nOptions);
 
     // b4967543
-    if(pObj->GetModel() && pObj->GetOutlinerParaObject())
+    if(pObj->GetOutlinerParaObject())
     {
-        SdrOutliner& rOutliner = pObj->GetModel()->GetHitTestOutliner();
+        SdrOutliner& rOutliner = pObj->getSdrModelFromSdrObject().GetHitTestOutliner();
         rOutliner.SetText(*pObj->GetOutlinerParaObject());
 
         if(1 == rOutliner.GetParagraphCount())
@@ -212,7 +221,7 @@ bool SdrExchangeView::Paste(SvStream& rInput, EETextFormat eFormat, const Point&
 
             if(pCandidate)
             {
-                if(pObj->GetModel()->GetStyleSheetPool() == &pCandidate->GetPool())
+                if(pObj->getSdrModelFromSdrObject().GetStyleSheetPool() == pCandidate->GetPool())
                 {
                     pObj->NbcSetStyleSheet(pCandidate, true);
                 }
@@ -233,7 +242,7 @@ bool SdrExchangeView::Paste(
     const bool bUndo = IsUndoEnabled();
 
     if( bUndo )
-        BegUndo(ImpGetResStr(STR_ExchangePaste));
+        BegUndo(SvxResId(STR_ExchangePaste));
 
     if( mxSelectionController.is() && mxSelectionController->PasteObjModel( rMod ) )
     {
@@ -299,21 +308,19 @@ bool SdrExchangeView::Paste(
         {
             const SdrObject* pSrcOb=pSrcPg->GetObj(nOb);
 
-            SdrObject* pNewObj = pSrcOb->Clone();
+            SdrObject* pNewObj(pSrcOb->CloneSdrObject(*mpModel));
 
             if (pNewObj!=nullptr)
             {
                 if(bResize)
                 {
-                    pNewObj->GetModel()->SetPasteResize(true);
+                    pNewObj->getSdrModelFromSdrObject().SetPasteResize(true);
                     pNewObj->NbcResize(aPt0,aXResize,aYResize);
-                    pNewObj->GetModel()->SetPasteResize(false);
+                    pNewObj->getSdrModelFromSdrObject().SetPasteResize(false);
                 }
 
                 // #i39861#
-                pNewObj->SetModel(pDstLst->GetModel());
                 pNewObj->SetPage(pDstLst->GetPage());
-
                 pNewObj->NbcMove(aSiz);
 
                 const SdrPage* pPg = pDstLst->GetPage();
@@ -345,7 +352,7 @@ bool SdrExchangeView::Paste(
                 pDstLst->InsertObject(pNewObj, SAL_MAX_SIZE);
 
                 if( bUndo )
-                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoNewObject(*pNewObj));
+                    AddUndo(getSdrModelFromSdrView().GetSdrUndoFactory().CreateUndoNewObject(*pNewObj));
 
                 if (bMark) {
                     // Don't already set Markhandles!
@@ -414,7 +421,7 @@ void SdrExchangeView::ImpPasteObject(SdrObject* pObj, SdrObjList& rLst, const Po
     rLst.InsertObject(pObj, SAL_MAX_SIZE);
 
     if( IsUndoEnabled() )
-        AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoNewObject(*pObj));
+        AddUndo(getSdrModelFromSdrView().GetSdrUndoFactory().CreateUndoNewObject(*pObj));
 
     SdrPageView* pMarkPV=nullptr;
     SdrPageView* pPV = GetSdrPageView();
@@ -579,7 +586,7 @@ Graphic SdrExchangeView::GetAllMarkedGraphic() const
     if( AreObjectsMarked() )
     {
         if( ( 1 == GetMarkedObjectCount() ) && GetSdrMarkByIndex( 0 ) )
-            aRet = SdrExchangeView::GetObjGraphic( mpModel, GetMarkedObjectByIndex( 0 ) );
+            aRet = SdrExchangeView::GetObjGraphic(*GetMarkedObjectByIndex(0));
         else
             aRet = GetMarkedObjMetaFile();
     }
@@ -588,68 +595,68 @@ Graphic SdrExchangeView::GetAllMarkedGraphic() const
 }
 
 
-Graphic SdrExchangeView::GetObjGraphic( const SdrModel* pModel, const SdrObject* pObj )
+Graphic SdrExchangeView::GetObjGraphic(const SdrObject& rSdrObject)
 {
     Graphic aRet;
 
-    if( pModel && pObj )
+    // try to get a graphic from the object first
+    const SdrGrafObj* pSdrGrafObj(dynamic_cast< const SdrGrafObj* >(&rSdrObject));
+    const SdrOle2Obj* pSdrOle2Obj(dynamic_cast< const SdrOle2Obj* >(&rSdrObject));
+
+    if(pSdrGrafObj)
     {
-        // try to get a graphic from the object first
-        const SdrGrafObj* pSdrGrafObj = dynamic_cast< const SdrGrafObj* >(pObj);
-        const SdrOle2Obj* pSdrOle2Obj = dynamic_cast< const SdrOle2Obj* >(pObj);
-
-        if(pSdrGrafObj)
+        if(pSdrGrafObj->isEmbeddedVectorGraphicData())
         {
-            if(pSdrGrafObj->isEmbeddedVectorGraphicData())
-            {
-                // get Metafile for Svg content
-                aRet = pSdrGrafObj->getMetafileFromEmbeddedVectorGraphicData();
-            }
-            else
-            {
-                // Make behaviour coherent with metafile
-                // recording below (which of course also takes
-                // view-transformed objects)
-                aRet = pSdrGrafObj->GetTransformedGraphic();
-            }
+            // get Metafile for Svg content
+            aRet = pSdrGrafObj->getMetafileFromEmbeddedVectorGraphicData();
         }
-        else if(pSdrOle2Obj)
+        else
         {
-            if ( pSdrOle2Obj->GetGraphic() )
-                aRet = *pSdrOle2Obj->GetGraphic();
+            // Make behaviour coherent with metafile
+            // recording below (which of course also takes
+            // view-transformed objects)
+            aRet = pSdrGrafObj->GetTransformedGraphic();
         }
-
-        // if graphic could not be retrieved => go the hard way and create a MetaFile
-        if( ( GraphicType::NONE == aRet.GetType() ) || ( GraphicType::Default == aRet.GetType() ) )
+    }
+    else if(pSdrOle2Obj)
+    {
+        if(pSdrOle2Obj->GetGraphic())
         {
-            ScopedVclPtrInstance< VirtualDevice > pOut;
-            GDIMetaFile     aMtf;
-            const tools::Rectangle aBoundRect( pObj->GetCurrentBoundRect() );
-            const MapMode   aMap( pModel->GetScaleUnit(),
-                                  Point(),
-                                  pModel->GetScaleFraction(),
-                                  pModel->GetScaleFraction() );
-
-            pOut->EnableOutput( false );
-            pOut->SetMapMode( aMap );
-            aMtf.Record( pOut );
-            pObj->SingleObjectPainter( *pOut.get() );
-            aMtf.Stop();
-            aMtf.WindStart();
-
-            // #i99268# replace the original offset from using XOutDev's SetOffset
-            // NOT (as tried with #i92760#) with another MapMode which gets recorded
-            // by the Metafile itself (what always leads to problems), but by
-            // moving the result directly
-            aMtf.Move(-aBoundRect.Left(), -aBoundRect.Top());
-
-            aMtf.SetPrefMapMode( aMap );
-            aMtf.SetPrefSize( aBoundRect.GetSize() );
-
-            if( aMtf.GetActionSize() )
-                aRet = aMtf;
+            aRet = *pSdrOle2Obj->GetGraphic();
         }
-     }
+    }
+
+    // if graphic could not be retrieved => go the hard way and create a MetaFile
+    if((GraphicType::NONE == aRet.GetType()) || (GraphicType::Default == aRet.GetType()))
+    {
+        ScopedVclPtrInstance< VirtualDevice > pOut;
+        GDIMetaFile aMtf;
+        const tools::Rectangle aBoundRect(rSdrObject.GetCurrentBoundRect());
+        const MapMode aMap(rSdrObject.getSdrModelFromSdrObject().GetScaleUnit(),
+            Point(),
+            rSdrObject.getSdrModelFromSdrObject().GetScaleFraction(),
+            rSdrObject.getSdrModelFromSdrObject().GetScaleFraction());
+
+        pOut->EnableOutput(false);
+        pOut->SetMapMode(aMap);
+        aMtf.Record(pOut);
+        rSdrObject.SingleObjectPainter(*pOut.get());
+        aMtf.Stop();
+        aMtf.WindStart();
+
+        // #i99268# replace the original offset from using XOutDev's SetOffset
+        // NOT (as tried with #i92760#) with another MapMode which gets recorded
+        // by the Metafile itself (what always leads to problems), but by
+        // moving the result directly
+        aMtf.Move(-aBoundRect.Left(), -aBoundRect.Top());
+        aMtf.SetPrefMapMode(aMap);
+        aMtf.SetPrefSize(aBoundRect.GetSize());
+
+        if(aMtf.GetActionSize())
+        {
+            aRet = aMtf;
+        }
+    }
 
      return aRet;
 }
@@ -703,55 +710,64 @@ void SdrExchangeView::DrawMarkedObj(OutputDevice& rOut) const
     }
 }
 
-
 SdrModel* SdrExchangeView::GetMarkedObjModel() const
 {
     // Sorting the MarkList here might be problematic in the future, so
     // use a copy.
     SortMarkedObjects();
-    SdrModel* pNeuMod=mpModel->AllocModel();
-    SdrPage* pNeuPag=pNeuMod->AllocPage(false);
-    pNeuMod->InsertPage(pNeuPag);
+    SdrModel* pNewModel(mpModel->AllocModel());
+    SdrPage* pNewPage(pNewModel->AllocPage(false));
+    pNewModel->InsertPage(pNewPage);
+    ::std::vector< SdrObject* > aSdrObjects(GetMarkedObjects());
 
-    if( !mxSelectionController.is() || !mxSelectionController->GetMarkedObjModel( pNeuPag ) )
+    // #i13033#
+    // New mechanism to re-create the connections of cloned connectors
+    CloneList aCloneList;
+
+    for(SdrObject* pObj : aSdrObjects)
     {
-        ::std::vector< SdrObject* > aSdrObjects(GetMarkedObjects());
+        SdrObject* pNewObj(nullptr);
 
-        // #i13033#
-        // New mechanism to re-create the connections of cloned connectors
-        CloneList aCloneList;
-
-        for(SdrObject* pObj : aSdrObjects)
+        if(nullptr != dynamic_cast< const SdrPageObj* >(pObj))
         {
-            SdrObject*          pNewObj;
-
-            if( dynamic_cast<const SdrPageObj*>( pObj) !=  nullptr )
+            // convert SdrPageObj's to a graphic representation, because
+            // virtual connection to referenced page gets lost in new model
+            pNewObj = new SdrGrafObj(
+                *pNewModel,
+                GetObjGraphic(*pObj),
+                pObj->GetLogicRect());
+        }
+        else if(nullptr != dynamic_cast< const sdr::table::SdrTableObj* >(pObj))
+        {
+            // check if we have a valid selection *different* from whole table
+            // being selected
+            if(mxSelectionController.is())
             {
-                // convert SdrPageObj's to a graphic representation, because
-                // virtual connection to referenced page gets lost in new model
-                pNewObj = new SdrGrafObj( GetObjGraphic( mpModel, pObj ), pObj->GetLogicRect() );
-                pNewObj->SetPage( pNeuPag );
-                pNewObj->SetModel( pNeuMod );
+                pNewObj = mxSelectionController->GetMarkedSdrObjClone(*pNewModel);
             }
-            else
-            {
-                pNewObj = pObj->Clone();
-                pNewObj->SetPage( pNeuPag );
-                pNewObj->SetModel( pNeuMod );
-            }
+        }
 
-            pNeuPag->InsertObject(pNewObj, SAL_MAX_SIZE);
+        if(nullptr == pNewObj)
+        {
+            // not cloned yet, use default way
+            pNewObj = pObj->CloneSdrObject(*pNewModel);
+        }
+
+        if(pNewObj)
+        {
+            pNewObj->SetPage(pNewPage);
+            pNewPage->InsertObject(pNewObj, SAL_MAX_SIZE);
 
             // #i13033#
             aCloneList.AddPair(pObj, pNewObj);
         }
-
-        // #i13033#
-        // New mechanism to re-create the connections of cloned connectors
-        aCloneList.CopyConnections();
     }
-    return pNeuMod;
-}
 
+    // #i13033#
+    // New mechanism to re-create the connections of cloned connectors
+    aCloneList.CopyConnections();
+
+    return pNewModel;
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

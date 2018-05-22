@@ -26,8 +26,6 @@
 #include <framework/sfxhelperfunctions.hxx>
 #include <uielement/menubarwrapper.hxx>
 #include <framework/addonsoptions.hxx>
-#include <classes/fwkresid.hxx>
-#include <strings.hrc>
 #include <toolkit/helper/convert.hxx>
 #include <uielement/progressbarwrapper.hxx>
 #include <uiconfiguration/globalsettings.hxx>
@@ -60,7 +58,6 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/lok.hxx>
 #include <svtools/imgdef.hxx>
 #include <tools/diagnose_ex.h>

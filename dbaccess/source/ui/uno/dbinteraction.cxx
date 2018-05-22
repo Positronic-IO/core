@@ -22,7 +22,6 @@
 #include <uiservices.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <vcl/msgbox.hxx>
 #include <connectivity/dbexception.hxx>
 #include <sqlmessage.hxx>
 #include <com/sun/star/task/InteractionHandler.hpp>
@@ -33,7 +32,6 @@
 #include <com/sun/star/sdb/XInteractionSupplyParameters.hpp>
 #include <com/sun/star/sdb/XInteractionDocumentSave.hpp>
 #include <sfx2/QuerySaveDocument.hxx>
-#include <strings.hrc>
 #include <paramdialog.hxx>
 #include <vcl/svapp.hxx>
 #include <CollectionView.hxx>
@@ -147,7 +145,7 @@ namespace dbaui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -181,9 +179,9 @@ namespace dbaui
         }
 
         // execute the dialog
-        ScopedVclPtrInstance< OSQLMessageBox > aDialog(nullptr, _rSqlInfo, nDialogStyle);
+        OSQLMessageBox aDialog(nullptr, _rSqlInfo, nDialogStyle);
         // TODO: need a way to specify the parent window
-        sal_Int16 nResult = aDialog->Execute();
+        sal_Int16 nResult = aDialog.run();
         try
         {
             switch (nResult)
@@ -221,7 +219,7 @@ namespace dbaui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     void BasicInteractionHandler::implHandle(const DocumentSaveRequest& _rDocuRequest, const Sequence< Reference< XInteractionContinuation > >& _rContinuations)
@@ -276,7 +274,7 @@ namespace dbaui
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
             else if ( -1 != nApprovePos )

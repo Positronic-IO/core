@@ -13,6 +13,8 @@
 #include <memory>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
+#include <com/sun/star/document/XFilter.hpp>
+#include <com/sun/star/document/XImporter.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/packages/zip/ZipFileAccess.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
@@ -35,6 +37,7 @@
 #include <test/xmltesttools.hxx>
 #include <test/testinteractionhandler.hxx>
 #include <unotest/macros_test.hxx>
+#include <unotools/streamwrap.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -179,6 +182,29 @@ protected:
     };
 
     virtual OUString getTestName() { return OUString(); }
+
+    /// Copy&paste helper.
+    void paste(const OUString& aFilename, uno::Reference<text::XTextRange> const& xTextRange)
+    {
+        uno::Reference<document::XFilter> xFilter(
+            m_xSFactory->createInstance("com.sun.star.comp.Writer.RtfFilter"),
+            uno::UNO_QUERY_THROW);
+        uno::Reference<document::XImporter> xImporter(xFilter, uno::UNO_QUERY_THROW);
+        xImporter->setTargetDocument(mxComponent);
+        uno::Sequence<beans::PropertyValue> aDescriptor(3);
+        aDescriptor[0].Name = "InputStream";
+        SvStream* pStream = utl::UcbStreamHelper::CreateStream(
+            m_directories.getURLFromSrc("/sw/qa/extras/") + aFilename,
+            StreamMode::STD_READ);
+        CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, pStream->GetError());
+        uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+        aDescriptor[0].Value <<= xStream;
+        aDescriptor[1].Name = "InsertMode";
+        aDescriptor[1].Value <<= true;
+        aDescriptor[2].Name = "TextInsertModeRange";
+        aDescriptor[2].Value <<= xTextRange;
+        CPPUNIT_ASSERT(xFilter->filter(aDescriptor));
+    }
 
 public:
     void setFilterOptions(const OUString &rFilterOptions)
@@ -498,19 +524,27 @@ protected:
         return aValue;
     }
 
-    /// Get number of paragraphs of the document.
-    int getParagraphs()
+    int getParagraphs( uno::Reference<text::XText> const & xText )
     {
-        uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
-        uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xTextDocument->getText(), uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xParaEnum = xParaEnumAccess->createEnumeration();
         int nRet = 0;
+        if ( ! xText.is() )
+            return nRet;
+
+        uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xText->getText(), uno::UNO_QUERY);
+        uno::Reference<container::XEnumeration> xParaEnum = xParaEnumAccess->createEnumeration();
         while (xParaEnum->hasMoreElements())
         {
             xParaEnum->nextElement();
             nRet++;
         }
         return nRet;
+    }
+
+    /// Get number of paragraphs of the document.
+    int getParagraphs()
+    {
+        uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
+        return getParagraphs( xTextDocument->getText() );
     }
 
     uno::Reference<text::XTextContent> getParagraphOrTable(int number, uno::Reference<text::XText> const & xText = uno::Reference<text::XText>()) const
@@ -739,6 +773,23 @@ protected:
         {
             setTestInteractionHandler(pPassword, aFilterOptions);
         }
+
+        if (!maImportFilterOptions.isEmpty())
+        {
+            beans::PropertyValue aValue;
+            aValue.Name = "FilterOptions";
+            aValue.Value <<= maImportFilterOptions;
+            aFilterOptions.push_back(aValue);
+        }
+
+        if (!maImportFilterName.isEmpty())
+        {
+            beans::PropertyValue aValue;
+            aValue.Name = "FilterName";
+            aValue.Value <<= maImportFilterName;
+            aFilterOptions.push_back(aValue);
+        }
+
         mxComponent = loadFromDesktop(maTempFile.GetURL(), "com.sun.star.text.TextDocument", comphelper::containerToSequence(aFilterOptions));
         if (pPassword)
         {
@@ -829,12 +880,19 @@ protected:
         return parseXmlStream(maTempFile.GetStream(StreamMode::READ));
     }
 
-    xmlDocPtr parseExportInternal( const OUString& url, const OUString& rStreamName )
+    std::shared_ptr<SvStream> parseExportStream(const OUString& url, const OUString& rStreamName)
     {
-        // Read the XML stream we're interested in.
+        // Read the stream we're interested in.
         uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory), url);
         uno::Reference<io::XInputStream> xInputStream(xNameAccess->getByName(rStreamName), uno::UNO_QUERY);
+        CPPUNIT_ASSERT(xInputStream.is());
         std::shared_ptr<SvStream> pStream(utl::UcbStreamHelper::CreateStream(xInputStream, true));
+        return pStream;
+    }
+
+    xmlDocPtr parseExportInternal(const OUString& url, const OUString& rStreamName)
+    {
+        std::shared_ptr<SvStream> pStream(parseExportStream(url, rStreamName));
 
         xmlDocPtr pXmlDoc = parseXmlStream(pStream.get());
         pXmlDoc->name = reinterpret_cast<char *>(xmlStrdup(reinterpret_cast<xmlChar const *>(OUStringToOString(url, RTL_TEXTENCODING_UTF8).getStr())));

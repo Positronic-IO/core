@@ -47,8 +47,6 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <comphelper/extract.hxx>
-#include <comphelper/uno3.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
@@ -291,7 +289,7 @@ OConnection::OConnection(ODatabaseSource& _rDB
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     m_xTableUIProvider.set(m_xMasterConnection, css::uno::UNO_QUERY);
@@ -311,7 +309,7 @@ OConnection::OConnection(ODatabaseSource& _rDB
         {
         }
         Reference< XNameContainer > xTableDefinitions(_rDB.getTables(),UNO_QUERY);
-        m_pTables = new OTableContainer( *this, m_aMutex, this, bCase, xTableDefinitions, this, m_nInAppend );
+        m_pTables.reset( new OTableContainer( *this, m_aMutex, this, bCase, xTableDefinitions, this, m_nInAppend ) );
 
         // check if we supports types
         if ( xMeta.is() )
@@ -340,9 +338,9 @@ OConnection::OConnection(ODatabaseSource& _rDB
             }
             if(m_bSupportsViews)
             {
-                m_pViews = new OViewContainer(*this, m_aMutex, this, bCase, this, m_nInAppend);
-                m_pViews->addContainerListener(m_pTables);
-                m_pTables->addContainerListener(m_pViews);
+                m_pViews.reset( new OViewContainer(*this, m_aMutex, this, bCase, this, m_nInAppend) );
+                m_pViews->addContainerListener(m_pTables.get());
+                m_pTables->addContainerListener(m_pViews.get());
             }
             m_bSupportsUsers = Reference< XUsersSupplier> (getMasterTables(),UNO_QUERY).is();
             m_bSupportsGroups = Reference< XGroupsSupplier> (getMasterTables(),UNO_QUERY).is();
@@ -352,15 +350,13 @@ OConnection::OConnection(ODatabaseSource& _rDB
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     osl_atomic_decrement( &m_refCount );
 }
 
 OConnection::~OConnection()
 {
-    delete m_pTables;
-    delete m_pViews;
 }
 
 // XWarningsSupplier
@@ -459,10 +455,9 @@ void OConnection::disposing()
     OSubComponent::disposing();
     OConnectionWrapper::disposing();
 
-    connectivity::OWeakRefArray::const_iterator aEnd = m_aStatements.end();
-    for (connectivity::OWeakRefArray::const_iterator i = m_aStatements.begin(); aEnd != i; ++i)
+    for (auto const& statement : m_aStatements)
     {
-        Reference<XComponent> xComp(i->get(),UNO_QUERY);
+        Reference<XComponent> xComp(statement.get(),UNO_QUERY);
         ::comphelper::disposeComponent(xComp);
     }
     m_aStatements.clear();
@@ -475,10 +470,9 @@ void OConnection::disposing()
 
     ::comphelper::disposeComponent(m_xQueries);
 
-    connectivity::OWeakRefArray::const_iterator aComposerEnd = m_aComposers.end();
-    for (connectivity::OWeakRefArray::const_iterator j = m_aComposers.begin(); aComposerEnd != j; ++j)
+    for (auto const& composer : m_aComposers)
     {
-        Reference<XComponent> xComp(j->get(),UNO_QUERY);
+        Reference<XComponent> xComp(composer.get(),UNO_QUERY);
         ::comphelper::disposeComponent(xComp);
     }
 
@@ -532,7 +526,7 @@ void OConnection::impl_fillTableFilter()
 
 void OConnection::refresh(const Reference< XNameAccess >& _rToBeRefreshed)
 {
-    if ( _rToBeRefreshed == Reference< XNameAccess >(m_pTables) )
+    if ( _rToBeRefreshed == Reference< XNameAccess >(m_pTables.get()) )
     {
         if (m_pTables && !m_pTables->isInitialized())
         {
@@ -550,7 +544,7 @@ void OConnection::refresh(const Reference< XNameAccess >& _rToBeRefreshed)
             }
         }
     }
-    else if ( _rToBeRefreshed == Reference< XNameAccess >(m_pViews) )
+    else if ( _rToBeRefreshed == Reference< XNameAccess >(m_pViews.get()) )
     {
         if (m_pViews && !m_pViews->isInitialized())
         {
@@ -572,9 +566,9 @@ Reference< XNameAccess >  OConnection::getTables()
     MutexGuard aGuard(m_aMutex);
     checkDisposed();
 
-    refresh(m_pTables);
+    refresh(m_pTables.get());
 
-    return m_pTables;
+    return m_pTables.get();
 }
 
 Reference< XNameAccess > SAL_CALL OConnection::getViews(  )
@@ -582,9 +576,9 @@ Reference< XNameAccess > SAL_CALL OConnection::getViews(  )
     MutexGuard aGuard(m_aMutex);
     checkDisposed();
 
-    refresh(m_pViews);
+    refresh(m_pViews.get());
 
-    return m_pViews;
+    return m_pViews.get();
 }
 
 // XQueriesSupplier
@@ -782,7 +776,7 @@ void OConnection::impl_checkTableQueryNames_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

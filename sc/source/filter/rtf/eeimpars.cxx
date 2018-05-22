@@ -58,6 +58,7 @@
 #include <fuinsert.hxx>
 
 #include <globstr.hrc>
+#include <scresid.hxx>
 
 #include <memory>
 
@@ -118,7 +119,7 @@ namespace
 void ScEEImport::WriteToDocument( bool bSizeColsRows, double nOutputFactor, SvNumberFormatter* pFormatter, bool bConvertDate )
 {
     std::unique_ptr<ScProgress> pProgress( new ScProgress( mpDoc->GetDocumentShell(),
-        ScGlobal::GetRscString( STR_LOAD_DOC ), mpParser->ListSize(), true ) );
+        ScResId( STR_LOAD_DOC ), mpParser->ListSize(), true ) );
     sal_uLong nProgress = 0;
 
     SCCOL nStartCol, nEndCol;
@@ -412,10 +413,10 @@ void ScEEImport::WriteToDocument( bool bSizeColsRows, double nOutputFactor, SvNu
                     mpDoc->SetString(nCol, nRow, nTab, aStr, &aParam);
                 }
             }
-            else if (EditTextObject* pTextObject = IsValidSel(*mpEngine, pE->aSel) ? mpEngine->CreateTextObject(pE->aSel) : nullptr)
+            else if (std::unique_ptr<EditTextObject> pTextObject = IsValidSel(*mpEngine, pE->aSel) ? mpEngine->CreateTextObject(pE->aSel) : nullptr)
             {
                 // The cell will own the text object instance.
-                mpDoc->SetEditText(ScAddress(nCol,nRow,nTab), pTextObject);
+                mpDoc->SetEditText(ScAddress(nCol,nRow,nTab), std::move(pTextObject));
             }
             if ( !pE->maImageList.empty() )
                 bHasGraphics |= GraphicSize( nCol, nRow, pE );
@@ -602,7 +603,11 @@ void ScEEImport::InsertGraphic( SCCOL nCol, SCROW nRow, SCTAB nTab,
         if ( pI->pGraphic )
         {
             tools::Rectangle aRect ( aInsertPos, aLogicSize );
-            SdrGrafObj* pObj = new SdrGrafObj( *pI->pGraphic, aRect );
+            SdrGrafObj* pObj = new SdrGrafObj(
+                *pModel,
+                *pI->pGraphic,
+                aRect);
+
             // calling SetGraphicLink here doesn't work
             pObj->SetName( pI->aURL );
 

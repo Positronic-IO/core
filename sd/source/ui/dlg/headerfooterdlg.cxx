@@ -26,8 +26,6 @@
 #include <editeng/editeng.hxx>
 #include <sfx2/viewfrm.hxx>
 
-#include <sdresid.hxx>
-
 #include <vcl/button.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/edit.hxx>
@@ -212,9 +210,9 @@ HeaderFooterDialog::HeaderFooterDialog( ViewShell* pViewShell, vcl::Window* pPar
         aCtrlSiz = aSiz;
     }
 
-    mnNotesId = mpTabCtrl->GetPageId("notes");
+    sal_uInt16 nNotesId = mpTabCtrl->GetPageId("notes");
     mpNotesHandoutsTabPage = VclPtr<HeaderFooterTabPage>::Create( mpTabCtrl, pDoc, pNotes, true );
-    mpTabCtrl->SetTabPage( mnNotesId, mpNotesHandoutsTabPage );
+    mpTabCtrl->SetTabPage( nNotesId, mpNotesHandoutsTabPage );
 
     get(maPBApplyToAll, "apply_all" );
     get(maPBApply, "apply" );
@@ -479,17 +477,16 @@ IMPL_LINK_NOARG(HeaderFooterTabPage, LanguageChangeHdl, ListBox&, void)
 
 void HeaderFooterTabPage::FillFormatList( sal_Int32 nSelectedPos )
 {
-    LanguageType eLanguage = mpCBDateTimeLanguage->GetSelectLanguage();
+    LanguageType eLanguage = mpCBDateTimeLanguage->GetSelectedLanguage();
 
     mpCBDateTimeFormat->Clear();
 
-    Date aDate( Date::SYSTEM );
-    tools::Time aTime( tools::Time::SYSTEM );
+    DateTime aDateTime( DateTime::SYSTEM );
 
     for( int nFormat = 0; nFormat < nDateTimeFormatsCount; nFormat++ )
     {
         OUString aStr( SvxDateTimeField::GetFormatted(
-                aDate, aTime,
+                aDateTime, aDateTime,
                 nDateTimeFormats[nFormat].meDateFormat, nDateTimeFormats[nFormat].meTimeFormat,
                 *(SD_MOD()->GetNumberFormatter()), eLanguage ) );
         const sal_Int32 nEntry = mpCBDateTimeFormat->InsertEntry( aStr );
@@ -551,7 +548,7 @@ void HeaderFooterTabPage::getData( HeaderFooterSettings& rSettings, bool& rNotOn
         rSettings.meTimeFormat = nDateTimeFormats[nPos].meTimeFormat;
     }
 
-    LanguageType eLanguage = mpCBDateTimeLanguage->GetSelectLanguage();
+    LanguageType eLanguage = mpCBDateTimeLanguage->GetSelectedLanguage();
     if( eLanguage != meOldLanguage )
         GetOrSetDateTimeLanguage( eLanguage, true );
 

@@ -18,7 +18,6 @@
  */
 
 #include <editeng/itemtype.hxx>
-#include <o3tl/any.hxx>
 #include <unosett.hxx>
 
 #include <swtypes.hxx>
@@ -28,6 +27,8 @@
 #include <strings.hrc>
 #include <unomid.h>
 #include <numrule.hxx>
+
+#include <editeng/eerdll.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -67,7 +68,7 @@ bool SwPageFootnoteInfoItem::GetPresentation
     {
         rText = SwResId( STR_MAX_FTN_HEIGHT ) + " " +
                 ::GetMetricText( nHght, eCoreUnit, ePresUnit, &rIntl ) + " " +
-                ::GetSvxString( ::GetMetricId( ePresUnit ) );
+                EditResId( ::GetMetricId( ePresUnit ) );
     }
     return true;
 }
@@ -79,7 +80,7 @@ bool SwPageFootnoteInfoItem::QueryValue( Any& rVal, sal_uInt8 nMemberId ) const
     {
         case MID_FTN_HEIGHT        :     rVal <<= static_cast<sal_Int32>(convertTwipToMm100(aFootnoteInfo.GetHeight()));break;
         case MID_LINE_WEIGHT       :     rVal <<= static_cast<sal_Int16>(convertTwipToMm100(aFootnoteInfo.GetLineWidth()));break;
-        case MID_LINE_COLOR        :     rVal <<= static_cast<sal_Int32>(aFootnoteInfo.GetLineColor().GetColor());break;
+        case MID_LINE_COLOR        :     rVal <<= aFootnoteInfo.GetLineColor();break;
         case MID_LINE_RELWIDTH     :
         {
             Fraction aTmp( 100, 1 );
@@ -87,7 +88,7 @@ bool SwPageFootnoteInfoItem::QueryValue( Any& rVal, sal_uInt8 nMemberId ) const
             rVal <<= static_cast<sal_Int8>(static_cast<long>(aTmp));
         }
         break;
-        case MID_LINE_ADJUST       :     rVal <<= aFootnoteInfo.GetAdj();break;//text::HorizontalAdjust
+        case MID_LINE_ADJUST       :     rVal <<= static_cast<sal_Int16>(aFootnoteInfo.GetAdj());break;//text::HorizontalAdjust
         case MID_LINE_TEXT_DIST    :     rVal <<= static_cast<sal_Int32>(convertTwipToMm100(aFootnoteInfo.GetTopDist()));break;
         case MID_LINE_FOOTNOTE_DIST:     rVal <<= static_cast<sal_Int32>(convertTwipToMm100(aFootnoteInfo.GetBottomDist()));break;
         case MID_FTN_LINE_STYLE    :
@@ -111,12 +112,13 @@ bool SwPageFootnoteInfoItem::QueryValue( Any& rVal, sal_uInt8 nMemberId ) const
 bool SwPageFootnoteInfoItem::PutValue(const Any& rVal, sal_uInt8 nMemberId)
 {
     sal_Int32 nSet32 = 0;
+    Color aColor;
     bool bRet = true;
     switch(nMemberId  & ~CONVERT_TWIPS)
     {
         case MID_LINE_COLOR        :
-            rVal >>= nSet32;
-            aFootnoteInfo.SetLineColor(nSet32);
+            rVal >>= aColor;
+            aFootnoteInfo.SetLineColor(aColor);
         break;
         case MID_FTN_HEIGHT:
         case MID_LINE_TEXT_DIST    :
@@ -157,8 +159,12 @@ bool SwPageFootnoteInfoItem::PutValue(const Any& rVal, sal_uInt8 nMemberId)
         break;
         case MID_LINE_ADJUST       :
         {
-            text::HorizontalAdjust nSet = *o3tl::forceAccess<text::HorizontalAdjust>(rVal);
-            aFootnoteInfo.SetAdj(nSet);
+            sal_Int16 nSet = 0;
+            rVal >>= nSet;
+            if(nSet >= 0 && nSet < 3) //text::HorizontalAdjust
+                aFootnoteInfo.SetAdj(static_cast<css::text::HorizontalAdjust>(nSet));
+            else
+                bRet = false;
         }
         break;
         case MID_FTN_LINE_STYLE:

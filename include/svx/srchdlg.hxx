@@ -50,8 +50,6 @@ struct SearchAttrItem
     SfxPoolItem*    pItem;
 };
 
-// class SearchAttrItemList ----------------------------------------------
-
 typedef std::vector<SearchAttrItem> SrchAttrItemList;
 
 class SVX_DLLPUBLIC SearchAttrItemList : private SrchAttrItemList
@@ -77,16 +75,16 @@ public:
     void Remove(size_t nPos);
 };
 
-
-// class SvxSearchDialogWrapper ------------------------------------------
-
 enum class SearchLabel
 {
     Empty,
     End,
     Start,
     EndSheet,
-    NotFound
+    NotFound,
+    StartWrapped,
+    EndWrapped,
+    NavElementNotFound
 };
 
 class SvxSearchDialog;
@@ -101,19 +99,16 @@ public:
     SvxSearchDialog *getDialog () { return dialog;}
     static void SetSearchLabel(const SearchLabel& rSL);
     static void SetSearchLabel(const OUString& sStr);
+    static OUString GetSearchLabel();
     SFX_DECL_CHILDWINDOW_WITHID(SvxSearchDialogWrapper);
 };
 
-// class SvxSearchDialog -------------------------------------------------
-/*
-    [Description]
+/**
     In this modeless dialog the attributes for a search are configured
     and a search is started from it. Several search types
     (search, search all, replace, replace all) are possible.
 
-    [Items]
-    <SvxSearchItem><SID_ATTR_SEARCH>
-*/
+ */
 
 class SvxSearchDialog : public SfxModelessDialog
 {
@@ -181,6 +176,7 @@ private:
     VclPtr<PushButton>     m_pCloseBtn;
     VclPtr<CheckBox>       m_pIncludeDiacritics;
     VclPtr<CheckBox>       m_pIncludeKashida;
+    VclPtr<VclExpander>    m_pOtherOptionsExpander;
     VclPtr<CheckBox>       m_pSelectionBtn;
     VclPtr<CheckBox>       m_pRegExpBtn;
     VclPtr<CheckBox>       m_pWildcardBtn;
@@ -267,6 +263,7 @@ private:
     void            SaveToModule_Impl();
 
     void            ApplyTransliterationFlags_Impl( TransliterationFlags nSettings );
+    bool            IsOtherOptionsExpanded();
 };
 
 #endif

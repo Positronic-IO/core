@@ -22,7 +22,6 @@
 
 #include <svtools/genericunodialog.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <core_resource.hxx>
 
 namespace dbaui
 {
@@ -69,8 +68,8 @@ private:
     // (overwriting these three, because we have some special handling for our property)
     virtual sal_Bool SAL_CALL convertFastPropertyValue( css::uno::Any& _rConvertedValue, css::uno::Any& _rOldValue, sal_Int32 _nHandle, const css::uno::Any& _rValue) override;
 
-// OGenericUnoDialog overridables
-    virtual VclPtr<Dialog> createDialog(vcl::Window* _pParent) override;
+    // OGenericUnoDialog overridables
+    virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
 };
 
 }   // namespace dbaui

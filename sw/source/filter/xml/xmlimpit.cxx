@@ -374,12 +374,10 @@ bool SvXMLImportItemMapper::PutXMLValue(
                 }
                 else if( !bColorFound && aToken.startsWith("#") )
                 {
-                    sal_Int32 nColor(0);
-                    bOk = ::sax::Converter::convertColor( nColor, aToken );
+                    bOk = ::sax::Converter::convertColor( aColor, aToken );
                     if( !bOk )
                         return false;
 
-                    aColor = nColor;
                     bColorFound = true;
                 }
                 else if( !bOffsetFound )
@@ -660,17 +658,6 @@ bool SvXMLImportItemMapper::PutXMLValue(
                         bOk = true;
                     }
                     break;
-
-                case MID_GRAPHIC_LINK:
-                {
-                    SvxGraphicPosition eOldGraphicPos = rBrush.GetGraphicPos();
-                    rBrush.PutValue( Any(rValue), MID_GRAPHIC_URL );
-                    if( GPOS_NONE == eOldGraphicPos &&
-                        GPOS_NONE != rBrush.GetGraphicPos() )
-                        rBrush.SetGraphicPos( GPOS_TILED );
-                    bOk = true;
-                }
-                break;
 
                 case MID_GRAPHIC_REPEAT:
                 {

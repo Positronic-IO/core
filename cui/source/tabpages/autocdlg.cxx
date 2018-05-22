@@ -214,26 +214,26 @@ void OfaAutocorrOptionsPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaAutocorrOptionsPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaAutocorrOptionsPage::Create( TabPageParent pParent,
                                                    const SfxItemSet* rSet)
 {
-    return VclPtr<OfaAutocorrOptionsPage>::Create(pParent, *rSet);
+    return VclPtr<OfaAutocorrOptionsPage>::Create(pParent.pParent, *rSet);
 }
 
 bool OfaAutocorrOptionsPage::FillItemSet( SfxItemSet* )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
-    long nFlags = pAutoCorrect->GetFlags();
+    ACFlags nFlags = pAutoCorrect->GetFlags();
 
     sal_uLong nPos = 0;
-    pAutoCorrect->SetAutoCorrFlag(Autocorrect,          m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(CapitalStartWord,     m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(CapitalStartSentence, m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(ChgWeightUnderl,      m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(SetINetAttr,          m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(ChgToEnEmDash,        m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(IgnoreDoubleSpace,    m_pCheckLB->IsChecked(nPos++));
-    pAutoCorrect->SetAutoCorrFlag(CorrectCapsLock,      m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::Autocorrect,          m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CapitalStartWord,     m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CapitalStartSentence, m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgWeightUnderl,      m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::SetINetAttr,          m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgToEnEmDash,        m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::IgnoreDoubleSpace,    m_pCheckLB->IsChecked(nPos++));
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CorrectCapsLock,      m_pCheckLB->IsChecked(nPos++));
 
     bool bReturn = nFlags != pAutoCorrect->GetFlags();
     if(bReturn )
@@ -253,7 +253,7 @@ void    OfaAutocorrOptionsPage::ActivatePage( const SfxItemSet& )
 void OfaAutocorrOptionsPage::Reset( const SfxItemSet* )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
-    const long nFlags = pAutoCorrect->GetFlags();
+    const ACFlags nFlags = pAutoCorrect->GetFlags();
 
     m_pCheckLB->SetUpdateMode(false);
     m_pCheckLB->Clear();
@@ -268,14 +268,14 @@ void OfaAutocorrOptionsPage::Reset( const SfxItemSet* )
     m_pCheckLB->InsertEntry(m_sAccidentalCaps);
 
     sal_uLong nPos = 0;
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & Autocorrect) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & CapitalStartWord) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & CapitalStartSentence) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & ChgWeightUnderl) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & SetINetAttr) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & ChgToEnEmDash) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & IgnoreDoubleSpace) );
-    m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & CorrectCapsLock) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::Autocorrect) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::CapitalStartWord) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::CapitalStartSentence) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::ChgWeightUnderl) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::SetINetAttr) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::ChgToEnEmDash) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::IgnoreDoubleSpace) );
+    m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::CorrectCapsLock) );
 
     m_pCheckLB->SetUpdateMode(true);
 }
@@ -302,21 +302,19 @@ struct ImpUserData
 /*                                                                   */
 /*********************************************************************/
 
-class OfaAutoFmtPrcntSet : public ModalDialog
+class OfaAutoFmtPrcntSet : public weld::GenericDialogController
 {
-    VclPtr<MetricField> m_pPrcntMF;
+    std::unique_ptr<weld::MetricSpinButton> m_xPrcntMF;
 public:
-    explicit OfaAutoFmtPrcntSet(vcl::Window* pParent)
-        : ModalDialog(pParent, "PercentDialog","cui/ui/percentdialog.ui")
+    explicit OfaAutoFmtPrcntSet(weld::Window* pParent)
+        : GenericDialogController(pParent, "cui/ui/percentdialog.ui", "PercentDialog")
+        , m_xPrcntMF(m_xBuilder->weld_metric_spin_button("margin", FUNIT_PERCENT))
     {
-        get(m_pPrcntMF, "margin");
     }
-    virtual ~OfaAutoFmtPrcntSet() override { disposeOnce(); }
-    virtual void dispose() override { m_pPrcntMF.clear(); ModalDialog::dispose(); }
 
-    MetricField& GetPrcntFld()
+    weld::MetricSpinButton& GetPrcntFld()
     {
-        return *m_pPrcntMF;
+        return *m_xPrcntMF;
     }
 };
 
@@ -445,12 +443,12 @@ OfaSwAutoFmtOptionsPage::OfaSwAutoFmtOptionsPage( vcl::Window* pParent,
     m_pCheckLB->SetSelectHdl(LINK(this, OfaSwAutoFmtOptionsPage, SelectHdl));
     m_pCheckLB->SetDoubleClickHdl(LINK(this, OfaSwAutoFmtOptionsPage, DoubleClickEditHdl));
 
-    static long aStaticTabs[]=
+    static long const aStaticTabs[]=
     {
-        3, 0, 20, 40
+        0, 20, 40
     };
 
-    m_pCheckLB->SvSimpleTable::SetTabs(aStaticTabs);
+    m_pCheckLB->SvSimpleTable::SetTabs(SAL_N_ELEMENTS(aStaticTabs), aStaticTabs);
     OUString sHeader = get<vcl::Window>("m")->GetText() + "\t"
                      + get<vcl::Window>("t")->GetText() + "\t";
     m_pCheckLB->InsertHeaderEntry(sHeader, HEADERBAR_APPEND,
@@ -504,10 +502,10 @@ void OfaSwAutoFmtOptionsPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaSwAutoFmtOptionsPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaSwAutoFmtOptionsPage::Create( TabPageParent pParent,
                                                     const SfxItemSet* rAttrSet)
 {
-    return VclPtr<OfaSwAutoFmtOptionsPage>::Create(pParent, *rAttrSet);
+    return VclPtr<OfaSwAutoFmtOptionsPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 bool OfaSwAutoFmtOptionsPage::FillItemSet( SfxItemSet*  )
@@ -515,42 +513,42 @@ bool OfaSwAutoFmtOptionsPage::FillItemSet( SfxItemSet*  )
     bool bModified = false;
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
     SvxSwAutoFormatFlags *pOpt = &pAutoCorrect->GetSwFlags();
-    long nFlags = pAutoCorrect->GetFlags();
+    ACFlags nFlags = pAutoCorrect->GetFlags();
 
     bool bCheck = m_pCheckLB->IsChecked(USE_REPLACE_TABLE);
     bModified |= pOpt->bAutoCorrect != bCheck;
     pOpt->bAutoCorrect = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(Autocorrect,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::Autocorrect,
                         m_pCheckLB->IsChecked(USE_REPLACE_TABLE, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(CORR_UPPER);
     bModified |= pOpt->bCapitalStartWord != bCheck;
     pOpt->bCapitalStartWord = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(CapitalStartWord,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CapitalStartWord,
                         m_pCheckLB->IsChecked(CORR_UPPER, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(BEGIN_UPPER);
     bModified |= pOpt->bCapitalStartSentence != bCheck;
     pOpt->bCapitalStartSentence = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(CapitalStartSentence,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CapitalStartSentence,
                         m_pCheckLB->IsChecked(BEGIN_UPPER, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(BOLD_UNDERLINE);
     bModified |= pOpt->bChgWeightUnderl != bCheck;
     pOpt->bChgWeightUnderl = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(ChgWeightUnderl,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgWeightUnderl,
                         m_pCheckLB->IsChecked(BOLD_UNDERLINE, CBCOL_SECOND));
 
-    pAutoCorrect->SetAutoCorrFlag(IgnoreDoubleSpace,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::IgnoreDoubleSpace,
                         m_pCheckLB->IsChecked(IGNORE_DBLSPACE, CBCOL_SECOND));
 
-    pAutoCorrect->SetAutoCorrFlag(CorrectCapsLock,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::CorrectCapsLock,
                         m_pCheckLB->IsChecked(CORRECT_CAPS_LOCK, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(DETECT_URL);
     bModified |= pOpt->bSetINetAttr != bCheck;
     pOpt->bSetINetAttr = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(SetINetAttr,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::SetINetAttr,
                         m_pCheckLB->IsChecked(DETECT_URL, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(DEL_EMPTY_NODE);
@@ -599,7 +597,7 @@ bool OfaSwAutoFmtOptionsPage::FillItemSet( SfxItemSet*  )
     bCheck = m_pCheckLB->IsChecked(REPLACE_DASHES);
     bModified |= pOpt->bChgToEnEmDash != bCheck;
     pOpt->bChgToEnEmDash = bCheck;
-    pAutoCorrect->SetAutoCorrFlag(ChgToEnEmDash,
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgToEnEmDash,
                         m_pCheckLB->IsChecked(REPLACE_DASHES, CBCOL_SECOND));
 
     bCheck = m_pCheckLB->IsChecked(DEL_SPACES_AT_STT_END);
@@ -635,7 +633,7 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
     SvxSwAutoFormatFlags *pOpt = &pAutoCorrect->GetSwFlags();
-    const long nFlags = pAutoCorrect->GetFlags();
+    const ACFlags nFlags = pAutoCorrect->GetFlags();
 
     m_pCheckLB->SetUpdateMode(false);
     m_pCheckLB->Clear();
@@ -663,19 +661,19 @@ void OfaSwAutoFmtOptionsPage::Reset( const SfxItemSet* )
     m_pCheckLB->GetModel()->Insert(CreateEntry(sRightMargin,       CBCOL_FIRST ));
 
     m_pCheckLB->CheckEntryPos( USE_REPLACE_TABLE,  CBCOL_FIRST,    pOpt->bAutoCorrect );
-    m_pCheckLB->CheckEntryPos( USE_REPLACE_TABLE,  CBCOL_SECOND,   0 != (nFlags & Autocorrect));
+    m_pCheckLB->CheckEntryPos( USE_REPLACE_TABLE,  CBCOL_SECOND,   bool(nFlags & ACFlags::Autocorrect));
     m_pCheckLB->CheckEntryPos( CORR_UPPER,         CBCOL_FIRST,    pOpt->bCapitalStartWord );
-    m_pCheckLB->CheckEntryPos( CORR_UPPER,         CBCOL_SECOND,   0 != (nFlags & CapitalStartWord) );
+    m_pCheckLB->CheckEntryPos( CORR_UPPER,         CBCOL_SECOND,   bool(nFlags & ACFlags::CapitalStartWord) );
     m_pCheckLB->CheckEntryPos( BEGIN_UPPER,        CBCOL_FIRST,    pOpt->bCapitalStartSentence );
-    m_pCheckLB->CheckEntryPos( BEGIN_UPPER,        CBCOL_SECOND,   0 != (nFlags & CapitalStartSentence) );
+    m_pCheckLB->CheckEntryPos( BEGIN_UPPER,        CBCOL_SECOND,   bool(nFlags & ACFlags::CapitalStartSentence) );
     m_pCheckLB->CheckEntryPos( BOLD_UNDERLINE,     CBCOL_FIRST,    pOpt->bChgWeightUnderl );
-    m_pCheckLB->CheckEntryPos( BOLD_UNDERLINE,     CBCOL_SECOND,   0 != (nFlags & ChgWeightUnderl) );
-    m_pCheckLB->CheckEntryPos( IGNORE_DBLSPACE,    CBCOL_SECOND,   0 != (nFlags & IgnoreDoubleSpace) );
-    m_pCheckLB->CheckEntryPos( CORRECT_CAPS_LOCK,  CBCOL_SECOND,   0 != (nFlags & CorrectCapsLock) );
+    m_pCheckLB->CheckEntryPos( BOLD_UNDERLINE,     CBCOL_SECOND,   bool(nFlags & ACFlags::ChgWeightUnderl) );
+    m_pCheckLB->CheckEntryPos( IGNORE_DBLSPACE,    CBCOL_SECOND,   bool(nFlags & ACFlags::IgnoreDoubleSpace) );
+    m_pCheckLB->CheckEntryPos( CORRECT_CAPS_LOCK,  CBCOL_SECOND,   bool(nFlags & ACFlags::CorrectCapsLock) );
     m_pCheckLB->CheckEntryPos( DETECT_URL,         CBCOL_FIRST,    pOpt->bSetINetAttr );
-    m_pCheckLB->CheckEntryPos( DETECT_URL,         CBCOL_SECOND,   0 != (nFlags & SetINetAttr) );
+    m_pCheckLB->CheckEntryPos( DETECT_URL,         CBCOL_SECOND,   bool(nFlags & ACFlags::SetINetAttr) );
     m_pCheckLB->CheckEntryPos( REPLACE_DASHES,     CBCOL_FIRST,    pOpt->bChgToEnEmDash );
-    m_pCheckLB->CheckEntryPos( REPLACE_DASHES,     CBCOL_SECOND,   0 != (nFlags & ChgToEnEmDash) );
+    m_pCheckLB->CheckEntryPos( REPLACE_DASHES,     CBCOL_SECOND,   bool(nFlags & ACFlags::ChgToEnEmDash) );
     m_pCheckLB->CheckEntryPos( DEL_SPACES_AT_STT_END,      CBCOL_FIRST,    pOpt->bAFormatDelSpacesAtSttEnd );
     m_pCheckLB->CheckEntryPos( DEL_SPACES_AT_STT_END,      CBCOL_SECOND,   pOpt->bAFormatByInpDelSpacesAtSttEnd );
     m_pCheckLB->CheckEntryPos( DEL_SPACES_BETWEEN_LINES,   CBCOL_FIRST,    pOpt->bAFormatDelSpacesBetweenLines );
@@ -727,15 +725,15 @@ IMPL_LINK_NOARG(OfaSwAutoFmtOptionsPage, EditHdl, Button*, void)
     if( nSelEntryPos == REPLACE_BULLETS ||
         nSelEntryPos == APPLY_NUMBERING)
     {
-        ScopedVclPtrInstance< SvxCharacterMap > pMapDlg(this, nullptr, false);
+        SvxCharacterMap aMapDlg(GetFrameWeld(), nullptr, false);
         ImpUserData* pUserData = static_cast<ImpUserData*>(m_pCheckLB->FirstSelected()->GetUserData());
-        pMapDlg->SetCharFont(*pUserData->pFont);
-        pMapDlg->SetChar( (*pUserData->pString)[0] );
-        if(RET_OK == pMapDlg->Execute())
+        aMapDlg.SetCharFont(*pUserData->pFont);
+        aMapDlg.SetChar( (*pUserData->pString)[0] );
+        if (RET_OK == aMapDlg.execute())
         {
-            vcl::Font aFont(pMapDlg->GetCharFont());
+            vcl::Font aFont(aMapDlg.GetCharFont());
             *pUserData->pFont = aFont;
-            sal_UCS4 aChar = pMapDlg->GetChar();
+            sal_UCS4 aChar = aMapDlg.GetChar();
             // using the UCS4 constructor
             OUString aOUStr( &aChar, 1 );
             *pUserData->pString = aOUStr;
@@ -744,11 +742,11 @@ IMPL_LINK_NOARG(OfaSwAutoFmtOptionsPage, EditHdl, Button*, void)
     else if( MERGE_SINGLE_LINE_PARA == nSelEntryPos )
     {
         // dialog for per cent settings
-        ScopedVclPtrInstance< OfaAutoFmtPrcntSet > aDlg(this);
-        aDlg->GetPrcntFld().SetValue(nPercent);
-        if(RET_OK == aDlg->Execute())
+        OfaAutoFmtPrcntSet aDlg(GetFrameWeld());
+        aDlg.GetPrcntFld().set_value(nPercent, FUNIT_PERCENT);
+        if (aDlg.run() == RET_OK)
         {
-            nPercent = static_cast<sal_uInt16>(aDlg->GetPrcntFld().GetValue());
+            nPercent = static_cast<sal_uInt16>(aDlg.GetPrcntFld().get_value(FUNIT_PERCENT));
             sMargin = " " +
                 unicode::formatPercent(nPercent, Application::GetSettings().GetUILanguageTag());
         }
@@ -886,8 +884,8 @@ OfaAutocorrReplacePage::OfaAutocorrReplacePage( vcl::Window* pParent,
     pCompareClass->loadDefaultCollator( aLanguageTag.getLocale(), 0 );
     pCharClass = new CharClass( aLanguageTag );
 
-    static long aTabs[] = { 2 /* Tab-Count */, 1, 61 };
-    m_pReplaceTLB->SetTabs( &aTabs[0] );
+    static long const aTabs[] = { 1, 61 };
+    m_pReplaceTLB->SetTabs( SAL_N_ELEMENTS(aTabs), aTabs );
 
     m_pReplaceTLB->SetStyle( m_pReplaceTLB->GetStyle()|WB_HSCROLL|WB_CLIPCHILDREN );
     m_pReplaceTLB->SetSelectHdl( LINK(this, OfaAutocorrReplacePage, SelectHdl) );
@@ -929,9 +927,9 @@ void OfaAutocorrReplacePage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaAutocorrReplacePage::Create( vcl::Window* pParent, const SfxItemSet* rSet)
+VclPtr<SfxTabPage> OfaAutocorrReplacePage::Create( TabPageParent pParent, const SfxItemSet* rSet)
 {
-    return VclPtr<OfaAutocorrReplacePage>::Create(pParent, *rSet);
+    return VclPtr<OfaAutocorrReplacePage>::Create(pParent.pParent, *rSet);
 }
 
 void OfaAutocorrReplacePage::ActivatePage( const SfxItemSet& )
@@ -1440,10 +1438,10 @@ void OfaAutocorrExceptPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaAutocorrExceptPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaAutocorrExceptPage::Create( TabPageParent pParent,
                                                   const SfxItemSet* rSet)
 {
-    return VclPtr<OfaAutocorrExceptPage>::Create(pParent, *rSet);
+    return VclPtr<OfaAutocorrExceptPage>::Create(pParent.pParent, *rSet);
 }
 
 void    OfaAutocorrExceptPage::ActivatePage( const SfxItemSet& )
@@ -1559,9 +1557,9 @@ bool OfaAutocorrExceptPage::FillItemSet( SfxItemSet*  )
         pAutoCorrect->SaveCplSttExceptList(eLang);
     }
     if(m_pAutoAbbrevCB->IsValueChangedFromSaved())
-        pAutoCorrect->SetAutoCorrFlag( SaveWordCplSttLst, m_pAutoAbbrevCB->IsChecked());
+        pAutoCorrect->SetAutoCorrFlag( ACFlags::SaveWordCplSttLst, m_pAutoAbbrevCB->IsChecked());
     if(m_pAutoCapsCB->IsValueChangedFromSaved())
-        pAutoCorrect->SetAutoCorrFlag( SaveWordWrdSttLst, m_pAutoCapsCB->IsChecked());
+        pAutoCorrect->SetAutoCorrFlag( ACFlags::SaveWordWrdSttLst, m_pAutoCapsCB->IsChecked());
     return false;
 }
 
@@ -1646,8 +1644,8 @@ void OfaAutocorrExceptPage::Reset( const SfxItemSet* )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
     RefillReplaceBoxes(true, eLang, eLang);
-    m_pAutoAbbrevCB->  Check(  pAutoCorrect->IsAutoCorrFlag( SaveWordCplSttLst ));
-    m_pAutoCapsCB->    Check(  pAutoCorrect->IsAutoCorrFlag( SaveWordWrdSttLst ));
+    m_pAutoAbbrevCB->  Check(  pAutoCorrect->IsAutoCorrFlag( ACFlags::SaveWordCplSttLst ));
+    m_pAutoCapsCB->    Check(  pAutoCorrect->IsAutoCorrFlag( ACFlags::SaveWordWrdSttLst ));
     m_pAutoAbbrevCB->SaveValue();
     m_pAutoCapsCB->SaveValue();
 }
@@ -1844,14 +1842,14 @@ OfaQuoteTabPage::OfaQuoteTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
 
     if ( bShowSWOptions )
     {
-        static long aStaticTabs[]=
+        static long const aStaticTabs[]=
         {
-            3, 0, 20, 40
+            0, 20, 40
         };
 
         m_pSwCheckLB->SetStyle(m_pSwCheckLB->GetStyle() | WB_HSCROLL| WB_VSCROLL);
 
-        m_pSwCheckLB->SvSimpleTable::SetTabs(aStaticTabs);
+        m_pSwCheckLB->SvSimpleTable::SetTabs(SAL_N_ELEMENTS(aStaticTabs), aStaticTabs);
         OUString sHeader = get<vcl::Window>("m")->GetText() + "\t" + get<vcl::Window>("t")->GetText() + "\t";
         m_pSwCheckLB->InsertHeaderEntry( sHeader, HEADERBAR_APPEND,
                         HeaderBarItemBits::CENTER | HeaderBarItemBits::VCENTER | HeaderBarItemBits::FIXEDPOS | HeaderBarItemBits::FIXED);
@@ -1895,23 +1893,23 @@ void OfaQuoteTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaQuoteTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaQuoteTabPage::Create( TabPageParent pParent,
                                             const SfxItemSet* rAttrSet)
 {
-    return VclPtr<OfaQuoteTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<OfaQuoteTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 bool OfaQuoteTabPage::FillItemSet( SfxItemSet*  )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
 
-    long nFlags = pAutoCorrect->GetFlags();
+    ACFlags nFlags = pAutoCorrect->GetFlags();
 
     if (m_pCheckLB->IsVisible())
     {
         sal_uLong nPos = 0;
-        pAutoCorrect->SetAutoCorrFlag(AddNonBrkSpace, m_pCheckLB->IsChecked(nPos++));
-        pAutoCorrect->SetAutoCorrFlag(ChgOrdinalNumber, m_pCheckLB->IsChecked(nPos++));
+        pAutoCorrect->SetAutoCorrFlag(ACFlags::AddNonBrkSpace, m_pCheckLB->IsChecked(nPos++));
+        pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgOrdinalNumber, m_pCheckLB->IsChecked(nPos++));
     }
 
     bool bModified = false;
@@ -1922,18 +1920,18 @@ bool OfaQuoteTabPage::FillItemSet( SfxItemSet*  )
         bool bCheck = m_pSwCheckLB->IsChecked(ADD_NONBRK_SPACE);
         bModified |= pOpt->bAddNonBrkSpace != bCheck;
         pOpt->bAddNonBrkSpace = bCheck;
-        pAutoCorrect->SetAutoCorrFlag(AddNonBrkSpace,
+        pAutoCorrect->SetAutoCorrFlag(ACFlags::AddNonBrkSpace,
                             m_pSwCheckLB->IsChecked(ADD_NONBRK_SPACE, CBCOL_SECOND));
 
         bCheck = m_pSwCheckLB->IsChecked(REPLACE_1ST);
         bModified |= pOpt->bChgOrdinalNumber != bCheck;
         pOpt->bChgOrdinalNumber = bCheck;
-        pAutoCorrect->SetAutoCorrFlag(ChgOrdinalNumber,
+        pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgOrdinalNumber,
                         m_pSwCheckLB->IsChecked(REPLACE_1ST, CBCOL_SECOND));
     }
 
-    pAutoCorrect->SetAutoCorrFlag(ChgQuotes, m_pDoubleTypoCB->IsChecked());
-    pAutoCorrect->SetAutoCorrFlag(ChgSglQuotes, m_pSingleTypoCB->IsChecked());
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgQuotes, m_pDoubleTypoCB->IsChecked());
+    pAutoCorrect->SetAutoCorrFlag(ACFlags::ChgSglQuotes, m_pSingleTypoCB->IsChecked());
     bool bReturn = nFlags != pAutoCorrect->GetFlags();
     if(cStartQuote != pAutoCorrect->GetStartDoubleQuote())
     {
@@ -1977,7 +1975,7 @@ void OfaQuoteTabPage::ActivatePage( const SfxItemSet& )
 void OfaQuoteTabPage::Reset( const SfxItemSet* )
 {
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
-    const long nFlags = pAutoCorrect->GetFlags();
+    const ACFlags nFlags = pAutoCorrect->GetFlags();
 
     // Initialize the Sw options
     if (m_pSwCheckLB->IsVisible())
@@ -1991,9 +1989,9 @@ void OfaQuoteTabPage::Reset( const SfxItemSet* )
         m_pSwCheckLB->GetModel()->Insert(CreateEntry(sOrdinal, CBCOL_BOTH ));
 
         m_pSwCheckLB->CheckEntryPos( ADD_NONBRK_SPACE, CBCOL_FIRST,    pOpt->bAddNonBrkSpace );
-        m_pSwCheckLB->CheckEntryPos( ADD_NONBRK_SPACE, CBCOL_SECOND,   0 != (nFlags & AddNonBrkSpace) );
+        m_pSwCheckLB->CheckEntryPos( ADD_NONBRK_SPACE, CBCOL_SECOND,   bool(nFlags & ACFlags::AddNonBrkSpace) );
         m_pSwCheckLB->CheckEntryPos( REPLACE_1ST, CBCOL_FIRST,    pOpt->bChgOrdinalNumber );
-        m_pSwCheckLB->CheckEntryPos( REPLACE_1ST, CBCOL_SECOND,   0 != (nFlags & ChgOrdinalNumber) );
+        m_pSwCheckLB->CheckEntryPos( REPLACE_1ST, CBCOL_SECOND,   bool(nFlags & ACFlags::ChgOrdinalNumber) );
 
         m_pSwCheckLB->SetUpdateMode( true );
     }
@@ -2008,15 +2006,15 @@ void OfaQuoteTabPage::Reset( const SfxItemSet* )
         m_pCheckLB->InsertEntry( sOrdinal );
 
         sal_uLong nPos = 0;
-        m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & AddNonBrkSpace) );
-        m_pCheckLB->CheckEntryPos( nPos++, 0 != (nFlags & ChgOrdinalNumber) );
+        m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::AddNonBrkSpace) );
+        m_pCheckLB->CheckEntryPos( nPos++, bool(nFlags & ACFlags::ChgOrdinalNumber) );
 
         m_pCheckLB->SetUpdateMode(true);
     }
 
     // Initialize the quote stuffs
-    m_pDoubleTypoCB->Check(0 != (nFlags & ChgQuotes));
-    m_pSingleTypoCB->Check(0 != (nFlags & ChgSglQuotes));
+    m_pDoubleTypoCB->Check(bool(nFlags & ACFlags::ChgQuotes));
+    m_pSingleTypoCB->Check(bool(nFlags & ACFlags::ChgSglQuotes));
     m_pDoubleTypoCB->SaveValue();
     m_pSingleTypoCB->SaveValue();
 
@@ -2047,10 +2045,10 @@ IMPL_LINK( OfaQuoteTabPage, QuoteHdl, Button*, pBtn, void )
     else if (pBtn == m_pDblEndQuotePB)
         nMode = DBL_END;
     // start character selection dialog
-    ScopedVclPtrInstance< SvxCharacterMap > pMap( this, nullptr, false );
-    pMap->SetCharFont( OutputDevice::GetDefaultFont(DefaultFontType::LATIN_TEXT,
+    SvxCharacterMap aMap(GetFrameWeld(), nullptr, false);
+    aMap.SetCharFont( OutputDevice::GetDefaultFont(DefaultFontType::LATIN_TEXT,
                         LANGUAGE_ENGLISH_US, GetDefaultFontFlags::OnlyOne ));
-    pMap->SetText(nMode < SGL_END ? CuiResId(RID_SVXSTR_STARTQUOTE)  : CuiResId(RID_SVXSTR_ENDQUOTE) );
+    aMap.set_title(nMode < SGL_END ? CuiResId(RID_SVXSTR_STARTQUOTE)  : CuiResId(RID_SVXSTR_ENDQUOTE));
     sal_UCS4 cDlg;
     SvxAutoCorrect* pAutoCorrect = SvxAutoCorrCfg::Get().GetAutoCorrect();
     LanguageType eLang = Application::GetSettings().GetLanguageTag().getLanguageType();
@@ -2082,11 +2080,11 @@ IMPL_LINK( OfaQuoteTabPage, QuoteHdl, Button*, pBtn, void )
             break;
 
     }
-    pMap->SetChar(  cDlg );
-    pMap->DisableFontSelection();
-    if(pMap->Execute() == RET_OK)
+    aMap.SetChar(  cDlg );
+    aMap.DisableFontSelection();
+    if (aMap.execute() == RET_OK)
     {
-        sal_UCS4 cNewChar = pMap->GetChar();
+        sal_UCS4 cNewChar = aMap.GetChar();
         switch( nMode )
         {
             case SGL_START:
@@ -2231,10 +2229,10 @@ void OfaAutoCompleteTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaAutoCompleteTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> OfaAutoCompleteTabPage::Create( TabPageParent pParent,
                                                    const SfxItemSet* rSet)
 {
-    return VclPtr<OfaAutoCompleteTabPage>::Create( pParent, *rSet );
+    return VclPtr<OfaAutoCompleteTabPage>::Create( pParent.pParent, *rSet );
 }
 
 bool OfaAutoCompleteTabPage::FillItemSet( SfxItemSet* )
@@ -2483,9 +2481,9 @@ void OfaSmartTagOptionsTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> OfaSmartTagOptionsTabPage::Create( vcl::Window* pParent, const SfxItemSet* rSet)
+VclPtr<SfxTabPage> OfaSmartTagOptionsTabPage::Create( TabPageParent pParent, const SfxItemSet* rSet)
 {
-    return VclPtr<OfaSmartTagOptionsTabPage>::Create( pParent, *rSet );
+    return VclPtr<OfaSmartTagOptionsTabPage>::Create( pParent.pParent, *rSet );
 }
 
 /** This struct is used to associate list box entries with smart tag data

@@ -22,7 +22,7 @@
 #include <editeng/editeng.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/editdata.hxx>
-#include <editeng/eerdll.hxx>
+
 #include <editeng/lrspitem.hxx>
 #include <editeng/fhgtitem.hxx>
 #include <svl/style.hxx>
@@ -414,19 +414,14 @@ OutputDevice* Outliner::GetRefDevice() const
     return pEditEngine->GetRefDevice();
 }
 
-sal_uLong Outliner::GetTextHeight( sal_Int32 nParagraph ) const
+tools::Rectangle Outliner::GetParaBounds( sal_Int32 nParagraph ) const
 {
-    return pEditEngine->GetTextHeight(nParagraph );
+    return pEditEngine->GetParaBounds(nParagraph );
 }
 
 Point Outliner::GetDocPos( const Point& rPaperPos ) const
 {
     return pEditEngine->GetDocPos( rPaperPos );
-}
-
-Point Outliner::GetDocPosTopLeft( sal_Int32 nParagraph )
-{
-    return pEditEngine->GetDocPosTopLeft( nParagraph );
 }
 
 bool Outliner::IsTextPos( const Point& rPaperPos, sal_uInt16 nBorder )

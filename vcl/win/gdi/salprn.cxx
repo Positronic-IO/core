@@ -348,7 +348,7 @@ static bool ImplTestSalJobSetup( WinSalInfoPrinter const * pPrinter,
 }
 
 static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSetup* pSetupData,
-                                   bool bIn, WinSalFrame* pVisibleDlgParent )
+                                   bool bIn, weld::Window* pVisibleDlgParent )
 {
     HANDLE hPrn;
     LPWSTR pPrinterNameW = const_cast<LPWSTR>(o3tl::toW(pPrinter->maDeviceName.getStr()));
@@ -392,7 +392,7 @@ static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
     // check if the dialog should be shown
     if ( pVisibleDlgParent )
     {
-        hWnd = pVisibleDlgParent->mhWnd;
+        hWnd = pVisibleDlgParent->get_system_data().hWnd;
         nMode |= DM_IN_PROMPT;
     }
 
@@ -1164,9 +1164,9 @@ void WinSalInfoPrinter::ReleaseGraphics( SalGraphics* )
     mbGraphics = FALSE;
 }
 
-bool WinSalInfoPrinter::Setup( SalFrame* pFrame, ImplJobSetup* pSetupData )
+bool WinSalInfoPrinter::Setup(weld::Window* pFrame, ImplJobSetup* pSetupData)
 {
-    if ( ImplUpdateSalJobSetup( this, pSetupData, true, static_cast<WinSalFrame*>(pFrame) ) )
+    if ( ImplUpdateSalJobSetup(this, pSetupData, true, pFrame))
     {
         ImplDevModeToJobSetup( this, pSetupData, JobSetFlags::ALL );
         return ImplUpdateSalPrnIC( this, pSetupData );
@@ -1264,18 +1264,18 @@ sal_uInt32 WinSalInfoPrinter::GetCapabilities( const ImplJobSetup* pSetupData, P
 
 void WinSalInfoPrinter::GetPageInfo( const ImplJobSetup*,
                                   long& rOutWidth, long& rOutHeight,
-                                  long& rPageOffX, long& rPageOffY,
-                                  long& rPageWidth, long& rPageHeight )
+                                  Point& rPageOffset,
+                                  Size& rPaperSize )
 {
     HDC hDC = mhDC;
 
     rOutWidth   = GetDeviceCaps( hDC, HORZRES );
     rOutHeight  = GetDeviceCaps( hDC, VERTRES );
 
-    rPageOffX   = GetDeviceCaps( hDC, PHYSICALOFFSETX );
-    rPageOffY   = GetDeviceCaps( hDC, PHYSICALOFFSETY );
-    rPageWidth  = GetDeviceCaps( hDC, PHYSICALWIDTH );
-    rPageHeight = GetDeviceCaps( hDC, PHYSICALHEIGHT );
+    rPageOffset.setX( GetDeviceCaps( hDC, PHYSICALOFFSETX ) );
+    rPageOffset.setY( GetDeviceCaps( hDC, PHYSICALOFFSETY ) );
+    rPaperSize.setWidth( GetDeviceCaps( hDC, PHYSICALWIDTH ) );
+    rPaperSize.setHeight( GetDeviceCaps( hDC, PHYSICALHEIGHT ) );
 }
 
 
@@ -1297,6 +1297,8 @@ BOOL CALLBACK SalPrintAbortProc( HDC hPrnDC, int /* nError */ )
     WinSalPrinter* pPrinter;
     bool        bWhile = true;
 
+    // Ensure we handle the mutex which will be released in WinSalInstance::DoYield
+    SolarMutexGuard aSolarMutexGuard;
     do
     {
         // process messages

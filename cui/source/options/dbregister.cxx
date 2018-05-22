@@ -29,7 +29,6 @@
 #include <vcl/field.hxx>
 #include <vcl/weld.hxx>
 #include <svl/eitem.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/uno/Exception.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/ui/dialogs/XFilePicker.hpp>
@@ -101,8 +100,6 @@ DbRegistrationOptionsPage::DbRegistrationOptionsPage( vcl::Window* pParent, cons
 
     SfxTabPage( pParent, "DbRegisterPage", "cui/ui/dbregisterpage.ui", &rSet ),
 
-    m_aTypeText       ( CuiResId( RID_SVXSTR_TYPE ) ),
-    m_aPathText       ( CuiResId( RID_SVXSTR_PATH ) ),
     m_pPathBox        ( nullptr ),
     m_pCurEntry     ( nullptr ),
     m_nOldCount     ( 0 ),
@@ -133,15 +130,15 @@ DbRegistrationOptionsPage::DbRegistrationOptionsPage( vcl::Window* pParent, cons
     rBar.SetEndDragHdl( LINK( this, DbRegistrationOptionsPage, HeaderEndDrag_Impl ) );
     Size aSz;
     aSz.setWidth( TAB_WIDTH1 );
-    rBar.InsertItem( ITEMID_TYPE, m_aTypeText,
+    rBar.InsertItem( ITEMID_TYPE, CuiResId( RID_SVXSTR_TYPE ),
                             LogicToPixel( aSz, MapMode( MapUnit::MapAppFont ) ).Width(),
                             HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER | HeaderBarItemBits::CLICKABLE | HeaderBarItemBits::UPARROW );
     aSz.setWidth( TAB_WIDTH2 );
-    rBar.InsertItem( ITEMID_PATH, m_aPathText,
+    rBar.InsertItem( ITEMID_PATH, CuiResId( RID_SVXSTR_PATH ),
                             LogicToPixel( aSz, MapMode( MapUnit::MapAppFont ) ).Width(),
                             HeaderBarItemBits::LEFT | HeaderBarItemBits::VCENTER );
 
-    static long aTabs[] = {3, 0, TAB_WIDTH1, TAB_WIDTH1 + TAB_WIDTH2 };
+    static long aTabs[] = {0, TAB_WIDTH1, TAB_WIDTH1 + TAB_WIDTH2 };
     Size aHeadSize = rBar.GetSizePixel();
 
     m_pPathBox->SetStyle( m_pPathBox->GetStyle()|nBits );
@@ -150,7 +147,7 @@ DbRegistrationOptionsPage::DbRegistrationOptionsPage( vcl::Window* pParent, cons
     m_pPathBox->SetSelectionMode( SelectionMode::Single );
     m_pPathBox->SetPosSizePixel( Point( 0, aHeadSize.Height() ),
                                Size( aBoxSize.Width(), aBoxSize.Height() - aHeadSize.Height() ) );
-    m_pPathBox->SvSimpleTable::SetTabs( aTabs );
+    m_pPathBox->SvSimpleTable::SetTabs( SAL_N_ELEMENTS(aTabs), aTabs );
     m_pPathBox->SetHighlightRange();
 
     m_pPathBox->SetHelpId( HID_DBPATH_CTL_PATH );
@@ -178,10 +175,10 @@ void DbRegistrationOptionsPage::dispose()
 }
 
 
-VclPtr<SfxTabPage> DbRegistrationOptionsPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> DbRegistrationOptionsPage::Create( TabPageParent pParent,
                                     const SfxItemSet* rAttrSet )
 {
-    return VclPtr<DbRegistrationOptionsPage>::Create( pParent, *rAttrSet );
+    return VclPtr<DbRegistrationOptionsPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 

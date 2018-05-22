@@ -22,8 +22,6 @@
 
 #include <gtk/gtk.h>
 
-#include <comphelper/processfactory.hxx>
-
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/document/XExporter.hpp>
@@ -939,7 +937,7 @@ GtkPrintDialog::impl_readFromSettings()
         bChanged = true;
         m_xWrapper->print_settings_set_collate(pSettings, bCollate);
     }
-    // TODO: wth was this var. meant for?
+    // TODO: what was this variable meant for?
     (void) bChanged;
 
     m_xWrapper->print_unix_dialog_set_settings(GTK_PRINT_UNIX_DIALOG(m_pDialog), pSettings);

@@ -476,12 +476,16 @@ struct OptionsGroupInfo
 };
 
 #define INI_LIST() \
+    m_pParent           ( pParent ),\
     pCurrentPageEntry   ( nullptr ),\
     sTitle              ( GetText() ),\
     sNotLoadedError     (       CuiResId( RID_SVXSTR_LOAD_ERROR ) ),\
     bForgetSelection    ( false ),\
     bIsFromExtensionManager( false ), \
-    bIsForSetDocumentLanguage( false )
+    bIsForSetDocumentLanguage( false ), \
+    bNeedsRestart ( false ), \
+    eRestartReason( svtools::RESTART_REASON_NONE )
+
 
 void OfaTreeOptionsDialog::InitWidgets()
 {
@@ -595,6 +599,7 @@ void OfaTreeOptionsDialog::dispose()
         pEntry = pTreeLB->Next(pEntry);
     }
     deleteGroupNames();
+    m_pParent.clear();
     pOkPB.clear();
     pBackPB.clear();
     pTreeLB.clear();
@@ -702,6 +707,13 @@ IMPL_LINK_NOARG(OfaTreeOptionsDialog, OKHdl_Impl, Button*, void)
         pEntry = pTreeLB->Next(pEntry);
     }
     EndDialog(RET_OK);
+
+    if ( bNeedsRestart )
+    {
+        SolarMutexGuard aGuard;
+        ::svtools::executeRestartDialog(comphelper::getProcessComponentContext(),
+                                        m_pParent->GetFrameWeld(), eRestartReason);
+    }
 }
 
 // an opened group shall be completely visible
@@ -1021,7 +1033,7 @@ void OfaTreeOptionsDialog::SelectHdl_Impl()
         pPageInfo->m_pPage.disposeAndReset( ::CreateGeneralTabPage(pPageInfo->m_nPageId, pTabBox, *pGroupInfo->m_pInItemSet ) );
 
         if(!pPageInfo->m_pPage && pGroupInfo->m_pModule)
-            pPageInfo->m_pPage.disposeAndReset( pGroupInfo->m_pModule->CreateTabPage(pPageInfo->m_nPageId, pTabBox, *pGroupInfo->m_pInItemSet) );
+            pPageInfo->m_pPage.disposeAndReset( pGroupInfo->m_pModule->CreateTabPage(pPageInfo->m_nPageId, TabPageParent(pTabBox), *pGroupInfo->m_pInItemSet) );
 
         DBG_ASSERT( pPageInfo->m_pPage, "tabpage could not created");
         if ( pPageInfo->m_pPage )
@@ -2035,6 +2047,12 @@ void  OfaTreeOptionsDialog::InsertNodes( const VectorOfNodes& rNodeList )
             }
         }
     }
+}
+
+void OfaTreeOptionsDialog::SetNeedsRestart( svtools::RestartReason eReason)
+{
+    bNeedsRestart = true;
+    eRestartReason = eReason;
 }
 
 short OfaTreeOptionsDialog::Execute()

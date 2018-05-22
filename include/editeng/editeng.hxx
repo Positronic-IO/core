@@ -41,6 +41,7 @@
 #include <o3tl/typed_flags_set.hxx>
 #include <svl/languageoptions.hxx>
 #include <vcl/errcode.hxx>
+#include <boost/optional.hpp>
 #include <functional>
 
 namespace com { namespace sun { namespace star {
@@ -286,6 +287,7 @@ public:
     void            GetLineBoundaries( /*out*/sal_Int32& rStart, /*out*/sal_Int32& rEnd, sal_Int32 nParagraph, sal_Int32 nLine ) const;
     sal_Int32       GetLineNumberAtIndex( sal_Int32 nPara, sal_Int32 nIndex ) const;
     sal_uInt32      GetLineHeight( sal_Int32 nParagraph );
+    tools::Rectangle GetParaBounds( sal_Int32 nPara );
     ParagraphInfos  GetParagraphInfos( sal_Int32 nPara );
     sal_Int32       FindParagraph( long nDocPosY );
     EPosition       FindDocPosition( const Point& rDocPos ) const;
@@ -298,10 +300,10 @@ public:
     void            Clear();
     void            SetText( const OUString& rStr );
 
-    EditTextObject* CreateTextObject();
-    EditTextObject* GetEmptyTextObject() const;
-    EditTextObject* CreateTextObject( sal_Int32 nPara, sal_Int32 nParas = 1 );
-    EditTextObject* CreateTextObject( const ESelection& rESelection );
+    std::unique_ptr<EditTextObject> CreateTextObject();
+    std::unique_ptr<EditTextObject> GetEmptyTextObject() const;
+    std::unique_ptr<EditTextObject> CreateTextObject( sal_Int32 nPara, sal_Int32 nParas = 1 );
+    std::unique_ptr<EditTextObject> CreateTextObject( const ESelection& rESelection );
     void            SetText( const EditTextObject& rTextObject );
 
     void            RemoveParagraph(sal_Int32 nPara);
@@ -507,7 +509,7 @@ public:
     virtual OUString  GetUndoComment( sal_uInt16 nUndoId ) const;
     virtual bool    SpellNextDocument();
     virtual void    FieldClicked( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos );
-    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rTxtColor, Color*& rFldColor );
+    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rTxtColor, boost::optional<Color>& rFldColor );
 
     // override this if access to bullet information needs to be provided
     virtual const SvxNumberFormat * GetNumberFormat( sal_Int32 nPara ) const;
@@ -623,7 +625,6 @@ public:
 
     // tdf#115639 compatibility flag
     void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
-    bool IsHoriAlignIgnoreTrailingWhitespace() const;
 };
 
 #endif // INCLUDED_EDITENG_EDITENG_HXX

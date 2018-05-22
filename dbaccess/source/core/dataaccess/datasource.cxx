@@ -29,6 +29,7 @@
 #include <OAuthenticationContinuation.hxx>
 
 #include <hsqlimport.hxx>
+#include <migrwarndlg.hxx>
 
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -52,7 +53,6 @@
 #include <comphelper/guarding.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/interaction.hxx>
-#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
@@ -73,6 +73,8 @@
 #include <algorithm>
 #include <iterator>
 #include <set>
+
+#include <config_firebird.h>
 
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::sdbcx;
@@ -580,6 +582,26 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
     Reference< XConnection > xReturn;
 
     Reference< XDriverManager > xManager;
+
+#if ENABLE_FIREBIRD_SDBC
+    bool bNeedMigration = false;
+    if(m_pImpl->m_sConnectURL == "sdbc:embedded:hsqldb")
+    {
+        OUString sMigrEnvVal;
+        osl_getEnvironment(OUString("DBACCESS_HSQL_MIGRATION").pData,
+            &sMigrEnvVal.pData);
+        if(!sMigrEnvVal.isEmpty())
+            bNeedMigration = true;
+        else
+        {
+            MigrationWarnDialog aWarnDlg{nullptr};
+            bNeedMigration = aWarnDlg.run() == RET_OK;
+        }
+        if (bNeedMigration)
+            m_pImpl->m_sConnectURL = "sdbc:embedded:firebird";
+    }
+#endif
+
     try {
         xManager.set( ConnectionPool::create( m_pImpl->m_aContext ), UNO_QUERY_THROW );
     } catch( const Exception& ) {  }
@@ -598,7 +620,6 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
     }
 
     const char* pExceptionMessageId = RID_STR_COULDNOTCONNECT_UNSPECIFIED;
-    bool bNeedMigration = false;
     if (xManager.is())
     {
         sal_Int32 nAdditionalArgs(0);
@@ -621,17 +642,6 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
         Reference< XDriver > xDriver;
         try
         {
-            // check if migration is needed
-            OUString sMigrEnvValue;
-            osl_getEnvironment(OUString("DBACCESS_HSQL_MIGRATION").pData,
-                    &sMigrEnvValue.pData);
-            if( m_pImpl->m_sConnectURL == "sdbc:embedded:hsqldb" &&
-                    !sMigrEnvValue.isEmpty() )
-            {
-                // TODO target could be anything else
-                m_pImpl->m_sConnectURL = "sdbc:embedded:firebird";
-                bNeedMigration = true;
-            }
 
             // choose driver
             Reference< XDriverAccess > xAccessDrivers( xManager, UNO_QUERY );
@@ -703,6 +713,7 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
         throwGenericSQLException( sMessage, static_cast< XDataSource* >( this ), makeAny( aContext ) );
     }
 
+#if ENABLE_FIREBIRD_SDBC
     if( bNeedMigration )
     {
         Reference< css::document::XDocumentSubStorageSupplier> xDocSup(
@@ -711,6 +722,7 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
                 xDocSup->getDocumentSubStorage("database",ElementModes::READWRITE) );
         importer.importHsqlDatabase();
     }
+#endif
 
     return xReturn;
 }
@@ -881,7 +893,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -988,7 +1000,7 @@ void ODatabaseSource::getFastPropertyValue( Any& rValue, sal_Int32 nHandle ) con
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
             break;
@@ -1095,7 +1107,7 @@ Reference< XConnection > ODatabaseSource::connectWithCompletion( const Reference
         }
         catch(Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
         if (!pAuthenticate->wasSelected())
@@ -1252,7 +1264,7 @@ void SAL_CALL ODatabaseSource::flush(  )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

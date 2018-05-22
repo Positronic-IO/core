@@ -254,7 +254,7 @@ sal_Int32 SAL_CALL SmGraphicAccessible::getForeground()
 
     if (!pWin)
         throw RuntimeException();
-    return static_cast<sal_Int32>(pWin->GetTextColor().GetColor());
+    return static_cast<sal_Int32>(pWin->GetTextColor());
 }
 
 sal_Int32 SAL_CALL SmGraphicAccessible::getBackground()
@@ -266,9 +266,9 @@ sal_Int32 SAL_CALL SmGraphicAccessible::getBackground()
     Wallpaper aWall( pWin->GetDisplayBackground() );
     Color nCol;
     if (aWall.IsBitmap() || aWall.IsGradient())
-        nCol = pWin->GetSettings().GetStyleSettings().GetWindowColor().GetColor();
+        nCol = pWin->GetSettings().GetStyleSettings().GetWindowColor();
     else
-        nCol = aWall.GetColor().GetColor();
+        nCol = aWall.GetColor();
     return static_cast<sal_Int32>(nCol);
 }
 
@@ -356,7 +356,7 @@ Reference< XAccessibleStateSet > SAL_CALL SmGraphicAccessible::getAccessibleStat
             pStateSet->AddState( AccessibleStateType::SHOWING );
         if (pWin->IsReallyVisible())
             pStateSet->AddState( AccessibleStateType::VISIBLE );
-        if (COL_TRANSPARENT != pWin->GetBackground().GetColor().GetColor())
+        if (COL_TRANSPARENT != pWin->GetBackground().GetColor())
             pStateSet->AddState( AccessibleStateType::OPAQUE );
     }
 
@@ -761,9 +761,9 @@ SmEditSource::~SmEditSource()
 {
 }
 
-SvxEditSource* SmEditSource::Clone() const
+std::unique_ptr<SvxEditSource> SmEditSource::Clone() const
 {
-    return new SmEditSource( *this );
+    return std::unique_ptr<SvxEditSource>(new SmEditSource( *this ));
 }
 
 SvxTextForwarder* SmEditSource::GetTextForwarder()
@@ -1023,7 +1023,7 @@ bool SmTextForwarder::IsValid() const
     return pEditEngine && pEditEngine->GetUpdateMode();
 }
 
-OUString SmTextForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rpTxtColor, Color*& rpFldColor )
+OUString SmTextForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor )
 {
     EditEngine *pEditEngine = rEditAcc.GetEditEngine();
     return pEditEngine ? pEditEngine->CalcFieldValue(rField, nPara, nPos, rpTxtColor, rpFldColor) : OUString();
@@ -1389,9 +1389,8 @@ void SmTextForwarder::CopyText(const SvxTextForwarder& rSource)
     EditEngine *pEditEngine = rEditAcc.GetEditEngine();
     if (pEditEngine && pSourceEditEngine )
     {
-        EditTextObject* pNewTextObject = pSourceEditEngine->CreateTextObject();
+        std::unique_ptr<EditTextObject> pNewTextObject = pSourceEditEngine->CreateTextObject();
         pEditEngine->SetText( *pNewTextObject );
-        delete pNewTextObject;
     }
 }
 
@@ -1677,7 +1676,7 @@ sal_Int32 SAL_CALL SmEditAccessible::getForeground()
 
     if (!pWin)
         throw RuntimeException();
-    return static_cast<sal_Int32>(pWin->GetTextColor().GetColor());
+    return static_cast<sal_Int32>(pWin->GetTextColor());
 }
 
 sal_Int32 SAL_CALL SmEditAccessible::getBackground()
@@ -1689,9 +1688,9 @@ sal_Int32 SAL_CALL SmEditAccessible::getBackground()
     Wallpaper aWall( pWin->GetDisplayBackground() );
     Color nCol;
     if (aWall.IsBitmap() || aWall.IsGradient())
-        nCol = pWin->GetSettings().GetStyleSettings().GetWindowColor().GetColor();
+        nCol = pWin->GetSettings().GetStyleSettings().GetWindowColor();
     else
-        nCol = aWall.GetColor().GetColor();
+        nCol = aWall.GetColor();
     return static_cast<sal_Int32>(nCol);
 }
 
@@ -1784,7 +1783,7 @@ uno::Reference< XAccessibleStateSet > SAL_CALL SmEditAccessible::getAccessibleSt
             pStateSet->AddState( AccessibleStateType::SHOWING );
         if (pWin->IsReallyVisible())
             pStateSet->AddState( AccessibleStateType::VISIBLE );
-        if (COL_TRANSPARENT != pWin->GetBackground().GetColor().GetColor())
+        if (COL_TRANSPARENT != pWin->GetBackground().GetColor())
             pStateSet->AddState( AccessibleStateType::OPAQUE );
     }
 

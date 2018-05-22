@@ -64,7 +64,6 @@
 #include <com/sun/star/inspection/XNumericControl.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 
-#include <vcl/msgbox.hxx>
 #include <vcl/waitobj.hxx>
 #include <tools/fldunit.hxx>
 #include <vcl/stdtext.hxx>
@@ -972,7 +971,7 @@ uno::Any SAL_CALL GeometryHandler::convertToPropertyValue(const OUString & Prope
         case PROPERTY_ID_CONTROLBACKGROUND:
             if ( !_rControlValue.hasValue() )
             {
-                aPropertyValue <<= static_cast<sal_Int32>(COL_TRANSPARENT);
+                aPropertyValue <<= COL_TRANSPARENT;
                 break;
             }
             SAL_FALLTHROUGH;

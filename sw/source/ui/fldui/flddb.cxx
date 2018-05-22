@@ -263,10 +263,10 @@ bool SwFieldDBPage::FillItemSet(SfxItemSet* )
     return false;
 }
 
-VclPtr<SfxTabPage> SwFieldDBPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwFieldDBPage::Create( TabPageParent pParent,
                                         const SfxItemSet *const pAttrSet )
 {
-    return VclPtr<SwFieldDBPage>::Create( pParent, pAttrSet );
+    return VclPtr<SwFieldDBPage>::Create( pParent.pParent, pAttrSet );
 }
 
 sal_uInt16 SwFieldDBPage::GetGroup()
@@ -477,7 +477,7 @@ IMPL_LINK( SwFieldDBPage, TreeSelectHdl, SvTreeListBox *, pBox, void )
 
 IMPL_LINK_NOARG(SwFieldDBPage, AddDBHdl, Button*, void)
 {
-    OUString sNewDB = SwDBManager::LoadAndRegisterDataSource(this);
+    OUString sNewDB = SwDBManager::LoadAndRegisterDataSource(GetFrameWeld());
     if(!sNewDB.isEmpty())
     {
         m_pDatabaseTLB->AddDataSource(sNewDB);

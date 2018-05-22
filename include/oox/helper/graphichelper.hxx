@@ -52,14 +52,6 @@ namespace oox {
 
 /** Provides helper functions for colors, device measurement conversion,
     graphics, and graphic objects handling.
-
-    All createGraphicObject() and importGraphicObject() functions create
-    persistent graphic objects internally and store them in an internal
-    container to prevent their early destruction. This makes it possible to use
-    the returned URL of the graphic object in any way (e.g. insert it into a
-    property map) without needing to store it immediately at an object that
-    resolves the graphic object from the passed URL and thus prevents it from
-    being destroyed.
  */
 class OOX_DLLPUBLIC GraphicHelper
 {
@@ -73,11 +65,11 @@ public:
     // System colors and predefined colors ------------------------------------
 
     /** Returns a system color specified by the passed XML token identifier. */
-    sal_Int32           getSystemColor( sal_Int32 nToken, sal_Int32 nDefaultRgb = API_RGB_TRANSPARENT ) const;
+    ::Color            getSystemColor( sal_Int32 nToken, ::Color nDefaultRgb = API_RGB_TRANSPARENT ) const;
     /** Derived classes may implement to resolve a scheme color from the passed XML token identifier. */
-    virtual sal_Int32   getSchemeColor( sal_Int32 nToken ) const;
+    virtual ::Color    getSchemeColor( sal_Int32 nToken ) const;
     /** Derived classes may implement to resolve a palette index to an RGB color. */
-    virtual sal_Int32   getPaletteColor( sal_Int32 nPaletteIdx ) const;
+    virtual ::Color    getPaletteColor( sal_Int32 nPaletteIdx ) const;
 
     virtual sal_Int32 getDefaultChartAreaFillStyle() const;
 
@@ -132,43 +124,21 @@ public:
     /** Imports graphics from the storage with the passed stream names. */
     void importEmbeddedGraphics(const std::vector<OUString>& rStreamNames) const;
 
-    /** Creates a persistent graphic object from the passed graphic.
-        @return  The URL of the created and internally cached graphic object. */
-    OUString     createGraphicObject(
-                            const css::uno::Reference< css::graphic::XGraphic >& rxGraphic ) const;
-
-    /** Creates a persistent graphic object from the passed input stream.
-        @return  The URL of the created and internally cached graphic object. */
-    OUString     importGraphicObject(
-                            const css::uno::Reference< css::io::XInputStream >& rxInStrm,
-                            const WmfExternal* pExtHeader ) const;
-
-    /** Creates a persistent graphic object from the passed binary memory block.
-        @return  The URL of the created and internally cached graphic object. */
-    OUString     importGraphicObject( const StreamDataSequence& rGraphicData ) const;
-
-    /** Imports a graphic object from the storage stream with the passed path and name.
-        @return  The URL of the created and internally cached graphic object. */
-    OUString     importEmbeddedGraphicObject( const OUString& rStreamName ) const;
-
     /** calculates the original size of a graphic which is necessary to be able to calculate cropping values
         @return The original Graphic size in 100thmm */
     css::awt::Size getOriginalSize( const css::uno::Reference< css::graphic::XGraphic >& rxGraphic ) const;
 
 
 private:
-    typedef ::std::deque< css::uno::Reference< css::graphic::XGraphicObject > > GraphicObjectDeque;
     typedef ::std::map< OUString, css::uno::Reference< css::graphic::XGraphic > > EmbeddedGraphicMap;
 
     css::uno::Reference< css::uno::XComponentContext > mxContext;
     css::uno::Reference< css::graphic::XGraphicProvider2 > mxGraphicProvider;
     css::uno::Reference< css::awt::XUnitConversion > mxUnitConversion;
     css::awt::DeviceInfo maDeviceInfo; ///< Current output device info.
-    ::std::map< sal_Int32, sal_Int32 >  maSystemPalette;  ///< Maps system colors (XML tokens) to RGB color values.
+    ::std::map< sal_Int32, ::Color >  maSystemPalette;  ///< Maps system colors (XML tokens) to RGB color values.
     StorageRef          mxStorage;                  ///< Storage containing embedded graphics.
-    mutable GraphicObjectDeque maGraphicObjects;    ///< Caches all created graphic objects to keep them alive.
     mutable EmbeddedGraphicMap maEmbeddedGraphics;  ///< Maps all embedded graphics by their storage path.
-    const OUString      maGraphicObjScheme;       ///< The URL scheme name for graphic objects.
     double              mfPixelPerHmmX;             ///< Number of screen pixels per 1/100 mm in X direction.
     double              mfPixelPerHmmY;             ///< Number of screen pixels per 1/100 mm in Y direction.
 };

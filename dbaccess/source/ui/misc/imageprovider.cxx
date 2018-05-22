@@ -19,7 +19,6 @@
 
 #include <imageprovider.hxx>
 #include <dbu_pageids.hxx>
-#include <core_resource.hxx>
 #include <stringconstants.hxx>
 #include <bitmaps.hlst>
 
@@ -69,7 +68,7 @@ namespace dbaui
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
 
@@ -91,7 +90,7 @@ namespace dbaui
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
     }
@@ -115,7 +114,7 @@ namespace dbaui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 

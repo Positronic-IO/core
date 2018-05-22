@@ -34,7 +34,7 @@
 #include <svx/svdview.hxx>
 #include <svx/svdundo.hxx>
 #include <svx/svdopath.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <svx/xflclit.hxx>
 #include <svx/xlnclit.hxx>
@@ -62,34 +62,42 @@ sdr::contact::ViewContact* SdrRectObj::CreateObjectSpecificViewContact()
 }
 
 
-SdrRectObj::SdrRectObj()
-:   mpXPoly(nullptr)
-{
-    bClosedObj=true;
-}
-
-SdrRectObj::SdrRectObj(const tools::Rectangle& rRect)
-:   SdrTextObj(rRect),
+SdrRectObj::SdrRectObj(SdrModel& rSdrModel)
+:   SdrTextObj(rSdrModel),
     mpXPoly(nullptr)
 {
     bClosedObj=true;
 }
 
-SdrRectObj::SdrRectObj(SdrObjKind eNewTextKind)
-:   SdrTextObj(eNewTextKind),
+SdrRectObj::SdrRectObj(
+    SdrModel& rSdrModel,
+    const tools::Rectangle& rRect)
+:   SdrTextObj(rSdrModel, rRect),
     mpXPoly(nullptr)
 {
-    DBG_ASSERT(eTextKind==OBJ_TEXT || eTextKind==OBJ_TEXTEXT ||
+    bClosedObj=true;
+}
+
+SdrRectObj::SdrRectObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewTextKind)
+:   SdrTextObj(rSdrModel, eNewTextKind),
+    mpXPoly(nullptr)
+{
+    DBG_ASSERT(eTextKind==OBJ_TEXT ||
                eTextKind==OBJ_OUTLINETEXT || eTextKind==OBJ_TITLETEXT,
                "SdrRectObj::SdrRectObj(SdrObjKind) can only be applied to text frames.");
     bClosedObj=true;
 }
 
-SdrRectObj::SdrRectObj(SdrObjKind eNewTextKind, const tools::Rectangle& rRect)
-:   SdrTextObj(eNewTextKind,rRect),
+SdrRectObj::SdrRectObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewTextKind,
+    const tools::Rectangle& rRect)
+:   SdrTextObj(rSdrModel, eNewTextKind, rRect),
     mpXPoly(nullptr)
 {
-    DBG_ASSERT(eTextKind==OBJ_TEXT || eTextKind==OBJ_TEXTEXT ||
+    DBG_ASSERT(eTextKind==OBJ_TEXT ||
                eTextKind==OBJ_OUTLINETEXT || eTextKind==OBJ_TITLETEXT,
                "SdrRectObj::SdrRectObj(SdrObjKind,...) can only be applied to text frames.");
     bClosedObj=true;
@@ -97,21 +105,6 @@ SdrRectObj::SdrRectObj(SdrObjKind eNewTextKind, const tools::Rectangle& rRect)
 
 SdrRectObj::~SdrRectObj()
 {
-}
-
-SdrRectObj& SdrRectObj::operator=(const SdrRectObj& rCopy)
-{
-    if ( this == &rCopy )
-        return *this;
-
-    SdrTextObj::operator=( rCopy );
-
-    if ( rCopy.mpXPoly )
-        mpXPoly.reset( new XPolygon( *rCopy.mpXPoly ) );
-    else
-        mpXPoly.reset();
-
-    return *this;
 }
 
 void SdrRectObj::SetXPolyDirty()
@@ -123,19 +116,19 @@ XPolygon SdrRectObj::ImpCalcXPoly(const tools::Rectangle& rRect1, long nRad1) co
 {
     XPolygon aXPoly(rRect1,nRad1,nRad1);
     const sal_uInt16 nPointCnt(aXPoly.GetPointCount());
-    XPolygon aNeuPoly(nPointCnt+1);
+    XPolygon aNewPoly(nPointCnt+1);
     sal_uInt16 nShift=nPointCnt-2;
     if (nRad1!=0) nShift=nPointCnt-5;
     sal_uInt16 j=nShift;
     for (sal_uInt16 i=1; i<nPointCnt; i++) {
-        aNeuPoly[i]=aXPoly[j];
-        aNeuPoly.SetFlags(i,aXPoly.GetFlags(j));
+        aNewPoly[i]=aXPoly[j];
+        aNewPoly.SetFlags(i,aXPoly.GetFlags(j));
         j++;
         if (j>=nPointCnt) j=1;
     }
-    aNeuPoly[0]=rRect1.BottomCenter();
-    aNeuPoly[nPointCnt]=aNeuPoly[0];
-    aXPoly=aNeuPoly;
+    aNewPoly[0]=rRect1.BottomCenter();
+    aNewPoly[nPointCnt]=aNewPoly[0];
+    aXPoly=aNewPoly;
 
     // these angles always relate to the top left corner of aRect
     if (aGeo.nShearAngle!=0) ShearXPoly(aXPoly,maRect.TopLeft(),aGeo.nTan);
@@ -231,7 +224,7 @@ OUString SdrRectObj::TakeObjNameSingul() const
     {
         pResId = bRounded ? STR_ObjNameSingulQUADRND : STR_ObjNameSingulQUAD; // square
     }
-    sName.append(ImpGetResStr(pResId));
+    sName.append(SvxResId(pResId));
 
     OUString aName(GetName());
     if (!aName.isEmpty())
@@ -263,12 +256,27 @@ OUString SdrRectObj::TakeObjNamePlural() const
         pResId = bRounded ? STR_ObjNamePluralQUADRND : STR_ObjNamePluralQUAD; // square
     }
 
-    return ImpGetResStr(pResId);
+    return SvxResId(pResId);
 }
 
-SdrRectObj* SdrRectObj::Clone() const
+SdrRectObj* SdrRectObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrRectObj >();
+    return CloneHelper< SdrRectObj >(rTargetModel);
+}
+
+SdrRectObj& SdrRectObj::operator=(const SdrRectObj& rCopy)
+{
+    if ( this == &rCopy )
+        return *this;
+
+    SdrTextObj::operator=( rCopy );
+
+    if ( rCopy.mpXPoly )
+        mpXPoly.reset( new XPolygon( *rCopy.mpXPoly ) );
+    else
+        mpXPoly.reset();
+
+    return *this;
 }
 
 basegfx::B2DPolyPolygon SdrRectObj::TakeXorPoly() const

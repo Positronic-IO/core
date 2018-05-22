@@ -1026,13 +1026,13 @@ OUString AquaSalFrame::GetKeyName( sal_uInt16 nKeyCode )
     if( it != aKeyMap.end() )
     {
         if( (nKeyCode & KEY_SHIFT) != 0 )
-            aResult.append( u'\x21e7' );
+            aResult.append( u'\x21e7' ); //⇧
         if( (nKeyCode & KEY_MOD1) != 0 )
-            aResult.append( u'\x2318' );
-        // we do not really handle Alt (see below)
-        // we map it to MOD3, which is actually Command
-        if( (nKeyCode & (KEY_MOD2|KEY_MOD3)) != 0 )
-            aResult.append( u'\x2325' );
+            aResult.append( u'\x2318' ); //⌘
+        if( (nKeyCode & KEY_MOD2) != 0 )
+            aResult.append( u'\x2325' ); //⌥
+        if( (nKeyCode & KEY_MOD3) != 0 )
+            aResult.append( u'\x2303' ); //⌃
 
         aResult.append( it->second );
     }
@@ -1341,10 +1341,10 @@ void AquaSalFrame::GetWorkArea( tools::Rectangle& rRect )
         pScreen = [NSScreen mainScreen];
     NSRect aRect = [pScreen visibleFrame];
     CocoaToVCL( aRect );
-    rRect.Left()     = static_cast<long>(aRect.origin.x);
-    rRect.Top()      = static_cast<long>(aRect.origin.y);
-    rRect.Right()    = static_cast<long>(aRect.origin.x + aRect.size.width - 1);
-    rRect.Bottom()   = static_cast<long>(aRect.origin.y + aRect.size.height - 1);
+    rRect.SetLeft( static_cast<long>(aRect.origin.x) );
+    rRect.SetTop( static_cast<long>(aRect.origin.y) );
+    rRect.SetRight( static_cast<long>(aRect.origin.x + aRect.size.width - 1) );
+    rRect.SetBottom( static_cast<long>(aRect.origin.y + aRect.size.height - 1) );
 }
 
 SalPointerState AquaSalFrame::GetPointerState()

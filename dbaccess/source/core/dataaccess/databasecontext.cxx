@@ -51,7 +51,6 @@
 
 #include <basic/basmgr.hxx>
 #include <comphelper/enumhelper.hxx>
-#include <comphelper/evtlistenerhlp.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
@@ -132,7 +131,7 @@ namespace dbaccess
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
 
@@ -275,13 +274,9 @@ void ODatabaseContext::disposing()
     // dispose the data sources
     // disposing seems to remove elements, so work on copy for valid iterators
     ObjectCache objCopy(m_aDatabaseObjects);
-    ObjectCache::const_iterator const aEnd = objCopy.end();
-    for (   ObjectCache::const_iterator aIter = objCopy.begin();
-            aIter != aEnd;
-            ++aIter
-        )
+    for (auto const& elem : objCopy)
     {
-        rtl::Reference< ODatabaseModelImpl > obj(aIter->second);
+        rtl::Reference< ODatabaseModelImpl > obj(elem.second);
             // make sure obj is acquired and does not delete itself from within
             // dispose()
         obj->dispose();
@@ -419,7 +414,7 @@ void ODatabaseContext::setTransientProperties(const OUString& _sURL, ODatabaseMo
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -479,7 +474,7 @@ void ODatabaseContext::storeTransientProperties( ODatabaseModelImpl& _rModelImpl
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // additionally, remember the "failed password", which is not available as property

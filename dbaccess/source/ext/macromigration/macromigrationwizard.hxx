@@ -25,9 +25,6 @@
 
 #include <svtools/genericunodialog.hxx>
 
-#include <core_resource.hxx>
-#include <strings.hrc>
-
 namespace dbmm
 {
 
@@ -87,7 +84,7 @@ namespace dbmm
         virtual ~MacroMigrationDialogService() override;
 
     protected:
-        virtual VclPtr<Dialog> createDialog( vcl::Window* _pParent ) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
 
     private:
         Reference< XOfficeDatabaseDocument >    m_xDocument;

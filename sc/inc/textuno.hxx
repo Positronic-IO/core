@@ -315,7 +315,7 @@ public:
         virtual         ~ScEditEngineTextObj() throw() override;
 
     void                SetText( const EditTextObject& rTextObject );
-    EditTextObject*     CreateTextObject();
+    std::unique_ptr<EditTextObject> CreateTextObject();
 };
 
 //  ScCellTextData: shared data between sub objects of a cell text object
@@ -325,7 +325,7 @@ class ScCellTextData : public SfxListener
 protected:
     ScDocShell*             pDocShell;
     ScAddress               aCellPos;
-    ScFieldEditEngine*      pEditEngine;
+    std::unique_ptr<ScFieldEditEngine> pEditEngine;
     SvxEditEngineForwarder* pForwarder;
     ScCellEditSource* pOriginalSource;
     bool                    bDataValid;
@@ -342,7 +342,7 @@ public:
                             // helper functions for ScSharedCellEditSource:
     virtual SvxTextForwarder* GetTextForwarder();
     void                    UpdateData();
-    ScFieldEditEngine*      GetEditEngine() { GetTextForwarder(); return pEditEngine; }
+    ScFieldEditEngine*      GetEditEngine() { GetTextForwarder(); return pEditEngine.get(); }
 
     ScCellEditSource* GetOriginalSource();        // used as argument for SvxUnoText ctor
 

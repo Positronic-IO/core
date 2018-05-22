@@ -146,6 +146,8 @@ public:
 
     void SwitchToDeck(const OUString& rsDeckId);
     void SwitchToDefaultDeck();
+    bool WasFloatingDeckClosed() const { return mbFloatingDeckClosed; }
+    void SetFloatingDeckClosed(bool bWasClosed) { mbFloatingDeckClosed = bWasClosed; }
 
     void CreateDeck(const OUString& rDeckId);
     void CreateDeck(const OUString& rDeckId, const Context& rContext, bool bForceCreate = false);
@@ -161,6 +163,8 @@ public:
 
     void FadeIn();
     void FadeOut();
+
+    tools::Rectangle GetDeckDragArea() const;
 
 private:
     SidebarController(
@@ -191,6 +195,8 @@ private:
     */
     ::boost::optional<bool> mbIsDeckRequestedOpen;
     ::boost::optional<bool> mbIsDeckOpen;
+
+    bool mbFloatingDeckClosed;
 
     /** Before the deck is closed the sidebar width is saved into this variable,
         so that it can be restored when the deck is reopened.

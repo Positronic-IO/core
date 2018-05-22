@@ -96,9 +96,6 @@ SC_SIMPLE_SERVICE_INFO( ScHeaderFooterTextObj, "ScHeaderFooterTextObj", "stardiv
 
 ScHeaderFooterContentObj::ScHeaderFooterContentObj()
 {
-#if defined __clang__ && defined _MSC_VER // workaround clang-cl ABI bug PR25641
-    css::uno::Sequence<css::beans::PropertyState> dummy; (void) dummy;
-#endif
 }
 
 ScHeaderFooterContentObj::~ScHeaderFooterContentObj() {}
@@ -253,13 +250,13 @@ void ScHeaderFooterTextData::UpdateData()
 {
     if (pEditEngine)
     {
-        mpTextObj.reset(pEditEngine->CreateTextObject());
+        mpTextObj = pEditEngine->CreateTextObject();
     }
 }
 
 void ScHeaderFooterTextData::UpdateData(EditEngine& rEditEngine)
 {
-    mpTextObj.reset(rEditEngine.CreateTextObject());
+    mpTextObj = rEditEngine.CreateTextObject();
     bDataValid = false;
 }
 
@@ -859,7 +856,7 @@ void ScEditEngineTextObj::SetText( const EditTextObject& rTextObject )
     SetSelection( aSel );
 }
 
-EditTextObject* ScEditEngineTextObj::CreateTextObject()
+std::unique_ptr<EditTextObject> ScEditEngineTextObj::CreateTextObject()
 {
     return GetEditEngine()->CreateTextObject();
 }
@@ -889,7 +886,7 @@ ScCellTextData::~ScCellTextData()
         pDocShell->GetDocument().DisposeFieldEditEngine(pEditEngine);
     }
     else
-        delete pEditEngine;
+        pEditEngine.reset();
 
     delete pForwarder;
 
@@ -916,7 +913,7 @@ SvxTextForwarder* ScCellTextData::GetTextForwarder()
         {
             SfxItemPool* pEnginePool = EditEngine::CreatePool();
             pEnginePool->FreezeIdRanges();
-            pEditEngine = new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true);
+            pEditEngine.reset( new ScFieldEditEngine(nullptr, pEnginePool, nullptr, true) );
         }
         //  currently, GetPortions doesn't work if UpdateMode is sal_False,
         //  this will be fixed (in EditEngine) by src600
@@ -1004,7 +1001,7 @@ void ScCellTextData::Notify( SfxBroadcaster&, const SfxHint& rHint )
             pDocShell = nullptr;                       // invalid now
 
             DELETEZ( pForwarder );
-            DELETEZ( pEditEngine );     // EditEngine uses document's pool
+            pEditEngine.reset();     // EditEngine uses document's pool
         }
         else if ( nId == SfxHintId::DataChanged )
         {

@@ -44,7 +44,6 @@
 #include <headertablistbox.hxx>
 #include "macropg_impl.hxx"
 
-#include <dialmgr.hxx>
 #include <cfgutil.hxx>
 #include <cfg.hxx>
 
@@ -158,7 +157,7 @@ void SvxEventConfigPage::ImplInitDocument()
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("cui.customize");
     }
 }
 

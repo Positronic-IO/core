@@ -34,6 +34,7 @@
 #include <strings.hrc>
 #include <DiagramHelper.hxx>
 #include <com/sun/star/chart2/XChartDocument.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
@@ -197,9 +198,9 @@ void RegressionCurveHelper::initializeCurveCalculator(
                 }
             }
         }
-        catch( const Exception & ex )
+        catch( const Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -249,9 +250,9 @@ bool RegressionCurveHelper::hasMeanValueLine(
                 return true;
         }
     }
-    catch( const Exception & ex )
+    catch( const Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return false;
@@ -282,9 +283,9 @@ uno::Reference< chart2::XRegressionCurve >
                     return aCurves[i];
             }
         }
-        catch( const Exception & ex )
+        catch( const Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -337,9 +338,9 @@ void RegressionCurveHelper::removeMeanValueLine(
             }
         }
     }
-    catch( const Exception & ex )
+    catch( const Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -412,16 +413,15 @@ bool RegressionCurveHelper::removeAllExceptMeanValueLine(
                 }
             }
 
-            for( std::vector< uno::Reference< chart2::XRegressionCurve > >::const_iterator aIt = aCurvesToDelete.begin();
-                     aIt != aCurvesToDelete.end(); ++aIt )
+            for (auto const& curveToDelete : aCurvesToDelete)
             {
-                xRegCnt->removeRegressionCurve( *aIt );
+                xRegCnt->removeRegressionCurve(curveToDelete);
                 bRemovedSomething = true;
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
     return bRemovedSomething;
@@ -455,9 +455,9 @@ void RegressionCurveHelper::removeEquations(
                 }
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }
@@ -493,9 +493,9 @@ uno::Reference< chart2::XRegressionCurve > RegressionCurveHelper::getFirstCurveN
             }
         }
     }
-    catch( const Exception & ex )
+    catch( const Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return nullptr;
@@ -517,9 +517,9 @@ uno::Reference< chart2::XRegressionCurve > RegressionCurveHelper::getRegressionC
                 return aCurves[aIndex];
         }
     }
-    catch( const Exception & ex )
+    catch( const Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return nullptr;
@@ -567,9 +567,9 @@ SvxChartRegress RegressionCurveHelper::getRegressionType(
             }
         }
     }
-    catch( const Exception & ex )
+    catch( const Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2" );
     }
 
     return eResult;
@@ -686,10 +686,9 @@ std::vector< Reference< chart2::XRegressionCurve > >
 {
     std::vector< Reference< chart2::XRegressionCurve > > aResult;
     std::vector< Reference< chart2::XDataSeries > > aSeries( DiagramHelper::getDataSeriesFromDiagram( xDiagram ));
-    for( std::vector< Reference< chart2::XDataSeries > >::iterator aIt( aSeries.begin());
-         aIt != aSeries.end(); ++aIt )
+    for (auto const& elem : aSeries)
     {
-        Reference< chart2::XRegressionCurveContainer > xContainer( *aIt, uno::UNO_QUERY );
+        Reference< chart2::XRegressionCurveContainer > xContainer(elem, uno::UNO_QUERY);
         if(xContainer.is())
         {
             uno::Sequence< uno::Reference< chart2::XRegressionCurve > > aCurves(xContainer->getRegressionCurves());
@@ -716,9 +715,9 @@ void RegressionCurveHelper::resetEquationPosition(
             if( xEqProp->getPropertyValue( aPosPropertyName ).hasValue())
                 xEqProp->setPropertyValue( aPosPropertyName, uno::Any());
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2" );
         }
     }
 }

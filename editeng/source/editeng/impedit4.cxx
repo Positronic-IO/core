@@ -20,7 +20,6 @@
 
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 
 #include <svl/srchitem.hxx>
@@ -135,9 +134,7 @@ EditPaM ImpEditEngine::ReadXML( SvStream& rInput, EditSelection aSel )
 
     ESelection aESel = CreateESel( aSel );
 
-    ::SvxReadXML( *GetEditEnginePtr(), rInput, aESel );
-
-    return aSel.Max();
+    return ::SvxReadXML( *GetEditEnginePtr(), rInput, aESel );
 }
 
 EditPaM ImpEditEngine::ReadRTF( SvStream& rInput, EditSelection aSel )
@@ -970,7 +967,7 @@ void ImpEditEngine::WriteItemAsRTF( const SfxPoolItem& rItem, SvStream& rOutput,
     }
 }
 
-EditTextObject* ImpEditEngine::GetEmptyTextObject()
+std::unique_ptr<EditTextObject> ImpEditEngine::GetEmptyTextObject()
 {
     EditSelection aEmptySel;
     aEmptySel.Min() = aEditDoc.GetStartPaM();
@@ -979,7 +976,7 @@ EditTextObject* ImpEditEngine::GetEmptyTextObject()
     return CreateTextObject( aEmptySel );
 }
 
-EditTextObject* ImpEditEngine::CreateTextObject()
+std::unique_ptr<EditTextObject> ImpEditEngine::CreateTextObject()
 {
     EditSelection aCompleteSelection;
     aCompleteSelection.Min() = aEditDoc.GetStartPaM();
@@ -988,14 +985,14 @@ EditTextObject* ImpEditEngine::CreateTextObject()
     return CreateTextObject( aCompleteSelection );
 }
 
-EditTextObject* ImpEditEngine::CreateTextObject(const EditSelection& rSel)
+std::unique_ptr<EditTextObject> ImpEditEngine::CreateTextObject(const EditSelection& rSel)
 {
     return CreateTextObject(rSel, GetEditTextObjectPool(), aStatus.AllowBigObjects(), nBigTextObjectStart);
 }
 
-EditTextObject* ImpEditEngine::CreateTextObject( EditSelection aSel, SfxItemPool* pPool, bool bAllowBigObjects, sal_Int32 nBigObjectStart )
+std::unique_ptr<EditTextObject> ImpEditEngine::CreateTextObject( EditSelection aSel, SfxItemPool* pPool, bool bAllowBigObjects, sal_Int32 nBigObjectStart )
 {
-    EditTextObject* pTxtObj = new EditTextObject(pPool);
+    std::unique_ptr<EditTextObject> pTxtObj(new EditTextObject(pPool));
     pTxtObj->SetVertical( IsVertical(), IsTopToBottom());
     MapUnit eMapUnit = aEditDoc.GetItemPool().GetMetric( DEF_METRIC );
     pTxtObj->mpImpl->SetMetric( static_cast<sal_uInt16>(eMapUnit) );
@@ -1098,7 +1095,7 @@ EditTextObject* ImpEditEngine::CreateTextObject( EditSelection aSel, SfxItemPool
     if ( bAllowBigObjects && bOnlyFullParagraphs && IsFormatted() && GetUpdateMode() && ( nTextPortions >= nBigObjectStart ) )
     {
         XParaPortionList* pXList = new XParaPortionList( GetRefDevice(), aPaperSize.Width(), nStretchX, nStretchY );
-        pTxtObj->mpImpl->SetPortionInfo(pXList);
+        pTxtObj->mpImpl->SetPortionInfo(std::unique_ptr<XParaPortionList>(pXList));
         for ( nNode = nStartNode; nNode <= nEndNode; nNode++  )
         {
             const ParaPortion* pParaPortion = GetParaPortions()[nNode];
@@ -1383,10 +1380,8 @@ void ImpEditEngine::GetAllMisspellRanges( std::vector<editeng::MisspellRanges>& 
 void ImpEditEngine::SetAllMisspellRanges( const std::vector<editeng::MisspellRanges>& rRanges )
 {
     EditDoc& rDoc = GetEditDoc();
-    std::vector<editeng::MisspellRanges>::const_iterator it = rRanges.begin(), itEnd = rRanges.end();
-    for (; it != itEnd; ++it)
+    for (auto const& rParaRanges : rRanges)
     {
-        const editeng::MisspellRanges& rParaRanges = *it;
         ContentNode* pNode = rDoc.GetObject(rParaRanges.mnParagraph);
         if (!pNode)
             continue;

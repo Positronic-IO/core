@@ -20,12 +20,12 @@
 #include <consoli.hxx>
 #include <document.hxx>
 #include <olinetab.hxx>
-#include <globstr.hrc>
 #include <subtotal.hxx>
 #include <formula/errorcodes.hxx>
 #include <formulacell.hxx>
 #include <tokenarray.hxx>
 #include <osl/diagnose.h>
+#include <refdata.hxx>
 
 #include <math.h>
 #include <string.h>

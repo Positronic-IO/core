@@ -9,7 +9,7 @@ dnl in order to create a configure script.
 # several non-alphanumeric characters, those are split off and used only for the
 # ABOUTBOXPRODUCTVERSIONSUFFIX in openoffice.lst. Why that is necessary, no idea.
 
-AC_INIT([LibreOffice],[6.1.0.0.alpha0+],[],[],[http://documentfoundation.org/])
+AC_INIT([LibreOffice],[6.1.0.0.alpha1+],[],[],[http://documentfoundation.org/])
 
 AC_PREREQ([2.59])
 
@@ -792,7 +792,6 @@ haiku*)
     test_randr=no
     test_xrender=no
     test_freetype=yes
-    test_cairo=yes
     enable_java=no
     enable_opengl=no
     enable_odk=no
@@ -803,7 +802,7 @@ haiku*)
     enable_gltf=no
     enable_collada=no
     enable_coinmp=no
-    enable_pdfimport=no
+    enable_pdfium=no
     enable_postgresql_sdbc=no
     enable_firebird_sdbc=no
     _os=Haiku
@@ -1170,6 +1169,10 @@ libo_FUZZ_ARG_ENABLE(ooenv,
     AS_HELP_STRING([--disable-ooenv],
         [Disable ooenv for the instdir installation.]))
 
+libo_FUZZ_ARG_ENABLE(libnumbertext,
+    AS_HELP_STRING([--disable-libnumbertext],
+        [Disable use of numbertext external library.]))
+
 AC_ARG_ENABLE(lto,
     AS_HELP_STRING([--enable-lto],
         [Enable link-time optimization. Suitable for (optimised) product builds. Building might take
@@ -1427,8 +1430,8 @@ AC_ARG_WITH(package-version,
 libo_FUZZ_ARG_ENABLE(readonly-installset,
     AS_HELP_STRING([--enable-readonly-installset],
         [Prevents any attempts by LibreOffice to write into its installation. That means
-         at least that no "system-wide" extensions can be added. Experimental work in
-         progress.]),
+         at least that no "system-wide" extensions can be added. Partly experimental work in
+         progress, probably not fully implemented (but is useful for sandboxed macOS builds).]),
 ,)
 
 libo_FUZZ_ARG_ENABLE(postgresql-sdbc,
@@ -1543,7 +1546,7 @@ AC_ARG_WITH(galleries,
 AC_ARG_WITH(theme,
     AS_HELP_STRING([--with-theme="theme1 theme2..."],
         [Choose which themes to include. By default those themes with an '*' are included.
-         Possible choices: *breeze, *breeze_dark, crystal, *elementary, *galaxy, *hicontrast, oxygen, *sifr, *sifr_dark, *tango, tango_testing.]),
+         Possible choices: *breeze, *breeze_dark, *colibre, *elementary, *karasa_jaga, *sifr, *sifr_dark, *tango.]),
 ,)
 
 libo_FUZZ_ARG_WITH(helppack-integration,
@@ -1940,8 +1943,6 @@ AC_ARG_WITH(help,
                                  --without-help     no local help (default)
                                  --with-help=html   build the new HTML local help
                                  --with-help=online build the new HTML online help
-                                 --with-help=common bundle common files for the local
-                                                    help but do not build the whole help
     ],
 ,)
 
@@ -2081,6 +2082,13 @@ AC_ARG_WITH(iwyu,
     AS_HELP_STRING([--with-iwyu],
         [Use given IWYU binary path to check unneeded includes instead of building.
          Use only if you are hacking on it.]),
+,)
+
+libo_FUZZ_ARG_WITH(lxml,
+    AS_HELP_STRING([--without-lxml],
+        [gla11y will use python lxml when available, potentially building a local copy if necessary.
+         --without-lxml tells it to not use python lxml at all, which means that gla11y will only
+         report widget classes and ids.]),
 ,)
 
 dnl ===================================================================
@@ -2612,8 +2620,13 @@ if test "$_os" != "WINNT"; then
         if test "$enable_icecream" = "yes"; then
             if test -d "/usr/lib/icecc/bin"; then
                 GCC_HOME="/usr/lib/icecc/"
-            else
+            elif test -d "/usr/libexec/icecc/bin"; then
+                GCC_HOME="/usr/libexec/icecc/"
+            elif test -d "/opt/icecream/bin"; then
                 GCC_HOME="/opt/icecream/"
+            else
+                AC_MSG_ERROR([Could not figure out the location of icecream GCC wrappers, manually use --with-gcc-home])
+
             fi
         else
             GCC_HOME=`which gcc | $SED -e s,/bin/gcc,,`
@@ -2919,7 +2932,7 @@ dnl ===================================================================
 
 if test $_os = iOS; then
     AC_MSG_CHECKING([what iOS SDK to use])
-    current_sdk_ver=11.2
+    current_sdk_ver=11.3
     if test "$enable_ios_simulator" = "yes"; then
         platform=iPhoneSimulator
         versionmin=-mios-simulator-version-min=$current_sdk_ver
@@ -3629,6 +3642,7 @@ if test "$COM_IS_CLANG" = TRUE; then
     AC_DEFINE_UNQUOTED(CLANG_FULL_VERSION,$CLANG_FULL_VERSION)
 fi
 AC_SUBST(COM_IS_CLANG)
+AC_SUBST(CLANGVER)
 
 SHOWINCLUDES_PREFIX=
 if test "$_os" = WINNT; then
@@ -3798,6 +3812,21 @@ if test -n "$enable_dbgutil" -a "$enable_dbgutil" != "no"; then
         AC_MSG_ERROR([--with-system-gpgmepp conflicts with --enable-dbgutil])
     else
         with_system_gpgmepp=no
+    fi
+    # As mixing system libwps and non-system libnumbertext or vice versa likely causes trouble (see
+    # 603074c5f2b84de8a24593faf807da784b040625 "Pass _GLIBCXX_DEBUG into external/libwps" and the
+    # mail thread starting at <https://gcc.gnu.org/ml/gcc/2018-05/msg00057.html> "libstdc++: ODR
+    # violation when using std::regex with and without -D_GLIBCXX_DEBUG"), simply make sure neither
+    # of those two is using the system variant:
+    if test "$with_system_libnumbertext" = "yes"; then
+        AC_MSG_ERROR([--with-system-libnumbertext conflicts with --enable-dbgutil])
+    else
+        with_system_libnumbertext=no
+    fi
+    if test "$with_system_libwps" = "yes"; then
+        AC_MSG_ERROR([--with-system-libwps conflicts with --enable-dbgutil])
+    else
+        with_system_libwps=no
     fi
 else
     ENABLE_DBGUTIL=""
@@ -4614,6 +4643,11 @@ if test "$USING_X11" != TRUE; then
     enable_cairo_canvas=no
 fi
 
+if test "$OS" = "HAIKU"; then
+    enable_cairo_canvas=yes
+    test_qt5=yes
+fi
+
 dnl ===================================================================
 dnl check for cups support
 dnl ===================================================================
@@ -4690,17 +4724,13 @@ fi
 AC_SUBST(DO_FETCH_TARBALLS)
 
 AC_MSG_CHECKING([whether to build help])
-HELP_COMMON_ONLY=FALSE
 if test -n "$with_help" -a "$with_help" != "no" -a $_os != iOS -a $_os != Android; then
     BUILD_TYPE="$BUILD_TYPE HELP"
     GIT_NEEDED_SUBMODULES="helpcontent2 $GIT_NEEDED_SUBMODULES"
     case "$with_help" in
-    "common")
-        HELP_COMMON_ONLY=TRUE
-        AC_MSG_RESULT([common only])
-        ;;
     "html")
         ENABLE_HTMLHELP=TRUE
+        SCPDEFS="$SCPDEFS -DWITH_HELP"
         AC_MSG_RESULT([HTML])
         ;;
     "online")
@@ -4708,16 +4738,18 @@ if test -n "$with_help" -a "$with_help" != "no" -a $_os != iOS -a $_os != Androi
         HELP_ONLINE=TRUE
         AC_MSG_RESULT([HTML])
         ;;
-    *)
+    yes)
         SCPDEFS="$SCPDEFS -DWITH_HELP"
         AC_MSG_RESULT([yes])
+        ;;
+    *)
+        AC_MSG_ERROR([Unknown --with-help=$with_help])
         ;;
     esac
 else
     AC_MSG_RESULT([no])
 fi
 AC_SUBST([ENABLE_HTMLHELP])
-AC_SUBST(HELP_COMMON_ONLY)
 AC_SUBST([HELP_ONLINE])
 
 dnl Test whether to include MySpell dictionaries
@@ -4983,18 +5015,32 @@ dnl Testing for required Perl modules
 dnl ===================================================================
 
 AC_MSG_CHECKING([for required Perl modules])
-if `$PERL -e 'use Cwd; use Digest::MD5'>/dev/null 2>&1`; then
+perl_use_string="use Cwd ; use Digest::MD5"
+if test "$_os" = "WINNT"; then
+    if test -n "$PKGFORMAT"; then
+        for i in $PKGFORMAT; do
+            case "$i" in
+            msi)
+                # for getting fonts versions to use in MSI
+                perl_use_string="$perl_use_string ; use Font::TTF::Font"
+                ;;
+            esac
+        done
+    fi
+fi
+if $PERL -e "$perl_use_string">/dev/null 2>&1; then
     AC_MSG_RESULT([all modules found])
 else
     AC_MSG_RESULT([failed to find some modules])
     # Find out which modules are missing.
-    if ! `$PERL -e 'use Cwd;'>/dev/null 2>&1`; then
-        missing_perl_modules="$missing_perl_modules Cwd"
-    fi
-    if ! `$PERL -e 'use Digest::MD5;'>/dev/null 2>&1`; then
-        missing_perl_modules="$missing_perl_modules Digest::MD5"
-    fi
-       AC_MSG_ERROR([
+    for i in $perl_use_string; do
+        if test "$i" != "use" -a "$i" != ";"; then
+            if ! $PERL -e "use $i;">/dev/null 2>&1; then
+                missing_perl_modules="$missing_perl_modules $i"
+            fi
+        fi
+    done
+    AC_MSG_ERROR([
     The missing Perl modules are: $missing_perl_modules
     Install them as superuser/administrator with "cpan -i $missing_perl_modules"])
 fi
@@ -5089,7 +5135,7 @@ find_al()
     done
 
     # We need this additional check to detect 4.6.1 or above.
-    for ver in 4.7 4.6.2 4.6.1; do
+    for ver in 4.7.1 4.7 4.6.2 4.6.1; do
         reg_get_value_32 "HKEY_LOCAL_MACHINE/SOFTWARE/Microsoft/Microsoft SDKs/NETFXSDK/$ver/WinSDK-NetFx40Tools/InstallationFolder"
         if test -n "$regvalue" -a \( -f "$regvalue/al.exe" -o -f "$regvalue/bin/al.exe" \); then
             altest=$regvalue
@@ -5123,7 +5169,7 @@ find_dotnetsdk46()
 {
     unset frametest
 
-    for ver in 4.7 4.6.2 4.6.1 4.6; do
+    for ver in 4.7.1 4.7 4.6.2 4.6.1 4.6; do
         reg_get_value_64 "HKEY_LOCAL_MACHINE/SOFTWARE/Wow6432Node/Microsoft/Microsoft SDKs/NETFXSDK/$ver/KitsInstallationFolder"
         if test -n "$regvalue"; then
             frametest=$regvalue
@@ -5184,12 +5230,8 @@ find_winsdk_version()
                 winsdklibsubdir="10.0.16299.0"
             elif test "$regvalue" = "10.0.15063"; then
                 winsdklibsubdir="10.0.15063.0"
-                dnl Hack needed at least by tml:
-                if test ! -f "${winsdktest}/Include/10.0.15063.0/um/sqlext.h" \
-                    -a -f "${winsdktest}/Include/10.0.14393.0/um/sqlext.h"
-                then
-                    winsdklibsubdir="10.0.14393.0"
-                fi
+            elif test "$regvalue" = "10.0.17134"; then
+                winsdklibsubdir="$regvalue.0"
             fi
             return
         fi
@@ -6543,7 +6585,7 @@ if test "$COM_IS_CLANG" = "TRUE"; then
         # compiler plugins must be built with "native" compiler that was used to build Clang itself:
         : "${COMPILER_PLUGINS_CXX=g++}"
         CXX=$COMPILER_PLUGINS_CXX
-        CPPFLAGS="$CPPFLAGS -I$CLANGDIR/include -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS"
+        CPPFLAGS="$CPPFLAGS $CXXFLAGS_CXX11 -I$CLANGDIR/include -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS"
         AC_CHECK_HEADER(clang/AST/RecursiveASTVisitor.h,
             [COMPILER_PLUGINS=TRUE],
             [
@@ -6613,13 +6655,21 @@ fi
 AC_SUBST([JITC_PROCESSOR_TYPE])
 
 # Misc Windows Stuff
-AC_ARG_WITH(vcredist-dir,
-    AS_HELP_STRING([--with-vcredist-dir],
-        [path to the directory with the arch-specific executables (vc_redist.x64.exe, vc_redist.x86.exe)
-        for packaging into the installsets (without those the target system needs to install
-        the Visual C++ Runtimes manually)]),
+AC_ARG_WITH(ucrt-dir,
+    AS_HELP_STRING([--with-ucrt-dir],
+        [path to the directory with the arch-specific MSU packages of the Windows Universal CRT redistributables
+        (MS KB 2999226) for packaging into the installsets (without those the target system needs to install
+        the UCRT or Visual C++ Runtimes manually). The directory must contain the following 6 files:
+            Windows6.1-KB2999226-x64.msu
+            Windows6.1-KB2999226-x86.msu
+            Windows8.1-KB2999226-x64.msu
+            Windows8.1-KB2999226-x86.msu
+            Windows8-RT-KB2999226-x64.msu
+            Windows8-RT-KB2999226-x86.msu
+        A zip archive including those files is available from Microsoft site:
+        https://www.microsoft.com/en-us/download/details.aspx?id=48234]),
 ,)
-VCREDIST_DIR="$with_vcredist_dir"
+UCRT_REDISTDIR="$with_ucrt_dir"
 if test $_os = "WINNT"; then
     find_msvc_x64_dlls
     find_msms
@@ -6632,20 +6682,23 @@ if test $_os = "WINNT"; then
     else
         SCPDEFS="$SCPDEFS -DWITH_VC${VCVER}_REDIST"
     fi
-    if test "$VCREDIST_DIR" = "no"; then
+    if test "$UCRT_REDISTDIR" = "no"; then
         dnl explicitly disabled
-        VCREDIST_DIR=""
+        UCRT_REDISTDIR=""
     else
-        if test -f "$VCREDIST_DIR/vc_redist.$WINDOWS_SDK_ARCH.exe"; then
-            VCREDIST_EXE="vc_redist.$WINDOWS_SDK_ARCH.exe"
-        else
-            VCREDIST_DIR=""
+        if ! test -f "$UCRT_REDISTDIR/Windows6.1-KB2999226-x64.msu" -a \
+                  -f "$UCRT_REDISTDIR/Windows6.1-KB2999226-x86.msu" -a \
+                  -f "$UCRT_REDISTDIR/Windows8.1-KB2999226-x64.msu" -a \
+                  -f "$UCRT_REDISTDIR/Windows8.1-KB2999226-x86.msu" -a \
+                  -f "$UCRT_REDISTDIR/Windows8-RT-KB2999226-x64.msu" -a \
+                  -f "$UCRT_REDISTDIR/Windows8-RT-KB2999226-x86.msu"; then
+            UCRT_REDISTDIR=""
             if test -n "$PKGFORMAT"; then
-               for i in "$PKGFORMAT"; do
+               for i in $PKGFORMAT; do
                    case "$i" in
                    msi)
-                       AC_MSG_WARN([--without-vcredist-dir not specified or exe not found - installer will have runtime dependency])
-                       add_warning "--without-vcredist-dir not specified or exe not found - installer will have runtime dependency"
+                       AC_MSG_WARN([--without-ucrt-dir not specified or MSUs not found - installer will have runtime dependency])
+                       add_warning "--without-ucrt-dir not specified or MSUs not found - installer will have runtime dependency"
                        ;;
                    esac
                done
@@ -6654,8 +6707,7 @@ if test $_os = "WINNT"; then
     fi
 fi
 
-AC_SUBST(VCREDIST_DIR)
-AC_SUBST(VCREDIST_EXE)
+AC_SUBST(UCRT_REDISTDIR)
 AC_SUBST(MSVC_DLL_PATH)
 AC_SUBST(MSVC_DLLS)
 AC_SUBST(MSM_PATH)
@@ -7816,7 +7868,7 @@ libo_CHECK_SYSTEM_MODULE([libwpd],[WPD],[libwpd-0.10],["-I${WORKDIR}/UnpackedTar
 libo_CHECK_SYSTEM_MODULE([libwpg],[WPG],[libwpg-0.3])
 
 libo_CHECK_SYSTEM_MODULE([libwps],[WPS],[libwps-0.4])
-libo_PKG_VERSION([WPS], [libwps-0.4], [0.4.8])
+libo_PKG_VERSION([WPS], [libwps-0.4], [0.4.9])
 
 libo_CHECK_SYSTEM_MODULE([libvisio],[VISIO],[libvisio-0.1])
 
@@ -7825,10 +7877,10 @@ libo_CHECK_SYSTEM_MODULE([libcdr],[CDR],[libcdr-0.1])
 libo_CHECK_SYSTEM_MODULE([libmspub],[MSPUB],[libmspub-0.1])
 
 libo_CHECK_SYSTEM_MODULE([libmwaw],[MWAW],[libmwaw-0.3 >= 0.3.1])
-libo_PKG_VERSION([MWAW], [libmwaw-0.3], [0.3.13])
+libo_PKG_VERSION([MWAW], [libmwaw-0.3], [0.3.14])
 
 libo_CHECK_SYSTEM_MODULE([libetonyek],[ETONYEK],[libetonyek-0.1])
-libo_PKG_VERSION([ETONYEK], [libetonyek-0.1], [0.1.7])
+libo_PKG_VERSION([ETONYEK], [libetonyek-0.1], [0.1.8])
 
 libo_CHECK_SYSTEM_MODULE([libfreehand],[FREEHAND],[libfreehand-0.1])
 
@@ -7844,7 +7896,7 @@ libo_CHECK_SYSTEM_MODULE([libqxp],[QXP],[libqxp-0.0])
 libo_CHECK_SYSTEM_MODULE([libzmf],[ZMF],[libzmf-0.0])
 
 libo_CHECK_SYSTEM_MODULE([libstaroffice],[STAROFFICE],[libstaroffice-0.0])
-libo_PKG_VERSION([STAROFFICE], [libstaroffice-0.0], [0.0.4])
+libo_PKG_VERSION([STAROFFICE], [libstaroffice-0.0], [0.0.6])
 
 dnl ===================================================================
 dnl Check for system lcms2
@@ -8016,14 +8068,14 @@ AC_SUBST(LIBXML_LIBS)
 AC_SUBST(XMLLINT)
 
 # =====================================================================
-# Checking for a Python interpreter with version >= 2.6.
-# Build and runtime requires Python 3 compatible version (>= 2.6).
+# Checking for a Python interpreter with version >= 2.7.
+# Build and runtime requires Python 3 compatible version (>= 2.7).
 # Optionally user can pass an option to configure, i. e.
 # ./configure PYTHON=/usr/bin/python
 # =====================================================================
 if test "$build_os" != "cygwin" -a "$enable_python" != fully-internal; then
     # This allows a lack of system python with no error, we use internal one in that case.
-    AM_PATH_PYTHON([2.6],, [:])
+    AM_PATH_PYTHON([2.7],, [:])
     # Clean PYTHON_VERSION checked below if cross-compiling
     PYTHON_VERSION=""
     if test "$PYTHON" != ":"; then
@@ -8141,35 +8193,50 @@ if test $enable_python = system; then
                AC_MSG_ERROR([no usable python found])])
         test -n "$PYTHON_CFLAGS" && break
     fi
+
+    dnl Check if the headers really work
+    save_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $PYTHON_CFLAGS"
+    AC_CHECK_HEADER(Python.h)
+    CPPFLAGS="$save_CPPFLAGS"
+
     # let the PYTHON_FOR_BUILD match the same python installation that
     # provides PYTHON_CFLAGS/PYTHON_LDFLAGS for pyuno, which should be
     # better for PythonTests.
     PYTHON_FOR_BUILD=$PYTHON
 fi
 
-if -z "$PYTHON_FOR_BUILD"; then
-    case $build_os in
-        cygwin)
-            AC_MSG_WARN([No system-provided python lxml, gla11y will only report widget classes and ids])
-            ;;
-        *)
-            BUILD_TYPE="$BUILD_TYPE LXML"
-            ;;
-    esac
-else
-    AC_MSG_CHECKING([for python lxml])
-    if $PYTHON_FOR_BUILD -c "import lxml.etree as ET" 2> /dev/null ; then
-        AC_MSG_RESULT([yes])
-    else
+if test "$with_lxml" != no; then
+    if test -z "$PYTHON_FOR_BUILD"; then
         case $build_os in
             cygwin)
-                AC_MSG_RESULT([no, gla11y will only report widget classes and ids])
+                AC_MSG_WARN([No system-provided python lxml, gla11y will only report widget classes and ids])
                 ;;
             *)
-                BUILD_TYPE="$BUILD_TYPE LXML"
-                AC_MSG_RESULT([no, using internal lxml])
+                if test "$cross_compiling" != yes ; then
+                    BUILD_TYPE="$BUILD_TYPE LXML"
+                fi
                 ;;
         esac
+    else
+        AC_MSG_CHECKING([for python lxml])
+        if $PYTHON_FOR_BUILD -c "import lxml.etree as ET" 2> /dev/null ; then
+            AC_MSG_RESULT([yes])
+        else
+            case $build_os in
+                cygwin)
+                    AC_MSG_RESULT([no, gla11y will only report widget classes and ids])
+                    ;;
+                *)
+                    if test "$cross_compiling" != yes -a "x$ac_cv_header_Python_h" = "xyes"; then
+                        BUILD_TYPE="$BUILD_TYPE LXML"
+                        AC_MSG_RESULT([no, using internal lxml])
+                    else
+                        AC_MSG_RESULT([no, and system does not provide python development headers, gla11y will only report widget classes and ids])
+                    fi
+                    ;;
+            esac
+        fi
     fi
 fi
 
@@ -8178,13 +8245,9 @@ case $enable_python in
 system)
     SYSTEM_PYTHON=TRUE
 
-    dnl Check if the headers really work
-    save_CPPFLAGS="$CPPFLAGS"
-    CPPFLAGS="$CPPFLAGS $PYTHON_CFLAGS"
-    AC_CHECK_HEADER(Python.h, [],
-       [AC_MSG_ERROR([Python headers not found. You probably want to set both the PYTHON_CFLAGS and PYTHON_LIBS environment variables.])],
-       [])
-    CPPFLAGS="$save_CPPFLAGS"
+    if test "x$ac_cv_header_Python_h" != "xyes"; then
+       AC_MSG_ERROR([Python headers not found. You probably want to set both the PYTHON_CFLAGS and PYTHON_LIBS environment variables.])
+    fi
 
     AC_LANG_PUSH(C)
     CFLAGS="$CFLAGS $PYTHON_CFLAGS"
@@ -8193,11 +8256,11 @@ system)
 #include <Python.h>
 
 int main(int argc, char **argv) {
-   if ((PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION >= 6) ||
+   if ((PY_MAJOR_VERSION == 2 && PY_MINOR_VERSION >= 7) ||
        (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 3)) return 0;
    else return 1;
 }
-       ]])],[AC_MSG_RESULT([ok])],[AC_MSG_ERROR([Python >= 3.3 is needed when building with Python 3, or Python >= 2.6 when building with Python 2])],[AC_MSG_RESULT([skipped; cross-compiling])])
+       ]])],[AC_MSG_RESULT([ok])],[AC_MSG_ERROR([Python >= 3.3 is needed when building with Python 3, or Python >= 2.7 when building with Python 2])],[AC_MSG_RESULT([skipped; cross-compiling])])
     CFLAGS=$save_CFLAGS
     AC_LANG_POP(C)
 
@@ -8217,13 +8280,6 @@ internal)
     # Embedded Python dies without Home set
     if test "$HOME" = ""; then
         export HOME=""
-    fi
-    # bz2 tarball and bzip2 is not standard
-    if test -z "$BZIP2"; then
-        AC_PATH_PROG( BZIP2, bzip2)
-        if test -z "$BZIP2"; then
-            AC_MSG_ERROR([the internal Python module has a .tar.bz2. You need bzip2])
-        fi
     fi
     ;;
 no)
@@ -8713,6 +8769,7 @@ int fb_api_is_30(void) { return 0; }
 
         BUILD_TYPE="$BUILD_TYPE FIREBIRD"
         ENABLE_FIREBIRD_SDBC="TRUE"
+        AC_DEFINE(ENABLE_FIREBIRD_SDBC)
     fi
 fi
 AC_SUBST(ENABLE_FIREBIRD_SDBC)
@@ -8965,8 +9022,8 @@ SYSTEM_GENBRK=
 SYSTEM_GENCCODE=
 SYSTEM_GENCMN=
 
-ICU_MAJOR=60
-ICU_MINOR=2
+ICU_MAJOR=61
+ICU_MINOR=1
 ICU_RECLASSIFIED_PREPEND_SET_EMPTY="TRUE"
 ICU_RECLASSIFIED_CONDITIONAL_JAPANESE_STARTER="TRUE"
 ICU_RECLASSIFIED_HEBREW_LETTER="TRUE"
@@ -9609,6 +9666,45 @@ if test "$with_system_libexttextcat" = "yes"; then
 fi
 AC_SUBST(SYSTEM_LIBEXTTEXTCAT_DATA)
 
+dnl ===================================================================
+dnl Checking for libnumbertext
+dnl ===================================================================
+AC_MSG_CHECKING([whether to use libnumbertext])
+if test "$enable_libnumbertext" = "no"; then
+    AC_MSG_RESULT([no])
+    ENABLE_LIBNUMBERTEXT=
+    SYSTEM_LIBNUMBERTEXT=
+else
+    AC_MSG_RESULT([yes])
+    ENABLE_LIBNUMBERTEXT=TRUE
+    libo_CHECK_SYSTEM_MODULE([libnumbertext],[LIBNUMBERTEXT],[libnumbertext >= 1.0.0])
+    if test "$with_system_libnumbertext" = "yes"; then
+        SYSTEM_LIBNUMBERTEXT_DATA=file://`$PKG_CONFIG --variable=pkgdatadir libnumbertext`
+        SYSTEM_LIBNUMBERTEXT=YES
+    else
+        SYSTEM_LIBNUMBERTEXT=
+        AC_LANG_PUSH([C++])
+        save_CXXFLAGS=$CXXFLAGS
+        CXXFLAGS="$CXXFLAGS $CXXFLAGS_CXX11"
+        AC_CHECK_HEADERS([codecvt regex])
+        AS_IF([test "x$ac_cv_header_codecvt" != xyes -o "x$ac_cv_header_regex" != xyes],
+                [ ENABLE_LIBNUMBERTEXT=''
+                  LIBNUMBERTEXT_CFLAGS=''
+                  AC_MSG_WARN([No system-provided libnumbertext or codecvt/regex C++11 headers (min. libstdc++ 4.9).
+                               Enable libnumbertext fallback (missing number to number name conversion).])
+                ])
+        CXXFLAGS=$save_CXXFLAGS
+        AC_LANG_POP([C++])
+    fi
+    if test "$ENABLE_LIBNUMBERTEXT" = TRUE; then
+        AC_DEFINE(ENABLE_LIBNUMBERTEXT)
+    fi
+fi
+AC_SUBST(SYSTEM_LIBNUMBERTEXT)
+AC_SUBST(SYSTEM_LIBNUMBERTEXT_DATA)
+AC_SUBST(ENABLE_LIBNUMBERTEXT)
+AC_SUBST(LIBNUMBERTEXT_CFLAGS)
+
 dnl ***************************************
 dnl testing libc version for Linux...
 dnl ***************************************
@@ -9860,6 +9956,8 @@ if test "x$enable_gtk3" = "xyes"; then
     dnl We require egl only for the gtk3 plugin. Otherwise we use glx.
     if test "$with_system_epoxy" != "yes"; then
         AC_CHECK_LIB(EGL, eglMakeCurrent, [:], AC_MSG_ERROR([libEGL required.]))
+        AC_CHECK_HEADER(EGL/eglplatform.h, [],
+                        [AC_MSG_ERROR(EGL headers not found. install mesa-libEGL-devel)], [])
     fi
 fi
 AC_SUBST(GTK3_LIBS)
@@ -10334,6 +10432,27 @@ elif test "$_os" = "Linux" -o "$_os" = "Darwin" -o "$_os" = "WINNT" ; then
         # gpg installation to run OpenPGP signature verification
         AC_DEFINE([HAVE_FEATURE_GPGVERIFY])
     fi
+    if test "$_os" = "Linux"; then
+      uid=`id -u`
+      AC_MSG_CHECKING([for /run/user/$uid])
+      if test -d /run/user/$uid; then
+        AC_MSG_RESULT([yes])
+        AC_PATH_PROG(GPGCONF, gpgconf)
+        AC_MSG_CHECKING([for gpgconf --create-socketdir... ])
+        if $GPGCONF --dump-options > /dev/null ; then
+          if $GPGCONF --dump-options | grep -q create-socketdir ; then
+	    AC_MSG_RESULT([yes])
+            AC_DEFINE([HAVE_GPGCONF_SOCKETDIR])
+          else
+            AC_MSG_RESULT([no])
+          fi
+        else
+	  AC_MSG_RESULT([no. missing or broken gpgconf?])
+        fi
+      else
+        AC_MSG_RESULT([no])
+     fi
+   fi
 fi
 AC_SUBST(ENABLE_GPGMEPP)
 AC_SUBST(SYSTEM_GPGMEPP)
@@ -10343,6 +10462,8 @@ AC_SUBST(LIBASSUAN_CFLAGS)
 AC_SUBST(LIBASSUAN_LIBS)
 AC_SUBST(GPGMEPP_CFLAGS)
 AC_SUBST(GPGMEPP_LIBS)
+AC_SUBST(GPGCONF)
+AC_SUBST(HAVE_GPGCONF_SOCKETDIR)
 
 AC_MSG_CHECKING([whether to build the Wiki Publisher extension])
 if test "x$enable_ext_wiki_publisher" = "xyes" -a "x$enable_extension_integration" != "xno" -a "$with_java" != "no"; then
@@ -10818,9 +10939,13 @@ int main(int argc, char **argv) {
             #  02 00 80 3a  90 8a 4e d2 3a 00 00 00  f0 b4 b9 a7 ff 7f 00 00  00 00 00 00 00 00 00 00  20 d8 4e d2
             #               ^~~~~~~~~~~~~~~~~~~~~~~
             #               vptr for 'QObjectPrivate'
+            # so temporarily ignore here whichever way would be used to make such errors fatal
+            # (-fno-sanitize-recover=... or UBSAN_OPTIONS halt_on_error=1):
             save_CXX=$CXX
             CXX=$(printf %s "$CXX" \
                 | sed -e 's/-fno-sanitize-recover\(=[[0-9A-Za-z,_-]]*\)*//')
+            save_UBSAN_OPTIONS=$UBSAN_OPTIONS
+            UBSAN_OPTIONS=$UBSAN_OPTIONS:halt_on_error=0
             save_CXXFLAGS=$CXXFLAGS
             CXXFLAGS="$CXXFLAGS $KDE4_CFLAGS"
             save_LIBS=$LIBS
@@ -10897,6 +11022,7 @@ int main(int argc, char *argv[])
 
             LIBS=$save_LIBS
             CXXFLAGS=$save_CXXFLAGS
+            UBSAN_OPTIONS=$save_UBSAN_OPTIONS
             CXX=$save_CXX
             AC_LANG_POP([C++])
         ],
@@ -10939,9 +11065,16 @@ then
     if test "$QMAKE5" = "no"; then
         AC_MSG_ERROR([Qmake not found.  Please specify the root of your Qt5 installation by exporting QT5DIR before running "configure".])
     else
-        qmake5_test_ver="`$QMAKE5 -v 2>&1 | sed -n -e '/^Using Qt version 5\./p'`"
+        qmake5_test_ver="`$QMAKE5 -v 2>&1 | $SED -n -e 's/^Using Qt version \(5\.[[0-9.]]\+\).*$/\1/p'`"
         if test -z "$qmake5_test_ver"; then
             AC_MSG_ERROR([Wrong qmake for Qt5 found. Please specify the root of your Qt5 installation by exporting QT5DIR before running "configure".])
+        fi
+        qmake5_minor_version="`echo $qmake5_test_ver | cut -d. -f2`"
+        qt5_minimal_minor="6"
+        if test "$qmake5_minor_version" -lt "$qt5_minimal_minor"; then
+            AC_MSG_ERROR([The minimal supported Qt5 version is 5.${qt5_minimal_minor}, but your 'qmake -v' reports Qt5 version $qmake5_test_ver.])
+        else
+            AC_MSG_NOTICE([Detected Qt5 version: $qmake5_test_ver])
         fi
     fi
 
@@ -11108,16 +11241,15 @@ dnl ===================================================================
 AC_MSG_CHECKING([which themes to include])
 # if none given use default subset of available themes
 if test "x$with_theme" = "x" -o "x$with_theme" = "xyes"; then
-    with_theme="breeze breeze_dark elementary galaxy hicontrast sifr sifr_dark tango"
-    # test -z "$ENABLE_RELEASE_BUILD" && with_theme="$with_theme tango_testing"
+    with_theme="breeze breeze_dark colibre elementary karasa_jaga sifr sifr_dark tango"
 fi
 
 WITH_THEMES=""
 if test "x$with_theme" != "xno"; then
     for theme in $with_theme; do
         case $theme in
-        breeze|breeze_dark|crystal|elementary|galaxy|hicontrast|oxygen|sifr|sifr_dark|tango|tango_testing) real_theme="$theme" ;;
-        default) real_theme=galaxy ;;
+        breeze|breeze_dark|colibre|elementary|karasa_jaga|sifr|sifr_dark|tango) real_theme="$theme" ;;
+        default) real_theme=colibre ;;
         *) AC_MSG_ERROR([Unknown value for --with-theme: $theme]) ;;
         esac
         WITH_THEMES=`echo "$WITH_THEMES $real_theme"|tr '\ ' '\n'|sort|uniq|tr '\n' '\ '`
@@ -11125,10 +11257,10 @@ if test "x$with_theme" != "xno"; then
 fi
 AC_MSG_RESULT([$WITH_THEMES])
 AC_SUBST([WITH_THEMES])
-# FIXME: remove this, and the convenience default->galaxy remapping after a crace period
+# FIXME: remove this, and the convenience default->colibre remapping after a crace period
 for theme in $with_theme; do
     case $theme in
-    default) AC_MSG_WARN([--with-theme=default is deprecated and will be removed, use --with-theme=galaxy]) ;;
+    default) AC_MSG_WARN([--with-theme=default is deprecated and will be removed, use --with-theme=colibre]) ;;
     *) ;;
     esac
 done
@@ -12080,59 +12212,40 @@ AC_SUBST(TESTINSTALLDIR)
 # ===================================================================
 
 AC_MSG_CHECKING([for Google Drive client id and secret])
-GDRIVE_CLIENT_ID="\"$with_gdrive_client_id\""
-GDRIVE_CLIENT_SECRET="\"$with_gdrive_client_secret\""
 if test "$with_gdrive_client_id" = "no" -o -z "$with_gdrive_client_id"; then
-    GDRIVE_CLIENT_ID="\"\""
-fi
-
-if test "$with_gdrive_client_secret" = "no" -o -z "$with_gdrive_client_secret"; then
-    GDRIVE_CLIENT_SECRET="\"\""
-fi
-
-if test -z "$GDRIVE_CLIENT_ID" -o -z "$GDRIVE_CLIENT_SECRET"; then
     AC_MSG_RESULT([not set])
+    GDRIVE_CLIENT_ID="\"\""
+    GDRIVE_CLIENT_SECRET="\"\""
 else
     AC_MSG_RESULT([set])
+    GDRIVE_CLIENT_ID="\"$with_gdrive_client_id\""
+    GDRIVE_CLIENT_SECRET="\"$with_gdrive_client_secret\""
 fi
-
 AC_DEFINE_UNQUOTED(GDRIVE_CLIENT_ID, $GDRIVE_CLIENT_ID)
 AC_DEFINE_UNQUOTED(GDRIVE_CLIENT_SECRET, $GDRIVE_CLIENT_SECRET)
 
 AC_MSG_CHECKING([for Alfresco Cloud client id and secret])
-ALFRESCO_CLOUD_CLIENT_ID="\"$with_alfresco_cloud_client_id\""
-ALFRESCO_CLOUD_CLIENT_SECRET="\"$with_alfresco_cloud_client_secret\""
 if test "$with_alfresco_cloud_client_id" = "no" -o -z "$with_alfresco_cloud_client_id"; then
-    ALFRESCO_CLOUD_CLIENT_ID="\"\""
-fi
-
-if test "$with_alfresco_cloud_client_secret" = "no" -o -z "$with_alfresco_cloud_client_secret"; then
-    ALFRESCO_CLOUD_CLIENT_SECRET="\"\""
-fi
-
-if test -z "$ALFRESCO_CLOUD_CLIENT_ID" -o -z "$ALFRESCO_CLOUD_CLIENT_SECRET"; then
     AC_MSG_RESULT([not set])
+    ALFRESCO_CLOUD_CLIENT_ID="\"\""
+    ALFRESCO_CLOUD_CLIENT_SECRET="\"\""
 else
     AC_MSG_RESULT([set])
+    ALFRESCO_CLOUD_CLIENT_ID="\"$with_alfresco_cloud_client_id\""
+    ALFRESCO_CLOUD_CLIENT_SECRET="\"$with_alfresco_cloud_client_secret\""
 fi
 AC_DEFINE_UNQUOTED(ALFRESCO_CLOUD_CLIENT_ID, $ALFRESCO_CLOUD_CLIENT_ID)
 AC_DEFINE_UNQUOTED(ALFRESCO_CLOUD_CLIENT_SECRET, $ALFRESCO_CLOUD_CLIENT_SECRET)
 
 AC_MSG_CHECKING([for OneDrive client id and secret])
-ONEDRIVE_CLIENT_ID="\"$with_onedrive_client_id\""
-ONEDRIVE_CLIENT_SECRET="\"$with_onedrive_client_secret\""
 if test "$with_onedrive_client_id" = "no" -o -z "$with_onedrive_client_id"; then
-    ONEDRIVE_CLIENT_ID="\"\""
-fi
-
-if test "$with_onedrive_client_secret" = "no" -o -z "$with_onedrive_client_secret"; then
-    ONEDRIVE_CLIENT_SECRET="\"\""
-fi
-
-if test -z "$ONEDRIVE_CLIENT_ID" -o -z "$ONEDRIVE_CLIENT_SECRET"; then
     AC_MSG_RESULT([not set])
+    ONEDRIVE_CLIENT_ID="\"\""
+    ONEDRIVE_CLIENT_SECRET="\"\""
 else
     AC_MSG_RESULT([set])
+    ONEDRIVE_CLIENT_ID="\"$with_onedrive_client_id\""
+    ONEDRIVE_CLIENT_SECRET="\"$with_onedrive_client_secret\""
 fi
 AC_DEFINE_UNQUOTED(ONEDRIVE_CLIENT_ID, $ONEDRIVE_CLIENT_ID)
 AC_DEFINE_UNQUOTED(ONEDRIVE_CLIENT_SECRET, $ONEDRIVE_CLIENT_SECRET)
@@ -12413,7 +12526,7 @@ if test "$enable_mpl_subset" = "yes"; then
     fi
     for theme in $WITH_THEMES; do
         case $theme in
-        breeze|crystal|default|hicontrast|oxygen|sifr)
+        breeze|default|sifr)
             AC_MSG_ERROR([need to disable icon themes from '$WITH_THEMES': $theme present, use --with-theme=tango]) ;;
         *) : ;;
         esac
@@ -12627,6 +12740,7 @@ AC_CONFIG_HEADERS([config_host/config_langs.h])
 AC_CONFIG_HEADERS([config_host/config_lgpl.h])
 AC_CONFIG_HEADERS([config_host/config_libcxx.h])
 AC_CONFIG_HEADERS([config_host/config_liblangtag.h])
+AC_CONFIG_HEADERS([config_host/config_libnumbertext.h])
 AC_CONFIG_HEADERS([config_host/config_locales.h])
 AC_CONFIG_HEADERS([config_host/config_mpl.h])
 AC_CONFIG_HEADERS([config_host/config_kde4.h])

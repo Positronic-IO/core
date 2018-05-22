@@ -26,13 +26,14 @@ ScDrawObjData::ScDrawObjData() :
     SdrObjUserData( SdrInventor::ScOrSwDraw, SC_UD_OBJDATA ),
     maStart( ScAddress::INITIALIZE_INVALID ),
     maEnd( ScAddress::INITIALIZE_INVALID ),
-    meType( DrawingObject )
+    meType( DrawingObject ),
+    mbResizeWithCell( false )
 {
 }
 
-ScDrawObjData* ScDrawObjData::Clone( SdrObject* ) const
+std::unique_ptr<SdrObjUserData> ScDrawObjData::Clone( SdrObject* ) const
 {
-    return new ScDrawObjData( *this );
+    return std::unique_ptr<SdrObjUserData>(new ScDrawObjData( *this ));
 }
 
 ScIMapInfo::ScIMapInfo( const ImageMap& rImageMap ) :
@@ -51,9 +52,9 @@ ScIMapInfo::~ScIMapInfo()
 {
 }
 
-SdrObjUserData* ScIMapInfo::Clone( SdrObject* ) const
+std::unique_ptr<SdrObjUserData> ScIMapInfo::Clone( SdrObject* ) const
 {
-    return new ScIMapInfo( *this );
+    return std::unique_ptr<SdrObjUserData>(new ScIMapInfo( *this ));
 }
 
 ScMacroInfo::ScMacroInfo() :
@@ -65,9 +66,9 @@ ScMacroInfo::~ScMacroInfo()
 {
 }
 
-SdrObjUserData* ScMacroInfo::Clone( SdrObject* /*pObj*/ ) const
+std::unique_ptr<SdrObjUserData> ScMacroInfo::Clone( SdrObject* /*pObj*/ ) const
 {
-   return new ScMacroInfo( *this );
+   return std::unique_ptr<SdrObjUserData>(new ScMacroInfo( *this ));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

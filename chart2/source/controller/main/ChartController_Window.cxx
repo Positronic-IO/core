@@ -58,15 +58,17 @@
 #include <com/sun/star/util/XUpdatable.hpp>
 #include <com/sun/star/awt/Rectangle.hpp>
 
+#include <comphelper/lok.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/sequence.hxx>
 
 #include <toolkit/awt/vclxmenu.hxx>
 
+#include <sfx2/viewsh.hxx>
+#include <sfx2/ipclient.hxx>
 #include <svx/svxids.hrc>
 #include <svx/ActionDescriptionProvider.hxx>
-
 #include <svx/obj3d.hxx>
 #include <svx/scene3d.hxx>
 #include <svx/svddrgmt.hxx>
@@ -75,6 +77,7 @@
 #include <vcl/weld.hxx>
 #include <rtl/math.hxx>
 #include <svtools/acceleratorexecute.hxx>
+#include <tools/diagnose_ex.h>
 
 #define DRGPIX    2     // Drag MinMove in Pixel
 
@@ -479,9 +482,9 @@ void ChartController::execute_Paint(vcl::RenderContext& rRenderContext, const to
                 pDrawViewWrapper->CompleteRedraw(&rRenderContext, vcl::Region(rRect));
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     catch( ... )
     {
@@ -858,9 +861,9 @@ void ChartController::execute_MouseButtonUp( const MouseEvent& rMEvt )
                         }
                     }
                 }
-                catch( const uno::Exception & ex )
+                catch( const uno::Exception & )
                 {
-                    SAL_WARN("chart2", "Exception caught. " << ex );
+                    DBG_UNHANDLED_EXCEPTION("chart2");
                 }
                 //all wanted model changes will take effect
                 //and all unwanted view modifications are cleaned
@@ -1087,9 +1090,9 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
                                 }
                             }
                         }
-                        catch( const uno::Exception & ex )
+                        catch( const uno::Exception & )
                         {
-                            SAL_WARN("chart2", "Exception caught. " << ex );
+                            DBG_UNHANDLED_EXCEPTION("chart2");
                         }
                     }
 
@@ -1252,6 +1255,25 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
 
         if ( !xPopupController.is() || !xPopupMenu.is() )
             return;
+
+        if (comphelper::LibreOfficeKit::isActive())
+        {
+            PopupMenu* pPopupMenu = static_cast<PopupMenu*>(VCLXMenu::GetImplementation(xPopupMenu)->GetMenu());
+            pPopupMenu->SetLOKNotifier(SfxViewShell::Current());
+
+            // the context menu expects a position related to the document window,
+            // not to the chart window
+            SfxInPlaceClient* pIPClient = SfxViewShell::Current()->GetIPClient();
+            if (pIPClient)
+            {
+                vcl::Window* pRootWin = pIPClient->GetEditWin();
+                if (pRootWin)
+                {
+                    Point aOffset = pChartWindow->GetOffsetPixelFrom(*pRootWin);
+                    aPos += aOffset;
+                }
+            }
+        }
 
         xPopupController->setPopupMenu( xPopupMenu );
         xPopupMenu->execute( css::uno::Reference< css::awt::XWindowPeer >( m_xFrame->getContainerWindow(), css::uno::UNO_QUERY ),
@@ -1816,9 +1838,9 @@ bool ChartController::impl_DragDataPoint( const OUString & rCID, double fAdditio
                 bResult = true;
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 

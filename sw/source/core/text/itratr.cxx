@@ -56,6 +56,7 @@
 #include "itrtxt.hxx"
 #include <breakit.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <editeng/lrspitem.hxx>
 #include <calbck.hxx>
 
@@ -158,7 +159,7 @@ bool SwAttrIter::SeekStartAndChgAttrIter( OutputDevice* pOut, const bool bParaFo
     {
         m_pRedline->Clear( m_pFont );
         if( !bParaFont )
-            m_nChgCnt = m_nChgCnt + m_pRedline->Seek( *m_pFont, 0, USHRT_MAX );
+            m_nChgCnt = m_nChgCnt + m_pRedline->Seek(*m_pFont, 0, COMPLETE_STRING);
         else
             m_pRedline->Reset();
     }
@@ -379,13 +380,13 @@ static bool lcl_MinMaxString( SwMinMaxArgs& rArg, SwFont* pFnt, const OUString &
             nStop = nEnd;
 
         SwDrawTextInfo aDrawInf( rArg.pSh, *rArg.pOut, nullptr, rText, nIdx, nStop - nIdx );
-        long nAktWidth = pFnt->GetTextSize_( aDrawInf ).Width();
-        rArg.nRowWidth += nAktWidth;
+        long nCurrentWidth = pFnt->GetTextSize_( aDrawInf ).Width();
+        rArg.nRowWidth += nCurrentWidth;
         if( bClear )
             rArg.NewWord();
         else
         {
-            rArg.nWordWidth += nAktWidth;
+            rArg.nWordWidth += nCurrentWidth;
             if( static_cast<long>(rArg.rAbsMin) < rArg.nWordWidth )
                 rArg.rAbsMin = rArg.nWordWidth;
             rArg.Minimum( rArg.nWordWidth + rArg.nWordAdd );
@@ -396,7 +397,7 @@ static bool lcl_MinMaxString( SwMinMaxArgs& rArg, SwFont* pFnt, const OUString &
     return bRet;
 }
 
-bool SwTextNode::IsSymbol( const sal_Int32 nBegin ) const
+bool SwTextNode::IsSymbolAt(const sal_Int32 nBegin) const
 {
     SwScriptInfo aScriptInfo;
     SwAttrIter aIter( *const_cast<SwTextNode*>(this), aScriptInfo );
@@ -600,7 +601,7 @@ void SwTextNode::GetMinMaxSize( sal_uLong nIndex, sal_uLong& rMin, sal_uLong &rM
     sal_Int32 nIdx = 0;
     aIter.SeekAndChgAttrIter( nIdx, pOut );
     sal_Int32 nLen = m_Text.getLength();
-    long nAktWidth = 0;
+    long nCurrentWidth = 0;
     long nAdd = 0;
     SwMinMaxArgs aArg( pOut, pSh, rMin, rAbsMin );
     while( nIdx < nLen )
@@ -654,9 +655,9 @@ void SwTextNode::GetMinMaxSize( sal_uLong nIndex, sal_uLong& rMin, sal_uLong &rM
                 OUString sTmp( cChar );
                 SwDrawTextInfo aDrawInf( getIDocumentLayoutAccess().GetCurrentViewShell(),
                     *pOut, nullptr, sTmp, 0, 1, 0, false );
-                nAktWidth = aIter.GetFnt()->GetTextSize_( aDrawInf ).Width();
-                aArg.nWordWidth += nAktWidth;
-                aArg.nRowWidth += nAktWidth;
+                nCurrentWidth = aIter.GetFnt()->GetTextSize_( aDrawInf ).Width();
+                aArg.nWordWidth += nCurrentWidth;
+                aArg.nRowWidth += nCurrentWidth;
                 if( static_cast<long>(rAbsMin) < aArg.nWordWidth )
                     rAbsMin = aArg.nWordWidth;
                 aArg.Minimum( aArg.nWordWidth + aArg.nWordAdd );
@@ -682,9 +683,9 @@ void SwTextNode::GetMinMaxSize( sal_uLong nIndex, sal_uLong& rMin, sal_uLong &rM
                         {
                             const SdrObject* pSObj = pFrameFormat->FindSdrObject();
                             if( pSObj )
-                                nAktWidth = pSObj->GetCurrentBoundRect().GetWidth();
+                                nCurrentWidth = pSObj->GetCurrentBoundRect().GetWidth();
                             else
-                                nAktWidth = 0;
+                                nCurrentWidth = 0;
                         }
                         else
                         {
@@ -697,17 +698,17 @@ void SwTextNode::GetMinMaxSize( sal_uLong nIndex, sal_uLong& rMin, sal_uLong &rM
                                 // and USHRT_MAX as maximum width
                                 // It were cleaner and maybe necessary later on to iterate over the content
                                 // of the text frame and call GetMinMaxSize recursively
-                                nAktWidth = FLYINCNT_MIN_WIDTH; // 0.5 cm
+                                nCurrentWidth = FLYINCNT_MIN_WIDTH; // 0.5 cm
                                 rMax = std::max(rMax, sal_uLong(USHRT_MAX));
                             }
                             else
-                                nAktWidth = pFrameFormat->GetFrameSize().GetWidth();
+                                nCurrentWidth = pFrameFormat->GetFrameSize().GetWidth();
                         }
-                        nAktWidth += rLR.GetLeft();
-                        nAktWidth += rLR.GetRight();
+                        nCurrentWidth += rLR.GetLeft();
+                        nCurrentWidth += rLR.GetRight();
                         aArg.nWordAdd = nOldWidth + nOldAdd;
-                        aArg.nWordWidth = nAktWidth;
-                        aArg.nRowWidth += nAktWidth;
+                        aArg.nWordWidth = nCurrentWidth;
+                        aArg.nRowWidth += nCurrentWidth;
                         if( static_cast<long>(rAbsMin) < aArg.nWordWidth )
                             rAbsMin = aArg.nWordWidth;
                         aArg.Minimum( aArg.nWordWidth + aArg.nWordAdd );

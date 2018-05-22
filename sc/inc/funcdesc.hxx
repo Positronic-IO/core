@@ -33,11 +33,6 @@
 #define MAX_FUNCCAT 12  /* maximum number of categories for functions */
 #define LRU_MAX 10 /* maximal number of last recently used functions */
 
-class ScFuncDesc;
-class ScFunctionList;
-class ScFunctionCategory;
-class ScFunctionMgr;
-
 /**
   Stores and generates human readable descriptions for spreadsheet-functions,
   e.g.\ functions used in formulas in calc
@@ -254,7 +249,6 @@ public:
 private:
     ::std::vector<const ScFuncDesc*> aFunctionList; /**< List of functions */
     ::std::vector<const ScFuncDesc*>::iterator aFunctionListIter; /**< position in function list */
-    sal_Int32  nMaxFuncNameLen; /**< Length of longest function name */
 };
 
 /**

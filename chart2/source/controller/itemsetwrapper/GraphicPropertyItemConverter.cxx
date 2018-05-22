@@ -41,6 +41,7 @@
 #include <com/sun/star/chart2/FillBitmap.hpp>
 #include <com/sun/star/awt/Gradient.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -255,9 +256,9 @@ void GraphicPropertyItemConverter::FillSpecialItem(
                     }
                 }
             }
-            catch( const beans::UnknownPropertyException &ex )
+            catch( const beans::UnknownPropertyException & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         break;
 
@@ -363,7 +364,7 @@ void GraphicPropertyItemConverter::FillSpecialItem(
 
                 lcl_SetContentForNamedProperty(
                     m_xNamedPropertyTableFactory, "com.sun.star.drawing.BitmapTable" ,
-                    aItem, MID_GRAFURL );
+                    aItem, MID_BITMAP );
 
                 // translate model name to UI-name for predefined entries, so
                 // that the correct entry is chosen in the list of UI-names
@@ -429,9 +430,14 @@ bool GraphicPropertyItemConverter::ApplySpecialItem(
                 bool bStretched = rItemSet.Get( XATTR_FILLBMP_STRETCH ).GetValue();
                 drawing::BitmapMode aMode =
                     (bStretched ? drawing::BitmapMode_STRETCH : drawing::BitmapMode_NO_REPEAT);
+                drawing::BitmapMode aOtherMode = drawing::BitmapMode_NO_REPEAT;
 
                 aValue <<= aMode;
-                if( aValue != GetPropertySet()->getPropertyValue( aModePropName ))
+                GetPropertySet()->getPropertyValue( aModePropName ) >>= aOtherMode;
+
+                // don't overwrite if it has been set to BitmapMode_REPEAT (= tiled) already
+                // XATTR_FILLBMP_STRETCH and XATTR_FILLBMP_TILE often come in pairs, tdf#104658
+                if( aMode != aOtherMode && aOtherMode != drawing::BitmapMode_REPEAT )
                 {
                     GetPropertySet()->setPropertyValue( aModePropName, aValue );
                     bChanged = true;
@@ -502,9 +508,9 @@ bool GraphicPropertyItemConverter::ApplySpecialItem(
                     }
                 }
             }
-            catch( const beans::UnknownPropertyException &ex )
+            catch( const beans::UnknownPropertyException & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         break;
 
@@ -640,7 +646,7 @@ bool GraphicPropertyItemConverter::ApplySpecialItem(
                     {
                         // add Bitmap to list
                         uno::Any aBitmap;
-                        rItem.QueryValue( aBitmap, MID_GRAFURL );
+                        rItem.QueryValue(aBitmap, MID_BITMAP);
                         OUString aPreferredName;
                         aValue >>= aPreferredName;
                         aValue <<= PropertyHelper::addBitmapUniqueNameToTable(

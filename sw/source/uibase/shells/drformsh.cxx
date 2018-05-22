@@ -39,7 +39,6 @@
 #include <wrtsh.hxx>
 #include <cmdid.h>
 #include <globals.hrc>
-#include <strings.hrc>
 #include <drwbassh.hxx>
 #include <drformsh.hxx>
 #include <svl/urihelper.hxx>
@@ -47,7 +46,7 @@
 #include <sfx2/docfile.hxx>
 #include <docsh.hxx>
 
-#define SwDrawFormShell
+#define ShellClass_SwDrawFormShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 

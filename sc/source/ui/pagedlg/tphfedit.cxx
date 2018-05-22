@@ -28,7 +28,6 @@
 #include <editeng/fhgtitem.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/objsh.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
@@ -142,7 +141,7 @@ void ScEditWindow::SetNumType(SvxNumType eNumType)
     pEdEngine->UpdateFields();
 }
 
-EditTextObject* ScEditWindow::CreateTextObject()
+std::unique_ptr<EditTextObject> ScEditWindow::CreateTextObject()
 {
     //  reset paragraph attributes
     //  (GetAttribs at creation of format dialog always returns the set items)
@@ -205,7 +204,7 @@ void ScEditWindow::SetCharAttributes()
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateScCharDlg(
             GetParent(),  &aSet, pDocSh));
         OSL_ENSURE(pDlg, "Dialog create fail!");
-        pDlg->SetText( ScGlobal::GetRscString( STR_TEXTATTRS ) );
+        pDlg->SetText( ScResId( STR_TEXTATTRS ) );
         if ( pDlg->Execute() == RET_OK )
         {
             aSet.ClearItem();

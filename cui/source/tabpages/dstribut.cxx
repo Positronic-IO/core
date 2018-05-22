@@ -21,7 +21,6 @@
 #include <dstribut.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/svddef.hxx>
-#include <dialmgr.hxx>
 
 /*************************************************************************
 |*
@@ -100,6 +99,10 @@ void SvxDistributePage::dispose()
 
 
 void SvxDistributePage::PointChanged(vcl::Window* /*pWindow*/, RectPoint /*eRP*/)
+{
+}
+
+void SvxDistributePage::PointChanged(weld::DrawingArea*, RectPoint /*eRP*/)
 {
 }
 

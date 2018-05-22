@@ -23,7 +23,6 @@
 #include <svl/poolitem.hxx>
 #include <svl/itemset.hxx>
 #include <svl/languageoptions.hxx>
-#include <unotools/fontcvt.hxx>
 #include <editeng/svxenum.hxx>
 #include "scdllapi.h"
 #include "fonthelper.hxx"
@@ -52,7 +51,7 @@ enum ScAutoFontColorMode
 
 class SC_DLLPUBLIC ScPatternAttr: public SfxSetItem
 {
-    std::unique_ptr<OUString>  pName;
+    boost::optional<OUString>  pName;
     ScStyleSheet*              pStyle;
     sal_uInt64                 mnKey;
 public:

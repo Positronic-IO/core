@@ -251,7 +251,7 @@ sal_Int32 Decompression::explode()
         }
         // if the bit is 1 we have here a length/distance pair:
         // -decode a number with Hufmman Tree #1; variable bit length, result is 0x00 .. 0x0F -> L1
-        sal_uInt32 L1 = Decode(m_Tree1);
+        sal_uInt32 L1 = Decode(m_Tree1.get());
         sal_uInt32 Length;
         if (L1 <= 7)
         {
@@ -276,7 +276,7 @@ sal_Int32 Decompression::explode()
         }
 
         // - decode another number with Hufmann Tree #2 giving result 0x00..0x3F -> D1
-        sal_uInt32 D1 = Decode(m_Tree2);
+        sal_uInt32 D1 = Decode(m_Tree2.get());
         sal_uInt32 D2;
         if (Length == 2)
         {
@@ -400,7 +400,7 @@ void Decompression::ConstructTree1()
     // d    0000 01
     // e    0000 001
     // f    0000 000
-    m_Tree1 = new HuffmanTreeNode();
+    m_Tree1.reset( new HuffmanTreeNode());
     for (sal_uInt32 i=0; i< 16; i++)
     {
         m_Tree1->InsertNode(i, Tree1String[i]);
@@ -431,7 +431,7 @@ void Decompression::ConstructTree1()
 void Decompression::ConstructTree2()
 {
 
-    m_Tree2 = new HuffmanTreeNode();
+    m_Tree2.reset(new HuffmanTreeNode());
     for (sal_uInt32 i=0; i< 64; i++)
     {
         m_Tree2->InsertNode(i, Tree2String[i]);
@@ -451,24 +451,11 @@ void Decompression::fillArray()
     }
 }
 
-HuffmanTreeNode::HuffmanTreeNode(sal_uInt32 nValue )
+HuffmanTreeNode::HuffmanTreeNode(sal_uInt32 nValue):value(nValue)
 {
-    value = nValue;
-    left = nullptr;
-    right = nullptr;
 }
 HuffmanTreeNode::~HuffmanTreeNode()
 {
-    if (left)
-    {
-        delete left;
-        left = nullptr;
-    }
-    if (right)
-    {
-        delete right;
-        right = nullptr;
-    }
 }
 
 HuffmanTreeNode * HuffmanTreeNode::InsertNode(sal_uInt32 nValue, const sal_Char * pInCode)
@@ -485,9 +472,9 @@ HuffmanTreeNode * HuffmanTreeNode::InsertNode(sal_uInt32 nValue, const sal_Char 
         pParent = InsertNode(0xffffffff, aCode.c_str());
     }
     if (cLast == '0')
-        pParent->left = pNew;
+        pParent->left.reset(pNew);
     else // (cChar == '1')
-        pParent->right = pNew;
+        pParent->right.reset(pNew);
 
     return pNew;
 }
@@ -502,11 +489,11 @@ HuffmanTreeNode * HuffmanTreeNode::QueryNode(const sal_Char * pCode)
         sal_Char cChar= pCode[i];
         if (cChar == '0')
         {
-            pNode = pNode->left;
+            pNode = pNode->left.get();
         }
         else // (cChar == '1')
         {
-            pNode = pNode->right;
+            pNode = pNode->right.get();
         }
     }
     return pNode;

@@ -74,7 +74,7 @@ bool UCB_DeleteFile( const OUString& rURL )
     return bRemoved;
 }
 
-bool UCB_CopyFile( const OUString& rURL, const OUString& rNewURL, bool bCopyIsMove )
+bool UCB_MoveFile( const OUString& rURL, const OUString& rNewURL )
 {
     bool bCopyCompleted = true;
     try
@@ -92,7 +92,7 @@ bool UCB_CopyFile( const OUString& rURL, const OUString& rNewURL, bool bCopyIsMo
         aInfo.NameClash = css::ucb::NameClash::ERROR;
         aInfo.NewTitle = sName;
         aInfo.SourceURL = rURL;
-        aInfo.MoveData = bCopyIsMove;
+        aInfo.MoveData = true;
         aTempContent.executeCommand( "transfer", uno::Any(aInfo) );
     }
     catch( css::uno::Exception& )
@@ -311,7 +311,7 @@ bool needToMapFillItemsToSvxBrushItemTypes(const SfxItemSet& rSet,
         case drawing::FillStyle_BITMAP:
             switch (nMID)
             {
-                case MID_GRAPHIC_URL:
+                case MID_GRAPHIC:
                     return SfxItemState::SET == rSet.GetItemState(XATTR_FILLBITMAP);
                 case MID_GRAPHIC_POSITION:
                     return SfxItemState::SET == rSet.GetItemState(XATTR_FILLBMP_STRETCH)

@@ -35,6 +35,7 @@
 #include <queryparam.hxx>
 #include <queryentry.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <editutil.hxx>
 #include <cellvalue.hxx>
 #include <scmatrix.hxx>
@@ -204,7 +205,7 @@ bool ScValueIterator::GetThis(double& rValue, FormulaError& rErr)
                 if (bCalcAsShown)
                 {
                     ScAttrArray_IterGetNumberFormat(nNumFormat, pAttrArray,
-                        nAttrEndRow, pCol->pAttrArray, nCurRow, pDoc);
+                        nAttrEndRow, pCol->pAttrArray.get(), nCurRow, pDoc);
                     rValue = pDoc->RoundValueAsShown(rValue, nNumFormat);
                 }
                 return true; // Found it!
@@ -323,7 +324,7 @@ const ScAttrArray* ScDBQueryDataIterator::GetAttrArrayByCol(ScDocument& rDoc, SC
     if (nTab >= rDoc.GetTableCount())
         OSL_FAIL("try to access index out of bounds, FIX IT");
     ScColumn* pCol = &rDoc.maTabs[nTab]->aCol[nCol];
-    return pCol->pAttrArray;
+    return pCol->pAttrArray.get();
 }
 
 bool ScDBQueryDataIterator::IsQueryValid(
@@ -540,7 +541,7 @@ bool ScDBQueryDataIterator::DataAccessMatrix::getCurrent(Value& rValue)
             // Don't take empty values into account.
             continue;
 
-        bool bIsStrVal = rMat.IsString(mpParam->mnField, mnCurRow);
+        bool bIsStrVal = rMat.IsStringOrEmpty(mpParam->mnField, mnCurRow);
         if (bIsStrVal && mpParam->mbSkipString)
             continue;
 
@@ -598,7 +599,7 @@ bool isQueryByString(const ScQueryEntry& rEntry, const ScQueryEntry::Item& rItem
             ;
     }
 
-    return rItem.meType == ScQueryEntry::ByString && rMat.IsString(nCol, nRow);
+    return rItem.meType == ScQueryEntry::ByString && rMat.IsStringOrEmpty(nCol, nRow);
 }
 
 }
@@ -987,7 +988,7 @@ ScCellValue ScCellIterator::getCellValue() const
             aRet.mpString = new svl::SharedString(*maCurCell.mpString);
         break;
         case CELLTYPE_EDIT:
-            aRet.mpEditText = maCurCell.mpEditText->Clone();
+            aRet.mpEditText = maCurCell.mpEditText->Clone().release();
         break;
         case CELLTYPE_VALUE:
             aRet.mfValue = maCurCell.mfValue;
@@ -1069,7 +1070,7 @@ ScQueryCellIterator::ScQueryCellIterator(ScDocument* pDocument, const ScInterpre
             ScQueryEntry& rEntry = mpParam->GetEntry(i);
             ScQueryEntry::Item& rItem = rEntry.GetQueryItem();
             sal_uInt32 nIndex = 0;
-            bool bNumber = pDoc->GetFormatTable()->IsNumberFormat(
+            bool bNumber = mrContext.GetFormatTable()->IsNumberFormat(
                 rItem.maString.getString(), nIndex, rItem.mfVal);
             rItem.meType = bNumber ? ScQueryEntry::ByValue : ScQueryEntry::ByString;
         }
@@ -1144,7 +1145,7 @@ bool ScQueryCellIterator::GetThis()
                 }
                 pCol = &(pDoc->maTabs[nTab])->aCol[nCol];
             }
-            while (pCol->IsEmptyData());
+            while (!rItem.mbMatchEmpty && pCol->IsEmptyData());
 
             InitPos();
 
@@ -1288,8 +1289,9 @@ bool ScQueryCellIterator::FindEqualOrSortedLastInRange( SCCOL& nFoundCol,
     bIgnoreMismatchOnLeadingStrings = true;
     bool bLiteral = mpParam->eSearchType == utl::SearchParam::SearchType::Normal &&
         mpParam->GetEntry(0).GetQueryItem().meType == ScQueryEntry::ByString;
-    bool bBinary = bLiteral && mpParam->bByRow && (mpParam->GetEntry(0).eOp ==
-            SC_LESS_EQUAL || mpParam->GetEntry(0).eOp == SC_GREATER_EQUAL);
+    bool bBinary = mpParam->bByRow &&
+        (bLiteral || mpParam->GetEntry(0).GetQueryItem().meType == ScQueryEntry::ByValue) &&
+        (mpParam->GetEntry(0).eOp == SC_LESS_EQUAL || mpParam->GetEntry(0).eOp == SC_GREATER_EQUAL);
     bool bFound = false;
     if (bBinary)
     {
@@ -1664,7 +1666,7 @@ bool ScQueryCellIterator::BinarySearch()
 
     CollatorWrapper* pCollator = (mpParam->bCaseSens ? ScGlobal::GetCaseCollator() :
         ScGlobal::GetCollator());
-    SvNumberFormatter& rFormatter = *(pDoc->GetFormatTable());
+    SvNumberFormatter& rFormatter = *(mrContext.GetFormatTable());
     const ScQueryEntry& rEntry = mpParam->GetEntry(0);
     const ScQueryEntry::Item& rItem = rEntry.GetQueryItem();
     bool bLessEqual = rEntry.eOp == SC_LESS_EQUAL;
@@ -2219,7 +2221,7 @@ bool ScHorizontalValueIterator::GetNext( double& rValue, FormulaError& rErr )
                     {
                         ScColumn* pCol = &pDoc->maTabs[nCurTab]->aCol[nCurCol];
                         ScAttrArray_IterGetNumberFormat( nNumFormat, pAttrArray,
-                                nAttrEndRow, pCol->pAttrArray, nCurRow, pDoc );
+                                nAttrEndRow, pCol->pAttrArray.get(), nCurRow, pDoc );
                         rValue = pDoc->RoundValueAsShown( rValue, nNumFormat );
                     }
                     bFound = true;
@@ -2284,7 +2286,7 @@ void ScHorizontalAttrIterator::InitForNextRow(bool bInitialization)
         SCCOL nPos = i - nStartCol;
         if ( bInitialization || pNextEnd[nPos] < nRow )
         {
-            const ScAttrArray* pArray = pDoc->maTabs[nTab]->aCol[i].pAttrArray;
+            const ScAttrArray* pArray = pDoc->maTabs[nTab]->aCol[i].pAttrArray.get();
             OSL_ENSURE( pArray, "pArray == 0" );
 
             SCSIZE nIndex;
@@ -2568,7 +2570,7 @@ void ScDocRowHeightUpdater::update()
         }
     }
 
-    ScProgress aProgress(mrDoc.GetDocumentShell(), ScGlobal::GetRscString(STR_PROGRESS_HEIGHTING), nCellCount, true);
+    ScProgress aProgress(mrDoc.GetDocumentShell(), ScResId(STR_PROGRESS_HEIGHTING), nCellCount, true);
 
     Fraction aZoom(1, 1);
     itr = mpTabRangesArray->begin();
@@ -2606,7 +2608,7 @@ void ScDocRowHeightUpdater::updateAll()
         nCellCount += mrDoc.maTabs[nTab]->GetWeightedCount();
     }
 
-    ScProgress aProgress(mrDoc.GetDocumentShell(), ScGlobal::GetRscString(STR_PROGRESS_HEIGHTING), nCellCount, true);
+    ScProgress aProgress(mrDoc.GetDocumentShell(), ScResId(STR_PROGRESS_HEIGHTING), nCellCount, true);
 
     Fraction aZoom(1, 1);
     sc::RowHeightContext aCxt(mfPPTX, mfPPTY, aZoom, aZoom, mpOutDev);

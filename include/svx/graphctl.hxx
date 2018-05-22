@@ -21,12 +21,27 @@
 
 #include <vcl/ctrl.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/weld.hxx>
 #include <svx/svxdllapi.h>
 
 #include <svx/svdview.hxx>
 #include <svx/svdobj.hxx>
 
-class GraphCtrlUserCall;
+class GraphCtrl;
+
+class GraphCtrlUserCall : public SdrObjUserCall
+{
+    GraphCtrl& rWin;
+
+public:
+
+    GraphCtrlUserCall(GraphCtrl& rGraphWin)
+        : rWin(rGraphWin)
+    {}
+
+    virtual void Changed(const SdrObject& rObj, SdrUserCallType eType, const tools::Rectangle& rOldBoundRect) override;
+};
+
 class SvxGraphCtrlAccessibleContext;
 
 class SVX_DLLPUBLIC GraphCtrl : public Control
@@ -71,7 +86,7 @@ protected:
     virtual void        SdrObjChanged( const SdrObject& rObj );
     virtual void        MarkListHasChanged();
 
-    inline SdrObjUserCall* GetSdrUserCall();
+    SdrObjUserCall* GetSdrUserCall() { return pUserCall; }
 
 public:
 
@@ -109,24 +124,32 @@ public:
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 };
 
-
-class GraphCtrlUserCall : public SdrObjUserCall
+class SVX_DLLPUBLIC SvxGraphCtrl
 {
-    GraphCtrl& rWin;
+    MapMode             aMap100;
+    Graphic             aGraphic;
+    Size                aGraphSize;
+    Size                maSize;
+
+    std::unique_ptr<weld::DrawingArea> mxDrawingArea;
+
+    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
+    DECL_LINK(DoResize, const Size& rSize, void);
 
 public:
 
-    GraphCtrlUserCall(GraphCtrl& rGraphWin)
-        : rWin(rGraphWin)
-    {}
+    SvxGraphCtrl(weld::Builder& rBuilder, const OString& rDrawingId);
+    virtual ~SvxGraphCtrl();
 
-    virtual void Changed(const SdrObject& rObj, SdrUserCallType eType, const tools::Rectangle& rOldBoundRect) override;
+    void                SetGraphic( const Graphic& rGraphic );
+
+    const Size&         GetSize() const { return maSize; }
+
+    void set_size_request(int nWidth, int nHeight)
+    {
+        mxDrawingArea->set_size_request(nWidth, nHeight);
+    }
 };
-
-SdrObjUserCall* GraphCtrl::GetSdrUserCall()
-{
-    return pUserCall;
-}
 
 class GraphCtrlView : public SdrView
 {
@@ -141,10 +164,13 @@ protected:
     }
 
 public:
-    GraphCtrlView(SdrModel* pModel, GraphCtrl* pWindow)
-        : SdrView(pModel, pWindow)
-        , rGraphCtrl(*pWindow)
-    {}
+    GraphCtrlView(
+        SdrModel& rSdrModel,
+        GraphCtrl* pWindow)
+        :   SdrView(rSdrModel, pWindow)
+        ,rGraphCtrl(*pWindow)
+    {
+    }
 };
 
 #endif // INCLUDED_SVX_GRAPHCTL_HXX

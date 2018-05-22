@@ -67,7 +67,6 @@
 
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/interaction.hxx>
-#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propagg.hxx>
 #include <comphelper/property.hxx>
@@ -287,7 +286,7 @@ ColumnInfoCache::ColumnInfoCache( const Reference< XColumnsSupplier >& _rxColSup
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -405,7 +404,7 @@ void ColumnInfoCache::initializeControls( const Sequence< Reference< XControl > 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     m_bControlsInitialized = true;
@@ -830,7 +829,7 @@ void FormController::getFastPropertyValue( Any& rValue, sal_Int32 nHandle ) cons
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("svx");
                     aFilter.setLength(0);
                 }
             }
@@ -1128,7 +1127,7 @@ void FormController::disposeAllFeaturesAndDispatchers()
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     m_aFeatureDispatchers.clear();
@@ -1340,7 +1339,7 @@ bool FormController::replaceControl( const Reference< XControl >& _rxExistentCon
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     Reference< XControl > xDisposeIt( bSuccess ? _rxExistentControl : _rxNewControl );
@@ -1533,7 +1532,7 @@ void FormController::modified( const EventObject& _rEvent )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     impl_onModify();
@@ -1694,7 +1693,7 @@ void FormController::focusGained(const FocusEvent& e)
             catch ( const Exception& )
             {
                 // don't handle this any further. That's an ... admissible error.
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
     }
@@ -1907,7 +1906,7 @@ void FormController::setModel(const Reference< XTabControllerModel > & Model)
                 else
                     m_aControlBorderManager.disableDynamicBorderColor();
 
-                sal_Int32 nColor = 0;
+                Color nColor;
                 if ( xModelProps->getPropertyValue( FM_PROP_CONTROL_BORDER_COLOR_FOCUS ) >>= nColor )
                     m_aControlBorderManager.setStatusColor( ControlStatus::Focused, nColor );
                 if ( xModelProps->getPropertyValue( FM_PROP_CONTROL_BORDER_COLOR_MOUSE ) >>= nColor )
@@ -1919,7 +1918,7 @@ void FormController::setModel(const Reference< XTabControllerModel > & Model)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -2193,7 +2192,7 @@ void FormController::setControlLock(const Reference< XControl > & xControl)
                         }
                         catch( const Exception& )
                         {
-                            DBG_UNHANDLED_EXCEPTION();
+                            DBG_UNHANDLED_EXCEPTION("svx");
                         }
 
                     }
@@ -2720,7 +2719,7 @@ void FormController::startFormListening( const Reference< XPropertySet >& _rxFor
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -2752,7 +2751,7 @@ void FormController::stopFormListening( const Reference< XPropertySet >& _rxForm
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -3046,7 +3045,7 @@ void FormController::setFilter(::std::vector<FmFieldInfo>& rFieldInfos)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -3539,7 +3538,7 @@ vcl::Window* FormController::getDialogParentWindow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     return pParentWindow;
 }
@@ -3580,7 +3579,7 @@ bool FormController::checkFormComponentValidity( OUString& /* [out] */ _rFirstIn
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     return true;
 }
@@ -3605,7 +3604,7 @@ Reference< XControl > FormController::locateControl( const Reference< XControlMo
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     return nullptr;
 }
@@ -3664,7 +3663,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         return true;
@@ -3754,7 +3753,7 @@ sal_Bool SAL_CALL FormController::approveRowChange(const RowChangeEvent& _rEvent
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     return true;
@@ -3830,7 +3829,7 @@ void SAL_CALL FormController::errorOccured(const SQLErrorEvent& aEvent)
     else
     {
         aGuard.clear();
-        displayException( aEvent );
+        displayException(aEvent, getDialogParentWindow());
     }
 }
 
@@ -3957,7 +3956,7 @@ sal_Bool SAL_CALL FormController::approveParameter(const DatabaseParameterEvent&
         }
         catch(Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     return true;
@@ -4039,7 +4038,7 @@ sal_Bool SAL_CALL FormController::confirmDelete(const RowChangeEvent& aEvent)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     return false;

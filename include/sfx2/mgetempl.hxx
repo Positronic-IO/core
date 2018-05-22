@@ -25,6 +25,7 @@
 #include <vcl/vclmedit.hxx>
 #include <sfx2/styfitem.hxx>
 #include <sfx2/tabdlg.hxx>
+#include <memory>
 
 /* expected:
     SID_TEMPLATE_NAME   :   In: StringItem, Name of Template
@@ -55,7 +56,7 @@ class SfxManageStyleSheetPage final : public SfxTabPage
     VclPtr<FixedText>        m_pDescFt;
 
     SfxStyleSheetBase *pStyle;
-    SfxStyleFamilies *pFamilies;
+    std::unique_ptr<SfxStyleFamilies> pFamilies;
     const SfxStyleFamilyItem *pItem;
     OUString aBuf;
     bool bModified;
@@ -64,7 +65,7 @@ class SfxManageStyleSheetPage final : public SfxTabPage
     OUString aName;
     OUString aFollow;
     OUString aParent;
-    sal_uInt16 nFlags;
+    SfxStyleSearchBits nFlags;
 
 friend class SfxStyleDialog;
 
@@ -81,13 +82,12 @@ friend class SfxStyleDialog;
     virtual ~SfxManageStyleSheetPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* );
 
     virtual bool        FillItemSet(SfxItemSet *) override;
     virtual void        Reset(const SfxItemSet *) override;
 
-    static bool    Execute_Impl( sal_uInt16 nId, const OUString& rStr, const OUString& rRefStr,
-                          sal_uInt16 nFamily );
+    static bool    Execute_Impl( sal_uInt16 nId, const OUString& rStr, sal_uInt16 nFamily );
     using TabPage::ActivatePage;
     virtual void        ActivatePage(const SfxItemSet &) override;
     using TabPage::DeactivatePage;

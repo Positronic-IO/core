@@ -23,8 +23,6 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/image.hxx>
-#include <svx/strings.hrc>
-#include <svx/dialmgr.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/popupmenuwindow.hxx>
 
@@ -55,7 +53,7 @@ void SvxPresetListBox::Command( const CommandEvent& rEvent )
     {
         case CommandEventId::ContextMenu:
         {
-            const sal_uInt16 nIndex = GetSelectItemId();
+            const sal_uInt16 nIndex = GetSelectedItemId();
             if(nIndex > 0)
             {
                 Point aPos(rEvent.GetMousePosPixel());

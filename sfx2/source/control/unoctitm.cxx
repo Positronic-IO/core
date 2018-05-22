@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_java.h>
 #include <config_folders.h>
 
 #include <tools/debug.hxx>
@@ -30,7 +30,6 @@
 #include <svtools/javainteractionhandler.hxx>
 #include <svl/itempool.hxx>
 #include <tools/urlobj.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/awt/FontDescriptor.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
@@ -298,21 +297,18 @@ SfxDispatchController_Impl::SfxDispatchController_Impl(
     , pDispatcher( pDispat )
     , pBindings( pBind )
     , pLastState( nullptr )
-    , nSlot( pSlot->GetSlotId() )
     , pDispatch( pDisp )
     , bMasterSlave( false )
     , bVisible( true )
-    , pUnoName( pSlot->pUnoName )
 {
-    if ( aDispatchURL.Protocol == "slot:" && pUnoName )
+    if ( aDispatchURL.Protocol == "slot:" && pSlot->pUnoName )
     {
-        OStringBuffer aTmp(".uno:");
-        aTmp.append(pUnoName);
-        aDispatchURL.Complete = OStringToOUString(aTmp.makeStringAndClear(), RTL_TEXTENCODING_ASCII_US);
+        aDispatchURL.Complete = ".uno:" + OUString::createFromAscii(pSlot->pUnoName);
         Reference< XURLTransformer > xTrans( URLTransformer::create( ::comphelper::getProcessComponentContext() ) );
         xTrans->parseStrict( aDispatchURL );
     }
 
+    sal_uInt16 nSlot = pSlot->GetSlotId();
     SetId( nSlot );
     if ( pBindings )
     {
@@ -640,8 +636,6 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
         SfxCallMode nCall = SfxCallMode::RECORD;
         sal_Int32   nMarkArg = -1;
 
-        VclPtr<vcl::Window> xDialogParent;
-
         // Filter arguments which shouldn't be part of the sequence property value
         sal_uInt16  nModifier(0);
         std::vector< css::beans::PropertyValue > aAddArgs;
@@ -653,12 +647,6 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                 bool    bTemp;
                 if( rProp.Value >>= bTemp )
                     nCall = bTemp ? SfxCallMode::SYNCHRON : SfxCallMode::ASYNCHRON;
-            }
-            else if( rProp.Name == "DialogParent" )
-            {
-                Reference<css::awt::XWindow> xWindow;
-                if (rProp.Value >>= xWindow)
-                    xDialogParent = VCLUnoHelper::GetWindow(xWindow);
             }
             else if( rProp.Name == "Bookmark" )
             {
@@ -744,7 +732,7 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                         if (xSet->Count())
                         {
                             // execute with arguments - call directly
-                            pItem = pDispatcher->Execute(GetId(), nCall, xSet.get(), &aInternalSet, nModifier, xDialogParent);
+                            pItem = pDispatcher->Execute(GetId(), nCall, xSet.get(), &aInternalSet, nModifier);
                             if ( pItem != nullptr )
                             {
                                 if (const SfxBoolItem* pBoolItem = dynamic_cast<const SfxBoolItem*>(pItem))
@@ -781,10 +769,10 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                 TransformParameters( GetId(), lNewArgs, aSet );
 
                 if ( aSet.Count() )
-                    pItem = pDispatcher->Execute(GetId(), nCall, &aSet, &aInternalSet, nModifier, xDialogParent);
+                    pItem = pDispatcher->Execute(GetId(), nCall, &aSet, &aInternalSet, nModifier);
                 else
                     // SfxRequests take empty sets as argument sets, GetArgs() returning non-zero!
-                    pItem = pDispatcher->Execute(GetId(), nCall, nullptr, &aInternalSet, nModifier, xDialogParent);
+                    pItem = pDispatcher->Execute(GetId(), nCall, nullptr, &aInternalSet, nModifier);
 
                 // no bindings, no invalidate ( usually done in SfxDispatcher::Call_Impl()! )
                 if (SfxApplication* pApp = SfxApplication::Get())

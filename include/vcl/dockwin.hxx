@@ -214,7 +214,7 @@ class VCL_DLLPUBLIC DockingWindow
 private:
     VclPtr<FloatingWindow> mpFloatWin;
     VclPtr<vcl::Window>    mpOldBorderWin;
-    ImplData*       mpImplData;
+    std::unique_ptr<ImplData> mpImplData;
     Point           maFloatPos;
     Point           maDockPos;
     Point           maMouseOff;
@@ -270,7 +270,8 @@ public:
     bool            isLayoutEnabled() const;
     void            setOptimalLayoutSize();
 
-    SAL_DLLPRIVATE void    ImplStartDocking( const Point& rPos );
+    //FIXME: is it okay to make this public?
+    void    ImplStartDocking( const Point& rPos );
     SAL_DLLPRIVATE bool    isDeferredInit() const { return mbIsDeferredInit; }
     virtual        void    doDeferredInit(WinBits nBits);
 protected:

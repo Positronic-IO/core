@@ -15,7 +15,6 @@
 #include <i18nlangtag/languagetag.hxx>
 #include <osl/thread.h>
 #include <rtl/tencinfo.h>
-#include <tools/colordata.hxx>
 #include <tools/mapunit.hxx>
 
 #include <ooxml/resourceids.hxx>
@@ -228,6 +227,13 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
     {
         case RTF_ITAP:
             nSprm = NS_ooxml::LN_tblDepth;
+            // tdf#117268: If \itap0 is encountered inside tables (between \cellxN and \cell), then
+            // use the default value (1), as Word apparently does
+            if (nParam == 0 && (m_nTopLevelCells != 0 || m_nNestedCells != 0))
+            {
+                nParam = 1;
+                pIntValue = std::make_shared<RTFValue>(nParam);
+            }
             break;
         default:
             break;
@@ -666,12 +672,16 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
                                                      pIntValue);
             else if (m_aStates.top().eDestination == Destination::LISTOVERRIDEENTRY)
                 m_aStates.top().aTableSprms.set(NS_ooxml::LN_CT_Num_abstractNumId, pIntValue);
+            m_aStates.top().nCurrentListIndex = nParam;
         }
         break;
         case RTF_LS:
         {
             if (m_aStates.top().eDestination == Destination::LISTOVERRIDEENTRY)
+            {
                 m_aStates.top().aTableAttributes.set(NS_ooxml::LN_CT_AbstractNum_nsid, pIntValue);
+                m_aStates.top().nCurrentListOverrideIndex = nParam;
+            }
             else
             {
                 // Insert at the start, so properties inherited from the list
@@ -1474,6 +1484,8 @@ RTFError RTFDocumentImpl::dispatchValue(RTFKeyword nKeyword, int nParam)
                 if (m_aStates.top().bLevelNumbersValid)
                     putNestedAttribute(m_aStates.top().aTableSprms, NS_ooxml::LN_CT_PPrBase_ind,
                                        NS_ooxml::LN_CT_Ind_firstLine, pIntValue);
+                else
+                    m_aInvalidListLevelFirstIndents[m_nListLevel] = nParam;
             }
             else
                 putNestedAttribute(m_aStates.top().aParagraphSprms, NS_ooxml::LN_CT_PPrBase_ind,

@@ -100,7 +100,7 @@ void OutputDevice::ImplDrawWaveLine( long nBaseX, long nBaseY,
     // If the height is 1 pixel, it's enough output a line
     if ( (nLineWidth == 1) && (nHeight == 1) )
     {
-        mpGraphics->SetLineColor( ImplColorToSal( rColor ) );
+        mpGraphics->SetLineColor( rColor );
         mbInitLineColor = true;
 
         long nEndX = nStartX+nWidth;
@@ -132,7 +132,7 @@ void OutputDevice::ImplDrawWaveLine( long nBaseX, long nBaseY,
                 mpGraphics->SetLineColor();
                 mbInitLineColor = true;
             }
-            mpGraphics->SetFillColor( ImplColorToSal( rColor ) );
+            mpGraphics->SetFillColor( rColor );
             mbInitFillColor = true;
             bDrawPixAsRect  = true;
             nPixWidth       = nLineWidth;
@@ -140,7 +140,7 @@ void OutputDevice::ImplDrawWaveLine( long nBaseX, long nBaseY,
         }
         else
         {
-            mpGraphics->SetLineColor( ImplColorToSal( rColor ) );
+            mpGraphics->SetLineColor( rColor );
             mbInitLineColor = true;
             nPixWidth       = 1;
             nPixHeight      = 1;
@@ -350,7 +350,7 @@ void OutputDevice::ImplDrawStraightTextLine( long nBaseX, long nBaseY,
             mpGraphics->SetLineColor();
             mbInitLineColor = true;
         }
-        mpGraphics->SetFillColor( ImplColorToSal( aColor ) );
+        mpGraphics->SetFillColor( aColor );
         mbInitFillColor = true;
 
         long nLeft = nDistX;
@@ -557,7 +557,7 @@ void OutputDevice::ImplDrawStrikeoutLine( long nBaseX, long nBaseY,
             mpGraphics->SetLineColor();
             mbInitLineColor = true;
         }
-        mpGraphics->SetFillColor( ImplColorToSal( aColor ) );
+        mpGraphics->SetFillColor( aColor );
         mbInitFillColor = true;
 
         const long& nLeft = nDistX;
@@ -751,7 +751,7 @@ void OutputDevice::ImplDrawTextLines( SalLayout& rSalLayout, FontStrikeout eStri
         DeviceCoordinate nWidth = 0;
         const GlyphItem* pGlyph;
         int nStart = 0;
-        while (rSalLayout.GetNextGlyphs(1, &pGlyph, aPos, nStart))
+        while (rSalLayout.GetNextGlyph(&pGlyph, aPos, nStart))
         {
             // calculate the boundaries of each word
             if (!pGlyph->IsSpacing())

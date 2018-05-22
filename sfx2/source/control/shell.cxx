@@ -326,7 +326,7 @@ void SfxShell::DoDeactivate_Impl( SfxViewFrame const *pFrame, bool bMDI )
             << " bMDI " << (bMDI ? "MDI" : ""));
 
     // Only when it comes from a Frame
-    // (not when for instance by poping BASIC-IDE from AppDisp)
+    // (not when for instance by popping BASIC-IDE from AppDisp)
     if ( bMDI && pImpl->pFrame == pFrame )
     {
         // deliver
@@ -387,6 +387,21 @@ bool SfxShell::CanExecuteSlot_Impl( const SfxSlot &rSlot )
     CallState( pFunc, aSet );
     return aSet.GetItemState(nId) != SfxItemState::DISABLED;
 }
+
+bool SfxShell::IsConditionalFastCall( const SfxRequest &rReq )
+{
+    sal_uInt16 nId = rReq.GetSlot();
+    bool bRet = false;
+
+    if (nId == SID_UNDO || nId == SID_REDO)
+    {
+        const SfxItemSet* pArgs = rReq.GetArgs();
+        if (pArgs && pArgs->HasItem(SID_REPAIRPACKAGE))
+            bRet = true;
+    }
+    return bRet;
+}
+
 
 void ShellCall_Impl( void* pObj, void* pArg )
 {

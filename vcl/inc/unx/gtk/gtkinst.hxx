@@ -43,6 +43,8 @@ class GtkPrintWrapper;
 }
 }
 
+vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale& rLocale);
+
 class GenPspGraphics;
 class GtkYieldMutex : public SalYieldMutex
 {
@@ -202,7 +204,8 @@ public:
     virtual void                DestroyMenuItem( SalMenuItem* pItem ) override;
     virtual SalTimer*           CreateSalTimer() override;
     virtual void                AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType, const OUString& rDocumentService) override;
-    virtual SalVirtualDevice*   CreateVirtualDevice( SalGraphics*,
+    virtual std::unique_ptr<SalVirtualDevice>
+                                CreateVirtualDevice( SalGraphics*,
                                                      long &nDX, long &nDY,
                                                      DeviceFormat eFormat,
                                                      const SystemGraphicsData* = nullptr ) override;
@@ -229,6 +232,7 @@ public:
     virtual OpenGLContext* CreateOpenGLContext() override;
     virtual weld::Builder* CreateBuilder(weld::Widget* pParent, const OUString& rUIRoot, const OUString& rUIFile) override;
     virtual weld::MessageDialog* CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType, VclButtonsType eButtonType, const OUString &rPrimaryMessage) override;
+    virtual weld::Window* GetFrameWeld(const css::uno::Reference<css::awt::XWindow>& rWindow) override;
 #endif
 
     virtual const cairo_font_options_t* GetCairoFontOptions() override;
@@ -249,6 +253,125 @@ private:
     cairo_font_options_t*       m_pLastCairoFontOptions;
 
     mutable std::shared_ptr<vcl::unx::GtkPrintWrapper> m_xPrintWrapper;
+};
+
+typedef cppu::WeakComponentImplHelper<css::awt::XWindow> SalGtkXWindow_Base;
+
+class SalGtkXWindow : public SalGtkXWindow_Base
+{
+private:
+    osl::Mutex m_aHelperMtx;
+    weld::Window* m_pWeldWidget;
+    GtkWidget* m_pWidget;
+public:
+
+    SalGtkXWindow(weld::Window* pWeldWidget, GtkWidget* pWidget)
+        : SalGtkXWindow_Base(m_aHelperMtx)
+        , m_pWeldWidget(pWeldWidget)
+        , m_pWidget(pWidget)
+    {
+    }
+
+    void clear()
+    {
+        m_pWeldWidget = nullptr;
+        m_pWidget = nullptr;
+    }
+
+    GtkWidget* getWidget() const
+    {
+        return m_pWidget;
+    }
+
+    weld::Window* getFrameWeld() const
+    {
+        return m_pWeldWidget;
+    }
+
+    // css::awt::XWindow
+    void SAL_CALL setPosSize(sal_Int32, sal_Int32, sal_Int32, sal_Int32, sal_Int16) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    css::awt::Rectangle SAL_CALL getPosSize() override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL setVisible(sal_Bool) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL setEnable(sal_Bool) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL setFocus() override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addWindowListener(const css::uno::Reference< css::awt::XWindowListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+    void SAL_CALL removeWindowListener(const css::uno::Reference< css::awt::XWindowListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addFocusListener(const css::uno::Reference< css::awt::XFocusListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL removeFocusListener(const css::uno::Reference< css::awt::XFocusListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addKeyListener(const css::uno::Reference< css::awt::XKeyListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL removeKeyListener(const css::uno::Reference< css::awt::XKeyListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addMouseListener(const css::uno::Reference< css::awt::XMouseListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL removeMouseListener(const css::uno::Reference< css::awt::XMouseListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addMouseMotionListener(const css::uno::Reference< css::awt::XMouseMotionListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL removeMouseMotionListener(const css::uno::Reference< css::awt::XMouseMotionListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL addPaintListener(const css::uno::Reference< css::awt::XPaintListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
+
+    void SAL_CALL removePaintListener(const css::uno::Reference< css::awt::XPaintListener >& ) override
+    {
+        throw css::uno::RuntimeException("not implemented");
+    }
 };
 
 #endif // INCLUDED_VCL_INC_UNX_GTK_GTKINST_HXX

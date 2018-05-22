@@ -75,9 +75,7 @@ int OutputDevice::GetDevFontCount() const
 
         if (!mpDeviceFontList->Count())
         {
-            delete mpDeviceFontList;
-            mpDeviceFontList = nullptr;
-
+            mpDeviceFontList.reset();
             return 0;
         }
     }
@@ -92,7 +90,7 @@ bool OutputDevice::IsFontAvailable( const OUString& rFontName ) const
 
 int OutputDevice::GetDevFontSizeCount( const vcl::Font& rFont ) const
 {
-    delete mpDeviceFontSizeList;
+    mpDeviceFontSizeList.reset();
 
     ImplInitFontList();
     mpDeviceFontSizeList = mpFontCollection->GetDeviceFontSizeList( rFont.GetFamilyName() );
@@ -488,16 +486,8 @@ void OutputDevice::ImplClearFontData( const bool bNewFontLists )
 
     if ( bNewFontLists )
     {
-        if ( mpDeviceFontList )
-        {
-            delete mpDeviceFontList;
-            mpDeviceFontList = nullptr;
-        }
-        if ( mpDeviceFontSizeList )
-        {
-            delete mpDeviceFontSizeList;
-            mpDeviceFontSizeList = nullptr;
-        }
+        mpDeviceFontList.reset();
+        mpDeviceFontSizeList.reset();
 
         // release all physically selected fonts on this device
         if( AcquireGraphics() )
@@ -677,6 +667,7 @@ void OutputDevice::EndFontSubstitution()
         ImplUpdateAllFontData( false );
 
         DataChangedEvent aDCEvt( DataChangedEventType::FONTSUBSTITUTION );
+        Application::ImplCallEventListenersApplicationDataChanged(&aDCEvt);
         Application::NotifyAllWindows( aDCEvt );
         pSVData->maGDIData.mbFontSubChanged = false;
     }
@@ -896,10 +887,8 @@ vcl::Font OutputDevice::GetDefaultFont( DefaultFontType nType, LanguageType eLan
                     LogicalFontInstance* pFontInstance = pOutDev->mpFontCache->GetFontInstance( pOutDev->mpFontCollection, aFont, aSize, fExactHeight );
                     if (pFontInstance)
                     {
-                        if( pFontInstance->maFontSelData.mpFontData )
-                            aFont.SetFamilyName( pFontInstance->maFontSelData.mpFontData->GetFamilyName() );
-                        else
-                            aFont.SetFamilyName( pFontInstance->maFontSelData.maTargetName );
+                        assert(pFontInstance->GetFontFace());
+                        aFont.SetFamilyName(pFontInstance->GetFontFace()->GetFamilyName());
                         pFontInstance->Release();
                     }
                 }
@@ -986,16 +975,17 @@ void OutputDevice::InitFont() const
     {
         // decide if antialiasing is appropriate
         bool bNonAntialiased(GetAntialiasing() & AntialiasingFlags::DisableText);
+        FontSelectPattern aPattern(mpFontInstance->GetFontSelectPattern());
         if (!utl::ConfigManager::IsFuzzing())
         {
             const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
             bNonAntialiased |= bool(rStyleSettings.GetDisplayOptions() & DisplayOptions::AADisable);
-            bNonAntialiased |= (int(rStyleSettings.GetAntialiasingMinPixelHeight()) > mpFontInstance->maFontSelData.mnHeight);
+            bNonAntialiased |= (int(rStyleSettings.GetAntialiasingMinPixelHeight()) > aPattern.mnHeight);
         }
-        mpFontInstance->maFontSelData.mbNonAntialiased = bNonAntialiased;
+        aPattern.mbNonAntialiased = bNonAntialiased;
 
         // select font in the device layers
-        mpGraphics->SetFont( &(mpFontInstance->maFontSelData), 0 );
+        mpGraphics->SetFont(&aPattern, 0);
         mbInitFont = false;
     }
 }
@@ -1072,7 +1062,7 @@ bool OutputDevice::ImplNewFont() const
         {
             pFontInstance->mbInit = true;
 
-            pFontInstance->mxFontMetric->SetOrientation( sal::static_int_cast<short>(pFontInstance->maFontSelData.mnOrientation) );
+            pFontInstance->mxFontMetric->SetOrientation( sal::static_int_cast<short>(mpFontInstance->GetFontSelectPattern().mnOrientation) );
             pGraphics->GetFontMetric( pFontInstance->mxFontMetric, 0 );
 
             pFontInstance->mxFontMetric->ImplInitTextLineSize( this );
@@ -1159,9 +1149,9 @@ bool OutputDevice::ImplNewFont() const
 
 void OutputDevice::SetFontOrientation( LogicalFontInstance* const pFontInstance ) const
 {
-    if( pFontInstance->maFontSelData.mnOrientation && !pFontInstance->mxFontMetric->GetOrientation() )
+    if( pFontInstance->GetFontSelectPattern().mnOrientation && !pFontInstance->mxFontMetric->GetOrientation() )
     {
-        pFontInstance->mnOwnOrientation = sal::static_int_cast<short>(pFontInstance->maFontSelData.mnOrientation);
+        pFontInstance->mnOwnOrientation = sal::static_int_cast<short>(pFontInstance->GetFontSelectPattern().mnOrientation);
         pFontInstance->mnOrientation = pFontInstance->mnOwnOrientation;
     }
     else
@@ -1267,7 +1257,7 @@ void OutputDevice::ImplDrawEmphasisMarks( SalLayout& rSalLayout )
     tools::Rectangle aRectangle;
     const GlyphItem* pGlyph;
     int nStart = 0;
-    while (rSalLayout.GetNextGlyphs(1, &pGlyph, aOutPoint, nStart))
+    while (rSalLayout.GetNextGlyph(&pGlyph, aOutPoint, nStart))
     {
         if (!mpGraphics->GetGlyphBoundRect(*pGlyph, aRectangle ) )
             continue;
@@ -1279,7 +1269,7 @@ void OutputDevice::ImplDrawEmphasisMarks( SalLayout& rSalLayout )
             if ( mpFontInstance->mnOrientation )
             {
                 Point aOriginPt(0, 0);
-                aOriginPt.RotateAround( aAdjPoint.X(), aAdjPoint.Y(), mpFontInstance->mnOrientation );
+                aOriginPt.RotateAround( aAdjPoint, mpFontInstance->mnOrientation );
             }
             aOutPoint += aAdjPoint;
             aOutPoint -= Point( nEmphasisWidth2, nEmphasisHeight2 );
@@ -1350,7 +1340,7 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
     rLayoutArgs.ResetPos();
     OUString aMissingCodes = aMissingCodeBuf.makeStringAndClear();
 
-    FontSelectPattern aFontSelData = mpFontInstance->maFontSelData;
+    FontSelectPattern aFontSelData(mpFontInstance->GetFontSelectPattern());
 
     // try if fallback fonts support the missing code units
     for( int nFallbackLevel = 1; nFallbackLevel < MAX_FALLBACK; ++nFallbackLevel )
@@ -1366,13 +1356,12 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
             break;
 
         aFontSelData.mpFontInstance = pFallbackFont;
-        aFontSelData.mpFontData = pFallbackFont->maFontSelData.mpFontData;
         if( nFallbackLevel < MAX_FALLBACK-1)
         {
             // ignore fallback font if it is the same as the original font
             // unless we are looking for a substitution for 0x202F, in which
             // case we'll just use a normal space
-            if( mpFontInstance->maFontSelData.mpFontData == aFontSelData.mpFontData &&
+            if( mpFontInstance->GetFontFace() == pFallbackFont->GetFontFace() &&
                 aMissingCodes.indexOf(0x202F) == -1 )
             {
                 pFallbackFont->Release();
@@ -1388,7 +1377,7 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
             if( !pMultiSalLayout )
                 pMultiSalLayout.reset( new MultiSalLayout( std::move(pSalLayout) ) );
             pMultiSalLayout->AddFallback( std::move(pFallback),
-                rLayoutArgs.maRuns, aFontSelData.mpFontData );
+                rLayoutArgs.maRuns, aFontSelData.mpFontInstance->GetFontFace() );
             if (nFallbackLevel == MAX_FALLBACK-1)
                 pMultiSalLayout->SetIncomplete(true);
         }

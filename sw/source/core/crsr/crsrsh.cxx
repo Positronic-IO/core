@@ -218,11 +218,11 @@ void SwCursorShell::StartAction()
     {
         // save for update of the ribbon bar
         const SwNode& rNd = m_pCurrentCursor->GetPoint()->nNode.GetNode();
-        m_nAktNode = rNd.GetIndex();
-        m_nAktContent = m_pCurrentCursor->GetPoint()->nContent.GetIndex();
-        m_nAktNdTyp = rNd.GetNodeType();
+        m_nCurrentNode = rNd.GetIndex();
+        m_nCurrentContent = m_pCurrentCursor->GetPoint()->nContent.GetIndex();
+        m_nCurrentNdTyp = rNd.GetNodeType();
         if( rNd.IsTextNode() )
-            m_nLeftFramePos = SwCallLink::getLayoutFrame( GetLayout(), *rNd.GetTextNode(), m_nAktContent, true );
+            m_nLeftFramePos = SwCallLink::getLayoutFrame( GetLayout(), *rNd.GetTextNode(), m_nCurrentContent, true );
         else
             m_nLeftFramePos = 0;
     }
@@ -272,10 +272,10 @@ void SwCursorShell::EndAction( const bool bIdleEnd, const bool DoSetPosX )
     UpdateCursor( eFlags, bIdleEnd );      // Show Cursor changes
 
     {
-        SwCallLink aLk( *this );        // watch Cursor-Moves
-        aLk.nNode = m_nAktNode;           // call Link if needed
-        aLk.nNdTyp = m_nAktNdTyp;
-        aLk.nContent = m_nAktContent;
+        SwCallLink aLk( *this );           // Watch cursor moves,
+        aLk.nNode = m_nCurrentNode;        // possibly call the link
+        aLk.nNdTyp = m_nCurrentNdTyp;
+        aLk.nContent = m_nCurrentContent;
         aLk.nLeftFramePos = m_nLeftFramePos;
 
         if( !m_nCursorMove ||
@@ -716,7 +716,7 @@ int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
     SwShellCursor* pCursor = getShellCursor( bBlock );
     SwPosition aPos( *pCursor->GetPoint() );
     Point aPt( rLPt );
-    Point & rAktCursorPt = pCursor->GetPtPos();
+    Point & rCurrentCursorPt = pCursor->GetPtPos();
     SwCursorMoveState aTmpState( IsTableMode() ? MV_TBLSEL :
                                     bOnlyText ?  MV_SETONLYTEXT : MV_NONE );
     aTmpState.m_bSetInReadOnly = IsReadOnlyAvailable();
@@ -769,7 +769,7 @@ int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
         {
             if( pFrame )
             {
-                if( pFrame->getFrameArea().IsInside( rAktCursorPt ))
+                if( pFrame->getFrameArea().IsInside( rCurrentCursorPt ))
                     return bRet;
             }
             else if( aPos.nNode.GetNode().IsContentNode() )
@@ -800,7 +800,7 @@ int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
     SwCursorSaveState aSaveState( *pCursor );
 
     *pCursor->GetPoint() = aPos;
-    rAktCursorPt = aPt;
+    rCurrentCursorPt = aPt;
 
     // #i41424# Only update the marked number levels if necessary
     // Force update of marked number levels if necessary.
@@ -1271,16 +1271,16 @@ void SwCursorShell::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
 
     if( m_bHasFocus && !m_bBasicHideCursor )
     {
-        SwShellCursor* pAktCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
+        SwShellCursor* pCurrentCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
 
         if( !ActionPend() )
         {
             // so that right/bottom borders will not be cropped
-            pAktCursor->Invalidate( VisArea() );
-            pAktCursor->Show(nullptr);
+            pCurrentCursor->Invalidate( VisArea() );
+            pCurrentCursor->Show(nullptr);
         }
         else
-            pAktCursor->Invalidate( aRect );
+            pCurrentCursor->Invalidate( aRect );
 
     }
 
@@ -1553,7 +1553,7 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
 
             m_pVisibleCursor->Hide(); // always hide visible Cursor
             // scroll Cursor to visible area
-            if( (eFlags & SwCursorShell::SCROLLWIN) &&
+            if( eFlags & SwCursorShell::SCROLLWIN &&
                 (HasSelection() || eFlags & SwCursorShell::READONLY ||
                  !IsCursorReadonly()) )
             {
@@ -2122,8 +2122,8 @@ void SwCursorShell::HideCursors()
         m_pVisibleCursor->Hide();
     }
     // revoke inversion of SSelection
-    SwShellCursor* pAktCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
-    pAktCursor->Hide();
+    SwShellCursor* pCurrentCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
+    pCurrentCursor->Hide();
 }
 
 void SwCursorShell::ShowCursors( bool bCursorVis )
@@ -2132,8 +2132,8 @@ void SwCursorShell::ShowCursors( bool bCursorVis )
         return;
 
     SET_CURR_SHELL( this );
-    SwShellCursor* pAktCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
-    pAktCursor->Show(nullptr);
+    SwShellCursor* pCurrentCursor = m_pTableCursor ? m_pTableCursor : m_pCurrentCursor;
+    pCurrentCursor->Show(nullptr);
 
     if( m_bSVCursorVis && bCursorVis ) // also show SV cursor again
         m_pVisibleCursor->Show();
@@ -2644,9 +2644,9 @@ SwCursorShell::SwCursorShell( SwCursorShell& rShell, vcl::Window *pInitWin )
     , m_pBoxPtr( nullptr )
     , m_nUpDownX(0)
     , m_nLeftFramePos(0)
-    , m_nAktNode(0)
-    , m_nAktContent(0)
-    , m_nAktNdTyp(SwNodeType::NONE)
+    , m_nCurrentNode(0)
+    , m_nCurrentContent(0)
+    , m_nCurrentNdTyp(SwNodeType::NONE)
     , m_nCursorMove( 0 )
     , m_eMvState( MV_NONE )
     , m_sMarkedListId()
@@ -2680,9 +2680,9 @@ SwCursorShell::SwCursorShell( SwDoc& rDoc, vcl::Window *pInitWin,
     , m_pBoxPtr( nullptr )
     , m_nUpDownX(0)
     , m_nLeftFramePos(0)
-    , m_nAktNode(0)
-    , m_nAktContent(0)
-    , m_nAktNdTyp(SwNodeType::NONE)
+    , m_nCurrentNode(0)
+    , m_nCurrentContent(0)
+    , m_nCurrentNdTyp(SwNodeType::NONE)
     , m_nCursorMove( 0 )
     , m_eMvState( MV_NONE ) // state for crsr-travelling - GetCursorOfst
     , m_sMarkedListId()
@@ -3433,7 +3433,7 @@ void SwCursorShell::GetSmartTagTerm( std::vector< OUString >& rSmartTagTypes,
             sal_Int32 nBegin = nCurrent;
             sal_Int32 nLen = 1;
 
-            if( pSmartTagList->InWrongWord( nBegin, nLen ) && !pNode->IsSymbol(nBegin) )
+            if (pSmartTagList->InWrongWord(nBegin, nLen) && !pNode->IsSymbolAt(nBegin))
             {
                 const sal_uInt16 nIndex = pSmartTagList->GetWrongPos( nBegin );
                 const SwWrongList* pSubList = pSmartTagList->SubList( nIndex );
@@ -3470,7 +3470,7 @@ void SwCursorShell::GetSmartTagRect( const Point& rPt, SwRect& rSelectRect )
         sal_Int32 nBegin = aPos.nContent.GetIndex();
         sal_Int32 nLen = 1;
 
-        if( pSmartTagList->InWrongWord( nBegin, nLen ) && !pNode->IsSymbol(nBegin) )
+        if (pSmartTagList->InWrongWord(nBegin, nLen) && !pNode->IsSymbolAt(nBegin))
         {
             // get smarttag word
             OUString aText( pNode->GetText().copy(nBegin, nLen) );

@@ -28,8 +28,9 @@
 #include <svx/selectioncontroller.hxx>
 #include <svx/svdotable.hxx>
 #include <svx/svdview.hxx>
+#include <memory>
 
-class SdrObjEditView;
+class SdrView;
 class SdrObject;
 class SfxItemSet;
 class SvxBoxInfoItem;
@@ -39,10 +40,12 @@ namespace sdr { namespace table {
 
 class TableModel;
 
-class SVX_DLLPUBLIC SvxTableController: public sdr::SelectionController
+class SVX_DLLPUBLIC SvxTableController : public sdr::SelectionController
 {
 public:
-    SVX_DLLPRIVATE SvxTableController( SdrObjEditView* pView, const SdrTableObj* pObj );
+    SVX_DLLPRIVATE SvxTableController(
+        SdrView& rView,
+        const SdrTableObj& rObj);
     SVX_DLLPRIVATE virtual ~SvxTableController() override;
 
     // from sdr::SelectionController
@@ -51,7 +54,7 @@ public:
     SVX_DLLPRIVATE virtual bool onMouseButtonUp(const MouseEvent& rMEvt, vcl::Window* pWin) override;
     SVX_DLLPRIVATE virtual bool onMouseMove(const MouseEvent& rMEvt, vcl::Window* pWin) override;
 
-    SVX_DLLPRIVATE virtual bool HasMarked() override;
+    SVX_DLLPRIVATE bool HasMarked();
     SVX_DLLPRIVATE virtual bool DeleteMarked() override;
 
     SVX_DLLPRIVATE virtual void onSelectionHasChanged() override;
@@ -76,7 +79,10 @@ public:
     SVX_DLLPRIVATE void DistributeRows();
     SVX_DLLPRIVATE void SetVertical( sal_uInt16 nSId );
 
-    SVX_DLLPRIVATE static rtl::Reference< sdr::SelectionController > create( SdrObjEditView* pView, const SdrTableObj* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
+    SVX_DLLPRIVATE static rtl::Reference< sdr::SelectionController > create(
+        SdrView& rView,
+        const SdrTableObj& rObj,
+        const rtl::Reference< sdr::SelectionController >& xRefController);
 
     SVX_DLLPRIVATE void MergeAttrFromSelectedCells(SfxItemSet& rAttr, bool bOnlyHardAttr) const;
     SVX_DLLPRIVATE void SetAttrToSelectedCells(const SfxItemSet& rAttr, bool bReplaceAll);
@@ -90,10 +96,10 @@ public:
     SVX_DLLPRIVATE virtual bool GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const override;
     SVX_DLLPRIVATE virtual bool SetAttributes(const SfxItemSet& rSet, bool bReplaceAll) override;
 
-    SVX_DLLPRIVATE virtual bool GetMarkedObjModel( SdrPage* pNewPage ) override;
+    SVX_DLLPRIVATE virtual SdrObject* GetMarkedSdrObjClone( SdrModel& rTargetModel ) override;
     SVX_DLLPRIVATE virtual bool PasteObjModel( const SdrModel& rModel ) override;
 
-    SVX_DLLPRIVATE virtual bool hasSelectedCells() const override { return mbCellSelectionMode || mpView->IsTextEdit(); }
+    SVX_DLLPRIVATE virtual bool hasSelectedCells() const override { return mbCellSelectionMode || mrView.IsTextEdit(); }
     /// @see sdr::SelectionController::setCursorLogicPosition().
     SVX_DLLPRIVATE virtual bool setCursorLogicPosition(const Point& rPosition, bool bPoint) override;
 
@@ -171,20 +177,20 @@ private:
     CellPos maCursorFirstPos;
     CellPos maCursorLastPos;
     bool mbCellSelectionMode;
+    bool mbHasJustMerged;
     CellPos maMouseDownPos;
     bool mbLeftButtonDown;
-    sdr::overlay::OverlayObjectList*  mpSelectionOverlay;
-
-    SdrView* mpView;
+    std::unique_ptr<sdr::overlay::OverlayObjectList>  mpSelectionOverlay;
+    SdrView& mrView;
     tools::WeakReference<SdrTableObj> mxTableObj;
-    SdrModel* mpModel;
-
     css::uno::Reference< css::util::XModifyListener > mxModifyListener;
-
     ImplSVEvent * mnUpdateEvent;
 };
 
-rtl::Reference< sdr::SelectionController > CreateTableController( SdrObjEditView* pView, const SdrTableObj* pObj, const rtl::Reference< sdr::SelectionController >& xRefController );
+rtl::Reference< sdr::SelectionController > CreateTableController(
+     SdrView& rView,
+     const SdrTableObj& rObj,
+     const rtl::Reference< sdr::SelectionController >& xRefController );
 
 } }
 

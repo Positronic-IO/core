@@ -59,10 +59,7 @@
 #include <pgjump.hxx>
 #include "PaneHider.hxx"
 
-#include <strings.hrc>
-
 #include <bitmaps.hlst>
-#include <sdresid.hxx>
 #include <vcl/canvastools.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/settings.hxx>
@@ -560,7 +557,9 @@ void SAL_CALL SlideshowImpl::disposing()
     RemoteServer::presentationStopped();
 #endif
     if( mxShow.is() && mpDoc )
-        NotifyDocumentEvent( mpDoc, "OnEndPresentation" );
+        NotifyDocumentEvent(
+            *mpDoc,
+            "OnEndPresentation" );
 
     if( mbAutoSaveWasOn )
         setAutoSaveState( true );
@@ -1080,7 +1079,9 @@ bool SlideshowImpl::startShowImpl( const Sequence< beans::PropertyValue >& aProp
         mxListenerProxy.set( new SlideShowListenerProxy( this, mxShow ) );
         mxListenerProxy->addAsSlideShowListener();
 
-        NotifyDocumentEvent( mpDoc, "OnStartPresentation");
+        NotifyDocumentEvent(
+            *mpDoc,
+            "OnStartPresentation");
         displaySlideIndex( mpSlideController->getStartSlideIndex() );
 
         return true;
@@ -1413,7 +1414,7 @@ void SAL_CALL SlideshowImpl::blankScreen( sal_Int32 nColor )
 
     if( mpShowWindow && mpSlideController )
     {
-        if( mpShowWindow->SetBlankMode( mpSlideController->getCurrentSlideIndex(), nColor ) )
+        if( mpShowWindow->SetBlankMode( mpSlideController->getCurrentSlideIndex(), Color(nColor) ) )
         {
             pause();
         }
@@ -1929,7 +1930,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
     VclPtr<PopupMenu> pMenu(aBuilder.get_menu("menu"));
 
     // Adding button to display if in Pen  mode
-    pMenu->CheckItem(pMenu->GetItemId("pen"), mbUsePen);
+    pMenu->CheckItem("pen", mbUsePen);
 
     const ShowWindowMode eMode = mpShowWindow->GetShowWindowMode();
     pMenu->EnableItem(pMenu->GetItemId("next"), mpSlideController->getNextSlideIndex() != -1);
@@ -1995,7 +1996,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
         PopupMenu* pBlankMenu = pMenu->GetPopupMenu(pMenu->GetItemId("screen"));
         if( pBlankMenu )
         {
-            pBlankMenu->CheckItem((mpShowWindow->GetBlankColor() == COL_WHITE) ? pBlankMenu->GetItemId("white") : pBlankMenu->GetItemId("black"));
+            pBlankMenu->CheckItem((mpShowWindow->GetBlankColor() == COL_WHITE) ? "white" : "black");
         }
     }
 
@@ -2105,7 +2106,7 @@ IMPL_LINK( SlideshowImpl, ContextMenuSelectHdl, Menu *, pMenu, bool )
         if (aColorDlg.Execute() )
         {
             aColor = aColorDlg.GetColor();
-            setPenColor(aColor.GetColor());
+            setPenColor(sal_Int32(aColor));
         }
         mbWasPaused = false;
     }

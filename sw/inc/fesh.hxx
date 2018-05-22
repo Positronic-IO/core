@@ -20,7 +20,6 @@
 #define INCLUDED_SW_INC_FESH_HXX
 
 #include <com/sun/star/text/RelOrientation.hpp>
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 
 #include <svx/svdobj.hxx>
 #include "swdllapi.h"
@@ -45,18 +44,17 @@ class SwTableAutoFormat;
 class SwFrame;
 class SwFormatFrameSize;
 class SwFormatRowSplit;
-class SdrObject;
-class Color;
 class Outliner;
-class SotDataObject;
 class SwFrameFormat;
 struct SwSortOptions;
 class SdrMarkList;
+enum class RndStdIds;
 
 namespace svx
 {
     class ISdrObjectFilter;
 }
+namespace com { namespace sun { namespace star { namespace embed { class XEmbeddedObject; } } } }
 
 // return values for GetFrameType() and GetSelFrameType().
 //! values can be combined via logical or
@@ -340,7 +338,7 @@ public:
     void SetObjRect( const SwRect& rRect );
 
     long BeginDrag( const Point *pPt, bool bProp );
-    long Drag     ( const Point *pPt, bool bProp );
+    void Drag     ( const Point *pPt, bool bProp );
     void EndDrag  ();
     void BreakDrag();
 
@@ -781,8 +779,6 @@ public:
         color COL_BLACK (default color on constructing object of class Color)
         is returned.
 
-        @author OD
-
         @returns an object of class Color
     */
     const Color GetShapeBackgrd() const;
@@ -792,8 +788,6 @@ public:
         Because drawing objects only painted for each page only, the default
         horizontal text direction of a drawing object is given by the corresponding
         page property.
-
-        @author OD
 
         @returns boolean, indicating, if the horizontal text direction of the
         page, the selected drawing object is on, is right-to-left.
@@ -809,7 +803,7 @@ public:
                                    const Point& _rDocPos );
 
     void ToggleHeaderFooterEdit( );
-    static void SetLineEnds(SfxItemSet& rAttr, SdrObject const * pObj, sal_uInt16 nSlotId);
+    static void SetLineEnds(SfxItemSet& rAttr, SdrObject const & rObj, sal_uInt16 nSlotId);
 
     SAL_DLLPRIVATE void ClearColumnRowCache(SwTabFrame const*);
 };

@@ -45,6 +45,8 @@
 #include <vcl/help.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/ImageTree.hxx>
+#include <vcl/BitmapEmbossGreyFilter.hxx>
+#include <bitmapwriteaccess.hxx>
 
 #include <basegfx/numeric/ftools.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
@@ -143,7 +145,10 @@ public:
             Application::Abort("Failed to load intro image");
 
         maIntroBW = maIntro.GetBitmap();
-        maIntroBW.Filter(BmpFilter::EmbossGrey);
+
+        BitmapEx aTmpBmpEx(maIntroBW);
+        BitmapFilter::Filter(aTmpBmpEx, BitmapEmbossGreyFilter(0, 0));
+        maIntroBW = aTmpBmpEx.GetBitmap();
 
         InitRenderers();
         mnSegmentsY = rtl::math::round(std::sqrt(maRenderers.size()), 0,
@@ -409,7 +414,7 @@ public:
 
             std::vector<OUString> aFontNames;
 
-            Color const nCols[] = {
+            static Color const nCols[] = {
                 COL_BLACK, COL_BLUE, COL_GREEN, COL_CYAN, COL_RED, COL_MAGENTA,
                 COL_BROWN, COL_GRAY, COL_LIGHTGRAY, COL_LIGHTBLUE, COL_LIGHTGREEN,
                 COL_LIGHTCYAN, COL_LIGHTRED, COL_LIGHTMAGENTA, COL_YELLOW, COL_WHITE
@@ -551,7 +556,7 @@ public:
             {
                 // Legend
                 vcl::Font aIndexFont("sans", Size(0,20));
-                aIndexFont.SetColor(COL_BLACK);
+                aIndexFont.SetColor( COL_BLACK);
                 tools::Rectangle aTextRect;
                 rDev.SetFont(aIndexFont);
                 OUString aText = OUString::number(i) + ".";
@@ -777,13 +782,13 @@ public:
             if (rCtx.meStyle == RENDER_EXPANDED)
             {
                 std::vector<tools::Rectangle> aRegions(DemoRenderer::partition(rCtx,5, 4));
-                Color nStartCols[] = {
+                static Color const nStartCols[] = {
                     COL_RED, COL_RED, COL_RED, COL_GREEN, COL_GREEN,
                     COL_BLUE, COL_BLUE, COL_BLUE, COL_CYAN, COL_CYAN,
                     COL_BLACK, COL_LIGHTGRAY, COL_WHITE, COL_BLUE, COL_CYAN,
                     COL_WHITE, COL_WHITE, COL_WHITE, COL_BLACK, COL_BLACK
                 };
-                Color nEndCols[] = {
+                static Color const nEndCols[] = {
                     COL_WHITE, COL_WHITE, COL_WHITE, COL_BLACK, COL_BLACK,
                     COL_RED, COL_RED, COL_RED, COL_GREEN, COL_GREEN,
                     COL_GRAY, COL_GRAY, COL_LIGHTGRAY, COL_LIGHTBLUE, COL_LIGHTCYAN,
@@ -1301,8 +1306,8 @@ public:
             AlphaMask aMask(aSrc.GetSizePixel());
             Bitmap aRecovered(aSrc.GetSizePixel(), 24);
             {
-                AlphaMask::ScopedWriteAccess pMaskAcc(aMask);
-                Bitmap::ScopedWriteAccess pRecAcc(aRecovered);
+                AlphaScopedWriteAccess pMaskAcc(aMask);
+                BitmapScopedWriteAccess pRecAcc(aRecovered);
                 Bitmap::ScopedReadAccess pAccW(aWhiteBmp); // a * pix + (1-a)
                 Bitmap::ScopedReadAccess pAccB(aBlackBmp); // a * pix + 0
                 int nSizeX = aSrc.GetSizePixel().Width();
@@ -2005,8 +2010,6 @@ class OpenGLTests
 {
     VclPtr<WorkWindow> mxWinA;
     VclPtr<WorkWindow> mxWinB;
-    OpenGLSalGraphicsImpl *mpImplA;
-    OpenGLSalGraphicsImpl *mpImplB;
     rtl::Reference<OpenGLContext> mpA;
     rtl::Reference<OpenGLContext> mpB;
 
@@ -2020,18 +2023,20 @@ public:
         mxWinA(VclPtr<WorkWindow>::Create(nullptr, WB_APP | WB_STDWORK)),
         mxWinB(VclPtr<WorkWindow>::Create(nullptr, WB_APP | WB_STDWORK))
     {
+        OpenGLSalGraphicsImpl *pImplA;
+        OpenGLSalGraphicsImpl *pImplB;
         if (!OpenGLHelper::isVCLOpenGLEnabled())
         {
-            mpImplA = mpImplB = nullptr;
+            pImplA = pImplB = nullptr;
             fprintf (stderr, "OpenGL is not enabled: try SAL_FORCEGL=1\n");
             return;
         }
 
-        mpImplA = getImpl(mxWinA);
-        mpImplB = getImpl(mxWinB);
-        assert (mpImplA && mpImplB);
-        mpA = mpImplA->GetOpenGLContext();
-        mpB = mpImplB->GetOpenGLContext();
+        pImplA = getImpl(mxWinA);
+        pImplB = getImpl(mxWinB);
+        assert (pImplA && pImplB);
+        mpA = pImplA->GetOpenGLContext();
+        mpB = pImplB->GetOpenGLContext();
 
         assert (mpA.is() && mpB.is());
         assert (mpA != mpB);
@@ -2117,7 +2122,7 @@ namespace {
         {
             vcl::Font aFont(aFontName, Size(0,96));
 #if 0
-            aFont.SetColor(COL_BLACK);
+            aFont.SetCOL_BLACK);
             xDevice->SetFont(aFont);
             xDevice->Erase();
 

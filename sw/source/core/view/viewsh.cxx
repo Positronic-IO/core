@@ -91,6 +91,7 @@
 bool SwViewShell::mbLstAct = false;
 ShellResource *SwViewShell::mpShellRes = nullptr;
 vcl::DeleteOnDeinit< VclPtr<vcl::Window> > SwViewShell::mpCareWindow(new VclPtr<vcl::Window>);
+vcl::DeleteOnDeinit<std::shared_ptr<weld::Dialog>> SwViewShell::mpCareDialog(new std::shared_ptr<weld::Dialog>);
 
 static bool bInSizeNotify = false;
 
@@ -566,7 +567,7 @@ const SwRect& SwViewShell::VisArea() const
 
 void SwViewShell::MakeVisible( const SwRect &rRect )
 {
-    if ( !VisArea().IsInside( rRect ) || IsScrollMDI( this, rRect ) || GetCareWin(*this) )
+    if ( !VisArea().IsInside( rRect ) || IsScrollMDI( this, rRect ) || GetCareWin(*this) || GetCareDialog() )
     {
         if ( !IsViewLocked() )
         {
@@ -923,6 +924,26 @@ void SwViewShell::SetSubtractFlysAnchoredAtFlys(bool bSubtractFlysAnchoredAtFlys
     rIDSA.set(DocumentSettingId::SUBTRACT_FLYS, bSubtractFlysAnchoredAtFlys);
 }
 
+void SwViewShell::SetEmptyDbFieldHidesPara(bool bEmptyDbFieldHidesPara)
+{
+    IDocumentSettingAccess& rIDSA = getIDocumentSettingAccess();
+    if (rIDSA.get(DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA) != bEmptyDbFieldHidesPara)
+    {
+        SwWait aWait(*GetDoc()->GetDocShell(), true);
+        rIDSA.set(DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA, bEmptyDbFieldHidesPara);
+        StartAction();
+        GetDoc()->getIDocumentState().SetModified();
+        for (auto* pFieldType : *GetDoc()->getIDocumentFieldsAccess().GetFieldTypes())
+        {
+            if (pFieldType->Which() == SwFieldIds::Database)
+            {
+                pFieldType->ModifyNotification(nullptr, nullptr);
+            }
+        }
+        EndAction();
+    }
+}
+
 void SwViewShell::Reformat()
 {
     SwWait aWait( *GetDoc()->GetDocShell(), true );
@@ -1223,19 +1244,19 @@ bool SwViewShell::SmoothScroll( long lXDiff, long lYDiff, const tools::Rectangle
 #if !defined(MACOSX) && !defined(ANDROID) && !defined(IOS)
     // #i98766# - disable smooth scrolling for Mac
 
-    const sal_uLong nColCnt = mpOut->GetColorCount();
+    const sal_uLong nBitCnt = mpOut->GetBitCount();
     long lMult = 1, lMax = LONG_MAX;
-    if ( nColCnt == 65536 )
+    if ( nBitCnt == 16 )
     {
         lMax = 7000;
         lMult = 2;
     }
-    if ( nColCnt == 16777216 )
+    if ( nBitCnt == 24 )
     {
         lMax = 5000;
         lMult = 6;
     }
-    else if ( nColCnt == 1 )
+    else if ( nBitCnt == 1 )
     {
         lMax = 3000;
         lMult = 12;
@@ -2466,6 +2487,11 @@ ShellResource* SwViewShell::GetShellRes()
 void SwViewShell::SetCareWin( vcl::Window* pNew )
 {
     (*mpCareWindow.get()) = pNew;
+}
+
+void SwViewShell::SetCareDialog(const std::shared_ptr<weld::Dialog>& rNew)
+{
+    (*mpCareDialog.get()) = rNew;
 }
 
 sal_uInt16 SwViewShell::GetPageCount() const

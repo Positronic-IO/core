@@ -21,6 +21,7 @@
 
 #include <IDocumentFieldsAccess.hxx>
 #include <sal/types.h>
+#include <memory>
 
 class SwDoc;
 class SwDBNameInfField;
@@ -56,7 +57,7 @@ public:
     virtual void SetFixFields(const DateTime* pNewDateTime) override;
     virtual void FieldsToCalc(SwCalc& rCalc, sal_uLong nLastNd, sal_uInt16 nLastCnt) override;
     virtual void FieldsToCalc(SwCalc& rCalc, const SetGetExpField& rToThisField) override;
-    virtual void FieldsToExpand(SwHash**& ppTable, sal_uInt16& rTableSize, const SetGetExpField& rToThisField) override;
+    virtual void FieldsToExpand(SwHashTable<HashStr>& rTable, const SetGetExpField& rToThisField) override;
     virtual bool IsNewFieldLst() const override;
     virtual void SetNewFieldLst( bool bFlag) override;
     virtual void InsDelFieldInFieldLst(bool bIns, const SwTextField& rField) override;
@@ -97,8 +98,8 @@ private:
     SwDoc& m_rDoc;
 
     bool mbNewFieldLst; //< TRUE: Rebuild field-list.
-    SwDocUpdateField    *mpUpdateFields; //< Struct for updating fields
-    SwFieldTypes      *mpFieldTypes;
+    std::unique_ptr<SwDocUpdateField> mpUpdateFields; //< Struct for updating fields
+    std::unique_ptr<SwFieldTypes>     mpFieldTypes;
     sal_Int8    mnLockExpField;  //< If != 0 UpdateExpFields() has no effect!
 };
 

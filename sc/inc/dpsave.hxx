@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_INC_DPSAVE_HXX
 #define INCLUDED_SC_INC_DPSAVE_HXX
 
-#include <list>
 #include <memory>
 #include <vector>
 
@@ -34,6 +33,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <boost/optional.hpp>
 
 namespace com { namespace sun { namespace star { namespace sheet {
     struct DataPilotFieldReference;
@@ -52,7 +52,7 @@ class ScDPSaveMember
 {
 private:
     OUString aName;
-    std::unique_ptr<OUString> mpLayoutName; // custom name to be displayed in the table.
+    boost::optional<OUString> mpLayoutName; // custom name to be displayed in the table.
     sal_uInt16 nVisibleMode;
     sal_uInt16 nShowDetailsMode;
 
@@ -79,7 +79,7 @@ public:
     void SetName( const OUString& rNew ); // used if the source member was renamed (groups)
 
     SC_DLLPUBLIC void SetLayoutName( const OUString& rName );
-    SC_DLLPUBLIC const OUString*  GetLayoutName() const;
+    SC_DLLPUBLIC const boost::optional<OUString> & GetLayoutName() const;
     void RemoveLayoutName();
 
     void WriteToSource( const css::uno::Reference<css::uno::XInterface>& xMember,
@@ -94,8 +94,8 @@ class SC_DLLPUBLIC ScDPSaveDimension
 {
 private:
     OUString aName;
-    std::unique_ptr<OUString> mpLayoutName;
-    std::unique_ptr<OUString> mpSubtotalName;
+    boost::optional<OUString> mpLayoutName;
+    boost::optional<OUString> mpSubtotalName;
     bool bIsDataLayout;
     bool bDupFlag;
     css::sheet::DataPilotFieldOrientation nOrientation;
@@ -105,18 +105,17 @@ private:
     bool bRepeatItemLabels; //! at level
     bool bSubTotalDefault; //! at level
     std::vector<ScGeneralFunction> maSubTotalFuncs;
-    css::sheet::DataPilotFieldReference* pReferenceValue;
-    css::sheet::DataPilotFieldSortInfo* pSortInfo; // (level)
-    css::sheet::DataPilotFieldAutoShowInfo* pAutoShowInfo; // (level)
-    css::sheet::DataPilotFieldLayoutInfo* pLayoutInfo; // (level)
+    std::unique_ptr<css::sheet::DataPilotFieldReference> pReferenceValue;
+    std::unique_ptr<css::sheet::DataPilotFieldSortInfo> pSortInfo; // (level)
+    std::unique_ptr<css::sheet::DataPilotFieldAutoShowInfo> pAutoShowInfo; // (level)
+    std::unique_ptr<css::sheet::DataPilotFieldLayoutInfo> pLayoutInfo; // (level)
 
 public:
     typedef std::unordered_set<OUString> MemberSetType;
-    typedef std::unordered_map <OUString, ScDPSaveMember*> MemberHash;
-    typedef std::list <ScDPSaveMember*> MemberList;
+    typedef std::vector<ScDPSaveMember*> MemberList;
 
 private:
-    MemberHash maMemberHash;
+    std::unordered_map<OUString, std::unique_ptr<ScDPSaveMember>> maMemberHash;
     MemberList maMemberList;
 
 public:
@@ -129,7 +128,7 @@ public:
     const MemberList& GetMembers() const
         { return maMemberList; }
 
-    void AddMember(ScDPSaveMember* pMember);
+    void AddMember(std::unique_ptr<ScDPSaveMember> pMember);
 
     void SetDupFlag(bool bSet)
         { bDupFlag = bSet; }
@@ -171,29 +170,29 @@ public:
         { return nUsedHierarchy; }
 
     void SetLayoutName(const OUString& rName);
-    const OUString* GetLayoutName() const;
+    const boost::optional<OUString> & GetLayoutName() const;
     void RemoveLayoutName();
     void SetSubtotalName(const OUString& rName);
-    const OUString* GetSubtotalName() const;
+    const boost::optional<OUString> & GetSubtotalName() const;
     void RemoveSubtotalName();
 
     bool IsMemberNameInUse(const OUString& rName) const;
 
     const css::sheet::DataPilotFieldReference* GetReferenceValue() const
-        { return pReferenceValue; }
+        { return pReferenceValue.get(); }
 
     void SetReferenceValue(const css::sheet::DataPilotFieldReference* pNew);
 
     const css::sheet::DataPilotFieldSortInfo* GetSortInfo() const
-        { return pSortInfo; }
+        { return pSortInfo.get(); }
 
     void SetSortInfo(const css::sheet::DataPilotFieldSortInfo* pNew);
     const css::sheet::DataPilotFieldAutoShowInfo* GetAutoShowInfo() const
-        { return pAutoShowInfo; }
+        { return pAutoShowInfo.get(); }
 
     void SetAutoShowInfo(const css::sheet::DataPilotFieldAutoShowInfo* pNew);
     const css::sheet::DataPilotFieldLayoutInfo* GetLayoutInfo() const
-        { return pLayoutInfo; }
+        { return pLayoutInfo.get(); }
 
     void SetLayoutInfo(const css::sheet::DataPilotFieldLayoutInfo* pNew);
 
@@ -253,7 +252,7 @@ private:
      *  created. */
     bool mbDimensionMembersBuilt;
 
-    std::unique_ptr<OUString> mpGrandTotalName;
+    boost::optional<OUString> mpGrandTotalName;
     mutable std::unique_ptr<DimOrderType> mpDimOrder; // dimension order for row and column dimensions, to traverse result tree.
 
 public:
@@ -266,7 +265,7 @@ public:
     bool operator== ( const ScDPSaveData& r ) const;
 
     SC_DLLPUBLIC void SetGrandTotalName(const OUString& rName);
-    SC_DLLPUBLIC const OUString* GetGrandTotalName() const;
+    SC_DLLPUBLIC const boost::optional<OUString> & GetGrandTotalName() const;
 
     const DimsType& GetDimensions() const { return m_DimList; }
 

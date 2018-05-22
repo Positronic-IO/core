@@ -33,6 +33,7 @@
 #include <docsh.hxx>
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <globalnames.hxx>
 #include <undodat.hxx>
 #include <undotab.hxx>
@@ -84,7 +85,7 @@ void ScDocShell::ErrorMessage(const char* pGlobStrId)
 
     std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pParent ? pParent->GetFrameWeld() : nullptr,
                                                   VclMessageType::Info, VclButtonsType::Ok,
-                                                  ScGlobal::GetRscString(pGlobStrId)));
+                                                  ScResId(pGlobStrId)));
     xInfoBox->run();
 
     if (bFocus)
@@ -232,9 +233,9 @@ ScDBData* ScDocShell::GetDBData( const ScRange& rMarked, ScGetDBMode eMode, ScGe
                 pNoNameData = aDocument.GetAnonymousDBData();
                 if (!pNoNameData)
                 {
-                    pNoNameData = new ScDBData( STR_DB_LOCAL_NONAME,
-                            nTab, nStartCol, nStartRow, nEndCol, nEndRow, true, bHasHeader);
-                    aDocument.SetAnonymousDBData( pNoNameData);
+                    aDocument.SetAnonymousDBData( std::unique_ptr<ScDBData>(new ScDBData( STR_DB_LOCAL_NONAME,
+                            nTab, nStartCol, nStartRow, nEndCol, nEndRow, true, bHasHeader) ) );
+                    pNoNameData = aDocument.GetAnonymousDBData();
                 }
                 // ScDocShell::CancelAutoDBRange() would restore the
                 // sheet-local anonymous DBData from pOldAutoDBRange, unset so
@@ -293,7 +294,7 @@ ScDBData* ScDocShell::GetDBData( const ScRange& rMarked, ScGetDBMode eMode, ScGe
                 aDocument.PreprocessDBDataUpdate();
                 pUndoColl = new ScDBCollection( *pColl );   // Undo for import range
 
-                OUString aImport = ScGlobal::GetRscString( STR_DBNAME_IMPORT );
+                OUString aImport = ScResId( STR_DBNAME_IMPORT );
                 long nCount = 0;
                 const ScDBData* pDummy = nullptr;
                 ScDBCollection::NamedDBs& rDBs = pColl->getNamedDBs();
@@ -316,7 +317,7 @@ ScDBData* ScDocShell::GetDBData( const ScRange& rMarked, ScGetDBMode eMode, ScGe
                 pNoNameData = new ScDBData(STR_DB_LOCAL_NONAME, nTab,
                                 nStartCol,nStartRow, nEndCol,nEndRow,
                                 true, bHasHeader );
-                aDocument.SetAnonymousDBData(nTab, pNoNameData);
+                aDocument.SetAnonymousDBData(nTab, std::unique_ptr<ScDBData>(pNoNameData));
             }
 
             if ( pUndoColl )
@@ -525,7 +526,7 @@ void ScDocShell::DoConsolidate( const ScConsolidateParam& rParam, bool bRecord )
         vcl::Window* pWin = GetActiveDialogParent();
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_CONSOLIDATE_ERR1)));
+                                                      ScResId(STR_CONSOLIDATE_ERR1)));
         xInfoBox->run();
         return;
     }
@@ -737,7 +738,7 @@ void ScDocShell::UseScenario( SCTAB nTab, const OUString& rName, bool bRecord )
                 vcl::Window* pWin = GetActiveDialogParent();
                 std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                               VclMessageType::Info, VclButtonsType::Ok,
-                                                              ScGlobal::GetRscString(STR_PROTECTIONERR)));
+                                                              ScResId(STR_PROTECTIONERR)));
                 xInfoBox->run();
             }
         }
@@ -746,7 +747,7 @@ void ScDocShell::UseScenario( SCTAB nTab, const OUString& rName, bool bRecord )
             vcl::Window* pWin = GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                           VclMessageType::Info, VclButtonsType::Ok,
-                                                          ScGlobal::GetRscString(STR_SCENARIO_NOTFOUND)));
+                                                          ScResId(STR_SCENARIO_NOTFOUND)));
             xInfoBox->run();
         }
     }
@@ -865,7 +866,7 @@ sal_uLong ScDocShell::TransferTab( ScDocShell& rSrcDocShell, SCTAB nSrcPos,
     // set the transferred area to the copyparam to make adjusting formulas possible
     ScClipParam aParam;
     ScRange aRange(0, 0, nSrcPos, MAXCOL, MAXROW, nSrcPos);
-    aParam.maRanges.Append(aRange);
+    aParam.maRanges.push_back(aRange);
     rSrcDoc.SetClipParam(aParam);
 
     sal_uLong nErrVal =  aDocument.TransferTab( &rSrcDoc, nSrcPos, nDestPos,
@@ -973,7 +974,7 @@ bool ScDocShell::MoveTable( SCTAB nSrcTab, SCTAB nDestTab, bool bCopy, bool bRec
                 catch ( const css::uno::Exception& )
                 {
                 }
-                VBA_InsertModule( aDocument, nTabToUse, OUString(), sSource );
+                VBA_InsertModule( aDocument, nTabToUse, sSource );
             }
         }
         Broadcast( ScTablesHint( SC_TAB_COPIED, nSrcTab, nDestTab ) );
@@ -992,7 +993,7 @@ bool ScDocShell::MoveTable( SCTAB nSrcTab, SCTAB nDestTab, bool bCopy, bool bRec
             return true;    // nothing to do, but valid
         }
 
-        ScProgress* pProgress = new ScProgress(this, ScGlobal::GetRscString(STR_UNDO_MOVE_TAB),
+        ScProgress* pProgress = new ScProgress(this, ScResId(STR_UNDO_MOVE_TAB),
                                                 aDocument.GetCodeCount(), true);
         bool bDone = aDocument.MoveTab( nSrcTab, nDestTab, pProgress );
         delete pProgress;

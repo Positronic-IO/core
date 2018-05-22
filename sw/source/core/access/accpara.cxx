@@ -42,7 +42,6 @@
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <breakit.hxx>
 #include "accpara.hxx"
-#include <strings.hrc>
 #include "accportions.hxx"
 #include <sfx2/viewsh.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -87,6 +86,7 @@
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <svx/colorwindow.hxx>
+#include <editeng/editids.hrc>
 
 #include <reffld.hxx>
 #include <expfld.hxx>
@@ -557,9 +557,9 @@ SwAccessibleParagraph::~SwAccessibleParagraph()
 {
     SolarMutexGuard aGuard;
 
-    delete m_pPortionData;
-    delete m_pHyperTextData;
-    delete mpParaChangeTrackInfo; // #i108125#
+    m_pPortionData.reset();
+    m_pHyperTextData.reset();
+    mpParaChangeTrackInfo.reset(); // #i108125#
     EndListeningAll();
 }
 
@@ -577,9 +577,8 @@ void SwAccessibleParagraph::UpdatePortionData()
     const SwTextFrame* pFrame = static_cast<const SwTextFrame*>( GetFrame() );
 
     // build new portion data
-    delete m_pPortionData;
-    m_pPortionData = new SwAccessiblePortionData(
-        pFrame->GetTextNode(), GetMap()->GetShell()->GetViewOptions() );
+    m_pPortionData.reset( new SwAccessiblePortionData(
+        pFrame->GetTextNode(), GetMap()->GetShell()->GetViewOptions() ) );
     pFrame->VisitPortions( *m_pPortionData );
 
     OSL_ENSURE( m_pPortionData != nullptr, "UpdatePortionData() failed" );
@@ -587,11 +586,8 @@ void SwAccessibleParagraph::UpdatePortionData()
 
 void SwAccessibleParagraph::ClearPortionData()
 {
-    delete m_pPortionData;
-    m_pPortionData = nullptr;
-
-    delete m_pHyperTextData;
-    m_pHyperTextData = nullptr;
+    m_pPortionData.reset();
+    m_pHyperTextData.reset();
 }
 
 void SwAccessibleParagraph::ExecuteAtViewShell( sal_uInt16 nSlot )
@@ -997,7 +993,7 @@ static bool lcl_GetBackgroundColor( Color & rColor,
     drawinglayer::attribute::SdrAllFillAttributesHelperPtr aFillAttributes;
 
     if ( pFrame &&
-         pFrame->GetBackgroundBrush( aFillAttributes, pBackgrdBrush, pSectionTOXColor, aDummyRect, false ) )
+         pFrame->GetBackgroundBrush( aFillAttributes, pBackgrdBrush, pSectionTOXColor, aDummyRect, false, /*bConsiderTextBox=*/false ) )
     {
         if ( pSectionTOXColor )
         {
@@ -1048,7 +1044,7 @@ sal_Int32 SAL_CALL SwAccessibleParagraph::getBackground()
 
     if ( lcl_GetBackgroundColor( aBackgroundCol, GetFrame(), GetCursorShell() ) )
     {
-        return aBackgroundCol.GetColor();
+        return sal_Int32(aBackgroundCol);
     }
 
     return SwAccessibleContext::getBackground();
@@ -1637,16 +1633,17 @@ uno::Sequence<PropertyValue> SwAccessibleParagraph::getCharacterAttributes(
         //sort property values
         // build sorted index array
         sal_Int32 nLength = aValues.size();
-        std::unique_ptr<sal_Int32[]> pIndices( new sal_Int32[nLength] );
-        for( i = 0; i < nLength; i++ )
-            pIndices[i] = i;
-        sort( &pIndices[0], &pIndices[nLength], IndexCompare(aValues.data()) );
+        std::vector<sal_Int32> aIndices;
+        aIndices.reserve(nLength);
+        for (i = 0; i < nLength; ++i)
+            aIndices.push_back(i);
+        std::sort(aIndices.begin(), aIndices.end(), IndexCompare(aValues.data()));
         // create sorted sequences according to index array
         uno::Sequence<PropertyValue> aNewValues( nLength );
         PropertyValue* pNewValues = aNewValues.getArray();
-        for( i = 0; i < nLength; i++ )
+        for (i = 0; i < nLength; ++i)
         {
-            pNewValues[i] = aValues[pIndices[i]];
+            pNewValues[i] = aValues[aIndices[i]];
         }
         return aNewValues;
     }
@@ -2155,7 +2152,7 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
         {
             uno::Any &anyChar = rValue.Value;
             sal_uInt32 crBack = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
-            if (COL_AUTO == crBack)
+            if (COL_AUTO == Color(crBack))
             {
                 uno::Reference<XAccessibleComponent> xComponent(this);
                 if (xComponent.is())
@@ -2171,11 +2168,11 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
         if (rValue.Name == UNO_NAME_CHAR_COLOR)
         {
             if( GetPortionData().IsInGrayPortion( nIndex ) )
-                 rValue.Value <<= SwViewOption::GetFieldShadingsColor().GetColor();
+                 rValue.Value <<= SwViewOption::GetFieldShadingsColor();
             uno::Any &anyChar = rValue.Value;
             sal_uInt32 crChar = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
 
-            if( COL_AUTO == crChar )
+            if( COL_AUTO == Color(crChar) )
             {
                 uno::Reference<XAccessibleComponent> xComponent(this);
                 if (xComponent.is())
@@ -2200,7 +2197,7 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
                 {
                     sal_Int32 nBegin = nIndex;
                     sal_Int32 nLen = 1;
-                    if( pWrongList->InWrongWord(nBegin,nLen) && !pTextNode->IsSymbol(nBegin) )
+                    if (pWrongList->InWrongWord(nBegin, nLen) && !pTextNode->IsSymbolAt(nBegin))
                     {
                         rValue.Value <<= sal_uInt16(LINESTYLE_WAVE);
                     }
@@ -2221,7 +2218,7 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
                 {
                     sal_Int32 nBegin = nIndex;
                     sal_Int32 nLen = 1;
-                    if( pWrongList->InWrongWord(nBegin,nLen) && !pTextNode->IsSymbol(nBegin) )
+                    if (pWrongList->InWrongWord(nBegin, nLen) && !pTextNode->IsSymbolAt(nBegin))
                     {
                         rValue.Value <<= sal_Int32(0x00ff0000);
                         continue;
@@ -2231,7 +2228,7 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
 
             uno::Any &anyChar = rValue.Value;
             sal_uInt32 crUnderline = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
-            if ( COL_AUTO == crUnderline )
+            if ( COL_AUTO == Color(crUnderline) )
             {
                 uno::Reference<XAccessibleComponent> xComponent(this);
                 if (xComponent.is())
@@ -2852,24 +2849,24 @@ sal_Bool SwAccessibleParagraph::setAttributes(
     // build sorted index array
     sal_Int32 nLength = rAttributeSet.getLength();
     const PropertyValue* pPairs = rAttributeSet.getConstArray();
-    sal_Int32* pIndices = new sal_Int32[nLength];
-    sal_Int32 i;
-    for( i = 0; i < nLength; i++ )
-        pIndices[i] = i;
-    sort( &pIndices[0], &pIndices[nLength], IndexCompare(pPairs) );
+    std::vector<sal_Int32> aIndices;
+    aIndices.reserve(nLength);
+    for (sal_Int32 i = 0; i < nLength; ++i)
+        aIndices.push_back(i);
+    std::sort(aIndices.begin(), aIndices.end(), IndexCompare(pPairs));
 
     // create sorted sequences according to index array
     uno::Sequence< OUString > aNames( nLength );
     OUString* pNames = aNames.getArray();
     uno::Sequence< uno::Any > aValues( nLength );
     uno::Any* pValues = aValues.getArray();
-    for( i = 0; i < nLength; i++ )
+    for (sal_Int32 i = 0; i < nLength; ++i)
     {
-        const PropertyValue& rVal = pPairs[pIndices[i]];
+        const PropertyValue& rVal = pPairs[aIndices[i]];
         pNames[i]  = rVal.Name;
         pValues[i] = rVal.Value;
     }
-    delete[] pIndices;
+    aIndices.clear();
 
     // now set the values
     bool bRet = true;
@@ -3057,7 +3054,7 @@ uno::Reference< XAccessibleHyperlink > SAL_CALL
                 if( pHt )
                 {
                     if( !m_pHyperTextData )
-                        m_pHyperTextData = new SwAccessibleHyperTextData;
+                        m_pHyperTextData.reset( new SwAccessibleHyperTextData );
                     SwAccessibleHyperTextData::iterator aIter =
                         m_pHyperTextData ->find( pHt );
                     if( aIter != m_pHyperTextData->end() )

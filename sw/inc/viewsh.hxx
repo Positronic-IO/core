@@ -19,8 +19,6 @@
 #ifndef INCLUDED_SW_INC_VIEWSH_HXX
 #define INCLUDED_SW_INC_VIEWSH_HXX
 
-#include <com/sun/star/embed/XClassifiedObject.hpp>
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include "swdllapi.h"
 #include "swtypes.hxx"
 #include "ring.hxx"
@@ -28,11 +26,8 @@
 #include <memory>
 #include <stack>
 #include <vcl/mapmod.hxx>
-#include <vcl/print.hxx>
 #include <vcl/vclptr.hxx>
 #include <vcl/lazydelete.hxx>
-
-#include <LibreOfficeKit/LibreOfficeKitTypes.h>
 
 namespace com { namespace sun { namespace star { namespace accessibility {
            class XAccessible; } } } }
@@ -44,7 +39,6 @@ class IDocumentMarkAccess;
 class IDocumentDrawModelAccess;
 class IDocumentRedlineAccess;
 class IDocumentLayoutAccess;
-class IDocumentFieldsAccess;
 class IDocumentContentOperations;
 class IDocumentStylePoolAccess;
 class IDocumentStatistics;
@@ -52,7 +46,6 @@ class IDocumentUndoRedo;
 class IDocumentListItems;
 class IDocumentOutlineNodes;
 class SfxPrinter;
-class SfxProgress;
 class SwRootFrame;
 class SwNodes;
 class SdrView;
@@ -61,28 +54,24 @@ class SfxViewShell;
 class SwViewOption;
 class SwViewShellImp;
 class SwPrintData;
-class SwPagePreviewPrtData;
-namespace vcl { class Window; }
-class OutputDevice;
-class SwLayIdle;
 struct ShellResource;
 class SwRegionRects;
-class SwFrame;
 class SvtAccessibilityOptions;
 class SwPagePreviewLayout;
 class SwTextFrame;
-class BitmapEx;
 
 struct SwAccessibilityOptions;
 namespace vcl { class Region; }
 class SwPostItMgr;
 class SdrPaintWindow;
 class SwAccessibleMap;
+enum class Orientation;
 
 namespace vcl
 {
     typedef OutputDevice RenderContext;
 }
+namespace weld { class Dialog; }
 
 // Define for flags needed in ctor or layers below.
 // Currently the Preview flag is needed for DrawPage.
@@ -173,13 +162,14 @@ class SW_DLLPUBLIC SwViewShell : public sw::Ring<SwViewShell>
     SAL_DLLPRIVATE bool CheckInvalidForPaint( const SwRect & );  // Direct Paint or rather
                                                                     // trigger an action.
 
-    SAL_DLLPRIVATE void PrepareForPrint( const SwPrintData &rOptions );
+    SAL_DLLPRIVATE void PrepareForPrint( const SwPrintData &rOptions, bool bIsPDFExport = false );
 
     SAL_DLLPRIVATE void ImplApplyViewOptions( const SwViewOption &rOpt );
 
 protected:
     static ShellResource*      mpShellRes;      ///< Resources for the Shell.
     static vcl::DeleteOnDeinit< VclPtr<vcl::Window> > mpCareWindow;    ///< Avoid this window.
+    static vcl::DeleteOnDeinit< std::shared_ptr<weld::Dialog> > mpCareDialog;    ///< Avoid this window.
 
     SwRect                  maVisArea;       ///< The modern version of VisArea.
     rtl::Reference<SwDoc>   mxDoc;          ///< The document; never 0.
@@ -356,7 +346,8 @@ public:
     // bIsPDFExport == true is: do PDF Export (no printing!)
     bool PrintOrPDFExport( OutputDevice *pOutDev,
             SwPrintData const& rPrintData,
-            sal_Int32 nRenderer /* offset in vector of pages to print */ );
+            sal_Int32 nRenderer, /* offset in vector of pages to print */
+            bool bIsPDFExport );
 
     // Printing of one brochure page.
     void PrintProspect( OutputDevice *pOutDev, const SwPrintData &rPrintData,
@@ -419,6 +410,8 @@ public:
 
     void SetSubtractFlysAnchoredAtFlys(bool bSubtractFlysAnchoredAtFlys);
 
+    void SetEmptyDbFieldHidesPara(bool bEmptyDbFieldHidesPara);
+
     // DOCUMENT COMPATIBILITY FLAGS END
 
     // Calls Idle-formatter of Layout.
@@ -441,6 +434,9 @@ public:
     static vcl::Window*   GetCareWin(SwViewShell const & rVSh)
                           { return (*mpCareWindow.get()) ? mpCareWindow.get()->get() : CareChildWin(rVSh); }
     static vcl::Window*   CareChildWin(SwViewShell const & rVSh);
+    static void           SetCareDialog(const std::shared_ptr<weld::Dialog>& rNew);
+    static weld::Dialog*  GetCareDialog()
+                          { return (*mpCareDialog.get()) ? mpCareDialog.get()->get() : nullptr; }
 
     SfxViewShell   *GetSfxViewShell() const { return mpSfxViewShell; }
     void           SetSfxViewShell(SfxViewShell *pNew) { mpSfxViewShell = pNew; }
@@ -511,8 +507,6 @@ public:
 
     /** invalidate CONTENT_FLOWS_FROM/_TO relation for paragraphs
 
-        @author OD
-
         @param _pFromTextFrame
         input parameter - paragraph frame, for which the relation CONTENT_FLOWS_FROM
         has to be invalidated.
@@ -527,8 +521,6 @@ public:
                                                const SwTextFrame* _pToTextFrame );
 
     /** invalidate text selection for paragraphs
-
-        @author OD
     */
     void InvalidateAccessibleParaTextSelection();
 
@@ -536,8 +528,6 @@ public:
 
         usage also for changes of the attributes of
         paragraph's characters.
-
-        @author OD
 
         @param rTextFrame
         input parameter - paragraph frame, whose attributes have changed

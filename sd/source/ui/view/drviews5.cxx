@@ -36,7 +36,6 @@
 #include <sfx2/viewfrm.hxx>
 #include <LayerTabBar.hxx>
 
-#include <strings.hrc>
 #include <app.hrc>
 #include <helpids.h>
 #include <optsitem.hxx>
@@ -47,7 +46,6 @@
 #include <sdpage.hxx>
 #include <stlpool.hxx>
 #include <prntopts.hxx>
-#include <sdresid.hxx>
 #include <Window.hxx>
 #include <drawview.hxx>
 #include <drawdoc.hxx>
@@ -106,9 +104,6 @@ void DrawViewShell::ArrangeGUIElements()
     // bar.
     int nScrollBarSize = GetParentWindow()->GetSettings().GetStyleSettings().GetScrollBarSize();
     maScrBarWH = Size (nScrollBarSize, nScrollBarSize);
-
-    Point aHPos = maViewPos;
-    aHPos.AdjustY(maViewSize.Height() );
 
     ViewShell::ArrangeGUIElements ();
 

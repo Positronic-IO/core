@@ -36,7 +36,9 @@
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XChartTypeContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
+#include <comphelper/sequence.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <algorithm>
 #include <iterator>
@@ -226,12 +228,12 @@ Reference< chart2::data::XLabeledDataSequence >
 
 std::vector< Reference< chart2::data::XLabeledDataSequence > >
     getAllDataSequencesByRole( const Sequence< Reference< chart2::data::XLabeledDataSequence > > & aDataSequences,
-                               const OUString& aRole, bool bMatchPrefix /* = false */ )
+                               const OUString& aRole )
 {
     std::vector< Reference< chart2::data::XLabeledDataSequence > > aResultVec;
     std::copy_if( aDataSequences.begin(), aDataSequences.end(),
                            std::back_inserter( aResultVec ),
-                           lcl_MatchesRole(aRole, bMatchPrefix) );
+                           lcl_MatchesRole(aRole, /*bMatchPrefix*/true) );
     return aResultVec;
 }
 
@@ -408,9 +410,9 @@ void setStackModeAtSeries(
                 aAxisIndexSet.insert(nAxisIndex);
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -422,12 +424,10 @@ void setStackModeAtSeries(
             aAxisIndexSet.insert(0);
         }
 
-        for( std::set< sal_Int32 >::const_iterator aIt = aAxisIndexSet.begin();
-            aIt != aAxisIndexSet.end(); ++aIt )
+        for (auto const& axisIndex : aAxisIndexSet)
         {
-            sal_Int32 nAxisIndex = *aIt;
             Reference< chart2::XAxis > xAxis(
-                xCorrespondingCoordinateSystem->getAxisByDimension( 1, nAxisIndex ));
+                xCorrespondingCoordinateSystem->getAxisByDimension(1, axisIndex));
             if( xAxis.is())
             {
                 bool bPercent = (eStackMode == StackMode::YStackedPercent);
@@ -457,9 +457,9 @@ sal_Int32 getAttachedAxisIndex( const Reference< chart2::XDataSeries > & xSeries
             xProp->getPropertyValue( "AttachedAxisIndex" ) >>= nRet;
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return nRet;
 }
@@ -480,9 +480,9 @@ sal_Int32 getNumberFormatKeyFromAxis(
         if( xAxisProp.is())
             xAxisProp->getPropertyValue(CHART_UNONAME_NUMFMT) >>= nResult;
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return nResult;
@@ -527,9 +527,9 @@ void deleteSeries(
             xSeriesCnt->setDataSeries( comphelper::containerToSequence( aSeries ));
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 

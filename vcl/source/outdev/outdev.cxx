@@ -62,7 +62,7 @@ OutputDevice::OutputDevice() :
     mpFontCollection                = nullptr;
     mpDeviceFontList                = nullptr;
     mpDeviceFontSizeList            = nullptr;
-    mpOutDevStateStack              = new OutDevStateStack;
+    mpOutDevStateStack.reset(new OutDevStateStack);
     mpPDFWriter                     = nullptr;
     mpAlphaVDev                     = nullptr;
     mpExtOutDevData                 = nullptr;
@@ -128,7 +128,7 @@ OutputDevice::OutputDevice() :
     maThresRes.mnThresPixToLogY     = 0;
 
     // struct ImplOutDevData- see #i82615#
-    mpOutDevData                    = new ImplOutDevData;
+    mpOutDevData.reset(new ImplOutDevData);
     mpOutDevData->mpRotateDev       = nullptr;
     mpOutDevData->mpRecordLayout    = nullptr;
 
@@ -158,8 +158,7 @@ void OutputDevice::dispose()
     // #i75163#
     ImplInvalidateViewTransform();
 
-    delete mpOutDevData;
-    mpOutDevData = nullptr;
+    mpOutDevData.reset();
 
     // for some reason, we haven't removed state from the stack properly
     if ( !mpOutDevStateStack->empty() )
@@ -170,20 +169,15 @@ void OutputDevice::dispose()
             mpOutDevStateStack->pop_back();
         }
     }
-    delete mpOutDevStateStack;
-    mpOutDevStateStack = nullptr;
+    mpOutDevStateStack.reset();
 
     // release the active font instance
     if( mpFontInstance )
         mpFontInstance->Release();
 
     // remove cached results of GetDevFontList/GetDevSizeList
-    // TODO: use smart pointers for them
-    delete mpDeviceFontList;
-    mpDeviceFontList = nullptr;
-
-    delete mpDeviceFontSizeList;
-    mpDeviceFontSizeList = nullptr;
+    mpDeviceFontList.reset();
+    mpDeviceFontSizeList.reset();
 
     // release ImplFontCache specific to this OutputDevice
     // TODO: refcount ImplFontCache
@@ -337,7 +331,8 @@ void OutputDevice::SetRefPoint()
         mpMetaFile->AddAction( new MetaRefPointAction( Point(), false ) );
 
     mbRefPoint = false;
-    maRefPoint.X() = maRefPoint.Y() = 0;
+    maRefPoint.setX(0);
+    maRefPoint.setY(0);
 
     if( mpAlphaVDev )
         mpAlphaVDev->SetRefPoint();
@@ -376,13 +371,6 @@ void OutputDevice::SetOutOffXPixel(long nOutOffX)
 void OutputDevice::SetOutOffYPixel(long nOutOffY)
 {
     mnOutOffY = nOutOffY;
-}
-
-sal_uLong OutputDevice::GetColorCount() const
-{
-
-    const sal_uInt16 nBitCount = GetBitCount();
-    return( ( nBitCount > 31 ) ? ULONG_MAX : ( ( sal_uLong(1) ) << nBitCount) );
 }
 
 css::uno::Reference< css::awt::XGraphics > OutputDevice::CreateUnoGraphics()

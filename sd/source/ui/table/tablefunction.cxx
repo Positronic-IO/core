@@ -41,7 +41,6 @@
 #include <svx/sdrpagewindow.hxx>
 #include <svx/sdr/table/tabledesign.hxx>
 #include <svx/svxdlg.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <svl/itempool.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -54,14 +53,12 @@
 #include <framework/FrameworkHelper.hxx>
 #include "TableDesignPane.hxx"
 #include <app.hrc>
-#include <strings.hrc>
 #include <tablefunction.hxx>
 #include <DrawViewShell.hxx>
 #include <drawdoc.hxx>
 #include <DrawDocShell.hxx>
 #include <Window.hxx>
 #include <drawview.hxx>
-#include <sdresid.hxx>
 #include <undo/undoobjects.hxx>
 
 #include <memory>
@@ -127,7 +124,7 @@ void DrawViewShell::FuTable(SfxRequest& rReq)
         if( (nColumns == 0) || (nRows == 0) )
         {
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-            ScopedVclPtr<SvxAbstractNewTableDialog> pDlg( pFact ? pFact->CreateSvxNewTableDialog() : nullptr);
+            ScopedVclPtr<SvxAbstractNewTableDialog> pDlg( pFact ? pFact->CreateSvxNewTableDialog(rReq.GetFrameWeld()) : nullptr);
 
             if( !pDlg.get() || (pDlg->Execute() != RET_OK) )
                 break;
@@ -186,7 +183,11 @@ void DrawViewShell::FuTable(SfxRequest& rReq)
             aRect = ::tools::Rectangle(aPos, aSize);
         }
 
-        sdr::table::SdrTableObj* pObj = new sdr::table::SdrTableObj( GetDoc(), aRect, nColumns, nRows );
+        sdr::table::SdrTableObj* pObj = new sdr::table::SdrTableObj(
+            *GetDoc(), // TTTT should be reference
+            aRect,
+            nColumns,
+            nRows);
         pObj->NbcSetStyleSheet( GetDoc()->GetDefaultStyleSheet(), true );
         apply_table_style( pObj, GetDoc(), sTableStyle );
         SdrPageView* pPV = mpView->GetSdrPageView();
@@ -226,19 +227,11 @@ void DrawViewShell::FuTable(SfxRequest& rReq)
     }
     case SID_TABLEDESIGN:
     {
-        if( GetDoc() && (GetDoc()->GetDocumentType() == DocumentType::Draw) )
-        {
-            // in draw open a modal dialog since we have no tool pane yet
-            showTableDesignDialog( GetActiveWindow(), GetViewShellBase() );
-        }
-        else
-        {
-            // First make sure that the sidebar is visible
-            GetViewFrame()->ShowChildWindow(SID_SIDEBAR);
-            ::sfx2::sidebar::Sidebar::ShowPanel(
-                "SdTableDesignPanel",
-                GetViewFrame()->GetFrame().GetFrameInterface());
-        }
+        // First make sure that the sidebar is visible
+        GetViewFrame()->ShowChildWindow(SID_SIDEBAR);
+        ::sfx2::sidebar::Sidebar::ShowPanel(
+            "SdTableDesignPanel",
+            GetViewFrame()->GetFrame().GetFrameInterface());
 
         Cancel();
         rReq.Done ();
@@ -274,7 +267,11 @@ void CreateTableFromRTF( SvStream& rStream, SdDrawDocument* pModel )
         {
             Size aSize( 200, 200 );
             ::tools::Rectangle aRect (Point(), aSize);
-            sdr::table::SdrTableObj* pObj = new sdr::table::SdrTableObj( pModel, aRect, 1, 1 );
+            sdr::table::SdrTableObj* pObj = new sdr::table::SdrTableObj(
+                *pModel,
+                aRect,
+                1,
+                1);
             pObj->NbcSetStyleSheet( pModel->GetDefaultStyleSheet(), true );
             apply_table_style( pObj, pModel, OUString() );
 

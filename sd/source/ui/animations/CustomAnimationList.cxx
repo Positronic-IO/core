@@ -202,8 +202,7 @@ public:
     CustomAnimationListEntryItem(const OUString& aDescription,
                                  const CustomAnimationEffectPtr& pEffect, CustomAnimationList* pParent);
     void InitViewData(SvTreeListBox*,SvTreeListEntry*,SvViewDataItem* = nullptr) override;
-    SvLBoxItem* Create() const override;
-    void Clone(SvLBoxItem* pSource) override;
+    virtual std::unique_ptr<SvLBoxItem> Clone(SvLBoxItem const * pSource) const override;
 
     virtual void Paint(const Point&, SvTreeListBox& rDev, vcl::RenderContext& rRenderContext,
                        const SvViewDataEntry* pView,const SvTreeListEntry& rEntry) override;
@@ -212,7 +211,6 @@ private:
     OUString        msDescription;
     OUString        msEffectName;
     CustomAnimationEffectPtr mpEffect;
-    const CustomAnimationPresets* mpCustomAnimationPresets;
     static const long nIconWidth = 19;
     static const long nItemMinHeight = 38;
 };
@@ -223,7 +221,6 @@ CustomAnimationListEntryItem::CustomAnimationListEntryItem( const OUString& aDes
 , msDescription( aDescription )
 , msEffectName( OUString() )
 , mpEffect(pEffect)
-, mpCustomAnimationPresets(&CustomAnimationPresets::getCustomAnimationPresets())
 {
     switch(mpEffect->getPresetClass())
     {
@@ -236,7 +233,7 @@ CustomAnimationListEntryItem::CustomAnimationListEntryItem( const OUString& aDes
     case EffectPresetClass::MOTIONPATH:
         msEffectName = SdResId(STR_CUSTOMANIMATION_MOTION_PATHS); break;
     }
-    msEffectName = msEffectName.replaceFirst( "%1" , mpCustomAnimationPresets->getUINameForPresetId(mpEffect->getPresetId()));
+    msEffectName = msEffectName.replaceFirst( "%1" , CustomAnimationPresets::getCustomAnimationPresets().getUINameForPresetId(mpEffect->getPresetId()));
 }
 
 void CustomAnimationListEntryItem::InitViewData( SvTreeListBox* pView, SvTreeListEntry* pEntry, SvViewDataItem* pViewData )
@@ -328,13 +325,9 @@ void CustomAnimationListEntryItem::Paint(const Point& rPos, SvTreeListBox& rDev,
     rRenderContext.DrawText(aPos, rRenderContext.GetEllipsisString(msEffectName, rDev.GetOutputSizePixel().Width() - aPos.X()));
 }
 
-SvLBoxItem* CustomAnimationListEntryItem::Create() const
+std::unique_ptr<SvLBoxItem> CustomAnimationListEntryItem::Clone(SvLBoxItem const *) const
 {
     return nullptr;
-}
-
-void CustomAnimationListEntryItem::Clone( SvLBoxItem* )
-{
 }
 
 class CustomAnimationListEntry : public SvTreeListEntry
@@ -364,8 +357,7 @@ public:
     explicit        CustomAnimationTriggerEntryItem( const OUString& aDescription );
 
     void            InitViewData( SvTreeListBox*,SvTreeListEntry*,SvViewDataItem* = nullptr ) override;
-    SvLBoxItem*     Create() const override;
-    void            Clone( SvLBoxItem* pSource ) override;
+    virtual std::unique_ptr<SvLBoxItem> Clone(SvLBoxItem const * pSource) const override;
     virtual void Paint(const Point& rPos, SvTreeListBox& rOutDev, vcl::RenderContext& rRenderContext,
                        const SvViewDataEntry* pView, const SvTreeListEntry& rEntry) override;
 
@@ -428,13 +420,9 @@ void CustomAnimationTriggerEntryItem::Paint(const Point& rPos, SvTreeListBox& rD
     rRenderContext.Pop();
 }
 
-SvLBoxItem* CustomAnimationTriggerEntryItem::Create() const
+std::unique_ptr<SvLBoxItem> CustomAnimationTriggerEntryItem::Clone(SvLBoxItem const *) const
 {
     return nullptr;
-}
-
-void CustomAnimationTriggerEntryItem::Clone( SvLBoxItem* )
-{
 }
 
 CustomAnimationList::CustomAnimationList( vcl::Window* pParent )
@@ -914,9 +902,9 @@ VclPtr<PopupMenu> CustomAnimationList::CreateContextMenu()
         pEntry = static_cast< CustomAnimationListEntry* >(NextSelected( pEntry ));
     }
 
-    mxMenu->CheckItem(mxMenu->GetItemId("onclick"), nNodeType == EffectNodeType::ON_CLICK);
-    mxMenu->CheckItem(mxMenu->GetItemId("withprev"), nNodeType == EffectNodeType::WITH_PREVIOUS);
-    mxMenu->CheckItem(mxMenu->GetItemId("afterprev"), nNodeType == EffectNodeType::AFTER_PREVIOUS);
+    mxMenu->CheckItem("onclick", nNodeType == EffectNodeType::ON_CLICK);
+    mxMenu->CheckItem("withprev", nNodeType == EffectNodeType::WITH_PREVIOUS);
+    mxMenu->CheckItem("afterprev", nNodeType == EffectNodeType::AFTER_PREVIOUS);
     mxMenu->EnableItem(mxMenu->GetItemId("options"), nEntries == 1);
     mxMenu->EnableItem(mxMenu->GetItemId("timing"), nEntries == 1);
 

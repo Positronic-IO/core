@@ -1,0 +1,179 @@
+---
+assumeFilename: sc/source/core/data/document.cxx
+blacklist:
+    sc/inc/AccessibleGlobal.hxx:
+    # base class has to be a complete type
+    - com/sun/star/accessibility/XAccessibleStateSet.hpp
+    sc/inc/AccessibleFilterMenu.hxx:
+    # base class has to be a complete type
+    - com/sun/star/accessibility/XAccessibleSelection.hpp
+    sc/inc/AccessibleFilterMenuItem.hxx:
+    # base class has to be a complete type
+    - com/sun/star/accessibility/XAccessibleAction.hpp
+    sc/inc/address.hxx:
+    # base class has to be a complete type
+    - com/sun/star/uno/Sequence.hxx
+    sc/inc/addruno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    sc/inc/afmtuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/lang/XUnoTunnel.hpp
+    - com/sun/star/container/XIndexReplace.hpp
+    - com/sun/star/container/XNameContainer.hpp
+    - com/sun/star/container/XNameReplace.hpp
+    - com/sun/star/container/XNamed.hpp
+    - com/sun/star/container/XSet.hpp
+    sc/inc/appluno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/container/XEnumerationAccess.hpp
+    - com/sun/star/container/XNameAccess.hpp
+    - com/sun/star/lang/XMultiServiceFactory.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/sheet/XFunctionDescriptions.hpp
+    - com/sun/star/sheet/XGlobalSheetSettings.hpp
+    - com/sun/star/sheet/XRecentFunctions.hpp
+    sc/inc/autoform.hxx:
+    # contains macro definitions
+    - scitems.hxx
+    sc/inc/calcconfig.hxx:
+    # needed for std::shared_ptr
+    - memory
+    sc/inc/chartuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/container/XEnumerationAccess.hpp
+    - com/sun/star/container/XIndexAccess.hpp
+    - com/sun/star/container/XNamed.hpp
+    - com/sun/star/document/XEmbeddedObjectSupplier.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/table/XTableChart.hpp
+    - com/sun/star/table/XTableCharts.hpp
+    sc/inc/chgviset.hxx:
+    # base class has to be a complete type
+    - unotools/textsearch.hxx
+    sc/inc/column.hxx:
+    # base class has to be a complete type
+    - mdds/flat_segment_tree.hpp
+    - svx/svdobj.hxx
+    sc/inc/columnset.hxx:
+    # contains macro definitions
+    - address.hxx
+    sc/inc/compiler.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/ExternalLinkInfo.hpp
+    - o3tl/typed_flags_set.hxx
+    - unotools/charclass.hxx
+    sc/inc/confuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    sc/inc/conditio.hxx:
+    # base class has to be a complete type
+    - tools/link.hxx
+    sc/inc/convuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/lang/Locale.hpp
+    sc/inc/dbdocutl.hxx:
+    # base class has to be a complete type
+    - com/sun/star/uno/Reference.hxx
+    sc/inc/defltuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/beans/XPropertyState.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    sc/inc/dispuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/frame/XDispatchProviderInterceptor.hpp
+    - com/sun/star/view/XSelectionChangeListener.hpp
+    sc/inc/dpglobal.hxx:
+    # base class has to be a complete type
+    - o3tl/typed_flags_set.hxx
+    sc/inc/dpoutput.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/DataResult.hpp
+    - com/sun/star/sheet/MemberResult.hpp
+    - com/sun/star/sheet/XDimensionsSupplier.hpp
+    sc/inc/dpobject.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/XDimensionsSupplier.hpp
+    sc/inc/dpsave.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/XDimensionsSupplier.hpp
+    sc/inc/dptabres.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/DataResult.hpp
+    - com/sun/star/sheet/MemberResult.hpp
+    - com/sun/star/uno/Sequence.hxx
+    sc/inc/dptabsrc.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/container/XNamed.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/sheet/MemberResult.hpp
+    - com/sun/star/sheet/XDataPilotMemberResults.hpp
+    - com/sun/star/sheet/XDataPilotResults.hpp
+    - com/sun/star/sheet/XDimensionsSupplier.hpp
+    - com/sun/star/sheet/XDrillDownDataSupplier.hpp
+    - com/sun/star/sheet/XHierarchiesSupplier.hpp
+    - com/sun/star/sheet/XLevelsSupplier.hpp
+    - com/sun/star/sheet/XMembersSupplier.hpp
+    - com/sun/star/util/XCloneable.hpp
+    - com/sun/star/util/XRefreshable.hpp
+    sc/inc/editdataarray.hxx:
+    # base class has to be a complete type
+    - editeng/editobj.hxx
+    sc/inc/editutil.hxx:
+    # struct definition has to be a complete type
+    - svx/pageitem.hxx
+    sc/inc/eventuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/container/XNameReplace.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    sc/inc/fillinfo.hxx:
+    # base class has to be a complete type
+    - o3tl/typed_flags_set.hxx
+    sc/inc/filtuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertyAccess.hpp
+    - com/sun/star/document/XExporter.hpp
+    - com/sun/star/document/XImporter.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/ui/dialogs/XExecutableDialog.hpp
+    sc/inc/fmtuno.hxx:
+    # base class has to be a complete type
+    - com/sun/star/beans/XPropertySet.hpp
+    - com/sun/star/container/XEnumerationAccess.hpp
+    - com/sun/star/container/XNameAccess.hpp
+    - com/sun/star/lang/XUnoTunnel.hpp
+    - com/sun/star/lang/XServiceInfo.hpp
+    - com/sun/star/sheet/FormulaToken.hpp
+    - com/sun/star/sheet/XSheetCondition2.hpp
+    - com/sun/star/sheet/XMultiFormulaTokens.hpp
+    - com/sun/star/sheet/XSheetConditionalEntries.hpp
+    - com/sun/star/sheet/XSheetConditionalEntry.hpp
+    sc/inc/fonthelper.hxx:
+    # base class has to be a complete type
+    - tools/color.hxx
+    sc/inc/formulagroup.hxx:
+    # base class has to be a complete type
+    - opencl/platforminfo.hxx
+    sc/inc/formulacell.hxx:
+    # base class has to be a complete type
+    - interpretercontext.hxx
+    sc/inc/formulalogger.hxx:
+    # base class has to be a complete type
+    - memory
+    # needed for conditionally enabled code path
+    - struct ScFormulaCellGroup
+    sc/inc/formulaparserpool.hxx:
+    # base class has to be a complete type
+    - com/sun/star/sheet/XFormulaParser.hpp
+    sc/inc/formularesult.hxx:
+    # Needed for enum
+    - global.hxx
+    # Needed for macros
+    - calcmacros.hxx

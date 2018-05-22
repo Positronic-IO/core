@@ -50,7 +50,6 @@
 #include <dociter.hxx>
 #include <strings.hrc>
 #include <scresid.hxx>
-#include <globstr.hrc>
 #include <bitmaps.hlst>
 #include <arealink.hxx>
 #include <navicfg.hxx>
@@ -610,13 +609,13 @@ void ScContentTree::Command( const CommandEvent& rCEvt )
                 switch (pParentWindow->GetDropMode())
                 {
                     case 0:
-                        aDropMenu->CheckItem(aDropMenu->GetItemId("hyperlink"));
+                        aDropMenu->CheckItem("hyperlink");
                         break;
                     case 1:
-                        aDropMenu->CheckItem(aDropMenu->GetItemId("link"));
+                        aDropMenu->CheckItem("link");
                         break;
                     case 2:
-                        aDropMenu->CheckItem(aDropMenu->GetItemId("copy"));
+                        aDropMenu->CheckItem("copy");
                         break;
                 }
 
@@ -1248,7 +1247,7 @@ static void lcl_DoDragObject( ScDocShell* pSrcShell, const OUString& rName, ScCo
         SdrObject* pObject = pModel->GetNamedObject( rName, nDrawId, nTab );
         if (pObject)
         {
-            SdrView aEditView( pModel );
+            SdrView aEditView(*pModel);
             aEditView.ShowSdrPage(aEditView.GetModel()->GetPage(nTab));
             SdrPageView* pPV = aEditView.GetSdrPageView();
             aEditView.MarkObj(pObject, pPV);
@@ -1262,7 +1261,7 @@ static void lcl_DoDragObject( ScDocShell* pSrcShell, const OUString& rName, ScCo
 
             rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( pDragModel, pSrcShell, aObjDesc );
 
-            pTransferObj->SetDragSourceObj( pObject, nTab );
+            pTransferObj->SetDragSourceObj( *pObject, nTab );
             pTransferObj->SetDragSourceFlags(ScDragSrc::Navigator);
 
             SC_MOD()->SetDragObject( nullptr, pTransferObj.get() );
@@ -1626,19 +1625,19 @@ void ScContentTree::SelectDoc(const OUString& rName)      // rName like shown in
     }
 }
 
-bool ScContentTree::SelectEntryByName(const ScContentId nRoot, const OUString& rName)
+void ScContentTree::SelectEntryByName(const ScContentId nRoot, const OUString& rName)
 {
     SvTreeListEntry* pParent = pRootNodes[ nRoot ];
 
     if( !pParent->HasChildren() )
-        return false;
+        return;
 
     SvTreeListEntry* pEntry = FirstChild( pParent );
     while( pEntry )
     {
         if( GetEntryText( pEntry ) == rName )
         {
-            bool bRet = SvTreeListBox::Select( pEntry );
+            SvTreeListBox::Select( pEntry );
 
             // Scroll to the selected item
             if( SvTreeListBox::GetVScroll()->IsVisible() )
@@ -1655,12 +1654,10 @@ bool ScContentTree::SelectEntryByName(const ScContentId nRoot, const OUString& r
                             + nBeforeCount );
             }
 
-            return bRet;
+            return;
         }
         pEntry = Next( pEntry );
     }
-
-    return false;
 }
 
 void ScContentTree::ApplyNavigatorSettings()

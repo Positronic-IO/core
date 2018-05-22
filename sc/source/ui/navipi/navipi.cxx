@@ -372,13 +372,13 @@ IMPL_LINK(ScNavigatorDlg, ToolBoxDropdownClickHdl, ToolBox *, pToolBox, void)
         switch (GetDropMode())
         {
             case 0:
-                aPop->CheckItem(aPop->GetItemId("hyperlink"));
+                aPop->CheckItem("hyperlink");
                 break;
             case 1:
-                aPop->CheckItem(aPop->GetItemId("link"));
+                aPop->CheckItem("link");
                 break;
             case 2:
-                aPop->CheckItem(aPop->GetItemId("copy"));
+                aPop->CheckItem("copy");
                 break;
         }
 
@@ -509,8 +509,6 @@ ScNavigatorDlg::ScNavigatorDlg(SfxBindings* pB, vcl::Window* pParent)
     aStrActive    = " (" + ScResId(SCSTR_ACTIVE) + ")";     // " (active)"
     aStrNotActive = " (" + ScResId(SCSTR_NOTACTIVE) + ")";  // " (not active)"
     aStrHidden    = " (" + ScResId(SCSTR_HIDDEN) + ")";     // " (hidden)"
-
-    aTitleBase = GetText();
 
     ppBoundItems = new ScNavigatorControllerItem* [CTRL_ITEMS];
 

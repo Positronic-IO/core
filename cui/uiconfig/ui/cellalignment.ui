@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="cui">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkAdjustment" id="adjustmentIndent">
     <property name="upper">990</property>
@@ -122,6 +122,7 @@
                         <property name="xalign">0</property>
                         <property name="label" translatable="yes" context="cellalignment|labelDegrees">_Degrees:</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">spinDegrees</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -157,7 +158,6 @@
                       <object class="GtkSpinButton" id="spinDegrees">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">•</property>
                         <property name="progress_pulse_step">1</property>
                         <property name="adjustment">adjustmentSpinDegrees</property>
                         <property name="wrap">True</property>
@@ -401,7 +401,6 @@
                   <object class="GtkSpinButton" id="spinIndentFrom:0.00pt">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
-                    <property name="invisible_char">•</property>
                     <property name="adjustment">adjustmentIndent</property>
                     <property name="climb_rate">1</property>
                   </object>

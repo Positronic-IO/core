@@ -28,7 +28,7 @@
 #include <scmod.hxx>
 #include <inputhdl.hxx>
 #include <globstr.hrc>
-
+#include <scresid.hxx>
 
 //      modify style (cell or page style)
 
@@ -83,7 +83,7 @@ OUString ScUndoModifyStyle::GetComment() const
     const char* pId = (eFamily == SfxStyleFamily::Para) ?
                                 STR_UNDO_EDITCELLSTYLE :
                                 STR_UNDO_EDITPAGESTYLE;
-    return ScGlobal::GetRscString(pId);
+    return ScResId(pId);
 }
 
 static void lcl_DocStyleChanged( ScDocument* pDoc, const SfxStyleSheetBase* pStyle, bool bRemoved )
@@ -127,7 +127,7 @@ void ScUndoModifyStyle::DoChange( ScDocShell* pDocSh, const OUString& rName,
     else if ( !bDelete )
     {
         // create style (with new name)
-        pStyle = &pStlPool->Make( aNewName, eStyleFamily, SFXSTYLEBIT_USERDEF );
+        pStyle = &pStlPool->Make( aNewName, eStyleFamily, SfxStyleSearchBits::UserDefined );
 
         if ( eStyleFamily == SfxStyleFamily::Para )
             rDoc.GetPool()->CellStyleCreated( aNewName, &rDoc );
@@ -232,7 +232,7 @@ void ScUndoApplyPageStyle::AddSheetAction( SCTAB nTab, const OUString& rOldStyle
 
 OUString ScUndoApplyPageStyle::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_APPLYPAGESTYLE );
+    return ScResId( STR_UNDO_APPLYPAGESTYLE );
 }
 
 void ScUndoApplyPageStyle::Undo()

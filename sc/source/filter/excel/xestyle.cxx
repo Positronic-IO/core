@@ -25,6 +25,7 @@
 #include <iterator>
 #include <set>
 #include <com/sun/star/i18n/ScriptType.hpp>
+#include <comphelper/processfactory.hxx>
 #include <rtl/tencinfo.h>
 #include <vcl/font.hxx>
 #include <svl/zformat.hxx>
@@ -49,6 +50,7 @@
 #include <patattr.hxx>
 #include <attrib.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <xestring.hxx>
 #include <conditio.hxx>
 
@@ -251,7 +253,7 @@ public:
                             sal_uInt16& rnXclForeIx, sal_uInt16& rnXclBackIx, sal_uInt8& rnXclPattern,
                             sal_uInt32 nForeColorId, sal_uInt32 nBackColorId ) const;
 
-    /** Returns the RGB color data for a (non-zero-based) Excel palette entry.
+    /** Returns the RGB color for a (non-zero-based) Excel palette entry.
         @return  The color from current or default palette or COL_AUTO, if nothing else found. */
     Color               GetColor( sal_uInt16 nXclIndex ) const;
 
@@ -467,7 +469,7 @@ Color XclExpPaletteImpl::GetColor( sal_uInt16 nXclIndex ) const
     {
         sal_uInt32 nIdx = nXclIndex - EXC_COLOR_USEROFFSET;
         if( nIdx < maPalette.size() )
-            return maPalette[ nIdx ].maColor.GetColor();
+            return maPalette[ nIdx ].maColor;
     }
     return mrDefPal.GetDefColor( nXclIndex );
 }
@@ -541,7 +543,7 @@ XclListColor* XclExpPaletteImpl::SearchListEntry( const Color& rColor, sal_uInt3
         bFound = pEntry->GetColor() == rColor;
         if( !bFound )
         {
-            if( pEntry->GetColor().GetColor() < rColor.GetColor() )
+            if( pEntry->GetColor() < rColor )
                 nBegIdx = rnIndex + 1;
             else
                 nEndIdx = rnIndex;
@@ -946,7 +948,7 @@ namespace {
 sal_uInt32 lclCalcHash( const XclFontData& rFontData )
 {
     sal_uInt32 nHash = rFontData.maName.getLength();
-    nHash += rFontData.maColor.GetColor() * 2;
+    nHash += sal_uInt32(rFontData.maColor) * 2;
     nHash += rFontData.mnWeight * 3;
     nHash += rFontData.mnCharSet * 5;
     nHash += rFontData.mnFamily * 7;
@@ -2056,7 +2058,7 @@ XclExpXF::XclExpXF( const XclExpRoot& rRoot, const SfxStyleSheetBase& rStyleShee
     XclExpRoot( rRoot ),
     mnParentXFId( XclExpXFBuffer::GetXFIdFromIndex( EXC_XF_STYLEPARENT ) )
 {
-    bool bDefStyle = (rStyleSheet.GetName() == ScGlobal::GetRscString( STR_STYLENAME_STANDARD ));
+    bool bDefStyle = (rStyleSheet.GetName() == ScResId( STR_STYLENAME_STANDARD ));
     sal_Int16 nScript = bDefStyle ? GetDefApiScript() : css::i18n::ScriptType::WEAK;
     Init( const_cast< SfxStyleSheetBase& >( rStyleSheet ).GetItemSet(), nScript,
         NUMBERFORMAT_ENTRY_NOT_FOUND, EXC_FONT_NOTFOUND, false, bDefStyle );
@@ -2889,7 +2891,7 @@ void XclExpXFBuffer::InsertDefaultRecords()
     maFills.push_back( lcl_GetPatternFill_Gray125() );
 
     // index 0: default style
-    if( SfxStyleSheetBase* pDefStyleSheet = GetStyleSheetPool().Find( ScGlobal::GetRscString( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) )
+    if( SfxStyleSheetBase* pDefStyleSheet = GetStyleSheetPool().Find( ScResId( STR_STYLENAME_STANDARD ), SfxStyleFamily::Para ) )
     {
         XclExpXFRef xDefStyle( new XclExpXF( GetRoot(), *pDefStyleSheet ) );
         sal_uInt32 nXFId = AppendBuiltInXFWithStyle( xDefStyle, EXC_STYLE_NORMAL );

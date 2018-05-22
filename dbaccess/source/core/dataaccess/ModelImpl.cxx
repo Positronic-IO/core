@@ -19,8 +19,6 @@
 
 #include "commandcontainer.hxx"
 #include "connection.hxx"
-#include <strings.hrc>
-#include <core_resource.hxx>
 #include <databasecontext.hxx>
 #include "databasedocument.hxx"
 #include "datasource.hxx"
@@ -159,20 +157,17 @@ void DocumentStorageAccess::dispose()
 {
     ::osl::MutexGuard aGuard( m_aMutex );
 
-    for (   NamedStorages::const_iterator loop = m_aExposedStorages.begin();
-            loop != m_aExposedStorages.end();
-            ++loop
-        )
+    for (auto const& exposedStorage : m_aExposedStorages)
     {
         try
         {
-            Reference< XTransactionBroadcaster > xBroadcaster( loop->second, UNO_QUERY );
+            Reference< XTransactionBroadcaster > xBroadcaster(exposedStorage.second, UNO_QUERY);
             if ( xBroadcaster.is() )
                 xBroadcaster->removeTransactionListener( this );
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -207,7 +202,7 @@ Reference< XStorage > DocumentStorageAccess::impl_openSubStorage_nothrow( const 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return xStorage;
@@ -217,19 +212,15 @@ void DocumentStorageAccess::disposeStorages()
 {
     m_bDisposingSubStorages = true;
 
-    NamedStorages::const_iterator aEnd = m_aExposedStorages.end();
-    for (   NamedStorages::iterator aIter = m_aExposedStorages.begin();
-            aIter != aEnd ;
-            ++aIter
-        )
+    for (auto & exposedStorage : m_aExposedStorages)
     {
         try
         {
-            ::comphelper::disposeComponent( aIter->second );
+            ::comphelper::disposeComponent( exposedStorage.second );
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     m_aExposedStorages.clear();
@@ -241,12 +232,9 @@ void DocumentStorageAccess::commitStorages()
 {
     try
     {
-        for (   NamedStorages::const_iterator aIter = m_aExposedStorages.begin();
-                aIter != m_aExposedStorages.end();
-                ++aIter
-            )
+        for (auto const& exposedStorage : m_aExposedStorages)
         {
-            tools::stor::commitStorageIfWriteable( aIter->second );
+            tools::stor::commitStorageIfWriteable( exposedStorage.second );
         }
     }
     catch(const WrappedTargetException&)
@@ -270,7 +258,7 @@ bool DocumentStorageAccess::commitEmbeddedStorage( bool _bPreventRootCommits )
     }
     catch( Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     if ( _bPreventRootCommits )
@@ -476,7 +464,7 @@ void ODatabaseModelImpl::impl_construct_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     m_rDBContext.appendAtTerminateListener(*this);
 }
@@ -502,22 +490,23 @@ namespace
     {
         bool bSomeDocHasMacros = false;
 
-        for (   ODefinitionContainer_Impl::const_iterator object = _rObjectDefinitions.begin();
-                ( object != _rObjectDefinitions.end() ) && !bSomeDocHasMacros;
-                ++object
-            )
+        for (auto const& objectDefinition : _rObjectDefinitions)
         {
-            const TContentPtr& rDefinition( object->second );
+            const TContentPtr& rDefinition( objectDefinition.second );
             const OUString& rPersistentName( rDefinition->m_aProps.sPersistentName );
 
             if ( rPersistentName.isEmpty() )
             {   // it's a logical sub folder used to organize the real objects
                 const ODefinitionContainer_Impl& rSubFoldersObjectDefinitions( dynamic_cast< const ODefinitionContainer_Impl& >( *rDefinition.get() ) );
                 bSomeDocHasMacros = lcl_hasObjectWithMacros_throw( rSubFoldersObjectDefinitions, _rxContainerStorage );
+                if (bSomeDocHasMacros)
+                    break;
                 continue;
             }
 
             bSomeDocHasMacros = ODatabaseModelImpl::objectHasMacros( _rxContainerStorage, rPersistentName );
+            if (bSomeDocHasMacros)
+                break;
         }
         return bSomeDocHasMacros;
     }
@@ -545,7 +534,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
             // be on the safe side: If we can't reliably determine whether there are macros,
             // assume there actually are. Better this way, than the other way round.
             bSomeDocHasMacros = true;
@@ -572,7 +561,7 @@ bool ODatabaseModelImpl::objectHasMacros( const Reference< XStorage >& _rxContai
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return bHasMacros;
 }
@@ -627,10 +616,9 @@ void ODatabaseModelImpl::clearConnections()
     aConnections.swap( m_aConnections );
 
     Reference< XConnection > xConn;
-    OWeakConnectionArray::const_iterator aEnd = aConnections.end();
-    for ( OWeakConnectionArray::const_iterator i = aConnections.begin(); aEnd != i; ++i )
+    for (auto const& connection : aConnections)
     {
-        xConn = *i;
+        xConn = connection;
         if ( xConn.is() )
         {
             try
@@ -639,7 +627,7 @@ void ODatabaseModelImpl::clearConnections()
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
     }
@@ -661,17 +649,15 @@ void ODatabaseModelImpl::dispose()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     m_xDataSource = WeakReference<XDataSource>();
     m_xModel = WeakReference< XModel >();
 
-    std::vector<TContentPtr>::const_iterator aIter = m_aContainer.begin();
-    std::vector<TContentPtr>::const_iterator aEnd = m_aContainer.end();
-    for (;aIter != aEnd ; ++aIter)
+    for (auto const& elem : m_aContainer)
     {
-        if ( aIter->get() )
-            (*aIter)->m_pDataSource = nullptr;
+        if ( elem.get() )
+            elem->m_pDataSource = nullptr;
     }
     m_aContainer.clear();
 
@@ -692,7 +678,7 @@ void ODatabaseModelImpl::dispose()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     if ( m_pStorageAccess.is() )
@@ -815,7 +801,7 @@ Reference< XStorage > const & ODatabaseModelImpl::getOrCreateRootStorage()
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                 }
             }
@@ -867,7 +853,7 @@ bool ODatabaseModelImpl::commitStorageIfWriteable_ignoreErrors( const Reference<
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return bSuccess;
 }
@@ -887,7 +873,7 @@ void ODatabaseModelImpl::setModified( bool _bModified )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -925,7 +911,7 @@ Reference< XModel > ODatabaseModelImpl::createNewModel_deliverOwnership()
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
         if ( bHadModelBefore )
@@ -1239,7 +1225,7 @@ sal_Int16 ODatabaseModelImpl::getCurrentMacroExecMode() const
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return nCurrentMode;
 }

@@ -21,7 +21,7 @@
 
 #include <svx/svdlayer.hxx>
 #include <svx/svdmodel.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 
 bool SdrLayerIDSet::IsEmpty() const
@@ -100,7 +100,7 @@ SdrLayer::SdrLayer(SdrLayerID nNewID, const OUString& rNewName) :
 void SdrLayer::SetStandardLayer()
 {
     nType=sal_uInt16(true);
-    maName = ImpGetResStr(STR_StandardLayerName);
+    maName = SvxResId(STR_StandardLayerName);
     if (pModel!=nullptr) {
         SdrHint aHint(SdrHintKind::LayerChange);
         pModel->Broadcast(aHint);
@@ -172,14 +172,14 @@ SdrLayerAdmin& SdrLayerAdmin::operator=(const SdrLayerAdmin& rSrcLayerAdmin)
     return *this;
 }
 
-void SdrLayerAdmin::SetModel(SdrModel* pNewModel)
+void SdrLayerAdmin::SetModel(SdrModel* pNewModelel)
 {
-    if (pNewModel!=pModel) {
-        pModel=pNewModel;
+    if (pNewModelel!=pModel) {
+        pModel=pNewModelel;
         sal_uInt16 nCount=GetLayerCount();
         sal_uInt16 i;
         for (i=0; i<nCount; i++) {
-            GetLayer(i)->SetModel(pNewModel);
+            GetLayer(i)->SetModel(pNewModelel);
         }
     }
 }

@@ -18,9 +18,7 @@
  */
 
 #include <hintids.hxx>
-#include <comphelper/processfactory.hxx>
 #include <svl/stritem.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svl/eitem.hxx>
 #include <editeng/scripttypeitem.hxx>
@@ -37,7 +35,6 @@
 #include <swmodule.hxx>
 #include <fldmgr.hxx>
 #include <fldbas.hxx>
-#include <strings.hrc>
 #include <swcont.hxx>
 #include <svl/cjkoptions.hxx>
 #include <ndtxt.hxx>

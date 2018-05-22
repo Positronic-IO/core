@@ -39,10 +39,10 @@ namespace connectivity
         {
         protected:
             OConnection*                                        m_pConnection;
-            SvStream*                                           m_pFileStream;
+            std::unique_ptr<SvStream>                           m_pFileStream;
             ::rtl::Reference<OSQLColumns>                           m_aColumns;
             sal_Int32                                           m_nFilePos;                 // current IResultSetHelper::Movement
-            sal_uInt8*                                          m_pBuffer;
+            std::unique_ptr<sal_uInt8[]>                        m_pBuffer;
             sal_uInt16                                          m_nBufferSize;  // size of the ReadBuffer, if pBuffer != NULL
             bool                                            m_bWriteable;   // svstream can't say if we are writeable
                                                                                 // so we have to
@@ -100,7 +100,7 @@ namespace connectivity
 
             // creates a stream using ::utl::UcbStreamHelper::CreateStream, but the error is simplified
             // (NULL or non-NULL is returned)
-            static SvStream* createStream_simpleError( const OUString& _rFileName, StreamMode _eOpenMode);
+            static std::unique_ptr<SvStream> createStream_simpleError( const OUString& _rFileName, StreamMode _eOpenMode);
         };
     }
 }

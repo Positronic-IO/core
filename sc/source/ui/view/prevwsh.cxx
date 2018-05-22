@@ -35,7 +35,6 @@
 #include <sfx2/request.hxx>
 #include <svl/stritem.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/help.hxx>
 #include <vcl/settings.hxx>
 #include <tools/urlobj.hxx>
@@ -52,8 +51,8 @@
 #include <tabvwsh.hxx>
 #include <stlpool.hxx>
 #include <editutil.hxx>
-#include <scresid.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <sc.hrc>
 #include <ViewSettingsSequenceDefines.hxx>
 #include <tpprint.hxx>
@@ -78,7 +77,7 @@
 
 using namespace com::sun::star;
 
-#define ScPreviewShell
+#define ShellClass_ScPreviewShell
 #include <scslots.hxx>
 
 #include <memory>
@@ -165,7 +164,6 @@ ScPreviewShell::ScPreviewShell( SfxViewFrame* pViewFrame,
 
         ScTabViewShell* pTabViewShell = static_cast<ScTabViewShell*>(pOldSh);
         const ScViewData& rData = pTabViewShell->GetViewData();
-        rData.WriteUserDataSequence( aSourceData );
         pPreview->SetSelectedTabs(rData.GetMarkData());
         InitStartTable( rData.GetTabNo() );
 
@@ -444,7 +442,7 @@ IMPL_LINK( ScPreviewShell, ScrollHandler, ScrollBar*, pScroll, void )
                 if( bIsDivide )
                     pPreview->SetPageNo( nPageNo );
 
-                aHelpStr = ScGlobal::GetRscString( STR_PAGE ) +
+                aHelpStr = ScResId( STR_PAGE ) +
                            " " + OUString::number( nPageNo ) +
                            " / "  + OUString::number( nTotalPages );
             }
@@ -454,7 +452,7 @@ IMPL_LINK( ScPreviewShell, ScrollHandler, ScrollBar*, pScroll, void )
                 if ( nTotalPages && ( nPageNo < nTotalPages || !bAllTested ) )
                     pPreview->SetPageNo( nPageNo );
 
-                aHelpStr = ScGlobal::GetRscString( STR_PAGE ) +
+                aHelpStr = ScResId( STR_PAGE ) +
                            " " + OUString::number( nPageNo+1 ) +
                            " / "  + OUString::number( nTotalPages );
             }
@@ -518,13 +516,13 @@ bool ScPreviewShell::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> ScPreviewShell::CreatePrintOptionsPage( vcl::Window *pParent, const SfxItemSet &rOptions )
+VclPtr<SfxTabPage> ScPreviewShell::CreatePrintOptionsPage(weld::Container* pPage, const SfxItemSet &rOptions)
 {
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
     OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
     ::CreateTabPage ScTpPrintOptionsCreate = pFact->GetTabPageCreatorFunc(RID_SC_TP_PRINT);
     if ( ScTpPrintOptionsCreate )
-        return ScTpPrintOptionsCreate( pParent, &rOptions );
+        return ScTpPrintOptionsCreate(pPage, &rOptions);
     return VclPtr<SfxTabPage>();
 }
 
@@ -610,8 +608,7 @@ void ScPreviewShell::Execute( SfxRequest& rReq )
                 if ( pReqArgs )
                 {
 
-                    const SvxZoomItem& rZoomItem = static_cast<const SvxZoomItem&>(
-                                                   pReqArgs->Get(SID_ATTR_ZOOM));
+                    const SvxZoomItem& rZoomItem = pReqArgs->Get(SID_ATTR_ZOOM);
 
                     eZoom = rZoomItem.GetType();
                     nZoom = rZoomItem.GetValue();
@@ -633,9 +630,8 @@ void ScPreviewShell::Execute( SfxRequest& rReq )
 
                         if ( !bCancel )
                         {
-                            const SvxZoomItem&  rZoomItem = static_cast<const SvxZoomItem&>(
-                                                    pDlg->GetOutputItemSet()->
-                                                        Get( SID_ATTR_ZOOM ));
+                            const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->
+                                                        Get( SID_ATTR_ZOOM );
 
                             eZoom = rZoomItem.GetType();
                             nZoom = rZoomItem.GetValue();
@@ -931,7 +927,8 @@ void ScPreviewShell::WriteUserDataSequence(uno::Sequence < beans::PropertyValue 
     }
 
     // Common SdrModel processing
-    GetDocument().GetDrawLayer()->WriteUserDataSequence(rSeq);
+    if (ScDrawLayer* pDrawLayer = GetDocument().GetDrawLayer())
+        pDrawLayer->WriteUserDataSequence(rSeq);
 }
 
 void ScPreviewShell::ReadUserDataSequence(const uno::Sequence < beans::PropertyValue >& rSeq)
@@ -958,7 +955,7 @@ void ScPreviewShell::ReadUserDataSequence(const uno::Sequence < beans::PropertyV
                         pPreview->SetPageNo(nTemp);
                 }
                 // Fallback to common SdrModel processing
-                else GetDocument().GetDrawLayer()->ReadUserDataSequenceValue(pSeq);
+                else pDocShell->MakeDrawLayer()->ReadUserDataSequenceValue(pSeq);
             }
         }
     }

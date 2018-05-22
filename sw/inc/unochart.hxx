@@ -37,10 +37,7 @@
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XEventListener.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
-#include <com/sun/star/util/XModifyBroadcaster.hpp>
 #include <com/sun/star/util/XModifyListener.hpp>
-#include <com/sun/star/chart/ChartDataRowSource.hpp>
-#include <com/sun/star/table/XCell.hpp>
 
 #include <comphelper/interfacecontainer2.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -60,7 +57,7 @@ class SwTable;
 class SwTableBox;
 struct SwRangeDescriptor;
 class SwSelBoxes;
-class SwFrameFormat;
+namespace com { namespace sun { namespace star { namespace table { class XCell; } } } }
 
 bool FillRangeDescriptor( SwRangeDescriptor &rDesc, const OUString &rCellRangeName );
 

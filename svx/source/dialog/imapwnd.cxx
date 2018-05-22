@@ -26,8 +26,6 @@
 #include <svl/urlbmk.hxx>
 
 #include <svx/xoutbmp.hxx>
-#include <svx/dialmgr.hxx>
-#include <svx/strings.hrc>
 #include <svx/svxids.hrc>
 #include "imapwnd.hxx"
 #include <svx/svdpage.hxx>
@@ -103,8 +101,8 @@ void IMapWindow::ReplaceImageMap( const ImageMap& rImageMap )
 
     if(pPage)
     {
-        // clear all draw objects
-        pPage->Clear();
+        // clear SdrObjects with broadcasting
+        pPage->ClearSdrObjList();
     }
 
     if(GetSdrView())
@@ -195,7 +193,10 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
             // clipped on CanvasPane
             aDrawRect.Intersection( aClipRect );
 
-            pSdrObj = static_cast<SdrObject*>(new SdrRectObj( aDrawRect ));
+            pSdrObj = static_cast<SdrObject*>(
+                new SdrRectObj(
+                    *pModel,
+                    aDrawRect));
             pCloneIMapObj.reset(static_cast<IMapObject*>(new IMapRectangleObject( *pIMapRectObj )));
         }
         break;
@@ -211,7 +212,13 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
             // limited to CanvasPane
             aCircle.Intersection( aClipRect );
 
-            pSdrObj = static_cast<SdrObject*>(new SdrCircObj( OBJ_CIRC, aCircle, 0, 36000 ));
+            pSdrObj = static_cast<SdrObject*>(
+                new SdrCircObj(
+                    *pModel,
+                    OBJ_CIRC,
+                    aCircle,
+                    0,
+                    36000));
             pCloneIMapObj.reset(static_cast<IMapObject*>(new IMapCircleObject( *pIMapCircleObj )));
         }
         break;
@@ -228,7 +235,13 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
                 // clipped on CanvasPane
                 aDrawRect.Intersection( aClipRect );
 
-                pSdrObj = static_cast<SdrObject*>(new SdrCircObj( OBJ_CIRC, aDrawRect, 0, 36000 ));
+                pSdrObj = static_cast<SdrObject*>(
+                    new SdrCircObj(
+                        *pModel,
+                        OBJ_CIRC,
+                        aDrawRect,
+                        0,
+                        36000));
             }
             else
             {
@@ -240,7 +253,11 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
 
                 basegfx::B2DPolygon aPolygon;
                 aPolygon.append(aDrawPoly.getB2DPolygon());
-                pSdrObj = static_cast<SdrObject*>(new SdrPathObj(OBJ_POLY, basegfx::B2DPolyPolygon(aPolygon)));
+                pSdrObj = static_cast<SdrObject*>(
+                    new SdrPathObj(
+                        *pModel,
+                        OBJ_POLY,
+                        basegfx::B2DPolyPolygon(aPolygon)));
             }
 
             pCloneIMapObj.reset(static_cast<IMapObject*>(new IMapPolygonObject( *pIMapPolyObj )));
@@ -271,7 +288,7 @@ SdrObject* IMapWindow::CreateObj( const IMapObject* pIMapObj )
 
         pSdrObj->SetMergedItemSetAndBroadcast(aSet);
 
-        pSdrObj->AppendUserData( new IMapUserData( pCloneIMapObj ) );
+        pSdrObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new IMapUserData( pCloneIMapObj )) );
         pSdrObj->SetUserCall( GetSdrUserCall() );
     }
 
@@ -299,7 +316,7 @@ void IMapWindow::SdrObjCreated( const SdrObject& rObj )
             SdrRectObj*    pRectObj = const_cast<SdrRectObj*>(static_cast<const SdrRectObj*>(&rObj));
             IMapRectangleObject* pObj = new IMapRectangleObject( pRectObj->GetLogicRect(), "", "", "", "", "", true, false );
 
-            pRectObj->AppendUserData( new IMapUserData( IMapObjectPtr(pObj) ) );
+            pRectObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new IMapUserData( IMapObjectPtr(pObj) )) );
         }
         break;
 
@@ -308,11 +325,14 @@ void IMapWindow::SdrObjCreated( const SdrObject& rObj )
             SdrCircObj* pCircObj = const_cast<SdrCircObj*>( static_cast<const SdrCircObj*>(&rObj) );
             SdrPathObj* pPathObj = static_cast<SdrPathObj*>( pCircObj->ConvertToPolyObj( false, false ) );
             tools::Polygon aPoly(pPathObj->GetPathPoly().getB2DPolygon(0));
-            delete pPathObj;
+
+            // always use SdrObject::Free(...) for SdrObjects (!)
+            SdrObject* pTemp(pPathObj);
+            SdrObject::Free(pTemp);
 
             IMapPolygonObject* pObj = new IMapPolygonObject( aPoly, "", "", "", "", "", true, false );
             pObj->SetExtraEllipse( aPoly.GetBoundRect() );
-            pCircObj->AppendUserData( new IMapUserData( IMapObjectPtr(pObj) ) );
+            pCircObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new IMapUserData( IMapObjectPtr(pObj) )) );
         }
         break;
 
@@ -328,7 +348,7 @@ void IMapWindow::SdrObjCreated( const SdrObject& rObj )
             {
                 tools::Polygon aPoly(rXPolyPoly.getB2DPolygon(0));
                 IMapPolygonObject* pObj = new IMapPolygonObject( aPoly, "", "", "", "", "", true, false );
-                pPathObj->AppendUserData( new IMapUserData( IMapObjectPtr(pObj) ) );
+                pPathObj->AppendUserData( std::unique_ptr<SdrObjUserData>(new IMapUserData( IMapObjectPtr(pObj) )) );
             }
         }
         break;
@@ -379,7 +399,10 @@ void IMapWindow::SdrObjChanged( const SdrObject& rObj )
                 pObj->SetExtraEllipse( aPoly.GetBoundRect() );
 
                 // was only created by us temporarily
-                delete pPathObj;
+                // always use SdrObject::Free(...) for SdrObjects (!)
+                SdrObject* pTemp(pPathObj);
+                SdrObject::Free(pTemp);
+
                 pUserData->ReplaceObject( IMapObjectPtr(pObj) );
             }
             break;
@@ -646,12 +669,12 @@ void IMapWindow::DoMacroAssign()
     aSet.Put( aMacroItem );
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateSfxDialog( this, aSet, mxDocumentFrame, SID_EVENTCONFIG ));
+    ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog( this, aSet, mxDocumentFrame ));
 
     if ( pMacroDlg && pMacroDlg->Execute() == RET_OK )
     {
         const SfxItemSet* pOutSet = pMacroDlg->GetOutputItemSet();
-        pIMapObj->SetMacroTable( static_cast<const SvxMacroItem& >(pOutSet->Get( SID_ATTR_MACROITEM )).GetMacroTable() );
+        pIMapObj->SetMacroTable( pOutSet->Get( SID_ATTR_MACROITEM ).GetMacroTable() );
         pModel->SetChanged();
         UpdateInfo( false );
     }
@@ -745,7 +768,10 @@ void IMapWindow::CreateDefaultObject()
     aPagePos.AdjustY((aPageSize.Height() / 2) - (nDefaultObjectSizeHeight / 2) );
     tools::Rectangle aNewObjectRectangle(aPagePos, Size(nDefaultObjectSizeWidth, nDefaultObjectSizeHeight));
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject( pView->GetCurrentObjInventor(), pView->GetCurrentObjIdentifier(), nullptr, pModel);
+    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+        *pModel,
+        pView->GetCurrentObjInventor(),
+        pView->GetCurrentObjIdentifier());
     pObj->SetLogicRect(aNewObjectRectangle);
 
     switch( pObj->GetObjIdentifier() )

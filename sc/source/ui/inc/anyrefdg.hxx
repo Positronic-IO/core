@@ -29,7 +29,6 @@
 #include <compiler.hxx>
 #include <formula/funcutl.hxx>
 #include "IAnyRefDialog.hxx"
-#include <scresid.hxx>
 #include <scmod.hxx>
 
 #include <memory>
@@ -44,30 +43,30 @@ class ScRangeList;
 class ScFormulaReferenceHelper
 {
     IAnyRefDialog*      m_pDlg;
-    ::std::unique_ptr<ScCompiler>         pRefComp;
-    VclPtr<formula::RefEdit>    pRefEdit;               // active input field
-    VclPtr<formula::RefButton>  pRefBtn;                // associated button
+    ::std::unique_ptr<ScCompiler>         m_pRefComp;
+    VclPtr<formula::RefEdit>    m_pRefEdit;               // active input field
+    VclPtr<formula::RefButton>  m_pRefBtn;                // associated button
     VclPtr<vcl::Window>         m_pWindow;
     SfxBindings*        m_pBindings;
     ::std::unique_ptr<Accelerator>
-                        pAccel;                 // for Enter/Escape
+                        m_pAccel;                 // for Enter/Escape
     ::std::vector<VclPtr<vcl::Window> > m_aHiddenWidgets;    // vector of hidden Controls
     sal_Int32           m_nOldBorderWidth;      // border width for expanded dialog
-    SCTAB               nRefTab;                // used for ShowReference
+    SCTAB               m_nRefTab;                // used for ShowReference
 
-    OUString            sOldDialogText;         // Original title of the dialog window
-    Size                aOldDialogSize;         // Original size of the dialog window
-    Point               aOldEditPos;            // Original position of the input field
-    Size                aOldEditSize;           // Original size of the input field
-    long                mnOldEditWidthReq;
-    Point               aOldButtonPos;          // Original position of the button
-    VclPtr<vcl::Window> mpOldEditParent;        // Original parent of the edit field and the button
-    bool                mbOldDlgLayoutEnabled;  // Original layout state of parent dialog
-    bool                mbOldEditParentLayoutEnabled;  // Original layout state of edit widget parent
+    OUString            m_sOldDialogText;         // Original title of the dialog window
+    Size                m_aOldDialogSize;         // Original size of the dialog window
+    Point               m_aOldEditPos;            // Original position of the input field
+    Size                m_aOldEditSize;           // Original size of the input field
+    long                m_nOldEditWidthReq;
+    Point               m_aOldButtonPos;          // Original position of the button
+    VclPtr<vcl::Window> m_pOldEditParent;        // Original parent of the edit field and the button
+    bool                m_bOldDlgLayoutEnabled;  // Original layout state of parent dialog
+    bool                m_bOldEditParentLayoutEnabled;  // Original layout state of edit widget parent
 
-    bool                bEnableColorRef;
-    bool                bHighlightRef;
-    bool                bAccInserted;
+    bool                m_bEnableColorRef;
+    bool                m_bHighlightRef;
+    bool                m_bAccInserted;
 
     DECL_LINK( AccelSelectHdl, Accelerator&, void );
 
@@ -90,7 +89,7 @@ public:
 
     void         SetWindow(vcl::Window* _pWindow) { m_pWindow = _pWindow; }
     void                DoClose( sal_uInt16 nId );
-    static void         SetDispatcherLock( bool bLock );
+    void                SetDispatcherLock( bool bLock );
     static void         EnableSpreadsheets( bool bFlag = true );
     static void         ViewShellChanged();
 
@@ -98,7 +97,7 @@ public:
 
 public:
     static bool         CanInputStart( const formula::RefEdit *pEdit ){ return !!pEdit; }
-    bool                CanInputDone( bool bForced ){   return pRefEdit && (bForced || !pRefBtn);   }
+    bool                CanInputDone( bool bForced ){   return m_pRefEdit && (bForced || !m_pRefBtn);   }
 };
 
 class SC_DLLPUBLIC ScRefHandler :
@@ -114,11 +113,11 @@ public:
 private:
     ScFormulaReferenceHelper
                         m_aHelper;
-    SfxBindings*        pMyBindings;
+    SfxBindings*        m_pMyBindings;
 
-    VclPtr<vcl::Window> pActiveWin;
-    Idle                aIdle;
-    OUString            aDocName;               // document on which the dialog was opened
+    VclPtr<vcl::Window> m_pActiveWin;
+    Idle                m_aIdle;
+    OUString            m_aDocName;               // document on which the dialog was opened
 
     DECL_LINK( UpdateFocusHdl, Timer*, void );
 
@@ -126,7 +125,7 @@ protected:
     void                disposeRefHandler();
     bool                DoClose( sal_uInt16 nId );
 
-    static void         SetDispatcherLock( bool bLock );
+    void                SetDispatcherLock( bool bLock );
 
     virtual void        RefInputStart( formula::RefEdit* pEdit, formula::RefButton* pButton = nullptr ) override;
     virtual void        RefInputDone( bool bForced = false ) override;

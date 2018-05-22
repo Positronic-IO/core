@@ -26,7 +26,6 @@
 #include "swatrset.hxx"
 #include "format.hxx"
 #include "charfmt.hxx"
-#include "swtypes.hxx"
 #include <editeng/adjustitem.hxx>
 #include <editeng/lspcitem.hxx>
 #include <editeng/spltitem.hxx>
@@ -40,7 +39,6 @@
 #include <editeng/paravertalignitem.hxx>
 #include <editeng/pgrditem.hxx>
 
-class SwCharFormat;
 class IntlWrapper;
 
 #define DROP_WHOLEWORD ((sal_uInt16)0x0001)

@@ -35,7 +35,6 @@
 #include <tabvwsh.hxx>
 #include <docsh.hxx>
 #include <reffact.hxx>
-#include <scresid.hxx>
 #include <dwfunctr.hxx>
 #include <sc.hrc>
 #include <spelldialog.hxx>
@@ -45,7 +44,7 @@
 #include <sfx2/request.hxx>
     // needed for -fsanitize=function visibility of typeinfo for functions of
     // type void(SfxShell*,SfxRequest&) defined in scslots.hxx
-#define ScTabViewShell
+#define ShellClass_ScTabViewShell
 #include <scslots.hxx>
 
 

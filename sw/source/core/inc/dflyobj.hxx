@@ -40,10 +40,11 @@ protected:
     // is called when RecalcBoundRect() is used
     virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
 
-public:
-
-    SwFlyDrawObj();
+    // protected destructor
     virtual ~SwFlyDrawObj() override;
+
+public:
+    SwFlyDrawObj(SdrModel& rSdrModel);
 
     // for instantiation of this class while loading (via factory)
     virtual SdrInventor GetObjInventor()     const override;
@@ -68,6 +69,9 @@ protected:
     // of original SnapRect)
     virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
 
+    // protected destructor
+    virtual ~SwVirtFlyDrawObj() override;
+
 public:
     // for paints triggered form ExecutePrimitive
     void wrap_DoPaintObject(
@@ -80,8 +84,10 @@ public:
     // RotGrfFlyFrame: Check if this is a SwGrfNode
     bool ContainsSwGrfNode() const;
 
-    SwVirtFlyDrawObj(SdrObject& rNew, SwFlyFrame* pFly);
-    virtual ~SwVirtFlyDrawObj() override;
+    SwVirtFlyDrawObj(
+        SdrModel& rSdrModel,
+        SdrObject& rNew,
+        SwFlyFrame* pFly);
 
     // override method of base class SdrVirtObj
     virtual void     TakeObjInfo( SdrObjTransformInfoRec& rInfo ) const override;

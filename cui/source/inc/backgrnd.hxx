@@ -26,6 +26,8 @@
 #include <editeng/brushitem.hxx>
 #include <memory>
 
+#include "cuitabarea.hxx"
+
 class BackgroundPreviewImpl;
 class SvxOpenGraphicDialog;
 struct SvxBackgroundTable_Impl;
@@ -47,7 +49,7 @@ class SvxBackgroundTabPage : public SvxTabPage
     friend class VclPtr<SvxBackgroundTabPage>;
     static const sal_uInt16 pPageRanges[];
 public:
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
     // returns the area of the which-values
     static const sal_uInt16* GetRanges() { return pPageRanges; }
 
@@ -55,6 +57,7 @@ public:
     virtual void        Reset( const SfxItemSet* rSet ) override;
     virtual void        FillUserData() override;
     virtual void        PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void        PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     /// Shift-ListBox activation
     void                ShowSelector();
@@ -137,6 +140,23 @@ private:
     DECL_LINK( FileClickHdl_Impl, Button*, void );
     DECL_LINK(BackgroundColorHdl_Impl, ValueSet*, void);
     DECL_LINK( TblDestinationHdl_Impl, ListBox&, void );
+};
+
+class SvxBkgTabPage : public SvxAreaTabPage
+{
+    VclPtr<ListBox> m_pTblLBox;
+    bool        bHighlighting       : 1;
+public:
+    using SvxAreaTabPage::DeactivatePage;
+
+    SvxBkgTabPage( vcl::Window* pParent, const SfxItemSet& rInAttrs );
+    virtual ~SvxBkgTabPage() override;
+    virtual void dispose() override;
+
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
+    virtual bool FillItemSet( SfxItemSet* ) override;
+    virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
+    virtual void PageCreated( const SfxAllItemSet& aSet ) override;
 };
 
 #endif // INCLUDED_CUI_SOURCE_INC_BACKGRND_HXX

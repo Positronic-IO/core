@@ -46,7 +46,6 @@
 #include <editeng/svxacorr.hxx>
 #include <editeng/ulspitem.hxx>
 #include <vcl/graph.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/printer.hxx>
 #include <unotools/charclass.hxx>
 #include <comphelper/storagehelper.hxx>
@@ -88,7 +87,6 @@
 #include <editeng/acorrcfg.hxx>
 #include <IMark.hxx>
 #include <sfx2/bindings.hxx>
-#include <svx/dialmgr.hxx>
 
 // -> #111827#
 #include <SwRewriter.hxx>
@@ -103,6 +101,7 @@
 
 #include <sfx2/msgpool.hxx>
 #include <comphelper/lok.hxx>
+#include <svtools/embedhlp.hxx>
 #include <memory>
 
 using namespace sw::mark;
@@ -136,9 +135,9 @@ using namespace com::sun::star;
 static SvxAutoCorrect* lcl_IsAutoCorr()
 {
     SvxAutoCorrect* pACorr = SvxAutoCorrCfg::Get().GetAutoCorrect();
-    if( pACorr && !pACorr->IsAutoCorrFlag( CapitalStartSentence | CapitalStartWord |
-                            AddNonBrkSpace | ChgOrdinalNumber |
-                            ChgToEnEmDash | SetINetAttr | Autocorrect ))
+    if( pACorr && !pACorr->IsAutoCorrFlag( ACFlags::CapitalStartSentence | ACFlags::CapitalStartWord |
+                            ACFlags::AddNonBrkSpace | ACFlags::ChgOrdinalNumber |
+                            ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr | ACFlags::Autocorrect ))
         pACorr = nullptr;
     return pACorr;
 }
@@ -214,12 +213,12 @@ void SwWrtShell::Insert( const OUString &rStr )
             aTmpStr += rStr;
             aTmpStr += SwResId(STR_END_QUOTE);
 
-            aRewriter.AddRule(UndoArg3, rStr);
+            aRewriter.AddRule(UndoArg3, aTmpStr);
         }
 
         StartUndo(SwUndoId::REPLACE, &aRewriter);
         bStarted = true;
-        bDeleted = DelRight() != 0;
+        bDeleted = DelRight();
     }
 
     bCallIns ?
@@ -375,8 +374,10 @@ void SwWrtShell::InsertObject( const svt::EmbeddedObjectRef& xRef, SvGlobalName 
                     OString aCmd(".uno:");
                     aCmd += pSlot->GetUnoName();
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                    ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg( pFact->CreateInsertObjectDialog( GetWin(), OUString::fromUtf8( aCmd ), xStor, &aServerList ));
-                    if ( pDlg )
+                    vcl::Window* pWin = GetWin();
+                    ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(pFact->CreateInsertObjectDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                OUString::fromUtf8( aCmd ), xStor, &aServerList));
+                    if (pDlg)
                     {
                         pDlg->Execute();
                         bDoVerb = pDlg->IsCreateNew();

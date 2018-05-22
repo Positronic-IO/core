@@ -26,6 +26,7 @@
 #include <AxisHelper.hxx>
 #include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <tools/diagnose_ex.h>
 
 #include <algorithm>
 #include <iterator>
@@ -143,10 +144,6 @@ BaseCoordinateSystem::BaseCoordinateSystem(
         xAxis->setScaleData( aScaleData );
     }
 
-    m_aOrigin.realloc( m_nDimensionCount );
-    for( sal_Int32 i = 0; i < m_nDimensionCount; ++i )
-        m_aOrigin[ i ] <<= 0.0;
-
     setFastPropertyValue_NoBroadcast( PROP_COORDINATESYSTEM_SWAPXANDYAXIS, uno::Any( false ));
 }
 
@@ -157,8 +154,7 @@ BaseCoordinateSystem::BaseCoordinateSystem(
         MutexContainer(),
         ::property::OPropertySet( rSource, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
-    m_nDimensionCount( rSource.m_nDimensionCount ),
-    m_aOrigin( rSource.m_aOrigin )
+    m_nDimensionCount( rSource.m_nDimensionCount )
 {
     m_aAllAxis.resize(rSource.m_aAllAxis.size());
     tAxisVecVecType::size_type nN=0;
@@ -179,9 +175,9 @@ BaseCoordinateSystem::~BaseCoordinateSystem()
             ModifyListenerHelper::removeListenerFromAllElements( i, m_xModifyEventForwarder );
         ModifyListenerHelper::removeListenerFromAllElements( m_aChartTypes, m_xModifyEventForwarder );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2" );
     }
 }
 
@@ -292,9 +288,9 @@ void SAL_CALL BaseCoordinateSystem::addModifyListener( const Reference< util::XM
         Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->addModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2" );
     }
 }
 
@@ -305,9 +301,9 @@ void SAL_CALL BaseCoordinateSystem::removeModifyListener( const Reference< util:
         Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->removeModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2" );
     }
 }
 

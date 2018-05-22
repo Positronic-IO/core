@@ -29,7 +29,6 @@
 #include <unotools/saveopt.hxx>
 #include <unotools/misccfg.hxx>
 
-#include <sfx2/strings.hrc>
 #include <sfx2/app.hxx>
 #include <sfx2/evntconf.hxx>
 #include <sfx2/unoctitm.hxx>
@@ -38,7 +37,6 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/printer.hxx>
 #include <arrdecl.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/event.hxx>
 #include <sfx2/templdlg.hxx>
 #include <sfx2/msgpool.hxx>
@@ -55,7 +53,6 @@
 #include <ctrlfactoryimpl.hxx>
 #include <shellimpl.hxx>
 #include <basic/basicmanagerrepository.hxx>
-#include <svtools/svtresid.hxx>
 
 using ::basic::BasicManagerRepository;
 
@@ -105,14 +102,14 @@ void SfxApplication::Deinitialize()
     // from here no SvObjects have to exists
     DELETEZ(pImpl->pMatcher);
 
-    DELETEX(SfxSlotPool, pImpl->pSlotPool);
-    DELETEX(SfxChildWinFactArr_Impl, pImpl->pFactArr);
+    DELETEZ(pImpl->pSlotPool);
+    DELETEZ(pImpl->pFactArr);
 
-    DELETEX(SfxTbxCtrlFactArr_Impl, pImpl->pTbxCtrlFac);
-    DELETEX(SfxStbCtrlFactArr_Impl, pImpl->pStbCtrlFac);
-    DELETEX(SfxViewFrameArr_Impl, pImpl->pViewFrames);
-    DELETEX(SfxViewShellArr_Impl, pImpl->pViewShells);
-    DELETEX(SfxObjectShellArr_Impl, pImpl->pObjShells);
+    DELETEZ(pImpl->pTbxCtrlFac);
+    DELETEZ(pImpl->pStbCtrlFac);
+    DELETEZ(pImpl->pViewFrames);
+    DELETEZ(pImpl->pViewShells);
+    DELETEZ(pImpl->pObjShells);
 
     //TODO/CLEANUP
     //ReleaseArgs could be used instead!

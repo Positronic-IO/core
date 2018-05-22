@@ -29,16 +29,12 @@
 #include "tblenum.hxx"
 #include "tox.hxx"
 
-#include <com/sun/star/linguistic2/ProofreadingResult.hpp>
-#include <com/sun/star/linguistic2/XSpellAlternatives.hpp>
-
 #include <memory>
 #include <vector>
 #include <set>
 
 namespace tools { class PolyPolygon; }
 class SwDoc;
-class DateTime;
 class CommandExtTextInputData;
 
 class SvNumberFormatter;
@@ -47,8 +43,6 @@ class SfxItemSet;
 class SfxWatermarkItem;
 class SvxAutoCorrect;
 
-class SwField;
-class SwFieldType;
 class SwDDEFieldType;
 class SwDBManager;
 
@@ -61,11 +55,7 @@ class SwNumRule;
 
 class SwTextFormatColl;
 class SwGrfNode;
-class SwFlyFrameFormat;
 
-class SwFrameFormat;
-class SwCharFormat;
-class SwExtTextInput;
 class Graphic;
 class GraphicObject;
 class GraphicAttr;
@@ -103,6 +93,8 @@ enum class GraphicType;
 namespace com { namespace sun { namespace star { namespace uno {
     template < class > class Sequence;
 }}}}
+namespace com { namespace sun { namespace star { namespace linguistic2 { class XSpellAlternatives; } } } }
+namespace com { namespace sun { namespace star { namespace linguistic2 { struct ProofreadingResult; } } } }
 
 namespace svx{
     struct SpellPortion;
@@ -180,7 +172,7 @@ public:
 
     /** Delete content of all ranges.
      If whole nodes are selected, these nodes get deleted. */
-    long Delete();
+    bool Delete();
 
     /// Remove a complete paragraph.
     bool DelFullPara();
@@ -396,7 +388,7 @@ public:
     /// Removes the paragraph metadata field at the current cursor, if any.
     /// Returns true iff a paragraph metadata field was removed.
     /// Currently there are two variants: signature and classification.
-    bool RemoveParagraphMetadataFieldAtCursor(const bool bBackspaceNotDel);
+    bool RemoveParagraphMetadataFieldAtCursor();
 
     void Insert2(SwField const &, const bool bForceExpandHints);
 
@@ -717,11 +709,11 @@ public:
     /// For Inserting SoftHyphen. Position is offset within the syllabificated word.
     static void InsertSoftHyph( const sal_Int32 nHyphPos );
 
-    const SwTable& InsertTable( const SwInsertTableOptions& rInsTableOpts,  ///< ALL_TBL_INS_ATTR
+    const SwTable& InsertTable( const SwInsertTableOptions& rInsTableOpts,  ///< All
                                 sal_uInt16 nRows, sal_uInt16 nCols,
                                 const SwTableAutoFormat* pTAFormat = nullptr );
 
-    void InsertDDETable( const SwInsertTableOptions& rInsTableOpts,  ///< HEADLINE_NO_BORDER
+    void InsertDDETable( const SwInsertTableOptions& rInsTableOpts,  ///< HeadlineNoBorder
                          SwDDEFieldType* pDDEType,
                          sal_uInt16 nRows, sal_uInt16 nCols  );
 
@@ -729,7 +721,7 @@ public:
     void SetTableName( SwFrameFormat& rTableFormat, const OUString &rNewName );
 
     SwFrameFormat *GetTableFormat();
-    bool TextToTable( const SwInsertTableOptions& rInsTableOpts,  ///< ALL_TBL_INS_ATTR
+    bool TextToTable( const SwInsertTableOptions& rInsTableOpts,  ///< All
                       sal_Unicode cCh,
                       const SwTableAutoFormat* pTAFormat = nullptr );
     bool TableToText( sal_Unicode cCh );
@@ -791,6 +783,9 @@ public:
     /// Is hyphenation active somewhere else?
     static bool HasHyphIter();
 
+    void HandleCorrectionError( const OUString aText, SwPosition aPos,
+            sal_Int32 nBegin, sal_Int32 nLen, SwPaM* pCursor,
+            const Point* pPt, SwRect& rSelectRect );
     css::uno::Reference< css::linguistic2::XSpellAlternatives >
             GetCorrection( const Point* pPt, SwRect& rSelectRect );
 

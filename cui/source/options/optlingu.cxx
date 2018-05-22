@@ -292,56 +292,42 @@ static inline OUString lcl_GetPropertyName( EID_OPTIONS eEntryId )
     return OUString::createFromAscii( aEidToPropName[ static_cast<int>(eEntryId) ] );
 }
 
-class OptionsBreakSet : public ModalDialog
+class OptionsBreakSet : public weld::GenericDialogController
 {
-    VclPtr<VclFrame>       m_pBeforeFrame;
-    VclPtr<VclFrame>       m_pAfterFrame;
-    VclPtr<VclFrame>       m_pMinimalFrame;
-    VclPtr<NumericField>   m_pBreakNF;
+    std::unique_ptr<weld::Widget> m_xBeforeFrame;
+    std::unique_ptr<weld::Widget> m_xAfterFrame;
+    std::unique_ptr<weld::Widget> m_xMinimalFrame;
+    std::unique_ptr<weld::SpinButton> m_xBreakNF;
 
 public:
-    OptionsBreakSet(vcl::Window* pParent, sal_uInt16 nRID)
-        : ModalDialog(pParent, "BreakNumberOption",
-            "cui/ui/breaknumberoption.ui")
-        , m_pBreakNF(nullptr)
+    OptionsBreakSet(weld::Window* pParent, sal_uInt16 nRID)
+        : GenericDialogController(pParent, "cui/ui/breaknumberoption.ui", "BreakNumberOption")
+        , m_xBeforeFrame(m_xBuilder->weld_widget("beforeframe"))
+        , m_xAfterFrame(m_xBuilder->weld_widget("afterframe"))
+        , m_xMinimalFrame(m_xBuilder->weld_widget("miniframe"))
     {
-        get(m_pBeforeFrame, "beforeframe");
-        get(m_pAfterFrame, "afterframe");
-        get(m_pMinimalFrame, "miniframe");
-
-        assert(EID_NUM_PRE_BREAK == nRID ||
-               EID_NUM_POST_BREAK == nRID ||
-               EID_NUM_MIN_WORDLEN == nRID); //unexpected ID
+        assert(EID_NUM_PRE_BREAK == nRID || EID_NUM_POST_BREAK == nRID || EID_NUM_MIN_WORDLEN == nRID); //unexpected ID
 
         if (nRID == EID_NUM_PRE_BREAK)
         {
-            m_pBeforeFrame->Show();
-            get(m_pBreakNF, "beforebreak");
+            m_xBeforeFrame->show();
+            m_xBreakNF.reset(m_xBuilder->weld_spin_button("beforebreak"));
         }
         else if(nRID == EID_NUM_POST_BREAK)
         {
-            m_pAfterFrame->Show();
-            get(m_pBreakNF, "afterbreak");
+            m_xAfterFrame->show();
+            m_xBreakNF.reset(m_xBuilder->weld_spin_button("afterbreak"));
         }
         else if(nRID == EID_NUM_MIN_WORDLEN)
         {
-            m_pMinimalFrame->Show();
-            get(m_pBreakNF, "wordlength");
+            m_xMinimalFrame->show();
+            m_xBreakNF.reset(m_xBuilder->weld_spin_button("wordlength"));
         }
     }
-    virtual ~OptionsBreakSet() override { disposeOnce(); }
-    virtual void dispose() override
-    {
-        m_pBeforeFrame.clear();
-        m_pAfterFrame.clear();
-        m_pMinimalFrame.clear();
-        m_pBreakNF.clear();
-        ModalDialog::dispose();
-    }
 
-    NumericField&   GetNumericFld()
+    weld::SpinButton& GetNumericFld()
     {
-        return *m_pBreakNF;
+        return *m_xBreakNF;
     }
 };
 
@@ -1059,10 +1045,10 @@ void SvxLinguTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxLinguTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SvxLinguTabPage::Create( TabPageParent pParent,
                                             const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxLinguTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxLinguTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
@@ -1507,7 +1493,7 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         if(pFact)
         {
-            ScopedVclPtr<AbstractSvxNewDictionaryDialog> aDlg(pFact->CreateSvxNewDictionaryDialog( this ));
+            ScopedVclPtr<AbstractSvxNewDictionaryDialog> aDlg(pFact->CreateSvxNewDictionaryDialog(GetFrameWeld()));
             DBG_ASSERT(aDlg, "Dialog creation failed!");
             uno::Reference< XDictionary >  xNewDic;
             if ( aDlg->Execute() == RET_OK )
@@ -1623,11 +1609,11 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
             if(aData.HasNumericValue())
             {
                 sal_uInt16 nRID = aData.GetEntryId();
-                ScopedVclPtrInstance< OptionsBreakSet > aDlg(this, nRID);
-                aDlg->GetNumericFld().SetValue( aData.GetNumericValue() );
-                if (RET_OK == aDlg->Execute() )
+                OptionsBreakSet aDlg(GetFrameWeld(), nRID);
+                aDlg.GetNumericFld().set_value(aData.GetNumericValue());
+                if (RET_OK == aDlg.run())
                 {
-                    long nVal = static_cast<long>(aDlg->GetNumericFld().GetValue());
+                    long nVal = static_cast<long>(aDlg.GetNumericFld().get_value());
                     if (-1 != nVal && aData.GetNumericValue() != nVal)
                     {
                         aData.SetNumericValue( static_cast<sal_uInt8>(nVal) ); //! sets IsModified !
@@ -1891,7 +1877,7 @@ IMPL_LINK( SvxEditModulesDlg, LangSelectListBoxHdl_Impl, ListBox&, rBox, void )
 
 void SvxEditModulesDlg::LangSelectHdl_Impl(ListBox const * pBox)
 {
-    LanguageType  eCurLanguage = m_pLanguageLB->GetSelectLanguage();
+    LanguageType  eCurLanguage = m_pLanguageLB->GetSelectedLanguage();
     static Locale aLastLocale;
     Locale aCurLocale( LanguageTag::convertToLocale( eCurLanguage));
     SvTreeList *pModel = m_pModulesCLB->GetModel();

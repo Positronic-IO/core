@@ -32,7 +32,6 @@
 
 #include <toolkit/helper/vclunohelper.hxx>
 
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 
 #include <tools/debug.hxx>
@@ -202,7 +201,7 @@ namespace rptui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
 
         impl_conditionCountChanged();
@@ -260,7 +259,7 @@ namespace rptui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
 
         impl_conditionCountChanged();
@@ -288,7 +287,7 @@ namespace rptui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
             return;
         }
 
@@ -299,7 +298,7 @@ namespace rptui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
 
         // at least the two swapped conditions need to know their new index
@@ -384,7 +383,7 @@ namespace rptui
             aArgs[1].Value <<= VCLUnoHelper::GetInterface(this);
 
             aArgs[2].Name = PROPERTY_FONTCOLOR;
-            aArgs[2].Value <<= static_cast<sal_uInt32>(rColor.GetColor());
+            aArgs[2].Value <<= rColor;
 
             // we use this way to create undo actions
             m_rController.executeUnChecked(_nCommandId,aArgs);
@@ -392,7 +391,7 @@ namespace rptui
         }
         catch( Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
     }
 
@@ -422,7 +421,7 @@ namespace rptui
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("reportdesign");
         }
         return sDataField;
     }
@@ -470,7 +469,7 @@ namespace rptui
             }
             catch ( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("reportdesign");
                 nRet = RET_NO;
             }
         }

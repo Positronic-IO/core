@@ -11,9 +11,6 @@
 #include <test/screenshot_test.hxx>
 
 #include <com/sun/star/frame/Desktop.hpp>
-#include <comphelper/dispatchcommand.hxx>
-#include <comphelper/processfactory.hxx>
-#include <comphelper/propertysequence.hxx>
 #include <comphelper/string.hxx>
 #include <editeng/editids.hrc>
 #include <editeng/editview.hxx>
@@ -156,50 +153,50 @@ VclPtr<VclAbstractDialog> ScScreenshotTest::createDialogByID(sal_uInt32 nID)
             SCTAB nTabSelCount = rViewData.GetMarkData().GetSelectCount();
 
             pReturnDialog = mpFact->CreateScInsertTableDlg(
-                mpViewShell->GetDialogParent(), rViewData, nTabSelCount, false);
+                mpViewShell->GetFrameWeld(), rViewData, nTabSelCount, false);
 
             break;
         }
 
         case 1: // "modules/scalc/ui/deletecells.ui"
         {
-            pReturnDialog = mpFact->CreateScDeleteCellDlg(mpViewShell->GetDialogParent(), false);
+            pReturnDialog = mpFact->CreateScDeleteCellDlg(mpViewShell->GetFrameWeld(), false);
             break;
         }
 
         case 2: // "modules/scalc/ui/pastespecial.ui"
         {
-            pReturnDialog = mpFact->CreateScInsertContentsDlg(mpViewShell->GetDialogParent());
+            pReturnDialog = mpFact->CreateScInsertContentsDlg(mpViewShell->GetFrameWeld());
             break;
         }
 
         case 3: // "modules/scalc/ui/changesourcedialog.ui"
         {
-            pReturnDialog = mpFact->CreateScColRowLabelDlg(mpViewShell->GetDialogParent(), true, false);
+            pReturnDialog = mpFact->CreateScColRowLabelDlg(mpViewShell->GetFrameWeld(), true, false);
             break;
         }
 
         case 4: // "modules/scalc/ui/selectdatasource.ui"
         {
-            pReturnDialog = mpFact->CreateScDataPilotDatabaseDlg(mpViewShell->GetDialogParent());
+            pReturnDialog = mpFact->CreateScDataPilotDatabaseDlg(mpViewShell->GetFrameWeld());
             break;
         }
         case 5: // "modules/scalc/ui/selectsource.ui"
         {
-            pReturnDialog = mpFact->CreateScDataPilotSourceTypeDlg(mpViewShell->GetDialogParent(), true);
+            pReturnDialog = mpFact->CreateScDataPilotSourceTypeDlg(mpViewShell->GetFrameWeld(), true);
             break;
         }
 
         case 6: // "modules/scalc/ui/deletecontents.ui"
         {
-            pReturnDialog = mpFact->CreateScDeleteContentsDlg(mpViewShell->GetDialogParent());
+            pReturnDialog = mpFact->CreateScDeleteContentsDlg(mpViewShell->GetFrameWeld());
             break;
         }
 
         case 7: // "modules/scalc/ui/createnamesdialog.ui"
         {
             pReturnDialog = mpFact->CreateScNameCreateDlg(
-                mpViewShell->GetDialogParent(),
+                mpViewShell->GetFrameWeld(),
                 CreateNameFlags::Left | CreateNameFlags::Top);
                     // just fake some flags
             break;
@@ -239,7 +236,7 @@ VclPtr<VclAbstractDialog> ScScreenshotTest::createDialogByID(sal_uInt32 nID)
 
         case 12: // "modules/scalc/ui/movecopysheet.ui"
         {
-            pReturnDialog = mpFact->CreateScMoveTableDlg(mpViewShell->GetDialogParent(), aDefaultSheetName);
+            pReturnDialog = mpFact->CreateScMoveTableDlg(mpViewShell->GetFrameWeld(), aDefaultSheetName);
             break;
         }
 

@@ -27,7 +27,6 @@
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -1196,6 +1195,9 @@ public:
 
     // XStatusListener
     virtual void SAL_CALL statusChanged( const css::frame::FeatureStateEvent& rEvent ) override;
+
+private:
+    VclPtr<vcl::Window> m_pSL;
 };
 
 SearchLabelToolboxController::SearchLabelToolboxController( const css::uno::Reference< css::uno::XComponentContext > & rxContext )
@@ -1250,6 +1252,7 @@ void SAL_CALL SearchLabelToolboxController::dispose()
     SearchToolbarControllersManager::createControllersManager().freeController(m_xFrame, m_aCommandURL);
 
     svt::ToolboxController::dispose();
+    m_pSL.disposeAndClear();
 }
 
 // XInitialization
@@ -1262,13 +1265,20 @@ void SAL_CALL SearchLabelToolboxController::initialize( const css::uno::Sequence
 // XStatusListener
 void SAL_CALL SearchLabelToolboxController::statusChanged( const css::frame::FeatureStateEvent& )
 {
+    if (m_pSL)
+    {
+        OUString aStr = SvxSearchDialogWrapper::GetSearchLabel();
+        m_pSL->SetText(aStr);
+        long aWidth = !aStr.isEmpty() ? m_pSL->get_preferred_size().getWidth() : 16;
+        m_pSL->SetSizePixel(Size(aWidth, m_pSL->get_preferred_size().getHeight()));
+    }
 }
 
 css::uno::Reference< css::awt::XWindow > SAL_CALL SearchLabelToolboxController::createItemWindow( const css::uno::Reference< css::awt::XWindow >& Parent )
 {
-    VclPtr<vcl::Window> pSL = VclPtr<FixedText>::Create(VCLUnoHelper::GetWindow( Parent ));
-    pSL->SetSizePixel(Size(250, 25));
-    return VCLUnoHelper::GetInterface(pSL);
+    m_pSL = VclPtr<FixedText>::Create(VCLUnoHelper::GetWindow( Parent ));
+    m_pSL->SetSizePixel(Size(16, 25));
+    return VCLUnoHelper::GetInterface(m_pSL);
 }
 
 // protocol handler for "vnd.sun.star.findbar:*" URLs

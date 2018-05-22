@@ -497,7 +497,7 @@ void XclObj::SaveTextRecs( XclExpStream& rStrm )
 XclObjComment::XclObjComment( XclExpObjectManager& rObjMgr, const tools::Rectangle& rRect, const EditTextObject& rEditObj, SdrCaptionObj* pCaption, bool bVisible, const ScAddress& rAddress, const tools::Rectangle &rFrom, const tools::Rectangle &rTo ) :
     XclObj( rObjMgr, EXC_OBJTYPE_NOTE, true )
             , maScPos( rAddress )
-            , mpCaption( pCaption->Clone() )
+            , mpCaption( pCaption->CloneSdrObject(pCaption->getSdrModelFromSdrObject()) )
             , mbVisible( bVisible )
             , maFrom ( rFrom )
             , maTo ( rTo )
@@ -531,7 +531,7 @@ static void lcl_FillProps( EscherPropertyContainer& rPropOpt, SdrObject* pCaptio
                 // be incorrect where user has chosen to use this colour explicitly.
                 Color aColor( static_cast<sal_uInt8>(nValue), static_cast<sal_uInt8>( nValue >> 8 ), static_cast<sal_uInt8>( nValue >> 16 ) );
                 const StyleSettings& rSett = Application::GetSettings().GetStyleSettings();
-                if( aColor == rSett.GetHelpColor().GetColor() )
+                if( aColor == rSett.GetHelpColor() )
                 {
                     rPropOpt.AddOpt( ESCHER_Prop_fillColor, 0x08000050 );
                     rPropOpt.AddOpt( ESCHER_Prop_fillBackColor, 0x08000050 );
@@ -1052,11 +1052,15 @@ GetEditAs( const XclObjAny& rObj )
 {
     if( const SdrObject* pShape = EscherEx::GetSdrObject( rObj.GetShape() ) )
     {
-        // OOXTODO: returning "twoCell"
         switch( ScDrawLayer::GetAnchorType( *pShape ) )
         {
-            case SCA_CELL:  return "oneCell";
-            default:        break;
+            case SCA_CELL:
+                return "oneCell";
+            case SCA_CELL_RESIZE:
+                return "twoCell";
+            default:
+            case SCA_PAGE:
+                break; // absolute
         }
     }
     return "absolute";
@@ -1378,9 +1382,9 @@ ExcEScenario::ExcEScenario( const XclExpRoot& rRoot, SCTAB nTab )
 
     for( size_t nRange = 0; (nRange < pRList->size()) && bContLoop; nRange++ )
     {
-        const ScRange* pRange = (*pRList)[nRange];
-        for( nRow = pRange->aStart.Row(); (nRow <= pRange->aEnd.Row()) && bContLoop; nRow++ )
-            for( nCol = pRange->aStart.Col(); (nCol <= pRange->aEnd.Col()) && bContLoop; nCol++ )
+        const ScRange & rRange = (*pRList)[nRange];
+        for( nRow = rRange.aStart.Row(); (nRow <= rRange.aEnd.Row()) && bContLoop; nRow++ )
+            for( nCol = rRange.aStart.Col(); (nCol <= rRange.aEnd.Col()) && bContLoop; nCol++ )
             {
                 if( rDoc.HasValueData( nCol, nRow, nTab ) )
                 {

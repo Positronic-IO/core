@@ -56,11 +56,8 @@ SvxGradientTabPage::SvxGradientTabPage
     SfxTabPage          ( pParent, "GradientPage", "cui/ui/gradientpage.ui", &rInAttrs ),
 
     m_rOutAttrs           ( rInAttrs ),
-
     m_pnGradientListState ( nullptr ),
     m_pnColorListState    ( nullptr ),
-
-    m_aXGradientItem      ( OUString(), XGradient( COL_BLACK, COL_WHITE ) ),
     m_aXFillAttr          ( rInAttrs.GetPool() ),
     m_rXFSet              ( m_aXFillAttr.GetItemSet() )
 {
@@ -100,7 +97,7 @@ SvxGradientTabPage::SvxGradientTabPage
 
     // setting the output device
     m_rXFSet.Put( XFillStyleItem(drawing::FillStyle_GRADIENT) );
-    m_rXFSet.Put( m_aXGradientItem );
+    m_rXFSet.Put( XFillGradientItem(OUString(), XGradient( COL_BLACK, COL_WHITE )) );
     m_pCtlPreview->SetAttributes( m_aXFillAttr.GetItemSet() );
 
     // set handler
@@ -228,7 +225,7 @@ bool SvxGradientTabPage::FillItemSet( SfxItemSet* rSet )
     if( nPos != VALUESET_ITEM_NOTFOUND )
     {
         pXGradient.reset(new XGradient( m_pGradientList->GetGradient( static_cast<sal_uInt16>(nPos) )->GetGradient() ));
-        aString = m_pGradientLB->GetItemText( m_pGradientLB->GetSelectItemId() );
+        aString = m_pGradientLB->GetItemText( m_pGradientLB->GetSelectedItemId() );
     }
     else
     // gradient was passed (unidentified)
@@ -272,10 +269,10 @@ void SvxGradientTabPage::Reset( const SfxItemSet* )
 }
 
 
-VclPtr<SfxTabPage> SvxGradientTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxGradientTabPage::Create( TabPageParent pWindow,
                                                const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxGradientTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxGradientTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 IMPL_LINK( SvxGradientTabPage, ModifiedListBoxHdl_Impl, ListBox&, rListBox, void )
@@ -376,7 +373,7 @@ IMPL_LINK_NOARG(SvxGradientTabPage, ClickAddHdl_Impl, Button*, void)
     }
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
     sal_uInt16 nError   = 1;
 
     while (pDlg->Execute() == RET_OK)
@@ -432,7 +429,7 @@ IMPL_LINK_NOARG(SvxGradientTabPage, ClickAddHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxGradientTabPage, ClickModifyHdl_Impl, Button*, void)
 {
-    sal_uInt16 nId = m_pGradientLB->GetSelectItemId();
+    sal_uInt16 nId = m_pGradientLB->GetSelectedItemId();
     size_t nPos = m_pGradientLB->GetSelectItemPos();
 
     if ( nPos != VALUESET_ITEM_NOTFOUND )
@@ -463,7 +460,7 @@ IMPL_LINK_NOARG(SvxGradientTabPage, ClickModifyHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxGradientTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pGradientLB->GetSelectItemId();
+    sal_uInt16 nId = m_pGradientLB->GetSelectedItemId();
     size_t nPos = m_pGradientLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -492,7 +489,7 @@ IMPL_LINK_NOARG(SvxGradientTabPage, ClickDeleteHdl_Impl, SvxPresetListBox*, void
 
 IMPL_LINK_NOARG(SvxGradientTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pGradientLB->GetSelectItemId();
+    sal_uInt16 nId = m_pGradientLB->GetSelectedItemId();
     size_t nPos = m_pGradientLB->GetSelectItemPos();
 
     if ( nPos != VALUESET_ITEM_NOTFOUND )
@@ -502,7 +499,7 @@ IMPL_LINK_NOARG(SvxGradientTabPage, ClickRenameHdl_Impl, SvxPresetListBox*, void
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
         assert(pDlg && "Dialog creation failed!");
 
         bool bLoop = true;

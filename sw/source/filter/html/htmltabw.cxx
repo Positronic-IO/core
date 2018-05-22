@@ -270,7 +270,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
 
         // determine the type of cell (TD/TH)
         SwNode* pNd;
-        while( !( pNd = rWrt.pDoc->GetNodes()[nNdPos])->IsEndNode() )
+        while( !( pNd = rWrt.m_pDoc->GetNodes()[nNdPos])->IsEndNode() )
         {
             if( pNd->IsTextNode() )
             {
@@ -300,7 +300,8 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     rWrt.OutNewLine();  // <TH>/<TD> in new line
     OStringBuffer sOut;
     sOut.append('<');
-    sOut.append(bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata);
+    OString aTag(bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata);
+    sOut.append(rWrt.GetNamespace() + aTag);
 
     // output ROW- and COLSPAN
     if( nRowSpan>1 )
@@ -338,6 +339,10 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
         else
             nWidth = GetAbsWidth( nCol, nColSpan );
     }
+
+    if (rWrt.mbReqIF)
+        // ReqIF implies strict XHTML: no width for <td>.
+        bOutWidth = false;
 
     long nHeight = pCell->GetHeight() > 0
                         ? GetAbsHeight( pCell->GetHeight(), nRow, nRowSpan )
@@ -412,7 +417,9 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     if( pBrushItem )
     {
         // output background
-        rWrt.OutBackground( pBrushItem, false );
+        if (!rWrt.mbReqIF)
+            // Avoid non-CSS version in the ReqIF case.
+            rWrt.OutBackground( pBrushItem, false );
 
         if( rWrt.m_bCfgOutStyles )
             OutCSS1_TableBGStyleOpt( rWrt, *pBrushItem );
@@ -439,7 +446,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     if( bNumFormat || bValue )
     {
         sOut.append(HTMLOutFuncs::CreateTableDataOptionsValNum(bValue, nValue,
-            nNumFormat, *rWrt.pDoc->GetNumberFormatter(), rWrt.m_eDestEnc,
+            nNumFormat, *rWrt.m_pDoc->GetNumberFormatter(), rWrt.m_eDestEnc,
             &rWrt.m_aNonConvertableCharacters));
     }
     sOut.append('>');
@@ -452,7 +459,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     {
         HTMLSaveData aSaveData( rWrt, pSttNd->GetIndex()+1,
                                 pSttNd->EndOfSectionIndex() );
-        rWrt.Out_SwDoc( rWrt.pCurPam );
+        rWrt.Out_SwDoc( rWrt.m_pCurrentPam );
     }
     else
     {
@@ -483,7 +490,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
 
     if( rWrt.m_bLFPossible )
         rWrt.OutNewLine();
-    OString aTag = bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata;
+    aTag = bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata;
     HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), rWrt.GetNamespace() + aTag, false);
     rWrt.m_bLFPossible = true;
 }
@@ -514,7 +521,7 @@ void SwHTMLWrtTable::OutTableCells( SwHTMLWriter& rWrt,
     }
 
     rWrt.OutNewLine();  // <TR> in new line
-    rWrt.Strm().WriteChar( '<' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_tablerow );
+    rWrt.Strm().WriteChar( '<' ).WriteOString( rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_tablerow );
     if( pBrushItem )
     {
         rWrt.OutBackground( pBrushItem, false );
@@ -598,7 +605,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     if( rWrt.m_bLFPossible )
         rWrt.OutNewLine();  // <TABLE> in new line
     OStringBuffer sOut;
-    sOut.append('<').append(OOO_STRING_SVTOOLS_HTML_table);
+    sOut.append('<').append(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_table);
 
     const SvxFrameDirection nOldDirection = rWrt.m_nDirection;
     if( pFrameFormat )
@@ -731,8 +738,8 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
 
             const SwWriteTableCol *pColumn = m_aCols[nCol];
 
-            OStringBuffer sOutStr;
-            sOutStr.append('<').append(OOO_STRING_SVTOOLS_HTML_col);
+            HtmlWriter html(rWrt.Strm(), rWrt.maNamespace);
+            html.start(OOO_STRING_SVTOOLS_HTML_col);
 
             sal_uInt32 nWidth;
             bool bRel;
@@ -747,14 +754,11 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
                 nWidth = bRel ? GetRelWidth(nCol,1) : GetAbsWidth(nCol,1);
             }
 
-            sOutStr.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_width).
-                append("=\"");
             if( bRel )
-                sOutStr.append(static_cast<sal_Int32>(nWidth)).append('*');
+                html.attribute(OOO_STRING_SVTOOLS_HTML_O_width, OString::number(nWidth) + "*");
             else
-                sOutStr.append(static_cast<sal_Int32>(SwHTMLWriter::ToPixel(nWidth,false)));
-            sOutStr.append("\">");
-            rWrt.Strm().WriteCharPtr( sOutStr.makeStringAndClear().getStr() );
+                html.attribute(OOO_STRING_SVTOOLS_HTML_O_width, OString::number(SwHTMLWriter::ToPixel(nWidth,false)));
+            html.end();
 
             if( bColGroups && pColumn->bRightBorder && nCol<nCols-1 )
             {
@@ -1076,7 +1080,7 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
 
 #ifdef DBG_UTIL
     {
-    SwViewShell *pSh = rWrt.pDoc->getIDocumentLayoutAccess().GetCurrentViewShell();
+    SwViewShell *pSh = rWrt.m_pDoc->getIDocumentLayoutAccess().GetCurrentViewShell();
     if ( pSh && pSh->GetViewOptions()->IsTest1() )
         pLayout = nullptr;
     }
@@ -1114,7 +1118,7 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
     }
 
     // move Pam behind the table
-    rHTMLWrt.pCurPam->GetPoint()->nNode = *rNode.EndOfSectionNode();
+    rHTMLWrt.m_pCurrentPam->GetPoint()->nNode = *rNode.EndOfSectionNode();
 
     if( bPreserveForm )
     {

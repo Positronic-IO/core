@@ -28,7 +28,6 @@
 
 class FontCharMap;
 
-// classes Subset & SubsetMap --------------------------------------------
 // TODO: should be moved into Font Attributes territory,
 // we let them mature here though because this is currently the only use
 
@@ -52,7 +51,7 @@ inline bool operator<(const Subset &rLHS, const Subset &rRHS)
     return rLHS.GetRangeMin() < rRHS.GetRangeMin();
 }
 
-typedef ::std::list<Subset> SubsetList;
+typedef ::std::vector<Subset> SubsetVec;
 
 class SVX_DLLPUBLIC SubsetMap
 {
@@ -60,10 +59,10 @@ public:
     SubsetMap( const FontCharMapRef& );
 
     const Subset*   GetSubsetByUnicode( sal_UCS4 ) const;
-    const SubsetList&   GetSubsetMap() const;
+    const SubsetVec&   GetSubsetMap() const;
 
 private:
-    SubsetList      maSubsets;
+    SubsetVec      maSubsets;
 
     SVX_DLLPRIVATE void            InitList();
     SVX_DLLPRIVATE void            ApplyCharMap( const FontCharMapRef& );

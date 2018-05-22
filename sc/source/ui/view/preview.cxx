@@ -47,7 +47,9 @@
 #include <scmod.hxx>
 #include <markdata.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <sc.hrc>
+#include <helpids.h>
 #include <AccessibleDocumentPagePreview.hxx>
 #include <vcl/lineinfo.hxx>
 #include <svx/algitem.hxx>
@@ -165,7 +167,9 @@ void ScPreview::UpdateDrawView()        // nTab must be right
 
         if ( !pDrawView )                                   // New Drawing?
         {
-            pDrawView = new FmFormView( pModel, this );
+            pDrawView = new FmFormView(
+                *pModel,
+                this);
 
             // The DrawView takes over the Design-Mode from the Model
             // (Settings "In opening Draftmode"), therefore to restore here
@@ -518,9 +522,9 @@ void ScPreview::DoPrint( ScPreviewLocationData* pFillLocation )
 
             OUString aEmptyMsg;
             if (mbHasEmptyRangeTable)
-                aEmptyMsg = ScGlobal::GetRscString(STR_PRINT_PREVIEW_EMPTY_RANGE);
+                aEmptyMsg = ScResId(STR_PRINT_PREVIEW_EMPTY_RANGE);
             else
-                aEmptyMsg = ScGlobal::GetRscString(STR_PRINT_PREVIEW_NODATA);
+                aEmptyMsg = ScResId(STR_PRINT_PREVIEW_NODATA);
 
             long nHeight = 3000;
             pEditEng->SetDefaultItem(SvxFontHeightItem(nHeight, 100, EE_CHAR_FONTHEIGHT));
@@ -715,7 +719,7 @@ OUString ScPreview::GetPosString()
         UpdateDrawView();       // The table eventually changes
     }
 
-    OUString aString = ScGlobal::GetRscString( STR_PAGE ) +
+    OUString aString = ScResId( STR_PAGE ) +
                        " " + OUString::number(nPageNo+1);
 
     if (nTabsTested >= nTabCount)

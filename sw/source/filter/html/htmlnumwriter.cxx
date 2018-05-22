@@ -33,6 +33,7 @@
 #include <poolfmt.hxx>
 #include <ndtxt.hxx>
 #include <paratr.hxx>
+#include <pam.hxx>
 
 #include "htmlnum.hxx"
 #include "wrthtml.hxx"
@@ -47,12 +48,12 @@ void SwHTMLWriter::FillNextNumInfo()
 {
     m_pNextNumRuleInfo = nullptr;
 
-    sal_uLong nPos = pCurPam->GetPoint()->nNode.GetIndex() + 1;
+    sal_uLong nPos = m_pCurrentPam->GetPoint()->nNode.GetIndex() + 1;
 
     bool bTable = false;
     do
     {
-        const SwNode* pNd = pDoc->GetNodes()[nPos];
+        const SwNode* pNd = m_pDoc->GetNodes()[nPos];
         if( pNd->IsTextNode() )
         {
             m_pNextNumRuleInfo = new SwHTMLNumRuleInfo( *pNd->GetTextNode() );
@@ -118,10 +119,10 @@ Writer& OutHTML_NumBulListStart( SwHTMLWriter& rWrt,
                 if( rInfo.GetDepth() > 1 )
                 {
                     sal_uLong nPos =
-                        rWrt.pCurPam->GetPoint()->nNode.GetIndex() + 1;
+                        rWrt.m_pCurrentPam->GetPoint()->nNode.GetIndex() + 1;
                     do
                     {
-                        const SwNode* pNd = rWrt.pDoc->GetNodes()[nPos];
+                        const SwNode* pNd = rWrt.m_pDoc->GetNodes()[nPos];
                         if( pNd->IsTextNode() )
                         {
                             const SwTextNode *pTextNd = pNd->GetTextNode();
@@ -181,6 +182,7 @@ Writer& OutHTML_NumBulListStart( SwHTMLWriter& rWrt,
 
         rWrt.m_aBulletGrfs[i].clear();
         OString sOut = "<";
+        sOut += rWrt.GetNamespace();
         const SwNumFormat& rNumFormat = rInfo.GetNumRule()->Get( i );
         sal_Int16 eType = rNumFormat.GetNumberingType();
         if( SVX_NUM_CHAR_SPECIAL == eType )
@@ -250,9 +252,9 @@ Writer& OutHTML_NumBulListStart( SwHTMLWriter& rWrt,
             sal_uInt16 nStartVal = rNumFormat.GetStart();
             if( bStartValue && 1 == nStartVal && i == rInfo.GetDepth()-1 )
             {
-                if ( rWrt.pCurPam->GetNode().GetTextNode()->GetNum() )
+                if ( rWrt.m_pCurrentPam->GetNode().GetTextNode()->GetNum() )
                 {
-                    nStartVal = static_cast< sal_uInt16 >( rWrt.pCurPam->GetNode()
+                    nStartVal = static_cast< sal_uInt16 >( rWrt.m_pCurrentPam->GetNode()
                                 .GetTextNode()->GetNumberVector()[i] );
                 }
                 else

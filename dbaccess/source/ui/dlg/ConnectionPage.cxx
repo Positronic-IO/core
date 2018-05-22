@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_java.h>
 #include "ConnectionPage.hxx"
 #include <core_resource.hxx>
 #include <dbu_dlg.hxx>
@@ -35,7 +35,6 @@
 #include <dsitems.hxx>
 #include <helpids.h>
 #include <osl/process.h>
-#include <vcl/msgbox.hxx>
 #include <dbadmin.hxx>
 #include <comphelper/types.hxx>
 #include <vcl/stdtext.hxx>
@@ -78,9 +77,9 @@ namespace dbaui
     using namespace ::dbtools;
     using namespace ::svt;
 
-    VclPtr<SfxTabPage> OConnectionTabPage::Create( vcl::Window* pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> OConnectionTabPage::Create( TabPageParent pParent, const SfxItemSet* _rAttrSet )
     {
-        return VclPtr<OConnectionTabPage>::Create( pParent, *_rAttrSet );
+        return VclPtr<OConnectionTabPage>::Create( pParent.pParent, *_rAttrSet );
     }
 
     // OConnectionTabPage
@@ -307,9 +306,9 @@ namespace dbaui
 #endif
 
         const char* pMessage = bSuccess ? STR_JDBCDRIVER_SUCCESS : STR_JDBCDRIVER_NO_SUCCESS;
-        const OSQLMessageBox::MessageType mt = bSuccess ? OSQLMessageBox::Info : OSQLMessageBox::Error;
-        ScopedVclPtrInstance< OSQLMessageBox > aMsg( this, DBA_RES(pMessage), OUString(), MessBoxStyle::Ok | MessBoxStyle::DefaultOk, mt );
-        aMsg->Execute();
+        const MessageType mt = bSuccess ? MessageType::Info : MessageType::Error;
+        OSQLMessageBox aMsg(GetFrameWeld(), DBA_RES(pMessage), OUString(), MessBoxStyle::Ok | MessBoxStyle::DefaultOk, mt);
+        aMsg.run();
     }
     bool OConnectionTabPage::checkTestConnection()
     {

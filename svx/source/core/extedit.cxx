@@ -11,6 +11,7 @@
 
 #include <vcl/svapp.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <vcl/cvtgrf.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <svx/xoutbmp.hxx>
@@ -18,7 +19,6 @@
 #include <svx/svdpagv.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/fmview.hxx>
-#include <svtools/grfmgr.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/bindings.hxx>
 #include <salhelper/thread.hxx>
@@ -154,12 +154,13 @@ void ExternalToolEdit::Edit(GraphicObject const*const pGraphicObject)
 }
 
 SdrExternalToolEdit::SdrExternalToolEdit(
-        FmFormView *const pView, SdrObject *const pObj)
-    : m_pView(pView)
-    , m_pObj(pObj)
+    FmFormView* pView,
+    SdrObject* pObj)
+:   m_pView(pView)
+    ,m_pObj(pObj)
 {
     assert(m_pObj && m_pView);
-    StartListening(*m_pObj->GetModel());
+    StartListening(m_pObj->getSdrModelFromSdrObject());
 }
 
 
@@ -184,7 +185,7 @@ void SdrExternalToolEdit::Update(Graphic & rGraphic)
     SdrPageView *const pPageView = m_pView->GetSdrPageView();
     if (pPageView)
     {
-        SdrGrafObj *const pNewObj(static_cast<SdrGrafObj*>(m_pObj->Clone()));
+        SdrGrafObj *const pNewObj(static_cast<SdrGrafObj*>(m_pObj->CloneSdrObject(m_pObj->getSdrModelFromSdrObject())));
         assert(pNewObj);
         OUString const description =
             m_pView->GetDescriptionOfMarkedObjects() + " External Edit";

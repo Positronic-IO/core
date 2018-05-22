@@ -817,7 +817,8 @@ static void ImplDrawBtnDropDownArrow( OutputDevice* pDev,
 }
 
 void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFlags,
-                                           const tools::Rectangle& rRect, bool bMenuBtnSep)
+                                           const tools::Rectangle& rRect, bool bMenuBtnSep,
+                                           DrawButtonFlags nButtonFlags)
 {
     const StyleSettings&    rStyleSettings = GetSettings().GetStyleSettings();
     tools::Rectangle               aInRect = rRect;
@@ -834,12 +835,22 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
 
     if ( nDrawFlags & DrawFlags::Mono )
         aColor = COL_BLACK;
-    else if( (nDrawFlags & DrawFlags::NoRollover) && IsNativeControlSupported(ControlType::Pushbutton, ControlPart::Entire) )
-        aColor = rStyleSettings.GetButtonRolloverTextColor();
+    else if( (nButtonFlags & DrawButtonFlags::Highlight) && IsNativeControlSupported(ControlType::Pushbutton, ControlPart::Entire) )
+    {
+        if (nButtonFlags & DrawButtonFlags::Pressed)
+            aColor = rStyleSettings.GetButtonPressedRolloverTextColor();
+        else
+            aColor = rStyleSettings.GetButtonRolloverTextColor();
+    }
     else if ( IsControlForeground() )
         aColor = GetControlForeground();
-    else if( nDrawFlags & DrawFlags::NoRollover )
-        aColor = rStyleSettings.GetButtonRolloverTextColor();
+    else if( nButtonFlags & DrawButtonFlags::Highlight )
+    {
+        if (nButtonFlags & DrawButtonFlags::Pressed)
+            aColor = rStyleSettings.GetButtonPressedRolloverTextColor();
+        else
+            aColor = rStyleSettings.GetButtonRolloverTextColor();
+    }
     else
         aColor = rStyleSettings.GetButtonTextColor();
 
@@ -1022,6 +1033,8 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
         return;
 
     bool bRollOver = (IsMouseOver() && aInRect.IsInside(GetPointerPosPixel()));
+    if (bRollOver)
+        nButtonStyle |= DrawButtonFlags::Highlight;
     bool bDrawMenuSep = mnDDStyle == PushButtonDropdownStyle::SplitMenuButton;
     if (GetStyle() & WB_FLATBUTTON)
     {
@@ -1036,7 +1049,10 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
         ControlState nState = ControlState::NONE;
 
         if (mbPressed || IsChecked() || mbIsActive)
+        {
             nState |= ControlState::PRESSED;
+            nButtonStyle |= DrawButtonFlags::Pressed;
+        }
         if (ImplGetButtonState() & DrawButtonFlags::Pressed)
             nState |= ControlState::PRESSED;
         if (HasFocus())
@@ -1047,10 +1063,16 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
             nState |= ControlState::ENABLED;
 
         if (bRollOver || mbIsActive)
+        {
+            nButtonStyle |= DrawButtonFlags::Highlight;
             nState |= ControlState::ROLLOVER;
+        }
 
         if (mbIsActive && bRollOver)
+        {
             nState &= ~ControlState::PRESSED;
+            nButtonStyle &= ~DrawButtonFlags::Pressed;
+        }
 
         if (GetStyle() & WB_BEVELBUTTON)
             aControlValue.mbBevelButton = true;
@@ -1085,8 +1107,8 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
         }
 
         // draw content using the same aInRect as non-native VCL would do
-        ImplDrawPushButtonContent(&rRenderContext, (nState&ControlState::ROLLOVER) ? DrawFlags::NoRollover : DrawFlags::NONE,
-                                  aInRect, bDrawMenuSep);
+        ImplDrawPushButtonContent(&rRenderContext, DrawFlags::NONE,
+                                  aInRect, bDrawMenuSep, nButtonStyle);
 
         if (HasFocus())
             ShowFocus(ImplGetFocusRect());
@@ -1111,7 +1133,7 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
         }
 
         // draw content
-        ImplDrawPushButtonContent(&rRenderContext, DrawFlags::NONE, aInRect, bDrawMenuSep);
+        ImplDrawPushButtonContent(&rRenderContext, DrawFlags::NONE, aInRect, bDrawMenuSep, nButtonStyle);
 
         if (HasFocus())
         {
@@ -1387,7 +1409,7 @@ void PushButton::Draw( OutputDevice* pDev, const Point& rPos, const Size& rSize,
         nButtonStyle |= DrawButtonFlags::Checked;
     aRect = aDecoView.DrawButton( aRect, nButtonStyle );
 
-    ImplDrawPushButtonContent( pDev, nFlags, aRect, true );
+    ImplDrawPushButtonContent( pDev, nFlags, aRect, true, nButtonStyle );
     pDev->Pop();
 }
 
@@ -2756,15 +2778,15 @@ Image RadioButton::GetRadioImage( const AllSettings& rSettings, DrawButtonFlags 
 
     if ( pSVData->maCtrlData.maRadioImgList.empty() ||
          (pSVData->maCtrlData.mnRadioStyle != nStyle) ||
-         (pSVData->maCtrlData.mnLastRadioFColor != rStyleSettings.GetFaceColor().GetColor()) ||
-         (pSVData->maCtrlData.mnLastRadioWColor != rStyleSettings.GetWindowColor().GetColor()) ||
-         (pSVData->maCtrlData.mnLastRadioLColor != rStyleSettings.GetLightColor().GetColor()) )
+         (pSVData->maCtrlData.mnLastRadioFColor != rStyleSettings.GetFaceColor()) ||
+         (pSVData->maCtrlData.mnLastRadioWColor != rStyleSettings.GetWindowColor()) ||
+         (pSVData->maCtrlData.mnLastRadioLColor != rStyleSettings.GetLightColor()) )
     {
         pSVData->maCtrlData.maRadioImgList.clear();
 
-        pSVData->maCtrlData.mnLastRadioFColor = rStyleSettings.GetFaceColor().GetColor();
-        pSVData->maCtrlData.mnLastRadioWColor = rStyleSettings.GetWindowColor().GetColor();
-        pSVData->maCtrlData.mnLastRadioLColor = rStyleSettings.GetLightColor().GetColor();
+        pSVData->maCtrlData.mnLastRadioFColor = rStyleSettings.GetFaceColor();
+        pSVData->maCtrlData.mnLastRadioWColor = rStyleSettings.GetWindowColor();
+        pSVData->maCtrlData.mnLastRadioLColor = rStyleSettings.GetLightColor();
 
         std::vector<OUString> aResources;
         if (nStyle)
@@ -3580,15 +3602,15 @@ Image CheckBox::GetCheckImage( const AllSettings& rSettings, DrawButtonFlags nFl
 
     if ( pSVData->maCtrlData.maCheckImgList.empty() ||
          (pSVData->maCtrlData.mnCheckStyle != nStyle) ||
-         (pSVData->maCtrlData.mnLastCheckFColor != rStyleSettings.GetFaceColor().GetColor()) ||
-         (pSVData->maCtrlData.mnLastCheckWColor != rStyleSettings.GetWindowColor().GetColor()) ||
-         (pSVData->maCtrlData.mnLastCheckLColor != rStyleSettings.GetLightColor().GetColor()) )
+         (pSVData->maCtrlData.mnLastCheckFColor != rStyleSettings.GetFaceColor()) ||
+         (pSVData->maCtrlData.mnLastCheckWColor != rStyleSettings.GetWindowColor()) ||
+         (pSVData->maCtrlData.mnLastCheckLColor != rStyleSettings.GetLightColor()) )
     {
         pSVData->maCtrlData.maCheckImgList.clear();
 
-        pSVData->maCtrlData.mnLastCheckFColor = rStyleSettings.GetFaceColor().GetColor();
-        pSVData->maCtrlData.mnLastCheckWColor = rStyleSettings.GetWindowColor().GetColor();
-        pSVData->maCtrlData.mnLastCheckLColor = rStyleSettings.GetLightColor().GetColor();
+        pSVData->maCtrlData.mnLastCheckFColor = rStyleSettings.GetFaceColor();
+        pSVData->maCtrlData.mnLastCheckWColor = rStyleSettings.GetWindowColor();
+        pSVData->maCtrlData.mnLastCheckLColor = rStyleSettings.GetLightColor();
 
         std::vector<OUString> aResources;
         if (nStyle)

@@ -67,6 +67,7 @@
 #include <global.hxx>
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <patattr.hxx>
 #include <viewdata.hxx>
 #include <document.hxx>
@@ -1179,7 +1180,7 @@ void ScInputHandler::ShowFuncList( const ::std::vector< OUString > & rFuncStrVec
     if ( nRemainFindNumber == 0 && nRemainNumber > 0 )
     {
         OUString aBufStr( aTipStr );
-        OUString aMessage( ScGlobal::GetRscString( STR_FUNCTIONS_FOUND ) );
+        OUString aMessage( ScResId( STR_FUNCTIONS_FOUND ) );
         aMessage = aMessage.replaceFirst("%2", OUString::number(nRemainNumber));
         aMessage = aMessage.replaceFirst("%1", aBufStr);
         aTipStr = aMessage;
@@ -2821,7 +2822,7 @@ void ScInputHandler::EnterHandler( ScEnterMode nBlockMode )
         if (bAttrib)
         {
             mpEditEngine->ClearSpellErrors();
-            pObject.reset(mpEditEngine->CreateTextObject());
+            pObject = mpEditEngine->CreateTextObject();
         }
         else if (bAutoComplete) // Adjust Upper/Lower case
         {
@@ -3400,13 +3401,23 @@ bool ScInputHandler::KeyInput( const KeyEvent& rKEvt, bool bStartEdit /* = false
                 {
                     if (pTableView)
                     {
+                        EVControlBits nControl = pTableView->GetControlWord();
+                        if (pTopView)
+                            pTableView->SetControlWord(nControl | EVControlBits::SINGLELINEPASTE);
+
                         vcl::Window* pFrameWin = pActiveViewSh ? pActiveViewSh->GetFrameWin() : nullptr;
                         if ( pTableView->PostKeyEvent( rKEvt, pFrameWin ) )
                             bUsed = true;
+
+                        pTableView->SetControlWord(nControl);
                     }
                     if (pTopView)
-                        if ( pTopView->PostKeyEvent( rKEvt ) )
+                    {
+                        if ( bUsed && rKEvt.GetKeyCode().GetFunction() == KeyFuncType::CUT )
+                            pTopView->DeleteSelected();
+                        else if ( pTopView->PostKeyEvent( rKEvt ) )
                             bUsed = true;
+                    }
                 }
 
                 // AutoInput:
@@ -3446,10 +3457,7 @@ bool ScInputHandler::KeyInput( const KeyEvent& rKEvt, bool bStartEdit /* = false
                 }
                 if( bUsed && bFormulaMode && nCode == KEY_BACKSPACE )
                 {
-                    if (bFormulaMode)
-                        UseFormulaData();
-                    else
-                        UseColData();
+                    UseFormulaData();
                 }
 
             }
@@ -3890,9 +3898,9 @@ bool ScInputHandler::GetTextAndFields( ScEditEngineDefaulter& rDestEngine )
         if ( eFieldState == SfxItemState::DONTCARE || eFieldState == SfxItemState::SET )
         {
             // Copy content
-            EditTextObject* pObj = mpEditEngine->CreateTextObject();
+            std::unique_ptr<EditTextObject> pObj = mpEditEngine->CreateTextObject();
             rDestEngine.SetText(*pObj);
-            delete pObj;
+            pObj.reset();
 
             // Delete attributes
             for (sal_Int32 i=0; i<nParCnt; i++)
@@ -4055,7 +4063,9 @@ ScInputHdlState& ScInputHdlState::operator=( const ScInputHdlState& r )
     aStartPos   = r.aStartPos;
     aEndPos     = r.aEndPos;
     aString     = r.aString;
-    pEditData.reset( r.pEditData ? r.pEditData->Clone() : nullptr );
+    pEditData.reset();
+    if (r.pEditData)
+        pEditData = r.pEditData->Clone();
 
     return *this;
 }

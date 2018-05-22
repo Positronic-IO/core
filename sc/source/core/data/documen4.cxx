@@ -25,6 +25,7 @@
 #include <document.hxx>
 #include <table.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <subtotal.hxx>
 #include <docoptio.hxx>
 #include <interpre.hxx>
@@ -653,9 +654,10 @@ bool ScDocument::GetSelectionFunction( ScSubTotalFunc eFunc,
     return !aData.bError;
 }
 
-double ScDocument::RoundValueAsShown( double fVal, sal_uInt32 nFormat ) const
+double ScDocument::RoundValueAsShown( double fVal, sal_uInt32 nFormat, const ScInterpreterContext* pContext ) const
 {
-    const SvNumberformat* pFormat = GetFormatTable()->GetEntry( nFormat );
+    const SvNumberFormatter* pFormatter = pContext ? pContext->GetFormatTable() : GetFormatTable();
+    const SvNumberformat* pFormat = pFormatter->GetEntry( nFormat );
     SvNumFormatType nType;
     if (pFormat && (nType = pFormat->GetMaskedType()) != SvNumFormatType::DATE
             && nType != SvNumFormatType::TIME && nType != SvNumFormatType::DATETIME )
@@ -908,21 +910,19 @@ bool ScDocument::HasDetectiveOperations() const
 void ScDocument::AddDetectiveOperation( const ScDetOpData& rData )
 {
     if (!pDetOpList)
-        pDetOpList = new ScDetOpList;
+        pDetOpList.reset(new ScDetOpList);
 
     pDetOpList->Append( new ScDetOpData( rData ) );
 }
 
 void ScDocument::ClearDetectiveOperations()
 {
-    delete pDetOpList;      // deletes also the entries
-    pDetOpList = nullptr;
+    pDetOpList.reset();      // deletes also the entries
 }
 
-void ScDocument::SetDetOpList(ScDetOpList* pNew)
+void ScDocument::SetDetOpList(std::unique_ptr<ScDetOpList> pNew)
 {
-    delete pDetOpList;      // deletes also the entries
-    pDetOpList = pNew;
+    pDetOpList = std::move(pNew);
 }
 
 // Comparison of Documents
@@ -1192,7 +1192,7 @@ void ScDocument::CompareDocument( ScDocument& rOtherDoc )
 
             OUString aTabName;
             GetName( nThisTab, aTabName );
-            OUString aTemplate = ScGlobal::GetRscString(STR_PROGRESS_COMPARING);
+            OUString aTemplate = ScResId(STR_PROGRESS_COMPARING);
             sal_Int32 nIndex = 0;
             OUStringBuffer aProText = aTemplate.getToken( 0, '#', nIndex );
             aProText.append(aTabName);

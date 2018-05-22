@@ -16,7 +16,6 @@
 #include <vcl/pngwrite.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/configmgr.hxx>
-#include <unotools/syslocaleoptions.hxx>
 
 
 namespace {
@@ -39,8 +38,7 @@ ScreenshotTest::ScreenshotTest()
 :   m_aScreenshotDirectory("screenshots"),
     maKnownDialogs()
 {
-    SvtSysLocaleOptions localeOptions;
-    maCurrentLanguage = localeOptions.GetRealUILanguageTag().getBcp47();
+    maCurrentLanguage = OUString::fromUtf8(getenv("LO_TEST_LOCALE"));
 }
 
 ScreenshotTest::~ScreenshotTest()
@@ -70,20 +68,20 @@ void ScreenshotTest::implSaveScreenshot(const Bitmap& rScreenshot, const OString
     aDirname = m_aScreenshotDirectory + "/" + aDirname +
                ( (maCurrentLanguage == "en-US") ? OUString() : "/" + maCurrentLanguage );
 
-    auto const path = m_directories.getURLFromWorkdir(aDirname);
-    auto const e = osl::Directory::createPath(path);
+    auto const dirUrl = m_directories.getURLFromWorkdir(aDirname);
+    auto const e = osl::Directory::createPath(dirUrl);
     if (e != osl::FileBase::E_EXIST) {
         CPPUNIT_ASSERT_EQUAL_MESSAGE(
             OUStringToOString(
-                "Failed to create " + path, RTL_TEXTENCODING_UTF8).getStr(),
+                "Failed to create " + dirUrl, RTL_TEXTENCODING_UTF8).getStr(),
             osl::FileBase::E_None, e);
     }
 
-    OUString aFullPath = m_directories.getPathFromWorkdir("/" + aDirname + "/" + aBasename + ".png");
-    SvFileStream aNew(aFullPath, StreamMode::WRITE | StreamMode::TRUNC);
-    CPPUNIT_ASSERT_MESSAGE(OUStringToOString("Failed to open <" + aFullPath + ">: " + OUString::number(sal_uInt32(aNew.GetErrorCode())), RTL_TEXTENCODING_UTF8).getStr(), aNew.IsOpen());
+    auto const pngUrl = OUString(dirUrl + "/" + aBasename + ".png");
+    SvFileStream aNew(pngUrl, StreamMode::WRITE | StreamMode::TRUNC);
+    CPPUNIT_ASSERT_MESSAGE(OUStringToOString("Failed to open <" + pngUrl + ">: " + OUString::number(sal_uInt32(aNew.GetErrorCode())), RTL_TEXTENCODING_UTF8).getStr(), aNew.IsOpen());
 
-    vcl::PNGWriter aPNGWriter(rScreenshot);
+    vcl::PNGWriter aPNGWriter((BitmapEx(rScreenshot)));
     aPNGWriter.Write(aNew);
 }
 
@@ -186,7 +184,12 @@ void ScreenshotTest::dumpDialogToPath(const OString& rUIXMLDescription)
         {
             VclPtr<vcl::Window> aOwnedToplevel;
 
-            std::unique_ptr<VclBuilder> xBuilder(new VclBuilder(pDialog, VclBuilderContainer::getUIRootDir(), OStringToOUString(rUIXMLDescription, RTL_TEXTENCODING_UTF8)));
+            bool bLegacy;
+            if (rUIXMLDescription == "cui/ui/textanimtabpage.ui")
+                bLegacy = false;
+            else
+                bLegacy = true;
+            std::unique_ptr<VclBuilder> xBuilder(new VclBuilder(pDialog, VclBuilderContainer::getUIRootDir(), OStringToOUString(rUIXMLDescription, RTL_TEXTENCODING_UTF8), OString(), css::uno::Reference<css::frame::XFrame>(), bLegacy));
             vcl::Window *pRoot = xBuilder->get_widget_root();
             Dialog *pRealDialog = dynamic_cast<Dialog*>(pRoot);
 

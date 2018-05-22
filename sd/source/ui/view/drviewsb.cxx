@@ -18,7 +18,6 @@
  */
 
 #include <com/sun/star/ui/dialogs/XSLTFilterDialog.hpp>
-#include <comphelper/processfactory.hxx>
 #include <svx/svdlayer.hxx>
 #include <svx/svxids.hrc>
 #include <sfx2/msgpool.hxx>
@@ -26,7 +25,6 @@
 #include <svx/hlnkitem.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/flditem.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svx/svdorect.hxx>

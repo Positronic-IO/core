@@ -39,7 +39,6 @@
 #include <sfx2/linkmgr.hxx>
 #include <editeng/editdata.hxx>
 #include <svx/dialogs.hrc>
-#include <svx/dialmgr.hxx>
 
 #include <editeng/outliner.hxx>
 #include <svx/svditer.hxx>
@@ -681,7 +680,7 @@ void SdDrawDocument::CreateFirstPages( SdDrawDocument const * pRefDocument /* = 
         if( !pRefPage && (meDocType != DocumentType::Draw) )
             pPage->SetAutoLayout( AUTOLAYOUT_TITLE, true, true );
 
-        mpWorkStartupTimer = new Timer("DrawWorkStartupTimer");
+        mpWorkStartupTimer.reset( new Timer("DrawWorkStartupTimer") );
         mpWorkStartupTimer->SetInvokeHandler( LINK(this, SdDrawDocument, WorkStartupHdl) );
         mpWorkStartupTimer->SetTimeout(2000);
         mpWorkStartupTimer->Start();
@@ -968,8 +967,7 @@ void SdDrawDocument::StopWorkStartupDelay()
             WorkStartupHdl(nullptr);
         }
 
-        delete mpWorkStartupTimer;
-        mpWorkStartupTimer = nullptr;
+        mpWorkStartupTimer.reset();
     }
 }
 
@@ -1005,7 +1003,7 @@ SdAnimationInfo* SdDrawDocument::GetShapeUserData(SdrObject& rObject, bool bCrea
     if( (pRet == nullptr) && bCreate )
     {
         pRet = new SdAnimationInfo( rObject );
-        rObject.AppendUserData( pRet);
+        rObject.AppendUserData( std::unique_ptr<SdrObjUserData>(pRet) );
     }
 
     return pRet;
@@ -1385,8 +1383,8 @@ sal_uInt16 SdDrawDocument::DuplicatePage (
     }
 
     // Create duplicates of a standard page and the associated notes page
-    pStandardPage = static_cast<SdPage*>( pPreviousStandardPage->Clone() );
-    pNotesPage = static_cast<SdPage*>( pPreviousNotesPage->Clone() );
+    pStandardPage = static_cast<SdPage*>( pPreviousStandardPage->CloneSdrPage(*this) );
+    pNotesPage = static_cast<SdPage*>( pPreviousNotesPage->CloneSdrPage(*this) );
 
     return InsertPageSet (
         pActualPage,

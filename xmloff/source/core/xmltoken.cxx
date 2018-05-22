@@ -368,6 +368,7 @@ namespace xmloff { namespace token {
         TOKEN( "calculation-settings",            XML_CALCULATION_SETTINGS ),
         TOKEN( "calendar",                        XML_CALENDAR ),
         TOKEN( "capitalize-entries",              XML_CAPITALIZE_ENTRIES ),
+        TOKEN( "can-add-comment",                 XML_CAN_ADD_COMMENT ),
         TOKEN( "caption",                         XML_CAPTION ),
         TOKEN( "caption-point-x",                 XML_CAPTION_POINT_X ),
         TOKEN( "caption-point-y",                 XML_CAPTION_POINT_Y ),
@@ -1056,6 +1057,7 @@ namespace xmloff { namespace token {
         TOKEN( "institution",                     XML_INSTITUTION ),
         TOKEN( "int",                             XML_INT ),
         TOKEN( "intensity",                       XML_INTENSITY ),
+        TOKEN( "inter-character",                 XML_INTER_CHARACTER ),
         TOKEN( "intersect",                       XML_INTERSECT ),
         TOKEN( "interval",                        XML_INTERVAL ),
         TOKEN( "interval-major",                  XML_INTERVAL_MAJOR ),
@@ -1942,8 +1944,14 @@ namespace xmloff { namespace token {
         TOKEN( "dot-dash",                        XML_DOT_DASH ),
         TOKEN( "dot-dot-dash",                    XML_DOT_DOT_DASH ),
         TOKEN( "long-dash",                       XML_LONG_DASH ),
+        TOKEN( "show-sign-date",                  XML_SHOW_SIGN_DATE ),
+        TOKEN( "signatureline",                   XML_SIGNATURELINE ),
+        TOKEN( "signing-instructions",            XML_SIGNING_INSTRUCTIONS ),
         TOKEN( "single",                          XML_SINGLE ),
         TOKEN( "small-wave",                      XML_SMALL_WAVE ),
+        TOKEN( "suggested-signer-email",          XML_SUGGESTED_SIGNER_EMAIL ),
+        TOKEN( "suggested-signer-name",           XML_SUGGESTED_SIGNER_NAME ),
+        TOKEN( "suggested-signer-title",          XML_SUGGESTED_SIGNER_TITLE ),
         TOKEN( "wave",                            XML_WAVE ),
         TOKEN( "unformatted-text",                XML_UNFORMATTED_TEXT ),
         TOKEN( "union",                           XML_UNION ),
@@ -3297,6 +3305,9 @@ namespace xmloff { namespace token {
 
         // for optional language-dependent reference formats
         TOKEN( "reference-language",              XML_REFERENCE_LANGUAGE ),
+        TOKEN( "newline",                         XML_NEWLINE ),
+        TOKEN( "creator-initials",                XML_CREATOR_INITIALS ),
+
 #if OSL_DEBUG_LEVEL > 0
         { 0, nullptr, nullptr,                       XML_TOKEN_END }
 #else
@@ -3321,7 +3332,8 @@ namespace xmloff { namespace token {
             while (pEntry < pEntryEnd)
             {
                 assert(nPos == static_cast<sal_uInt16>(pEntry->eToken));
-                    // "xmloff::GetXMLToken: inconsistency in the token list!"
+                    // Inconsistency in the token list!
+                    // The positions in xmltoken.hxx and xmltoken.cxx need to match.
                 ++pEntry;
                 ++nPos;
             }

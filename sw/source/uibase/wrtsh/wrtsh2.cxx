@@ -20,7 +20,6 @@
 #include <hintids.hxx>
 #include <svl/macitem.hxx>
 #include <sfx2/frame.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/urihelper.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
@@ -64,6 +63,7 @@
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
+#include <sfx2/event.hxx>
 
 void SwWrtShell::Insert(SwField const &rField)
 {
@@ -108,7 +108,7 @@ void SwWrtShell::Insert(SwField const &rField)
         }
         else
         {
-            bDeleted = DelRight() != 0;
+            bDeleted = DelRight();
         }
     }
 
@@ -143,7 +143,6 @@ void SwWrtShell::UpdateInputFields( SwInputFieldList* pLst )
         pTmp->PushCursor();
 
         bool bCancel = false;
-        OString aDlgPos;
 
         size_t nIndex = 0;
         FieldDialogPressedButton ePressedButton = BTN_NONE;
@@ -169,10 +168,10 @@ void SwWrtShell::UpdateInputFields( SwInputFieldList* pLst )
             pField = pTmp->GetField(nIndex);
             if (pField->GetTyp()->Which() == SwFieldIds::Dropdown)
             {
-                bCancel = StartDropDownFieldDlg(pField, bPrev, bNext, &aDlgPos, &ePressedButton);
+                bCancel = StartDropDownFieldDlg(pField, bPrev, bNext, GetView().GetFrameWeld(), &ePressedButton);
             }
             else
-                bCancel = StartInputFieldDlg(pField, bPrev, bNext, nullptr, &aDlgPos, &ePressedButton);
+                bCancel = StartInputFieldDlg(pField, bPrev, bNext, GetView().GetFrameWeld(), &ePressedButton);
 
             if (!bCancel)
             {
@@ -251,16 +250,14 @@ class FieldDeletionModify : public SwModify
 };
 
 // Start input dialog for a specific field
-bool SwWrtShell::StartInputFieldDlg( SwField* pField, bool bPrevButton, bool bNextButton,
-                                   vcl::Window* pParentWin, OString* pWindowState, SwWrtShell::FieldDialogPressedButton* pPressedButton )
+bool SwWrtShell::StartInputFieldDlg(SwField* pField, bool bPrevButton, bool bNextButton,
+                                    weld::Window* pParentWin, SwWrtShell::FieldDialogPressedButton* pPressedButton)
 {
 
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
     OSL_ENSURE(pFact, "Dialog creation failed!");
     ScopedVclPtr<AbstractFieldInputDlg> pDlg(pFact->CreateFieldInputDlg(pParentWin, *this, pField, bPrevButton, bNextButton));
     OSL_ENSURE(pDlg, "Dialog creation failed!");
-    if(pWindowState && !pWindowState->isEmpty())
-        pDlg->SetWindowState(*pWindowState);
 
     bool bRet;
 
@@ -268,9 +265,6 @@ bool SwWrtShell::StartInputFieldDlg( SwField* pField, bool bPrevButton, bool bNe
         FieldDeletionModify aModify(pDlg.get(), pField);
         bRet = RET_CANCEL == pDlg->Execute();
     }
-
-    if(pWindowState)
-        *pWindowState = pDlg->GetWindowState();
 
     if (pPressedButton)
     {
@@ -285,18 +279,15 @@ bool SwWrtShell::StartInputFieldDlg( SwField* pField, bool bPrevButton, bool bNe
     return bRet;
 }
 
-bool SwWrtShell::StartDropDownFieldDlg(SwField* pField, bool bPrevButton, bool bNextButton, OString* pWindowState, SwWrtShell::FieldDialogPressedButton* pPressedButton)
+bool SwWrtShell::StartDropDownFieldDlg(SwField* pField, bool bPrevButton, bool bNextButton,
+                                       weld::Window* pParentWin, SwWrtShell::FieldDialogPressedButton* pPressedButton)
 {
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-    ScopedVclPtr<AbstractDropDownFieldDialog> pDlg(pFact->CreateDropDownFieldDialog(*this, pField, bPrevButton, bNextButton));
+    ScopedVclPtr<AbstractDropDownFieldDialog> pDlg(pFact->CreateDropDownFieldDialog(pParentWin, *this, pField, bPrevButton, bNextButton));
     OSL_ENSURE(pDlg, "Dialog creation failed!");
-    if(pWindowState && !pWindowState->isEmpty())
-        pDlg->SetWindowState(*pWindowState);
     const short nRet = pDlg->Execute();
-    if(pWindowState)
-        *pWindowState = pDlg->GetWindowState();
 
     if (pPressedButton)
     {
@@ -430,17 +421,17 @@ void SwWrtShell::ClickToField( const SwField& rField )
             const SwInputField* pInputField = dynamic_cast<const SwInputField*>(&rField);
             if ( pInputField == nullptr )
             {
-                StartInputFieldDlg( const_cast<SwField*>(&rField), false, false );
+                StartInputFieldDlg(const_cast<SwField*>(&rField), false, false, GetView().GetFrameWeld());
             }
         }
         break;
 
     case SwFieldIds::SetExp:
         if( static_cast<const SwSetExpField&>(rField).GetInputFlag() )
-            StartInputFieldDlg( const_cast<SwField*>(&rField), false, false );
+            StartInputFieldDlg(const_cast<SwField*>(&rField), false, false, GetView().GetFrameWeld());
         break;
     case SwFieldIds::Dropdown :
-        StartDropDownFieldDlg( const_cast<SwField*>(&rField), false, false );
+        StartDropDownFieldDlg(const_cast<SwField*>(&rField), false, false, GetView().GetFrameWeld());
     break;
     default:
         SAL_WARN_IF(rField.IsClickable(), "sw", "unhandled clickable field!");
@@ -528,8 +519,9 @@ void LoadURL( SwViewShell& rVSh, const OUString& rURL, LoadUrlFlags nFilter,
             sFileURL = aURL.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous );
     }
 
-    // We are doing tiledRendering, let the client handles the URL loading.
-    if (comphelper::LibreOfficeKit::isActive())
+    // We are doing tiledRendering, let the client handles the URL loading,
+    // unless we are jumping to a TOC mark.
+    if (comphelper::LibreOfficeKit::isActive() && !rURL.startsWith("#"))
     {
         rVSh.GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED, sFileURL.toUtf8().getStr());
         return;
@@ -564,7 +556,7 @@ void LoadURL( SwViewShell& rVSh, const OUString& rURL, LoadUrlFlags nFilter,
     //#39076# Silent can be removed accordingly to SFX.
     SfxBoolItem aBrowse( SID_BROWSE, true );
 
-    if( nFilter & LoadUrlFlags::NewView )
+    if ((nFilter & LoadUrlFlags::NewView) && !comphelper::LibreOfficeKit::isActive())
         aTargetFrameName.SetValue( "_blank" );
 
     const SfxPoolItem* aArr[] = {

@@ -27,6 +27,7 @@
 #include <com/sun/star/style/XStyle.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <algorithm>
 
@@ -110,10 +111,9 @@ namespace chart
 
 StockBar::StockBar( bool bRisingCourse ) :
         ::property::OPropertySet( m_aMutex ),
-    m_bRisingCourse( bRisingCourse ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {
-    if( ! m_bRisingCourse )
+    if( ! bRisingCourse )
     {
         setFastPropertyValue_NoBroadcast(
             ::chart::FillProperties::PROP_FILL_COLOR,
@@ -128,7 +128,6 @@ StockBar::StockBar( const StockBar & rOther ) :
         MutexContainer(),
         impl::StockBar_Base(),
         ::property::OPropertySet( rOther, m_aMutex ),
-    m_bRisingCourse( rOther.m_bRisingCourse ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {}
 
@@ -170,9 +169,9 @@ void SAL_CALL StockBar::addModifyListener( const uno::Reference< util::XModifyLi
         uno::Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->addModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -183,9 +182,9 @@ void SAL_CALL StockBar::removeModifyListener( const uno::Reference< util::XModif
         uno::Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->removeModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 

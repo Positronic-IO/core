@@ -86,16 +86,6 @@ public class _LineDiagram extends MultiPropertyTest {
         doc.setDiagram(oldDiagram);
     }
 
-    protected PropertyTester URLTester = new PropertyTester() {
-        @Override
-        protected Object getNewValue(String propName, Object oldValue)
-                throws java.lang.IllegalArgumentException {
-            if (oldValue.equals(util.utils.getFullTestURL("space-metal.jpg")))
-                return util.utils.getFullTestURL("crazy-blue.jpg"); else
-                return util.utils.getFullTestURL("space-metal.jpg");
-        }
-    } ;
-
     protected PropertyTester SymbolTester = new PropertyTester() {
         @Override
         protected Object getNewValue(String propName, Object oldValue)
@@ -183,7 +173,27 @@ public class _LineDiagram extends MultiPropertyTest {
             throw new StatusException("Exception while set property value", e);
         }
 
-        testProperty("SymbolBitmapURL", URLTester) ;
+        try {
+            oObj.setPropertyValue(
+                "SymbolBitmapURL",
+                util.utils.getFullTestURL("space-metal.jpg") );
+        } catch(com.sun.star.lang.WrappedTargetException e) {
+            log.println("Exception while set property value");
+            e.printStackTrace(log);
+            throw new StatusException("Exception while set property value", e);
+        } catch(com.sun.star.lang.IllegalArgumentException e) {
+            log.println("Exception while set property value");
+            e.printStackTrace(log);
+            throw new StatusException("Exception while set property value", e);
+        } catch(com.sun.star.beans.PropertyVetoException e) {
+            log.println("Exception while set property value");
+            e.printStackTrace(log);
+            throw new StatusException("Exception while set property value", e);
+        } catch(com.sun.star.beans.UnknownPropertyException e) {
+            log.println("Exception while set property value");
+            e.printStackTrace(log);
+            throw new StatusException("Exception while set property value", e);
+        }
     }
 } // EOF LineDiagram
 

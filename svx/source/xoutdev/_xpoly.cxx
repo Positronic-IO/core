@@ -65,13 +65,13 @@ ImpXPolygon::ImpXPolygon( const ImpXPolygon& rImpXPoly )
 
     // copy
     nPoints = rImpXPoly.nPoints;
-    memcpy( pPointAry, rImpXPoly.pPointAry, nSize*sizeof( Point ) );
+    memcpy( pPointAry.get(), rImpXPoly.pPointAry.get(), nSize*sizeof( Point ) );
     memcpy( pFlagAry.get(), rImpXPoly.pFlagAry.get(), nSize );
 }
 
 ImpXPolygon::~ImpXPolygon()
 {
-    delete[] pPointAry;
+    pPointAry.reset();
     if ( bDeleteOldPoints )
     {
         delete[] pOldPointAry;
@@ -83,7 +83,7 @@ bool ImpXPolygon::operator==(const ImpXPolygon& rImpXPoly) const
 {
     return nPoints==rImpXPoly.nPoints &&
            (nPoints==0 ||
-            (memcmp(pPointAry, rImpXPoly.pPointAry, nPoints*sizeof(Point))==0 &&
+            (memcmp(pPointAry.get(), rImpXPoly.pPointAry.get(), nPoints*sizeof(Point))==0 &&
              memcmp(pFlagAry.get(), rImpXPoly.pFlagAry.get(), nPoints)==0));
 }
 
@@ -104,7 +104,7 @@ void ImpXPolygon::Resize( sal_uInt16 nNewSize, bool bDeletePoints )
     sal_uInt16  nOldSize     = nSize;
 
     CheckPointDelete();
-    pOldPointAry = pPointAry;
+    pOldPointAry = pPointAry.release();
 
     // Round the new size to a multiple of nResize, if
     // the object was not newly created (nSize != 0)
@@ -115,7 +115,7 @@ void ImpXPolygon::Resize( sal_uInt16 nNewSize, bool bDeletePoints )
     }
     // create point array
     nSize     = nNewSize;
-    pPointAry = new Point[ nSize ];
+    pPointAry.reset( new Point[ nSize ] );
 
     // create flag array
     pFlagAry.reset( new PolyFlags[ nSize ] );
@@ -126,12 +126,12 @@ void ImpXPolygon::Resize( sal_uInt16 nNewSize, bool bDeletePoints )
     {
         if( nOldSize < nSize )
         {
-            memcpy( pPointAry, pOldPointAry, nOldSize*sizeof( Point ) );
+            memcpy( pPointAry.get(), pOldPointAry, nOldSize*sizeof( Point ) );
             memcpy( pFlagAry.get(),  pOldFlagAry, nOldSize );
         }
         else
         {
-            memcpy( pPointAry, pOldPointAry, nSize*sizeof( Point ) );
+            memcpy( pPointAry.get(), pOldPointAry, nSize*sizeof( Point ) );
             memcpy( pFlagAry.get(), pOldFlagAry, nSize );
 
             // adjust number of valid points
@@ -168,7 +168,7 @@ void ImpXPolygon::InsertSpace( sal_uInt16 nPos, sal_uInt16 nCount )
                  nMove * sizeof(Point) );
         memmove( &pFlagAry[nPos+nCount], &pFlagAry[nPos], nMove );
     }
-    std::fill(pPointAry + nPos, pPointAry + nPos + nCount, Point());
+    std::fill(pPointAry.get() + nPos, pPointAry.get() + nPos + nCount, Point());
     memset( &pFlagAry [nPos], 0, nCount );
 
     nPoints = nPoints + nCount;
@@ -188,7 +188,7 @@ void ImpXPolygon::Remove( sal_uInt16 nPos, sal_uInt16 nCount )
                      nMove * sizeof(Point) );
             memmove( &pFlagAry[nPos], &pFlagAry[nPos+nCount], nMove );
         }
-        std::fill(pPointAry + (nPoints - nCount), pPointAry + nPoints, Point());
+        std::fill(pPointAry.get() + (nPoints - nCount), pPointAry.get() + nPoints, Point());
         memset( &pFlagAry [nPoints - nCount], 0, nCount );
         nPoints = nPoints - nCount;
     }
@@ -209,15 +209,9 @@ XPolygon::XPolygon( sal_uInt16 nSize )
 {
 }
 
-XPolygon::XPolygon( const XPolygon& rXPoly )
-    : pImpXPolygon(rXPoly.pImpXPolygon)
-{
-}
+XPolygon::XPolygon( const XPolygon& ) = default;
 
-XPolygon::XPolygon( XPolygon&& rXPoly )
-    : pImpXPolygon(std::move(rXPoly.pImpXPolygon))
-{
-}
+XPolygon::XPolygon( XPolygon&& ) = default;
 
 /// create a XPolygon out of a standard polygon
 XPolygon::XPolygon( const tools::Polygon& rPoly )
@@ -333,9 +327,7 @@ XPolygon::XPolygon(const Point& rCenter, long nRx, long nRy,
     pImpXPolygon->nPoints = nPos + 1;
 }
 
-XPolygon::~XPolygon()
-{
-}
+XPolygon::~XPolygon() = default;
 
 void XPolygon::SetPointCount( sal_uInt16 nPoints )
 {
@@ -348,7 +340,7 @@ void XPolygon::SetPointCount( sal_uInt16 nPoints )
     {
         sal_uInt16 nSize = pImpXPolygon->nPoints - nPoints;
         std::fill(
-            pImpXPolygon->pPointAry + nPoints, pImpXPolygon->pPointAry + nPoints + nSize, Point());
+            pImpXPolygon->pPointAry.get() + nPoints, pImpXPolygon->pPointAry.get() + nPoints + nSize, Point());
         memset( &pImpXPolygon->pFlagAry [nPoints], 0, nSize );
     }
     pImpXPolygon->nPoints = nPoints;
@@ -383,7 +375,7 @@ void XPolygon::Insert( sal_uInt16 nPos, const XPolygon& rXPoly )
     pImpXPolygon->InsertSpace( nPos, nPoints );
 
     memcpy( &(pImpXPolygon->pPointAry[nPos]),
-            rXPoly.pImpXPolygon->pPointAry,
+            rXPoly.pImpXPolygon->pPointAry.get(),
             nPoints*sizeof( Point ) );
     memcpy( &(pImpXPolygon->pFlagAry[nPos]),
             rXPoly.pImpXPolygon->pFlagAry.get(),
@@ -455,17 +447,9 @@ Point& XPolygon::operator[]( sal_uInt16 nPos )
     return pImpXPolygon->pPointAry[nPos];
 }
 
-XPolygon& XPolygon::operator=( const XPolygon& rXPoly )
-{
-    pImpXPolygon = rXPoly.pImpXPolygon;
-    return *this;
-}
+XPolygon& XPolygon::operator=( const XPolygon& ) = default;
 
-XPolygon& XPolygon::operator=( XPolygon&& rXPoly )
-{
-    pImpXPolygon = std::move(rXPoly.pImpXPolygon);
-    return *this;
-}
+XPolygon& XPolygon::operator=( XPolygon&& ) = default;
 
 bool XPolygon::operator==( const XPolygon& rXPoly ) const
 {
@@ -516,7 +500,7 @@ double XPolygon::CalcDistance(sal_uInt16 nP1, sal_uInt16 nP2)
 
 void XPolygon::SubdivideBezier(sal_uInt16 nPos, bool bCalcFirst, double fT)
 {
-    Point*  pPoints = pImpXPolygon->pPointAry;
+    Point*  pPoints = pImpXPolygon->pPointAry.get();
     double  fT2 = fT * fT;
     double  fT3 = fT * fT2;
     double  fU = 1.0 - fT;
@@ -565,7 +549,7 @@ void XPolygon::GenBezArc(const Point& rCenter, long nRx, long nRy,
                          long nXHdl, long nYHdl, sal_uInt16 nStart, sal_uInt16 nEnd,
                          sal_uInt16 nQuad, sal_uInt16 nFirst)
 {
-    Point* pPoints = pImpXPolygon->pPointAry;
+    Point* pPoints = pImpXPolygon->pPointAry.get();
     pPoints[nFirst  ] = rCenter;
     pPoints[nFirst+3] = rCenter;
 
@@ -647,7 +631,7 @@ void XPolygon::CalcSmoothJoin(sal_uInt16 nCenter, sal_uInt16 nDrag, sal_uInt16 n
         nDrag = nPnt;
         nPnt = nTmp;
     }
-    Point*  pPoints = pImpXPolygon->pPointAry;
+    Point*  pPoints = pImpXPolygon->pPointAry.get();
     Point   aDiff   = pPoints[nDrag] - pPoints[nCenter];
     double  fDiv    = CalcDistance(nCenter, nDrag);
 
@@ -703,7 +687,7 @@ void XPolygon::PointsToBezier(sal_uInt16 nFirst)
     double  fX0, fY0, fX1, fY1, fX2, fY2, fX3, fY3;
     double  fTx1, fTx2, fTy1, fTy2;
     double  fT1, fU1, fT2, fU2, fV;
-    Point*  pPoints = pImpXPolygon->pPointAry;
+    Point*  pPoints = pImpXPolygon->pPointAry.get();
 
     if ( nFirst > pImpXPolygon->nPoints - 4 || IsControl(nFirst) ||
          IsControl(nFirst+1) || IsControl(nFirst+2) || IsControl(nFirst+3) )
@@ -842,7 +826,7 @@ basegfx::B2DPolygon XPolygon::getB2DPolygon() const
     // #i74631# use tools Polygon class for conversion to not have the code doubled
     // here. This needs one more conversion but avoids different convertors in
     // the long run
-    const tools::Polygon aSource(GetPointCount(), pImpXPolygon->pPointAry, pImpXPolygon->pFlagAry.get());
+    const tools::Polygon aSource(GetPointCount(), pImpXPolygon->pPointAry.get(), pImpXPolygon->pFlagAry.get());
 
     return aSource.getB2DPolygon();
 }
@@ -866,30 +850,11 @@ XPolygon::XPolygon(const basegfx::B2DPolygon& rPolygon)
 }
 
 // XPolyPolygon
+XPolyPolygon::XPolyPolygon() = default;
 
-ImpXPolyPolygon::ImpXPolyPolygon( const ImpXPolyPolygon& rImpXPolyPoly )
-    : aXPolyList( rImpXPolyPoly.aXPolyList )
-{
-}
+XPolyPolygon::XPolyPolygon( const XPolyPolygon& ) = default;
 
-ImpXPolyPolygon::~ImpXPolyPolygon()
-{
-}
-
-XPolyPolygon::XPolyPolygon()
-    : pImpXPolyPolygon()
-{
-}
-
-XPolyPolygon::XPolyPolygon( const XPolyPolygon& rXPolyPoly )
-    : pImpXPolyPolygon( rXPolyPoly.pImpXPolyPolygon )
-{
-}
-
-XPolyPolygon::XPolyPolygon( XPolyPolygon&& rXPolyPoly )
-    : pImpXPolyPolygon( std::move(rXPolyPoly.pImpXPolyPolygon) )
-{
-}
+XPolyPolygon::XPolyPolygon( XPolyPolygon&& ) = default;
 
 XPolyPolygon::XPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPolygon)
     : pImpXPolyPolygon()
@@ -901,9 +866,7 @@ XPolyPolygon::XPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPolygon)
     }
 }
 
-XPolyPolygon::~XPolyPolygon()
-{
-}
+XPolyPolygon::~XPolyPolygon() = default;
 
 void XPolyPolygon::Insert( XPolygon&& rXPoly )
 {
@@ -958,17 +921,9 @@ XPolygon& XPolyPolygon::operator[]( sal_uInt16 nPos )
     return pImpXPolyPolygon->aXPolyList[ nPos ];
 }
 
-XPolyPolygon& XPolyPolygon::operator=( const XPolyPolygon& rXPolyPoly )
-{
-    pImpXPolyPolygon = rXPolyPoly.pImpXPolyPolygon;
-    return *this;
-}
+XPolyPolygon& XPolyPolygon::operator=( const XPolyPolygon& ) = default;
 
-XPolyPolygon& XPolyPolygon::operator=( XPolyPolygon&& rXPolyPoly )
-{
-    pImpXPolyPolygon = std::move(rXPolyPoly.pImpXPolyPolygon);
-    return *this;
-}
+XPolyPolygon& XPolyPolygon::operator=( XPolyPolygon&& ) = default;
 
 /**
  * Distort a polygon by scaling its coordinates relative to a reference

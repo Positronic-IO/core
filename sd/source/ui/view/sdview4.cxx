@@ -54,7 +54,6 @@
 #include <sdpage.hxx>
 #include <view/SlideSorterView.hxx>
 #include <undo/undoobjects.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
@@ -112,12 +111,15 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
         if( bIsGraphic )
         {
             // We fill the object with the Bitmap
-            pNewGrafObj = static_cast<SdrGrafObj*>( pPickObj->Clone() );
+            pNewGrafObj = static_cast<SdrGrafObj*>( pPickObj->CloneSdrObject(pPickObj->getSdrModelFromSdrObject()) );
             pNewGrafObj->SetGraphic(rGraphic);
         }
         else
         {
-            pNewGrafObj = new SdrGrafObj( rGraphic, pPickObj->GetLogicRect() );
+            pNewGrafObj = new SdrGrafObj(
+                getSdrModelFromSdrView(),
+                rGraphic,
+                pPickObj->GetLogicRect());
             pNewGrafObj->SetEmptyPresObj(true);
         }
 
@@ -137,7 +139,7 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
         }
 
         if (pImageMap)
-            pNewGrafObj->AppendUserData(new SdIMapInfo(*pImageMap));
+            pNewGrafObj->AppendUserData(std::unique_ptr<SdrObjUserData>(new SdIMapInfo(*pImageMap)));
 
         ReplaceObjectAtView(pPickObj, *pPV, pNewGrafObj); // maybe ReplaceObjectAtView
 
@@ -190,7 +192,10 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
                                                 MapMode( MapUnit::Map100thMM ) );
         }
 
-        pNewGrafObj = new SdrGrafObj( rGraphic, ::tools::Rectangle( rPos, aSize ) );
+        pNewGrafObj = new SdrGrafObj(
+            getSdrModelFromSdrView(),
+            rGraphic,
+            ::tools::Rectangle(rPos, aSize));
         SdrPage* pPage = pPV->GetPage();
         Size aPageSize( pPage->GetSize() );
         aPageSize.AdjustWidth( -(pPage->GetLeftBorder() + pPage->GetRightBorder()) );
@@ -219,7 +224,7 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
         {
             // replace object
             if (pImageMap)
-                pNewGrafObj->AppendUserData(new SdIMapInfo(*pImageMap));
+                pNewGrafObj->AppendUserData(std::unique_ptr<SdrObjUserData>(new SdIMapInfo(*pImageMap)));
 
             ::tools::Rectangle aPickObjRect(pPickObj->GetCurrentBoundRect());
             Size aPickObjSize(aPickObjRect.GetSize());
@@ -262,7 +267,7 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
             InsertObjectAtView(pNewGrafObj, *pPV, nOptions);
 
             if( pImageMap )
-                pNewGrafObj->AppendUserData(new SdIMapInfo(*pImageMap));
+                pNewGrafObj->AppendUserData(std::unique_ptr<SdrObjUserData>(new SdIMapInfo(*pImageMap)));
         }
     }
 
@@ -313,7 +318,7 @@ SdrMediaObj* View::InsertMediaObj( const OUString& rMediaURL, const OUString& rM
 
     if( mnAction == DND_ACTION_LINK && pPickObj && pPV && dynamic_cast< SdrMediaObj *>( pPickObj ) !=  nullptr )
     {
-        pNewMediaObj = static_cast< SdrMediaObj* >( pPickObj->Clone() );
+        pNewMediaObj = static_cast< SdrMediaObj* >( pPickObj->CloneSdrObject(pPickObj->getSdrModelFromSdrObject()) );
         pNewMediaObj->setURL( rMediaURL, ""/*TODO?*/, rMimeType );
 
         BegUndo(SdResId(STR_UNDO_DRAGDROP));
@@ -330,7 +335,9 @@ SdrMediaObj* View::InsertMediaObj( const OUString& rMediaURL, const OUString& rM
             pUserCall = pPickObj->GetUserCall(); // ReplaceObjectAtView can free pPickObj
         }
 
-        pNewMediaObj = new SdrMediaObj( aRect );
+        pNewMediaObj = new SdrMediaObj(
+            getSdrModelFromSdrView(),
+            aRect);
 
         bool bIsPres = false;
         if( pPickObj )
@@ -377,8 +384,7 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
     if( !mpViewSh )
         return;
 
-    vcl::Window* pWindow = mpViewSh->GetActiveWindow();
-    SfxErrorContext aEc( ERRCTX_ERROR, pWindow ? pWindow->GetFrameWeld() : nullptr, RID_SO_ERRCTX );
+    SfxErrorContext aEc( ERRCTX_ERROR, mpViewSh->GetFrameWeld(), RID_SO_ERRCTX );
     ErrCode nError = ERRCODE_NONE;
 
     ::std::vector< OUString >::const_iterator aIter( maDropFileVector.begin() );
@@ -531,7 +537,11 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
 
                             aRect = ::tools::Rectangle( maDropPos, aSize );
 
-                            SdrOle2Obj* pOleObj = new SdrOle2Obj( svt::EmbeddedObjectRef( xObj, nAspect ), aName, aRect );
+                            SdrOle2Obj* pOleObj = new SdrOle2Obj(
+                                getSdrModelFromSdrView(),
+                                svt::EmbeddedObjectRef(xObj, nAspect),
+                                aName,
+                                aRect);
                             SdrInsertFlags nOptions = SdrInsertFlags::SETDEFLAYER;
 
                             if (mpViewSh != nullptr)

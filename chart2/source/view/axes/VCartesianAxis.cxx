@@ -74,6 +74,53 @@ VCartesianAxis::~VCartesianAxis()
     m_pPosHelper = nullptr;
 }
 
+void lcl_ResizeTextShapeToFitAvailableSpace( Reference< drawing::XShape > const & xShape2DText,
+                                             const AxisLabelProperties& rAxisLabelProperties,
+                                             const OUString& rLabel,
+                                             const tNameSequence& rPropNames,
+                                             const tAnySequence& rPropValues )
+{
+    uno::Reference< text::XTextRange > xTextRange( xShape2DText, uno::UNO_QUERY );
+
+    if( !xTextRange.is() )
+        return;
+
+    const sal_Int32 nFullHeight = rAxisLabelProperties.m_aFontReferenceSize.Height;
+
+    if( !nFullHeight || !rLabel.getLength() )
+        return;
+
+    sal_Int32 nMaxLabelsHeight = nFullHeight - rAxisLabelProperties.m_aMaximumSpaceForLabels.Height - rAxisLabelProperties.m_aMaximumSpaceForLabels.Y;
+    const sal_Int32 nAvgCharWidth = xShape2DText->getSize().Width / rLabel.getLength();
+    const sal_Int32 nTextSize = AbstractShapeFactory::getSizeAfterRotation( xShape2DText,
+                                            rAxisLabelProperties.fRotationAngleDegree ).Height;
+
+    if( !nAvgCharWidth )
+        return;
+
+    const OUString sDots = "...";
+    const sal_Int32 nCharsToRemove = ( nTextSize - nMaxLabelsHeight ) / nAvgCharWidth + 1;
+    sal_Int32 nNewLen = rLabel.getLength() - nCharsToRemove - sDots.getLength();
+    // Prevent from showing only dots
+    if (nNewLen < 0)
+        nNewLen = ( rLabel.getLength() >= sDots.getLength() ) ? sDots.getLength() : rLabel.getLength();
+
+    bool bCrop = nCharsToRemove > 0;
+    if( bCrop )
+    {
+        OUString aNewLabel = rLabel.copy( 0, nNewLen );
+        if( nNewLen > sDots.getLength() )
+            aNewLabel += sDots;
+        xTextRange->setString( aNewLabel );
+
+        uno::Reference< beans::XPropertySet > xProp( xTextRange, uno::UNO_QUERY );
+        if( xProp.is() )
+        {
+            PropertyMapper::setMultiProperties( rPropNames, rPropValues, xProp );
+        }
+    }
+}
+
 Reference< drawing::XShape > createSingleLabel(
             const Reference< lang::XMultiServiceFactory>& xShapeFactory
           , const Reference< drawing::XShapes >& xTarget
@@ -95,6 +142,9 @@ Reference< drawing::XShape > createSingleLabel(
 
     Reference< drawing::XShape > xShape2DText = AbstractShapeFactory::getOrCreateShapeFactory(xShapeFactory)
                     ->createText( xTarget, aLabel, rPropNames, rPropValues, aATransformation );
+
+    if( rAxisProperties.m_bLimitSpaceForLabels )
+        lcl_ResizeTextShapeToFitAvailableSpace(xShape2DText, rAxisLabelProperties, aLabel, rPropNames, rPropValues);
 
     LabelPositionHelper::correctPositionForRotation( xShape2DText
         , rAxisProperties.maLabelAlignment.meAlignment, rAxisLabelProperties.fRotationAngleDegree, rAxisProperties.m_bComplexCategories );
@@ -361,7 +411,7 @@ bool lcl_hasWordBreak( const Reference<drawing::XShape>& xShape )
 
 OUString getTextLabelString(
     const FixedNumberFormatter& rFixedNumberFormatter, const uno::Sequence<OUString>* pCategories,
-    const TickInfo* pTickInfo, bool bComplexCat, sal_Int32& rExtraColor, bool& rHasExtraColor )
+    const TickInfo* pTickInfo, bool bComplexCat, Color& rExtraColor, bool& rHasExtraColor )
 {
     if (pCategories)
     {
@@ -532,14 +582,11 @@ void VCartesianAxis::createAllTickInfosFromComplexCategories( TickInfoArraysType
                 continue;
 
             sal_Int32 nCatIndex = 0;
-            std::vector<ComplexCategory>::const_iterator aIt = pComplexCategories->begin();
-            std::vector<ComplexCategory>::const_iterator aEnd = pComplexCategories->end();
 
-            for(;aIt!=aEnd;++aIt)
+            for (auto const& complexCategory : *pComplexCategories)
             {
                 TickInfo aTickInfo(nullptr);
-                ComplexCategory aCat(*aIt);
-                sal_Int32 nCount = aCat.Count;
+                sal_Int32 nCount = complexCategory.Count;
                 if( nCatIndex + 1.0 + nCount >= m_aScale.Maximum )
                 {
                     nCount = static_cast<sal_Int32>(m_aScale.Maximum - 1.0 - nCatIndex);
@@ -548,7 +595,7 @@ void VCartesianAxis::createAllTickInfosFromComplexCategories( TickInfoArraysType
                 }
                 aTickInfo.fScaledTickValue = nCatIndex + 1.0 + nCount/2.0;
                 aTickInfo.nFactorForLimitedTextWidth = nCount;
-                aTickInfo.aText = aCat.Text;
+                aTickInfo.aText = complexCategory.Text;
                 aTickInfoVector.push_back(aTickInfo);
                 nCatIndex += nCount;
                 if( nCatIndex + 1.0 >= m_aScale.Maximum )
@@ -570,15 +617,12 @@ void VCartesianAxis::createAllTickInfosFromComplexCategories( TickInfoArraysType
             sal_Int32 nCatIndex = 0;
             if (pComplexCategories)
             {
-                std::vector<ComplexCategory>::const_iterator aIt = pComplexCategories->begin();
-                std::vector<ComplexCategory>::const_iterator aEnd = pComplexCategories->end();
-                for(;aIt!=aEnd;++aIt)
+                for (auto const& complexCategory : *pComplexCategories)
                 {
                     TickInfo aTickInfo(nullptr);
-                    ComplexCategory aCat(*aIt);
                     aTickInfo.fScaledTickValue = nCatIndex + 1.0;
                     aTickInfoVector.push_back(aTickInfo);
-                    nCatIndex += aCat.Count;
+                    nCatIndex += complexCategory.Count;
                     if( nCatIndex + 1.0 > m_aScale.Maximum )
                         break;
                 }
@@ -700,7 +744,7 @@ bool VCartesianAxis::createTextShapes(
     getAxisLabelProperties(aPropNames, aPropValues, m_aAxisProperties, rAxisLabelProperties, nLimitedSpaceForText, bLimitedHeight);
 
     uno::Any* pColorAny = PropertyMapper::getValuePointer(aPropValues,aPropNames,"CharColor");
-    sal_Int32 nColor = COL_AUTO.GetColor();
+    Color nColor = COL_AUTO;
     if(pColorAny)
         *pColorAny >>= nColor;
 
@@ -764,7 +808,7 @@ bool VCartesianAxis::createTextShapes(
         }
 
         bool bHasExtraColor=false;
-        sal_Int32 nExtraColor=0;
+        Color nExtraColor;
 
         OUString aLabel = getTextLabelString(
             aFixedNumberFormatter, pCategories, pTickInfo, isComplexCategoryAxis(),
@@ -888,7 +932,7 @@ bool VCartesianAxis::createTextShapesSimple(
     getAxisLabelProperties(aPropNames, aPropValues, m_aAxisProperties, rAxisLabelProperties, -1, bLimitedHeight);
 
     uno::Any* pColorAny = PropertyMapper::getValuePointer(aPropValues,aPropNames,"CharColor");
-    sal_Int32 nColor = COL_AUTO.GetColor();
+    Color nColor = COL_AUTO;
     if(pColorAny)
         *pColorAny >>= nColor;
 
@@ -930,7 +974,7 @@ bool VCartesianAxis::createTextShapesSimple(
         }
 
         bool bHasExtraColor=false;
-        sal_Int32 nExtraColor=0;
+        Color nExtraColor;
 
         OUString aLabel = getTextLabelString(
             aFixedNumberFormatter, pCategories, pTickInfo, isComplexCategoryAxis(),
@@ -1642,20 +1686,16 @@ void VCartesianAxis::updatePositions()
     //update positions of all existing text shapes
     pTickFactory2D->updateScreenValues( m_aAllTickInfos );
 
-    TickInfoArraysType::iterator aDepthIter = m_aAllTickInfos.begin();
-    const TickInfoArraysType::const_iterator aDepthEnd  = m_aAllTickInfos.end();
-    for( sal_Int32 nDepth=0; aDepthIter != aDepthEnd; ++aDepthIter, nDepth++ )
+    sal_Int32 nDepth=0;
+    for (auto const& tickInfos : m_aAllTickInfos)
     {
-        TickInfoArrayType::iterator aTickIter = aDepthIter->begin();
-        const TickInfoArrayType::const_iterator aTickEnd  = aDepthIter->end();
-        for( ; aTickIter != aTickEnd; ++aTickIter )
+        for (auto const& tickInfo : tickInfos)
         {
-            TickInfo& rTickInfo = (*aTickIter);
-            Reference< drawing::XShape > xShape2DText( rTickInfo.xTextShape );
+            Reference< drawing::XShape > xShape2DText(tickInfo.xTextShape);
             if( xShape2DText.is() )
             {
                 B2DVector aTextToTickDistance( pTickFactory2D->getDistanceAxisTickToText( m_aAxisProperties, true ) );
-                B2DVector aTickScreenPos2D( rTickInfo.aTickScreenPosition );
+                B2DVector aTickScreenPos2D(tickInfo.aTickScreenPosition);
                 aTickScreenPos2D += aTextToTickDistance;
                 awt::Point aAnchorScreenPosition2D(
                     static_cast<sal_Int32>(aTickScreenPos2D.getX())
@@ -1694,6 +1734,7 @@ void VCartesianAxis::updatePositions()
                     , m_aAxisProperties.maLabelAlignment.meAlignment, fRotationAngleDegree, m_aAxisProperties.m_bComplexCategories );
             }
         }
+        ++nDepth;
     }
 
     doStaggeringOfLabels( m_aAxisLabelProperties, pTickFactory2D );
@@ -1704,12 +1745,10 @@ void VCartesianAxis::createTickMarkLineShapes( TickInfoArrayType& rTickInfos, co
     sal_Int32 nPointCount = rTickInfos.size();
     drawing::PointSequenceSequence aPoints(2*nPointCount);
 
-    TickInfoArrayType::const_iterator       aTickIter = rTickInfos.begin();
-    const TickInfoArrayType::const_iterator aTickEnd  = rTickInfos.end();
     sal_Int32 nN = 0;
-    for( ; aTickIter != aTickEnd; ++aTickIter )
+    for (auto const& tickInfo : rTickInfos)
     {
-        if( !(*aTickIter).bPaintIt )
+        if( !tickInfo.bPaintIt )
             continue;
 
         bool bTicksAtLabels = ( m_aAxisProperties.m_eTickmarkPos != css::chart::ChartAxisMarkPosition_AT_AXIS );
@@ -1718,11 +1757,11 @@ void VCartesianAxis::createTickMarkLineShapes( TickInfoArrayType& rTickInfos, co
             fInnerDirectionSign *= -1.0;
         bTicksAtLabels = bTicksAtLabels || bOnlyAtLabels;
         //add ticks at labels:
-        rTickFactory2D.addPointSequenceForTickLine( aPoints, nN++, (*aTickIter).fScaledTickValue
+        rTickFactory2D.addPointSequenceForTickLine( aPoints, nN++, tickInfo.fScaledTickValue
             , fInnerDirectionSign , rTickmarkProperties, bTicksAtLabels );
         //add ticks at axis (without labels):
         if( !bOnlyAtLabels && m_aAxisProperties.m_eTickmarkPos == css::chart::ChartAxisMarkPosition_AT_LABELS_AND_AXIS )
-            rTickFactory2D.addPointSequenceForTickLine( aPoints, nN++, (*aTickIter).fScaledTickValue
+            rTickFactory2D.addPointSequenceForTickLine( aPoints, nN++, tickInfo.fScaledTickValue
                 , m_aAxisProperties.maLabelAlignment.mfInnerTickDirection, rTickmarkProperties, !bTicksAtLabels );
     }
     aPoints.realloc(nN);
@@ -1789,10 +1828,11 @@ void VCartesianAxis::createShapes()
             }
             TickInfoArraysType& rAllTickInfos = m_aScale.ShiftedCategoryPosition ? aUnshiftedTickInfos : m_aAllTickInfos;
 
+            if (rAllTickInfos.empty())
+                return;
+
             TickInfoArraysType::iterator aDepthIter             = rAllTickInfos.begin();
             const TickInfoArraysType::const_iterator aDepthEnd  = rAllTickInfos.end();
-            if(aDepthIter == aDepthEnd)//no tickmarks at all
-                return;
 
             sal_Int32 nTickmarkPropertiesCount = m_aAxisProperties.m_aTickmarkPropertiesList.size();
             for( sal_Int32 nDepth=0; aDepthIter != aDepthEnd && nDepth < nTickmarkPropertiesCount; ++aDepthIter, nDepth++ )

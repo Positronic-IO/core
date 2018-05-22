@@ -30,7 +30,6 @@
 #include <DrawDocShell.hxx>
 #include <sdpage.hxx>
 #include <glob.hxx>
-#include <strings.hrc>
 #include <app.hrc>
 
 #include <DrawViewShell.hxx>
@@ -39,7 +38,6 @@
 #include "PreviewValueSet.hxx"
 #include <ViewShellBase.hxx>
 #include <sfx2/objface.hxx>
-#include <sdresid.hxx>
 #include <drawview.hxx>
 #include <vcl/image.hxx>
 #include <vcl/floatwin.hxx>
@@ -205,7 +203,7 @@ void MasterPagesSelector::Command (const CommandEvent& rEvent)
         {
             // Use the currently selected item and show the popup menu in its
             // center.
-            const sal_uInt16 nIndex = PreviewValueSet::GetSelectItemId();
+            const sal_uInt16 nIndex = PreviewValueSet::GetSelectedItemId();
             if (nIndex > 0)
             {
                 // The position of the upper left corner of the context menu is
@@ -305,7 +303,7 @@ void MasterPagesSelector::ExecuteCommand(const OString &rIdent)
             SfxDispatcher* pDispatcher = pViewFrame->GetDispatcher();
             if (pDispatcher != nullptr)
             {
-                sal_uInt16 nIndex = PreviewValueSet::GetSelectItemId();
+                sal_uInt16 nIndex = PreviewValueSet::GetSelectedItemId();
                 pDispatcher->Execute(SID_MASTERPAGE, SfxCallMode::SYNCHRON);
                 PreviewValueSet::SelectItem (nIndex);
                 mrBase.GetDrawController().setCurrentPage(xSelectedMaster);
@@ -324,7 +322,7 @@ SdPage* MasterPagesSelector::GetSelectedMasterPage()
     const ::osl::MutexGuard aGuard (maMutex);
 
     SdPage* pMasterPage = nullptr;
-    sal_uInt16 nIndex = PreviewValueSet::GetSelectItemId();
+    sal_uInt16 nIndex = PreviewValueSet::GetSelectedItemId();
     UserData* pData = GetUserData(nIndex);
     if (pData != nullptr)
     {
@@ -462,10 +460,6 @@ void MasterPagesSelector::SetUserData (int nIndex, UserData* pData)
             delete pOldData;
         PreviewValueSet::SetItemData(static_cast<sal_uInt16>(nIndex), pData);
     }
-}
-
-void MasterPagesSelector::UpdateSelection()
-{
 }
 
 void MasterPagesSelector::SetItem (

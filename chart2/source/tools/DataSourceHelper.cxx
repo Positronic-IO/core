@@ -34,6 +34,7 @@
 
 #include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
+#include <tools/diagnose_ex.h>
 
 #include <iterator>
 
@@ -107,9 +108,9 @@ void lcl_addErrorBarRanges(
             }
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -269,12 +270,11 @@ uno::Sequence< OUString > DataSourceHelper::getUsedDataRanges(
             lcl_addRanges( aResult, xCategories );
 
         std::vector< uno::Reference< XDataSeries > > aSeriesVector( DiagramHelper::getDataSeriesFromDiagram( xDiagram ) );
-        for( std::vector< uno::Reference< XDataSeries > >::const_iterator aSeriesIt( aSeriesVector.begin() )
-                 ; aSeriesIt != aSeriesVector.end(); ++aSeriesIt )
+        for (auto const& series : aSeriesVector)
         {
-            uno::Reference< data::XDataSource > xDataSource( *aSeriesIt, uno::UNO_QUERY );
+            uno::Reference< data::XDataSource > xDataSource(series, uno::UNO_QUERY);
             lcl_addDataSourceRanges( aResult, xDataSource );
-            lcl_addErrorBarRanges( aResult, *aSeriesIt );
+            lcl_addErrorBarRanges( aResult, series );
         }
     }
 
@@ -304,10 +304,9 @@ uno::Reference< chart2::data::XDataSource > DataSourceHelper::getUsedData(
         aResult.push_back( xCategories );
 
     std::vector< uno::Reference< XDataSeries > > aSeriesVector( ChartModelHelper::getDataSeries( xChartModel ) );
-    for( std::vector< uno::Reference< XDataSeries > >::const_iterator aSeriesIt( aSeriesVector.begin() )
-        ; aSeriesIt != aSeriesVector.end(); ++aSeriesIt )
+    for (auto const& series : aSeriesVector)
     {
-        uno::Reference< data::XDataSource > xDataSource( *aSeriesIt, uno::UNO_QUERY );
+        uno::Reference< data::XDataSource > xDataSource(series, uno::UNO_QUERY);
         if( !xDataSource.is() )
             continue;
         uno::Sequence< uno::Reference< data::XLabeledDataSequence > > aDataSequences( xDataSource->getDataSequences() );
@@ -330,10 +329,9 @@ uno::Reference< chart2::data::XDataSource > DataSourceHelper::getUsedData(
         aResult.push_back( xCategories );
 
     std::vector< uno::Reference< XDataSeries > > aSeriesVector( ChartModelHelper::getDataSeries( rModel ) );
-    for( std::vector< uno::Reference< XDataSeries > >::const_iterator aSeriesIt( aSeriesVector.begin() )
-        ; aSeriesIt != aSeriesVector.end(); ++aSeriesIt )
+    for (auto const& series : aSeriesVector)
     {
-        uno::Reference< data::XDataSource > xDataSource( *aSeriesIt, uno::UNO_QUERY );
+        uno::Reference< data::XDataSource > xDataSource(series, uno::UNO_QUERY);
         if( !xDataSource.is() )
             continue;
         uno::Sequence< uno::Reference< data::XLabeledDataSequence > > aDataSequences( xDataSource->getDataSequences() );
@@ -374,9 +372,9 @@ bool DataSourceHelper::detectRangeSegmentation(
                     DiagramHelper::getCategoriesFromDiagram( xChartDocument->getFirstDiagram() ));
         rOutHasCategories = xCategories.is();
     }
-    catch( uno::Exception & ex )
+    catch( uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return bSomethingDetected;
 }
@@ -417,9 +415,9 @@ bool DataSourceHelper::allArgumentsForRectRangeDetected(
             }
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return (bHasCellRangeRepresentation && bHasDataRowSource && bHasFirstCellAsLabel);

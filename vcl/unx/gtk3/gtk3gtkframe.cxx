@@ -59,7 +59,6 @@
 
 #include <dlfcn.h>
 #include <vcl/salbtype.hxx>
-#include <impbmp.hxx>
 #include <window.h>
 #include <strings.hrc>
 #include <bitmaps.hlst>
@@ -74,6 +73,8 @@
 #if OSL_DEBUG_LEVEL > 1
 #  include <cstdio>
 #endif
+
+#include <i18nlangtag/mslangid.hxx>
 
 #include <cstdlib>
 #include <cmath>
@@ -108,7 +109,7 @@ int GtkSalFrame::m_nFloats = 0;
 
 static GDBusConnection* pSessionBus = nullptr;
 
-static sal_uInt16 GetKeyModCode( guint state )
+sal_uInt16 GtkSalFrame::GetKeyModCode( guint state )
 {
     sal_uInt16 nCode = 0;
     if( state & GDK_SHIFT_MASK )
@@ -122,7 +123,7 @@ static sal_uInt16 GetKeyModCode( guint state )
     return nCode;
 }
 
-static sal_uInt16 GetMouseModCode( guint state )
+sal_uInt16 GtkSalFrame::GetMouseModCode( guint state )
 {
     sal_uInt16 nCode = GetKeyModCode( state );
     if( state & GDK_BUTTON1_MASK )
@@ -135,7 +136,7 @@ static sal_uInt16 GetMouseModCode( guint state )
     return nCode;
 }
 
-static sal_uInt16 GetKeyCode( guint keyval )
+sal_uInt16 GtkSalFrame::GetKeyCode(guint keyval)
 {
     sal_uInt16 nCode = 0;
     if( keyval >= GDK_KEY_0 && keyval <= GDK_KEY_9 )
@@ -331,7 +332,7 @@ static sal_uInt16 GetKeyCode( guint keyval )
     return nCode;
 }
 
-static guint GetKeyValFor(GdkKeymap* pKeyMap, guint16 hardware_keycode, guint8 group)
+guint GtkSalFrame::GetKeyValFor(GdkKeymap* pKeyMap, guint16 hardware_keycode, guint8 group)
 {
     guint updated_keyval = 0;
     gdk_keymap_translate_keyboard_state(pKeyMap, hardware_keycode,
@@ -384,8 +385,7 @@ bool GtkSalFrame::doKeyCallback( guint state,
     vcl::DeletionListener aDel( this );
 
 #if OSL_DEBUG_LEVEL > 0
-    char* pKeyDebug = nullptr;
-    pKeyDebug = getenv("VCL_GTK3_PAINTDEBUG");
+    const char* pKeyDebug = getenv("VCL_GTK3_PAINTDEBUG");
 
     if (pKeyDebug && *pKeyDebug == '1')
     {
@@ -412,8 +412,6 @@ bool GtkSalFrame::doKeyCallback( guint state,
             }
         }
     }
-
-    free(pKeyDebug);
 #endif
 
     /*
@@ -488,6 +486,7 @@ bool GtkSalFrame::doKeyCallback( guint state,
 
 GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
+    , m_pHeaderBar(nullptr)
     , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
@@ -500,6 +499,7 @@ GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
 
 GtkSalFrame::GtkSalFrame( SystemParentData* pSysData )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
+    , m_pHeaderBar(nullptr)
     , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
@@ -1249,6 +1249,27 @@ void GtkSalFrame::Init( SalFrame* pParent, SalFrameStyleFlags nStyle )
         gtk_window_set_type_hint( GTK_WINDOW(m_pWindow), eType );
         gtk_window_set_gravity( GTK_WINDOW(m_pWindow), GDK_GRAVITY_STATIC );
         gtk_window_set_resizable( GTK_WINDOW(m_pWindow), bool(nStyle & SalFrameStyleFlags::SIZEABLE) );
+
+#if defined(GDK_WINDOWING_WAYLAND)
+        //rhbz#1392145 under wayland/csd if we've overridden the default widget direction in order to set LibreOffice's
+        //UI to the configured ui language but the system ui locale is a different text direction, then the toplevel
+        //built-in close button of the titlebar follows the overridden direction rather than continue in the same
+        //direction as every other titlebar on the user's desktop. So if they don't match set an explicit
+        //header bar with the desired 'outside' direction
+        if ((eType == GDK_WINDOW_TYPE_HINT_NORMAL || eType == GDK_WINDOW_TYPE_HINT_DIALOG) && GDK_IS_WAYLAND_DISPLAY(GtkSalFrame::getGdkDisplay()))
+        {
+            const bool bDesktopIsRTL = MsLangId::isRightToLeft(MsLangId::getSystemUILanguage());
+            const bool bAppIsRTL = gtk_widget_get_default_direction() == GTK_TEXT_DIR_RTL;
+            if (bDesktopIsRTL != bAppIsRTL)
+            {
+                m_pHeaderBar = GTK_HEADER_BAR(gtk_header_bar_new());
+                gtk_widget_set_direction(GTK_WIDGET(m_pHeaderBar), bDesktopIsRTL ? GTK_TEXT_DIR_RTL : GTK_TEXT_DIR_LTR);
+                gtk_header_bar_set_show_close_button(m_pHeaderBar, true);
+                gtk_window_set_titlebar(GTK_WINDOW(m_pWindow), GTK_WIDGET(m_pHeaderBar));
+                gtk_widget_show(GTK_WIDGET(m_pHeaderBar));
+            }
+        }
+#endif
     }
     else if( nStyle & SalFrameStyleFlags::FLOAT )
         gtk_window_set_type_hint( GTK_WINDOW(m_pWindow), GDK_WINDOW_TYPE_HINT_POPUP_MENU );
@@ -1340,7 +1361,12 @@ void GtkSalFrame::SetTitle( const OUString& rTitle )
 {
     m_aTitle = rTitle;
     if( m_pWindow && ! isChild() )
-        gtk_window_set_title( GTK_WINDOW(m_pWindow), OUStringToOString( rTitle, RTL_TEXTENCODING_UTF8 ).getStr() );
+    {
+        OString sTitle(OUStringToOString(rTitle, RTL_TEXTENCODING_UTF8));
+        gtk_window_set_title(GTK_WINDOW(m_pWindow), sTitle.getStr());
+        if (m_pHeaderBar)
+            gtk_header_bar_set_title(m_pHeaderBar, sTitle.getStr());
+    }
 }
 
 void GtkSalFrame::SetIcon( sal_uInt16 nIcon )
@@ -1797,7 +1823,7 @@ bool GtkSalFrame::GetWindowState( SalFrameState* pState )
     return true;
 }
 
-void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle *pSize )
+void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle const *pSize )
 {
     if( !m_pWindow )
         return;
@@ -3948,8 +3974,14 @@ void GtkSalFrame::IMHandler::signalIMPreeditChanged( GtkIMContext*, gpointer im_
         ExtTextInputAttr sal_attr = ExtTextInputAttr::NONE;
 
         pango_attr_iterator_range (iter, &start, &end);
-        if (end == G_MAXINT)
-            end = pText ? strlen (pText) : 0;
+        if (start == G_MAXINT || end == G_MAXINT)
+        {
+            auto len = pText ? g_utf8_strlen(pText, -1) : 0;
+            if (end == G_MAXINT)
+                end = len;
+            if (start == G_MAXINT)
+                start = len;
+        }
         if (end == start)
             continue;
 

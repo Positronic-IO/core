@@ -23,10 +23,9 @@
 #include <tools/wldcrd.hxx>
 #include <osl/file.hxx>
 #include <stringconstants.hxx>
-#include <core_resource.hxx>
-#include <strings.hrc>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/string.hxx>
+#include <svtools/miscopt.hxx>
 
 namespace dbaccess
 {
@@ -42,8 +41,9 @@ namespace dbaccess
         {
             if ( comphelper::string::getTokenCount(_sUrl, ':') >= 2 )
             {
-                _sHostname      = _sUrl.getToken(0,':');
-                _nPortNumber    = _sUrl.getToken(1,':').toInt32();
+                sal_Int32 nPos {0};
+                _sHostname   = _sUrl.getToken(0, ':', nPos);
+                _nPortNumber = _sUrl.getToken(0, ':', nPos).toInt32();
             }
         }
     }
@@ -84,21 +84,19 @@ OUString ODsnTypeCollection::cutPrefix(const OUString& _sURL) const
 {
     OUString sRet;
     OUString sOldPattern;
-    StringVector::const_iterator aIter = m_aDsnPrefixes.begin();
-    StringVector::const_iterator aEnd = m_aDsnPrefixes.end();
 
-    for(;aIter != aEnd;++aIter)
+    for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
-        WildCard aWildCard(*aIter);
-        if ( sOldPattern.getLength() < aIter->getLength() && aWildCard.Matches(_sURL) )
+        WildCard aWildCard(dsnPrefix);
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
         {
             // This relies on the fact that all patterns are of the form
             //   foo*
             // that is, the very concept of "prefix" applies.
-            OUString prefix(comphelper::string::stripEnd(*aIter, '*'));
+            OUString prefix(comphelper::string::stripEnd(dsnPrefix, '*'));
             OSL_ENSURE(prefix.getLength() <= _sURL.getLength(), "How can A match B when A shorter than B?");
             sRet = _sURL.copy(prefix.getLength());
-            sOldPattern = *aIter;
+            sOldPattern = dsnPrefix;
         }
     }
 
@@ -109,19 +107,17 @@ OUString ODsnTypeCollection::getPrefix(const OUString& _sURL) const
 {
     OUString sRet;
     OUString sOldPattern;
-    StringVector::const_iterator aIter = m_aDsnPrefixes.begin();
-    StringVector::const_iterator aEnd = m_aDsnPrefixes.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
-        WildCard aWildCard(*aIter);
-        if ( sOldPattern.getLength() < aIter->getLength() && aWildCard.Matches(_sURL) )
+        WildCard aWildCard(dsnPrefix);
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
         {
             // This relies on the fact that all patterns are of the form
             //   foo*
             // that is, the very concept of "prefix" applies.
-            sRet = comphelper::string::stripEnd(*aIter, '*');
+            sRet = comphelper::string::stripEnd(dsnPrefix, '*');
             OSL_ENSURE(sRet.getLength() <= _sURL.getLength(), "How can A match B when A shorter than B?");
-            sOldPattern = *aIter;
+            sOldPattern = dsnPrefix;
         }
     }
 
@@ -131,25 +127,23 @@ OUString ODsnTypeCollection::getPrefix(const OUString& _sURL) const
 bool ODsnTypeCollection::hasDriver( const sal_Char* _pAsciiPattern ) const
 {
     OUString sPrefix( getPrefix( OUString::createFromAscii( _pAsciiPattern ) ) );
-    return ( sPrefix.getLength() > 0 );
+    return !sPrefix.isEmpty();
 }
 
 bool ODsnTypeCollection::isConnectionUrlRequired(const OUString& _sURL) const
 {
     OUString sRet;
     OUString sOldPattern;
-    StringVector::const_iterator aIter = m_aDsnPrefixes.begin();
-    StringVector::const_iterator aEnd = m_aDsnPrefixes.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
-        WildCard aWildCard(*aIter);
-        if ( sOldPattern.getLength() < aIter->getLength() && aWildCard.Matches(_sURL) )
+        WildCard aWildCard(dsnPrefix);
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
         {
-            sRet = *aIter;
-            sOldPattern = *aIter;
+            sRet = dsnPrefix;
+            sOldPattern = dsnPrefix;
         }
     }
-    return sRet.getLength() > 0 && sRet[sRet.getLength()-1] == '*';
+    return !sRet.isEmpty() && sRet[sRet.getLength()-1] == '*';
 }
 
 OUString ODsnTypeCollection::getMediaType(const OUString& _sURL) const
@@ -180,7 +174,7 @@ OUString ODsnTypeCollection::getDatasourcePrefixFromMediaType(const OUString& _s
         }
     }
 
-    if ( !sURL.getLength() && sFallbackURL.getLength() )
+    if ( sURL.isEmpty() && !sFallbackURL.isEmpty() )
         sURL = sFallbackURL;
 
     sURL = comphelper::string::stripEnd(sURL, '*');
@@ -207,14 +201,15 @@ void ODsnTypeCollection::extractHostNamePort(const OUString& _rDsn,OUString& _sD
     if ( _rDsn.startsWithIgnoreAsciiCase("jdbc:oracle:thin:") )
     {
         lcl_extractHostAndPort(sUrl,_rsHostname,_nPortNumber);
-        if ( !_rsHostname.getLength() && comphelper::string::getTokenCount(sUrl, ':') == 2 )
+        const sal_Int32 nUrlTokens {comphelper::string::getTokenCount(sUrl, ':')};
+        if ( _rsHostname.isEmpty() && nUrlTokens == 2 )
         {
             _nPortNumber = -1;
             _rsHostname = sUrl.getToken(0,':');
         }
-        if ( _rsHostname.getLength() )
+        if ( !_rsHostname.isEmpty() )
             _rsHostname = _rsHostname.getToken(comphelper::string::getTokenCount(_rsHostname, '@') - 1, '@');
-        _sDatabaseName = sUrl.getToken(comphelper::string::getTokenCount(sUrl, ':') - 1, ':');
+        _sDatabaseName = sUrl.getToken(nUrlTokens - 1, ':');
     }
     else if ( _rDsn.startsWithIgnoreAsciiCase("sdbc:address:ldap:") )
     {
@@ -225,9 +220,10 @@ void ODsnTypeCollection::extractHostNamePort(const OUString& _rDsn,OUString& _sD
     {
         lcl_extractHostAndPort(sUrl,_rsHostname,_nPortNumber);
 
-        if ( _nPortNumber == -1 && !_rsHostname.getLength() && comphelper::string::getTokenCount(sUrl, '/') == 2 )
+        const sal_Int32 nUrlTokens {comphelper::string::getTokenCount(sUrl, '/')};
+        if ( _nPortNumber == -1 && _rsHostname.isEmpty() && nUrlTokens == 2 )
             _rsHostname = sUrl.getToken(0,'/');
-        _sDatabaseName = sUrl.getToken(comphelper::string::getTokenCount(sUrl, '/') - 1, '/');
+        _sDatabaseName = sUrl.getToken(nUrlTokens - 1, '/');
     }
     else if ( _rDsn.startsWithIgnoreAsciiCase("sdbc:ado:access:Provider=Microsoft.ACE.OLEDB.12.0;DATA SOURCE=")
            || _rDsn.startsWithIgnoreAsciiCase("sdbc:ado:access:PROVIDER=Microsoft.Jet.OLEDB.4.0;DATA SOURCE=") )
@@ -303,7 +299,14 @@ OUString ODsnTypeCollection::getEmbeddedDatabase() const
         }
     }
     if ( sEmbeddedDatabaseURL.isEmpty() )
-        sEmbeddedDatabaseURL = "sdbc:embedded:hsqldb";
+    {
+        SvtMiscOptions aMiscOptions;
+        if( aMiscOptions.IsExperimentalMode() )
+            sEmbeddedDatabaseURL = "sdbc:embedded:firebird";
+        else
+            sEmbeddedDatabaseURL = "sdbc:embedded:hsqldb";
+
+    }
 
     return sEmbeddedDatabaseURL;
 }
@@ -487,14 +490,12 @@ void ODsnTypeCollection::fillPageIds(const OUString& _sURL,std::vector<sal_Int16
 OUString ODsnTypeCollection::getType(const OUString& _sURL) const
 {
     OUString sOldPattern;
-    StringVector::const_iterator aIter = m_aDsnPrefixes.begin();
-    StringVector::const_iterator aEnd = m_aDsnPrefixes.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
-        WildCard aWildCard(*aIter);
-        if ( sOldPattern.getLength() < aIter->getLength() && aWildCard.Matches(_sURL) )
+        WildCard aWildCard(dsnPrefix);
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
         {
-            sOldPattern = *aIter;
+            sOldPattern = dsnPrefix;
         }
     }
     return sOldPattern;
@@ -504,16 +505,16 @@ sal_Int32 ODsnTypeCollection::getIndexOf(const OUString& _sURL) const
 {
     sal_Int32 nRet = -1;
     OUString sOldPattern;
-    StringVector::const_iterator aIter = m_aDsnPrefixes.begin();
-    StringVector::const_iterator aEnd = m_aDsnPrefixes.end();
-    for(sal_Int32 i = 0;aIter != aEnd;++aIter,++i)
+    sal_Int32 i = 0;
+    for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
-        WildCard aWildCard(*aIter);
-        if ( sOldPattern.getLength() < aIter->getLength() && aWildCard.Matches(_sURL) )
+        WildCard aWildCard(dsnPrefix);
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
         {
             nRet = i;
-            sOldPattern = *aIter;
+            sOldPattern = dsnPrefix;
         }
+        ++i;
     }
 
     return nRet;

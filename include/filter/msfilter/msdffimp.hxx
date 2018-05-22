@@ -26,6 +26,7 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <unordered_map>
 
 #include <boost/optional.hpp>
 #include <com/sun/star/uno/Any.hxx>
@@ -39,7 +40,6 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <svx/msdffdef.hxx>
-#include <tools/colordata.hxx>
 #include <vcl/errcode.hxx>
 #include <tools/gen.hxx>
 #include <tools/ref.hxx>
@@ -262,21 +262,30 @@ private:
     SvxMSDffImportRec &operator=(const SvxMSDffImportRec&) = delete;
 };
 
-/** list of all SvxMSDffImportRec instances of/for a group */
-typedef std::set<std::unique_ptr<SvxMSDffImportRec>,
-        comphelper::UniquePtrValueLess<SvxMSDffImportRec>> MSDffImportRecords;
-
 /** block of parameters for import/export for a single call of
     ImportObjAtCurrentStreamPos() */
-struct SvxMSDffImportData
+class MSFILTER_DLLPUBLIC SvxMSDffImportData
 {
+private:
+    /** list of all SvxMSDffImportRec instances of/for a group */
+    typedef std::set<std::unique_ptr<SvxMSDffImportRec>,
+            comphelper::UniquePtrValueLess<SvxMSDffImportRec>> MSDffImportRecords;
     MSDffImportRecords  m_Records;  ///< Shape pointer, Shape ids and private data
-    tools::Rectangle           aParentRect;///< Rectangle of the surrounding groups,
+    std::map<const SdrObject*, SvxMSDffImportRec*> m_ObjToRecMap;
+public:
+    tools::Rectangle    aParentRect;///< Rectangle of the surrounding groups,
                                     ///< which might have been provided externally
 
-    explicit SvxMSDffImportData( const tools::Rectangle& rParentRect ) : aParentRect( rParentRect ) {}
+    explicit SvxMSDffImportData(const tools::Rectangle& rParentRect);
+    SvxMSDffImportData& operator=( SvxMSDffImportData const & ) = delete; // MSVC2015 workaround
+    SvxMSDffImportData( SvxMSDffImportData const & ) = delete; // MSVC2015 workaround
+    ~SvxMSDffImportData();
     bool empty() const { return m_Records.empty(); }
+    void insert(SvxMSDffImportRec* pImpRec);
+    void unmap(const SdrObject* pObj) { m_ObjToRecMap.erase(pObj); }
+    SvxMSDffImportRec* front() { return m_Records.begin()->get(); }
     size_t size() const { return m_Records.size(); }
+    SvxMSDffImportRec* find(const SdrObject* pObj);
     MSDffImportRecords::const_iterator begin() const { return m_Records.begin();  }
     MSDffImportRecords::const_iterator end() const { return m_Records.end();  }
 };
@@ -398,7 +407,7 @@ public:
 */
 class MSFILTER_DLLPUBLIC SvxMSDffManager : public DffPropertyReader
 {
-    SvxMSDffBLIPInfos*      m_pBLIPInfos;
+    std::unique_ptr<SvxMSDffBLIPInfos>      m_pBLIPInfos;
     std::unique_ptr<SvxMSDffShapeInfos_ByTxBxComp> m_xShapeInfosByTxBxComp;
     std::unique_ptr<SvxMSDffShapeInfos_ById> m_xShapeInfosById;
     SvxMSDffShapeOrders     m_aShapeOrders;
@@ -499,6 +508,9 @@ protected:
                                    void* pData,
                                    tools::Rectangle& rTextRect,
                                    SdrObject* pObj);
+    virtual void NotifyFreeObj(void* pData, SdrObject* pObj);
+    void FreeObj(void* pData, SdrObject* pObj);
+
 
     /** Object finalization, used by the Excel filter to correctly
         compute the object anchoring after nested objects have been imported.
@@ -527,8 +539,8 @@ protected:
     virtual bool ShapeHasText(sal_uLong nShapeId, sal_uLong nFilePos) const;
 
 public:
-    DffPropertyReader* pSecPropSet;
-    std::map<sal_uInt32,OString> aEscherBlipCache;
+    std::unique_ptr<DffPropertyReader> pSecPropSet;
+    std::unordered_map<sal_uInt32, Graphic> aEscherBlipCache;
 
     DffRecordManager    maShapeRecords;
     Color               mnDefaultColor;
@@ -588,7 +600,7 @@ public:
                      SvStream* pStData,
                      SdrModel* pSdrModel_,
                      long      nApplicationScale,
-                     Color     mnDefaultColor_      =  COL_DEFAULT,
+                     Color     mnDefaultColor_,
                      SvStream* pStData2_            =  nullptr,
                      bool bSkipImages               =  false );
 
@@ -695,17 +707,19 @@ public:
 
     void RemoveFromShapeOrder( SdrObject const * pObject ) const;
 
-    static SdrOle2Obj* CreateSdrOLEFromStorage( const OUString& rStorageName,
-                                                tools::SvRef<SotStorage> const & rSrcStorage,
-                                                const css::uno::Reference < css::embed::XStorage >& xDestStg,
-                                                const Graphic& rGraf,
-                                                const tools::Rectangle& rBoundRect,
-                                                const tools::Rectangle& rVisArea,
-                                                SvStream* pDataStrrm,
-                                                ErrCode& rError,
-                                                sal_uInt32 nConvertFlags,
-                                                sal_Int64 nAspect,
-                                                OUString const& rBaseURL);
+    static SdrOle2Obj* CreateSdrOLEFromStorage(
+        SdrModel& rSdrModel,
+        const OUString& rStorageName,
+        tools::SvRef<SotStorage> const & rSrcStorage,
+        const css::uno::Reference < css::embed::XStorage >& xDestStg,
+        const Graphic& rGraf,
+        const tools::Rectangle& rBoundRect,
+        const tools::Rectangle& rVisArea,
+        SvStream* pDataStrrm,
+        ErrCode& rError,
+        sal_uInt32 nConvertFlags,
+        sal_Int64 nAspect,
+        OUString const& rBaseURL);
 
     /** Create connections between shapes.
         This method should be called after a page is imported.

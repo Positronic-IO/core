@@ -21,8 +21,6 @@
 
 #include <toolkit/awt/vclxwindows.hxx>
 #include <toolkit/helper/convert.hxx>
-#include <helper/accresmgr.hxx>
-#include <strings.hrc>
 
 #include <unotools/accessiblestatesethelper.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
@@ -134,7 +132,7 @@ OUString VCLXAccessibleEdit::implGetText()
     {
         aText = OutputDevice::GetNonMnemonicString( pEdit->GetText() );
 
-        if ( getAccessibleRole() == AccessibleRole::PASSWORD_TEXT )
+        if ( implGetAccessibleRole() == AccessibleRole::PASSWORD_TEXT )
         {
             sal_Unicode cEchoChar = pEdit->GetEchoChar();
             if ( !cEchoChar )
@@ -199,14 +197,9 @@ sal_Int32 VCLXAccessibleEdit::getAccessibleChildCount()
 }
 
 
-Reference< XAccessible > VCLXAccessibleEdit::getAccessibleChild( sal_Int32 i )
+Reference< XAccessible > VCLXAccessibleEdit::getAccessibleChild( sal_Int32 )
 {
-    OExternalLockGuard aGuard( this );
-
-    if ( i < 0 || i >= getAccessibleChildCount() )
-        throw IndexOutOfBoundsException();
-
-    return Reference< XAccessible >();
+    throw IndexOutOfBoundsException();
 }
 
 
@@ -214,9 +207,14 @@ sal_Int16 VCLXAccessibleEdit::getAccessibleRole(  )
 {
     OExternalLockGuard aGuard( this );
 
+    return implGetAccessibleRole();
+}
+
+sal_Int16 VCLXAccessibleEdit::implGetAccessibleRole(  )
+{
     sal_Int16 nRole;
     VclPtr< Edit > pEdit = GetAs< Edit >();
-    if ( pEdit && ( ( pEdit->GetStyle() & WB_PASSWORD ) || pEdit->GetEchoChar() ) )
+    if ( pEdit && ( pEdit->IsPassword() || pEdit->GetEchoChar() ) )
         nRole = AccessibleRole::PASSWORD_TEXT;
     else if ( pEdit && ( pEdit->GetStyle() & WB_READONLY ) )
         nRole = AccessibleRole::LABEL;
@@ -336,7 +334,7 @@ Sequence< PropertyValue > VCLXAccessibleEdit::getCharacterAttributes( sal_Int32 
                 OutputDevice* pDev = Application::GetDefaultDevice();
                 if ( pDev )
                 {
-                    aValue.Value <<= static_cast< sal_Int32 >(pDev->GetSettings().GetStyleSettings().GetFieldTextColor().GetColor());
+                    aValue.Value <<= pDev->GetSettings().GetStyleSettings().GetFieldTextColor();
                 }
             }
             break;

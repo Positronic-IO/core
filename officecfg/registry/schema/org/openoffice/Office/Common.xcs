@@ -1491,6 +1491,7 @@
         </info>
         <prop oor:name="TotalCacheSize" oor:type="xs:int" oor:nillable="false">
           <info>
+            <deprecated>Not used anymore</deprecated>
             <desc>Specifies the maximum cache size for all graphical display
             objects.</desc>
             <label>Total Image Cache Size</label>
@@ -1499,6 +1500,7 @@
         </prop>
         <prop oor:name="ObjectCacheSize" oor:type="xs:int" oor:nillable="false">
           <info>
+            <deprecated>Not used anymore</deprecated>
             <desc>Specifies the maximum cache size for a single graphic display
             object.</desc>
             <label>Image Object Cache Size</label>
@@ -1507,11 +1509,30 @@
         </prop>
         <prop oor:name="ObjectReleaseTime" oor:type="xs:int" oor:nillable="false">
           <info>
+            <deprecated>Not used anymore</deprecated>
             <desc>Specifies the time in seconds after which a cached object is
             freed from the cache.</desc>
             <label>Image Object Release Timeout</label>
           </info>
           <value>600</value>
+        </prop>
+        <prop oor:name="GraphicMemoryLimit" oor:type="xs:int" oor:nillable="false">
+          <info>
+            <desc>Specifies the allowed cumulated memory that the
+            graphic objects can occupy before they start to get swapped
+            to the disk to save memory.</desc>
+            <label>Graphic Memory Limit Size</label>
+          </info>
+          <value>300000000</value>
+        </prop>
+        <prop oor:name="GraphicAllowedIdleTime" oor:type="xs:int" oor:nillable="false">
+          <info>
+            <desc>Specifies the time in seconds when the graphic object
+            can be idle (time since it was last used) before it is
+            considered to be swapped to the disk to save memory.</desc>
+            <label>Graphic Allowed Idle Time</label>
+          </info>
+          <value>10</value>
         </prop>
       </group>
     </group>
@@ -2340,6 +2361,13 @@
           </constraints>
           <value>1</value>
         </prop>
+        <prop oor:name="AddReplacementImages" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>Export replacement objects as fallback images for vector graphics (True).</desc>
+            <label>Export replacement objects as fallback images for vector graphics</label>
+          </info>
+          <value>true</value>
+        </prop>
       </group>
       <group oor:name="URL">
         <info>
@@ -2438,6 +2466,29 @@
       <info>
         <desc>Contains security specific Office settings.</desc>
       </info>
+      <prop oor:name="LoadExoticFileFormats" oor:type="xs:int" oor:nillable="false">
+        <info>
+          <desc>Determines how exotic file formats should be handled.</desc>
+        </info>
+        <constraints>
+          <enumeration oor:value="0">
+            <info>
+              <desc>Refuse loading without question</desc>
+            </info>
+          </enumeration>
+          <enumeration oor:value="1">
+            <info>
+              <desc>Display a warning and let the user decide</desc>
+            </info>
+          </enumeration>
+          <enumeration oor:value="2">
+            <info>
+              <desc>Always load without question</desc>
+            </info>
+          </enumeration>
+        </constraints>
+        <value>2</value>
+      </prop>
       <prop oor:name="EnableExpertConfiguration" oor:type="xs:boolean" oor:nillable="false">
         <info>
           <desc>Determines if the user has access to the entire
@@ -5152,7 +5203,7 @@
             <constraints>
               <enumeration oor:value="0">
                 <info>
-                  <desc>PDF 1.4 (default selection).</desc>
+                  <desc>PDF 1.5 (default selection).</desc>
                 </info>
               </enumeration>
               <enumeration oor:value="1">
@@ -5171,7 +5222,7 @@
               protocol) present in the document will be exported as relative to
               the source document location.</desc>
             </info>
-            <value>false</value>
+            <value>true</value>
           </prop>
           <prop oor:name="PDFViewSelection" oor:type="xs:int" oor:nillable="false">
             <info>
@@ -5744,9 +5795,9 @@
         <!-- OldLocation: -->
         <!-- UIHints: Edit/Find & Replace -->
         <info>
-          <desc>Specifies search with the use of CTL option.</desc>
+          <desc>Specifies search ignores diacritics, not only CTL though.</desc>
         </info>
-        <value>true</value>
+        <value>false</value>
       </prop>
       <prop oor:name="IsIgnoreKashida_CTL" oor:type="xs:boolean" oor:nillable="false">
         <!-- OldPath: -->

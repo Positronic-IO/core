@@ -115,7 +115,6 @@
 
 #include <unomailmerge.hxx>
 #include <sfx2/event.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <osl/mutex.hxx>
 #include <rtl/textenc.h>
@@ -138,6 +137,8 @@
 #include <dbfld.hxx>
 #include <IDocumentState.hxx>
 #include <imaildsplistener.hxx>
+#include <iodetect.hxx>
+#include <IDocumentDeviceAccess.hxx>
 
 #include <memory>
 #include <comphelper/propertysequence.hxx>
@@ -752,6 +753,47 @@ bool SwDBManager::GetTableNames(ListBox* pListBox, const OUString& rDBName)
     return bRet;
 }
 
+bool SwDBManager::GetTableNames(weld::ComboBoxText& rBox, const OUString& rDBName)
+{
+    bool bRet = false;
+    OUString sOldTableName(rBox.get_active_text());
+    rBox.clear();
+    SwDSParam* pParam = FindDSConnection(rDBName, false);
+    uno::Reference< sdbc::XConnection> xConnection;
+    if (pParam && pParam->xConnection.is())
+        xConnection = pParam->xConnection;
+    else
+    {
+        if ( !rDBName.isEmpty() )
+            xConnection = RegisterConnection( rDBName );
+    }
+    if (xConnection.is())
+    {
+        uno::Reference<sdbcx::XTablesSupplier> xTSupplier(xConnection, uno::UNO_QUERY);
+        if(xTSupplier.is())
+        {
+            uno::Reference<container::XNameAccess> xTables = xTSupplier->getTables();
+            uno::Sequence<OUString> aTables = xTables->getElementNames();
+            const OUString* pTables = aTables.getConstArray();
+            for (sal_Int32 i = 0; i < aTables.getLength(); ++i)
+                rBox.append("0", pTables[i]);
+        }
+        uno::Reference<sdb::XQueriesSupplier> xQSupplier(xConnection, uno::UNO_QUERY);
+        if(xQSupplier.is())
+        {
+            uno::Reference<container::XNameAccess> xQueries = xQSupplier->getQueries();
+            uno::Sequence<OUString> aQueries = xQueries->getElementNames();
+            const OUString* pQueries = aQueries.getConstArray();
+            for (sal_Int32 i = 0; i < aQueries.getLength(); i++)
+                rBox.append("1", pQueries[i]);
+        }
+        if (!sOldTableName.isEmpty())
+            rBox.set_active_text(sOldTableName);
+        bRet = true;
+    }
+    return bRet;
+}
+
 // fill Listbox with column names of a database
 void SwDBManager::GetColumnNames(ListBox* pListBox,
                              const OUString& rDBName, const OUString& rTableName)
@@ -771,6 +813,24 @@ void SwDBManager::GetColumnNames(ListBox* pListBox,
     GetColumnNames(pListBox, xConnection, rTableName);
 }
 
+void SwDBManager::GetColumnNames(weld::ComboBoxText& rBox,
+                             const OUString& rDBName, const OUString& rTableName)
+{
+    SwDBData aData;
+    aData.sDataSource = rDBName;
+    aData.sCommand = rTableName;
+    aData.nCommandType = -1;
+    SwDSParam* pParam = FindDSData(aData, false);
+    uno::Reference< sdbc::XConnection> xConnection;
+    if(pParam && pParam->xConnection.is())
+        xConnection = pParam->xConnection;
+    else
+    {
+        xConnection = RegisterConnection( rDBName );
+    }
+    GetColumnNames(rBox, xConnection, rTableName);
+}
+
 void SwDBManager::GetColumnNames(ListBox* pListBox,
         uno::Reference< sdbc::XConnection> const & xConnection,
         const OUString& rTableName)
@@ -785,6 +845,25 @@ void SwDBManager::GetColumnNames(ListBox* pListBox,
         for(int nCol = 0; nCol < aColNames.getLength(); nCol++)
         {
             pListBox->InsertEntry(pColNames[nCol]);
+        }
+        ::comphelper::disposeComponent( xColsSupp );
+    }
+}
+
+void SwDBManager::GetColumnNames(weld::ComboBoxText& rBox,
+        uno::Reference< sdbc::XConnection> const & xConnection,
+        const OUString& rTableName)
+{
+    rBox.clear();
+    uno::Reference< sdbcx::XColumnsSupplier> xColsSupp = SwDBManager::GetColumnSupplier(xConnection, rTableName);
+    if(xColsSupp.is())
+    {
+        uno::Reference<container::XNameAccess> xCols = xColsSupp->getColumns();
+        const uno::Sequence<OUString> aColNames = xCols->getElementNames();
+        const OUString* pColNames = aColNames.getConstArray();
+        for (sal_Int32 nCol = 0; nCol < aColNames.getLength(); ++nCol)
+        {
+            rBox.append_text(pColNames[nCol]);
         }
         ::comphelper::disposeComponent( xColsSupp );
     }
@@ -1234,25 +1313,25 @@ bool SwDBManager::MergeMailFiles(SwWrtShell* pSourceShell,
     sal_uInt16 nStartingPageNo = 0;
 
     vcl::Window *pSourceWindow = nullptr;
-    VclPtr<CancelableDialog> pProgressDlg;
+    std::shared_ptr<weld::GenericDialogController> xProgressDlg;
 
     if( !bIsMergeSilent )
     {
         // construct the process dialog
         pSourceWindow = &pSourceShell->GetView().GetEditWin();
-        vcl::Window* pParent = pSourceWindow;
-        if( !bMT_PRINTER )
-            pProgressDlg = VclPtr<CreateMonitor>::Create(
-                pParent, pParent != pSourceWindow );
-        else {
-            pProgressDlg = VclPtr<PrintMonitor>::Create(
-                pParent, pParent != pSourceWindow,
-                PrintMonitor::MONITOR_TYPE_PRINT );
-            static_cast<PrintMonitor*>( pProgressDlg.get() )->SetText(
-                pSourceDocSh->GetTitle(22) );
+        if (!bMT_PRINTER)
+            xProgressDlg.reset(new CreateMonitor(pSourceWindow->GetFrameWeld()));
+        else
+        {
+            xProgressDlg.reset(new PrintMonitor(pSourceWindow->GetFrameWeld()));
+            static_cast<PrintMonitor*>(xProgressDlg.get())->set_title(
+                pSourceDocSh->GetTitle(22));
         }
-        pProgressDlg->SetCancelHdl( LINK(this, SwDBManager, PrtCancelHdl) );
-        pProgressDlg->Show();
+        weld::DialogController::runAsync(xProgressDlg, [this, &xProgressDlg](sal_Int32 nResult){
+            if (nResult == RET_CANCEL)
+                MergeCancel();
+            xProgressDlg.reset();
+        });
 
         Application::Reschedule( true );
     }
@@ -1263,6 +1342,11 @@ bool SwDBManager::MergeMailFiles(SwWrtShell* pSourceShell,
         xTargetDocShell = lcl_CreateWorkingDocument( WorkingDocType::TARGET,
             *pSourceShell, bMT_SHELL ? pSourceWindow : nullptr,
             nullptr, &pTargetView, &pTargetShell, &pTargetDoc );
+
+        // import current print settings
+        const SwPrintData &rPrintData = pSourceShell->getIDocumentDeviceAccess().getPrintData();
+        pTargetDoc->getIDocumentDeviceAccess().setPrintData(rPrintData);
+
         if (nMaxDumpDocs)
             lcl_SaveDebugDoc( xTargetDocShell.get(), "MergeDoc" );
     }
@@ -1317,7 +1401,7 @@ bool SwDBManager::MergeMailFiles(SwWrtShell* pSourceShell,
         sal_Int32 nMaxDocs = nRecordCount / nRecordPerDoc;
         if ( 0 != nRecordCount % nRecordPerDoc )
             nMaxDocs += 1;
-        static_cast<CreateMonitor*>( pProgressDlg.get() )->SetTotalCount( nMaxDocs );
+        static_cast<CreateMonitor*>(xProgressDlg.get())->SetTotalCount(nMaxDocs);
     }
 
     long nStartRow, nEndRow;
@@ -1385,16 +1469,16 @@ bool SwDBManager::MergeMailFiles(SwWrtShell* pSourceShell,
                 aTempFileURL.reset( new INetURLObject(aTempFile->GetURL()));
             if( !bIsMergeSilent ) {
                 if( !bMT_PRINTER )
-                    static_cast<CreateMonitor*>( pProgressDlg.get() )->SetCurrentPosition( nDocNo );
+                    static_cast<CreateMonitor*>(xProgressDlg.get())->SetCurrentPosition(nDocNo);
                 else {
-                    PrintMonitor *pPrintMonDlg = static_cast<PrintMonitor*>( pProgressDlg.get() );
-                    pPrintMonDlg->m_pPrinter->SetText( bNeedsTempFiles
-                        ? aTempFileURL->GetBase() : pSourceDocSh->GetTitle( 22 ) );
+                    PrintMonitor *pPrintMonDlg = static_cast<PrintMonitor*>(xProgressDlg.get());
+                    pPrintMonDlg->m_xPrinter->set_label(bNeedsTempFiles
+                        ? aTempFileURL->GetBase() : pSourceDocSh->GetTitle( 2));
                     OUString sStat( SwResId(STR_STATSTR_LETTER) );
                     sStat += " " + OUString::number( nDocNo );
-                    pPrintMonDlg->m_pPrintInfo->SetText( sStat );
+                    pPrintMonDlg->m_xPrintInfo->set_label(sStat);
                 }
-                pProgressDlg->Update();
+                //TODO xProgressDlg->queue_draw();
             }
 
             Application::Reschedule( true );
@@ -1627,7 +1711,10 @@ bool SwDBManager::MergeMailFiles(SwWrtShell* pSourceShell,
 
     Application::Reschedule( true );
 
-    pProgressDlg.disposeAndClear();
+    if (xProgressDlg)
+    {
+        xProgressDlg->response(RET_OK);
+    }
 
     // unlock all dispatchers
     pViewFrame = SfxViewFrame::GetFirst(pSourceDocSh);
@@ -1671,12 +1758,6 @@ void SwDBManager::MergeCancel()
 {
     if (m_aMergeStatus < MergeStatus::Cancel)
         m_aMergeStatus = MergeStatus::Cancel;
-}
-
-IMPL_LINK( SwDBManager, PrtCancelHdl, Button *, pButton, void )
-{
-    pButton->GetParent()->Hide();
-    MergeCancel();
 }
 
 // determine the column's Numberformat and transfer to the forwarded Formatter,
@@ -2697,7 +2778,7 @@ In case of success it returns the registered name, otherwise an empty string.
 Optionally add a prefix to the registered DB name.
 */
 OUString LoadAndRegisterDataSource_Impl(DBConnURIType type, const uno::Reference< beans::XPropertySet > *pSettings,
-    const INetURLObject &rURL, const OUString *pPrefix, const OUString *pDestDir, SfxObjectShell* pDocShell)
+    const INetURLObject &rURL, const OUString *pDestDir, SfxObjectShell* pDocShell)
 {
     OUString sExt(rURL.GetExtension());
     uno::Any aTableFilterAny;
@@ -2737,8 +2818,6 @@ OUString LoadAndRegisterDataSource_Impl(DBConnURIType type, const uno::Reference
             INetURLObject::DecodeMechanism::Unambiguous);
         sal_Int32 nExtLen = sExt.getLength();
         sNewName = sNewName.replaceAt(sNewName.getLength() - nExtLen - 1, nExtLen + 1, "");
-        if (pPrefix)
-            sNewName = *pPrefix + sNewName;
 
         //find a unique name if sNewName already exists
         sFind = sNewName;
@@ -2832,7 +2911,7 @@ OUString ConstructVndSunStarPkgUrl(const OUString& rMainURL, const OUString& rSt
 }
 }
 
-OUString SwDBManager::LoadAndRegisterDataSource(const vcl::Window* pParent, SwDocShell* pDocShell)
+OUString SwDBManager::LoadAndRegisterDataSource(weld::Window* pParent, SwDocShell* pDocShell)
 {
     sfx2::FileDialogHelper aDlgHelper(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, pParent);
     uno::Reference < ui::dialogs::XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
@@ -2887,7 +2966,7 @@ OUString SwDBManager::LoadAndRegisterDataSource(const vcl::Window* pParent, SwDo
             if( xSettingsDlg->execute() )
                 aSettings.set( uno::Reference < beans::XPropertySet >( xSettingsDlg, uno::UNO_QUERY_THROW ) );
         }
-        sFind = LoadAndRegisterDataSource_Impl( type, DBConnURIType::FLAT == type ? &aSettings : nullptr, aURL, nullptr, nullptr, pDocShell );
+        sFind = LoadAndRegisterDataSource_Impl( type, DBConnURIType::FLAT == type ? &aSettings : nullptr, aURL, nullptr, pDocShell );
 
         m_aUncommitedRegistrations.push_back(std::pair<SwDocShell*, OUString>(pDocShell, sFind));
     }
@@ -2913,7 +2992,7 @@ void SwDBManager::StoreEmbeddedDataSource(const uno::Reference<frame::XStorable>
 
 OUString SwDBManager::LoadAndRegisterDataSource(const OUString &rURI, const OUString *pDestDir)
 {
-    return LoadAndRegisterDataSource_Impl( DBConnURIType::UNKNOWN, nullptr, INetURLObject(rURI), nullptr, pDestDir, nullptr );
+    return LoadAndRegisterDataSource_Impl( DBConnURIType::UNKNOWN, nullptr, INetURLObject(rURI), pDestDir, nullptr );
 }
 
 void SwDBManager::RevokeDataSource(const OUString& rName)

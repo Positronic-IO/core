@@ -19,7 +19,6 @@
 
 #include <unotools/searchopt.hxx>
 #include <i18nutil/transliteration.hxx>
-#include <dialmgr.hxx>
 #include "optjsearch.hxx"
 
 using namespace com::sun::star::i18n;
@@ -82,11 +81,10 @@ void SvxJSearchOptionsPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxJSearchOptionsPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxJSearchOptionsPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxJSearchOptionsPage>::Create( pParent, *rSet );
+    return VclPtr<SvxJSearchOptionsPage>::Create( pParent.pParent, *rSet );
 }
-
 
 void SvxJSearchOptionsPage::SetTransliterationFlags( TransliterationFlags nSettings )
 {

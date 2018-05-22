@@ -27,7 +27,6 @@
 #include <mmconfigitem.hxx>
 #include <comphelper/string.hxx>
 #include <vcl/scrbar.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/builderfactory.hxx>
 #include <svtools/controldims.hxx>
 #include <unotools/pathoptions.hxx>
@@ -623,7 +622,7 @@ IMPL_LINK_NOARG(SwCreateAddressListDialog, OkHdl_Impl, Button*, void)
     if(m_sURL.isEmpty())
     {
         sfx2::FileDialogHelper aDlgHelper(TemplateDescription::FILESAVE_SIMPLE,
-                                          FileDialogFlags::NONE, this);
+                                          FileDialogFlags::NONE, GetFrameWeld());
         uno::Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
 
         const OUString sPath( SvtPathOptions().SubstituteVariable("$(userurl)/database") );

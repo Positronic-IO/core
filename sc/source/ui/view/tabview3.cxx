@@ -536,8 +536,6 @@ void ScTabView::SelectionChanged()
     rBindings.Invalidate( FID_INS_CELL );
     rBindings.Invalidate( FID_INS_CELLSDOWN );
     rBindings.Invalidate( FID_INS_CELLSRIGHT );
-    rBindings.Invalidate( SID_ROW_OPERATIONS );
-    rBindings.Invalidate( SID_COLUMN_OPERATIONS );
 
     rBindings.Invalidate( FID_CHG_COMMENT );
 
@@ -2488,11 +2486,11 @@ void ScTabView::DoChartSelection(
             size_t nListSize = aRangeList.size();
             for ( size_t j = 0; j < nListSize; ++j )
             {
-                ScRange* p = aRangeList[j];
+                ScRange const & r = aRangeList[j];
                 if( rHighlightedRange.Index == - 1 )
-                    AddHighlightRange( *p, aSelColor );
+                    AddHighlightRange( r, aSelColor );
                 else
-                    AddHighlightRange( lcl_getSubRangeByIndex( *p, rHighlightedRange.Index ), aSelColor );
+                    AddHighlightRange( lcl_getSubRangeByIndex( r, rHighlightedRange.Index ), aSelColor );
             }
         }
     }

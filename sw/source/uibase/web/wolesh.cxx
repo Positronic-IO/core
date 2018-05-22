@@ -25,11 +25,10 @@
 #include <wrtsh.hxx>
 #include <view.hxx>
 #include <globals.hrc>
-#include <strings.hrc>
 #include <wolesh.hxx>
 #include <cmdid.h>
 
-#define SwWebOleShell
+#define ShellClass_SwWebOleShell
 #include <swslots.hxx>
 
 SFX_IMPL_INTERFACE(SwWebOleShell, SwOleShell)

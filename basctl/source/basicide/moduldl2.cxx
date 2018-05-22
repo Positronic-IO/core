@@ -151,9 +151,9 @@ CheckBox::CheckBox(vcl::Window* pParent, WinBits nStyle)
     , eMode(ObjectMode::Module)
     , m_aDocument(ScriptDocument::getApplicationScriptDocument())
 {
-    long const aTabs_[] = { 1, 12 };  // TabPos needs at least one...
-                                      // 12 because of the CheckBox
-    SetTabs( aTabs_ );
+    long const aTabPositions[] = { 12 };  // TabPos needs at least one...
+                                          // 12 because of the CheckBox
+    SetTabs( SAL_N_ELEMENTS(aTabPositions), aTabPositions );
     Init();
 }
 
@@ -337,7 +337,7 @@ bool CheckBox::EditedEntry( SvTreeListEntry* pEntry, const OUString& rNewName )
         }
         catch (const container::NoSuchElementException& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("basctl.basicide");
             return false;
         }
     }
@@ -355,124 +355,88 @@ bool CheckBox::EditedEntry( SvTreeListEntry* pEntry, const OUString& rNewName )
 }
 
 // NewObjectDialog
-IMPL_LINK_NOARG(NewObjectDialog, OkButtonHandler, Button*, void)
+IMPL_LINK_NOARG(NewObjectDialog, OkButtonHandler, weld::Button&, void)
 {
-    if (IsValidSbxName(m_pEdit->GetText()))
-        EndDialog(1);
+    if (!m_bCheckName || IsValidSbxName(m_xEdit->get_text()))
+        m_xDialog->response(RET_OK);
     else
     {
-        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(GetFrameWeld(),
+        std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(m_xDialog.get(),
                                                        VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_BADSBXNAME)));
         xErrorBox->run();
-        m_pEdit->GrabFocus();
+        m_xEdit->grab_focus();
     }
 }
 
-NewObjectDialog::NewObjectDialog(vcl::Window * pParent, ObjectMode eMode,
-    bool bCheckName)
-    : ModalDialog(pParent, "NewLibDialog", "modules/BasicIDE/ui/newlibdialog.ui")
+NewObjectDialog::NewObjectDialog(weld::Window * pParent, ObjectMode eMode, bool bCheckName)
+    : GenericDialogController(pParent, "modules/BasicIDE/ui/newlibdialog.ui", "NewLibDialog")
+    , m_xEdit(m_xBuilder->weld_entry("entry"))
+    , m_xOKButton(m_xBuilder->weld_button("ok"))
+    , m_bCheckName(bCheckName)
 {
-    get(m_pOKButton, "ok");
-    get(m_pEdit, "entry");
-
-    m_pEdit->GrabFocus();
-
     switch (eMode)
     {
         case ObjectMode::Library:
-            SetText( IDEResId(RID_STR_NEWLIB) );
+            m_xDialog->set_title(IDEResId(RID_STR_NEWLIB));
             break;
         case ObjectMode::Module:
-            SetText( IDEResId(RID_STR_NEWMOD) );
+            m_xDialog->set_title(IDEResId(RID_STR_NEWMOD));
             break;
         case ObjectMode::Dialog:
-            SetText( IDEResId(RID_STR_NEWDLG) );
+            m_xDialog->set_title(IDEResId(RID_STR_NEWDLG));
             break;
         default:
             assert(false);
     }
-
-    if (bCheckName)
-        m_pOKButton->SetClickHdl(LINK(this, NewObjectDialog, OkButtonHandler));
-}
-
-NewObjectDialog::~NewObjectDialog()
-{
-    disposeOnce();
-}
-
-void NewObjectDialog::dispose()
-{
-    m_pEdit.clear();
-    m_pOKButton.clear();
-    ModalDialog::dispose();
+    m_xOKButton->connect_clicked(LINK(this, NewObjectDialog, OkButtonHandler));
 }
 
 // GotoLineDialog
-GotoLineDialog::GotoLineDialog(vcl::Window * pParent )
-    : ModalDialog(pParent, "GotoLineDialog",
-        "modules/BasicIDE/ui/gotolinedialog.ui")
+GotoLineDialog::GotoLineDialog(weld::Window* pParent )
+    : GenericDialogController(pParent, "modules/BasicIDE/ui/gotolinedialog.ui", "GotoLineDialog")
+    , m_xEdit(m_xBuilder->weld_entry("entry"))
+    , m_xOKButton(m_xBuilder->weld_button("ok"))
 {
-    get(m_pEdit, "entry");
-    get(m_pOKButton, "ok");
-    m_pEdit->GrabFocus();
-    m_pOKButton->SetClickHdl(LINK(this, GotoLineDialog, OkButtonHandler));
+    m_xEdit->grab_focus();
+    m_xOKButton->connect_clicked(LINK(this, GotoLineDialog, OkButtonHandler));
 }
 
 GotoLineDialog::~GotoLineDialog()
 {
-    disposeOnce();
-}
-
-void GotoLineDialog::dispose()
-{
-    m_pEdit.clear();
-    m_pOKButton.clear();
-    ModalDialog::dispose();
 }
 
 sal_Int32 GotoLineDialog::GetLineNumber() const
 {
-    return m_pEdit->GetText().toInt32();
+    return m_xEdit->get_text().toInt32();
 }
 
-IMPL_LINK_NOARG(GotoLineDialog, OkButtonHandler, Button*, void)
+IMPL_LINK_NOARG(GotoLineDialog, OkButtonHandler, weld::Button&, void)
 {
-    if ( GetLineNumber() )
-        EndDialog(1);
+    if (GetLineNumber())
+        m_xDialog->response(RET_OK);
     else
-        m_pEdit->SetText(m_pEdit->GetText(), Selection(0, m_pEdit->GetText().getLength()));
+        m_xEdit->select_region(0, -1);
 }
 
 // ExportDialog
-IMPL_LINK_NOARG(ExportDialog, OkButtonHandler, Button*, void)
+IMPL_LINK_NOARG(ExportDialog, OkButtonHandler, weld::Button&, void)
 {
-    mbExportAsPackage = m_pExportAsPackageButton->IsChecked();
-    EndDialog(1);
+    m_bExportAsPackage = m_xExportAsPackageButton->get_active();
+    m_xDialog->response(RET_OK);
 }
 
-ExportDialog::ExportDialog(vcl::Window * pParent)
-    : ModalDialog(pParent, "ExportDialog",
-        "modules/BasicIDE/ui/exportdialog.ui")
-    , mbExportAsPackage(false)
+ExportDialog::ExportDialog(weld::Window * pParent)
+    : GenericDialogController(pParent, "modules/BasicIDE/ui/exportdialog.ui", "ExportDialog")
+    , m_bExportAsPackage(false)
+    , m_xExportAsPackageButton(m_xBuilder->weld_radio_button("extension"))
+    , m_xOKButton(m_xBuilder->weld_button("ok"))
 {
-    get(m_pExportAsPackageButton, "extension");
-    get(m_pOKButton, "ok");
-
-    m_pExportAsPackageButton->Check();
-    m_pOKButton->SetClickHdl(LINK(this, ExportDialog, OkButtonHandler));
+    m_xExportAsPackageButton->set_active(true);
+    m_xOKButton->connect_clicked(LINK(this, ExportDialog, OkButtonHandler));
 }
 
 ExportDialog::~ExportDialog()
 {
-    disposeOnce();
-}
-
-void ExportDialog::dispose()
-{
-    m_pExportAsPackageButton.clear();
-    m_pOKButton.clear();
-    ModalDialog::dispose();
 }
 
 // LibPage
@@ -510,8 +474,8 @@ LibPage::LibPage(vcl::Window * pParent)
     m_pLibBox->EnableInplaceEditing(true);
     m_pLibBox->SetStyle( WB_HSCROLL | WB_BORDER | WB_TABSTOP );
 
-    long const aTabs[] = { 2, 30, 120 };
-    m_pLibBox->SetTabs( aTabs, MapUnit::MapPixel );
+    long const aTabPositions[] = { 30, 120 };
+    m_pLibBox->SetTabs( SAL_N_ELEMENTS(aTabPositions), aTabPositions, MapUnit::MapPixel );
 
     FillListBox();
     m_pBasicsBox->SelectEntryPos( 0 );
@@ -685,10 +649,10 @@ IMPL_LINK( LibPage, ButtonHdl, Button *, pButton, void )
                 bool const bProtected = xPasswd->isLibraryPasswordProtected( aLibName );
 
                 // change password dialog
-                VclPtrInstance< SvxPasswordDialog > pDlg( this, true, !bProtected );
-                pDlg->SetCheckPasswordHdl( LINK( this, LibPage, CheckPasswordHdl ) );
+                SvxPasswordDialog aDlg(GetFrameWeld(), !bProtected);
+                aDlg.SetCheckPasswordHdl(LINK(this, LibPage, CheckPasswordHdl));
 
-                if ( pDlg->Execute() == RET_OK )
+                if (aDlg.run() == RET_OK)
                 {
                     bool const bNewProtected = xPasswd->isLibraryPasswordProtected( aLibName );
 
@@ -735,14 +699,14 @@ IMPL_LINK( LibPage, CheckPasswordHdl, SvxPasswordDialog *, pDlg, bool )
 
 void LibPage::NewLib()
 {
-    createLibImpl( static_cast<vcl::Window*>( this ), m_aCurDocument, m_pLibBox, nullptr);
+    createLibImpl(GetFrameWeld(), m_aCurDocument, m_pLibBox, nullptr);
 }
 
 void LibPage::InsertLib()
 {
     Reference< uno::XComponentContext > xContext( ::comphelper::getProcessComponentContext() );
     // file open dialog
-    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, pTabDlg);
+    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, pTabDlg ? pTabDlg->GetFrameWeld() : nullptr);
     Reference <XFilePicker3> xFP = aDlg.GetFilePicker();
 
     xFP->setTitle(IDEResId(RID_STR_APPENDLIBS));
@@ -1129,15 +1093,15 @@ void LibPage::Export()
             return;
     }
 
-    ScopedVclPtrInstance<ExportDialog> aNewDlg(this);
-    if (aNewDlg->Execute() == RET_OK)
+    std::unique_ptr<ExportDialog> xNewDlg(new ExportDialog(GetFrameWeld()));
+    if (xNewDlg->run() == RET_OK)
     {
         try
         {
-            bool bExportAsPackage = aNewDlg->isExportAsPackage();
-            //tdf#112063 ensure closing aNewDlg is not selected as
+            bool bExportAsPackage = xNewDlg->isExportAsPackage();
+            //tdf#112063 ensure closing xNewDlg is not selected as
             //parent of file dialog from ExportAs...
-            aNewDlg.disposeAndClear();
+            xNewDlg.reset();
             if (bExportAsPackage)
                 ExportAsPackage( aLibName );
             else
@@ -1199,7 +1163,7 @@ Reference< XProgressHandler > OLibCommandEnvironment::getProgressHandler()
 void LibPage::ExportAsPackage( const OUString& aLibName )
 {
     // file open dialog
-    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILESAVE_SIMPLE, FileDialogFlags::NONE, pTabDlg);
+    sfx2::FileDialogHelper aDlg(ui::dialogs::TemplateDescription::FILESAVE_SIMPLE, FileDialogFlags::NONE, pTabDlg ? pTabDlg->GetFrameWeld() : nullptr);
     Reference <XFilePicker3> xFP = aDlg.GetFilePicker();
 
     Reference< uno::XComponentContext > xContext( ::comphelper::getProcessComponentContext() );
@@ -1478,8 +1442,8 @@ SvTreeListEntry* LibPage::ImpInsertLibEntry( const OUString& rLibName, sal_uLong
 }
 
 // Helper function
-void createLibImpl( vcl::Window* pWin, const ScriptDocument& rDocument,
-                    CheckBox* pLibBox, TreeListBox* pBasicBox )
+void createLibImpl(weld::Window* pWin, const ScriptDocument& rDocument,
+                   CheckBox* pLibBox, TreeListBox* pBasicBox)
 {
     OSL_ENSURE( rDocument.isAlive(), "createLibImpl: invalid document!" );
     if ( !rDocument.isAlive() )
@@ -1497,29 +1461,29 @@ void createLibImpl( vcl::Window* pWin, const ScriptDocument& rDocument,
         i++;
     }
 
-    ScopedVclPtrInstance< NewObjectDialog > aNewDlg(pWin, ObjectMode::Library);
-    aNewDlg->SetObjectName(aLibName);
+    NewObjectDialog aNewDlg(pWin, ObjectMode::Library);
+    aNewDlg.SetObjectName(aLibName);
 
-    if (aNewDlg->Execute())
+    if (aNewDlg.run())
     {
-        if (!aNewDlg->GetObjectName().isEmpty())
-            aLibName = aNewDlg->GetObjectName();
+        if (!aNewDlg.GetObjectName().isEmpty())
+            aLibName = aNewDlg.GetObjectName();
 
         if ( aLibName.getLength() > 30 )
         {
-            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin,
                                                            VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_LIBNAMETOLONG)));
             xErrorBox->run();
         }
         else if ( !IsValidSbxName( aLibName ) )
         {
-            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin,
                                                            VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_BADSBXNAME)));
             xErrorBox->run();
         }
         else if ( rDocument.hasLibrary( E_SCRIPTS, aLibName ) || rDocument.hasLibrary( E_DIALOGS, aLibName ) )
         {
-            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+            std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(pWin,
                                                            VclMessageType::Warning, VclButtonsType::Ok, IDEResId(RID_STR_SBXNAMEALLREADYUSED2)));
             xErrorBox->run();
         }
@@ -1584,7 +1548,7 @@ void createLibImpl( vcl::Window* pWin, const ScriptDocument& rDocument,
             }
             catch (const uno::Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("basctl.basicide");
             }
         }
     }

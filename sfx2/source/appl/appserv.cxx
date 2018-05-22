@@ -46,6 +46,7 @@
 #include <com/sun/star/util/CloseVetoException.hpp>
 #include <org/freedesktop/PackageKit/SyncDbusSessionHelper.hpp>
 
+#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/propertysequence.hxx>
@@ -165,6 +166,12 @@ namespace
             case vcl::EnumContext::Application::Draw:
                 return OUString( "Draw" );
                 break;
+            case vcl::EnumContext::Application::Formula:
+                return OUString( "Formula" );
+                break;
+            case vcl::EnumContext::Application::Base:
+                return OUString( "Base" );
+                break;
             default:
                 return OUString();
                 break;
@@ -271,48 +278,88 @@ static void showDocument( const char* pBaseName )
 
 namespace
 {
-    class LicenseDialog : public ModalDialog
+    Reference<XFrame> GetRequestFrame(const SfxRequest& rReq)
     {
-    private:
-        DECL_LINK(ShowHdl, Button*, void);
+        const SfxItemSet* pArgs = rReq.GetInternalArgs_Impl();
+        const SfxPoolItem* pItem = nullptr;
+        Reference <XFrame> xFrame;
+        if (pArgs && pArgs->GetItemState(SID_FILLFRAME, false, &pItem) == SfxItemState::SET)
+        {
+            OSL_ENSURE( dynamic_cast< const SfxUnoFrameItem *>( pItem ) !=  nullptr, "SfxApplication::OfaExec_Impl: XFrames are to be transported via SfxUnoFrameItem by now!" );
+            xFrame = static_cast< const SfxUnoFrameItem*>( pItem )->GetFrame();
+        }
+        return xFrame;
+    }
+
+    vcl::Window* getFrameWindow(const Reference<XFrame>& rFrame)
+    {
+        if (rFrame.is())
+        {
+            try
+            {
+                Reference< awt::XWindow > xContainerWindow(rFrame->getContainerWindow(), UNO_SET_THROW);
+                VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xContainerWindow);
+                return pWindow;
+            }
+            catch (const Exception&)
+            {
+                DBG_UNHANDLED_EXCEPTION("sfx.appl");
+            }
+        }
+
+        SAL_WARN( "sfx.appl", "no parent for dialogs" );
+        return nullptr;
+    }
+
+    class LicenseDialog : public weld::GenericDialogController
+    {
     public:
-        explicit LicenseDialog();
+        LicenseDialog(weld::Window* pParent)
+            : GenericDialogController(pParent, "sfx/ui/licensedialog.ui",  "LicenseDialog")
+        {
+        }
+
+        short execute()
+        {
+            short nRet = m_xDialog->run();
+            if (nRet == RET_OK)
+                showDocument("LICENSE");
+            return nRet;
+        }
     };
 
-    LicenseDialog::LicenseDialog()
-        : ModalDialog(nullptr, "LicenseDialog", "sfx/ui/licensedialog.ui")
+    class SafeModeQueryDialog : public weld::MessageDialogController
     {
-        get<PushButton>("show")->SetClickHdl(LINK(this, LicenseDialog, ShowHdl));
-    }
-
-    IMPL_LINK_NOARG(LicenseDialog, ShowHdl, Button*, void)
-    {
-        EndDialog(RET_OK);
-        showDocument("LICENSE");
-    }
-
-    class SafeModeQueryDialog : public ModalDialog
-    {
-    private:
-        DECL_LINK(RestartHdl, Button*, void);
     public:
-        explicit SafeModeQueryDialog();
+        SafeModeQueryDialog(weld::Window* pParent)
+            : MessageDialogController(pParent, "sfx/ui/safemodequerydialog.ui", "SafeModeQueryDialog")
+        {
+        }
+
+        short execute()
+        {
+            short nRet = m_xDialog->run();
+            if (nRet == RET_OK)
+            {
+                sfx2::SafeMode::putFlag();
+                uno::Reference< uno::XComponentContext > xContext = comphelper::getProcessComponentContext();
+                css::task::OfficeRestartManager::get(xContext)->requestRestart(
+                    css::uno::Reference< css::task::XInteractionHandler >());
+            }
+            return nRet;
+        }
     };
+}
 
-    SafeModeQueryDialog::SafeModeQueryDialog()
-        : ModalDialog(nullptr, "SafeModeQueryDialog", "sfx/ui/safemodequerydialog.ui")
-    {
-        get<PushButton>("restart")->SetClickHdl(LINK(this, SafeModeQueryDialog, RestartHdl));
-    }
+vcl::Window* SfxRequest::GetFrameWindow() const
+{
+    return getFrameWindow(GetRequestFrame(*this));
+}
 
-    IMPL_LINK_NOARG(SafeModeQueryDialog, RestartHdl, Button*, void)
-    {
-        EndDialog(RET_OK);
-        sfx2::SafeMode::putFlag();
-        uno::Reference< uno::XComponentContext > xContext = comphelper::getProcessComponentContext();
-        css::task::OfficeRestartManager::get(xContext)->requestRestart(
-            css::uno::Reference< css::task::XInteractionHandler >());
-    }
+weld::Window* SfxRequest::GetFrameWeld() const
+{
+    vcl::Window* pWin = GetFrameWindow();
+    return pWin ? pWin->GetFrameWeld() : nullptr;
 }
 
 void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
@@ -412,12 +459,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
                         SID_CONFIG, pStringItem->GetValue() ) );
                 }
 
-                Reference< XFrame > xFrame;
-                const SfxItemSet* pIntSet = rReq.GetInternalArgs_Impl();
-                const SfxUnoFrameItem* pFrameItem = SfxItemSet::GetItem<SfxUnoFrameItem>(pIntSet, SID_FILLFRAME, false);
-                if ( pFrameItem )
-                    xFrame = pFrameItem->GetFrame();
-
+                Reference <XFrame> xFrame(GetRequestFrame(rReq));
                 ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateCustomizeTabDialog(
                     &aSet, xFrame ));
 
@@ -524,8 +566,8 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         }
         case SID_SHOW_LICENSE:
         {
-            ScopedVclPtrInstance< LicenseDialog > aDialog;
-            aDialog->Execute();
+            LicenseDialog aDialog(rReq.GetFrameWeld());
+            aDialog.execute();
             break;
         }
 
@@ -988,8 +1030,8 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         }
         case SID_SAFE_MODE:
         {
-            ScopedVclPtrInstance< SafeModeQueryDialog > aDialog;
-            aDialog->Execute();
+            SafeModeQueryDialog aDialog(rReq.GetFrameWeld());
+            aDialog.execute();
             break;
         }
 
@@ -1242,7 +1284,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sfx.appl");
         }
         return _pFallback;
     }
@@ -1290,7 +1332,7 @@ namespace
         }
         catch( const Exception& )
         {
-               DBG_UNHANDLED_EXCEPTION();
+               DBG_UNHANDLED_EXCEPTION("sfx.appl");
         }
         return nullptr;
     }
@@ -1307,19 +1349,12 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             const SfxStringItem* pURLItem = rReq.GetArg<SfxStringItem>(SID_OPTIONS_PAGEURL);
             if ( pURLItem )
                 sPageURL = pURLItem->GetValue();
-            const SfxItemSet* pArgs = rReq.GetInternalArgs_Impl();
-            const SfxPoolItem* pItem = nullptr;
-            Reference < XFrame > xFrame;
-            if ( pArgs && pArgs->GetItemState( SID_FILLFRAME, false, &pItem ) == SfxItemState::SET )
-            {
-                OSL_ENSURE( dynamic_cast< const SfxUnoFrameItem *>( pItem ) !=  nullptr, "SfxApplication::OfaExec_Impl: XFrames are to be transported via SfxUnoFrameItem by now!" );
-                xFrame = static_cast< const SfxUnoFrameItem*>( pItem )->GetFrame();
-            }
+            Reference <XFrame> xFrame(GetRequestFrame(rReq));
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
             if ( pFact )
             {
                 VclPtr<VclAbstractDialog> pDlg =
-                    pFact->CreateFrameDialog( xFrame, rReq.GetSlot(), sPageURL );
+                    pFact->CreateFrameDialog(rReq.GetFrameWindow(), xFrame, rReq.GetSlot(), sPageURL );
                 short nRet = pDlg->Execute();
                 pDlg.disposeAndClear();
                 SfxViewFrame* pView = SfxViewFrame::GetFirst();
@@ -1407,7 +1442,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("sfx.appl");
                 }
 
                 pView = lcl_getBasicIDEViewFrame( pBasicIDE );
@@ -1455,12 +1490,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
                 }
             }
 
-            Reference< XFrame > xFrame;
-            const SfxItemSet* pIntSet = rReq.GetInternalArgs_Impl();
-            const SfxUnoFrameItem* pFrameItem = SfxItemSet::GetItem<SfxUnoFrameItem>(pIntSet, SID_FILLFRAME, false);
-            if (pFrameItem)
-                xFrame = pFrameItem->GetFrame();
-
+            Reference <XFrame> xFrame(GetRequestFrame(rReq));
             rReq.SetReturnValue(SfxStringItem(rReq.GetSlot(), ChooseMacro(xLimitToModel, xFrame, bChooseOnly)));
             rReq.Done();
         }
@@ -1487,12 +1517,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
             SAL_INFO("sfx.appl", "SfxApplication::OfaExec_Impl: case ScriptOrg");
 
-            Reference< XFrame > xFrame;
-            const SfxItemSet* pIntSet = rReq.GetInternalArgs_Impl();
-            const SfxUnoFrameItem* pFrameItem = SfxItemSet::GetItem<SfxUnoFrameItem>(pIntSet, SID_FILLFRAME, false);
-            if ( pFrameItem )
-                xFrame = pFrameItem->GetFrame();
-
+            Reference <XFrame> xFrame(GetRequestFrame(rReq));
             if ( !xFrame.is() )
             {
                 const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
@@ -1593,7 +1618,8 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
                 if ( pSet && pSet->GetItemState( pSetPool->GetWhich( SID_AUTO_CORRECT_DLG ), false, &pItem ) == SfxItemState::SET )
                     aSet.Put( *pItem );
 
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateAutoCorrTabDialog( &aSet ));
+                const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
+                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateAutoCorrTabDialog(pViewFrame? &pViewFrame->GetWindow(): nullptr, &aSet));
                 pDlg->Execute();
             }
 
@@ -1659,7 +1685,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             }
             catch(const css::uno::Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sfx.appl");
             }
         }
         break;

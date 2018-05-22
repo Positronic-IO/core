@@ -55,7 +55,7 @@ namespace com { namespace sun { namespace star { namespace lang {
  * The resulting default font height, however, stays the same (the logical
  * font height is converted).
  */
-SVX_DLLPUBLIC SdrOutliner* SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrModel& rMod);
+SVX_DLLPUBLIC std::unique_ptr<SdrOutliner> SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrModel& rMod);
 
 /**
  * Global default settings for the DrawingEngine.
@@ -200,11 +200,6 @@ public:
 };
 
 SVX_DLLPUBLIC SdrGlobalData & GetSdrGlobalData();
-
-namespace sdr
-{
-    SVX_DLLPUBLIC OUString GetResourceString(const char* pResID);
-}
 
 
 // #i101872# isolated GetTextEditBackgroundColor for tooling

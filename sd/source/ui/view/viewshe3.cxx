@@ -40,7 +40,6 @@
 #include <svx/svdopage.hxx>
 #include <sfx2/progress.hxx>
 #include <svx/svdobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/bindings.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdetc.hxx>
@@ -50,7 +49,6 @@
 #include <svl/intitem.hxx>
 #include <svl/style.hxx>
 #include <unotools/localedatawrapper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <stlsheet.hxx>
 #include <WindowUpdater.hxx>

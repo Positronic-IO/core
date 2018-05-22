@@ -30,7 +30,6 @@
 #include <ucbhelper/content.hxx>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
-#include <comphelper/namecontainer.hxx>
 #include <comphelper/propertysequence.hxx>
 
 namespace dbaxml
@@ -49,7 +48,6 @@ OXMLTable::OXMLTable( ODBFilter& _rImport
                 )
     :SvXMLImportContext( _rImport, nPrfx, _sLocalName )
     ,m_xParentContainer(_xParentContainer)
-    ,m_sServiceName(_sServiceName)
     ,m_bApplyFilter(false)
     ,m_bApplyOrder(false)
 {
@@ -94,7 +92,7 @@ OXMLTable::OXMLTable( ODBFilter& _rImport
         {"Parent", uno::Any(m_xParentContainer)}
     }));
     m_xTable.set(
-        GetOwnImport().GetComponentContext()->getServiceManager()->createInstanceWithArgumentsAndContext(m_sServiceName,aArguments, GetOwnImport().GetComponentContext()),
+        GetOwnImport().GetComponentContext()->getServiceManager()->createInstanceWithArgumentsAndContext(_sServiceName,aArguments, GetOwnImport().GetComponentContext()),
         UNO_QUERY);
 }
 

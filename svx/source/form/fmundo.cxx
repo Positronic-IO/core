@@ -52,7 +52,6 @@
 #include <sfx2/event.hxx>
 #include <osl/mutex.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/uno3.hxx>
 #include <connectivity/dbtools.hxx>
 
 using namespace ::com::sun::star::uno;
@@ -132,7 +131,7 @@ private:
         }
         catch( Exception const & )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
     FmFormModel&                    m_rModel;
@@ -376,7 +375,7 @@ namespace
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         return false;
@@ -431,7 +430,7 @@ void FmXUndoEnvironment::Inserted(FmFormObj* pObj)
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
 
@@ -497,7 +496,7 @@ void FmXUndoEnvironment::Removed(FmFormObj* pObj)
                 }
                 catch(Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("svx");
                 }
 
             }
@@ -594,7 +593,7 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
                 }
                 catch(const Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("svx");
                 }
             }
             aSetPos = pCache->emplace(xSet,aNewEntry).first;
@@ -635,7 +634,7 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
 
             // insert the new entry

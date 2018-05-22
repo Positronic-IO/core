@@ -33,6 +33,7 @@
 #include <breakit.hxx>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <editeng/langitem.hxx>
 #include <charatr.hxx>
 #include <editeng/fhgtitem.hxx>
@@ -161,7 +162,7 @@ sal_Int32 SwTextNode::GetDropLen( sal_Int32 nWishLen ) const
         sal_Unicode const cChar = GetText()[i];
         if( CH_TAB == cChar || CH_BREAK == cChar ||
             (( CH_TXTATR_BREAKWORD == cChar || CH_TXTATR_INWORD == cChar )
-                && SwTextSizeInfo::HasHint_( this, i ) ) )
+                && GetTextAttrForCharAt(i)) )
             break;
     }
     return i;

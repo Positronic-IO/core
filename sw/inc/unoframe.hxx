@@ -26,12 +26,9 @@
 #include <com/sun/star/text/XTextFrame.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/util/XModifyListener.hpp>
-#include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/document/XEventsSupplier.hpp>
 
 #include <cppuhelper/implbase.hxx>
-
-#include <sfx2/objsh.hxx>
 
 #include "flyenum.hxx"
 #include "frmfmt.hxx"
@@ -42,7 +39,8 @@
 class SdrObject;
 class SwDoc;
 class SwFormat;
-class SwFlyFrameFormat;
+class SfxItemPropertySet;
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
 
 class BaseFrameProperties_Impl;
 class SwXFrame : public cppu::WeakImplHelper
@@ -238,9 +236,6 @@ public:
 
     //XPropertySet
     virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-
-    void * operator new( size_t ) throw();
-    void operator delete( void * ) throw();
 };
 
 typedef cppu::ImplInheritanceHelper
@@ -269,12 +264,8 @@ public:
 
     // XEventsSupplier
     virtual css::uno::Reference< css::container::XNameReplace > SAL_CALL getEvents(  ) override;
-
-    void * operator new( size_t ) throw();
-    void operator delete( void * ) throw();
 };
 
-class SwOLENode;
 typedef cppu::ImplInheritanceHelper
 <   SwXFrame,
     css::document::XEmbeddedObjectSupplier2,
@@ -311,8 +302,6 @@ public:
 
     // XEventsSupplier
     virtual css::uno::Reference< css::container::XNameReplace > SAL_CALL getEvents(  ) override;
-    void * operator new( size_t ) throw();
-    void operator delete( void * ) throw();
 };
 
 class SwXOLEListener : public cppu::WeakImplHelper<css::util::XModifyListener>,

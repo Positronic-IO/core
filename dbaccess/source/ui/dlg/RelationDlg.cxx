@@ -34,7 +34,6 @@
 #include <RTableConnectionData.hxx>
 #include <RelationControl.hxx>
 #include <cppuhelper/exc_hlp.hxx>
-#include <comphelper/processfactory.hxx>
 
 #include <algorithm>
 
@@ -51,7 +50,6 @@ ORelationDialog::ORelationDialog( OJoinTableView* pParent,
                                  bool bAllowTableSelect )
     : ModalDialog(pParent, "RelationDialog",
         "dbaccess/ui/relationdialog.ui")
-    , m_pTableMap(&pParent->GetTabWinMap())
     , m_pOrigConnData(pConnectionData)
     , m_bTriedOneUpdate(false)
 {
@@ -72,7 +70,7 @@ ORelationDialog::ORelationDialog( OJoinTableView* pParent,
     m_pConnData->CopyFrom( *pConnectionData );
 
     Init(m_pConnData);
-    m_xTableControl.reset( new OTableListBoxControl(this, m_pTableMap, this) );
+    m_xTableControl.reset( new OTableListBoxControl(this, &pParent->GetTabWinMap(), this) );
 
     m_pPB_OK->SetClickHdl( LINK(this, ORelationDialog, OKClickHdl) );
 
@@ -207,7 +205,7 @@ IMPL_LINK_NOARG( ORelationDialog, OKClickHdl, Button*, void )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     m_bTriedOneUpdate = true;

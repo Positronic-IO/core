@@ -29,7 +29,6 @@
 #include <osl/file.hxx>
 #include <osl/process.h>
 #include <rtl/bootstrap.hxx>
-#include <svtools/miscopt.hxx>
 #include <unotools/localfilehelper.hxx>
 
 using namespace com::sun::star;
@@ -72,12 +71,6 @@ FirebirdDriver::FirebirdDriver(const css::uno::Reference< css::uno::XComponentCo
     , m_firebirdTMPDirectory(nullptr, true)
     , m_firebirdLockDirectory(nullptr, true)
 {
-    // Note: TempFile caches the URL on first access; call this here so that
-    // ~FirebirdDriver is not the first access, because that is called
-    // when the ServiceManager is disposing, so GetURL() would fail!
-    m_firebirdTMPDirectory.GetURL();
-    m_firebirdLockDirectory.GetURL();
-
     // ::utl::TempFile uses a unique temporary directory (subdirectory of
     // /tmp or other user specific tmp directory) per instance in which
     // we can create directories for firebird at will.
@@ -183,7 +176,7 @@ Reference< XConnection > SAL_CALL FirebirdDriver::connect(
     if ( ! acceptsURL(url) )
         return nullptr;
 
-    Connection* pCon = new Connection(this);
+    Connection* pCon = new Connection();
     Reference< XConnection > xCon = pCon;
     pCon->construct(url, info);
 
@@ -197,10 +190,7 @@ Reference< XConnection > SAL_CALL FirebirdDriver::connect(
 
 sal_Bool SAL_CALL FirebirdDriver::acceptsURL( const OUString& url )
 {
-    SvtMiscOptions aMiscOptions;
-
-    return aMiscOptions.IsExperimentalMode() &&
-        (url == "sdbc:embedded:firebird" || url.startsWith("sdbc:firebird:"));
+    return (url == "sdbc:embedded:firebird" || url.startsWith("sdbc:firebird:"));
 }
 
 Sequence< DriverPropertyInfo > SAL_CALL FirebirdDriver::getPropertyInfo(
@@ -219,7 +209,7 @@ Sequence< DriverPropertyInfo > SAL_CALL FirebirdDriver::getPropertyInfo(
 sal_Int32 SAL_CALL FirebirdDriver::getMajorVersion(  )
 {
     // The major and minor version are sdbc driver specific. Must begin with 1.0
-    // as per http://api.libreoffice.org/docs/common/ref/com/sun/star/sdbc/XDriver.html
+    // as per https://api.libreoffice.org/docs/common/ref/com/sun/star/sdbc/XDriver.html
     return 1;
 }
 
@@ -248,42 +238,6 @@ namespace connectivity
 {
     namespace firebird
     {
-
-        void release(oslInterlockedCount& _refCount, ::cppu::OBroadcastHelper& rBHelper,
-                     Reference< XInterface >& _xInterface, XComponent* _pObject)
-        {
-            if (osl_atomic_decrement( &_refCount ) == 0)
-            {
-                osl_atomic_increment( &_refCount );
-
-                if (!rBHelper.bDisposed && !rBHelper.bInDispose)
-                {
-                    // remember the parent
-                    Reference< XInterface > xParent;
-                    {
-                        MutexGuard aGuard( rBHelper.rMutex );
-                        xParent = _xInterface;
-                        _xInterface = nullptr;
-                    }
-
-                    // First dispose
-                    _pObject->dispose();
-
-                    // only the alive ref holds the object
-                    OSL_ASSERT( _refCount == 1 );
-
-                    // release the parent in the ~
-                    if (xParent.is())
-                    {
-                        MutexGuard aGuard( rBHelper.rMutex );
-                        _xInterface = xParent;
-                    }
-                }
-            }
-            else
-                osl_atomic_increment( &_refCount );
-        }
-
         void checkDisposed(bool _bThrow)
         {
             if (_bThrow)

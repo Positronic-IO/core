@@ -38,6 +38,7 @@
 #include <docsh.hxx>
 #include <postit.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <attrib.hxx>
 #include <scitems.hxx>
 #include <drawview.hxx>
@@ -77,11 +78,11 @@ void FuText::StopEditMode()
     {
         /*  Put all undo actions already collected (e.g. create caption object)
             and all following undo actions (text changed) together into a ListAction. */
-        SdrUndoGroup* pCalcUndo = pDrawLayer->GetCalcUndo();
+        std::unique_ptr<SdrUndoGroup> pCalcUndo = pDrawLayer->GetCalcUndo();
 
         if(pCalcUndo)
         {
-            const OUString aUndoStr = ScGlobal::GetRscString( STR_UNDO_EDITNOTE );
+            const OUString aUndoStr = ScResId( STR_UNDO_EDITNOTE );
             pUndoMgr->EnterListAction( aUndoStr, aUndoStr, 0, pViewShell->GetViewShellId() );
 
             /*  Note has been created before editing, if first undo action is
@@ -91,9 +92,9 @@ void FuText::StopEditMode()
 
             // create a "insert note" undo action if needed
             if( bNewNote )
-                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, pNote->GetNoteData(), true, pCalcUndo ) );
+                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, pNote->GetNoteData(), true, pCalcUndo.release() ) );
             else
-                pUndoMgr->AddUndoAction( pCalcUndo );
+                pUndoMgr->AddUndoAction( pCalcUndo.release() );
         }
     }
 
@@ -142,7 +143,7 @@ void FuText::StopEditMode()
                 // delete note from document (removes caption, but does not delete it)
                 rDoc.ReleaseNote(aNotePos);
                 // create undo action for removed note
-                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, aNoteData, false, pDrawLayer->GetCalcUndo() ) );
+                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, aNoteData, false, pDrawLayer->GetCalcUndo().release() ) );
             }
             else
             {
@@ -172,7 +173,7 @@ void FuText::StopEditMode()
                 SfxListUndoAction* pAction = dynamic_cast< SfxListUndoAction* >( pUndoMgr->GetUndoAction() );
                 OSL_ENSURE( pAction, "FuText::StopEditMode - list undo action expected" );
                 if( pAction )
-                    pAction->SetComment( ScGlobal::GetRscString( bNewNote ? STR_UNDO_INSERTNOTE : STR_UNDO_DELETENOTE ) );
+                    pAction->SetComment( ScResId( bNewNote ? STR_UNDO_INSERTNOTE : STR_UNDO_DELETENOTE ) );
             }
         }
 

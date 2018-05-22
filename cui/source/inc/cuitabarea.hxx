@@ -195,7 +195,7 @@ public:
     virtual ~SvxTransparenceTabPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create(vcl::Window*, const SfxItemSet*);
+    static VclPtr<SfxTabPage> Create(TabPageParent, const SfxItemSet*);
     static const sal_uInt16* GetRanges() { return pTransparenceRanges; }
 
     virtual bool FillItemSet(SfxItemSet*) override;
@@ -204,6 +204,7 @@ public:
     virtual void ActivatePage(const SfxItemSet& rSet) override;
     virtual DeactivateRC DeactivatePage(SfxItemSet* pSet) override;
     virtual void PointChanged(vcl::Window* pWindow, RectPoint eRP) override;
+    virtual void PointChanged(weld::DrawingArea* pWindow, RectPoint eRP) override;
 
     void SetPageType(PageType nInType) { nPageType = nInType; }
     void SetDlgType(sal_uInt16 nInType) { nDlgType = nInType; }
@@ -215,7 +216,6 @@ public:
 class SvxAreaTabPage : public SvxTabPage
 {
     using TabPage::ActivatePage;
-    using TabPage::DeactivatePage;
     static const sal_uInt16 pAreaRanges[];
 private:
     ScopedVclPtr<SfxTabPage>   m_pFillTabPage;
@@ -258,11 +258,13 @@ private:
     template< typename TabPage >
     DeactivateRC DeactivatePage_Impl( SfxItemSet* pSet );
 public:
+    using TabPage::DeactivatePage;
+
     SvxAreaTabPage( vcl::Window* pParent, const SfxItemSet& rInAttrs );
     virtual ~SvxAreaTabPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     static const sal_uInt16* GetRanges() { return pAreaRanges; }
 
     virtual bool FillItemSet( SfxItemSet* ) override;
@@ -270,6 +272,7 @@ public:
     virtual void ActivatePage( const SfxItemSet& rSet ) override;
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     void    SetColorList( XColorListRef const & pColorList ) { m_pColorList = pColorList; }
     void    SetGradientList( XGradientListRef const & pGrdLst)
@@ -323,7 +326,7 @@ public:
     virtual ~SvxShadowTabPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     static const sal_uInt16* GetRanges() { return pShadowRanges; }
 
     virtual bool FillItemSet( SfxItemSet* ) override;
@@ -331,6 +334,7 @@ public:
     virtual void ActivatePage( const SfxItemSet& rSet ) override;
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     void    SetColorList( XColorListRef const & pColorList ) { m_pColorList = pColorList; }
     void    SetPageType( PageType nInType ) { m_nPageType = nInType; }
@@ -374,7 +378,6 @@ private:
     ChangeType*         m_pnGradientListState;
     ChangeType*         m_pnColorListState;
 
-    XFillGradientItem   m_aXGradientItem;
     XFillAttrSetItem    m_aXFillAttr;
     SfxItemSet&         m_rXFSet;
 
@@ -401,7 +404,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 
@@ -443,7 +446,6 @@ private:
     ChangeType*         m_pnHatchingListState;
     ChangeType*         m_pnColorListState;
 
-    XFillHatchItem      m_aXHatchItem;
     XFillAttrSetItem    m_aXFillAttr;
     SfxItemSet&         m_rXFSet;
 
@@ -472,7 +474,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 
@@ -480,6 +482,7 @@ public:
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
 
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     void    SetColorList( XColorListRef const & pColorList ) { m_pColorList = pColorList; }
     void    SetHatchingList( XHatchListRef const & pHtchLst)
@@ -521,22 +524,19 @@ private:
 
     XBitmapListRef             m_pBitmapList;
     ChangeType*                m_pnBitmapListState;
-    XFillBitmapItem            m_aXBitmapItem;
 
     double                     m_fObjectWidth;
     double                     m_fObjectHeight;
+    bool                       m_bLogicalSize;
 
     XFillAttrSetItem           m_aXFillAttr;
     SfxItemSet&                m_rXFSet;
     const SdrView*             mpView;
     MapUnit                    mePoolUnit;
+    FieldUnit                  meFieldUnit;
     Size                       rBitmapSize;
     Size                       rFilledSize;
     Size                       rZoomedSize;
-    sal_Int64                  nFilledWidthPercent;
-    sal_Int64                  nFilledHeightPercent;
-    sal_Int64                  nZoomedWidthPercent;
-    sal_Int64                  nZoomedHeightPercent;
     DECL_LINK( ModifyBitmapHdl, ValueSet*, void );
     DECL_LINK( ClickScaleHdl, Button*, void );
     DECL_LINK( ModifyBitmapStyleHdl, ListBox&, void );
@@ -558,13 +558,14 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
 
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
     virtual void ActivatePage( const SfxItemSet& rSet ) override;
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea*, RectPoint eRP ) override;
 
     void    SetBitmapList( const XBitmapListRef& pBmpLst) { m_pBitmapList = pBmpLst; }
     void    SetBmpChgd( ChangeType* pIn ) { m_pnBitmapListState = pIn; }
@@ -596,7 +597,6 @@ private:
     ChangeType*         m_pnPatternListState;
     ChangeType*         m_pnColorListState;
 
-    XFillBitmapItem     m_aXPatternItem;
     XFillAttrSetItem    m_aXFillAttr;
     SfxItemSet&         m_rXFSet;
 
@@ -616,7 +616,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 
@@ -624,6 +624,7 @@ public:
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
 
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea*, RectPoint eRP ) override;
 
     void    SetColorList( XColorListRef const & pColorList ) { m_pColorList = pColorList; }
     void    SetPatternList( XPatternListRef const & pPatternList) { m_pPatternList = pPatternList; }
@@ -691,7 +692,6 @@ private:
 
     ChangeType*         pnColorListState;
 
-    XFillColorItem      aXFillColorItem;
     XFillAttrSetItem    aXFillAttr;
     SfxItemSet&         rXFSet;
 
@@ -735,7 +735,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 

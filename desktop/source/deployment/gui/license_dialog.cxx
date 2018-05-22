@@ -24,7 +24,6 @@
 #include <comphelper/unwrapargs.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <svtools/svmedit.hxx>
@@ -34,9 +33,7 @@
 #include <vcl/threadex.hxx>
 #include <vcl/builderfactory.hxx>
 
-#include <dp_shared.hxx>
 #include "license_dialog.hxx"
-#include <strings.hrc>
 
 #include <functional>
 

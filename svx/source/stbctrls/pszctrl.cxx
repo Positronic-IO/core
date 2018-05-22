@@ -37,15 +37,12 @@
 #define PAINT_OFFSET    5
 
 #include <editeng/sizeitem.hxx>
-#include <svx/dialmgr.hxx>
 #include <svx/dlgutil.hxx>
 #include "stbctrls.h"
 
-#include <svx/strings.hrc>
 #include <svx/svxids.hrc>
 #include <bitmaps.hlst>
 #include <unotools/localedatawrapper.hxx>
-#include <comphelper/processfactory.hxx>
 
 
 /*  [Description]

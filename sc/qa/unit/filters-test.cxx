@@ -470,7 +470,7 @@ void ScFiltersTest::testLegacyCellAnchoredRotatedShape()
 {
     {
         // This example doc contains cell anchored shape that is rotated, the
-        // rotated shape is in fact clipped by the sheet boundries (and thus
+        // rotated shape is in fact clipped by the sheet boundaries (and thus
         // is a good edge case test to see if we import it still correctly)
         ScDocShellRef xDocSh = loadDoc("legacycellanchoredrotatedclippedshape.", FORMAT_ODS);
 
@@ -496,7 +496,7 @@ void ScFiltersTest::testLegacyCellAnchoredRotatedShape()
     }
     {
         // This example doc contains cell anchored shape that is rotated, the
-        // rotated shape is in fact clipped by the sheet boundries, additionally
+        // rotated shape is in fact clipped by the sheet boundaries, additionally
         // the shape is completely hidden because the rows the shape occupies
         // are hidden
         ScDocShellRef xDocSh = loadDoc("legacycellanchoredrotatedhiddenshape.", FORMAT_ODS, true);
@@ -608,8 +608,8 @@ void ScFiltersTest::testSortWithSharedFormulasODS()
 
     // Set A1:E17 as an anonymous database range to sheet, or else Calc would
     // refuse to sort the range.
-    ScDBData* pDBData = new ScDBData(STR_DB_LOCAL_NONAME, 0, 0, 0, 4, 16, true, true);
-    rDoc.SetAnonymousDBData(0, pDBData);
+    std::unique_ptr<ScDBData> pDBData(new ScDBData(STR_DB_LOCAL_NONAME, 0, 0, 0, 4, 16, true, true));
+    rDoc.SetAnonymousDBData(0, std::move(pDBData));
 
     // Sort ascending by Column E.
 
@@ -722,8 +722,8 @@ void ScFiltersTest::testSortWithSheetExternalReferencesODS_Impl( ScDocShellRef c
     }
 
     // Set as an anonymous database range to sort.
-    ScDBData* pDBData = new ScDBData(STR_DB_LOCAL_NONAME, 0, 0, nRow1, 3, nRow2, true, true);
-    rDoc.SetAnonymousDBData(0, pDBData);
+    std::unique_ptr<ScDBData> pDBData(new ScDBData(STR_DB_LOCAL_NONAME, 0, 0, nRow1, 3, nRow2, true, true));
+    rDoc.SetAnonymousDBData(0, std::move(pDBData));
 
     // Sort descending by Column A.
     ScSortParam aSortData;

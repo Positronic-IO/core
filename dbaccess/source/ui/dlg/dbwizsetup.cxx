@@ -31,7 +31,6 @@
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
-#include <vcl/msgbox.hxx>
 #include <stringconstants.hxx>
 #include "adminpages.hxx"
 #include <sfx2/docfilt.hxx>
@@ -75,7 +74,6 @@
 #include <svl/filenotation.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/namedvaluecollection.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
@@ -186,12 +184,10 @@ void ODbTypeWizDialogSetup::declareAuthDepPath( const OUString& _sURL, PathId _n
     // collect the elements of the path
     WizardPath aPath;
 
-    svt::RoadmapWizardTypes::WizardPath::const_iterator aIter = _rPaths.begin();
-    svt::RoadmapWizardTypes::WizardPath::const_iterator aEnd = _rPaths.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& path : _rPaths)
     {
-        if ( bHasAuthentication || ( *aIter != PAGE_DBSETUPWIZARD_AUTHENTIFICATION ) )
-            aPath.push_back( *aIter );
+        if ( bHasAuthentication || ( path != PAGE_DBSETUPWIZARD_AUTHENTIFICATION ) )
+            aPath.push_back(path);
     }
 
     // call base method
@@ -383,11 +379,8 @@ void ODbTypeWizDialogSetup::resetPages(const Reference< XPropertySet >& _rxDatas
     // are set. Select another data source of the same type, where the indirect props are not set (yet). Then,
     // the indirect property values of the first ds are shown in the second ds ...)
     const ODbDataSourceAdministrationHelper::MapInt2String& rMap = m_pImpl->getIndirectProperties();
-    for (   ODbDataSourceAdministrationHelper::MapInt2String::const_iterator aIndirect = rMap.begin();
-            aIndirect != rMap.end();
-            ++aIndirect
-        )
-        getWriteOutputSet()->ClearItem( static_cast<sal_uInt16>(aIndirect->first) );
+    for (auto const& elem : rMap)
+        getWriteOutputSet()->ClearItem( static_cast<sal_uInt16>(elem.first) );
 
     // extract all relevant data from the property set of the data source
     m_pImpl->translateProperties(_rxDatasource, *getWriteOutputSet());
@@ -789,7 +782,7 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
         bool bRet = false;
         ::sfx2::FileDialogHelper aFileDlg(
                 ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION,
-                FileDialogFlags::NONE, this);
+                FileDialogFlags::NONE, GetFrameWeld());
         std::shared_ptr<const SfxFilter> pFilter = getStandardDatabaseFilter();
         if ( pFilter )
         {
@@ -904,7 +897,7 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
 
@@ -918,7 +911,7 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
                 if ( m_xDesktop.is() )
                     m_xDesktop->addTerminateListener( this );
             }
-            catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+            catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
 
             m_aAsyncCaller.Call();
         }
@@ -954,7 +947,7 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
                 if ( m_xDesktop.is() )
                     m_xDesktop->removeTerminateListener( this );
             }
-            catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+            catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
 
             release();
         }
@@ -991,7 +984,7 @@ bool ODbTypeWizDialogSetup::SaveDatabaseDocument()
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
 
             return true;

@@ -67,6 +67,7 @@
 #include <mailmergehelper.hxx>
 
 #include <unomid.h>
+#include <iodetect.hxx>
 
 #include <memory>
 
@@ -1005,7 +1006,7 @@ void SAL_CALL SwXMailMerge::setPropertyValue(
             else if(pData == &m_sInServerPassword)
                 bOK = rValue >>= m_sInServerPassword;
             else if(pData == &m_sOutServerPassword)
-                bOK = rValue >>= m_sInServerPassword;
+                bOK = rValue >>= m_sOutServerPassword;
             else {
                 OSL_FAIL("invalid pointer" );
             }

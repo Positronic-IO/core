@@ -21,7 +21,6 @@
 #include <utility>
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 
 #include "eertfpar.hxx"
@@ -497,9 +496,9 @@ void EditRTFParser::CreateStyleSheets()
     // the SvxRTFParser has now created the template...
     if (mpEditEngine->GetStyleSheetPool() && mpEditEngine->IsImportRTFStyleSheetsSet())
     {
-        for (SvxRTFStyleTbl::iterator it = GetStyleTbl().begin(); it != GetStyleTbl().end(); ++it)
+        for (auto const& elem : GetStyleTbl())
         {
-            SvxRTFStyleType* pRTFStyle = it->second.get();
+            SvxRTFStyleType* pRTFStyle = elem.second.get();
             CreateStyleSheet( pRTFStyle );
         }
     }
@@ -618,9 +617,9 @@ sal_Int32 EditNodeIdx::GetIdx() const
 EditPosition::EditPosition(EditEngine* pEE, EditSelection* pSel) :
     mpEditEngine(pEE), mpCurSel(pSel) {}
 
-EditPosition* EditPosition::Clone() const
+std::unique_ptr<EditPosition> EditPosition::Clone() const
 {
-    return new EditPosition(mpEditEngine, mpCurSel);
+    return std::unique_ptr<EditPosition>(new EditPosition(mpEditEngine, mpCurSel));
 }
 
 EditNodeIdx* EditPosition::MakeNodeIdx() const

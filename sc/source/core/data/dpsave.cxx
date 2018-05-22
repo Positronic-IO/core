@@ -69,7 +69,6 @@ static void lcl_SetBoolProperty( const uno::Reference<beans::XPropertySet>& xPro
 
 ScDPSaveMember::ScDPSaveMember(const OUString& rName) :
     aName( rName ),
-    mpLayoutName(nullptr),
     nVisibleMode( SC_DPSAVEMODE_DONTKNOW ),
     nShowDetailsMode( SC_DPSAVEMODE_DONTKNOW )
 {
@@ -77,12 +76,10 @@ ScDPSaveMember::ScDPSaveMember(const OUString& rName) :
 
 ScDPSaveMember::ScDPSaveMember(const ScDPSaveMember& r) :
     aName( r.aName ),
-    mpLayoutName(nullptr),
+    mpLayoutName( r.mpLayoutName ),
     nVisibleMode( r.nVisibleMode ),
     nShowDetailsMode( r.nShowDetailsMode )
 {
-    if (r.mpLayoutName)
-        mpLayoutName.reset(new OUString(*r.mpLayoutName));
 }
 
 ScDPSaveMember::~ScDPSaveMember()
@@ -126,12 +123,12 @@ void ScDPSaveMember::SetName( const OUString& rNew )
 
 void ScDPSaveMember::SetLayoutName( const OUString& rName )
 {
-    mpLayoutName.reset(new OUString(rName));
+    mpLayoutName = rName;
 }
 
-const OUString* ScDPSaveMember::GetLayoutName() const
+const boost::optional<OUString> & ScDPSaveMember::GetLayoutName() const
 {
-    return mpLayoutName.get();
+    return mpLayoutName;
 }
 
 void ScDPSaveMember::RemoveLayoutName()
@@ -189,8 +186,6 @@ void ScDPSaveMember::Dump(int nIndent) const
 
 ScDPSaveDimension::ScDPSaveDimension(const OUString& rName, bool bDataLayout) :
     aName( rName ),
-    mpLayoutName(nullptr),
-    mpSubtotalName(nullptr),
     bIsDataLayout( bDataLayout ),
     bDupFlag( false ),
     nOrientation( sheet::DataPilotFieldOrientation_HIDDEN ),
@@ -208,8 +203,8 @@ ScDPSaveDimension::ScDPSaveDimension(const OUString& rName, bool bDataLayout) :
 
 ScDPSaveDimension::ScDPSaveDimension(const ScDPSaveDimension& r) :
     aName( r.aName ),
-    mpLayoutName(nullptr),
-    mpSubtotalName(nullptr),
+    mpLayoutName( r.mpLayoutName ),
+    mpSubtotalName( r.mpSubtotalName ),
     bIsDataLayout( r.bIsDataLayout ),
     bDupFlag( r.bDupFlag ),
     nOrientation( r.nOrientation ),
@@ -223,40 +218,27 @@ ScDPSaveDimension::ScDPSaveDimension(const ScDPSaveDimension& r) :
     for (MemberList::const_iterator i=r.maMemberList.begin(); i != r.maMemberList.end() ; ++i)
     {
         const OUString& rName =  (*i)->GetName();
-        ScDPSaveMember* pNew = new ScDPSaveMember( **i );
-        maMemberHash[rName] = pNew;
-        maMemberList.push_back( pNew );
+        std::unique_ptr<ScDPSaveMember> pNew(new ScDPSaveMember( **i ));
+        maMemberList.push_back( pNew.get() );
+        maMemberHash[rName] = std::move(pNew);
     }
     if (r.pReferenceValue)
-        pReferenceValue = new sheet::DataPilotFieldReference( *(r.pReferenceValue) );
-    else
-        pReferenceValue = nullptr;
+        pReferenceValue.reset( new sheet::DataPilotFieldReference( *(r.pReferenceValue) ) );
     if (r.pSortInfo)
-        pSortInfo = new sheet::DataPilotFieldSortInfo( *(r.pSortInfo) );
-    else
-        pSortInfo = nullptr;
+        pSortInfo.reset( new sheet::DataPilotFieldSortInfo( *(r.pSortInfo) ) );
     if (r.pAutoShowInfo)
-        pAutoShowInfo = new sheet::DataPilotFieldAutoShowInfo( *(r.pAutoShowInfo) );
-    else
-        pAutoShowInfo = nullptr;
+        pAutoShowInfo.reset( new sheet::DataPilotFieldAutoShowInfo( *(r.pAutoShowInfo) ) );
     if (r.pLayoutInfo)
-        pLayoutInfo = new sheet::DataPilotFieldLayoutInfo( *(r.pLayoutInfo) );
-    else
-        pLayoutInfo = nullptr;
-    if (r.mpLayoutName)
-        mpLayoutName.reset(new OUString(*r.mpLayoutName));
-    if (r.mpSubtotalName)
-        mpSubtotalName.reset(new OUString(*r.mpSubtotalName));
+        pLayoutInfo.reset(new sheet::DataPilotFieldLayoutInfo( *(r.pLayoutInfo) ));
 }
 
 ScDPSaveDimension::~ScDPSaveDimension()
 {
-    for (MemberHash::const_iterator i=maMemberHash.begin(); i != maMemberHash.end() ; ++i)
-        delete i->second;
-    delete pReferenceValue;
-    delete pSortInfo;
-    delete pAutoShowInfo;
-    delete pLayoutInfo;
+    maMemberHash.clear();
+    pReferenceValue.reset();
+    pSortInfo.reset();
+    pAutoShowInfo.reset();
+    pLayoutInfo.reset();
 }
 
 bool ScDPSaveDimension::operator== ( const ScDPSaveDimension& r ) const
@@ -319,22 +301,21 @@ bool ScDPSaveDimension::operator== ( const ScDPSaveDimension& r ) const
     return true;
 }
 
-void ScDPSaveDimension::AddMember(ScDPSaveMember* pMember)
+void ScDPSaveDimension::AddMember(std::unique_ptr<ScDPSaveMember> pMember)
 {
     const OUString & rName = pMember->GetName();
-    MemberHash::iterator aExisting = maMemberHash.find( rName );
+    auto aExisting = maMemberHash.find( rName );
+    auto tmp = pMember.get();
     if ( aExisting == maMemberHash.end() )
     {
-        std::pair< const OUString, ScDPSaveMember *> key( rName, pMember );
-        maMemberHash.insert ( key );
+        maMemberHash[rName] = std::move(pMember);
     }
     else
     {
-        maMemberList.remove( aExisting->second );
-        delete aExisting->second;
-        aExisting->second = pMember;
+        maMemberList.erase(std::remove(maMemberList.begin(), maMemberList.end(), aExisting->second.get()), maMemberList.end());
+        aExisting->second = std::move(pMember);
     }
-    maMemberList.push_back( pMember );
+    maMemberList.push_back( tmp );
 }
 
 void ScDPSaveDimension::SetName( const OUString& rNew )
@@ -383,12 +364,12 @@ void ScDPSaveDimension::SetUsedHierarchy(long nNew)
 
 void ScDPSaveDimension::SetSubtotalName(const OUString& rName)
 {
-    mpSubtotalName.reset(new OUString(rName));
+    mpSubtotalName = rName;
 }
 
-const OUString* ScDPSaveDimension::GetSubtotalName() const
+const boost::optional<OUString> & ScDPSaveDimension::GetSubtotalName() const
 {
-    return mpSubtotalName.get();
+    return mpSubtotalName;
 }
 
 void ScDPSaveDimension::RemoveSubtotalName()
@@ -405,7 +386,7 @@ bool ScDPSaveDimension::IsMemberNameInUse(const OUString& rName) const
         if (rName.equalsIgnoreAsciiCase(pMem->GetName()))
             return true;
 
-        const OUString* pLayoutName = pMem->GetLayoutName();
+        const boost::optional<OUString> & pLayoutName = pMem->GetLayoutName();
         if (pLayoutName && rName.equalsIgnoreAsciiCase(*pLayoutName))
             return true;
     }
@@ -414,12 +395,12 @@ bool ScDPSaveDimension::IsMemberNameInUse(const OUString& rName) const
 
 void ScDPSaveDimension::SetLayoutName(const OUString& rName)
 {
-    mpLayoutName.reset(new OUString(rName));
+    mpLayoutName = rName;
 }
 
-const OUString* ScDPSaveDimension::GetLayoutName() const
+const boost::optional<OUString> & ScDPSaveDimension::GetLayoutName() const
 {
-    return mpLayoutName.get();
+    return mpLayoutName;
 }
 
 void ScDPSaveDimension::RemoveLayoutName()
@@ -429,38 +410,34 @@ void ScDPSaveDimension::RemoveLayoutName()
 
 void ScDPSaveDimension::SetReferenceValue(const sheet::DataPilotFieldReference* pNew)
 {
-    delete pReferenceValue;
     if (pNew)
-        pReferenceValue = new sheet::DataPilotFieldReference(*pNew);
+        pReferenceValue.reset( new sheet::DataPilotFieldReference(*pNew) );
     else
-        pReferenceValue = nullptr;
+        pReferenceValue.reset();
 }
 
 void ScDPSaveDimension::SetSortInfo(const sheet::DataPilotFieldSortInfo* pNew)
 {
-    delete pSortInfo;
     if (pNew)
-        pSortInfo = new sheet::DataPilotFieldSortInfo(*pNew);
+        pSortInfo.reset( new sheet::DataPilotFieldSortInfo(*pNew) );
     else
-        pSortInfo = nullptr;
+        pSortInfo.reset();
 }
 
 void ScDPSaveDimension::SetAutoShowInfo(const sheet::DataPilotFieldAutoShowInfo* pNew)
 {
-    delete pAutoShowInfo;
     if (pNew)
-        pAutoShowInfo = new sheet::DataPilotFieldAutoShowInfo(*pNew);
+        pAutoShowInfo.reset( new sheet::DataPilotFieldAutoShowInfo(*pNew) );
     else
-        pAutoShowInfo = nullptr;
+        pAutoShowInfo.reset();
 }
 
 void ScDPSaveDimension::SetLayoutInfo(const sheet::DataPilotFieldLayoutInfo* pNew)
 {
-    delete pLayoutInfo;
     if (pNew)
-        pLayoutInfo = new sheet::DataPilotFieldLayoutInfo(*pNew);
+        pLayoutInfo.reset( new sheet::DataPilotFieldLayoutInfo(*pNew) );
     else
-        pLayoutInfo = nullptr;
+        pLayoutInfo.reset();
 }
 
 void ScDPSaveDimension::SetCurrentPage( const OUString* pPage )
@@ -492,20 +469,20 @@ OUString ScDPSaveDimension::GetCurrentPage() const
 
 ScDPSaveMember* ScDPSaveDimension::GetExistingMemberByName(const OUString& rName)
 {
-    MemberHash::const_iterator res = maMemberHash.find (rName);
+    auto res = maMemberHash.find (rName);
     if (res != maMemberHash.end())
-        return res->second;
+        return res->second.get();
     return nullptr;
 }
 
 ScDPSaveMember* ScDPSaveDimension::GetMemberByName(const OUString& rName)
 {
-    MemberHash::const_iterator res = maMemberHash.find (rName);
+    auto res = maMemberHash.find (rName);
     if (res != maMemberHash.end())
-        return res->second;
+        return res->second.get();
 
     ScDPSaveMember* pNew = new ScDPSaveMember( rName );
-    maMemberHash[rName] = pNew;
+    maMemberHash[rName] = std::unique_ptr<ScDPSaveMember>(pNew);
     maMemberList.push_back( pNew );
     return pNew;
 }
@@ -514,12 +491,9 @@ void ScDPSaveDimension::SetMemberPosition( const OUString& rName, sal_Int32 nNew
 {
     ScDPSaveMember* pMember = GetMemberByName( rName ); // make sure it exists and is in the hash
 
-    maMemberList.remove( pMember );
+    maMemberList.erase(std::remove( maMemberList.begin(), maMemberList.end(), pMember), maMemberList.end() );
 
-    MemberList::iterator aIter = maMemberList.begin();
-    for (sal_Int32 i=0; i<nNewPos && aIter != maMemberList.end(); i++)
-        ++aIter;
-    maMemberList.insert( aIter, pMember );
+    maMemberList.insert( maMemberList.begin() + nNewPos, pMember );
 }
 
 void ScDPSaveDimension::WriteToSource( const uno::Reference<uno::XInterface>& xDim )
@@ -550,7 +524,7 @@ void ScDPSaveDimension::WriteToSource( const uno::Reference<uno::XInterface>& xD
         if (mpLayoutName)
             ScUnoHelpFunctions::SetOptionalPropertyValue(xDimProp, SC_UNO_DP_LAYOUTNAME, *mpLayoutName);
 
-        const OUString* pSubTotalName = GetSubtotalName();
+        const boost::optional<OUString> & pSubTotalName = GetSubtotalName();
         if (pSubTotalName)
             // Custom subtotal name, with '?' being replaced by the visible field name later.
             ScUnoHelpFunctions::SetOptionalPropertyValue(xDimProp, SC_UNO_DP_FIELD_SUBTOTALNAME, *pSubTotalName);
@@ -687,22 +661,17 @@ bool ScDPSaveDimension::HasInvisibleMember() const
 
 void ScDPSaveDimension::RemoveObsoleteMembers(const MemberSetType& rMembers)
 {
-    maMemberHash.clear();
     MemberList aNew;
-    MemberList::iterator it = maMemberList.begin(), itEnd = maMemberList.end();
-    for (; it != itEnd; ++it)
+    for (ScDPSaveMember* pMem : maMemberList)
     {
-        ScDPSaveMember* pMem = *it;
         if (rMembers.count(pMem->GetName()))
         {
             // This member still exists.
-            maMemberHash.emplace(pMem->GetName(), pMem);
             aNew.push_back(pMem);
         }
         else
         {
-            // This member no longer exists.
-            delete pMem;
+            maMemberHash.erase(pMem->GetName());
         }
     }
 
@@ -762,8 +731,7 @@ ScDPSaveData::ScDPSaveData() :
     nRepeatEmptyMode( SC_DPSAVEMODE_DONTKNOW ),
     bFilterButton( true ),
     bDrillDown( true ),
-    mbDimensionMembersBuilt(false),
-    mpGrandTotalName(nullptr)
+    mbDimensionMembersBuilt(false)
 {
 }
 
@@ -775,7 +743,7 @@ ScDPSaveData::ScDPSaveData(const ScDPSaveData& r) :
     bFilterButton( r.bFilterButton ),
     bDrillDown( r.bDrillDown ),
     mbDimensionMembersBuilt(r.mbDimensionMembersBuilt),
-    mpGrandTotalName(nullptr),
+    mpGrandTotalName(r.mpGrandTotalName),
     mpDimOrder(nullptr)
 {
     if ( r.pDimensionData )
@@ -785,9 +753,6 @@ ScDPSaveData::ScDPSaveData(const ScDPSaveData& r) :
     {
         m_DimList.push_back(o3tl::make_unique<ScDPSaveDimension>(*it));
     }
-
-    if (r.mpGrandTotalName)
-        mpGrandTotalName.reset(new OUString(*r.mpGrandTotalName));
 }
 
 ScDPSaveData& ScDPSaveData::operator= ( const ScDPSaveData& r )
@@ -837,12 +802,12 @@ ScDPSaveData::~ScDPSaveData()
 
 void ScDPSaveData::SetGrandTotalName(const OUString& rName)
 {
-    mpGrandTotalName.reset(new OUString(rName));
+    mpGrandTotalName = rName;
 }
 
-const OUString* ScDPSaveData::GetGrandTotalName() const
+const boost::optional<OUString> & ScDPSaveData::GetGrandTotalName() const
 {
-    return mpGrandTotalName.get();
+    return mpGrandTotalName;
 }
 
 namespace {
@@ -1132,7 +1097,7 @@ void ScDPSaveData::WriteToSource( const uno::Reference<sheet::XDimensionsSupplie
             // no error
         }
 
-        const OUString* pGrandTotalName = GetGrandTotalName();
+        const boost::optional<OUString> & pGrandTotalName = GetGrandTotalName();
         if (pGrandTotalName)
             ScUnoHelpFunctions::SetOptionalPropertyValue(xSourceProp, SC_UNO_DP_GRANDTOTAL_NAME, *pGrandTotalName);
     }
@@ -1325,7 +1290,7 @@ void ScDPSaveData::BuildAllDimensionMembers(ScDPTableData* pData)
 
             unique_ptr<ScDPSaveMember> pNewMember(new ScDPSaveMember(aMemName));
             pNewMember->SetIsVisible(true);
-            iter->AddMember(pNewMember.release());
+            iter->AddMember(std::move(pNewMember));
         }
     }
 

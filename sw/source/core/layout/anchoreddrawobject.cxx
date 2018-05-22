@@ -32,6 +32,8 @@
 #include <IDocumentState.hxx>
 #include <txtfly.hxx>
 #include <viewimp.hxx>
+#include <textboxhelper.hxx>
+#include <unomid.h>
 
 using namespace ::com::sun::star;
 
@@ -198,8 +200,6 @@ bool SwObjPosOscillationControl::OscillationDetected()
 SwAnchoredDrawObject::SwAnchoredDrawObject() :
     SwAnchoredObject(),
     mbValidPos( false ),
-    // --> #i34748#
-    mpLastObjRect( nullptr ),
     mbNotYetAttachedToAnchorFrame( true ),
     // --> #i28749#
     mbNotYetPositioned( true ),
@@ -661,9 +661,22 @@ const SwRect SwAnchoredDrawObject::GetObjBoundRect() const
 
             bool bEnableSetModified = pDoc->getIDocumentState().IsEnableSetModified();
             pDoc->getIDocumentState().SetEnableSetModified(false);
-            const_cast< SdrObject* >( GetDrawObj() )->Resize( aCurrObjRect.TopLeft(),
+            auto pObject = const_cast<SdrObject*>(GetDrawObj());
+            pObject->Resize( aCurrObjRect.TopLeft(),
                     Fraction( nTargetWidth, aCurrObjRect.GetWidth() ),
                     Fraction( nTargetHeight, aCurrObjRect.GetHeight() ), false );
+
+            if (SwFrameFormat* pFrameFormat = FindFrameFormat(pObject))
+            {
+                if (SwTextBoxHelper::isTextBox(pFrameFormat, RES_DRAWFRMFMT))
+                {
+                    // Shape has relative size and also a textbox, update its text area as well.
+                    uno::Reference<drawing::XShape> xShape(pObject->getUnoShape(), uno::UNO_QUERY);
+                    SwTextBoxHelper::syncProperty(pFrameFormat, RES_FRM_SIZE, MID_FRMSIZE_SIZE,
+                                                  uno::makeAny(xShape->getSize()));
+                }
+            }
+
             pDoc->getIDocumentState().SetEnableSetModified(bEnableSetModified);
         }
     }
@@ -724,11 +737,7 @@ void SwAnchoredDrawObject::AdjustPositioningAttr( const SwFrame* _pNewAnchorFram
 // If member <mpLastObjRect> is NULL, create one.
 void SwAnchoredDrawObject::SetLastObjRect( const tools::Rectangle& _rNewLastRect )
 {
-    if ( !mpLastObjRect )
-    {
-        mpLastObjRect.reset( new tools::Rectangle );
-    }
-    *(mpLastObjRect) = _rNewLastRect;
+    maLastObjRect = _rNewLastRect;
 }
 
 void SwAnchoredDrawObject::ObjectAttachedToAnchorFrame()

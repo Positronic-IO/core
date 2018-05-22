@@ -24,6 +24,7 @@
 #include <tools/b3dtrans.hxx>
 #include <svx/svxdllapi.h>
 #include <svx/obj3d.hxx>
+#include <memory>
 
 namespace sdr { namespace properties {
     class BaseProperties;
@@ -56,7 +57,7 @@ class Imp3DDepthRemapper;
 |*
 \************************************************************************/
 
-class SVX_DLLPUBLIC E3dScene : public E3dObject
+class SVX_DLLPUBLIC E3dScene : public E3dObject, public SdrObjList
 {
 private:
     // to allow sdr::properties::E3dSceneProperties access to StructureChanged()
@@ -70,7 +71,7 @@ protected:
     B3dCamera                   aCameraSet;
     Camera3D                    aCamera;
 
-    Imp3DDepthRemapper*         mp3DDepthRemapper;
+    mutable std::unique_ptr<Imp3DDepthRemapper> mp3DDepthRemapper;
 
     // Flag to determine if only selected objects should be drawn
     bool                        bDrawOnlySelected       : 1;
@@ -86,12 +87,13 @@ protected:
 
 protected:
     void SetDefaultAttributes();
-
     void ImpCleanup3DDepthMapper();
 
-public:
-    E3dScene();
+    // protected destructor
     virtual ~E3dScene() override;
+
+public:
+    E3dScene(SdrModel& rSdrModel);
 
     virtual void SetBoundRectDirty() override;
 
@@ -130,7 +132,7 @@ public:
     const Camera3D& GetCamera() const { return aCamera; }
     void removeAllNonSelectedObjects();
 
-    virtual E3dScene* Clone() const override;
+    virtual E3dScene* CloneSdrObject(SdrModel& rTargetModel) const override;
     E3dScene& operator=(const E3dScene&);
 
     virtual SdrObjGeoData *NewGeoData() const override;
@@ -168,6 +170,27 @@ public:
     void ResumeReportingDirtyRects();
     void SetAllSceneRectsDirty();
 
+    // set selection from E3dObject (temporary flag for 3D actions)
+    virtual void SetSelected(bool bNew) override;
+
+    // derived from SdrObjList
+    virtual void NbcInsertObject(SdrObject* pObj, size_t nPos=SAL_MAX_SIZE) override;
+    virtual void InsertObject(SdrObject* pObj, size_t nPos=SAL_MAX_SIZE) override;
+    virtual SdrObject* NbcRemoveObject(size_t nObjNum) override;
+    virtual SdrObject* RemoveObject(size_t nObjNum) override;
+
+    // needed for group functionality
+    virtual void SetRectsDirty(bool bNotMyself = false) override;
+    virtual void NbcSetLayer(SdrLayerID nLayer) override;
+    virtual void setParentOfSdrObject(SdrObjList* pNewObjList) override;
+    virtual void SetPage(SdrPage* pNewPage) override;
+    virtual SdrObjList* GetSubList() const override;
+    void Insert3DObj(E3dObject* p3DObj);
+    void Remove3DObj(E3dObject const * p3DObj);
+    virtual void SetTransformChanged() override;
+
+protected:
+    virtual basegfx::B3DRange RecalcBoundVolume() const override;
 };
 
 #endif // INCLUDED_SVX_SCENE3D_HXX

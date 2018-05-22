@@ -31,8 +31,7 @@
 #include <tools/bigint.hxx>
 #include <tools/helpers.hxx>
 
-#include "svdconv.hxx"
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 
 #include <sdr/contact/viewcontactofsdrcaptionobj.hxx>
@@ -189,16 +188,19 @@ sdr::contact::ViewContact* SdrCaptionObj::CreateObjectSpecificViewContact()
 }
 
 
-SdrCaptionObj::SdrCaptionObj():
-    SdrRectObj(OBJ_TEXT),
+SdrCaptionObj::SdrCaptionObj(SdrModel& rSdrModel)
+:   SdrRectObj(rSdrModel, OBJ_TEXT),
     aTailPoly(3),  // default size: 3 points = 2 lines
     mbSpecialTextBoxShadow(false),
     mbFixedTail(false)
 {
 }
 
-SdrCaptionObj::SdrCaptionObj(const tools::Rectangle& rRect, const Point& rTail):
-    SdrRectObj(OBJ_TEXT,rRect),
+SdrCaptionObj::SdrCaptionObj(
+    SdrModel& rSdrModel,
+    const tools::Rectangle& rRect,
+    const Point& rTail)
+:   SdrRectObj(rSdrModel, OBJ_TEXT,rRect),
     aTailPoly(3),  // default size: 3 points = 2 lines
     mbSpecialTextBoxShadow(false),
     mbFixedTail(false)
@@ -232,14 +234,28 @@ sal_uInt16 SdrCaptionObj::GetObjIdentifier() const
     return sal_uInt16(OBJ_CAPTION);
 }
 
-SdrCaptionObj* SdrCaptionObj::Clone() const
+SdrCaptionObj* SdrCaptionObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrCaptionObj >();
+    return CloneHelper< SdrCaptionObj >(rTargetModel);
+}
+
+SdrCaptionObj& SdrCaptionObj::operator=(const SdrCaptionObj& rObj)
+{
+    if( this == &rObj )
+        return *this;
+    SdrRectObj::operator=(rObj);
+
+    aTailPoly = rObj.aTailPoly;
+    mbSpecialTextBoxShadow = rObj.mbSpecialTextBoxShadow;
+    mbFixedTail = rObj.mbFixedTail;
+    maFixedTailPos = rObj.maFixedTailPos;
+
+    return *this;
 }
 
 OUString SdrCaptionObj::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulCAPTION));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulCAPTION));
 
     OUString aName(GetName());
     if (!aName.isEmpty())
@@ -255,7 +271,7 @@ OUString SdrCaptionObj::TakeObjNameSingul() const
 
 OUString SdrCaptionObj::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralCAPTION);
+    return SvxResId(STR_ObjNamePluralCAPTION);
 }
 
 basegfx::B2DPolyPolygon SdrCaptionObj::TakeXorPoly() const
@@ -663,12 +679,6 @@ Point SdrCaptionObj::GetSnapPoint(sal_uInt32 /*i*/) const
     return Point(0,0);
 }
 
-void SdrCaptionObj::SetModel(SdrModel* pNewModel)
-{
-    SdrRectObj::SetModel(pNewModel);
-    ImpRecalcTail();
-}
-
 void SdrCaptionObj::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
 {
     SdrRectObj::Notify(rBC,rHint);
@@ -706,8 +716,9 @@ SdrObject* SdrCaptionObj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
         if (pOL!=nullptr) { pRet=pRect; bInsTail = false; }
         if (pOL==nullptr) pOL=pRect->GetSubList();
         if (pOL!=nullptr) { pRet=pRect; bInsRect = false; }
-        if (pOL==nullptr) {
-            SdrObjGroup* pGrp=new SdrObjGroup;
+        if (pOL==nullptr)
+        {
+            SdrObjGroup* pGrp = new SdrObjGroup(getSdrModelFromSdrObject());
             pOL=pGrp->GetSubList();
             pRet=pGrp;
         }
@@ -746,33 +757,8 @@ void SdrCaptionObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, cons
 
     handleNegativeScale(aScale, &fRotate);
 
-    // force metric to pool metric
-    MapUnit eMapUnit = pModel->GetItemPool().GetMetric(0);
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplMMToTwips(aTranslate.getX()));
-                aTranslate.setY(ImplMMToTwips(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplMMToTwips(aScale.getX()));
-                aScale.setY(ImplMMToTwips(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRSetBaseGeometry: Missing unit translation to PoolMetric!");
-            }
-        }
-    }
-
     // if anchor is used, make position relative to it
-    if( pModel->IsWriter() )
+    if(getSdrModelFromSdrObject().IsWriter())
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {

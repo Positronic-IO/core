@@ -54,7 +54,6 @@ private:
 
     std::vector<OUString> m_aStrHorzList;
     std::vector<OUString> m_aStrVertList;
-    std::vector<OUString> m_aLineTypes;
 
     SdrCaptionType      nCaptionType;
     sal_Int32           nGap;
@@ -83,7 +82,7 @@ public:
     virtual ~SvxCaptionTabPage() override;
     virtual void dispose() override;
 
-    static VclPtr<SfxTabPage>  Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage>  Create( TabPageParent, const SfxItemSet* );
     static const sal_uInt16*  GetRanges() { return pCaptionRanges; }
 
     virtual bool        FillItemSet( SfxItemSet* ) override;

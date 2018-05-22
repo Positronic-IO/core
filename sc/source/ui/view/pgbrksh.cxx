@@ -27,11 +27,10 @@
 
 #include <pgbrksh.hxx>
 #include <tabvwsh.hxx>
-#include <scresid.hxx>
 #include <document.hxx>
 #include <sc.hrc>
 
-#define ScPageBreakShell
+#define ShellClass_ScPageBreakShell
 #include <scslots.hxx>
 
 

@@ -968,7 +968,7 @@ MSWordSections::MSWordSections( MSWordExportBase& rExport )
     : mbDocumentIsProtected( false )
 {
     const SwSectionFormat *pFormat = nullptr;
-    rExport.m_pAktPageDesc = &rExport.m_pDoc->GetPageDesc( 0 );
+    rExport.m_pCurrentPageDesc = &rExport.m_pDoc->GetPageDesc( 0 );
 
     const SfxPoolItem* pI;
     const SwNode* pNd = rExport.m_pCurPam->GetContentNode();
@@ -1009,7 +1009,7 @@ MSWordSections::MSWordSections( MSWordExportBase& rExport )
         AppendSection( *static_cast<const SwFormatPageDesc*>(pI), *pNd, pFormat, nRstLnNum );
     }
     else
-        AppendSection( rExport.m_pAktPageDesc, pFormat, nRstLnNum );
+        AppendSection( rExport.m_pCurrentPageDesc, pFormat, nRstLnNum );
 }
 
 WW8_WrPlcSepx::WW8_WrPlcSepx( MSWordExportBase& rExport )
@@ -1392,6 +1392,10 @@ void WW8AttributeOutput::SectionPageBorders( const SwFrameFormat* pPdFormat, con
             nPgBorder = 2;
     }
 
+    // [MS-DOC] 2.9.255 SPgbPropOperand; 2.9.185 PgbOffsetFrom
+    if (m_bFromEdge)
+        nPgBorder |= (1<<5);
+
     if ( USHRT_MAX != nPgBorder )
     {
         // write the Flag and Border Attribute
@@ -1513,7 +1517,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
     if ( rSepInfo.pSectionFormat && !pPd )
         pPd = &m_pDoc->GetPageDesc( 0 );
 
-    m_pAktPageDesc = pPd;
+    m_pCurrentPageDesc = pPd;
 
     if ( !pPd )
         return;
@@ -1640,7 +1644,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
                 else
                     pPdFirstPgFormat = &pPd->GetMaster();
 
-                m_pAktPageDesc = pPd = pFollow;
+                m_pCurrentPageDesc = pPd = pFollow;
                 pPdFormat = &rFollowFormat;
 
                 // has different headers/footers for the title page
@@ -2044,7 +2048,7 @@ bool WW8_WrPlcSubDoc::WriteGenericText( WW8Export& rWrt, sal_uInt8 nTTyp,
 
                 if( aContent[ i ] != nullptr )
                 {
-                    // is it an writer or sdr - textbox?
+                    // is it a writer or sdr - textbox?
                     const SdrObject& rObj = *static_cast<SdrObject const *>(aContent[ i ]);
                     if (rObj.GetObjInventor() == SdrInventor::FmForm)
                     {
@@ -2300,7 +2304,7 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
                 for ( sal_uInt16 i = 0; i < nLen; ++i )
                 {
                     // write textbox story - FTXBXS
-                    // is it an writer or sdr - textbox?
+                    // is it a writer or sdr - textbox?
                     const SdrObject* pObj = static_cast<SdrObject const *>(aContent[ i ]);
                     sal_Int32 nCnt = 1;
                     if (pObj && dynamic_cast< const SdrTextObj *>( pObj ) ==  nullptr )

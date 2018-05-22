@@ -19,8 +19,8 @@
 
 #include <reffact.hxx>
 #include <document.hxx>
-#include <scresid.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <docsh.hxx>
 #include <crnrdlg.hxx>
 #include <vcl/weld.hxx>
@@ -385,21 +385,22 @@ void ScColRowNameRangesDlg::UpdateNames()
     OUString aString;
     OUString strDelim(" --- ");
     aString = strDelim;
-    aString += ScGlobal::GetRscString( STR_COLUMN );
+    aString += ScResId( STR_COLUMN );
     aString += strDelim;
     sal_Int32 nPos = pLbRange->InsertEntry( aString );
     pLbRange->SetEntryData( nPos, reinterpret_cast<void*>(nEntryDataDelim) );
     if ( (nCount = xColNameRanges->size()) > 0 )
     {
-        std::unique_ptr<ScRangePair*[]> ppSortArray(xColNameRanges->CreateNameSortedArray(
-               nCount, pDoc ));
+        std::vector<const ScRangePair*> aSortArray(xColNameRanges->CreateNameSortedArray(
+               pDoc ));
+        nCount = aSortArray.size();
         for ( j=0; j < nCount; j++ )
         {
-            const ScRange aRange(ppSortArray[j]->GetRange(0));
+            const ScRange aRange(aSortArray[j]->GetRange(0));
             aString = aRange.Format(ScRefFlags::RANGE_ABS_3D, pDoc, aDetails);
 
             //@008 get range parameters from document
-            ppSortArray[j]->GetRange(0).GetVars( nCol1, nRow1, nTab1,
+            aSortArray[j]->GetRange(0).GetVars( nCol1, nRow1, nTab1,
                                             nCol2, nRow2, nTab2 );
             SCCOL q=nCol1+3;
             if(q>nCol2) q=nCol2;
@@ -428,21 +429,22 @@ void ScColRowNameRangesDlg::UpdateNames()
         }
     }
     aString = strDelim;
-    aString += ScGlobal::GetRscString( STR_ROW );
+    aString += ScResId( STR_ROW );
     aString += strDelim;
     nPos = pLbRange->InsertEntry( aString );
     pLbRange->SetEntryData( nPos, reinterpret_cast<void*>(nEntryDataDelim) );
     if ( (nCount = xRowNameRanges->size()) > 0 )
     {
-        std::unique_ptr<ScRangePair*[]> ppSortArray(xRowNameRanges->CreateNameSortedArray(
-               nCount, pDoc ));
+        std::vector<const ScRangePair*> aSortArray(xRowNameRanges->CreateNameSortedArray(
+               pDoc ));
+        nCount = aSortArray.size();
         for ( j=0; j < nCount; j++ )
         {
-            const ScRange aRange(ppSortArray[j]->GetRange(0));
+            const ScRange aRange(aSortArray[j]->GetRange(0));
             aString = aRange.Format(ScRefFlags::RANGE_ABS_3D, pDoc, aDetails);
 
             //@008 Build string for rows below
-            ppSortArray[j]->GetRange(0).GetVars( nCol1, nRow1, nTab1,
+            aSortArray[j]->GetRange(0).GetVars( nCol1, nRow1, nTab1,
                                             nCol2, nRow2, nTab2 );
             SCROW q=nRow1+3;
             if(q>nRow2) q=nRow2;
@@ -555,11 +557,11 @@ IMPL_LINK_NOARG(ScColRowNameRangesDlg, AddBtnHdl, Button*, void)
             ScRangePair* pPair;
             if ( ( pPair = xColNameRanges->Find( theCurArea ) ) != nullptr )
             {
-                xColNameRanges->Remove( pPair );
+                xColNameRanges->Remove( *pPair );
             }
             if ( ( pPair = xRowNameRanges->Find( theCurArea ) ) != nullptr )
             {
-                xRowNameRanges->Remove( pPair );
+                xRowNameRanges->Remove( *pPair );
             }
             if ( pBtnColHead->IsChecked() )
                 xColNameRanges->Join( ScRangePair( theCurArea, theCurData ) );
@@ -581,7 +583,7 @@ IMPL_LINK_NOARG(ScColRowNameRangesDlg, AddBtnHdl, Button*, void)
         }
         else
         {
-            ERRORBOX(GetFrameWeld(), ScGlobal::GetRscString(STR_INVALIDTABNAME));
+            ERRORBOX(GetFrameWeld(), ScResId(STR_INVALIDTABNAME));
             if ( !bOk1 )
                 pEdAssign->GrabFocus();
             else
@@ -609,7 +611,7 @@ IMPL_LINK_NOARG(ScColRowNameRangesDlg, RemoveBtnHdl, Button*, void)
         bFound = true;
     if ( bFound )
     {
-        OUString aStrDelMsg = ScGlobal::GetRscString( STR_QUERY_DELENTRY );
+        OUString aStrDelMsg = ScResId( STR_QUERY_DELENTRY );
         OUString aMsg       = aStrDelMsg.getToken( 0, '#' )
                             + aRangeStr
                             + aStrDelMsg.getToken( 1, '#' );
@@ -617,9 +619,9 @@ IMPL_LINK_NOARG(ScColRowNameRangesDlg, RemoveBtnHdl, Button*, void)
         if (RET_YES == QUERYBOX(GetFrameWeld(), aMsg))
         {
             if ( bColName )
-                xColNameRanges->Remove( pPair );
+                xColNameRanges->Remove( *pPair );
             else
-                xRowNameRanges->Remove( pPair );
+                xRowNameRanges->Remove( *pPair );
 
             UpdateNames();
             const sal_Int32 nCnt = pLbRange->GetEntryCount();

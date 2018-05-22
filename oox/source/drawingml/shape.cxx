@@ -33,6 +33,7 @@
 #include <oox/drawingml/chart/chartconverter.hxx>
 #include <drawingml/chart/chartspacefragment.hxx>
 #include <drawingml/chart/chartspacemodel.hxx>
+#include <o3tl/safeint.hxx>
 #include <oox/ppt/pptimport.hxx>
 #include <oox/vml/vmldrawing.hxx>
 #include <oox/vml/vmlshape.hxx>
@@ -54,6 +55,7 @@
 #include <tools/mapunit.hxx>
 #include <editeng/unoprnms.hxx>
 #include <com/sun/star/awt/Size.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -385,10 +387,10 @@ void Shape::addChildren(
              << aChildTransformation.get(2, 1) << " "
              << aChildTransformation.get(2, 2));
 
-    std::vector< ShapePtr >::iterator aIter( rMaster.maChildren.begin() );
-    while( aIter != rMaster.maChildren.end() ) {
-        (*aIter)->setMasterTextListStyle( mpMasterTextListStyle );
-        (*aIter++)->addShape( rFilterBase, pTheme, rxShapes, aChildTransformation, getFillProperties(), pShapeMap );
+    for (auto const& child : rMaster.maChildren)
+    {
+        child->setMasterTextListStyle( mpMasterTextListStyle );
+        child->addShape( rFilterBase, pTheme, rxShapes, aChildTransformation, getFillProperties(), pShapeMap );
     }
 }
 
@@ -428,16 +430,14 @@ Reference< XShape > const & Shape::createAndInsert(
     if ( mpTablePropertiesPtr.get() && rServiceName == "com.sun.star.drawing.TableShape" )
     {
         maSize.Width = 0;
-        for( std::vector< sal_Int32 >::const_iterator aTableColIter(mpTablePropertiesPtr->getTableGrid().begin());
-             aTableColIter != mpTablePropertiesPtr->getTableGrid().end(); ++aTableColIter )
+        for (auto const& elem : mpTablePropertiesPtr->getTableGrid())
         {
-            maSize.Width += *aTableColIter;
+            maSize.Width = o3tl::saturating_add(maSize.Width, static_cast<sal_Int32>(elem));
         }
         maSize.Height = 0;
-        for( std::vector< ::oox::drawingml::table::TableRow >::const_iterator aTableRowIter(mpTablePropertiesPtr->getTableRows().begin());
-             aTableRowIter != mpTablePropertiesPtr->getTableRows().end(); ++aTableRowIter )
+        for (auto const& elem : mpTablePropertiesPtr->getTableRows())
         {
-            maSize.Height += (*aTableRowIter).getHeight();
+            maSize.Height = o3tl::saturating_add(maSize.Height, elem.getHeight());
         }
     }
 
@@ -692,8 +692,8 @@ Reference< XShape > const & Shape::createAndInsert(
 
         const GraphicHelper& rGraphicHelper = rFilterBase.getGraphicHelper();
 
-        sal_Int32 nLinePhClr = -1;
-        sal_Int32 nFillPhClr = -1;
+        ::Color nLinePhClr(0xffffffff);
+        ::Color nFillPhClr(0xffffffff);
         // TODO: use ph color when applying effect properties
         //sal_Int32 nEffectPhClr = -1;
 
@@ -841,16 +841,19 @@ Reference< XShape > const & Shape::createAndInsert(
                     aShapeProps.setAnyProperty(PROP_BackColorTransparency, aShapeProps.getProperty(PROP_FillTransparence));
                     aShapeProps.erase(PROP_FillTransparence);
                 }
-                // TextFrames have BackGrahicURL, not FillBitmapURL
-                if (aShapeProps.hasProperty(PROP_FillBitmapURL))
+                // TextFrames have BackGrahic, not FillBitmap
+                if (aShapeProps.hasProperty(PROP_FillBitmap))
                 {
-                    aShapeProps.setAnyProperty(PROP_BackGraphicURL, aShapeProps.getProperty(PROP_FillBitmapURL));
-                    aShapeProps.erase(PROP_FillBitmapURL);
+                    aShapeProps.setAnyProperty(PROP_BackGraphic, aShapeProps.getProperty(PROP_FillBitmap));
+                    aShapeProps.erase(PROP_FillBitmap);
                 }
                 if (aShapeProps.hasProperty(PROP_FillBitmapName))
                 {
                     uno::Any aAny = aShapeProps.getProperty(PROP_FillBitmapName);
-                    aShapeProps.setProperty(PROP_BackGraphicURL, rFilterBase.getModelObjectHelper().getFillBitmapUrl( aAny.get<OUString>() ));
+                    OUString aFillBitmapName = aAny.get<OUString>();
+                    uno::Reference<awt::XBitmap> xBitmap = rFilterBase.getModelObjectHelper().getFillBitmap(aFillBitmapName);
+                    uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+                    aShapeProps.setProperty(PROP_BackGraphic, xGraphic);
                     // aShapeProps.erase(PROP_FillBitmapName);  // Maybe, leave the name as well
                 }
                 // And no LineColor property; individual borders can have colors
@@ -1170,7 +1173,7 @@ Reference< XShape > const & Shape::createAndInsert(
             // character color on the shape, then.
             if(const ShapeStyleRef* pFontRef = getShapeStyleRef(XML_fontRef))
             {
-                sal_Int32 nCharColor = pFontRef->maPhClr.getColor(rGraphicHelper);
+                ::Color nCharColor = pFontRef->maPhClr.getColor(rGraphicHelper);
                 aPropertySet.setAnyProperty(PROP_CharColor, uno::makeAny(nCharColor));
             }
         }
@@ -1564,11 +1567,11 @@ uno::Sequence< uno::Sequence< uno::Any > >  Shape::resolveRelationshipsOfTypeFro
         if ( xImageRels )
         {
             xRelListTemp.realloc( xImageRels->size() );
-            for( ::std::map< OUString, core::Relation >::const_iterator aIt = xImageRels->begin(), aEnd = xImageRels->end(); aIt != aEnd; ++aIt )
+            for (auto const& imageRel : *xImageRels)
             {
                 uno::Sequence< uno::Any > diagramRelTuple (3);
                 // [0] => RID, [1] => InputStream [2] => extension
-                OUString sRelId = aIt->second.maId;
+                OUString sRelId = imageRel.second.maId;
 
                 diagramRelTuple[0] <<= sRelId;
                 OUString sTarget = xImageRels->getFragmentPathFromRelId( sRelId );

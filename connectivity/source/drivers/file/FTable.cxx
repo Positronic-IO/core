@@ -40,7 +40,6 @@ OFileTable::OFileTable(sdbcx::OCollection* _pTables,OConnection* _pConnection)
                 ,m_pConnection(_pConnection)
                 ,m_pFileStream(nullptr)
                 ,m_nFilePos(0)
-                ,m_pBuffer(nullptr)
                 ,m_nBufferSize(0)
                 ,m_bWriteable(false)
 {
@@ -63,7 +62,6 @@ OFileTable::OFileTable( sdbcx::OCollection* _pTables,OConnection* _pConnection,
     , m_pConnection(_pConnection)
     , m_pFileStream(nullptr)
     , m_nFilePos(0)
-    , m_pBuffer(nullptr)
     , m_nBufferSize(0)
     , m_bWriteable(false)
 {
@@ -155,14 +153,8 @@ void OFileTable::FileClose()
     if (m_pFileStream && m_pFileStream->IsWritable())
         m_pFileStream->Flush();
 
-    delete m_pFileStream;
-    m_pFileStream = nullptr;
-
-    if (m_pBuffer)
-    {
-        delete[] m_pBuffer;
-        m_pBuffer = nullptr;
-    }
+    m_pFileStream.reset();
+    m_pBuffer.reset();
 }
 
 bool OFileTable::InsertRow(OValueRefVector& /*rRow*/, const css::uno::Reference< css::container::XIndexAccess>& /*_xCols*/)
@@ -191,13 +183,12 @@ void OFileTable::dropColumn(sal_Int32 /*_nPos*/)
 }
 
 
-SvStream* OFileTable::createStream_simpleError( const OUString& _rFileName, StreamMode _eOpenMode)
+std::unique_ptr<SvStream> OFileTable::createStream_simpleError( const OUString& _rFileName, StreamMode _eOpenMode)
 {
-    SvStream* pReturn = ::utl::UcbStreamHelper::CreateStream( _rFileName, _eOpenMode, bool(_eOpenMode & StreamMode::NOCREATE));
+    std::unique_ptr<SvStream> pReturn(::utl::UcbStreamHelper::CreateStream( _rFileName, _eOpenMode, bool(_eOpenMode & StreamMode::NOCREATE)));
     if (pReturn && (ERRCODE_NONE != pReturn->GetErrorCode()))
     {
-        delete pReturn;
-        pReturn = nullptr;
+        pReturn.reset();
     }
     return pReturn;
 }

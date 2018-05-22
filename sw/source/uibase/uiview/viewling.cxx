@@ -30,7 +30,6 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/scopeguard.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <svtools/ehdl.hxx>
 #include <svl/stritem.hxx>
@@ -711,15 +710,9 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                 aEvent.ExecutePosition.Y = aPixPos.Y();
                 ScopedVclPtr<Menu> pMenu;
 
-                OUString sMenuName  = bUseGrammarContext ?
+                OUString sMenuName = bUseGrammarContext ?
                     OUString("private:resource/GrammarContextMenu") : OUString("private:resource/SpellContextMenu");
-
-                if (comphelper::LibreOfficeKit::isActive())
-                {
-                    // TODO for LOK, we'll need to convert the spelling popup menu to
-                    // something much more sfx2-based & non-modal...
-                }
-                else if (TryContextMenuInterception(xPopup->GetMenu(), sMenuName, pMenu, aEvent))
+                if (TryContextMenuInterception(xPopup->GetMenu(), sMenuName, pMenu, aEvent))
                 {
                     //! happy hacking for context menu modifying extensions of this
                     //! 'custom made' menu... *sigh* (code copied from sfx2 and framework)
@@ -768,6 +761,9 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                     }
                     else
                     {
+                        if (comphelper::LibreOfficeKit::isActive())
+                            xPopup->GetMenu().SetLOKNotifier(SfxViewShell::Current());
+
                         xPopup->Execute(aToFill.SVRect(), m_pEditWin);
                     }
                 }

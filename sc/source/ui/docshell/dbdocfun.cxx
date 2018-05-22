@@ -31,6 +31,7 @@
 #include <docsh.hxx>
 #include <docfunc.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <globalnames.hxx>
 #include <tabvwsh.hxx>
 #include <patattr.hxx>
@@ -71,9 +72,9 @@ bool ScDBDocFunc::AddDBRange( const OUString& rName, const ScRange& rRange )
     if (bUndo)
         pUndoColl = new ScDBCollection( *pDocColl );
 
-    ScDBData* pNew = new ScDBData( rName, rRange.aStart.Tab(),
+    std::unique_ptr<ScDBData> pNew(new ScDBData( rName, rRange.aStart.Tab(),
                                     rRange.aStart.Col(), rRange.aStart.Row(),
-                                    rRange.aEnd.Col(), rRange.aEnd.Row() );
+                                    rRange.aEnd.Col(), rRange.aEnd.Row() ));
 
     // #i55926# While loading XML, formula cells only have a single string token,
     // so CompileDBFormula would never find any name (index) tokens, and would
@@ -84,12 +85,12 @@ bool ScDBDocFunc::AddDBRange( const OUString& rName, const ScRange& rRange )
         rDoc.PreprocessDBDataUpdate();
     if ( rName == STR_DB_LOCAL_NONAME )
     {
-        rDoc.SetAnonymousDBData(rRange.aStart.Tab() , pNew);
+        rDoc.SetAnonymousDBData(rRange.aStart.Tab(), std::move(pNew));
         bOk = true;
     }
     else
     {
-        bOk = pDocColl->getNamedDBs().insert(pNew);
+        bOk = pDocColl->getNamedDBs().insert(pNew.release());
     }
     if ( bCompile )
         rDoc.CompileHybridFormula();
@@ -163,15 +164,14 @@ bool ScDBDocFunc::RenameDBRange( const OUString& rOld, const OUString& rNew )
 
         ScDBData* pNewData = new ScDBData(rNew, **iterOld);
 
-        ScDBCollection* pUndoColl = new ScDBCollection( *pDocColl );
+        std::unique_ptr<ScDBCollection> pUndoColl( new ScDBCollection( *pDocColl ) );
 
         rDoc.PreprocessDBDataUpdate();
         rDBs.erase(iterOld);
         bool bInserted = rDBs.insert(pNewData);
         if (!bInserted)                             // error -> restore old state
         {
-            delete pNewData;
-            rDoc.SetDBCollection(pUndoColl);       // belongs to the document then
+            rDoc.SetDBCollection(std::move(pUndoColl));       // belongs to the document then
         }
 
         rDoc.CompileHybridFormula();
@@ -182,10 +182,10 @@ bool ScDBDocFunc::RenameDBRange( const OUString& rOld, const OUString& rNew )
             {
                 ScDBCollection* pRedoColl = new ScDBCollection( *pDocColl );
                 rDocShell.GetUndoManager()->AddUndoAction(
-                                new ScUndoDBData( &rDocShell, pUndoColl, pRedoColl ) );
+                                new ScUndoDBData( &rDocShell, pUndoColl.release(), pRedoColl ) );
             }
             else
-                delete pUndoColl;
+                pUndoColl.reset();
 
             aModificator.SetDocumentModified();
             SfxGetpApp()->Broadcast( SfxHint( SfxHintId::ScDbAreasChanged ) );
@@ -264,7 +264,7 @@ void ScDBDocFunc::ModifyAllDBData( const ScDBCollection& rNewColl, const std::ve
     //  register target in SBA no longer necessary
 
     rDoc.PreprocessDBDataUpdate();
-    rDoc.SetDBCollection( new ScDBCollection( rNewColl ) );
+    rDoc.SetDBCollection( std::unique_ptr<ScDBCollection>(new ScDBCollection( rNewColl )) );
     rDoc.CompileHybridFormula();
     pOldColl = nullptr;
     rDocShell.PostPaint(ScRange(0, 0, 0, MAXCOL, MAXROW, MAXTAB), PaintPartFlags::Grid);
@@ -562,7 +562,7 @@ bool ScDBDocFunc::Sort( SCTAB nTab, const ScSortParam& rSortParam,
     {
         ScInputOptions aInputOption = SC_MOD()->GetInputOptions();
         bool bUpdateRefs = aInputOption.GetSortRefUpdate();
-        ScProgress aProgress(&rDocShell, ScGlobal::GetRscString(STR_PROGRESS_SORTING), 0, true);
+        ScProgress aProgress(&rDocShell, ScResId(STR_PROGRESS_SORTING), 0, true);
         rDoc.Sort(nTab, aLocalParam, bRepeatQuery, bUpdateRefs, &aProgress, &aUndoParam);
     }
 
@@ -832,7 +832,7 @@ bool ScDBDocFunc::Query( SCTAB nTab, const ScQueryParam& rQueryParam,
                 sal_uLong nProgCount = nFormulaCols;
                 nProgCount *= aLocalParam.nRow2 - nFStartY;
                 ScProgress aProgress( rDoc.GetDocumentShell(),
-                        ScGlobal::GetRscString(STR_FILL_SERIES_PROGRESS), nProgCount, true );
+                        ScResId(STR_FILL_SERIES_PROGRESS), nProgCount, true );
 
                 rDoc.Fill( aLocalParam.nCol2+1, nFStartY,
                             aLocalParam.nCol2+nFormulaCols, nFStartY, &aProgress, aMark,
@@ -1013,8 +1013,8 @@ void ScDBDocFunc::DoSubTotals( SCTAB nTab, const ScSubTotalParam& rParam,
             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Question,
-                                                      VclButtonsType::YesNo, ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_1))); // "Delete Data?"
-            xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
+                                                      VclButtonsType::YesNo, ScResId(STR_MSSG_DOSUBTOTALS_1))); // "Delete Data?"
+            xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
             bOk = xBox->run() == RET_YES;
         }
     }
@@ -1161,8 +1161,8 @@ bool isEditable(ScDocShell& rDocShell, const ScRangeList& rRanges, bool bApi)
 
     for (size_t i = 0, n = rRanges.size(); i < n; ++i)
     {
-        const ScRange* p = rRanges[i];
-        ScEditableTester aTester(&rDoc, *p);
+        const ScRange & r = rRanges[i];
+        ScEditableTester aTester(&rDoc, r);
         if (!aTester.IsEditable())
         {
             if (!bApi)
@@ -1254,8 +1254,8 @@ bool ScDBDocFunc::DataPilotUpdate( ScDPObject* pOldObj, const ScDPObject* pNewOb
     WaitObject aWait( ScDocShell::GetActiveDialogParent() );
 
     ScRangeList aRanges;
-    aRanges.Append(pOldObj->GetOutRange());
-    aRanges.Append(pNewObj->GetOutRange().aStart); // at least one cell in the output position must be editable.
+    aRanges.push_back(pOldObj->GetOutRange());
+    aRanges.push_back(pNewObj->GetOutRange().aStart); // at least one cell in the output position must be editable.
     if (!isEditable(rDocShell, aRanges, bApi))
         return false;
 
@@ -1303,7 +1303,7 @@ bool ScDBDocFunc::DataPilotUpdate( ScDPObject* pOldObj, const ScDPObject* pNewOb
             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                            VclMessageType::Question, VclButtonsType::YesNo,
-                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+                                                           ScResId(STR_PIVOT_NOTEMPTY)));
             xQueryBox->set_default_response(RET_YES);
             if (xQueryBox->run() == RET_NO)
             {
@@ -1357,7 +1357,7 @@ bool ScDBDocFunc::RemovePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                            VclMessageType::Question, VclButtonsType::YesNo,
-                                                           ScGlobal::GetRscString(STR_PIVOT_REMOVE_PIVOTCHART)));
+                                                           ScResId(STR_PIVOT_REMOVE_PIVOTCHART)));
             xQueryBox->set_default_response(RET_YES);
             if (xQueryBox->run() == RET_NO)
             {
@@ -1503,7 +1503,7 @@ bool ScDBDocFunc::CreatePivotTable(const ScDPObject& rDPObj, bool bRecord, bool 
             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                            VclMessageType::Question, VclButtonsType::YesNo,
-                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+                                                           ScResId(STR_PIVOT_NOTEMPTY)));
             xQueryBox->set_default_response(RET_YES);
             if (xQueryBox->run() == RET_NO)
             {
@@ -1578,7 +1578,7 @@ bool ScDBDocFunc::UpdatePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
             vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                            VclMessageType::Question, VclButtonsType::YesNo,
-                                                           ScGlobal::GetRscString(STR_PIVOT_NOTEMPTY)));
+                                                           ScResId(STR_PIVOT_NOTEMPTY)));
             xQueryBox->set_default_response(RET_YES);
             if (xQueryBox->run() == RET_NO)
             {
@@ -1685,7 +1685,7 @@ void ScDBDocFunc::UpdateImport( const OUString& rTarget, const svx::ODataAccessD
         vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_TARGETNOTFOUND)));
+                                                      ScResId(STR_TARGETNOTFOUND)));
         xInfoBox->run();
         return;
     }

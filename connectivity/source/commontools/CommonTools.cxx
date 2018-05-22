@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_java.h>
 
 #include <connectivity/CommonTools.hxx>
 #include <connectivity/dbtools.hxx>
@@ -26,7 +26,6 @@
 #include <com/sun/star/util/DateTime.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
-#include <comphelper/extract.hxx>
 #include <cppuhelper/interfacecontainer.h>
 #include <TConnection.hxx>
 #include <comphelper/types.hxx>

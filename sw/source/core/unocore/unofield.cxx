@@ -47,7 +47,6 @@
 #include <docstat.hxx>
 #include <editsh.hxx>
 #include <viewsh.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/types.hxx>
@@ -591,6 +590,7 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
                 RES_POOLCOLL_LABEL_ABB - RES_POOLCOLL_EXTRA_BEGIN,
                 RES_POOLCOLL_LABEL_TABLE - RES_POOLCOLL_EXTRA_BEGIN,
                 RES_POOLCOLL_LABEL_FRAME- RES_POOLCOLL_EXTRA_BEGIN,
+                RES_POOLCOLL_LABEL_FIGURE - RES_POOLCOLL_EXTRA_BEGIN,
                 0
             };
             for(const sal_uInt16 * pIds = nIds; *pIds; ++pIds)
@@ -638,7 +638,8 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
             ( sTypeName == SwResId(STR_POOLCOLL_LABEL_TABLE) ||
               sTypeName == SwResId(STR_POOLCOLL_LABEL_DRAWING) ||
               sTypeName == SwResId(STR_POOLCOLL_LABEL_FRAME) ||
-              sTypeName == SwResId(STR_POOLCOLL_LABEL_ABB) )))
+              sTypeName == SwResId(STR_POOLCOLL_LABEL_ABB) ||
+              sTypeName == SwResId(STR_POOLCOLL_LABEL_FIGURE) )))
         {
             throw lang::IllegalArgumentException();
         }
@@ -2340,10 +2341,6 @@ uno::Any SAL_CALL SwXTextField::getPropertyValue(const OUString& rPropertyName)
                     {
                         sal_Int32 nHiddenStart;
                         sal_Int32 nHiddenEnd;
-
-                        SwPosition aPosition( pTextField->GetTextNode() );
-                        aPosition.nContent = pTextField->GetStart();
-
                         bHidden = SwScriptInfo::GetBoundsOfHiddenRange( pTextField->GetTextNode(),
                                         pTextField->GetStart(),
                                         nHiddenStart, nHiddenEnd );

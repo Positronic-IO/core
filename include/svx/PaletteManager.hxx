@@ -25,7 +25,6 @@
 #include <svx/tbxcolorupdate.hxx>
 
 #include <tools/urlobj.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 
@@ -73,7 +72,7 @@ public:
     void        AddRecentColor(const Color& rRecentColor, const OUString& rColorName, bool bFront = true);
 
     void        SetBtnUpdater(svx::ToolboxButtonColorUpdater* pBtnUpdater);
-    void        PopupColorPicker(const OUString& aCommand, const Color& rInitialColor);
+    void        PopupColorPicker(vcl::Window* pParent, const OUString& aCommand, const Color& rInitialColor);
 
     void        SetColorSelectFunction(const std::function<void(const OUString&, const NamedColor&)>& aColorSelectFunction);
 

@@ -1137,54 +1137,44 @@ void SbRtl_Mid(StarBASIC *, SbxArray & rPar, bool bWrite)
             }
             if ( bWrite )
             {
-                OUStringBuffer aResultStr;
-                SbiInstance* pInst = GetSbData()->pInst;
-                bool bCompatibility = ( pInst && pInst->IsCompatibility() );
-                if( bCompatibility )
+                sal_Int32 nArgLen = aArgStr.getLength();
+                if( nStartPos > nArgLen )
                 {
-                    sal_Int32 nArgLen = aArgStr.getLength();
-                    if( nStartPos + 1 > nArgLen )
+                    SbiInstance* pInst = GetSbData()->pInst;
+                    bool bCompatibility = ( pInst && pInst->IsCompatibility() );
+                    if( bCompatibility )
                     {
                         StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
                         return;
                     }
+                    nStartPos = nArgLen;
+                }
 
-                    OUString aReplaceStr = rPar.Get(4)->GetOUString();
-                    sal_Int32 nReplaceStrLen = aReplaceStr.getLength();
-                    sal_Int32 nReplaceLen;
-                    if( bWriteNoLenParam )
-                    {
-                        nReplaceLen = nReplaceStrLen;
-                    }
-                    else
-                    {
-                        nReplaceLen = nLen;
-                        if( nReplaceLen < 0 || nReplaceLen > nReplaceStrLen )
-                        {
-                            nReplaceLen = nReplaceStrLen;
-                        }
-                    }
-
-                    sal_Int32 nReplaceEndPos = nStartPos + nReplaceLen;
-                    if( nReplaceEndPos > nArgLen )
-                    {
-                        nReplaceLen -= (nReplaceEndPos - nArgLen);
-                    }
-                    aResultStr = aArgStr;
-                    sal_Int32 nErase = nReplaceLen;
-                    aResultStr.remove( nStartPos, nErase );
-                    aResultStr.insert( nStartPos, aReplaceStr.getStr(), nReplaceLen);
+                OUString aReplaceStr = rPar.Get(4)->GetOUString();
+                sal_Int32 nReplaceStrLen = aReplaceStr.getLength();
+                sal_Int32 nReplaceLen;
+                if( bWriteNoLenParam )
+                {
+                    nReplaceLen = nReplaceStrLen;
                 }
                 else
                 {
-                    aResultStr = aArgStr;
-                    sal_Int32 nTmpStartPos = nStartPos;
-                    if ( nTmpStartPos > aArgStr.getLength() )
-                        nTmpStartPos =  aArgStr.getLength();
-                    else
-                        aResultStr.remove( nTmpStartPos, nLen );
-                    aResultStr.insert( nTmpStartPos, rPar.Get(4)->GetOUString().getStr(), std::min(nLen, rPar.Get(4)->GetOUString().getLength()));
+                    nReplaceLen = nLen;
+                    if( nReplaceLen < 0 || nReplaceLen > nReplaceStrLen )
+                    {
+                        nReplaceLen = nReplaceStrLen;
+                    }
                 }
+
+                sal_Int32 nReplaceEndPos = nStartPos + nReplaceLen;
+                if( nReplaceEndPos > nArgLen )
+                {
+                    nReplaceLen -= (nReplaceEndPos - nArgLen);
+                }
+                OUStringBuffer aResultStr = aArgStr;
+                sal_Int32 nErase = nReplaceLen;
+                aResultStr.remove( nStartPos, nErase );
+                aResultStr.insert( nStartPos, aReplaceStr.getStr(), nReplaceLen);
 
                 rPar.Get(1)->PutString( aResultStr.makeStringAndClear() );
             }
@@ -1735,7 +1725,7 @@ css::util::Date SbxDateToUNODate( const SbxValue* const pVal )
 void SbxDateFromUNODate( SbxValue *pVal, const css::util::Date& aUnoDate)
 {
     double dDate;
-    if( implDateSerial( aUnoDate.Year, aUnoDate.Month, aUnoDate.Day, false, false, dDate ) )
+    if( implDateSerial( aUnoDate.Year, aUnoDate.Month, aUnoDate.Day, false, SbDateCorrection::None, dDate ) )
     {
         pVal->PutDate( dDate );
     }
@@ -1965,7 +1955,8 @@ void SbRtl_CDateFromIso(StarBASIC *, SbxArray & rPar, bool)
 
             double dDate;
             if (!implDateSerial( static_cast<sal_Int16>(nSign * aYearStr.toInt32()),
-                        static_cast<sal_Int16>(aMonthStr.toInt32()), static_cast<sal_Int16>(aDayStr.toInt32()), bUseTwoDigitYear, false, dDate ))
+                        static_cast<sal_Int16>(aMonthStr.toInt32()), static_cast<sal_Int16>(aDayStr.toInt32()),
+                        bUseTwoDigitYear, SbDateCorrection::None, dDate ))
                 break;
 
             rPar.Get(0)->PutDate( dDate );
@@ -1994,7 +1985,7 @@ void SbRtl_DateSerial(StarBASIC *, SbxArray & rPar, bool)
     sal_Int16 nDay = rPar.Get(3)->GetInteger();
 
     double dDate;
-    if( implDateSerial( nYear, nMonth, nDay, true, true, dDate ) )
+    if( implDateSerial( nYear, nMonth, nDay, true, SbDateCorrection::RollOver, dDate ) )
     {
         rPar.Get(0)->PutDate( dDate );
     }
@@ -4557,7 +4548,7 @@ sal_Int16 implGetDateYear( double aDate )
 }
 
 bool implDateSerial( sal_Int16 nYear, sal_Int16 nMonth, sal_Int16 nDay,
-        bool bUseTwoDigitYear, bool bRollOver, double& rdRet )
+        bool bUseTwoDigitYear, SbDateCorrection eCorr, double& rdRet )
 {
     // XXX NOTE: For VBA years<0 are invalid and years in the range 0..29 and
     // 30..99 can not be input as they are 2-digit for 2000..2029 and
@@ -4620,14 +4611,14 @@ bool implDateSerial( sal_Int16 nYear, sal_Int16 nMonth, sal_Int16 nDay,
      * documentation would need to be adapted. As is, the DateSerial() runtime
      * function works as dumb as documented.. (except that the resulting date
      * is checked for validity now and not just day<=31 and month<=12).
-     * If change wanted then simply remove overriding bRollOver here and adapt
+     * If change wanted then simply remove overriding RollOver here and adapt
      * documentation.*/
 #if HAVE_FEATURE_SCRIPTING
-    if (!SbiRuntime::isVBAEnabled())
-        bRollOver = false;
+    if (eCorr == SbDateCorrection::RollOver && !SbiRuntime::isVBAEnabled())
+        eCorr = SbDateCorrection::None;
 #endif
 
-    if (nYear == 0 || (!bRollOver && (nAddMonths || nAddDays || !aCurDate.IsValidDate())))
+    if (nYear == 0 || (eCorr == SbDateCorrection::None && (nAddMonths || nAddDays || !aCurDate.IsValidDate())))
     {
 #if HAVE_FEATURE_SCRIPTING
         StarBASIC::Error( ERRCODE_BASIC_BAD_ARGUMENT );
@@ -4635,13 +4626,29 @@ bool implDateSerial( sal_Int16 nYear, sal_Int16 nMonth, sal_Int16 nDay,
         return false;
     }
 
-    if (bRollOver)
+    if (eCorr != SbDateCorrection::None)
     {
         aCurDate.Normalize();
         if (nAddMonths)
             aCurDate.AddMonths( nAddMonths);
         if (nAddDays)
             aCurDate.AddDays( nAddDays);
+        if (eCorr == SbDateCorrection::TruncateToMonth && aCurDate.GetMonth() != nMonth)
+        {
+            if (aCurDate.GetYear() == SAL_MAX_INT16 && nMonth == 12)
+            {
+                // Roll over and back not possible, hard max.
+                aCurDate.SetMonth(12);
+                aCurDate.SetDay(31);
+            }
+            else
+            {
+                aCurDate.SetMonth(nMonth);
+                aCurDate.SetDay(1);
+                aCurDate.AddMonths(1);
+                aCurDate.AddDays(-1);
+            }
+        }
     }
 
     long nDiffDays = GetDayDiff( aCurDate );
@@ -4664,7 +4671,7 @@ bool implDateTimeSerial( sal_Int16 nYear, sal_Int16 nMonth, sal_Int16 nDay,
                          double& rdRet )
 {
     double dDate;
-    if(!implDateSerial(nYear, nMonth, nDay, false/*bUseTwoDigitYear*/, false/*bRollOver*/, dDate))
+    if(!implDateSerial(nYear, nMonth, nDay, false/*bUseTwoDigitYear*/, SbDateCorrection::None, dDate))
         return false;
     rdRet += dDate + implTimeSerial(nHour, nMinute, nSecond);
     return true;

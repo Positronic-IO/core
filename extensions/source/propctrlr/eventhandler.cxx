@@ -65,7 +65,6 @@
 #include <svx/svxdlg.hxx>
 #include <svx/svxids.hrc>
 #include <tools/diagnose_ex.h>
-#include <vcl/msgbox.hxx>
 
 #include <map>
 #include <algorithm>
@@ -414,11 +413,11 @@ namespace pcr
         // of the implementation.
         // Well, it means we're forced to return the events in getElementNames in exactly the same as they
         // appear in the property browser UI.
-        for (   EventMapIndexAccess::const_iterator loop = m_aEventIndexAccess.begin();
-                loop != m_aEventIndexAccess.end();
-                ++loop, ++pReturn
-            )
-            *pReturn = loop->second->first;
+        for (auto const& elem : m_aEventIndexAccess)
+        {
+            *pReturn = elem.second->first;
+            ++pReturn;
+        }
         return aReturn;
     }
 
@@ -519,7 +518,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -660,7 +659,7 @@ namespace pcr
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             }
         }
 
@@ -697,14 +696,11 @@ namespace pcr
                 std::vector< Type > aListeners;
                 impl_getComponentListenerTypes_nothrow( aListeners );
 
-                Property aCurrentProperty;
                 OUString sListenerClassName;
 
                 // loop through all listeners and all methods, and see which we can present at the UI
                 for ( const Type& rListener : aListeners )
                 {
-                    aCurrentProperty = Property();
-
                     // the programmatic name of the listener, to be used as "property" name
                     sListenerClassName = rListener.getTypeName();
                     OSL_ENSURE( !sListenerClassName.isEmpty(), "EventHandler::getSupportedProperties: strange - no listener name ..." );
@@ -729,19 +725,16 @@ namespace pcr
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             }
         }
 
         // sort them by ID - this is the relative ordering in the UI
         std::map< EventId, Property > aOrderedProperties;
-        for (   EventMap::const_iterator loop = m_aEvents.begin();
-                loop != m_aEvents.end();
-                ++loop
-            )
+        for (auto const& event : m_aEvents)
         {
-            aOrderedProperties[ loop->second.nId ] = Property(
-                loop->first, loop->second.nId,
+            aOrderedProperties[ event.second.nId ] = Property(
+                event.first, event.second.nId,
                 ::cppu::UnoType<OUString>::get(),
                 PropertyAttribute::BOUND );
         }
@@ -802,14 +795,11 @@ namespace pcr
         // SvxMacroAssignDlg-compatible structure holding all event/assignments
         ::rtl::Reference< EventHolder >  pEventHolder( new EventHolder );
 
-        for (   EventMap::const_iterator event = m_aEvents.begin();
-                event != m_aEvents.end();
-                ++event
-            )
+        for (auto const& event : m_aEvents)
         {
             // the script which is assigned to the current event (if any)
-            ScriptEventDescriptor aAssignedScript = lcl_getAssignedScriptEvent( event->second, aAllAssignedEvents );
-            pEventHolder->addEvent( event->second.nId, event->second.sListenerMethodName, aAssignedScript );
+            ScriptEventDescriptor aAssignedScript = lcl_getAssignedScriptEvent( event.second, aAllAssignedEvents );
+            pEventHolder->addEvent( event.second.nId, event.second.sListenerMethodName, aAssignedScript );
         }
 
         // the initial selection in the dialog
@@ -840,23 +830,20 @@ namespace pcr
 
         try
         {
-            for (   EventMap::const_iterator event = m_aEvents.begin();
-                    event != m_aEvents.end();
-                    ++event
-                )
+            for (auto const& event : m_aEvents)
             {
-                ScriptEventDescriptor aScriptDescriptor( pEventHolder->getNormalizedDescriptorByName( event->second.sListenerMethodName ) );
+                ScriptEventDescriptor aScriptDescriptor( pEventHolder->getNormalizedDescriptorByName( event.second.sListenerMethodName ) );
 
                 // set the new "property value"
                 setPropertyValue(
-                    lcl_getEventPropertyName( event->second.sListenerClassName, event->second.sListenerMethodName ),
+                    lcl_getEventPropertyName( event.second.sListenerClassName, event.second.sListenerMethodName ),
                     makeAny( aScriptDescriptor )
                 );
             }
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
 
         return InteractiveSelectionResult_Success;
@@ -893,7 +880,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
 
         return xContextFrame;
@@ -933,7 +920,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -963,7 +950,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -984,7 +971,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -1086,7 +1073,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -1125,7 +1112,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 

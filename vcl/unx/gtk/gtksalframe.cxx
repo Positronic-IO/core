@@ -53,7 +53,6 @@
 
 #include <dlfcn.h>
 #include <vcl/salbtype.hxx>
-#include <impbmp.hxx>
 #include <window.h>
 #include <strings.hrc>
 #include <bitmaps.hlst>
@@ -94,7 +93,7 @@ int GtkSalFrame::m_nFloats = 0;
 static GDBusConnection* pSessionBus = nullptr;
 #endif
 
-static sal_uInt16 GetKeyModCode( guint state )
+sal_uInt16 GtkSalFrame::GetKeyModCode( guint state )
 {
     sal_uInt16 nCode = 0;
     if( state & GDK_SHIFT_MASK )
@@ -111,7 +110,7 @@ static sal_uInt16 GetKeyModCode( guint state )
     return nCode;
 }
 
-static sal_uInt16 GetMouseModCode( guint state )
+sal_uInt16 GtkSalFrame::GetMouseModCode( guint state )
 {
     sal_uInt16 nCode = GetKeyModCode( state );
     if( state & GDK_BUTTON1_MASK )
@@ -124,7 +123,7 @@ static sal_uInt16 GetMouseModCode( guint state )
     return nCode;
 }
 
-static sal_uInt16 GetKeyCode( guint keyval )
+sal_uInt16 GtkSalFrame::GetKeyCode(guint keyval)
 {
     sal_uInt16 nCode = 0;
     if( keyval >= GDK_KEY_0 && keyval <= GDK_KEY_9 )
@@ -330,7 +329,7 @@ static sal_uInt16 GetKeyCode( guint keyval )
     return nCode;
 }
 
-static guint GetKeyValFor(GdkKeymap* pKeyMap, guint16 hardware_keycode, guint8 group)
+guint GtkSalFrame::GetKeyValFor(GdkKeymap* pKeyMap, guint16 hardware_keycode, guint8 group)
 {
     guint updated_keyval = 0;
     gdk_keymap_translate_keyboard_state(pKeyMap, hardware_keycode,
@@ -1816,7 +1815,7 @@ bool GtkSalFrame::GetWindowState( SalFrameState* pState )
     return true;
 }
 
-void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle *pSize )
+void GtkSalFrame::SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle const *pSize )
 {
     if( !m_pWindow )
         return;
@@ -3560,8 +3559,14 @@ void GtkSalFrame::IMHandler::signalIMPreeditChanged( GtkIMContext*, gpointer im_
         ExtTextInputAttr sal_attr = ExtTextInputAttr::NONE;
 
         pango_attr_iterator_range (iter, &start, &end);
-        if (end == G_MAXINT)
-            end = pText ? strlen (pText) : 0;
+        if (start == G_MAXINT || end == G_MAXINT)
+        {
+            auto len = pText ? g_utf8_strlen(pText, -1) : 0;
+            if (end == G_MAXINT)
+                end = len;
+            if (start == G_MAXINT)
+                start = len;
+        }
         if (end == start)
             continue;
 

@@ -30,6 +30,7 @@
 #include <rangenam.hxx>
 #include <pivot.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <global.hxx>
 #include <globalnames.hxx>
 #include <target.hxx>
@@ -72,8 +73,8 @@ ScUndoDoOutline::~ScUndoDoOutline()
 OUString ScUndoDoOutline::GetComment() const
 {   // Show outline" "Hide outline"
     return bShow ?
-        ScGlobal::GetRscString( STR_UNDO_DOOUTLINE ) :
-        ScGlobal::GetRscString( STR_UNDO_REDOOUTLINE );
+        ScResId( STR_UNDO_DOOUTLINE ) :
+        ScResId( STR_UNDO_REDOOUTLINE );
 }
 
 void ScUndoDoOutline::Undo()
@@ -160,8 +161,8 @@ ScUndoMakeOutline::~ScUndoMakeOutline()
 OUString ScUndoMakeOutline::GetComment() const
 {   // "Grouping" "Undo grouping"
     return bMake ?
-        ScGlobal::GetRscString( STR_UNDO_MAKEOUTLINE ) :
-        ScGlobal::GetRscString( STR_UNDO_REMAKEOUTLINE );
+        ScResId( STR_UNDO_MAKEOUTLINE ) :
+        ScResId( STR_UNDO_REMAKEOUTLINE );
 }
 
 void ScUndoMakeOutline::Undo()
@@ -240,7 +241,7 @@ ScUndoOutlineLevel::ScUndoOutlineLevel( ScDocShell* pNewDocShell,
 
 OUString ScUndoOutlineLevel::GetComment() const
 {   // "Select outline level"
-    return ScGlobal::GetRscString( STR_UNDO_OUTLINELEVEL );
+    return ScResId( STR_UNDO_OUTLINELEVEL );
 }
 
 void ScUndoOutlineLevel::Undo()
@@ -320,8 +321,8 @@ ScUndoOutlineBlock::ScUndoOutlineBlock( ScDocShell* pNewDocShell,
 OUString ScUndoOutlineBlock::GetComment() const
 {   // "Show outline" "Hide outline"
     return bShow ?
-        ScGlobal::GetRscString( STR_UNDO_DOOUTLINEBLK ) :
-        ScGlobal::GetRscString( STR_UNDO_REDOOUTLINEBLK );
+        ScResId( STR_UNDO_DOOUTLINEBLK ) :
+        ScResId( STR_UNDO_REDOOUTLINEBLK );
 }
 
 void ScUndoOutlineBlock::Undo()
@@ -418,7 +419,7 @@ ScUndoRemoveAllOutlines::ScUndoRemoveAllOutlines(ScDocShell* pNewDocShell,
 
 OUString ScUndoRemoveAllOutlines::GetComment() const
 {   // "Remove outlines"
-    return ScGlobal::GetRscString( STR_UNDO_REMOVEALLOTLNS );
+    return ScResId( STR_UNDO_REMOVEALLOTLNS );
 }
 
 void ScUndoRemoveAllOutlines::Undo()
@@ -499,7 +500,7 @@ ScUndoAutoOutline::ScUndoAutoOutline(ScDocShell* pNewDocShell,
 
 OUString ScUndoAutoOutline::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_AUTOOUTLINE );
+    return ScResId( STR_UNDO_AUTOOUTLINE );
 }
 
 void ScUndoAutoOutline::Undo()
@@ -600,7 +601,7 @@ ScUndoSubTotals::ScUndoSubTotals(ScDocShell* pNewDocShell, SCTAB nNewTab,
 
 OUString ScUndoSubTotals::GetComment() const
 {   // "Subtotals"
-    return ScGlobal::GetRscString( STR_UNDO_SUBTOTALS );
+    return ScResId( STR_UNDO_SUBTOTALS );
 }
 
 void ScUndoSubTotals::Undo()
@@ -656,9 +657,9 @@ void ScUndoSubTotals::Undo()
                                             aParam.nCol2,aParam.nRow2,nTab );
 
     if (xUndoRange)
-        rDoc.SetRangeName(new ScRangeName(*xUndoRange));
+        rDoc.SetRangeName(std::unique_ptr<ScRangeName>(new ScRangeName(*xUndoRange)));
     if (xUndoDB)
-        rDoc.SetDBCollection(new ScDBCollection(*xUndoDB), true);
+        rDoc.SetDBCollection(std::unique_ptr<ScDBCollection>(new ScDBCollection(*xUndoDB)), true);
 
     SCTAB nVisTab = pViewShell->GetViewData().GetTabNo();
     if ( nVisTab != nTab )
@@ -721,7 +722,7 @@ ScUndoQuery::ScUndoQuery( ScDocShell* pNewDocShell, SCTAB nNewTab, const ScQuery
         aAdvSource = *pAdvSrc;
     }
 
-    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
+    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
 }
 
 ScUndoQuery::~ScUndoQuery()
@@ -731,7 +732,7 @@ ScUndoQuery::~ScUndoQuery()
 
 OUString ScUndoQuery::GetComment() const
 {   // "Filter";
-    return ScGlobal::GetRscString( STR_UNDO_QUERY );
+    return ScResId( STR_UNDO_QUERY );
 }
 
 void ScUndoQuery::Undo()
@@ -796,7 +797,7 @@ void ScUndoQuery::Undo()
                                  InsertDeleteFlags::NONE, false, rDoc);
 
     if (xUndoDB)
-        rDoc.SetDBCollection(new ScDBCollection(*xUndoDB ), true);
+        rDoc.SetDBCollection(std::unique_ptr<ScDBCollection>(new ScDBCollection(*xUndoDB )), true);
 
     if (!bCopy)
     {
@@ -888,7 +889,7 @@ ScUndoAutoFilter::~ScUndoAutoFilter()
 
 OUString ScUndoAutoFilter::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_QUERY );    // same as ScUndoQuery
+    return ScResId( STR_UNDO_QUERY );    // same as ScUndoQuery
 }
 
 void ScUndoAutoFilter::DoChange( bool bUndo )
@@ -968,7 +969,7 @@ ScUndoDBData::~ScUndoDBData()
 
 OUString ScUndoDBData::GetComment() const
 {   // "Change database range";
-    return ScGlobal::GetRscString( STR_UNDO_DBDATA );
+    return ScResId( STR_UNDO_DBDATA );
 }
 
 void ScUndoDBData::Undo()
@@ -980,7 +981,7 @@ void ScUndoDBData::Undo()
     bool bOldAutoCalc = rDoc.GetAutoCalc();
     rDoc.SetAutoCalc( false );         // Avoid unnecessary calculations
     rDoc.PreprocessDBDataUpdate();
-    rDoc.SetDBCollection( new ScDBCollection(*pUndoColl), true );
+    rDoc.SetDBCollection( std::unique_ptr<ScDBCollection>(new ScDBCollection(*pUndoColl)), true );
     rDoc.CompileHybridFormula();
     rDoc.SetAutoCalc( bOldAutoCalc );
 
@@ -998,7 +999,7 @@ void ScUndoDBData::Redo()
     bool bOldAutoCalc = rDoc.GetAutoCalc();
     rDoc.SetAutoCalc( false );         // Avoid unnecessary calculations
     rDoc.PreprocessDBDataUpdate();
-    rDoc.SetDBCollection( new ScDBCollection(*pRedoColl), true );
+    rDoc.SetDBCollection( std::unique_ptr<ScDBCollection>(new ScDBCollection(*pRedoColl)), true );
     rDoc.CompileHybridFormula();
     rDoc.SetAutoCalc( bOldAutoCalc );
 
@@ -1038,7 +1039,7 @@ ScUndoImportData::ScUndoImportData( ScDocShell* pNewDocShell, SCTAB nNewTab,
 
 OUString ScUndoImportData::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_IMPORTDATA );
+    return ScResId( STR_UNDO_IMPORTDATA );
 }
 
 void ScUndoImportData::Undo()
@@ -1247,7 +1248,7 @@ ScUndoRepeatDB::ScUndoRepeatDB( ScDocShell* pNewDocShell, SCTAB nNewTab,
 
 OUString ScUndoRepeatDB::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_REPEATDB );
+    return ScResId( STR_UNDO_REPEATDB );
 }
 
 void ScUndoRepeatDB::Undo()
@@ -1333,9 +1334,9 @@ void ScUndoRepeatDB::Undo()
                                             aBlockEnd.Col(),aBlockEnd.Row(),nTab );
 
     if (xUndoRange)
-        rDoc.SetRangeName(new ScRangeName(*xUndoRange));
+        rDoc.SetRangeName(std::unique_ptr<ScRangeName>(new ScRangeName(*xUndoRange)));
     if (xUndoDB)
-        rDoc.SetDBCollection(new ScDBCollection(*xUndoDB), true);
+        rDoc.SetDBCollection(std::unique_ptr<ScDBCollection>(new ScDBCollection(*xUndoDB)), true);
 
     SCTAB nVisTab = pViewShell->GetViewData().GetTabNo();
     if ( nVisTab != nTab )
@@ -1402,7 +1403,7 @@ OUString ScUndoDataPilot::GetComment() const
     else
         pResId = STR_UNDO_PIVOT_DELETE;
 
-    return ScGlobal::GetRscString(pResId);
+    return ScResId(pResId);
 }
 
 void ScUndoDataPilot::Undo()
@@ -1543,7 +1544,7 @@ ScUndoConsolidate::ScUndoConsolidate( ScDocShell* pNewDocShell, const ScArea& rA
 
 OUString ScUndoConsolidate::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_CONSOLIDATE );
+    return ScResId( STR_UNDO_CONSOLIDATE );
 }
 
 void ScUndoConsolidate::Undo()
@@ -1676,7 +1677,7 @@ ScUndoChartData::ScUndoChartData( ScDocShell* pNewDocShell, const OUString& rNam
     bAddRange( bAdd )
 {
     aNewRangeListRef = new ScRangeList;
-    aNewRangeListRef->Append( rNew );
+    aNewRangeListRef->push_back( rNew );
 
     Init();
 }
@@ -1700,7 +1701,7 @@ ScUndoChartData::~ScUndoChartData()
 
 OUString ScUndoChartData::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_CHARTDATA );
+    return ScResId( STR_UNDO_CHARTDATA );
 }
 
 void ScUndoChartData::Undo()
@@ -1758,7 +1759,7 @@ ScUndoDataForm::ScUndoDataForm( ScDocShell* pNewDocShell,
 
 OUString ScUndoDataForm::GetComment() const
 {
-    return ScGlobal::GetRscString( STR_UNDO_PASTE );
+    return ScResId( STR_UNDO_PASTE );
 }
 
 void ScUndoDataForm::Undo()

@@ -65,16 +65,29 @@ private:
 
     virtual void Notify(SfxBroadcaster& rBC, const SfxHint& rHint) override;
 
+private:
+    // protected destructor - due to final, make private
+    virtual ~SdrCircObj() override;
+
 public:
-    SdrCircObj(SdrObjKind eNewKind); // Circ, CArc, Sect or CCut
-    SdrCircObj(SdrObjKind eNewKind, const tools::Rectangle& rRect);
+    SdrCircObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewKind); // Circ, CArc, Sect or CCut
+    SdrCircObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewKind,
+        const tools::Rectangle& rRect);
 
     // 0=0.00Deg=3h 9000=90.00Deg=12h 18000=180.00Deg=9h 27000=270.00Deg=6h
     // The circle is build up from StartAngle to EndWink anti-clockwise.
     // If nNewStartAngle==nNewEndWink, then arc has an angle of 0 degrees.
     // If nNewStartAngle+36000==nNewEndWink, then the arc has angle of 360 degrees.
-    SdrCircObj(SdrObjKind eNewKind, const tools::Rectangle& rRect, long nNewStartAngle, long nNewEndWink);
-    virtual ~SdrCircObj() override;
+    SdrCircObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewKind,
+        const tools::Rectangle& rRect,
+        long nNewStartAngle,
+        long nNewEndWink);
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
@@ -83,7 +96,11 @@ public:
     virtual OUString TakeObjNameSingul() const override;
     virtual OUString TakeObjNamePlural() const override;
 
-    virtual SdrCircObj* Clone() const override;
+    virtual SdrCircObj* CloneSdrObject(SdrModel& rTargetModel) const override;
+
+    // implemented mainly for the purposes of Clone()
+    SdrCircObj& operator=(const SdrCircObj& rObj);
+
     virtual void RecalcSnapRect() override;
     virtual void NbcSetSnapRect(const tools::Rectangle& rRect) override;
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;

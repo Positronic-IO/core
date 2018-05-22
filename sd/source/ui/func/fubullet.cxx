@@ -31,7 +31,6 @@
 #include <strings.hrc>
 #include <sdresid.hxx>
 #include <svx/svdoutl.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 #include <svl/ctloptions.hxx>
 #include <svl/itempool.hxx>
@@ -190,31 +189,16 @@ void FuBullet::InsertSpecialCharacter( SfxRequest const & rReq )
             aSet.Put( *pFontItem );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact ? pFact->CreateSfxDialog( &mpView->GetViewShell()->GetViewFrame()->GetWindow(), aSet,
-            mpView->GetViewShell()->GetViewFrame()->GetFrame().GetFrameInterface(),
-            RID_SVXDLG_CHARMAP ) : nullptr);
+        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact ? pFact->CreateCharMapDialog(mpView->GetViewShell()->GetFrameWeld(), aSet,
+            true ) : nullptr);
         if( !pDlg )
             return;
 
         // If a character is selected, it can be shown
         // pDLg->SetFont( );
         // pDlg->SetChar( );
-        sal_uInt16 nResult = pDlg->Execute();
-        if( nResult == RET_OK )
-        {
-            const SfxStringItem* pCItem = SfxItemSet::GetItem<SfxStringItem>(pDlg->GetOutputItemSet(), SID_CHARMAP, false);
-            const SvxFontItem* pFItem = SfxItemSet::GetItem<SvxFontItem>(pDlg->GetOutputItemSet(), SID_ATTR_CHAR_FONT, false);
-            if ( pFItem )
-            {
-                aFont.SetFamilyName( pFItem->GetFamilyName() );
-                aFont.SetStyleName( pFItem->GetStyleName() );
-                aFont.SetCharSet( pFItem->GetCharSet() );
-                aFont.SetPitch( pFItem->GetPitch() );
-            }
-
-            if ( pCItem )
-                aChars  = pCItem->GetValue();
-        }
+        pDlg->Execute();
+        return;
     }
 
     if (!aChars.isEmpty())

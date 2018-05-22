@@ -24,6 +24,7 @@
 #include <global.hxx>
 #include <subtotal.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <dpitemdata.hxx>
 #include <generalfunction.hxx>
 
@@ -780,7 +781,7 @@ void ScDPResultData::SetMeasureData(
 
     maMeasureNames.swap(rNames);
     if (maMeasureNames.empty())
-        maMeasureNames.push_back(ScGlobal::GetRscString(STR_EMPTYDATA));
+        maMeasureNames.push_back(ScResId(STR_EMPTYDATA));
 }
 
 void ScDPResultData::SetDataLayoutOrientation( sheet::DataPilotFieldOrientation nOrient )
@@ -839,10 +840,10 @@ OUString ScDPResultData::GetMeasureString(long nMeasure, bool bForce, ScSubTotal
         //  display only function name
         assert(unsigned(eForceFunc) < SAL_N_ELEMENTS(aFuncStrIds));
         if ( eForceFunc != SUBTOTAL_FUNC_NONE )
-            return ScGlobal::GetRscString(aFuncStrIds[eForceFunc]);
+            return ScResId(aFuncStrIds[eForceFunc]);
 
         rbTotalResult = true;
-        return ScGlobal::GetRscString(STR_TABLE_ERGEBNIS);
+        return ScResId(STR_TABLE_ERGEBNIS);
     }
     else
     {
@@ -850,7 +851,7 @@ OUString ScDPResultData::GetMeasureString(long nMeasure, bool bForce, ScSubTotal
         const ScDPDimension* pDataDim = mrSource.GetDataDimension(nMeasure);
         if (pDataDim)
         {
-            const OUString* pLayoutName = pDataDim->GetLayoutName();
+            const boost::optional<OUString> & pLayoutName = pDataDim->GetLayoutName();
             if (pLayoutName)
                 return *pLayoutName;
         }
@@ -968,8 +969,6 @@ ScDPResultMember::ScDPResultMember(
 }
 ScDPResultMember::~ScDPResultMember()
 {
-    delete pChildDimension;
-    delete pDataRoot;
 }
 
 OUString ScDPResultMember::GetName() const
@@ -978,7 +977,7 @@ OUString ScDPResultMember::GetName() const
     if (pMemberDesc)
         return pMemberDesc->GetNameStr( false );
     else
-        return ScGlobal::GetRscString(STR_PIVOT_TOTAL);         // root member
+        return ScResId(STR_PIVOT_TOTAL);         // root member
 }
 
 OUString ScDPResultMember::GetDisplayName( bool bLocaleIndependent ) const
@@ -1002,7 +1001,7 @@ ScDPItemData ScDPResultMember::FillItemData() const
     const ScDPMember* pMemberDesc = GetDPMember();
     if (pMemberDesc)
         return pMemberDesc->FillItemData();
-    return ScDPItemData(ScGlobal::GetRscString(STR_PIVOT_TOTAL));     // root member
+    return ScDPItemData(ScResId(STR_PIVOT_TOTAL));     // root member
 }
 
 bool ScDPResultMember::IsNamedItem( SCROW nIndex ) const
@@ -1056,7 +1055,7 @@ void ScDPResultMember::InitFrom( const vector<ScDPDimension*>& ppDim, const vect
             if (  ppDim[nPos]->getIsDataLayoutDimension() )
             {
                  if ( !pChildDimension )
-                        pChildDimension = new ScDPResultDimension( pResultData );
+                        pChildDimension.reset( new ScDPResultDimension( pResultData ) );
                     pChildDimension->InitFrom( ppDim, ppLev, nPos, rInitState , false );
                     return;
             }
@@ -1072,7 +1071,7 @@ void ScDPResultMember::InitFrom( const vector<ScDPDimension*>& ppDim, const vect
 
     if ( bInitChild )
     {
-        pChildDimension = new ScDPResultDimension( pResultData );
+        pChildDimension.reset( new ScDPResultDimension( pResultData ) );
         pChildDimension->InitFrom(ppDim, ppLev, nPos, rInitState);
     }
 }
@@ -1100,7 +1099,7 @@ void ScDPResultMember::LateInitFrom(
             if (  rParams.GetDim( nPos )->getIsDataLayoutDimension() )
             {
                 if ( !pChildDimension )
-                    pChildDimension = new ScDPResultDimension( pResultData );
+                    pChildDimension.reset( new ScDPResultDimension( pResultData ) );
 
                 // #i111462# reset InitChild flag only for this child dimension's LateInitFrom call,
                 // not for following members of parent dimensions
@@ -1124,7 +1123,7 @@ void ScDPResultMember::LateInitFrom(
     if ( rParams.GetInitChild() )
     {
         if ( !pChildDimension )
-            pChildDimension = new ScDPResultDimension( pResultData );
+            pChildDimension.reset( new ScDPResultDimension( pResultData ) );
         pChildDimension->LateInitFrom( rParams, pItemData, nPos, rInitState );
     }
 }
@@ -1261,7 +1260,7 @@ void ScDPResultMember::ProcessData( const vector< SCROW >& aChildMembers, const 
 
     if ( !pDataRoot )
     {
-        pDataRoot = new ScDPDataMember( pResultData, nullptr );
+        pDataRoot.reset( new ScDPDataMember( pResultData, nullptr ) );
         if ( pDataDim )
             pDataRoot->InitFrom( pDataDim );            // recursive
     }
@@ -1378,7 +1377,7 @@ void ScDPResultMember::FillMemberResults(
     const ScDPMember* pMemberDesc = GetDPMember();
     if (pMemberDesc)
     {
-        const OUString* pLayoutName = pMemberDesc->GetLayoutName();
+        const boost::optional<OUString> & pLayoutName = pMemberDesc->GetLayoutName();
         if (pLayoutName)
         {
             aCaption = *pLayoutName;
@@ -1389,7 +1388,7 @@ void ScDPResultMember::FillMemberResults(
     if ( pMemberCaption )                   // use pMemberCaption if != NULL
         aCaption = *pMemberCaption;
     if (aCaption.isEmpty())
-        aCaption = ScGlobal::GetRscString(STR_EMPTYDATA);
+        aCaption = ScResId(STR_EMPTYDATA);
 
     if (bIsNumeric)
         pArray[rPos].Flags |= sheet::MemberResultFlags::NUMERIC;
@@ -1480,7 +1479,7 @@ void ScDPResultMember::FillMemberResults(
                     if (pMemberDesc)
                     {
                         // single data field layout.
-                        const OUString* pSubtotalName = pParentDim->GetSubtotalName();
+                        const boost::optional<OUString> & pSubtotalName = pParentDim->GetSubtotalName();
                         if (pSubtotalName)
                             aSubStr = lcl_parseSubtotalName(*pSubtotalName, aCaption);
                         pArray[rPos].Flags &= ~sheet::MemberResultFlags::GRANDTOTAL;
@@ -1488,7 +1487,7 @@ void ScDPResultMember::FillMemberResults(
                     else
                     {
                         // root member - subtotal (grand total?) for multi-data field layout.
-                        const OUString* pGrandTotalName = pResultData->GetSource().GetGrandTotalName();
+                        const boost::optional<OUString> & pGrandTotalName = pResultData->GetSource().GetGrandTotalName();
                         if (pGrandTotalName)
                             aSubStr = *pGrandTotalName;
                         pArray[rPos].Flags |= sheet::MemberResultFlags::GRANDTOTAL;
@@ -1511,7 +1510,7 @@ void ScDPResultMember::FillMemberResults(
                     uno::Sequence<sheet::MemberResult>* pLayoutSeq = pSequences;
                     if (!bRoot)
                         ++pLayoutSeq;
-                    ScDPResultDimension* pLayoutDim = pChildDimension;
+                    ScDPResultDimension* pLayoutDim = pChildDimension.get();
                     while ( pLayoutDim && !pLayoutDim->IsDataLayout() )
                     {
                         pLayoutDim = pLayoutDim->GetFirstChildDimension();

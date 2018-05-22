@@ -45,18 +45,19 @@ class SAL_WARN_UNUSED VCL_DLLPUBLIC BitmapEx
 public:
 
                         BitmapEx();
-                        BitmapEx( const OUString& rIconName );
+    explicit            BitmapEx( const OUString& rIconName );
                         BitmapEx( const BitmapEx& rBitmapEx );
                         BitmapEx( const BitmapEx& rBitmapEx, Point aSrc, Size aSize );
-                        BitmapEx( const Bitmap& rBmp );
+    explicit            BitmapEx( const Bitmap& rBmp );
                         BitmapEx( const Bitmap& rBmp, const Bitmap& rMask );
                         BitmapEx( const Bitmap& rBmp, const AlphaMask& rAlphaMask );
                         BitmapEx( const Bitmap& rBmp, const Color& rTransparentColor );
 
     BitmapEx&           operator=( const BitmapEx& rBitmapEx );
+    BitmapEx&           operator=( const Bitmap& rBitmap ) { return operator=(BitmapEx(rBitmap)); }
     bool                operator==( const BitmapEx& rBitmapEx ) const;
     bool                operator!=( const BitmapEx& rBitmapEx ) const { return !(*this==rBitmapEx); }
-    bool                operator!() const { return !aBitmap; }
+    bool                operator!() const { return !maBitmap; }
 
     bool                IsEmpty() const;
     void                SetEmpty();
@@ -68,7 +69,7 @@ public:
                               const Point& rDestPt, const Size& rDestSize ) const;
 
     bool                IsTransparent() const;
-    TransparentType     GetTransparentType() const { return eTransparent; }
+    TransparentType     GetTransparentType() const { return meTransparent; }
 
     Bitmap              GetBitmap( const Color* pTransReplaceColor = nullptr ) const;
     /// Gives direct access to the contained bitmap.
@@ -78,22 +79,27 @@ public:
     bool                IsAlpha() const;
     AlphaMask           GetAlpha() const;
 
-    const Size&         GetSizePixel() const { return aBitmapSize; }
-    void                SetSizePixel( const Size& rNewSize, BmpScaleFlag nScaleFlag = BmpScaleFlag::Default );
+    const Size&         GetSizePixel() const { return maBitmapSize; }
+    void                SetSizePixel(const Size& rNewSize);
 
-    const Size&         GetPrefSize() const { return aBitmap.GetPrefSize(); }
-    void                SetPrefSize( const Size& rPrefSize ) { aBitmap.SetPrefSize( rPrefSize ); }
+    const Size&         GetPrefSize() const { return maBitmap.GetPrefSize(); }
+    void                SetPrefSize( const Size& rPrefSize ) { maBitmap.SetPrefSize( rPrefSize ); }
 
-    const MapMode&      GetPrefMapMode() const { return aBitmap.GetPrefMapMode(); }
-    void                SetPrefMapMode( const MapMode& rPrefMapMode ) { aBitmap.SetPrefMapMode( rPrefMapMode ); }
+    const MapMode&      GetPrefMapMode() const { return maBitmap.GetPrefMapMode(); }
+    void                SetPrefMapMode( const MapMode& rPrefMapMode ) { maBitmap.SetPrefMapMode( rPrefMapMode ); }
 
-    const Color&        GetTransparentColor() const { return aTransparentColor; }
+    const Color&        GetTransparentColor() const { return maTransparentColor; }
 
-    sal_uInt16          GetBitCount() const { return aBitmap.GetBitCount(); }
+    sal_uInt16          GetBitCount() const { return maBitmap.GetBitCount(); }
     sal_uLong           GetSizeBytes() const;
     BitmapChecksum      GetChecksum() const;
 
 public:
+
+    /**
+     * @brief extract the bitmap and alpha data separately. Used by the SWF filter.
+     */
+    void GetSplitData( std::vector<sal_uInt8>& rvColorData, std::vector<sal_uInt8>& rvAlphaData ) const;
 
     /** Convert bitmap format
 
@@ -103,23 +109,6 @@ public:
         @return true, if the conversion was completed successfully.
      */
     bool                Convert( BmpConversion eConversion );
-
-    /** Reduce number of colors for the bitmap using the POPULAR algorithm
-
-        @param nNewColorCount
-        Maximal number of bitmap colors after the reduce operation
-
-        @return true, if the color reduction operation was completed successfully.
-     */
-    bool                ReduceColors( sal_uInt16 nNewColorCount );
-
-    /** Apply a dither algorithm to the bitmap
-
-        This method dithers the bitmap inplace, i.e. a true color
-        bitmap is converted to a paletted bitmap, reducing the color
-        deviation by error diffusion.
-     */
-    bool                Dither();
 
     /** Crop the bitmap
 
@@ -302,8 +291,7 @@ public:
     void                Replace(
                             const Color* pSearchColors,
                             const Color* pReplaceColors,
-                            sal_uLong nColorCount,
-                            const sal_uInt8* pTols = nullptr );
+                            sal_uLong nColorCount );
 
     /** Change various global color characteristics
 
@@ -345,20 +333,6 @@ public:
                             bool bInvert = false,
                             bool msoBrightness = false );
 
-    /** Apply specified filter to the bitmap
-
-        @param eFilter
-        The filter algorithm to apply
-
-        @param pFilterParam
-        Various parameter for the different bitmap filter algorithms
-
-        @return true, if the operation was completed successfully.
-     */
-    bool                Filter(
-                            BmpFilter eFilter,
-                            const BmpFilterParam* pFilterParam = nullptr );
-
     /** Get transparency at given position
 
         @param nX
@@ -371,6 +345,18 @@ public:
                 0 is not transparent, 255 is fully transparent
      */
     sal_uInt8           GetTransparency(
+                            sal_Int32 nX,
+                            sal_Int32 nY) const;
+
+    /** Get pixel color (including alpha) at given position
+
+        @param nX
+        integer X-Position in Bitmap
+
+        @param nY
+        integer Y-Position in Bitmap
+     */
+    ::Color             GetPixelColor(
                             sal_Int32 nX,
                             sal_Int32 nY) const;
 
@@ -444,10 +430,11 @@ public:
 
     void                AdjustTransparency( sal_uInt8 cTrans );
 
+    void                CombineMaskOr(Color maskColor, sal_uInt8 nTol);
 public:
 
-    SAL_DLLPRIVATE std::shared_ptr<ImpBitmap> const & ImplGetBitmapImpBitmap() const { return aBitmap.ImplGetImpBitmap(); }
-    SAL_DLLPRIVATE std::shared_ptr<ImpBitmap> const & ImplGetMaskImpBitmap() const { return aMask.ImplGetImpBitmap(); }
+    SAL_DLLPRIVATE std::shared_ptr<SalBitmap> const & ImplGetBitmapSalBitmap() const { return maBitmap.ImplGetSalBitmap(); }
+    SAL_DLLPRIVATE std::shared_ptr<SalBitmap> const & ImplGetMaskSalBitmap() const { return maMask.ImplGetSalBitmap(); }
 
 
 private:
@@ -455,12 +442,12 @@ private:
     friend bool VCL_DLLPUBLIC WriteDIBBitmapEx(const BitmapEx& rSource, SvStream& rOStm);
     void  loadFromIconTheme( const OUString& rIconName );
 
-    Bitmap              aBitmap;
-    Bitmap              aMask;
-    Size                aBitmapSize;
-    Color               aTransparentColor;
-    TransparentType     eTransparent;
-    bool                bAlpha;
+    Bitmap              maBitmap;
+    Bitmap              maMask;
+    Size                maBitmapSize;
+    Color               maTransparentColor;
+    TransparentType     meTransparent;
+    bool                mbAlpha;
 
 };
 

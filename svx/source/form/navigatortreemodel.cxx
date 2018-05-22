@@ -36,6 +36,7 @@
 #include <sfx2/objsh.hxx>
 #include <tools/diagnose_ex.h>
 #include <com/sun/star/container/XContainer.hpp>
+#include <comphelper/types.hxx>
 
 
 namespace svxform
@@ -698,7 +699,7 @@ namespace svxform
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         else if ( pObj->IsGroupObject() )
@@ -724,7 +725,7 @@ namespace svxform
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
             }
         }
         else if ( pObj->IsGroupObject() )
@@ -765,7 +766,7 @@ namespace svxform
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("svx");
                 return false;
             }
         }

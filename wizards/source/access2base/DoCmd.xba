@@ -365,8 +365,9 @@ Const cstProgressMeterLimit = 100
 								oOutput._EditMode = dbEditNone
 								lInputRecs = lInputRecs + 1
 								If bProgressMeter Then
-									If lInputRecs Mod (lInputMax / 100) = 0 Then _
+									If lInputRecs Mod (lInputMax / 100) = 0 Then
 										Application.SysCmd acSysCmdUpdateMeter, pvNewName &amp; &quot; &quot; &amp; CStr(CLng(lInputRecs * 100 / lInputMax)) &amp; &quot;%&quot;, lInputRecs
+									End If
 								End If
 								.MoveNext
 							Loop
@@ -1138,44 +1139,38 @@ Dim sFilter As String, oForm As Object, oFormsCollection As Object
 	Else
 		sFilter = &quot;(&quot; &amp; pvFilterName &amp; &quot;) And (&quot; &amp; pvWhereCondition &amp; &quot;)&quot;
 	End If
-	Set oFormsCollection = oOpenForm.DrawPage.Forms
-	If oFormsCollection.hasByName(&quot;MainForm&quot;) Then
-		Set oForm = oFormsCollection.getByName(&quot;MainForm&quot;)
-	ElseIf oFormsCollection.hasByName(&quot;Form&quot;) Then
-		Set oForm = oFormsCollection.getByName(&quot;Form&quot;)
-	ElseIf oFormsCollection.hasByName(ofForm._Name) Then
-		Set oForm = oFormsCollection.getByName(ofForm._Name)
-	Else
-		Goto Trace_Error
-	End If
-	If sFilter &lt;&gt; &quot;&quot; Then
-		oForm.Filter = oDatabase._ReplaceSquareBrackets(sFilter)
-		oForm.ApplyFilter = True
-		oForm.reload()
-	ElseIf oForm.Filter &lt;&gt; &quot;&quot; Then			&apos;	If a filter has been set previously it must be removed
-		oForm.Filter = &quot;&quot;
-		oForm.ApplyFilter = False
-		oForm.reload()
+	If Not IsNull(oForm) Then
+		If sFilter &lt;&gt; &quot;&quot; Then
+			oForm.Filter = oDatabase._ReplaceSquareBrackets(sFilter)
+			oForm.ApplyFilter = True
+			oForm.reload()
+		ElseIf oForm.Filter &lt;&gt; &quot;&quot; Then			&apos;	If a filter has been set previously it must be removed
+			oForm.Filter = &quot;&quot;
+			oForm.ApplyFilter = False
+			oForm.reload()
+		End If
 	End If
 	
 &apos;Housekeeping
 	Set ofForm = Application.AllForms(pvFormName)			&apos;	Redone to reinitialize all properties of ofForm now FormName is open
 	With ofForm
-		Select Case pvDataMode
-			Case acFormAdd
-				.AllowAdditions = True
-				.AllowDeletions = False
-				.AllowEdits = False
-			Case acFormEdit
-				.AllowAdditions = True
-				.AllowDeletions = True
-				.AllowEdits = True
-			Case acFormReadOnly
-				.AllowAdditions = False
-				.AllowDeletions = False
-				.AllowEdits = False
-			Case acFormPropertySettings
-		End Select
+		If Not IsNull(.DatabaseForm) Then
+			Select Case pvDataMode
+				Case acFormAdd
+					.AllowAdditions = True
+					.AllowDeletions = False
+					.AllowEdits = False
+				Case acFormEdit
+					.AllowAdditions = True
+					.AllowDeletions = True
+					.AllowEdits = True
+				Case acFormReadOnly
+					.AllowAdditions = False
+					.AllowDeletions = False
+					.AllowEdits = False
+				Case acFormPropertySettings
+			End Select
+		End If
 		.Visible = ( pvWindowMode &lt;&gt; acHidden )
 		._OpenArgs = pvOpenArgs
 		&apos;To avoid AOO 3,4 bug See http://user.services.openoffice.org/en/forum/viewtopic.php?f=13&amp;t=53751
@@ -2655,4 +2650,5 @@ Dim oShell As Object
 	oShell.execute(sCommand, &quot;&quot; , com.sun.star.system.SystemShellExecuteFlags.DEFAULTS)
 
 End Sub				&apos;	_ShellExecute			V0.8.5
+
 </script:module>

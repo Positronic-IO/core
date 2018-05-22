@@ -612,7 +612,7 @@ namespace svgio
         {
             if(nChar >= '0' && nChar <= '9')
             {
-                return sal_Int32(nChar - u'0');
+                return nChar - u'0';
             }
             else if(nChar >= 'A' && nChar <= 'F')
             {
@@ -1663,10 +1663,10 @@ namespace svgio
             const sal_Unicode aSpace(' ');
 
             // convert newline to space
-            OUString aRetval(convert(rCandidate, aNewline, aSpace, false));
+            convert(rCandidate, aNewline, aSpace, false);
 
             // convert tab to space
-            aRetval = convert(rCandidate, aTab, aSpace, false);
+            convert(rCandidate, aTab, aSpace, false);
 
             return rCandidate;
         }

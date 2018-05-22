@@ -1361,7 +1361,7 @@ void SwAccessibleMap::InvalidateShapeInParaSelection()
         }
     }
     if( !mpSeletedFrameMap )
-        mpSeletedFrameMap = new SwAccessibleContextMap_Impl;
+        mpSeletedFrameMap.reset( new SwAccessibleContextMap_Impl );
     if( !mpSeletedFrameMap->empty() )
     {
         SwAccessibleContextMap_Impl::iterator aIter = mpSeletedFrameMap->begin();
@@ -1636,7 +1636,6 @@ void SwAccessibleMap::DoInvalidateShapeFocus()
 SwAccessibleMap::SwAccessibleMap( SwViewShell *pSh ) :
     mpFrameMap( nullptr ),
     mpShapeMap( nullptr ),
-    mpShapes( nullptr ),
     mpEvents( nullptr ),
     mpEventMap( nullptr ),
     mpSelectedParas( nullptr ),
@@ -1699,14 +1698,12 @@ SwAccessibleMap::~SwAccessibleMap()
         mpFrameMap = nullptr;
         delete mpShapeMap;
         mpShapeMap = nullptr;
-        delete mpShapes;
-        mpShapes = nullptr;
+        mvShapes.clear();
         delete mpSelectedParas;
         mpSelectedParas = nullptr;
     }
 
-    delete mpPreview;
-    mpPreview = nullptr;
+    mpPreview.reset();
 
     {
         osl::MutexGuard aGuard( maEventMutex );
@@ -1718,7 +1715,6 @@ SwAccessibleMap::~SwAccessibleMap()
         mpEvents = nullptr;
     }
     mpVSh->GetLayout()->RemoveAccessibleShell();
-    delete mpSeletedFrameMap;
 }
 
 uno::Reference< XAccessible > SwAccessibleMap::GetDocumentView_(
@@ -1796,7 +1792,7 @@ uno::Reference<XAccessible> SwAccessibleMap::GetDocumentPreview(
 {
     // create & update preview data object
     if( mpPreview == nullptr )
-        mpPreview = new SwAccPreviewData();
+        mpPreview.reset( new SwAccPreviewData() );
     mpPreview->Update( *this, _rPreviewPages, _rScale, _pSelectedPageFrame, _rPreviewWinSize );
 
     uno::Reference<XAccessible> xAcc = GetDocumentView_( true );
@@ -2239,9 +2235,7 @@ void SwAccessibleMap::A11yDispose( const SwFrame *pFrame,
                     uno::UNO_QUERY );
                 if( xShape.is() )
                 {
-                    if( !mpShapes )
-                        mpShapes = new SwShapeList_Impl;
-                    mpShapes->push_back( xShape );
+                    mvShapes.push_back( xShape );
                 }
             }
         }
@@ -3026,11 +3020,7 @@ void SwAccessibleMap::FireEvents()
     }
     {
         osl::MutexGuard aGuard( maMutex );
-        if( mpShapes )
-        {
-            delete mpShapes;
-            mpShapes = nullptr;
-        }
+        mvShapes.clear();
     }
 
 }

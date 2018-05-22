@@ -21,7 +21,7 @@ Autocomplete
 BackColor
 BackColorTransparency
 BackGraphicLocation
-BackGraphicURL
+BackGraphic
 Background
 BackgroundColor
 BasicLibraries
@@ -166,7 +166,7 @@ FillBitmapPositionOffsetY
 FillBitmapRectanglePoint
 FillBitmapSizeX
 FillBitmapSizeY
-FillBitmapURL
+FillBitmap
 FillColor
 FillGradient
 FillGradientName
@@ -207,7 +207,6 @@ GraphicBitmap
 GraphicColorMode
 GraphicCrop
 GraphicSize
-GraphicURL
 GridColor
 GroupInfo
 GroupName

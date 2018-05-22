@@ -24,13 +24,13 @@
 #include <svx/svdobj.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdotext.hxx>
+#include <svx/svdoashp.hxx>
 #include <svx/sderitm.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/transfrmhelper.hxx>
 #include <editeng/sizeitem.hxx>
 
 #include <transfrm.hxx>
-#include <dialmgr.hxx>
 #include <svx/dlgutil.hxx>
 #include <editeng/svxenum.hxx>
 #include <svx/anchorid.hxx>
@@ -321,9 +321,9 @@ void SvxAngleTabPage::Reset(const SfxItemSet* rAttrs)
 }
 
 
-VclPtr<SfxTabPage> SvxAngleTabPage::Create( vcl::Window* pWindow, const SfxItemSet* rSet)
+VclPtr<SfxTabPage> SvxAngleTabPage::Create( TabPageParent pWindow, const SfxItemSet* rSet)
 {
-    return VclPtr<SvxAngleTabPage>::Create(pWindow, *rSet);
+    return VclPtr<SvxAngleTabPage>::Create(pWindow.pParent, *rSet);
 }
 
 
@@ -347,7 +347,6 @@ DeactivateRC SvxAngleTabPage::DeactivatePage( SfxItemSet* _pSet )
 
     return DeactivateRC::LeavePage;
 }
-
 
 void SvxAngleTabPage::PointChanged(vcl::Window* pWindow, RectPoint eRP)
 {
@@ -411,6 +410,11 @@ void SvxAngleTabPage::PointChanged(vcl::Window* pWindow, RectPoint eRP)
             }
         }
     }
+}
+
+void SvxAngleTabPage::PointChanged(weld::DrawingArea* /*pWindow*/, RectPoint /*eRP*/)
+{
+    assert(false);
 }
 
 /*************************************************************************
@@ -488,7 +492,6 @@ void SvxSlantTabPage::Construct()
 bool SvxSlantTabPage::FillItemSet(SfxItemSet* rAttrs)
 {
     bool  bModified = false;
-    OUString aStr = m_pMtrRadius->GetText();
 
     if( m_pMtrRadius->IsValueChangedFromSaved() )
     {
@@ -498,8 +501,6 @@ bool SvxSlantTabPage::FillItemSet(SfxItemSet* rAttrs)
         rAttrs->Put( makeSdrEckenradiusItem( nTmp ) );
         bModified = true;
     }
-
-    aStr = m_pMtrAngle->GetText();
 
     if( m_pMtrAngle->IsValueChangedFromSaved() )
     {
@@ -530,42 +531,80 @@ bool SvxSlantTabPage::FillItemSet(SfxItemSet* rAttrs)
     if (!bControlPointsChanged)
         return bModified;
 
-    SdrObject* pObj = pView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
-    SdrModel* pModel = pObj->GetModel();
-    SdrUndoAction* pUndo = pModel->IsUndoEnabled() ?
-                pModel->GetSdrUndoFactory().CreateUndoAttrObject(*pObj) :
-                nullptr;
+    bool bSelectionIsSdrObjCustomShape(false);
 
-    if (pUndo)
-        pModel->BegUndo(pUndo->GetComment());
-
-    EnhancedCustomShape2d aShape(pObj);
-    ::tools::Rectangle aLogicRect = aShape.GetLogicRect();
-
-    for (int i = 0; i < 2; ++i)
+    while(true)
     {
-        if (m_aControlX[i]->IsValueChangedFromSaved() || m_aControlY[i]->IsValueChangedFromSaved())
+        if(nullptr == pView)
         {
-            Point aNewPosition(GetCoreValue(*m_aControlX[i], ePoolUnit),
-                               GetCoreValue(*m_aControlY[i], ePoolUnit));
-            aNewPosition.Move(aLogicRect.Left(), aLogicRect.Top());
-
-            css::awt::Point aPosition;
-            aPosition.X = aNewPosition.X();
-            aPosition.Y = aNewPosition.Y();
-
-            aShape.SetHandleControllerPosition(i, aPosition);
+            break;
         }
+
+        if(0 == pView->GetMarkedObjectList().GetMarkCount())
+        {
+            break;
+        }
+
+        SdrObject* pCandidate(pView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj());
+
+        if(nullptr == pCandidate)
+        {
+            break;
+        }
+
+        if(nullptr == dynamic_cast< SdrObjCustomShape* >(pCandidate))
+        {
+            break;
+        }
+
+        bSelectionIsSdrObjCustomShape = true;
+        break;
     }
 
-    pObj->SetChanged();
-    pObj->BroadcastObjectChange();
-    bModified = true;
-
-    if (pUndo)
+    if(bSelectionIsSdrObjCustomShape)
     {
-        pModel->AddUndo(pUndo);
-        pModel->EndUndo();
+        SdrObjCustomShape& rSdrObjCustomShape(
+            static_cast< SdrObjCustomShape& >(
+                *pView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj()));
+        SdrModel& rModel(rSdrObjCustomShape.getSdrModelFromSdrObject());
+        SdrUndoAction* pUndo(
+            rModel.IsUndoEnabled()
+                ? rModel.GetSdrUndoFactory().CreateUndoAttrObject(rSdrObjCustomShape)
+                : nullptr);
+
+        if(pUndo)
+        {
+            rModel.BegUndo(pUndo->GetComment());
+        }
+
+        EnhancedCustomShape2d aShape(rSdrObjCustomShape);
+        ::tools::Rectangle aLogicRect = aShape.GetLogicRect();
+
+        for (int i = 0; i < 2; ++i)
+        {
+            if (m_aControlX[i]->IsValueChangedFromSaved() || m_aControlY[i]->IsValueChangedFromSaved())
+            {
+                Point aNewPosition(GetCoreValue(*m_aControlX[i], ePoolUnit),
+                                GetCoreValue(*m_aControlY[i], ePoolUnit));
+                aNewPosition.Move(aLogicRect.Left(), aLogicRect.Top());
+
+                css::awt::Point aPosition;
+                aPosition.X = aNewPosition.X();
+                aPosition.Y = aNewPosition.Y();
+
+                aShape.SetHandleControllerPosition(i, aPosition);
+            }
+        }
+
+        rSdrObjCustomShape.SetChanged();
+        rSdrObjCustomShape.BroadcastObjectChange();
+        bModified = true;
+
+        if (pUndo)
+        {
+            rModel.AddUndo(pUndo);
+            rModel.EndUndo();
+        }
     }
 
     return bModified;
@@ -622,67 +661,89 @@ void SvxSlantTabPage::Reset(const SfxItemSet* rAttrs)
 
     m_pMtrAngle->SaveValue();
 
-    const SdrMarkList& rMarkList = pView->GetMarkedObjectList();
-    if (rMarkList.GetMarkCount() == 1)
+    bool bSelectionIsSdrObjCustomShape(false);
+
+    while(true)
     {
-        SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
-        SdrObjKind eKind = static_cast<SdrObjKind>(pObj->GetObjIdentifier());
-        if (eKind == OBJ_CUSTOMSHAPE)
+        if(1 != pView->GetMarkedObjectList().GetMarkCount())
         {
-            //save geometry
-            SdrCustomShapeGeometryItem aInitialGeometry =
-                pObj->GetMergedItem(SDRATTR_CUSTOMSHAPE_GEOMETRY);
-
-            EnhancedCustomShape2d aShape(pObj);
-
-            for (int i = 0; i < 2; ++i)
-            {
-                Point aInitialPosition;
-                if (!aShape.GetHandlePosition(i, aInitialPosition))
-                    break;
-                m_aControlGroups[i]->Enable();
-                css::awt::Point aPosition;
-
-                aPosition.X = SAL_MAX_INT32/2;
-                aPosition.Y = SAL_MAX_INT32/2;
-                aShape.SetHandleControllerPosition(i, aPosition);
-                Point aMaxPosition;
-                aShape.GetHandlePosition(i, aMaxPosition);
-
-                aPosition.X = SAL_MIN_INT32/2;
-                aPosition.Y = SAL_MIN_INT32/2;
-                aShape.SetHandleControllerPosition(i, aPosition);
-                Point aMinPosition;
-                aShape.GetHandlePosition(i, aMinPosition);
-
-                ::tools::Rectangle aLogicRect = aShape.GetLogicRect();
-                aInitialPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
-                aMaxPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
-                aMinPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
-
-                SetMetricValue(*m_aControlX[i], aInitialPosition.X(), ePoolUnit);
-                SetMetricValue(*m_aControlY[i], aInitialPosition.Y(), ePoolUnit);
-
-                if (aMaxPosition.X() == aMinPosition.X())
-                    m_aControlGroupX[i]->Disable();
-                else
-                {
-                    m_aControlX[i]->SetMin(aMinPosition.X(), FUNIT_MM);
-                    m_aControlX[i]->SetMax(aMaxPosition.X(), FUNIT_MM);
-                }
-                if (aMaxPosition.Y() == aMinPosition.Y())
-                    m_aControlGroupY[i]->Disable();
-                else
-                {
-                    m_aControlY[i]->SetMin(aMinPosition.Y(), FUNIT_MM);
-                    m_aControlY[i]->SetMax(aMaxPosition.Y(), FUNIT_MM);
-                }
-            }
-
-            //restore geometry
-            pObj->SetMergedItem(aInitialGeometry);
+            break;
         }
+
+        SdrObject* pCandidate(pView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj());
+
+        if(nullptr == pCandidate)
+        {
+            break;
+        }
+
+        if(nullptr == dynamic_cast< SdrObjCustomShape* >(pCandidate))
+        {
+            break;
+        }
+
+        bSelectionIsSdrObjCustomShape = true;
+        break;
     }
+
+    if(bSelectionIsSdrObjCustomShape)
+    {
+        SdrObjCustomShape& rSdrObjCustomShape(
+            static_cast< SdrObjCustomShape& >(
+                *pView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj()));
+
+        //save geometry
+        SdrCustomShapeGeometryItem aInitialGeometry(rSdrObjCustomShape.GetMergedItem(SDRATTR_CUSTOMSHAPE_GEOMETRY));
+        EnhancedCustomShape2d aShape(rSdrObjCustomShape);
+
+        for (int i = 0; i < 2; ++i)
+        {
+            Point aInitialPosition;
+            if (!aShape.GetHandlePosition(i, aInitialPosition))
+                break;
+            m_aControlGroups[i]->Enable();
+            css::awt::Point aPosition;
+
+            aPosition.X = SAL_MAX_INT32/2;
+            aPosition.Y = SAL_MAX_INT32/2;
+            aShape.SetHandleControllerPosition(i, aPosition);
+            Point aMaxPosition;
+            aShape.GetHandlePosition(i, aMaxPosition);
+
+            aPosition.X = SAL_MIN_INT32/2;
+            aPosition.Y = SAL_MIN_INT32/2;
+            aShape.SetHandleControllerPosition(i, aPosition);
+            Point aMinPosition;
+            aShape.GetHandlePosition(i, aMinPosition);
+
+            ::tools::Rectangle aLogicRect = aShape.GetLogicRect();
+            aInitialPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
+            aMaxPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
+            aMinPosition.Move(-aLogicRect.Left(), -aLogicRect.Top());
+
+            SetMetricValue(*m_aControlX[i], aInitialPosition.X(), ePoolUnit);
+            SetMetricValue(*m_aControlY[i], aInitialPosition.Y(), ePoolUnit);
+
+            if (aMaxPosition.X() == aMinPosition.X())
+                m_aControlGroupX[i]->Disable();
+            else
+            {
+                m_aControlX[i]->SetMin(aMinPosition.X(), FUNIT_MM);
+                m_aControlX[i]->SetMax(aMaxPosition.X(), FUNIT_MM);
+            }
+            if (aMaxPosition.Y() == aMinPosition.Y())
+                m_aControlGroupY[i]->Disable();
+            else
+            {
+                m_aControlY[i]->SetMin(aMinPosition.Y(), FUNIT_MM);
+                m_aControlY[i]->SetMax(aMaxPosition.Y(), FUNIT_MM);
+            }
+        }
+
+        //restore geometry
+        rSdrObjCustomShape.SetMergedItem(aInitialGeometry);
+    }
+
     for (int i = 0; i < 2; ++i)
     {
         m_aControlX[i]->SaveValue();
@@ -690,9 +751,9 @@ void SvxSlantTabPage::Reset(const SfxItemSet* rAttrs)
     }
 }
 
-VclPtr<SfxTabPage> SvxSlantTabPage::Create( vcl::Window* pWindow, const SfxItemSet* rOutAttrs )
+VclPtr<SfxTabPage> SvxSlantTabPage::Create( TabPageParent pWindow, const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxSlantTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxSlantTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 void SvxSlantTabPage::ActivatePage( const SfxItemSet& rSet )
@@ -730,7 +791,11 @@ DeactivateRC SvxSlantTabPage::DeactivatePage( SfxItemSet* _pSet )
 }
 
 
-void SvxSlantTabPage::PointChanged( vcl::Window* , RectPoint  )
+void SvxSlantTabPage::PointChanged( vcl::Window*, RectPoint )
+{
+}
+
+void SvxSlantTabPage::PointChanged( weld::DrawingArea*, RectPoint )
 {
 }
 
@@ -1152,9 +1217,9 @@ void SvxPositionSizeTabPage::Reset( const SfxItemSet*  )
 }
 
 
-VclPtr<SfxTabPage> SvxPositionSizeTabPage::Create( vcl::Window* pWindow, const SfxItemSet* rOutAttrs )
+VclPtr<SfxTabPage> SvxPositionSizeTabPage::Create( TabPageParent pWindow, const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxPositionSizeTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxPositionSizeTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 
@@ -1482,7 +1547,6 @@ void SvxPositionSizeTabPage::GetTopLeftPosition(double& rfX, double& rfY, const 
     }
 }
 
-
 void SvxPositionSizeTabPage::PointChanged( vcl::Window* pWindow, RectPoint eRP )
 {
     if( pWindow == m_pCtlPos )
@@ -1553,6 +1617,10 @@ void SvxPositionSizeTabPage::PointChanged( vcl::Window* pWindow, RectPoint eRP )
     }
 }
 
+void SvxPositionSizeTabPage::PointChanged(weld::DrawingArea* /*pWindow*/, RectPoint /*eRP*/)
+{
+    assert(false);
+}
 
 void SvxPositionSizeTabPage::DisableResize()
 {

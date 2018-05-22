@@ -27,6 +27,7 @@
 #include <vcl/tabctrl.hxx>
 #include <vcl/tabdlg.hxx>
 #include <vcl/tabpage.hxx>
+#include <vcl/weld.hxx>
 #include <com/sun/star/task/XInteractionHandler.hpp>
 
 class SvxPasswordDialog;
@@ -41,55 +42,51 @@ enum class ObjectMode
     Dialog  = 3,
 };
 
-class NewObjectDialog : public ModalDialog
+class NewObjectDialog : public weld::GenericDialogController
 {
 private:
-    VclPtr<Edit>           m_pEdit;
-    VclPtr<OKButton>       m_pOKButton;
+    std::unique_ptr<weld::Entry> m_xEdit;
+    std::unique_ptr<weld::Button> m_xOKButton;
+    bool m_bCheckName;
 
-    DECL_LINK(OkButtonHandler, Button*, void);
+    DECL_LINK(OkButtonHandler, weld::Button&, void);
 public:
-    NewObjectDialog (vcl::Window* pParent, ObjectMode, bool bCheckName = false);
-    virtual ~NewObjectDialog() override;
-    virtual void dispose() override;
-    OUString GetObjectName() const { return m_pEdit->GetText(); }
-    void SetObjectName( const OUString& rName )
+    NewObjectDialog(weld::Window* pParent, ObjectMode, bool bCheckName = false);
+    OUString GetObjectName() const { return m_xEdit->get_text(); }
+    void SetObjectName(const OUString& rName)
     {
-        m_pEdit->SetText( rName );
-        m_pEdit->SetSelection(Selection( 0, rName.getLength()));
+        m_xEdit->set_text(rName);
+        m_xEdit->select_region(0, -1);
     }
 };
 
-class GotoLineDialog : public ModalDialog
+class GotoLineDialog : public weld::GenericDialogController
 {
-    VclPtr<Edit>           m_pEdit;
-    VclPtr<OKButton>       m_pOKButton;
-    DECL_LINK(OkButtonHandler, Button*, void);
+    std::unique_ptr<weld::Entry> m_xEdit;
+    std::unique_ptr<weld::Button> m_xOKButton;
+    DECL_LINK(OkButtonHandler, weld::Button&, void);
 public:
-    explicit GotoLineDialog(vcl::Window * pParent);
+    explicit GotoLineDialog(weld::Window* pParent);
     virtual ~GotoLineDialog() override;
-    virtual void dispose() override;
     sal_Int32 GetLineNumber() const;
 };
 
-class ExportDialog : public ModalDialog
+class ExportDialog : public weld::GenericDialogController
 {
 private:
-    VclPtr<RadioButton>    m_pExportAsPackageButton;
-    VclPtr<OKButton>       m_pOKButton;
+    bool m_bExportAsPackage;
 
-    bool            mbExportAsPackage;
+    std::unique_ptr<weld::RadioButton> m_xExportAsPackageButton;
+    std::unique_ptr<weld::Button> m_xOKButton;
 
-    DECL_LINK(OkButtonHandler, Button*, void);
+    DECL_LINK(OkButtonHandler, weld::Button&, void);
 
 public:
-    explicit ExportDialog( vcl::Window * pParent );
+    explicit ExportDialog(weld::Window * pParent);
     virtual ~ExportDialog() override;
-    virtual void dispose() override;
 
-    bool isExportAsPackage () const { return mbExportAsPackage; }
+    bool isExportAsPackage () const { return m_bExportAsPackage; }
 };
-
 
 class ExtTreeListBox final : public TreeListBox
 {
@@ -252,10 +249,10 @@ public:
 };
 
 // Helper functions
-SbModule* createModImpl( vcl::Window* pWin, const ScriptDocument& rDocument,
-    TreeListBox& rBasicBox, const OUString& rLibName, const OUString& aModName, bool bMain );
-void createLibImpl( vcl::Window* pWin, const ScriptDocument& rDocument,
-                    CheckBox* pLibBox, TreeListBox* pBasicBox );
+SbModule* createModImpl(weld::Window* pWin, const ScriptDocument& rDocument,
+                        TreeListBox& rBasicBox, const OUString& rLibName, const OUString& aModName, bool bMain);
+void createLibImpl(weld::Window* pWin, const ScriptDocument& rDocument,
+                   CheckBox* pLibBox, TreeListBox* pBasicBox);
 
 } // namespace basctl
 

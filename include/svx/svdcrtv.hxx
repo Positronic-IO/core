@@ -22,6 +22,7 @@
 
 #include <svx/svddrgv.hxx>
 #include <svx/svxdllapi.h>
+#include <memory>
 
 class XLineAttrSetItem;
 class XFillAttrSetItem;
@@ -31,25 +32,25 @@ class SdrObjConnection;
 class ImplConnectMarkerOverlay;
 class ImpSdrCreateViewExtraData;
 
-class SVX_DLLPUBLIC SdrCreateView: public SdrDragView
+class SVX_DLLPUBLIC SdrCreateView : public SdrDragView
 {
     friend class                SdrPageView;
 
 protected:
-    SdrObject*                  pAktCreate;   // Currently in creation of the located object
+    SdrObject*                  pCurrentCreate;   // The currently being created object
     SdrPageView*                pCreatePV;    // Here, the creation is started
-    ImplConnectMarkerOverlay*   mpCoMaOverlay;
+    std::unique_ptr<ImplConnectMarkerOverlay> mpCoMaOverlay;
 
     // for migrating stuff from XOR, use ImpSdrCreateViewExtraData ATM to not need to
     // compile the apps all the time
     std::unique_ptr<ImpSdrCreateViewExtraData> mpCreateViewExtraData;
 
-    Pointer                     aAktCreatePointer;
+    Pointer                     aCurrentCreatePointer;
 
     sal_Int32                   nAutoCloseDistPix;
     sal_Int32                   nFreeHandMinDistPix;
-    SdrInventor                 nAktInvent;     // set the current ones
-    sal_uInt16                  nAktIdent;      // Obj for re-creating
+    SdrInventor                 nCurrentInvent;     // set the current ones
+    sal_uInt16                  nCurrentIdent;      // Obj for re-creating
 
     bool                        b1stPointAsCenter : 1;
     bool                        bUseIncompatiblePathCreateInterface : 1;
@@ -69,7 +70,10 @@ protected:
 
 protected:
     // #i71538# make constructors of SdrView sub-components protected to avoid incomplete incarnations which may get casted to SdrView
-    SdrCreateView(SdrModel* pModel1, OutputDevice* pOut);
+    SdrCreateView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
+
     virtual ~SdrCreateView() override;
 
 public:
@@ -100,9 +104,9 @@ public:
     bool IsMeasureTool() const;
 
     void SetCurrentObj(sal_uInt16 nIdent, SdrInventor nInvent=SdrInventor::Default);
-    void TakeCurrentObj(sal_uInt16& nIdent, SdrInventor& nInvent) const  { nInvent=nAktInvent; nIdent=nAktIdent; }
-    SdrInventor GetCurrentObjInventor() const { return nAktInvent; }
-    sal_uInt16  GetCurrentObjIdentifier() const { return nAktIdent; }
+    void TakeCurrentObj(sal_uInt16& nIdent, SdrInventor& nInvent) const  { nInvent=nCurrentInvent; nIdent=nCurrentIdent; }
+    SdrInventor GetCurrentObjInventor() const { return nCurrentInvent; }
+    sal_uInt16  GetCurrentObjIdentifier() const { return nCurrentIdent; }
 
     // Beginning the regular Create
     bool BegCreateObj(const Point& rPnt, OutputDevice* pOut=nullptr, short nMinMov=-3);
@@ -111,8 +115,8 @@ public:
     bool EndCreateObj(SdrCreateCmd eCmd);
     void BckCreateObj();  // go back one polygon point
     void BrkCreateObj();
-    bool IsCreateObj() const { return pAktCreate!=nullptr; }
-    SdrObject* GetCreateObj() const { return pAktCreate; }
+    bool IsCreateObj() const { return pCurrentCreate!=nullptr; }
+    SdrObject* GetCreateObj() const { return pCurrentCreate; }
 
     // BegCreateCaptionObj() creates a SdrCaptionObj (legend item).
     // rObjSiz is the initial size of the legend text frame.

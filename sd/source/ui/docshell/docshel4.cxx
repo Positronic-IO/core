@@ -54,7 +54,6 @@
 #include <unotools/saveopt.hxx>
 #include <com/sun/star/drawing/XDrawPage.hpp>
 #include <com/sun/star/drawing/XDrawView.hpp>
-#include <comphelper/processfactory.hxx>
 
 #include <app.hrc>
 #include <strings.hrc>
@@ -161,14 +160,14 @@ void DrawDocShell::SetPrinter(SfxPrinter *pNewPrinter)
 
 void DrawDocShell::UpdateFontList()
 {
-    delete mpFontList;
+    mpFontList.reset();
     OutputDevice* pRefDevice = nullptr;
     if ( mpDoc->GetPrinterIndependentLayout() == css::document::PrinterIndependentLayout::DISABLED )
         pRefDevice = GetPrinter(true);
     else
         pRefDevice = SD_MOD()->GetVirtualRefDevice();
-    mpFontList = new FontList(pRefDevice, nullptr);
-    SvxFontListItem aFontListItem( mpFontList, SID_ATTR_CHAR_FONTLIST );
+    mpFontList.reset( new FontList(pRefDevice, nullptr) );
+    SvxFontListItem aFontListItem( mpFontList.get(), SID_ATTR_CHAR_FONTLIST );
     PutItem( aFontListItem );
 }
 
@@ -281,13 +280,13 @@ bool DrawDocShell::Load( SfxMedium& rMedium )
 
     if( pSet )
     {
-        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && static_cast<const SfxBoolItem&>( pSet->Get( SID_PREVIEW ) ).GetValue() )
+        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && pSet->Get( SID_PREVIEW ).GetValue() )
         {
             mpDoc->SetStarDrawPreviewMode( true );
         }
 
         if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            static_cast<const SfxBoolItem&>( pSet->Get( SID_DOC_STARTPRESENTATION ) ).GetValue() )
+            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
         {
             bStartPresentation = true;
             mpDoc->SetStartWithPresentation( true );
@@ -318,7 +317,7 @@ bool DrawDocShell::Load( SfxMedium& rMedium )
             SdPage* pPage = mpDoc->GetSdPage( 0, PageKind::Standard );
 
             if( pPage )
-                SetVisArea( ::tools::Rectangle( pPage->GetAllObjBoundRect() ) );
+                SetVisArea( pPage->GetAllObjBoundRect() );
         }
 
         FinishedLoading();
@@ -420,7 +419,7 @@ bool DrawDocShell::ImportFrom(SfxMedium &rMedium,
     if( pSet )
     {
         if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            static_cast<const SfxBoolItem&>( pSet->Get( SID_DOC_STARTPRESENTATION ) ).GetValue() )
+            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
         {
             mpDoc->SetStartWithPresentation( true );
 
@@ -451,13 +450,13 @@ bool DrawDocShell::ConvertFrom( SfxMedium& rMedium )
     SfxItemSet* pSet = rMedium.GetItemSet();
     if( pSet )
     {
-        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && static_cast<const SfxBoolItem&>( pSet->Get( SID_PREVIEW ) ).GetValue() )
+        if( (  SfxItemState::SET == pSet->GetItemState(SID_PREVIEW ) ) && pSet->Get( SID_PREVIEW ).GetValue() )
         {
             mpDoc->SetStarDrawPreviewMode( true );
         }
 
         if( SfxItemState::SET == pSet->GetItemState(SID_DOC_STARTPRESENTATION)&&
-            static_cast<const SfxBoolItem&>( pSet->Get( SID_DOC_STARTPRESENTATION ) ).GetValue() )
+            pSet->Get( SID_DOC_STARTPRESENTATION ).GetValue() )
         {
             bStartPresentation = true;
             mpDoc->SetStartWithPresentation( true );
@@ -951,13 +950,13 @@ void DrawDocShell::FillClass(SvGlobalName* pClassName,
         {
             *pClassName = SvGlobalName(SO3_SDRAW_CLASSID_60);
             *pFormat = bTemplate ? SotClipboardFormatId::STARDRAW_8_TEMPLATE : SotClipboardFormatId::STARDRAW_8;
-            *pFullTypeName = "Draw 8"; // HACK: method will be removed with new storage API
+            *pFullTypeName = SdResId(STR_GRAPHIC_DOCUMENT_FULLTYPE_80); // HACK: method will be removed with new storage API
         }
         else
         {
             *pClassName = SvGlobalName(SO3_SIMPRESS_CLASSID_60);
             *pFormat = bTemplate ? SotClipboardFormatId::STARIMPRESS_8_TEMPLATE : SotClipboardFormatId::STARIMPRESS_8;
-            *pFullTypeName = "Impress 8"; // HACK: method will be removed with new storage API
+            *pFullTypeName = SdResId(STR_IMPRESS_DOCUMENT_FULLTYPE_80); // HACK: method will be removed with new storage API
         }
     }
 

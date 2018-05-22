@@ -20,9 +20,7 @@
 #include <sfx2/sidebar/SidebarController.hxx>
 #include <sfx2/sidebar/ControlFactory.hxx>
 #include <svx/sidebar/AreaPropertyPanelBase.hxx>
-#include <svx/strings.hrc>
 #include <svx/svxids.hrc>
-#include <svx/dialmgr.hxx>
 #include <sfx2/objsh.hxx>
 #include <svx/xfltrit.hxx>
 #include <svx/xflftrit.hxx>
@@ -197,7 +195,7 @@ void AreaPropertyPanelBase::SetTransparency(sal_uInt16 nVal)
 
 IMPL_LINK_NOARG(AreaPropertyPanelBase, ClickImportBitmapHdl, Button*, void)
 {
-    SvxOpenGraphicDialog aDlg("Import", this);
+    SvxOpenGraphicDialog aDlg("Import", GetFrameWeld());
     aDlg.EnableLink(false);
     if( aDlg.Execute() == ERRCODE_NONE )
     {
@@ -307,7 +305,8 @@ IMPL_LINK_NOARG(AreaPropertyPanelBase, SelectFillTypeHdl, ListBox&, void)
             if(0 < pItem->GetGradientList()->Count())
             {
                 const XGradient aGradient = pItem->GetGradientList()->GetGradient(0)->GetGradient();
-                const XFillGradientItem aXFillGradientItem(aGradient);
+                const OUString aName = pItem->GetGradientList()->GetGradient(0)->GetName();
+                const XFillGradientItem aXFillGradientItem(aName, aGradient);
 
                 // #i122676# change FillStyle and Gradient in one call
                 XFillStyleItem aXFillStyleItem(drawing::FillStyle_GRADIENT);
@@ -346,7 +345,8 @@ IMPL_LINK_NOARG(AreaPropertyPanelBase, SelectFillTypeHdl, ListBox&, void)
                     if(mnLastPosHatch < pXHatchList->Count())
                     {
                         const XHatch aHatch = pXHatchList->GetHatch(mnLastPosHatch)->GetHatch();
-                        const XFillHatchItem aXFillHatchItem(mpLbFillAttr->GetSelectedEntry(), aHatch);
+                        const OUString aName = pXHatchList->GetHatch(mnLastPosHatch)->GetName();
+                        const XFillHatchItem aXFillHatchItem(aName, aHatch);
 
                         // #i122676# change FillStyle and Hatch in one call
                         XFillStyleItem aXFillStyleItem(drawing::FillStyle_HATCH);
@@ -392,7 +392,7 @@ IMPL_LINK_NOARG(AreaPropertyPanelBase, SelectFillTypeHdl, ListBox&, void)
                         {
                             const XBitmapEntry* pXBitmapEntry = pXBitmapList->GetBitmap(mnLastPosBitmap);
                             aBitmap = pXBitmapEntry->GetGraphicObject();
-                            aName = mpLbFillAttr->GetSelectedEntry();
+                            aName = pXBitmapEntry->GetName();
                             mpLbFillAttr->SelectEntryPos(mnLastPosBitmap);
                         }
                     }
@@ -418,7 +418,7 @@ IMPL_LINK_NOARG(AreaPropertyPanelBase, SelectFillTypeHdl, ListBox&, void)
                         {
                             const XBitmapEntry* pXPatternEntry = pXPatternList->GetBitmap(mnLastPosPattern);
                             aBitmap = pXPatternEntry->GetGraphicObject();
-                            aName = mpLbFillAttr->GetSelectedEntry();
+                            aName = pXPatternEntry->GetName();
                             mpLbFillAttr->SelectEntryPos(mnLastPosPattern);
                         }
                     }

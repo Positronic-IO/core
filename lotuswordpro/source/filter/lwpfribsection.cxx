@@ -70,18 +70,13 @@
 #include <lwpglobalmgr.hxx>
 
 LwpFribSection::LwpFribSection(LwpPara *pPara)
-     : LwpFrib(pPara),m_pMasterPage(nullptr)
+     : LwpFrib(pPara)
 {
 
 }
 
 LwpFribSection::~LwpFribSection()
 {
-    if(m_pMasterPage)
-    {
-        delete m_pMasterPage;
-        m_pMasterPage = nullptr;
-    }
 }
 
 /**
@@ -111,7 +106,7 @@ void LwpFribSection::RegisterSectionStyle()
     LwpPageLayout* pLayout = GetPageLayout();
     if(pLayout)
     {
-        m_pMasterPage = new LwpMasterPage(m_pPara, pLayout);
+        m_pMasterPage.reset( new LwpMasterPage(m_pPara, pLayout) );
         m_pMasterPage->RegisterMasterPage(this);
     }
 }
@@ -307,11 +302,11 @@ void LwpMasterPage::RegisterMasterPage(LwpFrib* pFrib)
     m_pPara->RegisterTabStyle(xOverStyle.get());
 
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    m_StyleName = pXFStyleManager->AddStyle(xOverStyle.release()).m_pStyle->GetStyleName();
+    m_StyleName = pXFStyleManager->AddStyle(std::move(xOverStyle)).m_pStyle->GetStyleName();
     //register section style here
     if(m_bNewSection)
     {
-        XFSectionStyle* pSectStyle= new XFSectionStyle();
+        std::unique_ptr<XFSectionStyle> pSectStyle(new XFSectionStyle());
         //set margin
         pStory = dynamic_cast<LwpStory*>(m_pPara->GetStoryID().obj().get());
         LwpPageLayout* pCurrentLayout = pStory ? pStory->GetCurrentLayout() : nullptr;
@@ -332,7 +327,7 @@ void LwpMasterPage::RegisterMasterPage(LwpFrib* pFrib)
                 pSectStyle->SetColumns(pColumns);
             }
         //}
-        m_SectionStyleName = pXFStyleManager->AddStyle(pSectStyle).m_pStyle->GetStyleName();
+        m_SectionStyleName = pXFStyleManager->AddStyle(std::move(pSectStyle)).m_pStyle->GetStyleName();
     }
 }
 
@@ -438,12 +433,12 @@ void LwpMasterPage::RegisterFillerPageStyle()
     {
         if(m_pLayout->HasFillerPageText(m_pPara->GetFoundry()))
         {
-            XFParaStyle* pPagebreakStyle = new XFParaStyle;
+            std::unique_ptr<XFParaStyle> pPagebreakStyle(new XFParaStyle);
             *pPagebreakStyle = *(m_pPara->GetXFParaStyle());
             pPagebreakStyle->SetStyleName("");
             pPagebreakStyle->SetBreaks(enumXFBreakAftPage);
             XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-            m_FillerPageStyleName= pXFStyleManager->AddStyle(pPagebreakStyle).m_pStyle->GetStyleName();
+            m_FillerPageStyleName= pXFStyleManager->AddStyle(std::move(pPagebreakStyle)).m_pStyle->GetStyleName();
         }
     }
 }

@@ -55,7 +55,6 @@
 #include <editeng/outlobj.hxx>
 #include <CustomAnimationPreset.hxx>
 #include <Outliner.hxx>
-#include <sdresid.hxx>
 #include <comphelper/serviceinfohelper.hxx>
 #include <svx/svdogrp.hxx>
 #include <o3tl/typed_flags_set.hxx>
@@ -71,7 +70,6 @@
 #include <unopage.hxx>
 #include <DrawDocShell.hxx>
 #include <glob.hxx>
-#include <strings.hrc>
 #include "unolayer.hxx"
 #include <imapinfo.hxx>
 #include <EffectMigration.hxx>
@@ -449,7 +447,7 @@ void SAL_CALL SdXShape::setPropertyValue( const OUString& aPropertyName, const c
                     if(!(aValue >>= nNavOrder))
                         throw lang::IllegalArgumentException();
 
-                    SdrObjList* pObjList = pObj->GetObjList();
+                    SdrObjList* pObjList = pObj->getParentOfSdrObject();
                     if( pObjList )
                         pObjList->SetObjectNavigationPosition( *pObj, (nNavOrder < 0) ? SAL_MAX_UINT32 : static_cast< sal_uInt32 >( nNavOrder ) );
                     break;
@@ -508,7 +506,10 @@ void SAL_CALL SdXShape::setPropertyValue( const OUString& aPropertyName, const c
                             if(!pGroup->GetSubList()->GetObjCount())
                             {
                                 pPage->NbcRemoveObject(pGroup->GetOrdNum());
-                                delete pGroup;
+
+                                // always use SdrObject::Free(...) for SdrObjects (!)
+                                SdrObject* pTemp(pGroup);
+                                SdrObject::Free(pTemp);
                             }
                         }
                     }
@@ -647,7 +648,7 @@ void SAL_CALL SdXShape::setPropertyValue( const OUString& aPropertyName, const c
                         else
                         {
                             // insert new user data with image map
-                            pObj->AppendUserData(new SdIMapInfo(aImageMap) );
+                            pObj->AppendUserData(std::unique_ptr<SdrObjUserData>(new SdIMapInfo(aImageMap) ));
                         }
                     }
                 }
@@ -765,7 +766,7 @@ css::uno::Any SAL_CALL SdXShape::getPropertyValue( const OUString& PropertyName 
             aRet <<= EffectMigration::GetSoundOn( mpShape );
             break;
         case WID_BLUESCREEN:
-            aRet <<= static_cast<sal_Int32>( pInfo?pInfo->maBlueScreen.GetColor():0x00ffffff );
+            aRet <<= pInfo ? pInfo->maBlueScreen : Color(0x00ffffff);
             break;
         case WID_VERB:
             aRet <<= static_cast<sal_Int32>( pInfo?pInfo->mnVerb:0 );
@@ -1679,19 +1680,6 @@ uno::Sequence< OUString > SAL_CALL SdUnoEventsAccess::getSupportedServiceNames( 
 {
     uno::Sequence< OUString > aStr( &maStrServiceName, 1 );
     return aStr;
-}
-
-void SdXShape::modelChanged( SdrModel* pNewModel )
-{
-    if( pNewModel )
-    {
-        uno::Reference< uno::XInterface > xModel( pNewModel->getUnoModel() );
-        mpModel = SdXImpressDocument::getImplementation( xModel );
-    }
-    else
-    {
-        mpModel = nullptr;
-    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

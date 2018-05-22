@@ -44,6 +44,32 @@ namespace sdr
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  BaseProperties
+//      DefaultProperties                   ->SfxItemSet
+//          AttributeProperties             ->SfxStyleSheet
+//              E3dProperties
+//                  E3dCompoundProperties
+//                      E3dExtrudeProperties
+//                      E3dLatheProperties
+//                      E3dSphereProperties
+//                  E3dSceneProperties
+//              TextProperties              ->maVersion
+//                  ConnectorProperties
+//                  CustomShapeProperties
+//                  MeasureProperties
+//                  RectangleProperties
+//                      CaptionProperties
+//                      CircleProperties
+//                      GraphicProperties
+//                      OleProperties
+//                  CellProperties
+//                  TableProperties
+//          GroupProperties
+//      EmptyProperties
+//          PageProperties
+
 namespace sdr
 {
     namespace properties
@@ -89,7 +115,7 @@ namespace sdr
 
             // Clone() operator, normally just calls the local copy constructor,
             // see above.
-            virtual BaseProperties& Clone(SdrObject& rObj) const = 0;
+            virtual std::unique_ptr<BaseProperties> Clone(SdrObject& rObj) const = 0;
 
             // Get the local ItemSet. This directly returns the local ItemSet of the object. No
             // merging of ItemSets is done for e.g. Group objects.
@@ -140,17 +166,6 @@ namespace sdr
 
             // Get the installed StyleSheet.
             virtual SfxStyleSheet* GetStyleSheet() const = 0;
-
-            // Scale the local ItemSet as far as it contains metric items.
-            // Override this to do it for hierarchical objects like e.g. groups.
-            virtual void Scale(const Fraction& rScale);
-
-            // Move local items to a new ItemPool.
-            // Override this to do it for hierarchical objects like e.g. groups.
-            virtual void MoveToItemPool(SfxItemPool* pSrcPool, SfxItemPool* pDestPool, SdrModel* pNewModel);
-
-            // Set new model.
-            virtual void SetModel(SdrModel* pOldModel, SdrModel* pNewModel);
 
             // force all attributes which come from styles to hard attributes
             // to be able to live without the style.

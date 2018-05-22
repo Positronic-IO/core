@@ -34,7 +34,6 @@
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/task/ErrorCodeIOException.hpp>
 #include <com/sun/star/script/ModuleType.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <unotools/streamwrap.hxx>
 #include <unotools/ucbstreamhelper.hxx>
@@ -862,25 +861,22 @@ bool SfxScriptLibraryContainer::implLoadPasswordLibrary
     {
         uno::Reference< embed::XStorage > xLibrariesStor;
         uno::Reference< embed::XStorage > xLibraryStor;
-        if( bStorage )
-        {
-            try {
-                xLibrariesStor = mxStorage->openStorageElement( maLibrariesDir, embed::ElementModes::READ );
-                if ( !xLibrariesStor.is() )
-                {
-                    throw uno::RuntimeException("null returned from openStorageElement");
-                }
-                xLibraryStor = xLibrariesStor->openStorageElement( Name, embed::ElementModes::READ );
-                if ( !xLibraryStor.is() )
-                {
-                    throw uno::RuntimeException("null returned from openStorageElement");
-                }
-            }
-            catch(const uno::Exception& )
+        try {
+            xLibrariesStor = mxStorage->openStorageElement( maLibrariesDir, embed::ElementModes::READ );
+            if ( !xLibrariesStor.is() )
             {
-                OSL_FAIL( "### couldn't open sub storage for library" );
-                return false;
+                throw uno::RuntimeException("null returned from openStorageElement");
             }
+            xLibraryStor = xLibrariesStor->openStorageElement( Name, embed::ElementModes::READ );
+            if ( !xLibraryStor.is() )
+            {
+                throw uno::RuntimeException("null returned from openStorageElement");
+            }
+        }
+        catch(const uno::Exception& )
+        {
+            OSL_FAIL( "### couldn't open sub storage for library" );
+            return false;
         }
 
         for( sal_Int32 i = 0 ; i < nNameCount ; i++ )

@@ -317,7 +317,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/document/_XTypeDetection \
     qadevOOo/tests/java/ifc/document/_XViewDataSupplier \
     qadevOOo/tests/java/ifc/drawing/_AreaShapeDescriptor \
-    qadevOOo/tests/java/ifc/drawing/_CaptionShape \
     qadevOOo/tests/java/ifc/drawing/_ConnectorProperties \
     qadevOOo/tests/java/ifc/drawing/_ConnectorShape \
     qadevOOo/tests/java/ifc/drawing/_ConnectorShapeDescriptor \
@@ -563,28 +562,15 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/sdb/_XSingleSelectQueryAnalyzer \
     qadevOOo/tests/java/ifc/sdb/_XSingleSelectQueryComposer \
     qadevOOo/tests/java/ifc/sdb/_XSQLErrorBroadcaster \
-    qadevOOo/tests/java/ifc/sheet/_FunctionDescription \
-    qadevOOo/tests/java/ifc/sheet/_Shape \
-    qadevOOo/tests/java/ifc/sheet/_SheetLink \
-    qadevOOo/tests/java/ifc/sheet/_SheetSortDescriptor \
-    qadevOOo/tests/java/ifc/sheet/_Spreadsheet \
     qadevOOo/tests/java/ifc/sheet/_SpreadsheetDocument \
-    qadevOOo/tests/java/ifc/sheet/_SpreadsheetDocumentSettings \
     qadevOOo/tests/java/ifc/sheet/_TableAutoFormatField \
-    qadevOOo/tests/java/ifc/sheet/_XActivationBroadcaster \
-    qadevOOo/tests/java/ifc/sheet/_XArrayFormulaRange \
-    qadevOOo/tests/java/ifc/sheet/_XCalculatable \
     qadevOOo/tests/java/ifc/sheet/_XCellRangeData \
-    qadevOOo/tests/java/ifc/sheet/_XCellRangeFormula \
-    qadevOOo/tests/java/ifc/sheet/_XCellRangeMovement \
     qadevOOo/tests/java/ifc/sheet/_XCellRangeReferrer \
     qadevOOo/tests/java/ifc/sheet/_XCellRangesQuery \
-    qadevOOo/tests/java/ifc/sheet/_XDDELink \
     qadevOOo/tests/java/ifc/sheet/_XDocumentAuditing \
     qadevOOo/tests/java/ifc/sheet/_XEnhancedMouseClickBroadcaster \
     qadevOOo/tests/java/ifc/sheet/_XFormulaQuery \
     qadevOOo/tests/java/ifc/sheet/_XRangeSelection \
-    qadevOOo/tests/java/ifc/sheet/_XScenario \
     qadevOOo/tests/java/ifc/sheet/_XSheetCellCursor \
     qadevOOo/tests/java/ifc/style/_CharacterProperties \
     qadevOOo/tests/java/ifc/style/_CharacterPropertiesAsian \
@@ -1014,7 +1000,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScDrawPageObj \
     qadevOOo/tests/java/mod/_sc/ScDrawPagesObj \
     qadevOOo/tests/java/mod/_sc/ScFilterDescriptorBase \
-    qadevOOo/tests/java/mod/_sc/ScFunctionDescriptionObj \
     qadevOOo/tests/java/mod/_sc/ScFunctionListObj \
     qadevOOo/tests/java/mod/_sc/ScHeaderFieldObj \
     qadevOOo/tests/java/mod/_sc/ScHeaderFieldsObj \
@@ -1050,7 +1035,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScShapeObj \
     qadevOOo/tests/java/mod/_sc/ScSheetLinkObj \
     qadevOOo/tests/java/mod/_sc/ScSheetLinksObj \
-    qadevOOo/tests/java/mod/_sc/ScSortDescriptorBase \
     qadevOOo/tests/java/mod/_sc/ScSpreadsheetSettings \
     qadevOOo/tests/java/mod/_sc/ScSpreadsheetSettingsObj \
     qadevOOo/tests/java/mod/_sc/ScStyleFamiliesObj \

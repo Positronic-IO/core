@@ -21,7 +21,6 @@
 #include <svx/svdmrkv.hxx>
 #include <svx/svdetc.hxx>
 #include <svx/svdoedge.hxx>
-#include <svdglob.hxx>
 #include <svx/svdview.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdpage.hxx>
@@ -144,15 +143,17 @@ void SdrMarkView::ImpClearVars()
     BrkMarkGluePoints();
 }
 
-SdrMarkView::SdrMarkView(SdrModel* pModel1, OutputDevice* pOut)
-:   SdrSnapView(pModel1,pOut),
+SdrMarkView::SdrMarkView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrSnapView(rSdrModel, pOut),
     mpMarkObjOverlay(nullptr),
     mpMarkPointsOverlay(nullptr),
     mpMarkGluePointsOverlay(nullptr),
     maHdlList(this)
 {
     ImpClearVars();
-    StartListening(*pModel1);
+    StartListening(rSdrModel);
 }
 
 SdrMarkView::~SdrMarkView()
@@ -1510,7 +1511,7 @@ bool SdrMarkView::MarkNextObj(const Point& rPnt, short nTol, bool bPrev)
     if (pTopMarkHit==nullptr) return MarkObj(rPnt,sal_uInt16(nTol));
 
     SdrObject* pTopObjHit=pTopMarkHit->GetMarkedSdrObj();
-    SdrObjList* pObjList=pTopObjHit->GetObjList();
+    SdrObjList* pObjList=pTopObjHit->getParentOfSdrObject();
     SdrPageView* pPV=pTopMarkHit->GetPageView();
     // find lowermost of the selected objects that is hit by rPnt
     // and is placed on the same PageView as pTopMarkHit
@@ -2077,7 +2078,7 @@ const tools::Rectangle& SdrMarkView::GetMarkedObjRect() const
 
 OUString SdrMarkView::ImpGetDescriptionString(const char* pStrCacheID, ImpGetDescriptionOptions nOpt) const
 {
-    OUString sStr = ImpGetResStr(pStrCacheID);
+    OUString sStr = SvxResId(pStrCacheID);
     const sal_Int32 nPos = sStr.indexOf("%1");
 
     if(nPos != -1)

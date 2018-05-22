@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="sw">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">1</property>
     <property name="upper">65535</property>
@@ -137,7 +137,6 @@
                             <property name="can_focus">True</property>
                             <property name="halign">start</property>
                             <property name="valign">center</property>
-                            <property name="invisible_char">●</property>
                             <property name="adjustment">adjustment1</property>
                             <property name="numeric">True</property>
                           </object>
@@ -153,7 +152,6 @@
                             <property name="can_focus">True</property>
                             <property name="halign">start</property>
                             <property name="valign">center</property>
-                            <property name="invisible_char">●</property>
                             <property name="progress_fraction">0.040000000000000001</property>
                             <property name="progress_pulse_step">1</property>
                             <property name="adjustment">adjustment1</property>
@@ -174,6 +172,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="halign">start</property>
                             <property name="xalign">0</property>
                             <property name="active">True</property>
@@ -192,6 +191,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="halign">start</property>
                             <property name="xalign">0</property>
                             <property name="active">True</property>
@@ -210,6 +210,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="xalign">0</property>
                             <property name="active">True</property>
                             <property name="draw_indicator">True</property>
@@ -230,6 +231,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="xalign">0</property>
                             <property name="active">True</property>
                             <property name="draw_indicator">True</property>
@@ -294,6 +296,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="xalign">0</property>
                             <property name="draw_indicator">True</property>
                           </object>
@@ -333,7 +336,6 @@
                                     <property name="sensitive">False</property>
                                     <property name="can_focus">True</property>
                                     <property name="valign">center</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment1</property>
                                     <property name="numeric">True</property>
                                   </object>
@@ -358,6 +360,7 @@
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">False</property>
+                            <property name="use_underline">True</property>
                             <property name="xalign">0</property>
                             <property name="draw_indicator">True</property>
                           </object>
@@ -397,7 +400,6 @@
                                     <property name="sensitive">False</property>
                                     <property name="can_focus">True</property>
                                     <property name="valign">center</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment1</property>
                                     <property name="numeric">True</property>
                                   </object>

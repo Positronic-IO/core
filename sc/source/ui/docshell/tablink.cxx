@@ -19,6 +19,8 @@
 
 #include <sal/config.h>
 
+#include <com/sun/star/task/InteractionHandler.hpp>
+
 #include <o3tl/make_unique.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/app.hxx>
@@ -27,7 +29,9 @@
 #include <sfx2/docfile.hxx>
 #include <sfx2/docfilt.hxx>
 #include <sfx2/fcontnr.hxx>
+#include <sfx2/frame.hxx>
 #include <sfx2/linkmgr.hxx>
+#include <vcl/weld.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/transliterationwrapper.hxx>
 #include <unotools/configmgr.hxx>
@@ -39,6 +43,7 @@
 #include <document.hxx>
 #include <docsh.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <undoblk.hxx>
 #include <undotab.hxx>
 #include <global.hxx>
@@ -104,7 +109,7 @@ ScTableLink::~ScTableLink()
             rDoc.SetLink( nTab, ScLinkMode::NONE, "", "", "", "", 0 );
 }
 
-void ScTableLink::Edit( vcl::Window* pParent, const Link<SvBaseLink&,void>& rEndEditHdl )
+void ScTableLink::Edit(weld::Window* pParent, const Link<SvBaseLink&,void>& rEndEditHdl)
 {
     pImpl->m_aEndEditLink = rEndEditHdl;
 
@@ -322,11 +327,11 @@ bool ScTableLink::Refresh(const OUString& rNewFile, const OUString& rNewFilter,
 
                         for (size_t nPos=0; nPos < nRanges; nPos++)
                         {
-                            const ScRange* pRange = aErrorCells[ nPos ];
-                            SCCOL nStartCol = pRange->aStart.Col();
-                            SCROW nStartRow = pRange->aStart.Row();
-                            SCCOL nEndCol = pRange->aEnd.Col();
-                            SCROW nEndRow = pRange->aEnd.Row();
+                            const ScRange & rRange = aErrorCells[ nPos ];
+                            SCCOL nStartCol = rRange.aStart.Col();
+                            SCROW nStartRow = rRange.aStart.Row();
+                            SCCOL nEndCol = rRange.aEnd.Col();
+                            SCROW nEndRow = rRange.aEnd.Row();
                             for (SCROW nRow=nStartRow; nRow<=nEndRow; nRow++)
                                 for (SCCOL nCol=nStartCol; nCol<=nEndCol; nCol++)
                                 {
@@ -344,10 +349,10 @@ bool ScTableLink::Refresh(const OUString& rNewFile, const OUString& rNewFilter,
                 {
                     //  Normal link or no references: put error message on sheet.
 
-                    rDoc.SetString( 0,0,nTab, ScGlobal::GetRscString(STR_LINKERROR) );
-                    rDoc.SetString( 0,1,nTab, ScGlobal::GetRscString(STR_LINKERRORFILE) );
+                    rDoc.SetString( 0,0,nTab, ScResId(STR_LINKERROR) );
+                    rDoc.SetString( 0,1,nTab, ScResId(STR_LINKERRORFILE) );
                     rDoc.SetString( 1,1,nTab, aNewUrl );
-                    rDoc.SetString( 0,2,nTab, ScGlobal::GetRscString(STR_LINKERRORTAB) );
+                    rDoc.SetString( 0,2,nTab, ScResId(STR_LINKERRORTAB) );
                     rDoc.SetString( 1,2,nTab, aTabName );
                 }
 
@@ -488,33 +493,41 @@ void ScDocumentLoader::RemoveAppPrefix( OUString& rFilterName )
 }
 
 SfxMedium* ScDocumentLoader::CreateMedium( const OUString& rFileName, std::shared_ptr<const SfxFilter> const & pFilter,
-        const OUString& rOptions )
+        const OUString& rOptions, weld::Window* pInteractionParent )
 {
     // Always create SfxItemSet so ScDocShell can set options.
     SfxItemSet* pSet = new SfxAllItemSet( SfxGetpApp()->GetPool() );
     if ( !rOptions.isEmpty() )
         pSet->Put( SfxStringItem( SID_FILE_FILTEROPTIONS, rOptions ) );
 
-    return new SfxMedium( rFileName, StreamMode::STD_READ, pFilter, pSet );
+    if (pInteractionParent)
+    {
+        css::uno::Reference<css::uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+        css::uno::Reference<css::task::XInteractionHandler> xIHdl(css::task::InteractionHandler::createWithParent(xContext,
+                    pInteractionParent->GetXWindow()), css::uno::UNO_QUERY_THROW);
+        pSet->Put(SfxUnoAnyItem(SID_INTERACTIONHANDLER, makeAny(xIHdl)));
+    }
+
+    SfxMedium *pRet = new SfxMedium( rFileName, StreamMode::STD_READ, pFilter, pSet );
+    if (pInteractionParent)
+        pRet->UseInteractionHandler(true); // to enable the filter options dialog
+    return pRet;
 }
 
-ScDocumentLoader::ScDocumentLoader( const OUString& rFileName,
-                                    OUString& rFilterName, OUString& rOptions,
-                                    sal_uInt32 nRekCnt, bool bWithInteraction ) :
-        pDocShell(nullptr),
-        pMedium(nullptr)
+ScDocumentLoader::ScDocumentLoader(const OUString& rFileName,
+                                   OUString& rFilterName, OUString& rOptions,
+                                   sal_uInt32 nRekCnt, weld::Window* pInteractionParent)
+    : pDocShell(nullptr)
+    , pMedium(nullptr)
 {
     if ( rFilterName.isEmpty() )
-        GetFilterName( rFileName, rFilterName, rOptions, true, bWithInteraction );
+        GetFilterName(rFileName, rFilterName, rOptions, true, pInteractionParent != nullptr);
 
     std::shared_ptr<const SfxFilter> pFilter = ScDocShell::Factory().GetFilterContainer()->GetFilter4FilterName( rFilterName );
 
-    pMedium = CreateMedium( rFileName, pFilter, rOptions);
+    pMedium = CreateMedium(rFileName, pFilter, rOptions, pInteractionParent);
     if ( pMedium->GetError() != ERRCODE_NONE )
         return ;
-
-    if ( bWithInteraction )
-        pMedium->UseInteractionHandler( true ); // to enable the filter options dialog
 
     pDocShell = new ScDocShell( SfxModelFlags::EMBEDDED_OBJECT | SfxModelFlags::DISABLE_EMBEDDED_SCRIPTS );
     aRef = pDocShell;

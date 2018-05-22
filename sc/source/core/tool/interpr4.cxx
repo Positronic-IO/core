@@ -41,7 +41,6 @@
 
 #include <com/sun/star/table/XCellRange.hpp>
 #include <com/sun/star/sheet/XSheetCellRange.hpp>
-#include <comphelper/processfactory.hxx>
 
 #include <global.hxx>
 #include <dbdata.hxx>
@@ -130,7 +129,7 @@ sal_uInt32 ScInterpreter::GetCellNumberFormat( const ScAddress& rPos, ScRefCellV
     FormulaError nErr;
     if (rCell.isEmpty())
     {
-        nFormat = pDok->GetNumberFormat( rPos );
+        nFormat = pDok->GetNumberFormat( mrContext, rPos );
         nErr = FormulaError::NONE;
     }
     else
@@ -139,7 +138,7 @@ sal_uInt32 ScInterpreter::GetCellNumberFormat( const ScAddress& rPos, ScRefCellV
             nErr = rCell.mpFormula->GetErrCode();
         else
             nErr = FormulaError::NONE;
-        nFormat = pDok->GetNumberFormat( rPos );
+        nFormat = pDok->GetNumberFormat( mrContext, rPos );
     }
 
     SetError(nErr);
@@ -151,8 +150,8 @@ double ScInterpreter::GetValueCellValue( const ScAddress& rPos, double fOrig )
 {
     if ( bCalcAsShown && fOrig != 0.0 )
     {
-        sal_uInt32 nFormat = pDok->GetNumberFormat( rPos );
-        fOrig = pDok->RoundValueAsShown( fOrig, nFormat );
+        sal_uInt32 nFormat = pDok->GetNumberFormat( mrContext, rPos );
+        fOrig = pDok->RoundValueAsShown( fOrig, nFormat, &mrContext );
     }
     return fOrig;
 }
@@ -224,7 +223,7 @@ double ScInterpreter::GetCellValueOrZero( const ScAddress& rPos, ScRefCellValue&
             nCurFmtIndex = pDok->GetNumberFormat( mrContext, rPos );
             nCurFmtType = pFormatter->GetType( nCurFmtIndex );
             if ( bCalcAsShown && fValue != 0.0 )
-                fValue = pDok->RoundValueAsShown( fValue, nCurFmtIndex );
+                fValue = pDok->RoundValueAsShown( fValue, nCurFmtIndex, &mrContext );
         }
         break;
         case  CELLTYPE_STRING:
@@ -1577,15 +1576,15 @@ bool ScInterpreter::ConvertMatrixParameters()
             std::unique_ptr<ScJumpMatrix> pJumpMat( new ScJumpMatrix( pCur->GetOpCode(), nJumpCols, nJumpRows));
             pJumpMat->SetAllJumps( 1.0, nStart, nNext, nStop);
             // pop parameters and store in ScJumpMatrix, push in JumpMatrix()
-            ScTokenVec* pParams = new ScTokenVec( nParams);
+            ScTokenVec aParams(nParams);
             for ( sal_uInt16 i=1; i <= nParams && sp > 0; ++i )
             {
                 const FormulaToken* p = pStack[ --sp ];
                 p->IncRef();
                 // store in reverse order such that a push may simply iterate
-                (*pParams)[ nParams - i ] = p;
+                aParams[ nParams - i ] = p;
             }
-            pJumpMat->SetJumpParameters( pParams);
+            pJumpMat->SetJumpParameters( std::move(aParams) );
             xNew = new ScJumpMatrixToken( std::move(pJumpMat) );
             GetTokenMatrixMap().emplace(pCur, xNew);
         }
@@ -3383,7 +3382,7 @@ void ScInterpreter::ScMacro()
                         {
                             nIdx[ 1 ] = static_cast<sal_Int32>(nMatCol+1);
                             SbxVariable* p = refArray->Get32( nIdx );
-                            if (pMat->IsString(nMatCol, nMatRow))
+                            if (pMat->IsStringOrEmpty(nMatCol, nMatRow))
                             {
                                 p->PutString( pMat->GetString(nMatCol, nMatRow).getString() );
                             }
@@ -3861,7 +3860,6 @@ ScInterpreter::~ScInterpreter()
         bGlobalStackInUse = false;
     else
         delete pStackObj;
-    delete pTokenMatrixMap;
 }
 
 ScCalcConfig& ScInterpreter::GetOrCreateGlobalConfig()
@@ -4327,8 +4325,8 @@ StackVar ScInterpreter::Interpret()
                 case ocSkew             : ScSkew();                     break;
                 case ocSkewp            : ScSkewp();                    break;
                 case ocModalValue       : ScModalValue();               break;
-                case ocModalValue_MS    : ScModalValue();               break;
-                case ocModalValue_Multi : ScModalValue_Multi();         break;
+                case ocModalValue_MS    : ScModalValue_MS( true );      break;
+                case ocModalValue_Multi : ScModalValue_MS( false );     break;
                 case ocMedian           : ScMedian();                   break;
                 case ocGeoMean          : ScGeoMean();                  break;
                 case ocHarMean          : ScHarMean();                  break;

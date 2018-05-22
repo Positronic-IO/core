@@ -40,7 +40,6 @@
 #include <svx/gallery.hxx>
 #include <svx/drawitem.hxx>
 #include <unotools/pathoptions.hxx>
-#include <vcl/msgbox.hxx>
 #include <tools/urlobj.hxx>
 #include <sfx2/sidebar/Theme.hxx>
 #include <app.hrc>
@@ -153,17 +152,6 @@ SlideBackground::SlideBackground(
 
     maCustomEntry = get<FixedText>("customlabel")->GetText();
 
-    SfxViewFrame* pCurrent = SfxViewFrame::Current();
-    if (pCurrent)
-    {
-        const SfxPoolItem* pItem = nullptr;
-        pCurrent->GetBindings().GetDispatcher()->QueryState( SID_ATTR_PAGE_SIZE, pItem );
-        if (pItem)
-        {
-            const SvxSizeItem* pSize = static_cast<const SvxSizeItem*>( pItem );
-            m_aPageSize = pSize->GetSize();
-        }
-    }
     addListener();
     Initialize();
 }
@@ -261,7 +249,6 @@ void SlideBackground::HandleContextChange(
         }
         else if ( maContext == maImpressHandoutContext )
         {
-            SetPanelTitle(SdResId(STR_MASTERSLIDE_NAME));
             mpCloseMaster->Hide();
             mpEditMaster->Hide();
             mpMasterSlide->Disable();
@@ -328,6 +315,7 @@ void SlideBackground::Update()
         {
             mpFillAttr->Hide();
             mpFillGrad->Hide();
+            mpFillLB->Show();
             const Color aColor = GetColorSetOrDefault();
             mpFillLB->SelectEntry(aColor);
         }

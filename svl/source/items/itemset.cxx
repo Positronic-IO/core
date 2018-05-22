@@ -95,7 +95,11 @@ SfxItemSet::SfxItemSet(SfxItemPool& rPool)
     m_pWhichRanges = const_cast<sal_uInt16*>(m_pPool->GetFrozenIdRanges());
     assert( m_pWhichRanges && "don't create ItemSets with full range before FreezeIdRanges()" );
     if (!m_pWhichRanges)
-        m_pPool->FillItemIdRanges_Impl( m_pWhichRanges );
+    {
+        std::unique_ptr<sal_uInt16[]> tmp;
+        m_pPool->FillItemIdRanges_Impl(tmp);
+        m_pWhichRanges = tmp.release();
+    }
 
     const sal_uInt16 nSize = TotalCount();
     m_pItems.reset(new const SfxPoolItem*[nSize]{});
@@ -1338,7 +1342,6 @@ bool SfxItemSet::Equals(const SfxItemSet &rCmp, bool bComparePool) const
         return false;
 
     // If we reach here and bDifferentPools==true that means bComparePool==false.
-    assert(!bDifferentPools || !bComparePool);
 
     // Counting Ranges takes longer; they also need to be the same, however
     sal_uInt16 nCount1 = TotalCount();
@@ -1398,11 +1401,11 @@ bool SfxItemSet::Equals(const SfxItemSet &rCmp, bool bComparePool) const
     return true;
 }
 
-SfxItemSet *SfxItemSet::Clone(bool bItems, SfxItemPool *pToPool ) const
+std::unique_ptr<SfxItemSet> SfxItemSet::Clone(bool bItems, SfxItemPool *pToPool ) const
 {
     if (pToPool && pToPool != m_pPool)
     {
-        SfxItemSet *pNewSet = new SfxItemSet(*pToPool, m_pWhichRanges);
+        std::unique_ptr<SfxItemSet> pNewSet(new SfxItemSet(*pToPool, m_pWhichRanges));
         if ( bItems )
         {
             SfxWhichIter aIter(*pNewSet);
@@ -1418,9 +1421,9 @@ SfxItemSet *SfxItemSet::Clone(bool bItems, SfxItemPool *pToPool ) const
         return pNewSet;
     }
     else
-        return bItems
+        return std::unique_ptr<SfxItemSet>(bItems
                 ? new SfxItemSet(*this)
-                : new SfxItemSet(*m_pPool, m_pWhichRanges);
+                : new SfxItemSet(*m_pPool, m_pWhichRanges));
 }
 
 void SfxItemSet::PutDirect(const SfxPoolItem &rItem)
@@ -1693,17 +1696,17 @@ void SfxItemSet::DisableItem(sal_uInt16 nWhich)
     Put( SfxVoidItem(0), nWhich );
 }
 
-SfxItemSet *SfxAllItemSet::Clone(bool bItems, SfxItemPool *pToPool ) const
+std::unique_ptr<SfxItemSet> SfxAllItemSet::Clone(bool bItems, SfxItemPool *pToPool ) const
 {
     if (pToPool && pToPool != m_pPool)
     {
-        SfxAllItemSet *pNewSet = new SfxAllItemSet( *pToPool );
+        std::unique_ptr<SfxAllItemSet> pNewSet(new SfxAllItemSet( *pToPool ));
         if ( bItems )
             pNewSet->Set( *this );
-        return pNewSet;
+        return std::unique_ptr<SfxItemSet>(pNewSet.release()); // clang3.8 does not seem to be able to upcast std::unique_ptr
     }
     else
-        return bItems ? new SfxAllItemSet(*this) : new SfxAllItemSet(*m_pPool);
+        return std::unique_ptr<SfxItemSet>(bItems ? new SfxAllItemSet(*this) : new SfxAllItemSet(*m_pPool));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

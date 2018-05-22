@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 #include <svx/sidebar/ValueSetWithTextControl.hxx>
-#include <svx/strings.hrc>
-#include <svx/dialmgr.hxx>
 #include <sfx2/sidebar/Theme.hxx>
 
 #include <limits.h>
@@ -69,7 +67,7 @@ void ValueSetWithTextControl::UserDraw( const UserDrawEvent& rUDEvt )
 
     {
         //draw background
-        if ( GetSelectItemId() == nItemId )
+        if ( GetSelectedItemId() == nItemId )
         {
             tools::Rectangle aBackRect = aRect;
             aBackRect.AdjustTop(3 );
@@ -83,7 +81,7 @@ void ValueSetWithTextControl::UserDraw( const UserDrawEvent& rUDEvt )
             pDev->DrawRect(aRect);
         }
 
-        if ( GetSelectItemId() == nItemId )
+        if ( GetSelectedItemId() == nItemId )
         {
             aFont.SetColor( sfx2::sidebar::Theme::GetColor( sfx2::sidebar::Theme::Color_HighlightText ) );
         }

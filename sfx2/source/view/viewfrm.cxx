@@ -136,9 +136,8 @@ using ::com::sun::star::container::XIndexContainer;
 #include "impviewframe.hxx"
 #include <vcl/svapp.hxx>
 
-#define SfxViewFrame
+#define ShellClass_SfxViewFrame
 #include <sfxslots.hxx>
-#undef SfxViewFrame
 
 SFX_IMPL_SUPERCLASS_INTERFACE(SfxViewFrame,SfxShell)
 
@@ -154,22 +153,19 @@ void SfxViewFrame::InitInterface_Impl()
 
 namespace {
 /// Asks the user if editing a read-only document is really wanted.
-class SfxEditDocumentDialog
+class SfxEditDocumentDialog : public weld::MessageDialogController
 {
 private:
-    std::unique_ptr<weld::Builder> m_xBuilder;
-    std::unique_ptr<weld::MessageDialog> m_xDialog;
     std::unique_ptr<weld::Button> m_xEditDocument;
     std::unique_ptr<weld::Button> m_xCancel;
 
 public:
     SfxEditDocumentDialog(weld::Widget* pParent);
-    short run() { return m_xDialog->run(); }
 };
 
 SfxEditDocumentDialog::SfxEditDocumentDialog(weld::Widget* pParent)
-    : m_xBuilder(Application::CreateBuilder(pParent, "sfx/ui/editdocumentdialog.ui"))
-    , m_xDialog(m_xBuilder->weld_message_dialog("EditDocumentDialog"))
+    : MessageDialogController(pParent, "sfx/ui/editdocumentdialog.ui",
+            "EditDocumentDialog")
     , m_xEditDocument(m_xBuilder->weld_button("edit"))
     , m_xCancel(m_xBuilder->weld_button("cancel"))
 {
@@ -279,7 +275,11 @@ void SfxViewFrame::ExecReload_Impl( SfxRequest& rReq )
             {
                 SfxViewFrame* m_pFrame;
                 SfxObjectShell* m_pSh;
+                SfxMedium* m_pMed = nullptr;
                 bool m_bSetRO;
+                ReadOnlyUIGuard(SfxViewFrame* pFrame, SfxObjectShell* p_Sh)
+                    : m_pFrame(pFrame), m_pSh(p_Sh), m_bSetRO(p_Sh->IsReadOnlyUI())
+                {}
                 ~ReadOnlyUIGuard() COVERITY_NOEXCEPT_FALSE
                 {
                     if (m_bSetRO != m_pSh->IsReadOnlyUI())
@@ -287,9 +287,15 @@ void SfxViewFrame::ExecReload_Impl( SfxRequest& rReq )
                         m_pSh->SetReadOnlyUI(m_bSetRO);
                         if (!m_bSetRO)
                             m_pFrame->RemoveInfoBar("readonly");
+                        if (m_pMed)
+                        {
+                            // tdf#116066: DoSaveCompleted should be called after SetReadOnlyUI
+                            m_pSh->DoSaveCompleted(m_pMed);
+                            m_pSh->Broadcast(SfxHint(SfxHintId::ModeChanged));
+                        }
                     }
                 }
-            } aReadOnlyUIGuard{ this, pSh, pSh->IsReadOnlyUI() };
+            } aReadOnlyUIGuard(this, pSh);
 
             SfxMedium* pMed = pSh->GetMedium();
 
@@ -526,8 +532,7 @@ void SfxViewFrame::ExecReload_Impl( SfxRequest& rReq )
                 }
                 else
                 {
-                    pSh->DoSaveCompleted( pMed );
-                    pSh->Broadcast( SfxHint(SfxHintId::ModeChanged) );
+                    aReadOnlyUIGuard.m_pMed = pMed;
                     rReq.SetReturnValue( SfxBoolItem( rReq.GetSlot(), true ) );
                     rReq.Done( true );
                     return;
@@ -688,7 +693,7 @@ void SfxViewFrame::ExecReload_Impl( SfxRequest& rReq )
                     pNewSet->Put( SfxUInt16Item(SID_UPDATEDOCMODE,css::document::UpdateDocMode::ACCORDING_TO_CONFIG) );
 
                 xOldObj->SetModified( false );
-                // Do not chache the old Document! Is invalid when loading
+                // Do not cache the old Document! Is invalid when loading
                 // another document.
 
                 const SfxStringItem* pSavedOptions = SfxItemSet::GetItem<SfxStringItem>(pMedium->GetItemSet(), SID_FILE_FILTEROPTIONS, false);
@@ -1777,7 +1782,7 @@ SfxViewFrame* SfxViewFrame::LoadViewIntoFrame_Impl_NoThrow( const SfxObjectShell
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.view");
     }
 
     if ( pSuccessView )
@@ -1791,7 +1796,7 @@ SfxViewFrame* SfxViewFrame::LoadViewIntoFrame_Impl_NoThrow( const SfxObjectShell
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sfx.view");
         }
     }
 
@@ -1948,7 +1953,7 @@ void SfxViewFrame::SaveCurrentViewData_Impl( const SfxInterfaceId i_nNewViewId )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.view");
     }
 }
 
@@ -2034,7 +2039,7 @@ bool SfxViewFrame::SwitchToViewShell_Impl
     {
         // the SfxCode is not able to cope with exceptions thrown while creating views
         // the code will crash in the stack unwinding procedure, so we shouldn't let exceptions go through here
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.view");
         return false;
     }
 
@@ -3088,6 +3093,27 @@ VclPtr<SfxInfoBarWindow> SfxViewFrame::AppendInfoBar(const OUString& sId,
     auto pInfoBar = pInfoBarContainer->appendInfoBar(sId, sMessage, aInfoBarType, WB_LEFT | WB_VCENTER);
     ShowChildWindow(SfxInfoBarContainerChild::GetChildWindowId());
     return pInfoBar;
+}
+
+void SfxViewFrame::UpdateInfoBar( const OUString& sId,
+                           const OUString& sMessage,
+                           InfoBarType eType )
+{
+    const sal_uInt16 nId = SfxInfoBarContainerChild::GetChildWindowId();
+
+    // Make sure the InfoBar container is visible
+    if (!HasChildWindow(nId))
+        ToggleChildWindow(nId);
+
+    SfxChildWindow* pChild = GetChildWindow(nId);
+    if (pChild)
+    {
+        SfxInfoBarContainerWindow* pInfoBarContainer = static_cast<SfxInfoBarContainerWindow*>(pChild->GetWindow());
+        auto pInfoBar = pInfoBarContainer->getInfoBar(sId);
+
+        if (pInfoBar)
+             pInfoBar->Update(sMessage, eType);
+    }
 }
 
 void SfxViewFrame::RemoveInfoBar( const OUString& sId )

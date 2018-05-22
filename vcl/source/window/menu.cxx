@@ -20,6 +20,7 @@
 #include <tools/diagnose_ex.h>
 #include <tools/stream.hxx>
 
+#include <comphelper/lok.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/mnemonic.hxx>
 #include <vcl/image.hxx>
@@ -40,6 +41,7 @@
 #include <vcl/dockingarea.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/commandinfoprovider.hxx>
+#include <vcl/IDialogRenderable.hxx>
 
 #include <salinst.hxx>
 #include <svdata.hxx>
@@ -226,8 +228,7 @@ void Menu::dispose()
     bKilled = true;
 
     pItemList->Clear();
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 
     // Native-support: destroy SalMenu
     ImplClearSalMenu();
@@ -450,8 +451,7 @@ void Menu::InsertItem(sal_uInt16 nItemId, const OUString& rStr, MenuItemBits nIt
     NbcInsertItem(nItemId, nItemBits, rStr, this, nPos, rIdent);
 
     vcl::Window* pWin = ImplGetWindow();
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
     if ( pWin )
     {
         ImplCalcSize( pWin );
@@ -516,8 +516,7 @@ void Menu::InsertSeparator(const OString &rIdent, sal_uInt16 nPos)
     if( ImplGetSalMenu() && pData && pData->pSalMenuItem )
         ImplGetSalMenu()->InsertItem( pData->pSalMenuItem, nPos );
 
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 
     ImplCallEventListeners( VclEventId::MenuInsertItem, nPos );
 }
@@ -543,8 +542,7 @@ void Menu::RemoveItem( sal_uInt16 nPos )
         if ( pWin->IsVisible() )
             pWin->Invalidate();
     }
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 
     if ( bRemove )
         ImplCallEventListeners( VclEventId::MenuRemoveItem, nPos );
@@ -903,6 +901,11 @@ void Menu::CheckItem( sal_uInt16 nItemId, bool bCheck )
     ImplCallEventListeners( bCheck ? VclEventId::MenuItemChecked : VclEventId::MenuItemUnchecked, nPos );
 }
 
+void Menu::CheckItem( const OString &rIdent , bool bCheck )
+{
+    CheckItem( GetItemId( rIdent ), bCheck );
+}
+
 bool Menu::IsItemChecked( sal_uInt16 nItemId ) const
 {
     size_t          nPos;
@@ -998,8 +1001,7 @@ void Menu::SetItemText( sal_uInt16 nItemId, const OUString& rStr )
             ImplGetSalMenu()->SetItemText( nPos, pData->pSalMenuItem, rStr );
 
         vcl::Window* pWin = ImplGetWindow();
-        delete mpLayoutData;
-        mpLayoutData = nullptr;
+        mpLayoutData.reset();
         if (pWin && IsMenuBar())
         {
             ImplCalcSize( pWin );
@@ -2194,8 +2196,7 @@ void Menu::RemoveDisabledEntries( bool bCheckPopups, bool bRemoveEmptyPopups )
         if ( pItem->eType == MenuItemType::SEPARATOR )
             RemoveItem( nLast );
     }
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 }
 
 void Menu::UpdateNativeMenu()
@@ -2210,15 +2211,14 @@ void Menu::MenuBarKeyInput(const KeyEvent&)
 
 void Menu::ImplKillLayoutData() const
 {
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 }
 
 void Menu::ImplFillLayoutData() const
 {
     if (pWindow && pWindow->IsReallyVisible())
     {
-        mpLayoutData = new MenuLayoutData;
+        mpLayoutData.reset(new MenuLayoutData);
         if (IsMenuBar())
         {
             ImplPaint(*pWindow, pWindow->GetOutputSizePixel(), 0, 0, nullptr, false, true); // FIXME
@@ -2672,12 +2672,14 @@ MenuFloatingWindow * PopupMenu::ImplGetFloatingWindow() const {
 }
 
 PopupMenu::PopupMenu()
+    : mpLOKNotifier(nullptr)
 {
     mpSalMenu = ImplGetSVData()->mpDefInst->CreateMenu(false, this);
 }
 
 PopupMenu::PopupMenu( const PopupMenu& rMenu )
-    : Menu()
+    : Menu(),
+      mpLOKNotifier(nullptr)
 {
     mpSalMenu = ImplGetSVData()->mpDefInst->CreateMenu(false, this);
     *this = rMenu;
@@ -2804,8 +2806,7 @@ sal_uInt16 PopupMenu::ImplExecute( const VclPtr<vcl::Window>& pW, const tools::R
         pMenuBarWindow->SetMBWHideAccel( !(pMenuBarWindow->GetMBWMenuKey()) );
     }
 
-    delete mpLayoutData;
-    mpLayoutData = nullptr;
+    mpLayoutData.reset();
 
     ImplSVData* pSVData = ImplGetSVData();
 
@@ -2878,6 +2879,9 @@ sal_uInt16 PopupMenu::ImplExecute( const VclPtr<vcl::Window>& pW, const tools::R
     }
 
     VclPtrInstance<MenuFloatingWindow> pWin( this, pW, WB_BORDER | WB_SYSTEMWINDOW );
+    if (comphelper::LibreOfficeKit::isActive() && mpLOKNotifier)
+        pWin->SetLOKNotifier(mpLOKNotifier);
+
     if( pSVData->maNWFData.mbFlatMenu )
         pWin->SetBorderStyle( WindowBorderStyle::NOBORDER );
     else

@@ -61,7 +61,6 @@
 #include <tools/diagnose_ex.h>
 #include <svx/svdpage.hxx>
 #include <svx/fmmodel.hxx>
-#include <svx/dialmgr.hxx>
 #include <fmshimp.hxx>
 #include <svx/svdpagv.hxx>
 #include <sfx2/objitem.hxx>
@@ -71,16 +70,14 @@
 #include <svl/numuno.hxx>
 #include <connectivity/dbtools.hxx>
 #include <comphelper/types.hxx>
-#include <comphelper/processfactory.hxx>
 #include <fmdocumentclassification.hxx>
 #include <formtoolbars.hxx>
 
 #include <svx/svxdlg.hxx>
-#include <svx/strings.hrc>
 
 #include <svx/sdrobjectfilter.hxx>
 
-#define FmFormShell
+#define ShellClass_FmFormShell
 #include <svxslots.hxx>
 
 #include <tbxform.hxx>
@@ -735,8 +732,8 @@ void FmFormShell::Execute(SfxRequest &rReq)
                 DBG_ASSERT( pFact, "no dialog factory!" );
                 if ( pFact )
                 {
-                    ScopedVclPtr< AbstractFmInputRecordNoDialog > dlg( pFact->CreateFmInputRecordNoDialog() );
-                    DBG_ASSERT( dlg.get(), "Dialog creation failed!" );
+                    ScopedVclPtr<AbstractFmInputRecordNoDialog> dlg(pFact->CreateFmInputRecordNoDialog(rReq.GetFrameWeld()));
+                    assert(dlg.get() && "Dialog creation failed!");
                     dlg->SetValue( rController->getCursor()->getRow() );
                     if ( dlg->Execute() == RET_OK )
                         nRecord = dlg->GetValue();
@@ -1324,7 +1321,7 @@ void FmFormShell::ToggleControlFocus( const SdrUnoObj& i_rUnoObject, const SdrVi
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 

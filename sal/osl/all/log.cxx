@@ -163,8 +163,6 @@ std::ofstream * getLogFile() {
     static char logFilePath[INI_STRINGBUF_SIZE];
     if (getValueFromLoggingIniFile("LogFilePath", logFilePath))
         logFile = logFilePath;
-    else
-        return nullptr;
 #endif
 
     // stays until process exits
@@ -328,6 +326,10 @@ void sal_detail_log(
             *logFile << s.str() << std::endl;
         }
         else {
+#ifdef WNT
+            // write to Windows debugger console, too
+            OutputDebugStringA(s.str().c_str());
+#endif
             s << '\n';
             std::fputs(s.str().c_str(), stderr);
             std::fflush(stderr);

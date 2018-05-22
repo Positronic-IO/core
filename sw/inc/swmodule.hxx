@@ -31,8 +31,6 @@
 #include "swdllapi.h"
 #include "shellid.hxx"
 #include "fldupde.hxx"
-#include <com/sun/star/linguistic2/XLinguServiceEventListener.hpp>
-#include <com/sun/star/linguistic2/XLanguageGuessing.hpp>
 
 class Color;
 class SfxItemSet;
@@ -68,6 +66,8 @@ enum class SvViewOpt {
 namespace com{ namespace sun{ namespace star{ namespace scanner{
     class XScannerManager2;
 }}}}
+namespace com { namespace sun { namespace star { namespace linguistic2 { class XLanguageGuessing; } } } }
+namespace com { namespace sun { namespace star { namespace linguistic2 { class XLinguServiceEventListener; } } } }
 
 class SW_DLLPUBLIC SwModule final : public SfxModule, public SfxListener, public utl::ConfigurationListener
 {
@@ -222,7 +222,7 @@ public:
     // Virtual methods for options dialog.
     virtual std::unique_ptr<SfxItemSet> CreateItemSet( sal_uInt16 nId ) override;
     virtual void         ApplyItemSet( sal_uInt16 nId, const SfxItemSet& rSet ) override;
-    virtual VclPtr<SfxTabPage> CreateTabPage( sal_uInt16 nId, vcl::Window* pParent, const SfxItemSet& rSet ) override;
+    virtual VclPtr<SfxTabPage> CreateTabPage( sal_uInt16 nId, TabPageParent pParent, const SfxItemSet& rSet ) override;
     virtual SfxStyleFamilies* CreateStyleFamilies() override;
 
     // Pool is created here and set at SfxShell.

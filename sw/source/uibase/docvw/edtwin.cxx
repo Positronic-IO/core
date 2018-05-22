@@ -22,18 +22,17 @@
 #include <swtypes.hxx>
 #include <hintids.hxx>
 #include <com/sun/star/accessibility/XAccessible.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/i18n/InputSequenceCheckMode.hpp>
+#include <com/sun/star/i18n/XExtendedInputSequenceChecker.hpp>
 
 #include <com/sun/star/i18n/UnicodeScript.hpp>
 #include <com/sun/star/i18n/CalendarFieldIndex.hpp>
 
 #include <vcl/help.hxx>
 #include <vcl/graph.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <sot/storage.hxx>
 #include <svl/macitem.hxx>
@@ -126,7 +125,6 @@
 
 #include <helpids.h>
 #include <cmdid.h>
-#include <strings.hrc>
 #include <uitool.hxx>
 #include <fmtfollowtextflow.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
@@ -156,6 +154,9 @@
 #include <rootfrm.hxx>
 
 #include <unotools/syslocaleoptions.hxx>
+#include <i18nlangtag/mslangid.hxx>
+#include <salhelper/singletonref.hxx>
+#include <sfx2/event.hxx>
 #include <memory>
 
 using namespace sw::mark;
@@ -1550,9 +1551,6 @@ void SwEditWin::KeyInput(const KeyEvent &rKEvt)
 
     SwModuleOptions* pModOpt = SW_MOD()->GetModuleConfig();
 
-    TableChgWidthHeightType eTableChgMode = TableChgWidthHeightType::ColLeft;    // initialization just for warning-free code
-    sal_uInt16 nTableChgSize = 0;
-    bool bStopKeyInputTimer = true;
     OUString sFormulaEntry;
 
     enum class SwKeyState { CheckKey, InsChar, InsTab,
@@ -1577,8 +1575,6 @@ void SwEditWin::KeyInput(const KeyEvent &rKEvt)
                        CellLeftSmall, CellRightSmall,
                        CellTopBig, CellBottomBig,
                        CellTopSmall, CellBottomSmall,
-
-                       TableColCellInsDel,
 
                        Fly_Change, Draw_Change,
                        SpecialInsert,
@@ -1772,19 +1768,8 @@ KEYINPUT_CHECKTABLE:
                         eFlyState = SwKeyState::Fly_Change;
                         nDir = MOVE_LEFT_BIG;
                     }
-                    eTableChgMode = TableChgWidthHeightType::InsertDeleteMode |
-                            ( bMod1
-                                ? TableChgWidthHeightType::CellLeft
-                                : TableChgWidthHeightType::ColLeft );
-                    nTableChgSize = pModOpt->GetTableVInsert();
+                    break;
                 }
-                    goto KEYINPUT_CHECKTABLE_INSDEL;
-                case KEY_RIGHT | KEY_MOD1:
-                {
-                    eTableChgMode = TableChgWidthHeightType::InsertDeleteMode | TableChgWidthHeightType::CellRight;
-                    nTableChgSize = pModOpt->GetTableVInsert();
-                }
-                    goto KEYINPUT_CHECKTABLE_INSDEL;
                 case KEY_UP:
                 case KEY_UP | KEY_MOD1:
                 {
@@ -1794,13 +1779,8 @@ KEYINPUT_CHECKTABLE:
                         eFlyState = SwKeyState::Fly_Change;
                         nDir = MOVE_UP_BIG;
                     }
-                    eTableChgMode = TableChgWidthHeightType::InsertDeleteMode |
-                            ( bMod1
-                                ? TableChgWidthHeightType::CellTop
-                                : TableChgWidthHeightType::RowTop );
-                    nTableChgSize = pModOpt->GetTableHInsert();
+                    break;
                 }
-                    goto KEYINPUT_CHECKTABLE_INSDEL;
                 case KEY_DOWN:
                 case KEY_DOWN | KEY_MOD1:
                 {
@@ -1810,36 +1790,8 @@ KEYINPUT_CHECKTABLE:
                         eFlyState = SwKeyState::Fly_Change;
                         nDir = MOVE_DOWN_BIG;
                     }
-                    eTableChgMode = TableChgWidthHeightType::InsertDeleteMode |
-                            ( bMod1
-                                ? TableChgWidthHeightType::CellBottom
-                                : TableChgWidthHeightType::RowBottom );
-                    nTableChgSize = pModOpt->GetTableHInsert();
-                }
-                    goto KEYINPUT_CHECKTABLE_INSDEL;
-
-KEYINPUT_CHECKTABLE_INSDEL:
-                    if( rSh.IsTableMode() || !rSh.GetTableFormat() || !m_bTableInsDelMode )
-                    {
-                        const SelectionType nSelectionType = rSh.GetSelectionType();
-
-                        eKeyState = SwKeyState::KeyToView;
-                        if(SwKeyState::KeyToView != eFlyState)
-                        {
-                            if((nSelectionType & (SelectionType::DrawObject|SelectionType::DbForm))  &&
-                                    rSh.GetDrawView()->AreObjectsMarked())
-                                eKeyState = SwKeyState::Draw_Change;
-                            else if(nSelectionType & (SelectionType::Frame|SelectionType::Ole|SelectionType::Graphic))
-                                eKeyState = SwKeyState::Fly_Change;
-                        }
-                    }
-                    else
-                    {
-                        if( !m_bTableIsInsMode )
-                            eTableChgMode = eTableChgMode | TableChgWidthHeightType::BiggerMode;
-                        eKeyState = SwKeyState::TableColCellInsDel;
-                    }
                     break;
+                }
 
                 case KEY_DELETE:
                     if ( !rSh.HasReadonlySel() || rSh.CursorInsideInputField())
@@ -1853,27 +1805,6 @@ KEYINPUT_CHECKTABLE_INSDEL:
                         std::unique_ptr<weld::MessageDialog> xInfo(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
                         xInfo->run();
                         eKeyState = SwKeyState::End;
-                    }
-                    break;
-
-                case KEY_DELETE | KEY_MOD2:
-                    if( !rSh.IsTableMode() && rSh.GetTableFormat() )
-                    {
-                        eKeyState = SwKeyState::End;
-                        m_bTableInsDelMode = true;
-                        m_bTableIsInsMode = false;
-                        m_aKeyInputTimer.Start();
-                        bStopKeyInputTimer = false;
-                    }
-                    break;
-                case KEY_INSERT | KEY_MOD2:
-                    if( !rSh.IsTableMode() && rSh.GetTableFormat() )
-                    {
-                        eKeyState = SwKeyState::End;
-                        m_bTableInsDelMode = true;
-                        m_bTableIsInsMode = true;
-                        m_aKeyInputTimer.Start();
-                        bStopKeyInputTimer = false;
                     }
                     break;
 
@@ -2037,9 +1968,7 @@ KEYINPUT_CHECKTABLE_INSDEL:
                     {
                         eFlyState = SwKeyState::Fly_Change;
                         nDir = MOVE_RIGHT_BIG;
-                        eTableChgMode = TableChgWidthHeightType::InsertDeleteMode | TableChgWidthHeightType::ColRight;
-                        nTableChgSize = pModOpt->GetTableVInsert();
-                        goto KEYINPUT_CHECKTABLE_INSDEL;
+                        break;
                     }
                 case KEY_TAB:
                 {
@@ -2437,10 +2366,10 @@ KEYINPUT_CHECKTABLE_INSDEL:
                 const bool bIsAutoCorrectChar =  SvxAutoCorrect::IsAutoCorrectChar( aCh );
                 if( !aKeyEvent.GetRepeat() && pACorr && ( bIsAutoCorrectChar || rSh.IsNbspRunNext() ) &&
                         pACfg->IsAutoFormatByInput() &&
-                    (( pACorr->IsAutoCorrFlag( ChgWeightUnderl ) &&
+                    (( pACorr->IsAutoCorrFlag( ACFlags::ChgWeightUnderl ) &&
                         ( '*' == aCh || '_' == aCh ) ) ||
-                     ( pACorr->IsAutoCorrFlag( ChgQuotes ) && ('\"' == aCh ))||
-                     ( pACorr->IsAutoCorrFlag( ChgSglQuotes ) && ( '\'' == aCh))))
+                     ( pACorr->IsAutoCorrFlag( ACFlags::ChgQuotes ) && ('\"' == aCh ))||
+                     ( pACorr->IsAutoCorrFlag( ACFlags::ChgSglQuotes ) && ( '\'' == aCh))))
                 {
                     FlushInBuffer();
                     rSh.AutoCorrect( *pACorr, aCh );
@@ -2449,10 +2378,10 @@ KEYINPUT_CHECKTABLE_INSDEL:
                 }
                 else if( !aKeyEvent.GetRepeat() && pACorr && ( bIsAutoCorrectChar || rSh.IsNbspRunNext() ) &&
                         pACfg->IsAutoFormatByInput() &&
-                    pACorr->IsAutoCorrFlag( CapitalStartSentence | CapitalStartWord |
-                                            ChgOrdinalNumber | AddNonBrkSpace |
-                                            ChgToEnEmDash | SetINetAttr |
-                                            Autocorrect ) &&
+                    pACorr->IsAutoCorrFlag( ACFlags::CapitalStartSentence | ACFlags::CapitalStartWord |
+                                            ACFlags::ChgOrdinalNumber | ACFlags::AddNonBrkSpace |
+                                            ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr |
+                                            ACFlags::Autocorrect ) &&
                     '\"' != aCh && '\'' != aCh && '*' != aCh && '_' != aCh
                     )
                 {
@@ -2474,9 +2403,8 @@ KEYINPUT_CHECKTABLE_INSDEL:
             }
             else
             {
-                std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui"));
-                std::unique_ptr<weld::MessageDialog> xInfo(xBuilder->weld_message_dialog("InfoReadonlyDialog"));
-                xInfo->run();
+                auto xInfo(std::make_shared<weld::GenericDialogController>(GetFrameWeld(), "modules/swriter/ui/inforeadonlydialog.ui", "InfoReadonlyDialog"));
+                weld::DialogController::runAsync(xInfo, [](int) {});
                 eKeyState = SwKeyState::End;
             }
         break;
@@ -2484,10 +2412,10 @@ KEYINPUT_CHECKTABLE_INSDEL:
         case SwKeyState::CheckAutoCorrect:
         {
             if( pACorr && pACfg->IsAutoFormatByInput() &&
-                pACorr->IsAutoCorrFlag( CapitalStartSentence | CapitalStartWord |
-                                        ChgOrdinalNumber |
-                                        ChgToEnEmDash | SetINetAttr |
-                                        Autocorrect ) &&
+                pACorr->IsAutoCorrFlag( ACFlags::CapitalStartSentence | ACFlags::CapitalStartWord |
+                                        ACFlags::ChgOrdinalNumber |
+                                        ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr |
+                                        ACFlags::Autocorrect ) &&
                 !rSh.HasReadonlySel() )
             {
                 FlushInBuffer();
@@ -2651,9 +2579,6 @@ KEYINPUT_CHECKTABLE_INSDEL:
             case SwKeyState::CellTopSmall:       rSh.SetColRowWidthHeight( TableChgWidthHeightType::CellTop, pModOpt->GetTableVMove() );   break;
             case SwKeyState::CellBottomSmall:    rSh.SetColRowWidthHeight( TableChgWidthHeightType::CellBottom, pModOpt->GetTableVMove() );    break;
 
-            case SwKeyState::TableColCellInsDel:
-                rSh.SetColRowWidthHeight( eTableChgMode, nTableChgSize );
-                break;
             case SwKeyState::Fly_Change:
             {
                 SdrView *pSdrView = rSh.GetDrawView();
@@ -2678,12 +2603,6 @@ KEYINPUT_CHECKTABLE_INSDEL:
             eKeyState = SwKeyState::End;
         }
         }
-    }
-
-    if( bStopKeyInputTimer )
-    {
-        m_aKeyInputTimer.Stop();
-        m_bTableInsDelMode = false;
     }
 
     // in case the buffered characters are inserted
@@ -5037,8 +4956,6 @@ SwEditWin::SwEditWin(vcl::Window *pParent, SwView &rMyView):
     m_bIsInDrag(false),
     m_bOldIdle(false),
     m_bOldIdleSet(false),
-    m_bTableInsDelMode(false),
-    m_bTableIsInsMode(false),
     m_bChainMode(false),
     m_bWasShdwCursor(false),
     m_bLockInput(false),
@@ -5063,10 +4980,6 @@ SwEditWin::SwEditWin(vcl::Window *pParent, SwView &rMyView):
 
     SetPointer( PointerStyle::Text );
     m_aTimer.SetInvokeHandler(LINK(this, SwEditWin, TimerHandler));
-
-    m_bTableInsDelMode = false;
-    m_aKeyInputTimer.SetTimeout( 3000 );
-    m_aKeyInputTimer.SetInvokeHandler(LINK(this, SwEditWin, KeyInputTimerHandler));
 
     m_aKeyInputFlushTimer.SetTimeout( 200 );
     m_aKeyInputFlushTimer.SetInvokeHandler(LINK(this, SwEditWin, KeyInputFlushHandler));
@@ -5093,8 +5006,6 @@ SwEditWin::~SwEditWin()
 
 void SwEditWin::dispose()
 {
-    m_aKeyInputTimer.Stop();
-
     delete m_pShadCursor;
     m_pShadCursor = nullptr;
 
@@ -5382,8 +5293,8 @@ void SwEditWin::Command( const CommandEvent& rCEvt )
                     SvxAutoCorrCfg& rACfg = SvxAutoCorrCfg::Get();
                     SvxAutoCorrect* pACorr = rACfg.GetAutoCorrect();
                     if(pACorr &&
-                        (( pACorr->IsAutoCorrFlag( ChgQuotes ) && ('\"' == aCh ))||
-                        ( pACorr->IsAutoCorrFlag( ChgSglQuotes ) && ( '\'' == aCh))))
+                        (( pACorr->IsAutoCorrFlag( ACFlags::ChgQuotes ) && ('\"' == aCh ))||
+                        ( pACorr->IsAutoCorrFlag( ACFlags::ChgSglQuotes ) && ( '\'' == aCh))))
                     {
                         rSh.DelLeft();
                         rSh.AutoCorrect( *pACorr, aCh );
@@ -5855,11 +5766,6 @@ static SfxShell* lcl_GetTextShellFromDispatcher( SwView const & rView )
 IMPL_LINK_NOARG(SwEditWin, KeyInputFlushHandler, Timer *, void)
 {
     FlushInBuffer();
-}
-
-IMPL_LINK_NOARG(SwEditWin, KeyInputTimerHandler, Timer *, void)
-{
-    m_bTableInsDelMode = false;
 }
 
 void SwEditWin::InitStaticData()

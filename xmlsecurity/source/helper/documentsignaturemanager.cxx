@@ -29,7 +29,9 @@
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/xml/crypto/SEInitializer.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 
+#include <comphelper/base64.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <sax/tools/converter.hxx>
@@ -45,6 +47,8 @@
 #include <pdfsignaturehelper.hxx>
 
 using namespace css;
+using namespace css::graphic;
+using namespace css::uno;
 
 DocumentSignatureManager::DocumentSignatureManager(
     const uno::Reference<uno::XComponentContext>& xContext, DocumentSignatureMode eMode)
@@ -264,7 +268,9 @@ SignatureStreamHelper DocumentSignatureManager::ImplOpenSignatureStream(sal_Int3
 bool DocumentSignatureManager::add(
     const uno::Reference<security::XCertificate>& xCert,
     const uno::Reference<xml::crypto::XXMLSecurityContext>& xSecurityContext,
-    const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant)
+    const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant,
+    const OUString& rSignatureLineId, const Reference<XGraphic> xValidGraphic,
+    const Reference<XGraphic> xInvalidGraphic)
 {
     if (!xCert.is())
     {
@@ -289,13 +295,13 @@ bool DocumentSignatureManager::add(
         nSecurityId = maSignatureHelper.GetNewSecurityId();
 
         OUStringBuffer aStrBuffer;
-        sax::Converter::encodeBase64(aStrBuffer, xCert->getEncoded());
+        comphelper::Base64::encode(aStrBuffer, xCert->getEncoded());
 
         OUString aKeyId;
         if (auto pCertificate = dynamic_cast<xmlsecurity::Certificate*>(xCert.get()))
         {
             OUStringBuffer aBuffer;
-            sax::Converter::encodeBase64(aBuffer, pCertificate->getSHA256Thumbprint());
+            comphelper::Base64::encode(aBuffer, pCertificate->getSHA256Thumbprint());
             aKeyId = aBuffer.makeStringAndClear();
         }
         else
@@ -334,21 +340,26 @@ bool DocumentSignatureManager::add(
         nSecurityId = maSignatureHelper.GetNewSecurityId();
 
         OUStringBuffer aStrBuffer;
-        sax::Converter::encodeBase64(aStrBuffer, xCert->getEncoded());
+        comphelper::Base64::encode(aStrBuffer, xCert->getEncoded());
 
         OUString aCertDigest;
+        svl::crypto::SignatureMethodAlgorithm eAlgorithmID
+            = svl::crypto::SignatureMethodAlgorithm::RSA;
         if (auto pCertificate = dynamic_cast<xmlsecurity::Certificate*>(xCert.get()))
         {
             OUStringBuffer aBuffer;
-            sax::Converter::encodeBase64(aBuffer, pCertificate->getSHA256Thumbprint());
+            comphelper::Base64::encode(aBuffer, pCertificate->getSHA256Thumbprint());
             aCertDigest = aBuffer.makeStringAndClear();
+
+            eAlgorithmID = pCertificate->getSignatureMethodAlgorithm();
         }
         else
             SAL_WARN("xmlsecurity.helper",
                      "XCertificate implementation without an xmlsecurity::Certificate one");
 
         maSignatureHelper.SetX509Certificate(nSecurityId, xCert->getIssuerName(), aCertSerial,
-                                             aStrBuffer.makeStringAndClear(), aCertDigest);
+                                             aStrBuffer.makeStringAndClear(), aCertDigest,
+                                             eAlgorithmID);
     }
 
     uno::Sequence<uno::Reference<security::XCertificate>> aCertPath
@@ -359,7 +370,7 @@ bool DocumentSignatureManager::add(
     OUStringBuffer aStrBuffer;
     for (int i = 0; i < nCnt; i++)
     {
-        sax::Converter::encodeBase64(aStrBuffer, pCertPath[i]->getEncoded());
+        comphelper::Base64::encode(aStrBuffer, pCertPath[i]->getEncoded());
         maSignatureHelper.AddEncapsulatedX509Certificate(aStrBuffer.makeStringAndClear());
     }
 
@@ -378,9 +389,18 @@ bool DocumentSignatureManager::add(
                                   tools::Time(tools::Time::SYSTEM));
     maSignatureHelper.SetDescription(nSecurityId, rDescription);
 
+    if (!rSignatureLineId.isEmpty())
+        maSignatureHelper.SetSignatureLineId(nSecurityId, rSignatureLineId);
+
+    if (xValidGraphic.is())
+        maSignatureHelper.SetSignatureLineValidGraphic(nSecurityId, xValidGraphic);
+
+    if (xInvalidGraphic.is())
+        maSignatureHelper.SetSignatureLineInvalidGraphic(nSecurityId, xInvalidGraphic);
+
     // We open a signature stream in which the existing and the new
     //signature is written. ImplGetSignatureInformation (later in this function) will
-    //then read the stream an will fill  maCurrentSignatureInformations. The final signature
+    //then read the stream and fill maCurrentSignatureInformations. The final signature
     //is written when the user presses OK. Then only maCurrentSignatureInformation and
     //a sax writer are used to write the information.
     SignatureStreamHelper aStreamHelper

@@ -92,6 +92,7 @@
 #include <convuno.hxx>
 #include <postit.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 
 #include <fprogressbar.hxx>
 #include <xltracer.hxx>
@@ -425,8 +426,7 @@ SdrObjectPtr XclImpDrawObjBase::CreateSdrObject( XclImpDffConverter& rDffConv, c
     else
     {
         xSdrObj = DoCreateSdrObj( rDffConv, rAnchorRect );
-        if( xSdrObj )
-            xSdrObj->SetModel( rDffConv.GetModel() );
+
         //added for exporting OCX control
         /*  mnObjType value set should be as below table:
                     0x0000      Group               0x0001      Line
@@ -713,7 +713,7 @@ void XclImpDrawObjBase::ConvertFillStyle( SdrObject& rSdrObj, const XclObjFillDa
             Bitmap aBitmap;
             ReadDIB(aBitmap, aMemStrm, false);
 
-            XOBitmap aXOBitmap( aBitmap );
+            XOBitmap aXOBitmap(( BitmapEx(aBitmap) ));
             aXOBitmap.Bitmap2Array();
             if( aXOBitmap.GetBackgroundColor() == COL_BLACK )
                 ::std::swap( aPattColor, aBackColor );
@@ -1012,7 +1012,9 @@ std::size_t XclImpGroupObj::DoGetProgressSize() const
 
 SdrObjectPtr XclImpGroupObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const tools::Rectangle& /*rAnchorRect*/ ) const
 {
-    std::unique_ptr<SdrObjGroup, SdrObjectFree> xSdrObj( new SdrObjGroup );
+    std::unique_ptr<SdrObjGroup, SdrObjectFreeOp> xSdrObj(
+        new SdrObjGroup(
+            *GetDoc().GetDrawLayer()));
     // child objects in BIFF2-BIFF5 have absolute size, not needed to pass own anchor rectangle
     SdrObjList& rObjList = *xSdrObj->GetSubList();  // SdrObjGroup always returns existing sublist
     for( ::std::vector< XclImpDrawObjRef >::const_iterator aIt = maChildren.begin(), aEnd = maChildren.end(); aIt != aEnd; ++aIt )
@@ -1080,7 +1082,11 @@ SdrObjectPtr XclImpLineObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const 
             aB2DPolygon.append( ::basegfx::B2DPoint( rAnchorRect.Right(), rAnchorRect.Top() ) );
         break;
     }
-    SdrObjectPtr xSdrObj( new SdrPathObj( OBJ_LINE, ::basegfx::B2DPolyPolygon( aB2DPolygon ) ) );
+    SdrObjectPtr xSdrObj(
+        new SdrPathObj(
+            *GetDoc().GetDrawLayer(),
+            OBJ_LINE,
+            ::basegfx::B2DPolyPolygon(aB2DPolygon)));
     ConvertLineStyle( *xSdrObj, maLineData );
 
     // line ends
@@ -1195,7 +1201,10 @@ void XclImpRectObj::DoReadObj5( XclImpStream& rStrm, sal_uInt16 nNameLen, sal_uI
 
 SdrObjectPtr XclImpRectObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const tools::Rectangle& rAnchorRect ) const
 {
-    SdrObjectPtr xSdrObj( new SdrRectObj( rAnchorRect ) );
+    SdrObjectPtr xSdrObj(
+        new SdrRectObj(
+            *GetDoc().GetDrawLayer(),
+            rAnchorRect));
     ConvertRectStyle( *xSdrObj );
     rDffConv.Progress();
     return xSdrObj;
@@ -1208,7 +1217,11 @@ XclImpOvalObj::XclImpOvalObj( const XclImpRoot& rRoot ) :
 
 SdrObjectPtr XclImpOvalObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const tools::Rectangle& rAnchorRect ) const
 {
-    SdrObjectPtr xSdrObj( new SdrCircObj( OBJ_CIRC, rAnchorRect ) );
+    SdrObjectPtr xSdrObj(
+        new SdrCircObj(
+            *GetDoc().GetDrawLayer(),
+            OBJ_CIRC,
+            rAnchorRect));
     ConvertRectStyle( *xSdrObj );
     rDffConv.Progress();
     return xSdrObj;
@@ -1280,7 +1293,13 @@ SdrObjectPtr XclImpArcObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const t
         break;
     }
     SdrObjKind eObjKind = maFillData.IsFilled() ? OBJ_SECT : OBJ_CARC;
-    SdrObjectPtr xSdrObj( new SdrCircObj( eObjKind, aNewRect, nStartAngle, nEndAngle ) );
+    SdrObjectPtr xSdrObj(
+        new SdrCircObj(
+            *GetDoc().GetDrawLayer(),
+            eObjKind,
+            aNewRect,
+            nStartAngle,
+            nEndAngle));
     ConvertFillStyle( *xSdrObj, maFillData );
     ConvertLineStyle( *xSdrObj, maLineData );
     rDffConv.Progress();
@@ -1358,7 +1377,11 @@ SdrObjectPtr XclImpPolygonObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, con
             aB2DPolygon.append( lclGetPolyPoint( rAnchorRect, maCoords.front() ) );
         // create the SdrObject
         SdrObjKind eObjKind = maFillData.IsFilled() ? OBJ_PATHPOLY : OBJ_PATHPLIN;
-        xSdrObj.reset( new SdrPathObj( eObjKind, ::basegfx::B2DPolyPolygon( aB2DPolygon ) ) );
+        xSdrObj.reset(
+            new SdrPathObj(
+                *GetDoc().GetDrawLayer(),
+                eObjKind,
+                ::basegfx::B2DPolyPolygon(aB2DPolygon)));
         ConvertRectStyle( *xSdrObj );
     }
     rDffConv.Progress();
@@ -1420,7 +1443,9 @@ void XclImpTextObj::DoReadObj5( XclImpStream& rStrm, sal_uInt16 nNameLen, sal_uI
 
 SdrObjectPtr XclImpTextObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const tools::Rectangle& rAnchorRect ) const
 {
-    std::unique_ptr<SdrObjCustomShape, SdrObjectFree> xSdrObj( new SdrObjCustomShape );
+    std::unique_ptr<SdrObjCustomShape, SdrObjectFreeOp> xSdrObj(
+        new SdrObjCustomShape(
+            *GetDoc().GetDrawLayer()));
     xSdrObj->NbcSetSnapRect( rAnchorRect );
     OUString aRectType = "rectangle";
     xSdrObj->MergeDefaultAttributes( &aRectType );
@@ -1710,7 +1735,12 @@ SdrObjectPtr XclImpChartObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const
         // ChartHelper::AdaptDefaultsForChart( xEmbObj );
 
         // create the container OLE object
-        xSdrObj.reset( new SdrOle2Obj( svt::EmbeddedObjectRef( xEmbObj, nAspect ), aEmbObjName, rAnchorRect ) );
+        xSdrObj.reset(
+            new SdrOle2Obj(
+                *GetDoc().GetDrawLayer(),
+                svt::EmbeddedObjectRef(xEmbObj, nAspect),
+                aEmbObjName,
+                rAnchorRect));
     }
 
     return xSdrObj;
@@ -1797,8 +1827,7 @@ void XclImpNoteObj::DoPreProcessSdrObj( XclImpDffConverter& rDffConv, SdrObject&
             rSdrObj.GetMergedItemSet().Clone(),             // new object on heap expected
             new OutlinerParaObject( *pOutlinerObj ),        // new object on heap expected
             rSdrObj.GetLogicRect(),
-            ::get_flag( mnNoteFlags, EXC_NOTE_VISIBLE ),
-            false );
+            ::get_flag( mnNoteFlags, EXC_NOTE_VISIBLE ) );
     }
 }
 
@@ -1927,8 +1956,8 @@ void XclImpControlHelper::ReadCellLinkFormula( XclImpStream& rStrm, bool bWithBo
     // Use first cell of first range
     if ( !aScRanges.empty() )
     {
-        const ScRange* pScRange = aScRanges.front();
-        mxCellLink.reset( new ScAddress( pScRange->aStart ) );
+        const ScRange & rScRange = aScRanges.front();
+        mxCellLink.reset( new ScAddress( rScRange.aStart ) );
     }
 }
 
@@ -1939,8 +1968,8 @@ void XclImpControlHelper::ReadSourceRangeFormula( XclImpStream& rStrm, bool bWit
     // Use first range
     if ( !aScRanges.empty() )
     {
-        const ScRange* pScRange = aScRanges.front();
-        mxSrcRange.reset( new ScRange( *pScRange ) );
+        const ScRange & rScRange = aScRanges.front();
+        mxSrcRange.reset( new ScRange( rScRange ) );
     }
 }
 
@@ -2210,7 +2239,7 @@ void XclImpCheckBoxObj::DoProcessControl( ScfPropertySet& rPropSet ) const
     // background color
     if( maFillData.IsFilled() )
     {
-        sal_Int32 nColor = static_cast< sal_Int32 >( GetSolidFillColor( maFillData ).GetColor() );
+        sal_Int32 nColor = static_cast< sal_Int32 >( GetSolidFillColor( maFillData ) );
         rPropSet.SetProperty( "BackgroundColor", nColor );
     }
 }
@@ -2953,7 +2982,11 @@ SdrObjectPtr XclImpPictureObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, con
     // no OLE - create a plain picture from IMGDATA record data
     if( !xSdrObj && (maGraphic.GetType() != GraphicType::NONE) )
     {
-        xSdrObj.reset( new SdrGrafObj( maGraphic, rAnchorRect ) );
+        xSdrObj.reset(
+            new SdrGrafObj(
+                *GetDoc().GetDrawLayer(),
+                maGraphic,
+                rAnchorRect));
         ConvertRectStyle( *xSdrObj );
     }
 
@@ -3434,9 +3467,20 @@ SdrObjectPtr XclImpDffConverter::CreateSdrObject( const XclImpPictureObj& rPicOb
                     ErrCode nError = ERRCODE_NONE;
                     namespace cssea = ::com::sun::star::embed::Aspects;
                     sal_Int64 nAspects = rPicObj.IsSymbol() ? cssea::MSOLE_ICON : cssea::MSOLE_CONTENT;
-                    xSdrObj.reset( CreateSdrOLEFromStorage(
-                        aStrgName, xSrcStrg, pDocShell->GetStorage(), aGraphic,
-                        rAnchorRect, aVisArea, nullptr, nError, mnOleImpFlags, nAspects, GetRoot().GetMedium().GetBaseURL()) );
+                    xSdrObj.reset(
+                        CreateSdrOLEFromStorage(
+                            GetConvData().mrSdrModel,
+                            aStrgName,
+                            xSrcStrg,
+                            pDocShell->GetStorage(),
+                            aGraphic,
+                            rAnchorRect,
+                            aVisArea,
+                            nullptr,
+                            nError,
+                            mnOleImpFlags,
+                            nAspects,
+                            GetRoot().GetMedium().GetBaseURL()));
                 }
             }
         }
@@ -3592,7 +3636,7 @@ SdrObject* XclImpDffConverter::FinalizeObj(DffObjData& rDffObjData, SdrObject* p
     {
         // cell anchoring
         if ( !rDffObjData.bPageAnchor )
-            ScDrawLayer::SetCellAnchoredFromPosition( *xSdrObj,  GetDoc(), xDrawObj->GetTab() );
+            ScDrawLayer::SetCellAnchoredFromPosition( *xSdrObj,  GetDoc(), xDrawObj->GetTab(), false );
     }
 
     return xSdrObj.release();
@@ -4192,27 +4236,27 @@ XclImpObjectManager::XclImpObjectManager( const XclImpRoot& rRoot ) :
     XclImpRoot( rRoot )
 {
     maDefObjNames[ EXC_OBJTYPE_GROUP ]          = "Group";
-    maDefObjNames[ EXC_OBJTYPE_LINE ]           = ScGlobal::GetRscString( STR_SHAPE_LINE );
-    maDefObjNames[ EXC_OBJTYPE_RECTANGLE ]      = ScGlobal::GetRscString( STR_SHAPE_RECTANGLE );
-    maDefObjNames[ EXC_OBJTYPE_OVAL ]           = ScGlobal::GetRscString( STR_SHAPE_OVAL );
+    maDefObjNames[ EXC_OBJTYPE_LINE ]           = ScResId( STR_SHAPE_LINE );
+    maDefObjNames[ EXC_OBJTYPE_RECTANGLE ]      = ScResId( STR_SHAPE_RECTANGLE );
+    maDefObjNames[ EXC_OBJTYPE_OVAL ]           = ScResId( STR_SHAPE_OVAL );
     maDefObjNames[ EXC_OBJTYPE_ARC ]            = "Arc";
     maDefObjNames[ EXC_OBJTYPE_CHART ]          = "Chart";
     maDefObjNames[ EXC_OBJTYPE_TEXT ]           = "Text";
-    maDefObjNames[ EXC_OBJTYPE_BUTTON ]         =  ScGlobal::GetRscString( STR_FORM_BUTTON );
+    maDefObjNames[ EXC_OBJTYPE_BUTTON ]         =  ScResId( STR_FORM_BUTTON );
     maDefObjNames[ EXC_OBJTYPE_PICTURE ]        = "Picture";
     maDefObjNames[ EXC_OBJTYPE_POLYGON ]        = "Freeform";
-    maDefObjNames[ EXC_OBJTYPE_CHECKBOX ]       = ScGlobal::GetRscString( STR_FORM_CHECKBOX );
-    maDefObjNames[ EXC_OBJTYPE_OPTIONBUTTON ]   = ScGlobal::GetRscString( STR_FORM_OPTIONBUTTON );
+    maDefObjNames[ EXC_OBJTYPE_CHECKBOX ]       = ScResId( STR_FORM_CHECKBOX );
+    maDefObjNames[ EXC_OBJTYPE_OPTIONBUTTON ]   = ScResId( STR_FORM_OPTIONBUTTON );
     maDefObjNames[ EXC_OBJTYPE_EDIT ]           = "Edit Box";
-    maDefObjNames[ EXC_OBJTYPE_LABEL ]          = ScGlobal::GetRscString( STR_FORM_LABEL );
+    maDefObjNames[ EXC_OBJTYPE_LABEL ]          = ScResId( STR_FORM_LABEL );
     maDefObjNames[ EXC_OBJTYPE_DIALOG ]         = "Dialog Frame";
-    maDefObjNames[ EXC_OBJTYPE_SPIN ]           = ScGlobal::GetRscString( STR_FORM_SPINNER );
-    maDefObjNames[ EXC_OBJTYPE_SCROLLBAR ]      = ScGlobal::GetRscString( STR_FORM_SCROLLBAR );
-    maDefObjNames[ EXC_OBJTYPE_LISTBOX ]        = ScGlobal::GetRscString( STR_FORM_LISTBOX );
-    maDefObjNames[ EXC_OBJTYPE_GROUPBOX ]       = ScGlobal::GetRscString( STR_FORM_GROUPBOX );
-    maDefObjNames[ EXC_OBJTYPE_DROPDOWN ]       = ScGlobal::GetRscString( STR_FORM_DROPDOWN );
+    maDefObjNames[ EXC_OBJTYPE_SPIN ]           = ScResId( STR_FORM_SPINNER );
+    maDefObjNames[ EXC_OBJTYPE_SCROLLBAR ]      = ScResId( STR_FORM_SCROLLBAR );
+    maDefObjNames[ EXC_OBJTYPE_LISTBOX ]        = ScResId( STR_FORM_LISTBOX );
+    maDefObjNames[ EXC_OBJTYPE_GROUPBOX ]       = ScResId( STR_FORM_GROUPBOX );
+    maDefObjNames[ EXC_OBJTYPE_DROPDOWN ]       = ScResId( STR_FORM_DROPDOWN );
     maDefObjNames[ EXC_OBJTYPE_NOTE ]           = "Comment";
-    maDefObjNames[ EXC_OBJTYPE_DRAWING ]        = ScGlobal::GetRscString( STR_SHAPE_AUTOSHAPE );
+    maDefObjNames[ EXC_OBJTYPE_DRAWING ]        = ScResId( STR_SHAPE_AUTOSHAPE );
 }
 
 XclImpObjectManager::~XclImpObjectManager()

@@ -25,6 +25,9 @@
 #include <fmtornt.hxx>
 #include <fmtsrnd.hxx>
 #include <editeng/lrspitem.hxx>
+#include <svl/itemset.hxx>
+#include <svx/swframetypes.hxx>
+#include <swtable.hxx>
 
 #include "ww8scan.hxx"
 #include "ww8par.hxx"
@@ -89,23 +92,23 @@ class WW8RStyle: public WW8Style
 {
 friend class SwWW8ImplReader;
     wwSprmParser maSprmParser;
-    SwWW8ImplReader* pIo;   // parser class
-    SvStream* pStStrm;      // input file
+    SwWW8ImplReader* mpIo;   // parser class
+    SvStream* mpStStrm;      // input file
 
-    SwNumRule* pStyRule;    // bullets and enumerations in styles
+    SwNumRule* mpStyRule;    // bullets and enumerations in styles
 
-    sal_uInt8* pParaSprms;           // all ParaSprms of the UPX if UPX.Papx
-    sal_uInt16 nSprmsLen;           // its length
+    sal_uInt8* mpParaSprms;           // all ParaSprms of the UPX if UPX.Papx
+    sal_uInt16 mnSprmsLen;           // its length
 
-    sal_uInt8 nWwNumLevel;           // for bullets and enumerations in styles
+    sal_uInt8 mnWwNumLevel;           // for bullets and enumerations in styles
 
-    bool bTextColChanged;
-    bool bFontChanged;      // For Simulating Default-Font
-    bool bCJKFontChanged;   // For Simulating Default-CJK Font
-    bool bCTLFontChanged;   // For Simulating Default-CTL Font
-    bool bFSizeChanged;     // For Simulating Default-FontSize
-    bool bFCTLSizeChanged;  // For Simulating Default-CTL FontSize
-    bool bWidowsChanged;    // For Simulating Default-Widows / Orphans
+    bool mbTextColChanged;
+    bool mbFontChanged;      // For Simulating Default-Font
+    bool mbCJKFontChanged;   // For Simulating Default-CJK Font
+    bool mbCTLFontChanged;   // For Simulating Default-CTL Font
+    bool mbFSizeChanged;     // For Simulating Default-FontSize
+    bool mbFCTLSizeChanged;  // For Simulating Default-CTL FontSize
+    bool mbWidowsChanged;    // For Simulating Default-Widows / Orphans
 
     void ImportSprms(std::size_t nPosFc, short nLen, bool bPap);
     void ImportSprms(sal_uInt8 *pSprms, short nLen, bool bPap);
@@ -283,8 +286,8 @@ public:
     short GetMinLeft() const { return m_nConvertedLeft; }
     ~WW8TabDesc();
 
-    const WW8_TCell* GetAktWWCell() const { return m_pCurrentWWCell; }
-    short GetAktCol() const { return m_nCurrentCol; }
+    const WW8_TCell* GetCurrentWWCell() const { return m_pCurrentWWCell; }
+    short GetCurrentCol() const { return m_nCurrentCol; }
     // find name of numrule valid for current WW-COL
     OUString GetNumRuleName() const;
     void SetNumRuleName( const OUString& rName );

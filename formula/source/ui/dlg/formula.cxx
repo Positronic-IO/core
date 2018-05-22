@@ -59,7 +59,6 @@
 #include <com/sun/star/sheet/XFormulaOpCodeMapper.hpp>
 #include <com/sun/star/sheet/XFormulaParser.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <map>
 
@@ -200,8 +199,6 @@ public:
     bool                    m_bIsShutDown;
     bool                    m_bMakingTree;  // in method of constructing tree
 
-    vcl::Font               m_aFntBold;
-    vcl::Font               m_aFntLight;
     bool                    m_bEditFlag;
     const IFunctionDescription* m_pFuncDesc;
     sal_Int32               m_nArgs;
@@ -332,18 +329,18 @@ FormulaDlg_Impl::FormulaDlg_Impl(Dialog* pParent
     m_pMEdit->SetModifyHdl( LINK( this, FormulaDlg_Impl, FormulaHdl ) );
     m_pMEFormula->SetSelChangedHdl( LINK( this, FormulaDlg_Impl, FormulaCursorHdl ) );
 
-    m_aFntLight = m_pFtFormula->GetFont();
-    m_aFntLight.SetTransparent( true );
-    m_aFntBold = m_aFntLight;
-    m_aFntBold.SetWeight( WEIGHT_BOLD );
+    vcl::Font aFntLight = m_pFtFormula->GetFont();
+    aFntLight.SetTransparent( true );
+    vcl::Font aFntBold = aFntLight;
+    aFntBold.SetWeight( WEIGHT_BOLD );
 
-    m_pParaWin->SetArgumentFonts( m_aFntBold, m_aFntLight);
+    m_pParaWin->SetArgumentFonts( aFntBold, aFntLight);
 
     //  function description for choosing a function is no longer in a different color
 
-    m_pFtHeadLine->SetFont(m_aFntBold);
-    m_pFtFuncName->SetFont(m_aFntLight);
-    m_pFtFuncDesc->SetFont(m_aFntLight);
+    m_pFtHeadLine->SetFont(aFntBold);
+    m_pFtFuncName->SetFont(aFntLight);
+    m_pFtFuncDesc->SetFont(aFntLight);
 }
 
 FormulaDlg_Impl::~FormulaDlg_Impl()
@@ -567,22 +564,30 @@ void FormulaDlg_Impl::UpdateValues( bool bForceRecalcStruct )
     // Take a force-array context into account. RPN creation propagated those
     // to tokens that are ref-counted so also available in the token array.
     bool bForceArray = false;
-    // Only necessary if it's not a matrix formula anyway.
-    if (!m_pBtnMatrix->IsChecked())
+    // Only necessary if it's not a matrix formula anyway and matrix evaluation
+    // is supported, i.e. the button is visible.
+    if (m_pBtnMatrix->IsVisible() && !m_pBtnMatrix->IsChecked())
     {
-        const sal_Int32 nPos = m_aFuncSel.Min();
-        assert( 0 <= nPos && nPos < m_pHelper->getCurrentFormula().getLength());
-        OUStringBuffer aBuf;
         std::unique_ptr<FormulaCompiler> pCompiler( m_pHelper->createCompiler( *m_pTokenArray.get()));
-        const FormulaToken* pToken = nullptr;
-        for (pToken = m_pTokenArrayIterator->First(); pToken; pToken = m_pTokenArrayIterator->Next())
+        // In the case of the reportdesign dialog there is no currently active
+        // OpCode symbol mapping that could be used to create strings from
+        // tokens, it's all dreaded API mapping. However, in that case there's
+        // no array/matrix support anyway, but ensure checking.
+        if (pCompiler->GetCurrentOpCodeMap().get())
         {
-            pCompiler->CreateStringFromToken( aBuf, pToken);
-            if (nPos < aBuf.getLength())
-                break;
+            const sal_Int32 nPos = m_aFuncSel.Min();
+            assert( 0 <= nPos && nPos < m_pHelper->getCurrentFormula().getLength());
+            OUStringBuffer aBuf;
+            const FormulaToken* pToken = nullptr;
+            for (pToken = m_pTokenArrayIterator->First(); pToken; pToken = m_pTokenArrayIterator->Next())
+            {
+                pCompiler->CreateStringFromToken( aBuf, pToken);
+                if (nPos < aBuf.getLength())
+                    break;
+            }
+            if (pToken && nPos < aBuf.getLength())
+                bForceArray = pToken->IsInForceArray();
         }
-        if (pToken && nPos < aBuf.getLength())
-            bForceArray = pToken->IsInForceArray();
     }
 
     OUString aStrResult;
@@ -605,40 +610,32 @@ void FormulaDlg_Impl::UpdateValues( bool bForceRecalcStruct )
 
 bool FormulaDlg_Impl::CalcStruct( const OUString& rStrExp, bool bForceRecalcStruct )
 {
-    bool bResult = true;
     sal_Int32 nLength = rStrExp.getLength();
 
     if ( !rStrExp.isEmpty() && (bForceRecalcStruct || m_aOldFormula != rStrExp) && m_bStructUpdate)
     {
-        // Only calculate the value when there isn't any more keyboard input:
+        m_pStructPage->ClearStruct();
 
-        if ( !Application::AnyInput( VclInputFlags::KEYBOARD ) )
+        OUString aString = rStrExp;
+        if (rStrExp[nLength-1] == '(')
         {
-            m_pStructPage->ClearStruct();
-
-            OUString aString = rStrExp;
-            if (rStrExp[nLength-1] == '(')
-            {
-                aString = aString.copy( 0, nLength-1);
-            }
-
-            aString = aString.replaceAll( "\n", "");
-            OUString aStrResult;
-
-            if ( CalcValue( aString, aStrResult ) )
-                m_pWndFormResult->SetText( aStrResult );
-
-            UpdateTokenArray(aString);
-            fillTree(m_pStructPage);
-
-            m_aOldFormula = rStrExp;
-            if (rStrExp[nLength-1] == '(')
-                UpdateTokenArray(rStrExp);
+            aString = aString.copy( 0, nLength-1);
         }
-        else
-            bResult = false;
+
+        aString = aString.replaceAll( "\n", "");
+        OUString aStrResult;
+
+        if ( CalcValue( aString, aStrResult ) )
+            m_pWndFormResult->SetText( aStrResult );
+
+        UpdateTokenArray(aString);
+        fillTree(m_pStructPage);
+
+        m_aOldFormula = rStrExp;
+        if (rStrExp[nLength-1] == '(')
+            UpdateTokenArray(rStrExp);
     }
-    return bResult;
+    return true;
 }
 
 
@@ -762,6 +759,7 @@ void FormulaDlg_Impl::MakeTree( StructPage* _pTree, SvTreeListEntry* pParent, co
                             case ParamClass::Array:
                             case ParamClass::ForceArray:
                             case ParamClass::ReferenceOrForceArray:
+                            case ParamClass::SuppressedReferenceOrForceArray:
                                 ;   // nothing, only as array/matrix
                             // no default to get compiler warning
                         }
@@ -787,7 +785,7 @@ void FormulaDlg_Impl::MakeTree( StructPage* _pTree, SvTreeListEntry* pParent, co
         }
         catch (const uno::Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("formula.ui");
         }
     }
 }
@@ -815,7 +813,7 @@ void FormulaDlg_Impl::UpdateTokenArray( const OUString& rStrExp)
     }
     catch (const uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("formula.ui");
     }
     InitFormulaOpCodeMapper();
     m_pTokenArray = m_pHelper->convertToTokenArray(m_aTokenList);
@@ -865,7 +863,6 @@ void FormulaDlg_Impl::FillListboxes()
 {
     //  Switch between the "Pages"
     FormEditData* pData = m_pHelper->getFormEditData();
-    OUString aNewTitle;
     //  1. Page: select function
     if ( m_pFuncDesc && m_pFuncDesc->getCategory() )
     {
@@ -885,8 +882,6 @@ void FormulaDlg_Impl::FillListboxes()
     FuncSelHdl(*m_pFuncPage);
 
     m_pHelper->setDispatcherLock( true );   // Activate Modal-Mode
-
-    aNewTitle = m_aTitle1;
 
     //  HelpId for 1. page is the one from the resource
     m_pParent->SetHelpId( m_aOldHelp );

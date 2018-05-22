@@ -36,7 +36,6 @@
 #include <com/sun/star/ui/dialogs/XFilterManager.hpp>
 #include <o3tl/any.hxx>
 #include <svl/urihelper.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <svtools/transfer.hxx>
 #include <sot/formats.hxx>
 #include <vcl/svapp.hxx>
@@ -71,7 +70,7 @@ const char* SvxOpenGrfErr2ResId( ErrCode err )
 
 struct SvxOpenGrf_Impl
 {
-    SvxOpenGrf_Impl(const vcl::Window* pPreferredParent,
+    SvxOpenGrf_Impl(weld::Window* pPreferredParent,
                     sal_Int16 nDialogType);
 
     sfx2::FileDialogHelper                  aFileDlg;
@@ -80,7 +79,7 @@ struct SvxOpenGrf_Impl
 };
 
 
-SvxOpenGrf_Impl::SvxOpenGrf_Impl(const vcl::Window* pPreferredParent,
+SvxOpenGrf_Impl::SvxOpenGrf_Impl(weld::Window* pPreferredParent,
                                  sal_Int16 nDialogType)
     : aFileDlg(nDialogType, FileDialogFlags::Graphic, pPreferredParent)
 {
@@ -89,13 +88,13 @@ SvxOpenGrf_Impl::SvxOpenGrf_Impl(const vcl::Window* pPreferredParent,
 }
 
 
-SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, const vcl::Window* pPreferredParent)
+SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, weld::Window* pPreferredParent)
     : mpImpl(new SvxOpenGrf_Impl(pPreferredParent, ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW))
 {
     mpImpl->aFileDlg.SetTitle(rTitle);
 }
 
-SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, const vcl::Window* pPreferredParent,
+SvxOpenGraphicDialog::SvxOpenGraphicDialog(const OUString& rTitle, weld::Window* pPreferredParent,
                                            sal_Int16 nDialogType)
     : mpImpl(new SvxOpenGrf_Impl(pPreferredParent, nDialogType))
 {

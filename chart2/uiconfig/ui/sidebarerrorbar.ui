@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.16.1 -->
 <interface domain="chart">
-  <requires lib="gtk+" version="3.12"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkImage" id="image1">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -148,6 +148,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="tooltip_text" translatable="yes" context="sidebarerrorbar|radiobutton_positive_negative|tooltip_text">Positive and Negative</property>
                         <property name="image">image2</property>
                         <property name="xalign">0</property>
@@ -164,6 +165,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="tooltip_text" translatable="yes" context="sidebarerrorbar|radiobutton_positive|tooltip_text">Positive</property>
                         <property name="image">image1</property>
                         <property name="xalign">0</property>
@@ -180,6 +182,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="tooltip_text" translatable="yes" context="sidebarerrorbar|radiobutton_negative|tooltip_text">Negative</property>
                         <property name="image">image3</property>
                         <property name="xalign">0</property>

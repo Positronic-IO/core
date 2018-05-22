@@ -626,8 +626,8 @@ static bool lcl_TabInRanges( SCTAB nTab, const ScRangeList& rRanges )
 {
     for (size_t i = 0, nCount = rRanges.size(); i < nCount; ++i)
     {
-        const ScRange* pRange = rRanges[ i ];
-        if ( nTab >= pRange->aStart.Tab() && nTab <= pRange->aEnd.Tab() )
+        const ScRange & rRange = rRanges[ i ];
+        if ( nTab >= rRange.aStart.Tab() && nTab <= rRange.aEnd.Tab() )
             return true;
     }
     return false;
@@ -739,25 +739,22 @@ sal_Bool SAL_CALL ScTabViewObj::select( const uno::Any& aSelection )
             if ( nRangeCount == 0 )
                 pViewSh->Unmark();
             else if ( nRangeCount == 1 )
-                pViewSh->MarkRange( *rRanges[ 0 ] );
+                pViewSh->MarkRange( rRanges[ 0 ] );
             else
             {
                 // multiselection
 
-                const ScRange* pFirst = rRanges[ 0 ];
-                if ( pFirst && !lcl_TabInRanges( rViewData.GetTabNo(), rRanges ) )
-                    pViewSh->SetTabNo( pFirst->aStart.Tab() );
+                const ScRange & rFirst = rRanges[ 0 ];
+                if ( !lcl_TabInRanges( rViewData.GetTabNo(), rRanges ) )
+                    pViewSh->SetTabNo( rFirst.aStart.Tab() );
                 pViewSh->DoneBlockMode();
                 pViewSh->InitOwnBlockMode();
                 rViewData.GetMarkData().MarkFromRangeList( rRanges, true );
                 pViewSh->MarkDataChanged();
                 rViewData.GetDocShell()->PostPaintGridAll();   // Marks (old&new)
-                if ( pFirst )
-                {
-                    pViewSh->AlignToCursor( pFirst->aStart.Col(), pFirst->aStart.Row(),
-                                                SC_FOLLOW_JUMP );
-                    pViewSh->SetCursor( pFirst->aStart.Col(), pFirst->aStart.Row() );
-                }
+                pViewSh->AlignToCursor( rFirst.aStart.Col(), rFirst.aStart.Row(),
+                                            SC_FOLLOW_JUMP );
+                pViewSh->SetCursor( rFirst.aStart.Col(), rFirst.aStart.Row() );
 
                 //! method of the view to select RangeList
             }
@@ -922,7 +919,7 @@ uno::Any SAL_CALL ScTabViewObj::getSelection()
                     break;
                 case 1:
                     {
-                        const ScRange& rRange = *(aRangeList[ 0 ]);
+                        const ScRange& rRange = aRangeList[ 0 ];
                         if (rRange.aStart == rRange.aEnd)
                             pObj = new ScCellObj( pDocSh, rRange.aStart );
                         else
@@ -1086,7 +1083,7 @@ void SAL_CALL ScTabViewObj::setActiveSheet( const uno::Reference<sheet::XSpreads
             const ScRangeList& rRanges = pRangesImp->GetRangeList();
             if ( rRanges.size() == 1 )
             {
-                SCTAB nNewTab = rRanges[ 0 ]->aStart.Tab();
+                SCTAB nNewTab = rRanges[ 0 ].aStart.Tab();
                 if ( pViewSh->GetViewData().GetDocument()->HasTable(nNewTab) )
                     pViewSh->SetTabNo( nNewTab );
             }
@@ -1828,7 +1825,7 @@ void SAL_CALL ScTabViewObj::setPropertyValue(
         }
         else if ( aPropertyName == SC_UNO_GRIDCOLOR )
         {
-            sal_Int32 nIntVal = 0;
+            Color nIntVal;
             if ( aValue >>= nIntVal )
                 aNewOpt.SetGridColor( nIntVal, OUString() );
         }
@@ -1908,7 +1905,7 @@ uno::Any SAL_CALL ScTabViewObj::getPropertyValue( const OUString& aPropertyName 
         else if ( aPropertyName == SC_UNO_SHOWOBJ )    aRet <<= static_cast<sal_Int16>( rOpt.GetObjMode( VOBJ_TYPE_OLE ) );
         else if ( aPropertyName == SC_UNO_SHOWCHARTS ) aRet <<= static_cast<sal_Int16>( rOpt.GetObjMode( VOBJ_TYPE_CHART ) );
         else if ( aPropertyName == SC_UNO_SHOWDRAW )   aRet <<= static_cast<sal_Int16>( rOpt.GetObjMode( VOBJ_TYPE_DRAW ) );
-        else if ( aPropertyName == SC_UNO_GRIDCOLOR )  aRet <<= static_cast<sal_Int32>( rOpt.GetGridColor().GetColor() );
+        else if ( aPropertyName == SC_UNO_GRIDCOLOR )  aRet <<= rOpt.GetGridColor();
         else if ( aPropertyName == SC_UNO_VISAREA ) aRet <<= GetVisArea();
         else if ( aPropertyName == SC_UNO_ZOOMTYPE ) aRet <<= GetZoomType();
         else if ( aPropertyName == SC_UNO_ZOOMVALUE ) aRet <<= GetZoom();

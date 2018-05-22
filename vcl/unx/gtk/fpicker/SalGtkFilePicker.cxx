@@ -41,7 +41,6 @@
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 #include <com/sun/star/ui/dialogs/ControlActions.hpp>
 #include <com/sun/star/uno/Any.hxx>
-#include <comphelper/string.hxx>
 #include <unx/gtk/gtkdata.hxx>
 #include <unx/gtk/gtkinst.hxx>
 
@@ -180,9 +179,10 @@ SalGtkFilePicker::SalGtkFilePicker( const uno::Reference< uno::XComponentContext
 
         m_pAligns[i] = gtk_alignment_new(0, 0, 0, 1);
 
-        m_pListStores[i] = gtk_list_store_new (1, G_TYPE_STRING);
-        m_pLists[i] = gtk_combo_box_new_with_model(GTK_TREE_MODEL(m_pListStores[i]));
-        g_object_unref (m_pListStores[i]); // owned by the widget.
+        GtkListStore *pListStores[ LIST_LAST ];
+        pListStores[i] = gtk_list_store_new (1, G_TYPE_STRING);
+        m_pLists[i] = gtk_combo_box_new_with_model(GTK_TREE_MODEL(pListStores[i]));
+        g_object_unref (pListStores[i]); // owned by the widget.
         GtkCellRenderer *pCell = gtk_cell_renderer_text_new ();
         gtk_cell_layout_pack_start(
                 GTK_CELL_LAYOUT(m_pLists[i]), pCell, TRUE);
@@ -705,16 +705,23 @@ namespace
 
 bool lcl_matchFilter( const rtl::OUString& rFilter, const rtl::OUString& rExt )
 {
-    const int nCount = comphelper::string::getTokenCount( rFilter, ';' );
+    const sal_Int32 nBegin = rFilter.indexOf(rExt);
 
-    for ( int n = 0; n != nCount; ++n )
-    {
-        const rtl::OUString aToken = rFilter.getToken( n, ';' );
-        if ( aToken == rExt )
-            return true;
-    }
+    if (nBegin<0) // not found
+        return false;
 
-    return false;
+    const sal_Unicode cSep{';'};
+
+    // Check if the found occurrence is an exact match: left side
+    if (nBegin>0 && rFilter[nBegin-1]!=cSep)
+        return false;
+
+    // Check if the found occurrence is an exact match: right side
+    const sal_Int32 nEnd = nBegin + rExt.getLength();
+    if (nEnd<rFilter.getLength() && rFilter[nEnd]!=cSep)
+        return false;
+
+    return true;
 }
 
 }
@@ -1582,15 +1589,20 @@ void SAL_CALL SalGtkFilePicker::initialize( const uno::Sequence<uno::Any>& aArgu
 
     if (xParentWindow.is())
     {
-        css::uno::Reference<css::awt::XSystemDependentWindowPeer> xSysDepWin(xParentWindow, css::uno::UNO_QUERY);
-        if (xSysDepWin.is())
+        if (SalGtkXWindow* pGtkXWindow = dynamic_cast<SalGtkXWindow*>(xParentWindow.get()))
+            m_pParentWidget = pGtkXWindow->getWidget();
+        else
         {
-            css::uno::Sequence<sal_Int8> aProcessIdent(16);
-            rtl_getGlobalProcessId(reinterpret_cast<sal_uInt8*>(aProcessIdent.getArray()));
-            aAny = xSysDepWin->getWindowHandle(aProcessIdent, css::lang::SystemDependent::SYSTEM_XWINDOW);
-            css::awt::SystemDependentXWindow tmp;
-            aAny >>= tmp;
-            m_pParentWidget = GetGtkSalData()->GetGtkDisplay()->findGtkWidgetForNativeHandle(tmp.WindowHandle);
+            css::uno::Reference<css::awt::XSystemDependentWindowPeer> xSysDepWin(xParentWindow, css::uno::UNO_QUERY);
+            if (xSysDepWin.is())
+            {
+                css::uno::Sequence<sal_Int8> aProcessIdent(16);
+                rtl_getGlobalProcessId(reinterpret_cast<sal_uInt8*>(aProcessIdent.getArray()));
+                aAny = xSysDepWin->getWindowHandle(aProcessIdent, css::lang::SystemDependent::SYSTEM_XWINDOW);
+                css::awt::SystemDependentXWindow tmp;
+                aAny >>= tmp;
+                m_pParentWidget = GetGtkSalData()->GetGtkDisplay()->findGtkWidgetForNativeHandle(tmp.WindowHandle);
+            }
         }
     }
 

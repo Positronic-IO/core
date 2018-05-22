@@ -58,6 +58,8 @@ class SwHTMLNumRuleInfo;
 class SwHTMLPosFlyFrames;
 class SwTextFootnote;
 enum class HtmlPosition;
+enum class HtmlTokenId : sal_Int16;
+namespace utl { class TempFile; }
 
 extern SwAttrFnTab aHTMLAttrFnTab;
 
@@ -97,12 +99,14 @@ enum class HtmlFrmOpts {
     SPixSize    = 1<<18,
     Id          = 1<<19,
     Dir         = 1<<20,
+    /// The graphic frame is a replacement image of an OLE object.
+    Replacement = 1<<21,
 
     GenImgAllMask = Alt | Size | AbsSize | Name,
     GenImgMask    = GenImgAllMask | Align | Space | BrClear
 };
 namespace o3tl {
-    template<> struct typed_flags<HtmlFrmOpts> : is_typed_flags<HtmlFrmOpts, ((1<<21)-1)> {};
+    template<> struct typed_flags<HtmlFrmOpts> : is_typed_flags<HtmlFrmOpts, ((1<<22)-1)> {};
 }
 
 #define HTMLMODE_BLOCK_SPACER       0x00010000
@@ -110,7 +114,7 @@ namespace o3tl {
 #define HTMLMODE_VERT_SPACER        0x00040000
 #define HTMLMODE_NBSP_IN_TABLES     0x00080000
 #define HTMLMODE_LSPACE_IN_NUMBUL   0x00100000
-#define HTMLMODE_NO_BR_AT_PAREND    0x00200000
+//was HTMLMODE_NO_BR_AT_PAREND    0x00200000
 #define HTMLMODE_PRINT_EXT          0x00400000
 #define HTMLMODE_ABS_POS_FLY        0x00800000
 #define HTMLMODE_ABS_POS_DRAW       0x01000000
@@ -251,7 +255,7 @@ typedef std::set<std::unique_ptr<SwHTMLFormatInfo>,
 
 class IDocumentStylePoolAccess;
 
-class SwHTMLWriter : public Writer
+class SW_DLLPUBLIC SwHTMLWriter : public Writer
 {
     SwHTMLPosFlyFrames *m_pHTMLPosFlyFrames;
     std::unique_ptr<SwHTMLNumRuleInfo> m_pNumRuleInfo;// current numbering
@@ -384,10 +388,14 @@ public:
     /// If HTML header and footer should be written as well, or just the content itself.
     bool mbSkipHeaderFooter : 1;
     bool mbEmbedImages : 1;
+    /// Temporary base URL for paste of images.
+    std::unique_ptr<utl::TempFile> mpTempBaseURL;
     /// If XHTML markup should be written instead of HTML.
     bool mbXHTML = false;
     /// XML namespace, in case of XHTML.
     OString maNamespace;
+    /// If the ReqIF subset of XHTML should be written.
+    bool mbReqIF = false;
 
 #define sCSS2_P_CLASS_leaders "leaders"
     bool m_bCfgPrintLayout : 1;       // PrintLayout option for TOC dot leaders
@@ -495,8 +503,8 @@ public:
     void OutNewLine( bool bCheck=false );
 
     // for HTMLSaveData
-    SwPaM* GetEndPaM() { return pOrigPam; }
-    void SetEndPaM( SwPaM* pPam ) { pOrigPam = pPam; }
+    SwPaM* GetEndPaM() { return m_pOrigPam; }
+    void SetEndPaM( SwPaM* pPam ) { m_pOrigPam = pPam; }
 
     static sal_uInt32 ToPixel( sal_uInt32 nVal, const bool bVert );
 
@@ -650,7 +658,8 @@ Writer& OutHTML_Image( Writer&, const SwFrameFormat& rFormat,
                        Graphic const & rGraphic, const OUString& rAlternateText,
                        const Size& rRealSize, HtmlFrmOpts nFrameOpts,
                        const sal_Char *pMarkType,
-                       const ImageMap *pGenImgMap = nullptr );
+                       const ImageMap *pGenImgMap,
+                       const OUString& rMimeType = OUString() );
 
 Writer& OutHTML_BulletImage( Writer& rWrt, const sal_Char *pTag,
                              const SvxBrushItem* pBrush,

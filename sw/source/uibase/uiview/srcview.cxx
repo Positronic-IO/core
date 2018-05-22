@@ -25,7 +25,6 @@
 #include <vcl/errinf.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/print.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/metric.hxx>
 #include <svtools/ctrltool.hxx>
@@ -76,7 +75,7 @@
 #include <com/sun/star/ui/dialogs/XFilePicker3.hpp>
 #include <com/sun/star/ui/dialogs/XFilterManager.hpp>
 #include <sfx2/filedlghelper.hxx>
-#define SwSrcView
+#define ShellClass_SwSrcView
 #include <swslots.hxx>
 
 #include <unomid.h>
@@ -292,7 +291,7 @@ void SwSrcView::Execute(SfxRequest& rReq)
             // filesave dialog with autoextension
             FileDialogHelper aDlgHelper(
                 TemplateDescription::FILESAVE_AUTOEXTENSION,
-                FileDialogFlags::NONE, aEditWin);
+                FileDialogFlags::NONE, aEditWin->GetFrameWeld());
             uno::Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
             uno::Reference<XFilterManager> xFltMgr(xFP, UNO_QUERY);
 

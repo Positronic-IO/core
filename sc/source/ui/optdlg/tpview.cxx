@@ -126,10 +126,10 @@ void ScTpContentOptions::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> ScTpContentOptions::Create( vcl::Window*     pParent,
+VclPtr<SfxTabPage> ScTpContentOptions::Create( TabPageParent pParent,
                                                const SfxItemSet*     rCoreSet )
 {
-    return VclPtr<ScTpContentOptions>::Create(pParent, *rCoreSet);
+    return VclPtr<ScTpContentOptions>::Create(pParent.pParent, *rCoreSet);
 }
 
 bool    ScTpContentOptions::FillItemSet( SfxItemSet* rCoreSet )
@@ -310,7 +310,7 @@ void ScTpContentOptions::InitGridOpt()
     Color     aCol    = pLocalOptions->GetGridColor( &aName );
 
     if (aName.trim().isEmpty() && aCol == SC_STD_GRIDCOLOR)
-        aName = ScGlobal::GetRscString(STR_GRIDCOLOR);
+        aName = ScResId(STR_GRIDCOLOR);
 
     pColorLB->SelectEntry(std::make_pair(aCol, aName));
 }
@@ -409,10 +409,10 @@ void ScTpLayoutOptions::dispose()
 }
 
 
-VclPtr<SfxTabPage> ScTpLayoutOptions::Create( vcl::Window*          pParent,
+VclPtr<SfxTabPage> ScTpLayoutOptions::Create( TabPageParent pParent,
                                               const SfxItemSet*   rCoreSet )
 {
-    VclPtrInstance<ScTpLayoutOptions> pNew( pParent, *rCoreSet );
+    VclPtrInstance<ScTpLayoutOptions> pNew( pParent.pParent, *rCoreSet );
     ScDocShell* pDocSh = dynamic_cast< ScDocShell *>( SfxObjectShell::Current() );
 
     if(pDocSh!=nullptr)
@@ -527,7 +527,7 @@ void    ScTpLayoutOptions::Reset( const SfxItemSet* rCoreSet )
     m_pUnitLB->SetNoSelection();
     if ( rCoreSet->GetItemState( SID_ATTR_METRIC ) >= SfxItemState::DEFAULT )
     {
-        const SfxUInt16Item& rItem = static_cast<const SfxUInt16Item&>(rCoreSet->Get( SID_ATTR_METRIC ));
+        const SfxUInt16Item& rItem = rCoreSet->Get( SID_ATTR_METRIC );
         FieldUnit eFieldUnit = static_cast<FieldUnit>(rItem.GetValue());
 
         for ( sal_Int32 i = 0; i < m_pUnitLB->GetEntryCount(); ++i )

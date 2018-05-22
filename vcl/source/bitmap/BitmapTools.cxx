@@ -22,13 +22,18 @@
 #include <com/sun/star/rendering/XIntegerReadOnlyBitmap.hpp>
 
 #include <unotools/resmgr.hxx>
+#include <vcl/dibtools.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/salbtype.hxx>
 #include <vcl/bitmapaccess.hxx>
+#include <vcl/virdev.hxx>
 #if ENABLE_CAIRO_CANVAS
 #include <cairo.h>
 #endif
+#include <tools/diagnose_ex.h>
+#include <tools/fract.hxx>
+#include <bitmapwriteaccess.hxx>
 
 using namespace css;
 
@@ -120,16 +125,16 @@ BitmapEx CreateFromData( sal_uInt8 const *pData, sal_Int32 nWidth, sal_Int32 nHe
     assert( nBitCount == 1 || nBitCount == 24 || nBitCount == 32);
     Bitmap aBmp( Size( nWidth, nHeight ), nBitCount );
 
-    Bitmap::ScopedWriteAccess pWrite(aBmp);
+    BitmapScopedWriteAccess pWrite(aBmp);
     assert(pWrite.get());
     if( !pWrite )
         return BitmapEx();
     std::unique_ptr<AlphaMask> pAlphaMask;
-    AlphaMask::ScopedWriteAccess xMaskAcc;
+    AlphaScopedWriteAccess xMaskAcc;
     if (nBitCount == 32)
     {
         pAlphaMask.reset( new AlphaMask( Size(nWidth, nHeight) ) );
-        xMaskAcc = AlphaMask::ScopedWriteAccess(*pAlphaMask);
+        xMaskAcc = AlphaScopedWriteAccess(*pAlphaMask);
     }
     if (nBitCount == 1)
     {
@@ -171,7 +176,7 @@ BitmapEx CreateFromData( sal_uInt8 const *pData, sal_Int32 nWidth, sal_Int32 nHe
     if (nBitCount == 32)
         return BitmapEx(aBmp, *pAlphaMask);
     else
-        return aBmp;
+        return BitmapEx(aBmp);
 }
 
 /** Copy block of image data into the bitmap.
@@ -183,16 +188,16 @@ BitmapEx CreateFromData( RawBitmap&& rawBitmap )
     assert( nBitCount == 24 || nBitCount == 32);
     Bitmap aBmp( rawBitmap.maSize, nBitCount );
 
-    Bitmap::ScopedWriteAccess pWrite(aBmp);
+    BitmapScopedWriteAccess pWrite(aBmp);
     assert(pWrite.get());
     if( !pWrite )
         return BitmapEx();
     std::unique_ptr<AlphaMask> pAlphaMask;
-    AlphaMask::ScopedWriteAccess xMaskAcc;
+    AlphaScopedWriteAccess xMaskAcc;
     if (nBitCount == 32)
     {
         pAlphaMask.reset( new AlphaMask( rawBitmap.maSize ) );
-        xMaskAcc = AlphaMask::ScopedWriteAccess(*pAlphaMask);
+        xMaskAcc = AlphaScopedWriteAccess(*pAlphaMask);
     }
 
     auto nHeight = rawBitmap.maSize.getHeight();
@@ -222,7 +227,7 @@ BitmapEx CreateFromData( RawBitmap&& rawBitmap )
     if (nBitCount == 32)
         return BitmapEx(aBmp, *pAlphaMask);
     else
-        return aBmp;
+        return BitmapEx(aBmp);
 }
 
 #if ENABLE_CAIRO_CANVAS
@@ -230,8 +235,13 @@ BitmapEx* CreateFromCairoSurface(Size aSize, cairo_surface_t * pSurface)
 {
     // FIXME: if we could teach VCL/ about cairo handles, life could
     // be significantly better here perhaps.
-    cairo_surface_t *pPixels = cairo_image_surface_create( CAIRO_FORMAT_ARGB32,
-                                              aSize.Width(), aSize.Height() );
+
+#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 12, 0)
+    cairo_surface_t *pPixels = cairo_surface_create_similar_image(pSurface,
+#else
+    cairo_surface_t *pPixels = cairo_image_surface_create(
+#endif
+            CAIRO_FORMAT_ARGB32, aSize.Width(), aSize.Height());
     cairo_t *pCairo = cairo_create( pPixels );
     if( !pPixels || !pCairo || cairo_status(pCairo) != CAIRO_STATUS_SUCCESS )
         return nullptr;
@@ -246,12 +256,12 @@ BitmapEx* CreateFromCairoSurface(Size aSize, cairo_surface_t * pSurface)
     ::Bitmap aRGB( aSize, 24 );
     ::AlphaMask aMask( aSize );
 
-    Bitmap::ScopedWriteAccess pRGBWrite(aRGB);
+    BitmapScopedWriteAccess pRGBWrite(aRGB);
     assert(pRGBWrite);
     if (!pRGBWrite)
         return nullptr;
 
-    AlphaMask::ScopedWriteAccess pMaskWrite(aMask);
+    AlphaScopedWriteAccess pMaskWrite(aMask);
     assert(pMaskWrite);
     if (!pMaskWrite)
         return nullptr;
@@ -298,6 +308,694 @@ BitmapEx* CreateFromCairoSurface(Size aSize, cairo_surface_t * pSurface)
     return pBitmapEx;
 }
 #endif
+
+BitmapEx CanvasTransformBitmap( const BitmapEx&                 rBitmap,
+                                const ::basegfx::B2DHomMatrix&  rTransform,
+                                ::basegfx::B2DRectangle const & rDestRect,
+                                ::basegfx::B2DHomMatrix const & rLocalTransform )
+{
+    bool bCopyBack( false );
+    const Size aBmpSize( rBitmap.GetSizePixel() );
+    Bitmap aSrcBitmap( rBitmap.GetBitmap() );
+    Bitmap aSrcAlpha;
+
+    // differentiate mask and alpha channel (on-off
+    // vs. multi-level transparency)
+    if( rBitmap.IsTransparent() )
+    {
+        if( rBitmap.IsAlpha() )
+            aSrcAlpha = rBitmap.GetAlpha().GetBitmap();
+        else
+            aSrcAlpha = rBitmap.GetMask();
+    }
+
+    Bitmap::ScopedReadAccess pReadAccess( aSrcBitmap );
+    Bitmap::ScopedReadAccess pAlphaReadAccess( rBitmap.IsTransparent() ?
+                                             aSrcAlpha.AcquireReadAccess() :
+                                             nullptr,
+                                             aSrcAlpha );
+
+    if( pReadAccess.get() == nullptr ||
+        (pAlphaReadAccess.get() == nullptr && rBitmap.IsTransparent()) )
+    {
+        // TODO(E2): Error handling!
+        ENSURE_OR_THROW( false,
+                          "transformBitmap(): could not access source bitmap" );
+    }
+
+    // mapping table, to translate pAlphaReadAccess' pixel
+    // values into destination alpha values (needed e.g. for
+    // paletted 1-bit masks).
+    sal_uInt8 aAlphaMap[256];
+
+    if( rBitmap.IsTransparent() )
+    {
+        if( rBitmap.IsAlpha() )
+        {
+            // source already has alpha channel - 1:1 mapping,
+            // i.e. aAlphaMap[0]=0,...,aAlphaMap[255]=255.
+            sal_uInt8  val=0;
+            sal_uInt8* pCur=aAlphaMap;
+            sal_uInt8* const pEnd=&aAlphaMap[256];
+            while(pCur != pEnd)
+                *pCur++ = val++;
+        }
+        else
+        {
+            // mask transparency - determine used palette colors
+            const BitmapColor& rCol0( pAlphaReadAccess->GetPaletteColor( 0 ) );
+            const BitmapColor& rCol1( pAlphaReadAccess->GetPaletteColor( 1 ) );
+
+            // shortcut for true luminance calculation
+            // (assumes that palette is grey-level)
+            aAlphaMap[0] = rCol0.GetRed();
+            aAlphaMap[1] = rCol1.GetRed();
+        }
+    }
+    // else: mapping table is not used
+
+    const Size aDestBmpSize( ::basegfx::fround( rDestRect.getWidth() ),
+                             ::basegfx::fround( rDestRect.getHeight() ) );
+
+    if( aDestBmpSize.Width() == 0 || aDestBmpSize.Height() == 0 )
+        return BitmapEx();
+
+    Bitmap aDstBitmap( aDestBmpSize, aSrcBitmap.GetBitCount(), &pReadAccess->GetPalette() );
+    Bitmap aDstAlpha( AlphaMask( aDestBmpSize ).GetBitmap() );
+
+    {
+        // just to be on the safe side: let the
+        // ScopedAccessors get destructed before
+        // copy-constructing the resulting bitmap. This will
+        // rule out the possibility that cached accessor data
+        // is not yet written back.
+        BitmapScopedWriteAccess pWriteAccess( aDstBitmap );
+        BitmapScopedWriteAccess pAlphaWriteAccess( aDstAlpha );
+
+
+        if( pWriteAccess.get() != nullptr &&
+            pAlphaWriteAccess.get() != nullptr &&
+            rTransform.isInvertible() )
+        {
+            // we're doing inverse mapping here, i.e. mapping
+            // points from the destination bitmap back to the
+            // source
+            ::basegfx::B2DHomMatrix aTransform( rLocalTransform );
+            aTransform.invert();
+
+            // for the time being, always read as ARGB
+            for( long y=0; y<aDestBmpSize.Height(); ++y )
+            {
+                // differentiate mask and alpha channel (on-off
+                // vs. multi-level transparency)
+                if( rBitmap.IsTransparent() )
+                {
+                    Scanline pScan = pWriteAccess->GetScanline( y );
+                    Scanline pScanAlpha = pAlphaWriteAccess->GetScanline( y );
+                    // Handling alpha and mask just the same...
+                    for( long x=0; x<aDestBmpSize.Width(); ++x )
+                    {
+                        ::basegfx::B2DPoint aPoint(x,y);
+                        aPoint *= aTransform;
+
+                        const int nSrcX( ::basegfx::fround( aPoint.getX() ) );
+                        const int nSrcY( ::basegfx::fround( aPoint.getY() ) );
+                        if( nSrcX < 0 || nSrcX >= aBmpSize.Width() ||
+                            nSrcY < 0 || nSrcY >= aBmpSize.Height() )
+                        {
+                            pAlphaWriteAccess->SetPixelOnData( pScanAlpha, x, BitmapColor(255) );
+                        }
+                        else
+                        {
+                            const sal_uInt8 cAlphaIdx = pAlphaReadAccess->GetPixelIndex( nSrcY, nSrcX );
+                            pAlphaWriteAccess->SetPixelOnData( pScanAlpha, x, BitmapColor(aAlphaMap[ cAlphaIdx ]) );
+                            pWriteAccess->SetPixelOnData( pScan, x, pReadAccess->GetPixel( nSrcY, nSrcX ) );
+                        }
+                    }
+                }
+                else
+                {
+                    Scanline pScan = pWriteAccess->GetScanline( y );
+                    Scanline pScanAlpha = pAlphaWriteAccess->GetScanline( y );
+                    for( long x=0; x<aDestBmpSize.Width(); ++x )
+                    {
+                        ::basegfx::B2DPoint aPoint(x,y);
+                        aPoint *= aTransform;
+
+                        const int nSrcX( ::basegfx::fround( aPoint.getX() ) );
+                        const int nSrcY( ::basegfx::fround( aPoint.getY() ) );
+                        if( nSrcX < 0 || nSrcX >= aBmpSize.Width() ||
+                            nSrcY < 0 || nSrcY >= aBmpSize.Height() )
+                        {
+                            pAlphaWriteAccess->SetPixelOnData( pScanAlpha, x, BitmapColor(255) );
+                        }
+                        else
+                        {
+                            pAlphaWriteAccess->SetPixelOnData( pScanAlpha, x, BitmapColor(0) );
+                            pWriteAccess->SetPixelOnData( pScan, x, pReadAccess->GetPixel( nSrcY,
+                                                                                 nSrcX ) );
+                        }
+                    }
+                }
+            }
+
+            bCopyBack = true;
+        }
+        else
+        {
+            // TODO(E2): Error handling!
+            ENSURE_OR_THROW( false,
+                              "transformBitmap(): could not access bitmap" );
+        }
+    }
+
+    if( bCopyBack )
+        return BitmapEx( aDstBitmap, AlphaMask( aDstAlpha ) );
+    else
+        return BitmapEx();
+}
+
+
+void DrawAlphaBitmapAndAlphaGradient(BitmapEx & rBitmapEx, bool bFixedTransparence, float fTransparence, AlphaMask & rNewMask)
+{
+    // mix existing and new alpha mask
+    AlphaMask aOldMask;
+
+    if(rBitmapEx.IsAlpha())
+    {
+        aOldMask = rBitmapEx.GetAlpha();
+    }
+    else if(TransparentType::Bitmap == rBitmapEx.GetTransparentType())
+    {
+        aOldMask = rBitmapEx.GetMask();
+    }
+    else if(TransparentType::Color == rBitmapEx.GetTransparentType())
+    {
+        aOldMask = rBitmapEx.GetBitmap().CreateMask(rBitmapEx.GetTransparentColor());
+    }
+
+    {
+        AlphaScopedWriteAccess pOld(aOldMask);
+
+        assert(pOld && "Got no access to old alpha mask (!)");
+
+        const double fFactor(1.0 / 255.0);
+
+        if(bFixedTransparence)
+        {
+            const double fOpNew(1.0 - fTransparence);
+
+            for(long y(0); y < pOld->Height(); y++)
+            {
+                Scanline pScanline = pOld->GetScanline( y );
+                for(long x(0); x < pOld->Width(); x++)
+                {
+                    const double fOpOld(1.0 - (pOld->GetIndexFromData(pScanline, x) * fFactor));
+                    const sal_uInt8 aCol(basegfx::fround((1.0 - (fOpOld * fOpNew)) * 255.0));
+
+                    pOld->SetPixelOnData(pScanline, x, BitmapColor(aCol));
+                }
+            }
+        }
+        else
+        {
+            AlphaMask::ScopedReadAccess pNew(rNewMask);
+
+            assert(pNew && "Got no access to new alpha mask (!)");
+
+            assert(pOld->Width() == pNew->Width() && pOld->Height() == pNew->Height() &&
+                    "Alpha masks have different sizes (!)");
+
+            for(long y(0); y < pOld->Height(); y++)
+            {
+                Scanline pScanline = pOld->GetScanline( y );
+                for(long x(0); x < pOld->Width(); x++)
+                {
+                    const double fOpOld(1.0 - (pOld->GetIndexFromData(pScanline, x) * fFactor));
+                    const double fOpNew(1.0 - (pNew->GetIndexFromData(pScanline, x) * fFactor));
+                    const sal_uInt8 aCol(basegfx::fround((1.0 - (fOpOld * fOpNew)) * 255.0));
+
+                    pOld->SetPixelOnData(pScanline, x, BitmapColor(aCol));
+                }
+            }
+        }
+
+    }
+
+    // apply combined bitmap as mask
+    rBitmapEx = BitmapEx(rBitmapEx.GetBitmap(), aOldMask);
+}
+
+
+void DrawAndClipBitmap(const Point& rPos, const Size& rSize, const BitmapEx& rBitmap, BitmapEx & aBmpEx, basegfx::B2DPolyPolygon const & rClipPath)
+{
+    VclPtrInstance< VirtualDevice > pVDev;
+    MapMode aMapMode( MapUnit::Map100thMM );
+    aMapMode.SetOrigin( Point( -rPos.X(), -rPos.Y() ) );
+    const Size aOutputSizePixel( pVDev->LogicToPixel( rSize, aMapMode ) );
+    const Size aSizePixel( rBitmap.GetSizePixel() );
+    if ( aOutputSizePixel.Width() && aOutputSizePixel.Height() )
+    {
+        aMapMode.SetScaleX( Fraction( aSizePixel.Width(), aOutputSizePixel.Width() ) );
+        aMapMode.SetScaleY( Fraction( aSizePixel.Height(), aOutputSizePixel.Height() ) );
+    }
+    pVDev->SetMapMode( aMapMode );
+    pVDev->SetOutputSizePixel( aSizePixel );
+    pVDev->SetFillColor( COL_BLACK );
+    const tools::PolyPolygon aClip( rClipPath );
+    pVDev->DrawPolyPolygon( aClip );
+
+    // #i50672# Extract whole VDev content (to match size of rBitmap)
+    pVDev->EnableMapMode( false );
+    const Bitmap aVDevMask(pVDev->GetBitmap(Point(), aSizePixel));
+
+    if(aBmpEx.IsTransparent())
+    {
+        // bitmap already uses a Mask or Alpha, we need to blend that with
+        // the new masking in pVDev
+        if(aBmpEx.IsAlpha())
+        {
+            // need to blend in AlphaMask quality (8Bit)
+            AlphaMask fromVDev(aVDevMask);
+            AlphaMask fromBmpEx(aBmpEx.GetAlpha());
+            AlphaMask::ScopedReadAccess pR(fromVDev);
+            AlphaScopedWriteAccess pW(fromBmpEx);
+
+            if(pR && pW)
+            {
+                const long nWidth(std::min(pR->Width(), pW->Width()));
+                const long nHeight(std::min(pR->Height(), pW->Height()));
+
+                for(long nY(0); nY < nHeight; nY++)
+                {
+                    Scanline pScanlineR = pR->GetScanline( nY );
+                    Scanline pScanlineW = pW->GetScanline( nY );
+                    for(long nX(0); nX < nWidth; nX++)
+                    {
+                        const sal_uInt8 nIndR(pR->GetIndexFromData(pScanlineR, nX));
+                        const sal_uInt8 nIndW(pW->GetIndexFromData(pScanlineW, nX));
+
+                        // these values represent transparency (0 == no, 255 == fully transparent),
+                        // so to blend these we have to multiply the inverse (opacity)
+                        // and re-invert the result to transparence
+                        const sal_uInt8 nCombined(0x00ff - (((0x00ff - nIndR) * (0x00ff - nIndW)) >> 8));
+
+                        pW->SetPixelOnData(pScanlineW, nX, BitmapColor(nCombined));
+                    }
+                }
+            }
+
+            pR.reset();
+            pW.reset();
+            aBmpEx = BitmapEx(aBmpEx.GetBitmap(), fromBmpEx);
+        }
+        else
+        {
+            // need to blend in Mask quality (1Bit)
+            Bitmap aMask(aVDevMask.CreateMask(COL_WHITE));
+
+            if ( rBitmap.GetTransparentColor() == COL_WHITE )
+            {
+                aMask.CombineSimple( rBitmap.GetMask(), BmpCombine::Or );
+            }
+            else
+            {
+                aMask.CombineSimple( rBitmap.GetMask(), BmpCombine::And );
+            }
+
+            aBmpEx = BitmapEx( rBitmap.GetBitmap(), aMask );
+        }
+    }
+    else
+    {
+        // no mask yet, create and add new mask. For better quality, use Alpha,
+        // this allows the drawn mask being processed with AntiAliasing (AAed)
+        aBmpEx = BitmapEx(rBitmap.GetBitmap(), aVDevMask);
+    }
+}
+
+
+css::uno::Sequence< sal_Int8 > GetMaskDIB(BitmapEx const & aBmpEx)
+{
+    if ( aBmpEx.IsAlpha() )
+    {
+        SvMemoryStream aMem;
+        WriteDIB(aBmpEx.GetAlpha().GetBitmap(), aMem, false, true);
+        return css::uno::Sequence< sal_Int8 >( static_cast<sal_Int8 const *>(aMem.GetData()), aMem.Tell() );
+    }
+    else if ( aBmpEx.IsTransparent() )
+    {
+        SvMemoryStream aMem;
+        WriteDIB(aBmpEx.GetMask(), aMem, false, true);
+        return css::uno::Sequence< sal_Int8 >( static_cast<sal_Int8 const *>(aMem.GetData()), aMem.Tell() );
+    }
+
+    return css::uno::Sequence< sal_Int8 >();
+}
+
+static sal_uInt8 lcl_GetColor(BitmapColor const& rColor)
+{
+    sal_uInt8 nTemp(0);
+    if (rColor.IsIndex())
+    {
+        nTemp = rColor.GetIndex();
+    }
+    else
+    {
+        nTemp = rColor.GetBlue();
+        // greyscale expected here, or what would non-grey colors mean?
+        assert(rColor.GetRed() == nTemp && rColor.GetGreen() == nTemp);
+    }
+    return nTemp;
+}
+
+
+static bool readAlpha( BitmapReadAccess const * pAlphaReadAcc, long nY, const long nWidth, unsigned char* data, long nOff )
+{
+    bool bIsAlpha = false;
+    long nX;
+    int nAlpha;
+    Scanline pReadScan;
+
+    nOff += 3;
+
+    switch( pAlphaReadAcc->GetScanlineFormat() )
+    {
+        case ScanlineFormat::N8BitTcMask:
+            pReadScan = pAlphaReadAcc->GetScanline( nY );
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+                nAlpha = data[ nOff ] = 255 - ( *pReadScan++ );
+                if( nAlpha != 255 )
+                    bIsAlpha = true;
+                nOff += 4;
+            }
+            break;
+        case ScanlineFormat::N8BitPal:
+            pReadScan = pAlphaReadAcc->GetScanline( nY );
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+                BitmapColor const& rColor(
+                    pAlphaReadAcc->GetPaletteColor(*pReadScan));
+                pReadScan++;
+                nAlpha = data[ nOff ] = 255 - lcl_GetColor(rColor);
+                if( nAlpha != 255 )
+                    bIsAlpha = true;
+                nOff += 4;
+            }
+            break;
+        default:
+            SAL_INFO( "canvas.cairo", "fallback to GetColor for alpha - slow, format: " << static_cast<int>(pAlphaReadAcc->GetScanlineFormat()) );
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+                nAlpha = data[ nOff ] = 255 - pAlphaReadAcc->GetColor( nY, nX ).GetIndex();
+                if( nAlpha != 255 )
+                    bIsAlpha = true;
+                nOff += 4;
+            }
+    }
+
+    return bIsAlpha;
+}
+
+
+
+/**
+ * @param data will be filled with alpha data, if xBitmap is alpha/transparent image
+ * @param bHasAlpha will be set to true if resulting surface has alpha
+ **/
+void CanvasCairoExtractBitmapData( BitmapEx const & aBmpEx, Bitmap & aBitmap, unsigned char*& data, bool& bHasAlpha, long& rnWidth, long& rnHeight )
+{
+    AlphaMask aAlpha = aBmpEx.GetAlpha();
+
+    ::BitmapReadAccess* pBitmapReadAcc = aBitmap.AcquireReadAccess();
+    ::BitmapReadAccess* pAlphaReadAcc = nullptr;
+    const long      nWidth = rnWidth = pBitmapReadAcc->Width();
+    const long      nHeight = rnHeight = pBitmapReadAcc->Height();
+    long nX, nY;
+    bool bIsAlpha = false;
+
+    if( aBmpEx.IsTransparent() || aBmpEx.IsAlpha() )
+        pAlphaReadAcc = aAlpha.AcquireReadAccess();
+
+    data = static_cast<unsigned char*>(malloc( nWidth*nHeight*4 ));
+
+    long nOff = 0;
+    ::Color aColor;
+    unsigned int nAlpha = 255;
+
+    for( nY = 0; nY < nHeight; nY++ )
+    {
+        ::Scanline pReadScan;
+
+        switch( pBitmapReadAcc->GetScanlineFormat() )
+        {
+        case ScanlineFormat::N8BitPal:
+            pReadScan = pBitmapReadAcc->GetScanline( nY );
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff++ ];
+                else
+                    nAlpha = data[ nOff++ ] = 255;
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+#endif
+                aColor = pBitmapReadAcc->GetPaletteColor(*pReadScan++).GetColor();
+
+#ifdef OSL_BIGENDIAN
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetRed() ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetGreen() ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetBlue() ) )/255 );
+#else
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetBlue() ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetGreen() ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( aColor.GetRed() ) )/255 );
+                nOff++;
+#endif
+            }
+            break;
+        case ScanlineFormat::N24BitTcBgr:
+            pReadScan = pBitmapReadAcc->GetScanline( nY );
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff ];
+                else
+                    nAlpha = data[ nOff ] = 255;
+                data[ nOff + 3 ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff + 2 ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff + 1 ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                nOff += 4;
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                nOff++;
+#endif
+            }
+            break;
+        case ScanlineFormat::N24BitTcRgb:
+            pReadScan = pBitmapReadAcc->GetScanline( nY );
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff++ ];
+                else
+                    nAlpha = data[ nOff++ ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 2 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 1 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 0 ] ) )/255 );
+                pReadScan += 3;
+                nOff++;
+#endif
+            }
+            break;
+        case ScanlineFormat::N32BitTcBgra:
+            pReadScan = pBitmapReadAcc->GetScanline( nY );
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff++ ];
+                else
+                    nAlpha = data[ nOff++ ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 2 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 1 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 0 ] ) )/255 );
+                pReadScan += 4;
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                pReadScan++;
+                nOff++;
+#endif
+            }
+            break;
+        case ScanlineFormat::N32BitTcRgba:
+            pReadScan = pBitmapReadAcc->GetScanline( nY );
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff ++ ];
+                else
+                    nAlpha = data[ nOff ++ ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( *pReadScan++ ) )/255 );
+                pReadScan++;
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 2 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 1 ] ) )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*( pReadScan[ 0 ] ) )/255 );
+                pReadScan += 4;
+                nOff++;
+#endif
+            }
+            break;
+        default:
+            SAL_INFO( "canvas.cairo", "fallback to GetColor - slow, format: " << static_cast<int>(pBitmapReadAcc->GetScanlineFormat()) );
+
+            if( pAlphaReadAcc )
+                if( readAlpha( pAlphaReadAcc, nY, nWidth, data, nOff ) )
+                    bIsAlpha = true;
+
+            for( nX = 0; nX < nWidth; nX++ )
+            {
+                aColor = pBitmapReadAcc->GetColor( nY, nX ).GetColor();
+
+                // cairo need premultiplied color values
+                // TODO(rodo) handle endianness
+#ifdef OSL_BIGENDIAN
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff++ ];
+                else
+                    nAlpha = data[ nOff++ ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetRed() )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetGreen() )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetBlue() )/255 );
+#else
+                if( pAlphaReadAcc )
+                    nAlpha = data[ nOff + 3 ];
+                else
+                    nAlpha = data[ nOff + 3 ] = 255;
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetBlue() )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetGreen() )/255 );
+                data[ nOff++ ] = sal::static_int_cast<unsigned char>(( nAlpha*aColor.GetRed() )/255 );
+                nOff ++;
+#endif
+            }
+        }
+    }
+
+    ::Bitmap::ReleaseAccess( pBitmapReadAcc );
+    if( pAlphaReadAcc )
+        aAlpha.ReleaseAccess( pAlphaReadAcc );
+
+    bHasAlpha = bIsAlpha;
+
+}
+
+    uno::Sequence< sal_Int8 > CanvasExtractBitmapData(BitmapEx const & rBitmapEx, const geometry::IntegerRectangle2D& rect)
+    {
+        Bitmap aBitmap( rBitmapEx.GetBitmap() );
+        Bitmap aAlpha( rBitmapEx.GetAlpha().GetBitmap() );
+
+        Bitmap::ScopedReadAccess pReadAccess( aBitmap );
+        Bitmap::ScopedReadAccess pAlphaReadAccess( aAlpha.IsEmpty() ?
+                                                 nullptr : aAlpha.AcquireReadAccess(),
+                                                 aAlpha );
+
+        assert( pReadAccess );
+
+        // TODO(F1): Support more formats.
+        const Size aBmpSize( aBitmap.GetSizePixel() );
+
+        // for the time being, always return as BGRA
+        uno::Sequence< sal_Int8 > aRes( 4*aBmpSize.Width()*aBmpSize.Height() );
+        sal_Int8* pRes = aRes.getArray();
+
+        int nCurrPos(0);
+        for( long y=rect.Y1;
+             y<aBmpSize.Height() && y<rect.Y2;
+             ++y )
+        {
+            if( pAlphaReadAccess.get() != nullptr )
+            {
+                Scanline pScanlineReadAlpha = pAlphaReadAccess->GetScanline( y );
+                for( long x=rect.X1;
+                     x<aBmpSize.Width() && x<rect.X2;
+                     ++x )
+                {
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetRed();
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetGreen();
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetBlue();
+                    pRes[ nCurrPos++ ] = pAlphaReadAccess->GetIndexFromData( pScanlineReadAlpha, x );
+                }
+            }
+            else
+            {
+                for( long x=rect.X1;
+                     x<aBmpSize.Width() && x<rect.X2;
+                     ++x )
+                {
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetRed();
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetGreen();
+                    pRes[ nCurrPos++ ] = pReadAccess->GetColor( y, x ).GetBlue();
+                    pRes[ nCurrPos++ ] = sal_uInt8(255);
+                }
+            }
+        }
+        return aRes;
+    }
 
 }} // end vcl::bitmap
 

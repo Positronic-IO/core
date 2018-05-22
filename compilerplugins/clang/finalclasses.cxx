@@ -21,7 +21,7 @@ These can be made private.
 
 The process goes something like this:
   $ make check
-  $ make FORCE_COMPILE_ALL=1 COMPILER_PLUGIN_TOOL='FinalClasses' check
+  $ make FORCE_COMPILE_ALL=1 COMPILER_PLUGIN_TOOL='finalclasses' check
   $ ./compilerplugins/clang/finalclasses.py
 
 */
@@ -51,7 +51,7 @@ public:
         for (const std::pair<std::string,std::string> & s : definitionMap)
             output += "definition:\t" + s.first + "\t" + s.second + "\n";
         std::ofstream myfile;
-        myfile.open( SRCDIR "/loplugin.finalclasses.log", std::ios::app | std::ios::out);
+        myfile.open( WORKDIR "/loplugin.finalclasses.log", std::ios::app | std::ios::out);
         myfile << output;
         myfile.close();
     }

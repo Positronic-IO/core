@@ -56,9 +56,6 @@ SwTextAPIObject::SwTextAPIObject( SwTextAPIEditSource* p )
 : SvxUnoText( p, ImplGetSvxTextPortionPropertySet(), uno::Reference < text::XText >() )
 , pSource(p)
 {
-#if defined __clang__ && defined _MSC_VER // workaround clang-cl ABI bug PR25641
-    css::uno::Sequence<css::beans::PropertyState>dummy; (void) dummy;
-#endif
 }
 
 SwTextAPIObject::~SwTextAPIObject() throw()
@@ -85,9 +82,9 @@ SwTextAPIEditSource::SwTextAPIEditSource( const SwTextAPIEditSource& rSource )
     pImpl->mnRef++;
 }
 
-SvxEditSource* SwTextAPIEditSource::Clone() const
+std::unique_ptr<SvxEditSource> SwTextAPIEditSource::Clone() const
 {
-    return new SwTextAPIEditSource( *this );
+    return std::unique_ptr<SvxEditSource>(new SwTextAPIEditSource( *this ));
 }
 
 void SwTextAPIEditSource::UpdateData()

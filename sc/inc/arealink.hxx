@@ -24,11 +24,9 @@
 #include "address.hxx"
 #include <sfx2/lnkbase.hxx>
 #include "scdllapi.h"
-#include <memory>
 
 class SfxObjectShell;
 class ScDocShell;
-class Dialog;
 
 class SC_DLLPUBLIC ScAreaLink : public ::sfx2::SvBaseLink, public ScRefreshTimer
 {
@@ -54,7 +52,7 @@ public:
     virtual ::sfx2::SvBaseLink::UpdateResult DataChanged(
         const OUString& rMimeType, const css::uno::Any & rValue ) override;
 
-    virtual void    Edit( vcl::Window*, const Link<SvBaseLink&,void>& rEndEditHdl ) override;
+    virtual void    Edit(weld::Window*, const Link<SvBaseLink&,void>& rEndEditHdl) override;
 
     bool    Refresh( const OUString& rNewFile, const OUString& rNewFilter,
                     const OUString& rNewArea, sal_uLong nNewRefresh );

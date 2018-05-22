@@ -175,6 +175,11 @@ class LOKitThread extends Thread {
         mContext.getDocumentOverlay().setPartPageRectangles(partPageRectangles);
     }
 
+    private void updatePageSize(int pageWidth, int pageHeight){
+        mTileProvider.setDocumentSize(pageWidth, pageHeight);
+        redraw();
+    }
+
     private void updateZoomConstraints() {
         if (mTileProvider == null) return;
         mLayerClient = mContext.getLayerClient();
@@ -361,8 +366,17 @@ class LOKitThread extends Thread {
             case LOEvent.UPDATE_CALC_HEADERS:
                 updateCalcHeaders();
                 break;
+            case LOEvent.UNO_COMMAND_NOTIFY:
+                if (null == mTileProvider)
+                    Log.e(LOGTAG, "no mTileProvider when trying to process "+event.mValue+" from UNO_COMMAND "+event.mString);
+                else
+                    mTileProvider.postUnoCommand(event.mString, event.mValue, event.mNotify);
+                break;
             case LOEvent.REFRESH:
                 refresh();
+                break;
+            case LOEvent.PAGE_SIZE_CHANGED:
+                updatePageSize(event.mPageWidth, event.mPageHeight);
                 break;
         }
     }
@@ -378,12 +392,16 @@ class LOKitThread extends Thread {
      * Request a change of the handle position.
      */
     private void changeHandlePosition(SelectionHandle.HandleType handleType, PointF documentCoordinate) {
-        if (handleType == SelectionHandle.HandleType.MIDDLE) {
-            mTileProvider.setTextSelectionReset(documentCoordinate);
-        } else if (handleType == SelectionHandle.HandleType.START) {
-            mTileProvider.setTextSelectionStart(documentCoordinate);
-        } else if (handleType == SelectionHandle.HandleType.END) {
-            mTileProvider.setTextSelectionEnd(documentCoordinate);
+        switch (handleType) {
+            case MIDDLE:
+                mTileProvider.setTextSelectionReset(documentCoordinate);
+                break;
+            case START:
+                mTileProvider.setTextSelectionStart(documentCoordinate);
+                break;
+            case END:
+                mTileProvider.setTextSelectionEnd(documentCoordinate);
+                break;
         }
     }
 

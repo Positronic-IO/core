@@ -42,7 +42,6 @@
 #include <com/sun/star/lang/Locale.hpp>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/configmgr.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/extract.hxx>
 #include <vcl/svapp.hxx>
@@ -437,9 +436,8 @@ IMPLEMENT_FORWARD_XTYPEPROVIDER2( UnoControlModel, UnoControlModel_Base, ::cppu:
 
 uno::Reference< util::XCloneable > UnoControlModel::createClone()
 {
-    UnoControlModel* pClone = Clone();
-    uno::Reference< util::XCloneable > xClone( static_cast<cppu::OWeakObject*>(pClone), uno::UNO_QUERY );
-    return xClone;
+    rtl::Reference<UnoControlModel> pClone = Clone();
+    return pClone.get();
 }
 
 // css::lang::XComponent
@@ -1008,7 +1006,7 @@ void UnoControlModel::read( const css::uno::Reference< css::io::XObjectInputStre
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 
     if ( pFD )

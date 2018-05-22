@@ -30,7 +30,6 @@
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/awt/LineEndFormat.hpp>
 #include <cppuhelper/queryinterface.hxx>
-#include <comphelper/processfactory.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <toolkit/helper/property.hxx>
 #include <svtools/fmtfield.hxx>
@@ -2122,8 +2121,7 @@ void VCLXProgressBar::setForegroundColor( sal_Int32 nColor )
     VclPtr<vcl::Window> pWindow = GetWindow();
     if ( pWindow )
     {
-        Color aColor( nColor );
-        pWindow->SetControlForeground( aColor );
+        pWindow->SetControlForeground( Color(nColor) );
     }
 }
 
@@ -2134,7 +2132,7 @@ void VCLXProgressBar::setBackgroundColor( sal_Int32 nColor )
     VclPtr<vcl::Window> pWindow = GetWindow();
     if ( pWindow )
     {
-        Color aColor( nColor );
+        Color aColor = Color( nColor );
         pWindow->SetBackground( aColor );
         pWindow->SetControlBackground( aColor );
         pWindow->Invalidate();
@@ -2222,7 +2220,7 @@ void VCLXProgressBar::setProperty( const OUString& PropertyName, const css::uno:
                     sal_Int32 nColor = 0;
                     if ( Value >>= nColor )
                     {
-                        Color aColor( nColor );
+                        Color aColor = Color( nColor );
                         pWindow->SetControlForeground( aColor );
                     }
                 }

@@ -13,6 +13,10 @@
 #include <com/sun/star/graphic/GraphicType.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
+#include <com/sun/star/document/XEmbeddedObjectSupplier2.hpp>
+#include <com/sun/star/embed/ElementModes.hpp>
+#include <com/sun/star/io/XActiveDataStreamer.hpp>
+#include <com/sun/star/io/XSeekable.hpp>
 #include <tools/datetime.hxx>
 #include <unotools/datetime.hxx>
 #include <vcl/GraphicNativeTransform.hxx>
@@ -21,6 +25,10 @@
 #include <docsh.hxx>
 #include <editsh.hxx>
 #include <ndgrf.hxx>
+#include <ndtxt.hxx>
+#include <txatbase.hxx>
+#include <fmtflcnt.hxx>
+#include <fmtfsize.hxx>
 
 class HtmlImportTest : public SwModelTestBase
 {
@@ -76,14 +84,10 @@ DECLARE_HTMLIMPORT_TEST(testInlinedImage, "inlined_image.html")
     uno::Reference<container::XNamed> const xNamed(xShape, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT_EQUAL(OUString("Image1"), xNamed->getName());
 
-    uno::Reference<graphic::XGraphic> xGraphic =
-        getProperty< uno::Reference<graphic::XGraphic> >(xShape, "Graphic");
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xGraphic = getProperty< uno::Reference<graphic::XGraphic> >(xShape, "Graphic");
     CPPUNIT_ASSERT(xGraphic.is());
     CPPUNIT_ASSERT(xGraphic->getType() != graphic::GraphicType::EMPTY);
-
-    OUString sGraphicURL = getProperty< OUString >(xShape, "GraphicURL");
-    // Before it was "data:image/png;base64,<data>"
-    CPPUNIT_ASSERT(sGraphicURL.startsWith("vnd.sun.star.GraphicObject:"));
 
     for (int n = 0; ; n++)
     {
@@ -208,6 +212,26 @@ DECLARE_HTMLIMPORT_TEST(testMetaIsoDates, "meta-ISO8601-dates.html")
     CPPUNIT_ASSERT_EQUAL(DateTime(Date(8, 5, 2017), tools::Time(12, 47, 0, 386000000)), aModified);
 }
 
+DECLARE_HTMLIMPORT_TEST(testImageWidthAuto, "image-width-auto.html")
+{
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwTextAttr const*const pAttr(pTextDoc->GetDocShell()->GetDoc()->GetEditShell()->
+        GetCursor()->GetNode().GetTextNode()->GetTextAttrForCharAt(0, RES_TXTATR_FLYCNT));
+    CPPUNIT_ASSERT(pAttr);
+    SwFrameFormat const*const pFmt(pAttr->GetFlyCnt().GetFrameFormat());
+    SwFormatFrameSize const& rSize(pFmt->GetFormatAttr(RES_FRM_SIZE));
+    CPPUNIT_ASSERT_EQUAL(Size(1835, 560), rSize.GetSize());
+}
+
+DECLARE_HTMLIMPORT_TEST(testImageLazyRead, "image-lazy-read.html")
+{
+    auto xGraphic = getProperty<uno::Reference<graphic::XGraphic>>(getShape(1), "Graphic");
+    Graphic aGraphic(xGraphic);
+    // This failed, import loaded the graphic, it wasn't lazy-read.
+    CPPUNIT_ASSERT(!aGraphic.isAvailable());
+}
+
 DECLARE_HTMLIMPORT_TEST(testChangedby, "meta-changedby.html")
 {
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
@@ -295,6 +319,19 @@ DECLARE_HTMLIMPORT_TEST(testReqIfBr, "reqif-br.xhtml")
 {
     // <reqif-xhtml:br/> was not recognized as a line break from a ReqIf file.
     CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("aaa\nbbb"));
+}
+
+DECLARE_HTMLIMPORT_TEST(testImageSize, "image-size.html")
+{
+    awt::Size aSize = getShape(1)->getSize();
+    OutputDevice* pDevice = Application::GetDefaultDevice();
+    Size aPixelSize(200, 400);
+    Size aExpected = pDevice->PixelToLogic(aPixelSize, MapMode(MapUnit::Map100thMM));
+
+    // This was 1997, i.e. a hardcoded default, we did not look at the image
+    // header when the HTML markup declared no size.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aExpected.getWidth()), aSize.Width);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aExpected.getHeight()), aSize.Height);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -65,7 +65,6 @@
 #include <valgrind/callgrind.h>
 #endif
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <com/sun/star/beans/XMaterialHolder.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
@@ -207,11 +206,6 @@ std::vector<fontID> PrintFontManager::addFontFile( const OString& rFileName )
     return aFontIds;
 }
 
-enum fontFormat
-{
-    UNKNOWN, TRUETYPE, CFF
-};
-
 std::vector<std::unique_ptr<PrintFontManager::PrintFont>> PrintFontManager::analyzeFontFile( int nDirID, const OString& rFontFile, const char *pFormat ) const
 {
     std::vector<std::unique_ptr<PrintFontManager::PrintFont>> aNewFonts;
@@ -226,34 +220,30 @@ std::vector<std::unique_ptr<PrintFontManager::PrintFont>> PrintFontManager::anal
     if( access( aFullPath.getStr(), R_OK ) )
         return aNewFonts;
 
-    fontFormat eFormat = UNKNOWN;
+    bool bSupported = false;
     if (pFormat)
     {
-        if (!strcmp(pFormat, "TrueType"))
-            eFormat = TRUETYPE;
-        else if (!strcmp(pFormat, "CFF"))
-            eFormat = CFF;
+        if (!strcmp(pFormat, "TrueType") ||
+            !strcmp(pFormat, "CFF"))
+            bSupported = true;
     }
-    if (eFormat == UNKNOWN)
+    if (!bSupported)
     {
         OString aExt( rFontFile.copy( rFontFile.lastIndexOf( '.' )+1 ) );
         if( aExt.equalsIgnoreAsciiCase("ttf")
              ||  aExt.equalsIgnoreAsciiCase("ttc")
-             ||  aExt.equalsIgnoreAsciiCase("tte") ) // #i33947# for Gaiji support
-            eFormat = TRUETYPE;
-        else if( aExt.equalsIgnoreAsciiCase("otf") ) // check for TTF- and PS-OpenType too
-            eFormat = CFF;
+             ||  aExt.equalsIgnoreAsciiCase("tte")   // #i33947# for Gaiji support
+             ||  aExt.equalsIgnoreAsciiCase("otf") ) // check for TTF- and PS-OpenType too
+            bSupported = true;
     }
 
-    if (eFormat == TRUETYPE || eFormat == CFF)
+    if (bSupported)
     {
         // get number of ttc entries
         int nLength = CountTTCFonts( aFullPath.getStr() );
         if (nLength > 0)
         {
-#if OSL_DEBUG_LEVEL > 1
-            fprintf( stderr, "ttc: %s contains %d fonts\n", aFullPath.getStr(), nLength );
-#endif
+            SAL_INFO("vcl.fonts", "ttc: " << aFullPath << " contains " << nLength << " fonts");
 
             sal_uInt64 fileSize = 0;
 
@@ -466,7 +456,7 @@ OUString PrintFontManager::convertSfntName( void* pRecord )
             default:
                 if (aName.startsWith("Khmer OS"))
                     eEncoding = RTL_TEXTENCODING_UTF8;
-                SAL_WARN_IF(eEncoding == RTL_TEXTENCODING_DONTKNOW, "vcl", "Unimplemented mac encoding " << pNameRecord->encodingID << " to unicode conversion for fontname " << aName);
+                SAL_WARN_IF(eEncoding == RTL_TEXTENCODING_DONTKNOW, "vcl.fonts", "Unimplemented mac encoding " << pNameRecord->encodingID << " to unicode conversion for fontname " << aName);
                 break;
         }
         if (eEncoding != RTL_TEXTENCODING_DONTKNOW)
@@ -617,7 +607,7 @@ bool PrintFontManager::analyzeSfntFile( PrintFont* pFont ) const
         if( aInfo.usubfamily )
             pFont->m_aStyleName = OUString( aInfo.usubfamily );
 
-        SAL_WARN_IF( !aInfo.psname, "vcl", "No PostScript name in font:" << aFile );
+        SAL_WARN_IF( !aInfo.psname, "vcl.fonts", "No PostScript name in font:" << aFile );
 
         pFont->m_aPSName = aInfo.psname ?
             OUString(aInfo.psname, rtl_str_getLength(aInfo.psname), aEncoding) :
@@ -701,7 +691,7 @@ bool PrintFontManager::analyzeSfntFile( PrintFont* pFont ) const
         bSuccess = true;
     }
     else
-        SAL_WARN("vcl", "Could not OpenTTFont \"" << aFile << "\"");
+        SAL_WARN("vcl.fonts", "Could not OpenTTFont \"" << aFile << "\"");
 
     return bSuccess;
 }
@@ -1012,9 +1002,9 @@ bool PrintFontManager::createFontSubset(
         }
         else
         {
-            SAL_WARN_IF( (pGlyphIds[i] & 0x007f0000), "vcl", "overlong glyph id" );
-            SAL_WARN_IF( static_cast<int>(pNewEncoding[i]) >= nGlyphs, "vcl", "encoding wrong" );
-            SAL_WARN_IF( pEnc[pNewEncoding[i]] != 0 || pGID[pNewEncoding[i]] != 0, "vcl", "duplicate encoded glyph" );
+            SAL_WARN_IF( (pGlyphIds[i] & 0x007f0000), "vcl.fonts", "overlong glyph id" );
+            SAL_WARN_IF( static_cast<int>(pNewEncoding[i]) >= nGlyphs, "vcl.fonts", "encoding wrong" );
+            SAL_WARN_IF( pEnc[pNewEncoding[i]] != 0 || pGID[pNewEncoding[i]] != 0, "vcl.fonts", "duplicate encoded glyph" );
             pEnc[ pNewEncoding[i] ] = pNewEncoding[i];
             pGID[ pNewEncoding[i] ] = static_cast<sal_uInt16>(pGlyphIds[ i ]);
             pOldIndex[ pNewEncoding[i] ] = i;
@@ -1111,9 +1101,7 @@ bool PrintFontManager::createFontSubset(
                                                      aToFile.getStr(),
                                                      pGID,
                                                      pEnc,
-                                                     nGlyphs,
-                                                     0,
-                                                     nullptr ) );
+                                                     nGlyphs ) );
     CloseTTFont( pTTFont );
 
     return bSuccess;

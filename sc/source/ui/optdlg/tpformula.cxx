@@ -29,7 +29,6 @@
 #include <scresid.hxx>
 #include <formula/grammar.hxx>
 #include "calcoptionsdlg.hxx"
-#include <vcl/msgbox.hxx>
 
 #include <unotools/localedatawrapper.hxx>
 
@@ -139,12 +138,11 @@ void ScTpFormulaOptions::UpdateCustomCalcRadioButtons(bool bDefault)
 
 void ScTpFormulaOptions::LaunchCustomCalcSettings()
 {
-    ScopedVclPtrInstance< ScCalcOptionsDialog > aDlg(this, maCurrentConfig,
-                                                     maCurrentDocOptions.IsWriteCalcConfig());
-    if (aDlg->Execute() == RET_OK)
+    ScCalcOptionsDialog aDlg(GetFrameWeld(), maCurrentConfig, maCurrentDocOptions.IsWriteCalcConfig());
+    if (aDlg.run() == RET_OK)
     {
-        maCurrentConfig = aDlg->GetConfig();
-        maCurrentDocOptions.SetWriteCalcConfig( aDlg->GetWriteCalcConfig());
+        maCurrentConfig = aDlg.GetConfig();
+        maCurrentDocOptions.SetWriteCalcConfig(aDlg.GetWriteCalcConfig());
     }
 }
 
@@ -229,9 +227,9 @@ IMPL_LINK( ScTpFormulaOptions, SepEditOnFocusHdl, Control&, rControl, void )
     OnFocusSeparatorInput(static_cast<Edit*>(&rControl));
 }
 
-VclPtr<SfxTabPage> ScTpFormulaOptions::Create(vcl::Window* pParent, const SfxItemSet* rCoreSet)
+VclPtr<SfxTabPage> ScTpFormulaOptions::Create(TabPageParent pParent, const SfxItemSet* rCoreSet)
 {
-    return VclPtr<ScTpFormulaOptions>::Create(pParent, *rCoreSet);
+    return VclPtr<ScTpFormulaOptions>::Create(pParent.pParent, *rCoreSet);
 }
 
 bool ScTpFormulaOptions::FillItemSet(SfxItemSet* rCoreSet)

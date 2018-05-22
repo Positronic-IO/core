@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_IMPEX_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_IMPEX_HXX
 
+#include <o3tl/deleter.hxx>
 #include <sot/exchange.hxx>
 #include <global.hxx>
 #include <address.hxx>
@@ -48,7 +49,7 @@ class ScImportExport
 {
     ScDocShell* pDocSh;
     ScDocument* pDoc;
-    ScDocument* pUndoDoc;
+    std::unique_ptr<ScDocument, o3tl::default_delete<ScDocument>> pUndoDoc;
     ScRange     aRange;
     OUString    aStreamPath;
     OUString    aNonConvertibleChars;
@@ -72,7 +73,7 @@ class ScImportExport
                                 // do not need to broadcast after the import.
     ScExportTextOptions mExportTextOptions;
 
-    ScAsciiOptions* pExtOptions;        // extended options
+    std::unique_ptr<ScAsciiOptions> pExtOptions;        // extended options
 
     bool StartPaste();                  // Protect check, set up Undo
     void EndPaste(bool bAutoRowHeight = true);                    // Undo/Redo actions, Repaint
@@ -106,7 +107,7 @@ public:
     static bool  IsFormatSupported( SotClipboardFormatId nFormat );
     static const sal_Unicode* ScanNextFieldFromString( const sal_Unicode* p,
             OUString& rField, sal_Unicode cStr, const sal_Unicode* pSeps,
-            bool bMergeSeps, bool& rbIsQuoted, bool& rbOverflowCell, bool bRemoveSpace = false );
+            bool bMergeSeps, bool& rbIsQuoted, bool& rbOverflowCell, bool bRemoveSpace );
     static  void    WriteUnicodeOrByteString( SvStream& rStrm, const OUString& rString, bool bZero = false );
     static  void    WriteUnicodeOrByteEndl( SvStream& rStrm );
 

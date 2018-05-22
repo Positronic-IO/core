@@ -31,9 +31,7 @@
 #include <svtools/colorcfg.hxx>
 #include <svtools/langhelp.hxx>
 #include <sfx2/filedlghelper.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/templatecontaineritem.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/toolbox.hxx>
 
 #include <vcl/menubtn.hxx>
@@ -72,7 +70,7 @@ float const fMultiplier = 1.4f;
 BackingWindow::BackingWindow( vcl::Window* i_pParent ) :
     Window( i_pParent ),
     mbLocalViewInitialized(false),
-    maButtonsTextColor(officecfg::Office::Common::Help::StartCenter::StartCenterTextColor::get()),
+    maButtonsTextColor(Color(officecfg::Office::Common::Help::StartCenter::StartCenterTextColor::get())),
     mbInitControls( false )
 {
     m_pUIBuilder.reset(new VclBuilder(this, getUIRootDir(), "sfx/ui/startcenter.ui", "StartCenter" ));
@@ -279,7 +277,7 @@ void BackingWindow::initControls()
     mpHelpButton->SetControlForeground(maButtonsTextColor);
     mpExtensionsButton->SetControlForeground(maButtonsTextColor);
 
-    const Color aButtonsBackground(officecfg::Office::Common::Help::StartCenter::StartCenterBackgroundColor::get());
+    const Color aButtonsBackground = Color(officecfg::Office::Common::Help::StartCenter::StartCenterBackgroundColor::get());
 
     mpAllButtonsBox->SetBackground(aButtonsBackground);
     mpSmallButtonsBox->SetBackground(aButtonsBackground);

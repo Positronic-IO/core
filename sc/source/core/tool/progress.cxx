@@ -30,6 +30,7 @@
 #include <document.hxx>
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 
 using namespace com::sun::star;
 
@@ -106,8 +107,8 @@ ScProgress::ScProgress(SfxObjectShell* pObjSh, const OUString& rText,
     }
     else
     {
-        pProgress = new SfxProgress( pObjSh, rText, nRange, bWait );
-        pGlobalProgress = pProgress;
+        pProgress.reset(new SfxProgress( pObjSh, rText, nRange, bWait ));
+        pGlobalProgress = pProgress.get();
         nGlobalRange = nRange;
         nGlobalPercent = 0;
     }
@@ -124,7 +125,7 @@ ScProgress::~ScProgress()
 {
     if ( pProgress )
     {
-        delete pProgress;
+        pProgress.reset();
         pGlobalProgress = nullptr;
         nGlobalRange = 0;
         nGlobalPercent = 0;
@@ -147,7 +148,7 @@ void ScProgress::CreateInterpretProgress( ScDocument* pDoc, bool bWait )
             // Keep the dummy interpret progress.
             if ( !pGlobalProgress )
                 pInterpretProgress = new ScProgress( pDoc->GetDocumentShell(),
-                    ScGlobal::GetRscString( STR_PROGRESS_CALCULATING ),
+                    ScResId( STR_PROGRESS_CALCULATING ),
                     pDoc->GetFormulaCodeInTree()/MIN_NO_CODES_PER_PROGRESS_UPDATE, bWait );
             pInterpretDoc = pDoc;
         }

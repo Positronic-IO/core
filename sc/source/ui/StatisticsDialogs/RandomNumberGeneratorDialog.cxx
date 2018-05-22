@@ -20,6 +20,7 @@
 #include <uiitems.hxx>
 #include <reffact.hxx>
 #include <docfunc.hxx>
+#include <scresid.hxx>
 #include <strings.hrc>
 
 #include <random>
@@ -361,7 +362,7 @@ IMPL_LINK_NOARG(ScRandomNumberGeneratorDialog, InputRangeModified, Edit&, void)
 {
     ScRangeList aRangeList;
     bool bValid = ParseWithNames( aRangeList, mpInputRangeEdit->GetText(), mpDoc);
-    const ScRange* pRange = (bValid && aRangeList.size() == 1) ? aRangeList[0] : nullptr;
+    const ScRange* pRange = (bValid && aRangeList.size() == 1) ? &aRangeList[0] : nullptr;
     if (pRange)
     {
         maInputRange = *pRange;

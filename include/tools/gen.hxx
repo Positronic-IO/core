@@ -79,9 +79,6 @@ public:
     long                X() const { return nA; }
     long                Y() const { return nB; }
 
-    long&               X() { return nA; }
-    long&               Y() { return nB; }
-
     void                Move( long nHorzMove, long nVertMove );
     void                Move( Size const & s );
     long                AdjustX( long nHorzMove ) { nA += nHorzMove; return nA; }
@@ -102,8 +99,8 @@ public:
 
     long                getX() const { return X(); }
     long                getY() const { return Y(); }
-    void                setX(long nX)  { X() = nX; }
-    void                setY(long nY)  { Y() = nY; }
+    void                setX(long nX)  { nA = nX; }
+    void                setY(long nY)  { nB = nY; }
 
     Pair const &        toPair() const { return *this; }
     Pair &              toPair() { return *this; }
@@ -193,15 +190,13 @@ public:
     long            Width() const  { return nA; }
     long            Height() const { return nB; }
 
-    long&           Width()  { return nA; }
-    long&           Height() { return nB; }
     long            AdjustWidth( long n ) { nA += n; return nA; }
     long            AdjustHeight( long n ) { nB += n; return nB; }
 
     long            getWidth() const { return Width(); }
     long            getHeight() const { return Height(); }
-    void            setWidth(long nWidth)  { Width() = nWidth; }
-    void            setHeight(long nHeight)  { Height() = nHeight; }
+    void            setWidth(long nWidth)  { nA = nWidth; }
+    void            setHeight(long nHeight)  { nB = nHeight; }
 
     Pair const &    toPair() const { return *this; }
     Pair &          toPair() { return *this; }
@@ -390,11 +385,6 @@ public:
     long                Top() const     { return nTop;    }
     long                Bottom() const  { return nBottom; }
 
-    long&               Left()          { return nLeft;   }
-    long&               Right()         { return nRight;  }
-    long&               Top()           { return nTop;    }
-    long&               Bottom()        { return nBottom; }
-
     void                SetLeft(long v)    { nLeft = v;   }
     void                SetRight(long v)   { nRight = v;  }
     void                SetTop(long v)     { nTop = v;    }
@@ -482,6 +472,9 @@ public:
      * Sanitizing variants for handling data from the outside
      */
     void                SaturatingSetSize(const Size& rSize);
+    void                SaturatingSetX(long x);
+    void                SaturatingSetY(long y);
+
 private:
     long                nLeft;
     long                nTop;
@@ -755,10 +748,6 @@ inline SvStream& ReadPair( SvStream& rIStream, Point& v ) { return ReadPair(rISt
 inline SvStream& WritePair( SvStream& rOStream, const Point& v ) { return WritePair(rOStream, v.toPair()); }
 inline SvStream& ReadPair( SvStream& rIStream, Size& v ) { return ReadPair(rIStream, v.toPair()); }
 inline SvStream& WritePair( SvStream& rOStream, const Size& v ) { return WritePair(rOStream, v.toPair()); }
-inline SvStream& ReadPair( SvStream& rIStream, Range& v ) { return ReadPair(rIStream, v.toPair()); }
-inline SvStream& WritePair( SvStream& rOStream, const Range& v ) { return WritePair(rOStream, v.toPair()); }
-inline SvStream& ReadPair( SvStream& rIStream, Selection& v ) { return ReadPair(rIStream, v.toPair()); }
-inline SvStream& WritePair( SvStream& rOStream, const Selection& v ) { return WritePair(rOStream, v.toPair()); }
 
 #endif
 

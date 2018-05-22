@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/lok.hxx>
 
 #include <vcl/svapp.hxx>
@@ -40,7 +39,7 @@ void Control::ImplInitControlData()
 {
     mbHasControlFocus       = false;
     mbShowAccelerator       = false;
-    mpControlData   = new ImplControlData;
+    mpControlData.reset(new ImplControlData);
 }
 
 Control::Control( WindowType nType ) :
@@ -63,8 +62,7 @@ Control::~Control()
 
 void Control::dispose()
 {
-    delete mpControlData;
-    mpControlData = nullptr;
+    mpControlData.reset();
     Window::dispose();
 }
 

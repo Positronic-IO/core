@@ -41,7 +41,7 @@ using namespace ::com::sun::star::awt;
 using namespace ::com::sun::star::frame;
 using namespace ::com::sun::star::util;
 
-namespace unocontrols{
+namespace unocontrols {
 
 enum PropertyHandle  // values represent index in PropertyArray
 {                   // for FrameControl
@@ -344,7 +344,7 @@ IPropertyArrayHelper& FrameControl::getInfoHelper()
     // attention: properties need to be sorted by name!
     static OPropertyArrayHelper ourPropertyInfo(
                 {
-                    Property( "ComponentURL", PropertyHandle::Componenturl, cppu::UnoType<OUString>::get(),
+                    Property( "ComponentUrl", PropertyHandle::Componenturl, cppu::UnoType<OUString>::get(),
                             PropertyAttribute::BOUND | PropertyAttribute::CONSTRAINED ),
                     Property( "Frame", PropertyHandle::Frame, cppu::UnoType<XFrame>::get(),
                             PropertyAttribute::BOUND | PropertyAttribute::TRANSIENT ),

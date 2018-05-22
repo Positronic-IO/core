@@ -20,7 +20,6 @@
 #include <hintids.hxx>
 
 #include <o3tl/make_unique.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/whiter.hxx>
 #include <svl/stritem.hxx>
 #include <svl/itemiter.hxx>
@@ -53,7 +52,6 @@
 
 #include <cmdid.h>
 #include <globals.h>
-#include <strings.hrc>
 #include <SwStyleNameMapper.hxx>
 #include <swabstdlg.hxx>
 #include <outline.hxx>
@@ -305,7 +303,7 @@ void SwTextShell::ExecCharAttrArgs(SfxRequest &rReq)
 void SwTextShell::ExecParaAttr(SfxRequest &rReq)
 {
     SvxAdjust eAdjst;
-    sal_uInt8 ePropL;
+    sal_uInt16 ePropL;
     const SfxItemSet* pArgs = rReq.GetArgs();
 
     // Get both attributes immediately isn't more expensive!!

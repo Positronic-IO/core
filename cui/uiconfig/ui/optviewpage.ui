@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.20.0 -->
 <interface domain="cui">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">80</property>
     <property name="upper">400</property>
@@ -82,6 +82,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="draw_indicator">True</property>
                       </object>
@@ -96,6 +97,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
+                        <property name="use_underline">True</property>
                         <property name="tooltip_text" translatable="yes" context="optviewpage|forceopengl|tooltip_text">Requires restart. Enabling this may expose driver bugs</property>
                         <property name="margin_left">12</property>
                         <property name="xalign">0</property>
@@ -358,13 +360,11 @@
                               <item translatable="yes" context="optviewpage|iconstyle">Automatic</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Galaxy</item>
                               <item translatable="yes" context="optviewpage|iconstyle">High Contrast</item>
-                              <item translatable="yes" context="optviewpage|iconstyle">Crystal</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Tango</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Oxygen</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Classic</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Sifr</item>
                               <item translatable="yes" context="optviewpage|iconstyle">Breeze</item>
-                              <item translatable="yes" context="optviewpage|iconstyle">Tango Testing</item>
                             </items>
                           </object>
                           <packing>
@@ -499,7 +499,6 @@
                               <object class="GtkSpinButton" id="aanf:0pixels">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
-                                <property name="invisible_char">•</property>
                                 <property name="adjustment">adjustment2</property>
                               </object>
                               <packing>

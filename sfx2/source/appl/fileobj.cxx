@@ -18,7 +18,6 @@
  */
 
 #include <vcl/wrkwin.hxx>
-#include <vcl/msgbox.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/stream.hxx>
 #include <sot/formats.hxx>
@@ -57,10 +56,8 @@ SvFileObject::SvFileObject()
     , bWaitForData(false)
     , bInNewData(false)
     , bDataReady(false)
-    , bNativFormat(false)
     , bClearMedium(false)
     , bStateChangeCalled(false)
-    , bInCallDownload(false)
 {
 }
 
@@ -77,7 +74,7 @@ SvFileObject::~SvFileObject()
 
 bool SvFileObject::GetData( css::uno::Any & rData,
                                 const OUString & rMimeType,
-                                bool bGetSynchron )
+                                bool /*bGetSynchron*/ )
 {
     SotClipboardFormatId nFmt = SotExchange::RegisterFormatMimeType( rMimeType );
     switch( nType )
@@ -93,101 +90,11 @@ bool SvFileObject::GetData( css::uno::Any & rData,
         break;
 
     case FILETYPE_GRF:
-        if( !bLoadError )
+        if (SotClipboardFormatId::GDIMETAFILE == nFmt
+         || SotClipboardFormatId::BITMAP == nFmt
+         || SotClipboardFormatId::SVXB == nFmt)
         {
-            tools::SvRef<SfxMedium> xTmpMed;
-
-            if( SotClipboardFormatId::GDIMETAFILE == nFmt || SotClipboardFormatId::BITMAP == nFmt ||
-                SotClipboardFormatId::SVXB == nFmt )
-            {
-                Graphic aGrf;
-
-                // If the native format is requested, has to be reset at the
-                // end of the flag. Is solely in the sw/ndgrf.cxx used when
-                // the link is removed form GraphicNode.
-                bool bOldNativFormat = bNativFormat;
-
-                // If about to print, waiting for the data to be available
-                if( bGetSynchron )
-                {
-                    // call a LoadFile every second time to test the loading
-                    if( !xMed.is() )
-                        LoadFile_Impl();
-
-                    if( !bInCallDownload )
-                    {
-                        xTmpMed = xMed;
-                        while( bWaitForData )
-                            Application::Reschedule();
-
-                        xMed = xTmpMed;
-                        bClearMedium = true;
-                    }
-                }
-
-                if( !bWaitForData && ( xMed.is() ||  // was loaded as URL
-                      ( bSynchron && LoadFile_Impl() && xMed.is() ) ) )
-                {
-                    // If it was loaded from the Internet, do not retry
-                    if( !bGetSynchron )
-                        bLoadAgain = !xMed->IsRemote();
-                    bLoadError = !GetGraphic_Impl( aGrf, xMed->GetInStream() );
-                }
-                else if( !LoadFile_Impl() ||
-                        !GetGraphic_Impl( aGrf, xMed.is() ? xMed->GetInStream() : nullptr ))
-                {
-                    if( !xMed.is() )
-                        break;
-                    aGrf.SetDefaultType();
-                }
-
-                if( SotClipboardFormatId::SVXB != nFmt )
-                    nFmt = (bLoadError || GraphicType::Bitmap == aGrf.GetType())
-                                ? SotClipboardFormatId::BITMAP
-                                : SotClipboardFormatId::GDIMETAFILE;
-
-                SvMemoryStream aMemStm( 0, 65535 );
-                switch ( nFmt )
-                {
-                case SotClipboardFormatId::SVXB:
-                    if( GraphicType::NONE != aGrf.GetType() )
-                    {
-                        aMemStm.SetVersion( SOFFICE_FILEFORMAT_50 );
-                        WriteGraphic( aMemStm, aGrf );
-                    }
-                    break;
-
-                case SotClipboardFormatId::BITMAP:
-                {
-                    const Bitmap aBitmap(aGrf.GetBitmap());
-
-                    if(!aBitmap.IsEmpty())
-                    {
-                        WriteDIB(aBitmap, aMemStm, false, true);
-                    }
-
-                    break;
-                }
-
-                default:
-                    if( aGrf.GetGDIMetaFile().GetActionSize() )
-                    {
-                        GDIMetaFile aMeta( aGrf.GetGDIMetaFile() );
-                        aMeta.Write( aMemStm );
-                    }
-                }
-                rData <<= css::uno::Sequence< sal_Int8 >( static_cast<sal_Int8 const *>(aMemStm.GetData()),
-                                        aMemStm.Seek( STREAM_SEEK_TO_END ) );
-
-                bNativFormat = bOldNativFormat;
-
-                // Everything ready?
-                if( xMed.is() && !bSynchron && bClearMedium )
-                {
-                    xMed.clear();
-                    bClearMedium = false;
-                }
-            }
+            rData <<= sFileNm;
         }
         break;
     case FILETYPE_OBJECT:
@@ -266,9 +173,7 @@ bool SvFileObject::LoadFile_Impl()
         bWaitForData = true;
 
         tools::SvRef<SfxMedium> xTmpMed = xMed;
-        bInCallDownload = true;
         xMed->Download( LINK( this, SvFileObject, LoadGrfReady_Impl ) );
-        bInCallDownload = false;
 
         bClearMedium = !xMed.is();
         if( bClearMedium )
@@ -288,47 +193,6 @@ bool SvFileObject::LoadFile_Impl()
     return true;
 }
 
-
-bool SvFileObject::GetGraphic_Impl( Graphic& rGrf, SvStream* pStream )
-{
-    GraphicFilter& rGF = GraphicFilter::GetGraphicFilter();
-
-    const sal_uInt16 nFilter = !sFilter.isEmpty() && rGF.GetImportFormatCount()
-                            ? rGF.GetImportFormatNumber( sFilter )
-                            : GRFILTER_FORMAT_DONTKNOW;
-
-    ErrCode nRes;
-
-    // To avoid that a native link is created
-    if( !rGrf.IsLink() &&
-        !rGrf.GetContext() && !bNativFormat )
-        rGrf.SetLink( GfxLink() );
-
-    if( !pStream )
-        nRes = xMed.is() ? ERRCODE_GRFILTER_OPENERROR
-                         : rGF.ImportGraphic( rGrf, INetURLObject(sFileNm),
-                            nFilter );
-    else
-    {
-        pStream->Seek( STREAM_SEEK_TO_BEGIN );
-
-        // #i123042# for e.g. SVG the path is needed, see same TaskID in svx for more info
-        nRes = rGF.ImportGraphic( rGrf, sFileNm, *pStream, nFilter );
-    }
-
-    if( pStream && ERRCODE_IO_PENDING == pStream->GetError() )
-        pStream->ResetError();
-
-    if( nRes )
-    {
-        if( xMed.is() && !pStream )
-            SAL_WARN( "sfx.appl", "Graphic error [" << nRes << "] - [" << xMed->GetPhysicalName() << "] URL[" << sFileNm << "]" );
-        else
-            SAL_WARN( "sfx.appl", "Graphic error [" << nRes << "] - [" << sFileNm << "]" );
-    }
-
-    return ERRCODE_NONE == nRes;
-}
 
 /** detect the filter of the given file
 
@@ -390,7 +254,7 @@ OUString impl_getFilter( const OUString& _rURL )
     return sFilter;
 }
 
-void SvFileObject::Edit(vcl::Window* pParent, sfx2::SvBaseLink* pLink, const Link<const OUString&, void>& rEndEditHdl)
+void SvFileObject::Edit(weld::Window* pParent, sfx2::SvBaseLink* pLink, const Link<const OUString&, void>& rEndEditHdl)
 {
     aEndEditLink = rEndEditHdl;
     OUString sFile, sRange, sTmpFilter;
@@ -461,7 +325,6 @@ IMPL_LINK_NOARG( SvFileObject, LoadGrfReady_Impl, void*, void )
     // When we come form here there it can not be an error no more.
     bLoadError = false;
     bWaitForData = false;
-    bInCallDownload = false;
 
     if( !bInNewData && !bDataReady )
     {

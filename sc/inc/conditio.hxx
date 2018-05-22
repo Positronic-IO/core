@@ -26,15 +26,14 @@
 #include "scdllapi.h"
 #include "rangelst.hxx"
 
-#include <svl/hint.hxx>
 #include <svl/listener.hxx>
-#include <svl/broadcast.hxx>
 
 #include <comphelper/stl_types.hxx>
 #include <com/sun/star/sheet/ConditionOperator.hpp>
 
 #include <rtl/math.hxx>
 #include <tools/date.hxx>
+#include <tools/link.hxx>
 
 #include <map>
 #include <memory>
@@ -307,19 +306,19 @@ class SC_DLLPUBLIC ScConditionEntry : public ScFormatEntry
     const formula::FormulaGrammar::Grammar eTempGrammar2;  // grammar to be used on (re)compilation, e.g. in XML import
     bool                bIsStr1;        // for recognition of empty strings
     bool                bIsStr2;
-    ScTokenArray*       pFormula1;      // entered formula
-    ScTokenArray*       pFormula2;
+    std::unique_ptr<ScTokenArray> pFormula1;      // entered formula
+    std::unique_ptr<ScTokenArray> pFormula2;
     ScAddress           aSrcPos;        // source position for formulas
                                         // temporary data:
     OUString              aSrcString;     // formula source position as text during XML import
-    ScFormulaCell*      pFCell1;
-    ScFormulaCell*      pFCell2;
+    std::unique_ptr<ScFormulaCell>  pFCell1;
+    std::unique_ptr<ScFormulaCell>  pFCell2;
     bool                bRelRef1;
     bool                bRelRef2;
     bool                bFirstRun;
     std::unique_ptr<ScFormulaListener> mpListener;
 
-    void    SimplifyCompiledFormula( ScTokenArray*& rFormula,
+    void    SimplifyCompiledFormula( std::unique_ptr<ScTokenArray>& rFormula,
                                      double& rVal,
                                      bool& rIsStr,
                                      OUString& rStrVal );
@@ -604,10 +603,11 @@ public:
 
     /**
      * Checks that all cond formats have a non empty range.
-     * Deletes empty cond formats.
+     * Deletes empty cond formats. Optionally call rLink
+     * on the empty format before deleting it.
      * @return true if all cond formats were valid
      */
-    bool    CheckAllEntries();
+    bool    CheckAllEntries(const Link<ScConditionalFormat*,void>& rLink = Link<ScConditionalFormat*,void>());
 
     ScConditionalFormat* GetFormat( sal_uInt32 nKey );
     const ScConditionalFormat* GetFormat( sal_uInt32 nKey ) const;

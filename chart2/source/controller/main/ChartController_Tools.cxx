@@ -71,6 +71,7 @@
 #include <svx/unopage.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <tools/diagnose_ex.h>
 
 #include <memory>
 
@@ -226,9 +227,9 @@ void ChartController::executeDispatch_NewArrangement()
             aUndoGuard.commit();
         }
     }
-    catch( const uno::RuntimeException & ex )
+    catch( const uno::RuntimeException & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -395,11 +396,12 @@ void ChartController::impl_PasteShapes( SdrModel* pModel )
                 SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
                 while ( aIter.IsMore() )
                 {
-                    SdrObject* pObj = aIter.Next();
-                    SdrObject* pNewObj = ( pObj ? pObj->Clone() : nullptr );
+                    SdrObject* pObj(aIter.Next());
+                    // Clone to new SdrModel
+                    SdrObject* pNewObj(pObj ? pObj->CloneSdrObject(pDrawModelWrapper->getSdrModel()) : nullptr);
+
                     if ( pNewObj )
                     {
-                        pNewObj->SetModel( &pDrawModelWrapper->getSdrModel() );
                         pNewObj->SetPage( pDestPage );
 
                         // set position
@@ -479,9 +481,9 @@ void ChartController::impl_PasteStringAsTextShape( const OUString& rString, cons
                     impl_switchDiagramPositioningToExcludingPositioning();
                 }
             }
-            catch ( const uno::Exception& ex )
+            catch ( const uno::Exception& )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
     }
@@ -516,7 +518,9 @@ void ChartController::executeDispatch_Copy()
                     if ( pSelectedObj )
                     {
                         xTransferable.set( new ChartTransferable(
-                                &m_pDrawModelWrapper->getSdrModel(), pSelectedObj, aSelOID.isAdditionalShape() ) );
+                                m_pDrawModelWrapper->getSdrModel(),
+                                pSelectedObj,
+                                aSelOID.isAdditionalShape() ) );
                     }
                 }
             }
@@ -843,9 +847,9 @@ void ChartController::executeDispatch_ToggleLegend()
                 bChanged = true;
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
     else

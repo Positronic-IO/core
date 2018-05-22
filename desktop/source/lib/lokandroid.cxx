@@ -12,7 +12,6 @@
 
 #include <sal/types.h>
 #include <vcl/event.hxx>
-
 #include <android/log.h>
 
 #include <osl/detail/android-bootstrap.h>
@@ -330,7 +329,7 @@ extern "C" SAL_JNI_EXPORT void JNICALL Java_org_libreoffice_kit_Document_postMou
 }
 
 extern "C" SAL_JNI_EXPORT void JNICALL Java_org_libreoffice_kit_Document_postUnoCommand
-    (JNIEnv* pEnv, jobject aObject, jstring command, jstring arguments)
+    (JNIEnv* pEnv, jobject aObject, jstring command, jstring arguments, jboolean bNotifyWhenFinished)
 {
     LibreOfficeKitDocument* pDocument = getHandle<LibreOfficeKitDocument>(pEnv, aObject);
 
@@ -339,7 +338,7 @@ extern "C" SAL_JNI_EXPORT void JNICALL Java_org_libreoffice_kit_Document_postUno
     if (arguments != NULL)
         pArguments = pEnv->GetStringUTFChars(arguments, NULL);
 
-    pDocument->pClass->postUnoCommand(pDocument, pCommand, pArguments, false);
+    pDocument->pClass->postUnoCommand(pDocument, pCommand, pArguments, bNotifyWhenFinished);
 
     pEnv->ReleaseStringUTFChars(command, pCommand);
     if (arguments != NULL)
@@ -368,6 +367,23 @@ extern "C" SAL_JNI_EXPORT jstring JNICALL Java_org_libreoffice_kit_Document_getT
     pEnv->ReleaseStringUTFChars(mimeType, pMimeType);
 
     return pEnv->NewStringUTF(pSelection);
+}
+
+extern "C" SAL_JNI_EXPORT jboolean JNICALL Java_org_libreoffice_kit_Document_paste
+    (JNIEnv* pEnv, jobject aObject, jstring mimeType, jstring data)
+{
+    LibreOfficeKitDocument* pDocument = getHandle<LibreOfficeKitDocument>(pEnv, aObject);
+
+    const char* pMimeType = pEnv->GetStringUTFChars(mimeType, NULL);
+    const char* pData = pEnv->GetStringUTFChars(data, NULL);
+    const size_t nSize = pEnv->GetStringLength(data);
+
+    LibreOfficeKitDocumentClass* pcls = pDocument->pClass;
+    bool result = pcls->paste(pDocument, pMimeType, pData, nSize);
+    pEnv->ReleaseStringUTFChars(mimeType, pMimeType);
+    pEnv->ReleaseStringUTFChars(data, pData);
+
+    return result;
 }
 
 extern "C" SAL_JNI_EXPORT void JNICALL Java_org_libreoffice_kit_Document_setGraphicSelection

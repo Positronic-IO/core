@@ -40,9 +40,7 @@
 #include <ViewShellBase.hxx>
 #include <drawdoc.hxx>
 #include <app.hrc>
-#include <strings.hrc>
 #include <sdattr.hrc>
-#include <sdresid.hxx>
 #include <AccessibleSlideSorterView.hxx>
 #include <DrawDocShell.hxx>
 #include <DrawViewShell.hxx>
@@ -66,10 +64,9 @@
 #include <com/sun/star/drawing/framework/XControllerManager.hpp>
 #include <com/sun/star/drawing/framework/ResourceId.hpp>
 #include <cppuhelper/bootstrap.hxx>
-#include <comphelper/processfactory.hxx>
 
 using namespace ::sd::slidesorter;
-#define SlideSorterViewShell
+#define ShellClass_SlideSorterViewShell
 #include <sdslots.hxx>
 
 using namespace ::com::sun::star;

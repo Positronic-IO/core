@@ -552,7 +552,6 @@ class FieldList : public BlopObject
 public:
 
     sal_uInt16      m_numOfEntries;
-    sal_uInt16      m_numOfFieldEntries;
     size_t          m_FIELD_ENTRY_SIZE;
     ConstantPool*   m_pCP;
 
@@ -563,11 +562,10 @@ public:
     {
         if ( m_numOfEntries > 0 )
         {
-            m_numOfFieldEntries = readUINT16(0);
-            m_FIELD_ENTRY_SIZE = m_numOfFieldEntries * sizeof(sal_uInt16);
+            sal_uInt16 numOfFieldEntries = readUINT16(0);
+            m_FIELD_ENTRY_SIZE = numOfFieldEntries * sizeof(sal_uInt16);
         } else
         {
-            m_numOfFieldEntries = 0;
             m_FIELD_ENTRY_SIZE = 0;
         }
     }
@@ -738,7 +736,6 @@ class ReferenceList : public BlopObject
 public:
 
     sal_uInt16      m_numOfEntries;
-    sal_uInt16      m_numOfReferenceEntries;
     size_t          m_REFERENCE_ENTRY_SIZE;
     ConstantPool*   m_pCP;
 
@@ -749,11 +746,10 @@ public:
     {
         if ( m_numOfEntries > 0 )
         {
-            m_numOfReferenceEntries = readUINT16(0);
-            m_REFERENCE_ENTRY_SIZE = m_numOfReferenceEntries * sizeof(sal_uInt16);
+            sal_uInt16 numOfReferenceEntries = readUINT16(0);
+            m_REFERENCE_ENTRY_SIZE = numOfReferenceEntries * sizeof(sal_uInt16);
         } else
         {
-            m_numOfReferenceEntries = 0;
             m_REFERENCE_ENTRY_SIZE = 0;
         }
     }
@@ -840,7 +836,6 @@ class MethodList : public BlopObject
 public:
 
     sal_uInt16      m_numOfEntries;
-    sal_uInt16      m_numOfParamEntries;
     size_t          m_PARAM_ENTRY_SIZE;
     std::unique_ptr<sal_uInt32[]>  m_pIndex;
     ConstantPool*   m_pCP;
@@ -853,11 +848,10 @@ public:
         if ( m_numOfEntries > 0 )
         {
             readUINT16(0) /* numOfMethodEntries */;
-            m_numOfParamEntries = readUINT16(sizeof(sal_uInt16));
-            m_PARAM_ENTRY_SIZE = m_numOfParamEntries * sizeof(sal_uInt16);
+            sal_uInt16 numOfParamEntries = readUINT16(sizeof(sal_uInt16));
+            m_PARAM_ENTRY_SIZE = numOfParamEntries * sizeof(sal_uInt16);
         } else
         {
-            m_numOfParamEntries = 0;
             m_PARAM_ENTRY_SIZE = 0;
         }
     }
@@ -1109,15 +1103,15 @@ public:
     sal_uInt32      m_offset_SUPERTYPES;
 
     TypeRegistryEntry(
-        const sal_uInt8* buffer, sal_uInt32 len, bool copyBuffer);
+        const sal_uInt8* buffer, sal_uInt32 len);
         // throws std::bad_alloc
 
     typereg_Version getVersion() const;
 };
 
 TypeRegistryEntry::TypeRegistryEntry(
-    const sal_uInt8* buffer, sal_uInt32 len, bool copyBuffer):
-    BlopObject(buffer, len, copyBuffer), m_refCount(1), m_nSuperTypes(0),
+    const sal_uInt8* buffer, sal_uInt32 len):
+    BlopObject(buffer, len, /*copyBuffer*/false), m_refCount(1), m_nSuperTypes(0),
     m_offset_SUPERTYPES(0)
 {
     std::size_t const entrySize = sizeof(sal_uInt16);
@@ -1183,8 +1177,8 @@ typereg_Version TypeRegistryEntry::getVersion() const {
 **************************************************************************/
 
 bool TYPEREG_CALLTYPE typereg_reader_create(
-    void const * buffer, sal_uInt32 length, bool copy,
-    typereg_Version maxVersion, void ** result)
+    void const * buffer, sal_uInt32 length,
+    void ** result)
 {
     if (length < OFFSET_CP || length > SAL_MAX_UINT32) {
         *result = nullptr;
@@ -1195,7 +1189,7 @@ bool TYPEREG_CALLTYPE typereg_reader_create(
         try {
             entry.reset(
                 new TypeRegistryEntry(
-                    static_cast< sal_uInt8 const * >(buffer), length, copy));
+                    static_cast< sal_uInt8 const * >(buffer), length));
         } catch (std::bad_alloc &) {
             return false;
         }
@@ -1204,7 +1198,7 @@ bool TYPEREG_CALLTYPE typereg_reader_create(
             return true;
         }
         typereg_Version version = entry->getVersion();
-        if (version < TYPEREG_VERSION_0 || version > maxVersion) {
+        if (version < TYPEREG_VERSION_0 || version > TYPEREG_VERSION_1) {
             *result = nullptr;
             return true;
         }
@@ -1219,7 +1213,7 @@ bool TYPEREG_CALLTYPE typereg_reader_create(
 static TypeReaderImpl TYPEREG_CALLTYPE createEntry(const sal_uInt8* buffer, sal_uInt32 len)
 {
     void * handle;
-    typereg_reader_create(buffer, len, false/*copyBuffer*/, TYPEREG_VERSION_1, &handle);
+    typereg_reader_create(buffer, len, &handle);
     return handle;
 }
 

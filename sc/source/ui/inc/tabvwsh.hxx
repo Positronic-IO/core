@@ -190,8 +190,6 @@ protected:
 
     virtual void    Move() override;     // notification
 
-    virtual void    AdjustPosSizePixel( const Point &rPos, const Size &rSize ) override;     // old
-
     virtual void    InnerResizePixel( const Point &rOfs, const Size &rSize, bool inplaceEditModeChange ) override; // new
     virtual void    OuterResizePixel( const Point &rOfs, const Size &rSize ) override;
     virtual void    SetZoomFactor( const Fraction &rZoomX, const Fraction &rZoomY ) override;
@@ -320,7 +318,7 @@ public:
                                           SfxPrinterChangeFlags nDiffFlags = SFX_PRINTER_ALL ) override;
 
     virtual bool            HasPrintOptionsPage() const override;
-    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage( vcl::Window *pParent, const SfxItemSet &rOptions ) override;
+    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(weld::Container* pPage, const SfxItemSet &rOptions) override;
 
     void            ConnectObject( const SdrOle2Obj* pObj );
     void            ActivateObject( SdrOle2Obj* pObj, long nVerb );
@@ -389,8 +387,8 @@ public:
     /// See SfxViewShell::NotifyCursor().
     void NotifyCursor(SfxViewShell* pViewShell) const override;
     /// Emits a LOK_CALLBACK_INVALIDATE_HEADER for all views whose current tab is equal to nCurrentTabIndex
-    static void notifyAllViewsHeaderInvalidation(HeaderType eHeaderType, SCTAB nCurrentTabIndex = -1);
-    static void notifyAllViewsHeaderInvalidation(bool Columns, SCTAB nCurrentTabIndex = -1);
+    static void notifyAllViewsHeaderInvalidation(HeaderType eHeaderType, SCTAB nCurrentTabIndex);
+    static void notifyAllViewsHeaderInvalidation(bool Columns, SCTAB nCurrentTabIndex);
     static bool isAnyEditViewInRange(bool bColumns, SCCOLROW nStart, SCCOLROW nEnd);
     css::uno::Reference<css::drawing::XShapes> getSelectedXShapes();
 };

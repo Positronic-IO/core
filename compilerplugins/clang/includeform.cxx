@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "config_clang.h"
+
 #include "compat.hxx"
 #include "plugin.hxx"
 
@@ -26,7 +28,11 @@ private:
     void InclusionDirective(
         SourceLocation HashLoc, Token const & IncludeTok, StringRef,
         bool IsAngled, CharSourceRange FilenameRange, FileEntry const * File,
-        StringRef SearchPath, StringRef, clang::Module const *) override
+        StringRef SearchPath, StringRef, clang::Module const *
+#if CLANG_VERSION >= 70000
+        , SrcMgr::CharacteristicKind
+#endif
+        ) override
     {
         if (ignoreLocation(HashLoc)) {
             return;
@@ -47,11 +53,13 @@ private:
         bool shouldUseAngles;
         if (uno) {
             shouldUseAngles
-                = (!(loplugin::hasPathnamePrefix(SearchPath, SRCDIR)
-                     || loplugin::hasPathnamePrefix(SearchPath, BUILDDIR))
+                = (!(loplugin::hasPathnamePrefix(SearchPath, SRCDIR "/")
+                     || loplugin::hasPathnamePrefix(SearchPath, BUILDDIR "/"))
                    || loplugin::hasPathnamePrefix(
-                       SearchPath, WORKDIR "/UnpackedTarball"));
+                       SearchPath, WORKDIR "/UnpackedTarball/"));
         } else {
+            auto dir1 = std::string(SearchPath);
+            loplugin::normalizeDotDotInFilePath(dir1);
             auto const file = StringRef(
                 compiler.getSourceManager().getPresumedLoc(HashLoc)
                 .getFilename());
@@ -64,8 +72,9 @@ private:
                 pos = pos2;
             }
 #endif
-            auto const dir = compat::take_front(file, pos);
-            shouldUseAngles = !loplugin::isSamePathname(SearchPath, dir);
+            auto dir2 = std::string(compat::take_front(file, pos));
+            loplugin::normalizeDotDotInFilePath(dir2);
+            shouldUseAngles = !loplugin::isSamePathname(dir1, dir2);
         }
         if (shouldUseAngles == IsAngled) {
             return;

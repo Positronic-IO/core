@@ -19,7 +19,6 @@
 
 #include <redline.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/eitem.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/dispatch.hxx>
@@ -33,7 +32,6 @@
 #include <uitool.hxx>
 
 #include <cmdid.h>
-#include <strings.hrc>
 
 #include <vector>
 #include <redlndlg.hxx>

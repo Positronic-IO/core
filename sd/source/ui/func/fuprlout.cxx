@@ -22,7 +22,6 @@
 #include <sfx2/dispatch.hxx>
 #include <svl/itempool.hxx>
 #include <sot/storage.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/svdundo.hxx>
 
 #include <sfx2/viewfrm.hxx>
@@ -35,7 +34,6 @@
 #include <FrameView.hxx>
 #include <stlpool.hxx>
 #include <View.hxx>
-#include <strings.hrc>
 #include <glob.hxx>
 #include <strmname.h>
 #include <app.hrc>
@@ -45,7 +43,6 @@
 #include <unchss.hxx>
 #include <unmovss.hxx>
 #include <sdattr.hxx>
-#include <sdresid.hxx>
 #include <drawview.hxx>
 #include <editeng/outliner.hxx>
 #include <editeng/editdata.hxx>

@@ -37,7 +37,7 @@ protected:
     virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
 
     SdrObject&                  rRefObj; // Referenced drawing object
-    tools::Rectangle                   aSnapRect;
+    tools::Rectangle            aSnapRect;
 
 protected:
     virtual void Notify(SfxBroadcaster& rBC, const SfxHint& rHint) override;
@@ -46,13 +46,17 @@ protected:
     virtual void SaveGeoData(SdrObjGeoData& rGeo) const override;
     virtual void RestGeoData(const SdrObjGeoData& rGeo) override;
 
-public:
-    SdrVirtObj(SdrObject& rNewObj);
+    // protected destructor
     virtual ~SdrVirtObj() override;
+
+public:
+    SdrVirtObj(
+        SdrModel& rSdrModel,
+        SdrObject& rNewObj);
+
     SdrObject& ReferencedObj();
     const SdrObject& GetReferencedObj() const;
     virtual void NbcSetAnchorPos(const Point& rAnchorPos) override;
-    virtual void SetModel(SdrModel* pNewModel) override;
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual SdrInventor GetObjInventor() const override;
@@ -62,7 +66,7 @@ public:
     virtual const tools::Rectangle& GetCurrentBoundRect() const override;
     virtual const tools::Rectangle& GetLastBoundRect() const override;
     virtual void RecalcBoundRect() override;
-    virtual SdrVirtObj* Clone() const override;
+    virtual SdrVirtObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrVirtObj& operator=(const SdrVirtObj& rObj);
 
     virtual OUString TakeObjNameSingul() const override;

@@ -71,6 +71,7 @@
 #include <unonames.hxx>
 #include <unowids.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <cellsuno.hxx>
 #include <stylehelper.hxx>
 
@@ -199,7 +200,7 @@ static const SfxItemPropertySet * lcl_GetPageStyleSet()
         {OUString(SC_UNO_PAGE_FTRBACKCOL),  SC_WID_UNO_FOOTERSET,::cppu::UnoType<sal_Int32>::get(),           0, 0 },
         {OUString(SC_UNO_PAGE_FTRGRFFILT),  SC_WID_UNO_FOOTERSET,::cppu::UnoType<OUString>::get(),     0, 0 },
         {OUString(SC_UNO_PAGE_FTRGRFLOC),   SC_WID_UNO_FOOTERSET,::cppu::UnoType<style::GraphicLocation>::get(), 0, 0 },
-        {OUString(SC_UNO_PAGE_FTRGRFURL),   SC_WID_UNO_FOOTERSET,::cppu::UnoType<OUString>::get(),     0, 0 },
+        {OUString(SC_UNO_PAGE_FTRGRFURL),   SC_WID_UNO_FOOTERSET,::cppu::UnoType<OUString>::get(),            0, 0 },
         {OUString(SC_UNO_PAGE_FTRGRF),      SC_WID_UNO_FOOTERSET,::cppu::UnoType<graphic::XGraphic>::get(),     0, 0 },
         {OUString(SC_UNO_PAGE_FTRBACKTRAN), SC_WID_UNO_FOOTERSET,cppu::UnoType<bool>::get(),                       0, 0 },
         {OUString(OLD_UNO_PAGE_FTRBACKCOL), SC_WID_UNO_FOOTERSET,::cppu::UnoType<sal_Int32>::get(),           0, 0 },
@@ -227,7 +228,7 @@ static const SfxItemPropertySet * lcl_GetPageStyleSet()
         {OUString(SC_UNO_PAGE_HDRBACKCOL),  SC_WID_UNO_HEADERSET,::cppu::UnoType<sal_Int32>::get(),           0, 0 },
         {OUString(SC_UNO_PAGE_HDRGRFFILT),  SC_WID_UNO_HEADERSET,::cppu::UnoType<OUString>::get(),     0, 0 },
         {OUString(SC_UNO_PAGE_HDRGRFLOC),   SC_WID_UNO_HEADERSET,::cppu::UnoType<style::GraphicLocation>::get(), 0, 0 },
-        {OUString(SC_UNO_PAGE_HDRGRFURL),   SC_WID_UNO_HEADERSET,::cppu::UnoType<OUString>::get(),     0, 0 },
+        {OUString(SC_UNO_PAGE_HDRGRFURL),   SC_WID_UNO_HEADERSET,::cppu::UnoType<OUString>::get(),            0, 0 },
         {OUString(SC_UNO_PAGE_HDRGRF),      SC_WID_UNO_HEADERSET,::cppu::UnoType<graphic::XGraphic>::get(),     0, 0 },
         {OUString(SC_UNO_PAGE_HDRBACKTRAN), SC_WID_UNO_HEADERSET,cppu::UnoType<bool>::get(),                       0, 0 },
         {OUString(OLD_UNO_PAGE_HDRBACKCOL), SC_WID_UNO_HEADERSET,::cppu::UnoType<sal_Int32>::get(),           0, 0 },
@@ -676,7 +677,7 @@ void SAL_CALL ScStyleFamilyObj::insertByName( const OUString& aName, const uno::
             if ( pStylePool->Find( aNameStr, eFamily ) )   // not available yet
                 throw container::ElementExistException();
 
-            (void)pStylePool->Make( aNameStr, eFamily, SFXSTYLEBIT_USERDEF );
+            (void)pStylePool->Make( aNameStr, eFamily, SfxStyleSearchBits::UserDefined );
 
             if ( eFamily == SfxStyleFamily::Para && !rDoc.IsImportingXML() )
                 rDoc.GetPool()->CellStyleCreated( aNameStr, &rDoc );
@@ -742,7 +743,7 @@ void SAL_CALL ScStyleFamilyObj::removeByName( const OUString& aName )
             else
             {
                 if ( rDoc.RemovePageStyleInUse( aString ) )
-                    pDocShell->PageStyleModified( ScGlobal::GetRscString(STR_STYLENAME_STANDARD), true );
+                    pDocShell->PageStyleModified( ScResId(STR_STYLENAME_STANDARD), true );
 
                 pStylePool->Remove( pStyle );
 
@@ -887,7 +888,7 @@ uno::Any SAL_CALL ScStyleFamilyObj::getPropertyValue( const OUString& sPropertyN
     }
     if (pResId)
     {
-        OUString sDisplayName(ScGlobal::GetRscString(pResId));
+        OUString sDisplayName(ScResId(pResId));
         aRet <<= sDisplayName;
     }
 

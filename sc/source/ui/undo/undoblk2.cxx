@@ -25,6 +25,7 @@
 #include <tabvwsh.hxx>
 #include <olinetab.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <global.hxx>
 #include <target.hxx>
 
@@ -54,7 +55,7 @@ ScUndoWidthOrHeight::ScUndoWidthOrHeight( ScDocShell* pNewDocShell,
     eMode( eNewMode ),
     pDrawUndo( nullptr )
 {
-    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
+    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
 }
 
 ScUndoWidthOrHeight::~ScUndoWidthOrHeight()
@@ -69,12 +70,12 @@ OUString ScUndoWidthOrHeight::GetComment() const
     // [ "optimal " ] "Column width" | "row height"
     return ( bWidth ?
         ( ( eMode == SC_SIZE_OPTIMAL )?
-        ScGlobal::GetRscString( STR_UNDO_OPTCOLWIDTH ) :
-        ScGlobal::GetRscString( STR_UNDO_COLWIDTH )
+        ScResId( STR_UNDO_OPTCOLWIDTH ) :
+        ScResId( STR_UNDO_COLWIDTH )
         ) :
         ( ( eMode == SC_SIZE_OPTIMAL )?
-        ScGlobal::GetRscString( STR_UNDO_OPTROWHEIGHT ) :
-        ScGlobal::GetRscString( STR_UNDO_ROWHEIGHT )
+        ScResId( STR_UNDO_OPTROWHEIGHT ) :
+        ScResId( STR_UNDO_ROWHEIGHT )
         ) );
 }
 

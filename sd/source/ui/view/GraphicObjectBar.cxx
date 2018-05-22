@@ -20,7 +20,6 @@
 #include <GraphicObjectBar.hxx>
 
 #include <limits.h>
-#include <vcl/msgbox.hxx>
 #include <svl/whiter.hxx>
 #include <svl/itempool.hxx>
 #include <sfx2/app.hxx>
@@ -46,7 +45,7 @@
 #include <drawdoc.hxx>
 
 using namespace sd;
-#define GraphicObjectBar
+#define ShellClass_GraphicObjectBar
 #include <sdslots.hxx>
 
 namespace sd {
@@ -130,7 +129,7 @@ void GraphicObjectBar::ExecuteFilter( SfxRequest const & rReq )
 
                 if( pPageView )
                 {
-                    SdrGrafObj* pFilteredObj = static_cast<SdrGrafObj*>( pObj->Clone() );
+                    SdrGrafObj* pFilteredObj = static_cast<SdrGrafObj*>( pObj->CloneSdrObject(pObj->getSdrModelFromSdrObject()) );
                     OUString    aStr = mpView->GetDescriptionOfMarkedObjects();
                     aStr += " " + SdResId(STR_UNDO_GRAFFILTER);
                     mpView->BegUndo( aStr );

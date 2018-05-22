@@ -18,14 +18,11 @@
  */
 
 #include <fuolbull.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/intitem.hxx>
 #include <editeng/outliner.hxx>
 #include <editeng/eeitem.hxx>
 #include <sfx2/request.hxx>
 #include <editeng/numitem.hxx>
-#include <sdresid.hxx>
-#include <strings.hrc>
 #include <strings.hxx>
 
 #include <editeng/editdata.hxx>

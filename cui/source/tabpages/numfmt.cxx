@@ -372,10 +372,10 @@ void SvxNumberFormatTabPage::Init_Impl()
     m_pLbLanguage->InsertLanguage( LANGUAGE_SYSTEM );
 }
 
-VclPtr<SfxTabPage> SvxNumberFormatTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SvxNumberFormatTabPage::Create( TabPageParent pParent,
                                                    const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxNumberFormatTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxNumberFormatTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 
@@ -1066,7 +1066,7 @@ void SvxNumberFormatTabPage::UpdateFormatListBox_Impl
         pNumFmtShell->CategoryChanged( nTmpCatPos,nFmtLbSelPos, aEntryList );
     }
     else
-        pNumFmtShell->LanguageChanged( m_pLbLanguage->GetSelectLanguage(),
+        pNumFmtShell->LanguageChanged( m_pLbLanguage->GetSelectedLanguage(),
                                        nFmtLbSelPos,aEntryList );
 
     REMOVE_DONTKNOW() // possibly UI-Enable

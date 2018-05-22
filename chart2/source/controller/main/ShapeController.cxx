@@ -39,6 +39,7 @@
 #include <editeng/spltitem.hxx>
 #include <svx/svxdlg.hxx>
 #include <editeng/widwitem.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <memory>
 
@@ -335,7 +336,7 @@ void ShapeController::executeDispatch_TextAttributes()
             if ( pFact )
             {
                 ScopedVclPtr< SfxAbstractTabDialog > pDlg(
-                    pFact->CreateTextTabDialog( pChartWindow, &aAttr, pDrawViewWrapper ) );
+                    pFact->CreateTextTabDialog( pChartWindow ? pChartWindow->GetFrameWeld() : nullptr, &aAttr, pDrawViewWrapper ) );
                 if ( pDlg.get() && ( pDlg->Execute() == RET_OK ) )
                 {
                     const SfxItemSet* pOutAttr = pDlg->GetOutputItemSet();
@@ -426,8 +427,9 @@ void ShapeController::executeDispatch_ObjectTitleDescription()
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 if ( pFact )
                 {
+                    VclPtr<ChartWindow> pChartWindow( m_pChartController->GetChartWindow() );
                     ScopedVclPtr< AbstractSvxObjectTitleDescDialog > pDlg(
-                        pFact->CreateSvxObjectTitleDescDialog( aTitle, aDescription ) );
+                        pFact->CreateSvxObjectTitleDescDialog(pChartWindow ? pChartWindow->GetFrameWeld() : nullptr, aTitle, aDescription ) );
                     if ( pDlg.get() && ( pDlg->Execute() == RET_OK ) )
                     {
                         pDlg->GetTitle( aTitle );
@@ -456,8 +458,9 @@ void ShapeController::executeDispatch_RenameObject()
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 if ( pFact )
                 {
+                    VclPtr<ChartWindow> pChartWindow( m_pChartController->GetChartWindow() );
                     ScopedVclPtr< AbstractSvxObjectNameDialog > pDlg(
-                        pFact->CreateSvxObjectNameDialog( aName ) );
+                        pFact->CreateSvxObjectNameDialog(pChartWindow ? pChartWindow->GetFrameWeld() : nullptr, aName));
                     pDlg->SetCheckNameHdl( LINK( this, ShapeController, CheckNameHdl ) );
                     if ( pDlg.get() && ( pDlg->Execute() == RET_OK ) )
                     {
@@ -612,9 +615,9 @@ SdrObject* ShapeController::getFirstAdditionalShape()
             }
         }
     }
-    catch ( const uno::Exception& ex )
+    catch ( const uno::Exception& )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return pFirstObj;
@@ -652,9 +655,9 @@ SdrObject* ShapeController::getLastAdditionalShape()
             }
         }
     }
-    catch ( const uno::Exception& ex )
+    catch ( const uno::Exception& )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return pLastObj;

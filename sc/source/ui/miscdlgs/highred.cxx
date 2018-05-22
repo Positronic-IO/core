@@ -21,11 +21,8 @@
 #include <reffact.hxx>
 #include <document.hxx>
 #include <docsh.hxx>
-#include <scresid.hxx>
-#include <globstr.hrc>
 
 #include <highred.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/app.hxx>
 
 //  class ScHighlightChgDlg
@@ -123,8 +120,8 @@ void ScHighlightChgDlg::Init()
 
     if ( !aChangeViewSet.GetTheRangeList().empty() )
     {
-        const ScRange* pRangeEntry = aChangeViewSet.GetTheRangeList().front();
-        OUString aRefStr(pRangeEntry->Format(ScRefFlags::RANGE_ABS_3D, pDoc));
+        const ScRange & rRangeEntry = aChangeViewSet.GetTheRangeList().front();
+        OUString aRefStr(rRangeEntry.Format(ScRefFlags::RANGE_ABS_3D, pDoc));
         m_pFilterCtr->SetRange(aRefStr);
     }
     m_pFilterCtr->Enable();

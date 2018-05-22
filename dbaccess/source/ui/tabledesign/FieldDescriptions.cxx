@@ -20,7 +20,6 @@
 #include <FieldDescriptions.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
-#include <strings.hrc>
 #include <strings.hxx>
 #include <com/sun/star/sdbc/ColumnValue.hpp>
 #include <stringconstants.hxx>
@@ -162,7 +161,7 @@ OFieldDescription::OFieldDescription(const Reference< XPropertySet >& xAffectedC
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
     }
@@ -248,7 +247,7 @@ void OFieldDescription::SetName(const OUString& _rName)
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -263,7 +262,7 @@ void OFieldDescription::SetHelpText(const OUString& _sHelpText)
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -278,7 +277,7 @@ void OFieldDescription::SetDescription(const OUString& _rDescription)
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -293,7 +292,7 @@ void OFieldDescription::SetDefaultValue(const Any& _rDefaultValue)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -308,7 +307,7 @@ void OFieldDescription::SetControlDefault(const Any& _rControlDefault)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -323,7 +322,7 @@ void OFieldDescription::SetAutoIncrementValue(const OUString& _sAutoIncValue)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -341,7 +340,7 @@ void OFieldDescription::SetType(const TOTypeInfoSP& _pType)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -360,7 +359,7 @@ void OFieldDescription::SetTypeValue(sal_Int32 _nType)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -375,7 +374,7 @@ void OFieldDescription::SetPrecision(sal_Int32 _rPrecision)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -390,7 +389,7 @@ void OFieldDescription::SetScale(sal_Int32 _rScale)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -405,7 +404,7 @@ void OFieldDescription::SetIsNullable(sal_Int32 _rIsNullable)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -420,7 +419,7 @@ void OFieldDescription::SetFormatKey(sal_Int32 _rFormatKey)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -435,7 +434,7 @@ void OFieldDescription::SetHorJustify(const SvxCellHorJustify& _rHorJustify)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -450,7 +449,7 @@ void OFieldDescription::SetAutoIncrement(bool _bAuto)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -617,7 +616,7 @@ void OFieldDescription::SetTypeName(const OUString& _sTypeName)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

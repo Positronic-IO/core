@@ -34,7 +34,6 @@
 #include <com/sun/star/ui/XUIConfigurationListener.hpp>
 #include <com/sun/star/ui/XUIConfigurationManager.hpp>
 #include <com/sun/star/ui/XImageManager.hpp>
-#include <com/sun/star/graphic/XGraphicProvider.hpp>
 #include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/lang/XSingleComponentFactory.hpp>
@@ -54,8 +53,7 @@ private:
     DECL_LINK( SelectToolbarEntry, SvTreeListBox*, void );
     DECL_LINK( MoveHdl, Button *, void );
 
-    DECL_LINK( AddToolbarHdl, Button *, void );
-    DECL_LINK( RemoveToolbarHdl, Button *, void );
+    DECL_LINK( GearHdl, MenuButton *, void );
 
     DECL_LINK( SelectCategory, ListBox&, void );
 

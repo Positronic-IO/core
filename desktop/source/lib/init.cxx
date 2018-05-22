@@ -80,6 +80,7 @@
 #include <tools/fract.hxx>
 #include <svtools/ctrltool.hxx>
 #include <svtools/langtab.hxx>
+#include <vcl/floatwin.hxx>
 #include <vcl/fontcharmap.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <vcl/ptrstyle.hxx>
@@ -92,6 +93,8 @@
 #include <unotools/configmgr.hxx>
 #include <unotools/syslocaleoptions.hxx>
 #include <unotools/mediadescriptor.hxx>
+#include <unotools/pathoptions.hxx>
+#include <unotools/tempfile.hxx>
 #include <osl/module.hxx>
 #include <comphelper/sequence.hxx>
 #include <sfx2/sfxbasemodel.hxx>
@@ -273,6 +276,20 @@ static boost::property_tree::ptree unoAnyToPropertyTree(const uno::Any& anyItem)
         aTree.put("value", OString::number(anyItem.get<sal_uInt32>()).getStr());
     else if (aType == "long")
         aTree.put("value", OString::number(anyItem.get<sal_Int32>()).getStr());
+    else if (aType == "[]any")
+    {
+        uno::Sequence<uno::Any> aSeq;
+        if (anyItem >>= aSeq)
+        {
+            boost::property_tree::ptree aSubTree;
+
+            for (auto i = 0; i < aSeq.getLength(); ++i)
+            {
+                aSubTree.add_child(OString::number(i).getStr(), unoAnyToPropertyTree(aSeq[i]));
+            }
+            aTree.add_child("value", aSubTree);
+        }
+    }
 
     // TODO: Add more as required
 
@@ -563,6 +580,8 @@ static void doc_paintWindow(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId
 
 static void doc_postWindow(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId, int nAction);
 
+static char* doc_getPartInfo(LibreOfficeKitDocument* pThis, int nPart);
+
 LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XComponent> &xComponent)
     : mxComponent(xComponent)
 {
@@ -617,6 +636,8 @@ LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XCompone
         m_pDocumentClass->postWindow = doc_postWindow;
 
         m_pDocumentClass->setViewLanguage = doc_setViewLanguage;
+
+        m_pDocumentClass->getPartInfo = doc_getPartInfo;
 
         gDocumentClass = m_pDocumentClass;
     }
@@ -1563,28 +1584,25 @@ static int doc_saveAs(LibreOfficeKitDocument* pThis, const char* sUrl, const cha
         // saveAs() is more like save-a-copy, which allows saving to any
         // random format like PDF or PNG.
         // It is not a real filter option, so we have to filter it out.
+        uno::Sequence<OUString> aOptionSeq = comphelper::string::convertCommaSeparated(aFilterOptions);
+        std::vector<OUString> aFilteredOptionVec;
         bool bTakeOwnership = false;
-        int nIndex = -1;
-        if (aFilterOptions == "TakeOwnership")
-        {
-            bTakeOwnership = true;
-            aFilterOptions.clear();
-        }
-        else if ((nIndex = aFilterOptions.indexOf(",TakeOwnership")) >= 0 || (nIndex = aFilterOptions.indexOf("TakeOwnership,")) >= 0)
-        {
-            OUString aFiltered;
-            if (nIndex > 0)
-                aFiltered = aFilterOptions.copy(0, nIndex);
-            if (nIndex + 14 < aFilterOptions.getLength())
-                aFiltered = aFiltered + aFilterOptions.copy(nIndex + 14);
-
-            bTakeOwnership = true;
-            aFilterOptions = aFiltered;
-        }
-
         MediaDescriptor aSaveMediaDescriptor;
+        for (const auto& rOption : aOptionSeq)
+        {
+            if (rOption == "TakeOwnership")
+                bTakeOwnership = true;
+            else if (rOption == "NoFileSync")
+                aSaveMediaDescriptor["NoFileSync"] <<= true;
+            else
+                aFilteredOptionVec.push_back(rOption);
+        }
+
         aSaveMediaDescriptor["Overwrite"] <<= true;
         aSaveMediaDescriptor["FilterName"] <<= aFilterName;
+
+        auto aFilteredOptionSeq = comphelper::containerToSequence<OUString>(aFilteredOptionVec);
+        aFilterOptions = comphelper::string::convertCommaSeparated(aFilteredOptionSeq);
         aSaveMediaDescriptor[MediaDescriptor::PROP_FILTEROPTIONS()] <<= aFilterOptions;
 
         // add interaction handler too
@@ -1841,6 +1859,24 @@ static void doc_setPart(LibreOfficeKitDocument* pThis, int nPart)
     }
 
     pDoc->setPart( nPart );
+}
+
+static char* doc_getPartInfo(LibreOfficeKitDocument* pThis, int nPart)
+{
+    SolarMutexGuard aGuard;
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        gImpl->maLastExceptionMsg = "Document doesn't support tiled rendering";
+        return nullptr;
+    }
+
+    OUString aPartInfo = pDoc->getPartInfo( nPart );
+    OString aString = OUStringToOString(aPartInfo, RTL_TEXTENCODING_UTF8);
+
+    char* pMemory = static_cast<char*>(malloc(aString.getLength() + 1));
+    strcpy(pMemory, aString.getStr());
+    return pMemory;
 }
 
 static char* doc_getPartPageRectangles(LibreOfficeKitDocument* pThis)
@@ -2805,7 +2841,6 @@ static char* getStyles(LibreOfficeKitDocument* pThis, const char* pCommand)
     // Header & Footer Styles
     {
         OUString sName;
-        bool bIsPhysical;
         boost::property_tree::ptree aChild;
         boost::property_tree::ptree aChildren;
         const OUString sPageStyles("PageStyles");
@@ -2817,6 +2852,7 @@ static char* getStyles(LibreOfficeKitDocument* pThis, const char* pCommand)
             uno::Sequence<OUString> aSeqNames = xContainer->getElementNames();
             for (sal_Int32 itName = 0; itName < aSeqNames.getLength(); itName++)
             {
+                bool bIsPhysical;
                 sName = aSeqNames[itName];
                 xProperty.set(xContainer->getByName(sName), uno::UNO_QUERY);
                 if (xProperty.is() && (xProperty->getPropertyValue("IsPhysical") >>= bIsPhysical) && bIsPhysical)
@@ -2825,8 +2861,6 @@ static char* getStyles(LibreOfficeKitDocument* pThis, const char* pCommand)
                     aChild.put("", sName.toUtf8());
                     aChildren.push_back(std::make_pair("", aChild));
                 }
-                else
-                    bIsPhysical = false;
             }
             aValues.add_child("HeaderFooter", aChildren);
         }
@@ -3402,10 +3436,12 @@ static void doc_postWindow(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWindo
         return;
     }
 
-    if (Dialog* pDialog = dynamic_cast<Dialog*>(pWindow.get()))
+    if (nAction == LOK_WINDOW_CLOSE)
     {
-        if (nAction == LOK_WINDOW_CLOSE)
+        if (Dialog* pDialog = dynamic_cast<Dialog*>(pWindow.get()))
             pDialog->Close();
+        else if (FloatingWindow* pFloatWin = dynamic_cast<FloatingWindow*>(pWindow.get()))
+            pFloatWin->EndPopupMode(FloatWinPopupEndFlags::Cancel | FloatWinPopupEndFlags::CloseAll);
     }
 }
 
@@ -3479,6 +3515,8 @@ static void lo_setOptionalFeatures(LibreOfficeKit* pThis, unsigned long long con
         comphelper::LibreOfficeKit::setTiledAnnotations(false);
     if (features & LOK_FEATURE_RANGE_HEADERS)
         comphelper::LibreOfficeKit::setRangeHeaders(true);
+    if (features & LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK)
+        comphelper::LibreOfficeKit::setViewIdForVisCursorInvalidation(true);
 }
 
 static void lo_setDocumentPassword(LibreOfficeKit* pThis,
@@ -3615,14 +3653,27 @@ static void lo_status_indicator_callback(void *data, comphelper::LibreOfficeKit:
 /// Used only by LibreOfficeKit when used by Online to pre-initialize
 static void preloadData()
 {
+    // Create user profile in the temp directory for loading the dictionaries
+    OUString sUserPath;
+    rtl::Bootstrap::get("UserInstallation", sUserPath);
+    utl::TempFile aTempDir(nullptr, true);
+    aTempDir.EnableKillingFile();
+    rtl::Bootstrap::set("UserInstallation", aTempDir.GetURL());
+
+    // Register the bundled extensions
+    desktop::Desktop::SynchronizeExtensionRepositories(true);
+    bool bAbort = desktop::Desktop::CheckExtensionDependencies();
+    if(bAbort)
+        std::cerr << "CheckExtensionDependencies failed" << std::endl;
+
     // preload all available dictionaries
     css::uno::Reference<css::linguistic2::XLinguServiceManager> xLngSvcMgr =
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
 
+    std::cerr << "Preloading dictionaries: ";
     css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
     uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
-    std::cerr << "Preloading dictionaries: ";
     for (auto &it : aLocales)
     {
         std::cerr << it.Language << "_" << it.Country << " ";
@@ -3643,6 +3694,9 @@ static void preloadData()
         xThesaurus->queryMeanings("forcefed", it, aNone);
     }
     std::cerr << "\n";
+
+    // Set user profile's path back to the original one
+    rtl::Bootstrap::set("UserInstallation", sUserPath);
 
     css::uno::Reference< css::ui::XAcceleratorConfiguration > xGlobalCfg;
     xGlobalCfg = css::ui::GlobalAcceleratorConfiguration::create(
@@ -3805,6 +3859,13 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
 
         if (eStage != PRE_INIT)
         {
+            SAL_INFO("lok", "Re-initialize temp paths");
+            SvtPathOptions aOptions;
+            OUString aNewTemp;
+            osl::FileBase::getTempDirURL(aNewTemp);
+            aOptions.SetTempPath(aNewTemp);
+            desktop::Desktop::CreateTemporaryDirectory();
+
             SAL_INFO("lok", "Enabling RequestHandler");
             RequestHandler::Enable(false);
             SAL_INFO("lok", "Starting soffice_main");

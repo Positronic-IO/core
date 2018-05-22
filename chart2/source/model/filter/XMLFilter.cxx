@@ -45,8 +45,10 @@
 #include <com/sun/star/xml/sax/Parser.hpp>
 #include <com/sun/star/xml/sax/SAXParseException.hpp>
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
-#include <com/sun/star/document/GraphicObjectResolver.hpp>
+#include <com/sun/star/document/GraphicStorageHandler.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -117,9 +119,9 @@ uno::Reference< embed::XStorage > lcl_getWriteStorage(
             xProp->setPropertyValue( "MediaType", uno::Any( _sMediaType ));
         }
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return xStorage;
 }
@@ -170,9 +172,9 @@ uno::Reference< embed::XStorage > lcl_getReadStorage(
 
         OSL_ENSURE( xStorage.is(), "No Storage" );
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     return xStorage;
@@ -297,15 +299,15 @@ ErrCode XMLFilter::impl_Import(
         if( ! xStorage.is())
             return ERRCODE_SFX_GENERAL;
 
-        Reference< document::XGraphicObjectResolver > xGraphicObjectResolver;
-        uno::Reference< lang::XMultiServiceFactory > xServiceFactory( xFactory, uno::UNO_QUERY);
-        if( xServiceFactory.is())
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
+        uno::Reference<lang::XMultiServiceFactory> xServiceFactory(xFactory, uno::UNO_QUERY);
+        if (xServiceFactory.is())
         {
-            uno::Sequence< uno::Any > aArgs(1);
+            uno::Sequence<uno::Any> aArgs(1);
             aArgs[0] <<= xStorage;
-            xGraphicObjectResolver.set(
+            xGraphicStorageHandler.set(
                 xServiceFactory->createInstanceWithArguments(
-                    "com.sun.star.comp.Svx.GraphicImportHelper", aArgs ), uno::UNO_QUERY );
+                    "com.sun.star.comp.Svx.GraphicImportHelper", aArgs), uno::UNO_QUERY);
         }
 
         // create XPropertySet with extra informatio for the filter
@@ -361,7 +363,7 @@ ErrCode XMLFilter::impl_Import(
             nWarning = impl_ImportStream(
                 sXML_metaStreamName,
                 "com.sun.star.comp.Chart.XMLOasisMetaImporter",
-                xStorage, xSaxParser, xFactory, xGraphicObjectResolver, xImportInfo );
+                xStorage, xSaxParser, xFactory, xGraphicStorageHandler, xImportInfo );
 
         // import styles
         ErrCode nTmpErr = impl_ImportStream(
@@ -369,7 +371,7 @@ ErrCode XMLFilter::impl_Import(
             bOasis
             ? OUString("com.sun.star.comp.Chart.XMLOasisStylesImporter")
             : OUString("com.sun.star.comp.Chart.XMLStylesImporter"),
-            xStorage, xSaxParser, xFactory, xGraphicObjectResolver, xImportInfo );
+            xStorage, xSaxParser, xFactory, xGraphicStorageHandler, xImportInfo );
         nWarning = nWarning != ERRCODE_NONE ? nWarning : nTmpErr;
 
         // import content
@@ -378,7 +380,7 @@ ErrCode XMLFilter::impl_Import(
             bOasis
             ? OUString("com.sun.star.comp.Chart.XMLOasisContentImporter")
             : OUString("com.sun.star.comp.Chart.XMLContentImporter"),
-            xStorage, xSaxParser, xFactory, xGraphicObjectResolver, xImportInfo );
+            xStorage, xSaxParser, xFactory, xGraphicStorageHandler, xImportInfo );
         nWarning = nWarning != ERRCODE_NONE ? nWarning : nContentWarning;
 
         // import of "content.xml" didn't work - try old "Content.xml" stream
@@ -387,12 +389,12 @@ ErrCode XMLFilter::impl_Import(
             nWarning = impl_ImportStream(
                 "Content.xml", // old content stream name
                 "com.sun.star.office.sax.importer.Chart",
-                xStorage, xSaxParser, xFactory, xGraphicObjectResolver, xImportInfo );
+                xStorage, xSaxParser, xFactory, xGraphicStorageHandler, xImportInfo );
         }
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
 
         // something went awry
         nWarning = ERRCODE_SFX_GENERAL;
@@ -407,7 +409,7 @@ ErrCode XMLFilter::impl_ImportStream(
     const Reference< embed::XStorage > & xStorage,
     const Reference< xml::sax::XParser > & xParser,
     const Reference< lang::XMultiComponentFactory > & xFactory,
-    const Reference< document::XGraphicObjectResolver > & xGraphicObjectResolver,
+    const Reference< document::XGraphicStorageHandler > & xGraphicStorageHandler,
     uno::Reference< beans::XPropertySet > const & xImportInfo )
 {
     ErrCode nWarning = ERRCODE_SFX_GENERAL;
@@ -437,7 +439,7 @@ ErrCode XMLFilter::impl_ImportStream(
             if( aParserInput.aInputStream.is())
             {
                 sal_Int32 nArgs = 0;
-                if( xGraphicObjectResolver.is())
+                if( xGraphicStorageHandler.is())
                     nArgs++;
                 if( xImportInfo.is())
                     nArgs++;
@@ -445,8 +447,8 @@ ErrCode XMLFilter::impl_ImportStream(
                 uno::Sequence< uno::Any > aFilterCompArgs( nArgs );
 
                 nArgs = 0;
-                if( xGraphicObjectResolver.is())
-                    aFilterCompArgs[nArgs++] <<= xGraphicObjectResolver;
+                if( xGraphicStorageHandler.is())
+                    aFilterCompArgs[nArgs++] <<= xGraphicStorageHandler;
                 if( xImportInfo.is())
                     aFilterCompArgs[ nArgs++ ] <<= xImportInfo;
 
@@ -500,9 +502,9 @@ ErrCode XMLFilter::impl_ImportStream(
         catch (const io::IOException&)
         {
         }
-        catch (const uno::Exception& rEx)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << rEx);
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -575,8 +577,8 @@ ErrCode XMLFilter::impl_Export(
             }
         }
 
-        Reference< document::XGraphicObjectResolver > xGraphicObjectResolver = document::GraphicObjectResolver::createWithStorage(
-            m_xContext, xStorage );
+        Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
+        xGraphicStorageHandler.set(document::GraphicStorageHandler::createWithStorage(m_xContext, xStorage));
 
         // property map for export info set
         comphelper::PropertyMapEntry const aExportInfoMap[] =
@@ -599,7 +601,7 @@ ErrCode XMLFilter::impl_Export(
             xInfoSet->setPropertyValue( "ExportTableNumberList", uno::Any( true ));
 
         sal_Int32 nArgs = 2;
-        if( xGraphicObjectResolver.is())
+        if( xGraphicStorageHandler.is())
             nArgs++;
 
         uno::Sequence< uno::Any > aFilterProperties( nArgs );
@@ -607,8 +609,8 @@ ErrCode XMLFilter::impl_Export(
             nArgs = 0;
             aFilterProperties[ nArgs++ ] <<= xInfoSet;
             aFilterProperties[ nArgs++ ] <<= xDocHandler;
-            if( xGraphicObjectResolver.is())
-                aFilterProperties[ nArgs++ ] <<= xGraphicObjectResolver;
+            if( xGraphicStorageHandler.is())
+                aFilterProperties[ nArgs++ ] <<= xGraphicStorageHandler;
         }
 
         // export meta information
@@ -636,17 +638,17 @@ ErrCode XMLFilter::impl_Export(
             xStorage, xSaxWriter, xServiceFactory, aFilterProperties );
         nWarning = nWarning != ERRCODE_NONE ? nWarning : nContentWarning;
 
-        Reference< lang::XComponent > xComp( xGraphicObjectResolver, uno::UNO_QUERY );
-        if( xComp.is())
+        Reference< lang::XComponent > xComp(xGraphicStorageHandler, uno::UNO_QUERY);
+        if (xComp.is())
             xComp->dispose();
 
         uno::Reference<embed::XTransactedObject> xTransact( xStorage ,uno::UNO_QUERY);
         if ( xTransact.is() )
             xTransact->commit();
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
 
         // something went awry
         nWarning = ERRCODE_SFX_GENERAL;
@@ -687,9 +689,9 @@ ErrCode XMLFilter::impl_ExportStream(
             xStreamProp->setPropertyValue( "Compressed", uno::Any( true ) );//@todo?
             xStreamProp->setPropertyValue( "UseCommonStoragePasswordEncryption", uno::Any( true ) );
         }
-        catch (const uno::Exception& rEx)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << rEx );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
 
         xActiveDataSource->setOutputStream(xOutputStream);
@@ -717,9 +719,9 @@ ErrCode XMLFilter::impl_ExportStream(
 
         xFilter->filter(m_aMediaDescriptor);
     }
-    catch (const uno::Exception& rEx)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << rEx );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return ERRCODE_NONE;
 }

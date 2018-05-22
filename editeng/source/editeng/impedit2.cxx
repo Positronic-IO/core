@@ -20,7 +20,6 @@
 
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 
 #include <editeng/lspcitem.hxx>
@@ -58,7 +57,6 @@
 #include <com/sun/star/text/CharacterCompressionType.hpp>
 #include <com/sun/star/i18n/InputSequenceCheckMode.hpp>
 
-#include <comphelper/processfactory.hxx>
 
 #include <sot/exchange.hxx>
 #include <sot/formats.hxx>
@@ -1909,19 +1907,7 @@ void ImpEditEngine::InitWritingDirections( sal_Int32 nPara )
     WritingDirectionInfos& rInfos = pParaPortion->aWritingDirectionInfos;
     rInfos.clear();
 
-    bool bCTL = false;
-    ScriptTypePosInfos& rTypes = pParaPortion->aScriptInfos;
-    for (ScriptTypePosInfo & rType : rTypes)
-    {
-        if ( rType.nScriptType == i18n::ScriptType::COMPLEX )
-           {
-            bCTL = true;
-            break;
-        }
-    }
-
-    const UBiDiLevel nBidiLevel = IsRightToLeft( nPara ) ? 1 /*RTL*/ : 0 /*LTR*/;
-    if ( ( bCTL || ( nBidiLevel == 1 /*RTL*/ ) ) && pParaPortion->GetNode()->Len() )
+    if (pParaPortion->GetNode()->Len())
     {
         const OUString aText = pParaPortion->GetNode()->GetString();
 
@@ -1931,6 +1917,7 @@ void ImpEditEngine::InitWritingDirections( sal_Int32 nPara )
         UBiDi* pBidi = ubidi_openSized( aText.getLength(), 0, &nError );
         nError = U_ZERO_ERROR;
 
+        const UBiDiLevel nBidiLevel = IsRightToLeft(nPara) ? 1 /*RTL*/ : 0 /*LTR*/;
         ubidi_setPara( pBidi, reinterpret_cast<const UChar *>(aText.getStr()), aText.getLength(), nBidiLevel, nullptr, &nError );
         nError = U_ZERO_ERROR;
 
@@ -1954,7 +1941,7 @@ void ImpEditEngine::InitWritingDirections( sal_Int32 nPara )
         ubidi_close( pBidi );
     }
 
-    // No infos mean no CTL and default dir is L2R...
+    // No infos mean ubidi error, default to LTR
     if ( rInfos.empty() )
         rInfos.emplace_back( 0, 0, pParaPortion->GetNode()->Len() );
 
@@ -2271,13 +2258,13 @@ EditPaM ImpEditEngine::ImpConnectParagraphs( ContentNode* pLeft, ContentNode* pR
         pLeft->GetWrongList()->SetInvalidRange(nInv, nEnd+1);
         // Take over misspelled words
         WrongList* pRWrongs = pRight->GetWrongList();
-        for (WrongList::iterator i = pRWrongs->begin(); i < pRWrongs->end(); ++i)
+        for (auto & elem : *pRWrongs)
         {
-            if (i->mnStart != 0)   // Not a subsequent
+            if (elem.mnStart != 0)   // Not a subsequent
             {
-                i->mnStart = i->mnStart + nEnd;
-                i->mnEnd = i->mnEnd + nEnd;
-                pLeft->GetWrongList()->push_back(*i);
+                elem.mnStart = elem.mnStart + nEnd;
+                elem.mnEnd = elem.mnEnd + nEnd;
+                pLeft->GetWrongList()->push_back(elem);
             }
         }
     }
@@ -2525,7 +2512,7 @@ EditPaM ImpEditEngine::AutoCorrect( const EditSelection& rCurSel, sal_Unicode c,
         // #i78661 allow application to turn off capitalization of
         // start sentence explicitly.
         // (This is done by setting IsFirstWordCapitalization to sal_False.)
-        bool bOldCapitalStartSentence = pAutoCorrect->IsAutoCorrFlag( CapitalStartSentence );
+        bool bOldCapitalStartSentence = pAutoCorrect->IsAutoCorrFlag( ACFlags::CapitalStartSentence );
         if (!IsFirstWordCapitalization())
         {
             ESelection aESel( CreateESel(aSel) );
@@ -2556,7 +2543,7 @@ EditPaM ImpEditEngine::AutoCorrect( const EditSelection& rCurSel, sal_Unicode c,
                     aSel.Max().GetIndex() <= aSecondWordSel.Min().GetIndex();
 
             if (bIsFirstWordInFirstPara)
-                pAutoCorrect->SetAutoCorrFlag( CapitalStartSentence, IsFirstWordCapitalization() );
+                pAutoCorrect->SetAutoCorrFlag( ACFlags::CapitalStartSentence, IsFirstWordCapitalization() );
         }
 
         ContentNode* pNode = aSel.Max().GetNode();
@@ -2570,7 +2557,7 @@ EditPaM ImpEditEngine::AutoCorrect( const EditSelection& rCurSel, sal_Unicode c,
 
         // #i78661 since the SvxAutoCorrect object used here is
         // shared we need to reset the value to its original state.
-        pAutoCorrect->SetAutoCorrFlag( CapitalStartSentence, bOldCapitalStartSentence );
+        pAutoCorrect->SetAutoCorrFlag( ACFlags::CapitalStartSentence, bOldCapitalStartSentence );
     }
     return aSel.Max();
 }
@@ -2856,19 +2843,19 @@ EditPaM ImpEditEngine::ImpInsertParaBreak( EditPaM& rPaM, bool bKeepEndingAttrib
         WrongList* pLWrongs = rPaM.GetNode()->GetWrongList();
         WrongList* pRWrongs = aPaM.GetNode()->GetWrongList();
         // take over misspelled words:
-        for(WrongList::iterator i = pLWrongs->begin(); i < pLWrongs->end(); ++i)
+        for (auto & elem : *pLWrongs)
         {
             // Correct only if really a word gets overlapped in the process of
             // Spell checking
-            if (i->mnStart > static_cast<size_t>(nEnd))
+            if (elem.mnStart > static_cast<size_t>(nEnd))
             {
-                pRWrongs->push_back(*i);
+                pRWrongs->push_back(elem);
                 editeng::MisspellRange& rRWrong = pRWrongs->back();
                 rRWrong.mnStart = rRWrong.mnStart - nEnd;
                 rRWrong.mnEnd = rRWrong.mnEnd - nEnd;
             }
-            else if (i->mnStart < static_cast<size_t>(nEnd) && i->mnEnd > static_cast<size_t>(nEnd))
-                i->mnEnd = nEnd;
+            else if (elem.mnStart < static_cast<size_t>(nEnd) && elem.mnEnd > static_cast<size_t>(nEnd))
+                elem.mnEnd = nEnd;
         }
         sal_Int32 nInv = nEnd ? nEnd-1 : nEnd;
         if ( nEnd )
@@ -2981,7 +2968,7 @@ bool ImpEditEngine::UpdateFields()
                 rField.Reset();
 
                 if ( aStatus.MarkFields() )
-                    rField.GetFieldColor() = new Color( GetColorConfig().GetColorValue( svtools::WRITERFIELDSHADINGS ).nColor );
+                    rField.GetFieldColor() = GetColorConfig().GetColorValue( svtools::WRITERFIELDSHADINGS ).nColor;
 
                 const OUString aFldValue =
                     GetEditEnginePtr()->CalcFieldValue(
@@ -3097,51 +3084,65 @@ sal_uInt32 ImpEditEngine::CalcTextWidth( bool bIgnoreExtraSpace )
     if ( !IsFormatted() && !IsFormatting() )
         FormatDoc();
 
-    long nMaxWidth = 0;
-    long nCurWidth = 0;
-
+    sal_uInt32 nMaxWidth = 0;
 
     // Over all the paragraphs ...
 
     sal_Int32 nParas = GetParaPortions().Count();
     for ( sal_Int32 nPara = 0; nPara < nParas; nPara++ )
     {
-        ParaPortion* pPortion = GetParaPortions()[nPara];
-        if ( pPortion->IsVisible() )
+        nMaxWidth = std::max(nMaxWidth, CalcParaWidth(nPara, bIgnoreExtraSpace));
+    }
+
+    return nMaxWidth;
+}
+
+sal_uInt32 ImpEditEngine::CalcParaWidth( sal_Int32 nPara, bool bIgnoreExtraSpace )
+{
+    // If still not formatted and not in the process.
+    // Will be brought in the formatting for AutoPageSize.
+    if ( !IsFormatted() && !IsFormatting() )
+        FormatDoc();
+
+    long nMaxWidth = 0;
+
+    // Over all the paragraphs ...
+
+    ParaPortion* pPortion = GetParaPortions()[nPara];
+    if ( pPortion->IsVisible() )
+    {
+        const SvxLRSpaceItem& rLRItem = GetLRSpaceItem( pPortion->GetNode() );
+        sal_Int32 nSpaceBeforeAndMinLabelWidth = GetSpaceBeforeAndMinLabelWidth( pPortion->GetNode() );
+
+
+        // On the lines of the paragraph ...
+
+        sal_Int32 nLines = pPortion->GetLines().Count();
+        for ( sal_Int32 nLine = 0; nLine < nLines; nLine++ )
         {
-            const SvxLRSpaceItem& rLRItem = GetLRSpaceItem( pPortion->GetNode() );
-            sal_Int32 nSpaceBeforeAndMinLabelWidth = GetSpaceBeforeAndMinLabelWidth( pPortion->GetNode() );
-
-
-            // On the lines of the paragraph ...
-
-            sal_Int32 nLines = pPortion->GetLines().Count();
-            for ( sal_Int32 nLine = 0; nLine < nLines; nLine++ )
+            EditLine& rLine = pPortion->GetLines()[nLine];
+            // nCurWidth = pLine->GetStartPosX();
+            // For Center- or Right- alignment it depends on the paper
+            // width, here not preferred. I general, it is best not leave it
+            // to StartPosX, also the right indents have to be taken into
+            // account!
+            long nCurWidth = GetXValue( rLRItem.GetTextLeft() + nSpaceBeforeAndMinLabelWidth );
+            if ( nLine == 0 )
             {
-                EditLine& rLine = pPortion->GetLines()[nLine];
-                // nCurWidth = pLine->GetStartPosX();
-                // For Center- or Right- alignment it depends on the paper
-                // width, here not preferred. I general, it is best not leave it
-                // to StartPosX, also the right indents have to be taken into
-                // account!
-                nCurWidth = GetXValue( rLRItem.GetTextLeft() + nSpaceBeforeAndMinLabelWidth );
-                if ( nLine == 0 )
+                long nFI = GetXValue( rLRItem.GetTextFirstLineOfst() );
+                nCurWidth -= nFI;
+                if ( pPortion->GetBulletX() > nCurWidth )
                 {
-                    long nFI = GetXValue( rLRItem.GetTextFirstLineOfst() );
-                    nCurWidth -= nFI;
+                    nCurWidth += nFI;   // LI?
                     if ( pPortion->GetBulletX() > nCurWidth )
-                    {
-                        nCurWidth += nFI;   // LI?
-                        if ( pPortion->GetBulletX() > nCurWidth )
-                            nCurWidth = pPortion->GetBulletX();
-                    }
+                        nCurWidth = pPortion->GetBulletX();
                 }
-                nCurWidth += GetXValue( rLRItem.GetRight() );
-                nCurWidth += CalcLineWidth( pPortion, &rLine, bIgnoreExtraSpace );
-                if ( nCurWidth > nMaxWidth )
-                {
-                    nMaxWidth = nCurWidth;
-                }
+            }
+            nCurWidth += GetXValue( rLRItem.GetRight() );
+            nCurWidth += CalcLineWidth( pPortion, &rLine, bIgnoreExtraSpace );
+            if ( nCurWidth > nMaxWidth )
+            {
+                nMaxWidth = nCurWidth;
             }
         }
     }

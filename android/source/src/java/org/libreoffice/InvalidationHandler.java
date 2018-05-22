@@ -62,6 +62,9 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
             case Document.CALLBACK_INVALIDATE_TILES:
                 invalidateTiles(payload);
                 break;
+            case Document.CALLBACK_UNO_COMMAND_RESULT:
+                unoCommandResult(payload);
+                break;
             case Document.CALLBACK_INVALIDATE_VISIBLE_CURSOR:
                 invalidateCursor(payload);
                 break;
@@ -113,8 +116,24 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
             case Document.CALLBACK_DOCUMENT_PASSWORD:
                 documentPassword();
                 break;
+            case Document.CALLBACK_DOCUMENT_SIZE_CHANGED:
+                pageSizeChanged(payload);
             default:
+
                 Log.d(LOGTAG, "LOK_CALLBACK uncaught: " + messageID + " : " + payload);
+        }
+    }
+
+    private void unoCommandResult(String payload) {
+        try {
+            JSONObject payloadObject = new JSONObject(payload);
+            if (payloadObject.getString("commandName").equals(".uno:Save")) {
+                if (payloadObject.getString("success").equals("true")) {
+                    mContext.saveFilesToCloud();
+                }
+            }
+        }catch(JSONException e){
+            e.printStackTrace();
         }
     }
 
@@ -229,6 +248,15 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
         }
 
         LOKitShell.moveViewportTo(mContext, new PointF(newLeft, newTop), newZoom);
+    }
+
+    private void pageSizeChanged(String payload){
+        if(mContext.getTileProvider().isTextDocument()){
+            String[] bounds = payload.split(",");
+            int pageWidth = Integer.parseInt(bounds[0]);
+            int pageHeight = Integer.parseInt(bounds[1].trim());
+            LOKitShell.sendEvent(new LOEvent(LOEvent.PAGE_SIZE_CHANGED, pageWidth, pageHeight));
+        }
     }
 
     private void stateChanged(String payload) {
@@ -443,6 +471,7 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
             if (mContext.isSpreadsheet()) {
                 mDocumentOverlay.showHeaderSelection(null);
             }
+            mContext.getToolbarController().showHideClipboardCutAndCopy(false);
         } else {
             List<RectF> rectangles = convertPayloadToRectangles(payload);
             if (mState != OverlayState.SELECTION) {
@@ -453,6 +482,8 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
             if (mContext.isSpreadsheet()) {
                 mDocumentOverlay.showHeaderSelection(rectangles.get(0));
             }
+            String selectedText = mContext.getTileProvider().getTextSelection("");
+            mContext.getToolbarController().showClipboardActions(selectedText);
         }
     }
 
@@ -585,14 +616,18 @@ public class InvalidationHandler implements Document.MessageCallback, Office.Mes
      * Handle a transition to OverlayState.TRANSITION state.
      */
     private void handleTransitionState(OverlayState previous) {
-        if (previous == OverlayState.SELECTION) {
-            mDocumentOverlay.hideHandle(SelectionHandle.HandleType.START);
-            mDocumentOverlay.hideHandle(SelectionHandle.HandleType.END);
-            mDocumentOverlay.hideSelections();
-        } else if (previous == OverlayState.CURSOR) {
-            mDocumentOverlay.hideHandle(SelectionHandle.HandleType.MIDDLE);
-        } else if (previous == OverlayState.GRAPHIC_SELECTION) {
-            mDocumentOverlay.hideGraphicSelection();
+        switch (previous) {
+            case SELECTION:
+                mDocumentOverlay.hideHandle(SelectionHandle.HandleType.START);
+                mDocumentOverlay.hideHandle(SelectionHandle.HandleType.END);
+                mDocumentOverlay.hideSelections();
+                break;
+            case CURSOR:
+                mDocumentOverlay.hideHandle(SelectionHandle.HandleType.MIDDLE);
+                break;
+            case GRAPHIC_SELECTION:
+                mDocumentOverlay.hideGraphicSelection();
+                break;
         }
     }
 

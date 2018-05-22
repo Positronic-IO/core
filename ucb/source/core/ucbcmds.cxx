@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <osl/diagnose.h>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/exc_hlp.hxx>
@@ -216,9 +215,8 @@ public:
 
 
 CommandProcessorInfo::CommandProcessorInfo()
+    : m_pInfo( new uno::Sequence< ucb::CommandInfo >( 3 ) )
 {
-    m_pInfo.reset( new uno::Sequence< ucb::CommandInfo >( 2 ) );
-
     (*m_pInfo)[ 0 ]
         = ucb::CommandInfo(
             GETCOMMANDINFO_NAME, // Name
@@ -241,7 +239,7 @@ CommandProcessorInfo::CommandProcessorInfo()
 uno::Sequence< ucb::CommandInfo > SAL_CALL
 CommandProcessorInfo::getCommands()
 {
-    return uno::Sequence< ucb::CommandInfo >( *m_pInfo );
+    return *m_pInfo;
 }
 
 
@@ -252,7 +250,7 @@ CommandProcessorInfo::getCommandInfoByName( const OUString& Name )
     for ( sal_Int32 n = 0; n < m_pInfo->getLength(); ++n )
     {
         if ( (*m_pInfo)[ n ].Name == Name )
-            return ucb::CommandInfo( (*m_pInfo)[ n ] );
+            return (*m_pInfo)[ n ];
     }
 
     throw ucb::UnsupportedCommandException();
@@ -266,7 +264,7 @@ CommandProcessorInfo::getCommandInfoByHandle( sal_Int32 Handle )
     for ( sal_Int32 n = 0; n < m_pInfo->getLength(); ++n )
     {
         if ( (*m_pInfo)[ n ].Handle == Handle )
-            return ucb::CommandInfo( (*m_pInfo)[ n ] );
+            return (*m_pInfo)[ n ];
     }
 
     throw ucb::UnsupportedCommandException();

@@ -74,15 +74,7 @@ using namespace ::toolkit;
 uno::Reference< graphic::XGraphic >
 ImageHelper::getGraphicAndGraphicObjectFromURL_nothrow( uno::Reference< graphic::XGraphicObject >& xOutGraphicObj, const OUString& _rURL )
 {
-    if ( _rURL.startsWith( UNO_NAME_GRAPHOBJ_URLPREFIX ) )
-    {
-        // graphic manager uniqueid
-        OUString sID = _rURL.copy( sizeof( UNO_NAME_GRAPHOBJ_URLPREFIX ) - 1 );
-        xOutGraphicObj = graphic::GraphicObject::createWithId( ::comphelper::getProcessComponentContext(), sID );
-    }
-    else // linked
-        xOutGraphicObj = nullptr; // release the GraphicObject
-
+    xOutGraphicObj = nullptr;
     return ImageHelper::getGraphicFromURL_nothrow( _rURL );
 }
 
@@ -104,7 +96,7 @@ ImageHelper::getGraphicFromURL_nothrow( const OUString& _rURL )
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
 
     return xGraphic;
@@ -682,8 +674,8 @@ void SAL_CALL GraphicControlModel::setFastPropertyValue_NoBroadcast( sal_Int32 n
     }
     catch( const css::uno::Exception& )
     {
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
         OSL_FAIL( "GraphicControlModel::setFastPropertyValue_NoBroadcast: caught an exception while aligning the ImagePosition/ImageAlign properties!" );
-        DBG_UNHANDLED_EXCEPTION();
         mbAdjustingImagePosition = false;
     }
 }

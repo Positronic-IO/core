@@ -22,10 +22,6 @@
 
 #include <cppuhelper/factory.hxx>
 
-#include <xmlsec/xmlelementwrapper_xmlsecimpl.hxx>
-#include <xmlsec/xmldocumentwrapper_xmlsecimpl.hxx>
-#include "xsec_xmlsec.hxx"
-
 #include <config_gpgme.h>
 #if HAVE_FEATURE_GPGME
 # include <gpg/xmlsignature_gpgimpl.hxx>
@@ -39,7 +35,7 @@ using namespace ::com::sun::star::lang;
 extern "C"
 {
 
-SAL_DLLPUBLIC_EXPORT void* xsec_xmlsec_component_getFactory( const sal_Char* pImplName , void* pServiceManager , void* pRegistryKey )
+SAL_DLLPUBLIC_EXPORT void* xsec_xmlsec_component_getFactory( const sal_Char* pImplName , void* pServiceManager , void* /*pRegistryKey*/ )
 {
     void* pRet = nullptr;
     Reference< XInterface > xFactory ;
@@ -54,37 +50,12 @@ SAL_DLLPUBLIC_EXPORT void* xsec_xmlsec_component_getFactory( const sal_Char* pIm
         {
             xFactory = SEInitializerGpg::impl_createFactory( static_cast< XMultiServiceFactory* >( pServiceManager ) ) ;
         }
-        else
 #endif
-            if( XMLElementWrapper_XmlSecImpl_getImplementationName().equalsAscii( pImplName ) )
-        {
-            xFactory = cppu::createSingleComponentFactory(
-                XMLElementWrapper_XmlSecImpl_createInstance,
-                OUString::createFromAscii( pImplName ),
-                XMLElementWrapper_XmlSecImpl_getSupportedServiceNames() );
-        }
-        else if( XMLDocumentWrapper_XmlSecImpl_getImplementationName().equalsAscii( pImplName ) )
-        {
-            xFactory = cppu::createSingleComponentFactory(
-                XMLDocumentWrapper_XmlSecImpl_createInstance,
-                OUString::createFromAscii( pImplName ),
-                XMLDocumentWrapper_XmlSecImpl_getSupportedServiceNames() );
-        }
     }
 
     if( xFactory.is() ) {
         xFactory->acquire() ;
         pRet = xFactory.get() ;
-    } else {
-        pRet = nss_component_getFactory( pImplName, pServiceManager, pRegistryKey ) ;
-        if( pRet != nullptr )
-            return pRet ;
-
-#if defined( XMLSEC_CRYPTO_MSCRYPTO )
-        pRet = mscrypt_component_getFactory( pImplName, pServiceManager, pRegistryKey ) ;
-        if( pRet != nullptr )
-            return pRet ;
-#endif
     }
 
     return pRet ;

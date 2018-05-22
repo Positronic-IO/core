@@ -8,6 +8,11 @@
           <value xml:lang="en-US">Go to Line...</value>
         </prop>
       </node>
+      <node oor:name=".uno:RepeatSearch" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Repeat Search</value>
+        </prop>
+      </node>
       <node oor:name=".uno:ShowLines" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Line Numbers</value>
@@ -55,7 +60,7 @@
       </node>
       <node oor:name=".uno:InsertFormHScroll" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">Form Horizonal Scroll Bar</value>
+          <value xml:lang="en-US">Form Horizontal Scroll Bar</value>
         </prop>
         <prop oor:name="Properties" oor:type="xs:int">
           <value>1</value>

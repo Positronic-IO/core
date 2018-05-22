@@ -48,7 +48,6 @@
 #include <columniterator.hxx>
 #include <types.hxx>
 #include <fillinfo.hxx>
-#include <globstr.hrc>
 #include <tokenarray.hxx>
 #include <scopetools.hxx>
 #include <dociter.hxx>
@@ -355,9 +354,9 @@ void Test::testRangeList()
     m_pDoc->InsertTab(0, "foo");
 
     ScRangeList aRL;
-    aRL.Append(ScRange(1,1,0,3,10,0));
+    aRL.push_back(ScRange(1,1,0,3,10,0));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("List should have one range.", size_t(1), aRL.size());
-    const ScRange* p = aRL[0];
+    const ScRange* p = &aRL[0];
     CPPUNIT_ASSERT_MESSAGE("Failed to get the range object.", p);
     CPPUNIT_ASSERT_MESSAGE("Wrong range.", p->aStart == ScAddress(1,1,0) && p->aEnd == ScAddress(3,10,0));
 
@@ -582,8 +581,8 @@ void Test::testSelectionFunction()
 
     // Select B2:B8 & D2:D8 disjoint region.
     ScRangeList aRanges;
-    aRanges.Append(ScRange(1,1,0,1,7,0)); // B2:B8
-    aRanges.Append(ScRange(3,1,0,3,7,0)); // D2:D8
+    aRanges.push_back(ScRange(1,1,0,1,7,0)); // B2:B8
+    aRanges.push_back(ScRange(3,1,0,3,7,0)); // D2:D8
     ScMarkData aMark;
     aMark.MarkFromRangeList(aRanges, true);
 
@@ -703,8 +702,8 @@ void Test::testSelectionFunction()
 
     // Mark B2 and C3 on first sheet.
     aRanges.RemoveAll();
-    aRanges.Append(ScRange(1,1,0)); // B2
-    aRanges.Append(ScRange(2,2,0)); // C3
+    aRanges.push_back(ScRange(1,1,0)); // B2
+    aRanges.push_back(ScRange(2,2,0)); // C3
     aMark.MarkFromRangeList(aRanges, true);
     // Additionally select third sheet.
     aMark.SelectTable(2, true);
@@ -1511,10 +1510,10 @@ void Test::testNamedRange()
 
     m_pDoc->SetValue (0, 0, 0, 101);
 
-    ScRangeName* pNames = new ScRangeName;
-    bool bSuccess = insertRangeNames(m_pDoc, pNames, aNames, aNames + SAL_N_ELEMENTS(aNames));
+    std::unique_ptr<ScRangeName> pNames(new ScRangeName);
+    bool bSuccess = insertRangeNames(m_pDoc, pNames.get(), aNames, aNames + SAL_N_ELEMENTS(aNames));
     CPPUNIT_ASSERT_MESSAGE("Failed to insert range names.", bSuccess);
-    m_pDoc->SetRangeName(pNames);
+    m_pDoc->SetRangeName(std::move(pNames));
 
     ScRangeName* pNewRanges = m_pDoc->GetRangeName();
     CPPUNIT_ASSERT(pNewRanges);
@@ -1537,12 +1536,12 @@ void Test::testNamedRange()
     ASSERT_DOUBLES_EQUAL_MESSAGE ("calculation failed", 1.0, result);
 
     // Test copy-ability of range names.
-    ScRangeName* pCopiedRanges = new ScRangeName(*pNewRanges);
-    m_pDoc->SetRangeName(pCopiedRanges);
+    std::unique_ptr<ScRangeName> pCopiedRanges(new ScRangeName(*pNewRanges));
+    m_pDoc->SetRangeName(std::move(pCopiedRanges));
     // Make sure the index lookup still works.
     for (size_t i = 0; i < SAL_N_ELEMENTS(aNames); ++i)
     {
-        const ScRangeData* p = pCopiedRanges->findByIndex(aNames[i].mnIndex);
+        const ScRangeData* p = m_pDoc->GetRangeName()->findByIndex(aNames[i].mnIndex);
         CPPUNIT_ASSERT_MESSAGE("lookup of range name by index failed with the copied instance.", p);
         OUString aName = p->GetName();
         CPPUNIT_ASSERT_MESSAGE("wrong range name is retrieved with the copied instance.", aName.equalsAscii(aNames[i].mpName));
@@ -1553,12 +1552,12 @@ void Test::testNamedRange()
     ScRangeData* pLocal2 = new ScRangeData( m_pDoc, "local2", "$Sheet1.$A$1");
     ScRangeData* pLocal3 = new ScRangeData( m_pDoc, "local3", "Sheet1.$A$1");
     ScRangeData* pLocal4 = new ScRangeData( m_pDoc, "local4", "$A$1"); // implicit relative sheet reference
-    ScRangeName* pLocalRangeName1 = new ScRangeName;
+    std::unique_ptr<ScRangeName> pLocalRangeName1(new ScRangeName);
     pLocalRangeName1->insert(pLocal1);
     pLocalRangeName1->insert(pLocal2);
     pLocalRangeName1->insert(pLocal3);
     pLocalRangeName1->insert(pLocal4);
-    m_pDoc->SetRangeName(0, pLocalRangeName1);
+    m_pDoc->SetRangeName(0, std::move(pLocalRangeName1));
 
     CPPUNIT_ASSERT_MESSAGE ("failed to insert sheet", m_pDoc->InsertTab (1, "Sheet2"));
 
@@ -1588,10 +1587,10 @@ void Test::testInsertNameList()
         { "MyRange3", "$Test.$C$1:$C$100", 3 }
     };
 
-    ScRangeName* pNames = new ScRangeName;
-    bool bSuccess = insertRangeNames(m_pDoc, pNames, aNames, aNames + SAL_N_ELEMENTS(aNames));
+    std::unique_ptr<ScRangeName> pNames(new ScRangeName);
+    bool bSuccess = insertRangeNames(m_pDoc, pNames.get(), aNames, aNames + SAL_N_ELEMENTS(aNames));
     CPPUNIT_ASSERT_MESSAGE("Failed to insert range names.", bSuccess);
-    m_pDoc->SetRangeName(pNames);
+    m_pDoc->SetRangeName(std::move(pNames));
 
     ScDocFunc& rDocFunc = getDocShell().GetDocFunc();
     ScAddress aPos(1,1,0);
@@ -2708,7 +2707,7 @@ void Test::testGraphicsInGroup()
     {
         //Add a square
         tools::Rectangle aOrigRect(2,2,100,100);
-        SdrRectObj *pObj = new SdrRectObj(aOrigRect);
+        SdrRectObj *pObj = new SdrRectObj(*pDrawLayer, aOrigRect);
         pPage->InsertObject(pObj);
         const tools::Rectangle &rNewRect = pObj->GetLogicRect();
         CPPUNIT_ASSERT_EQUAL_MESSAGE("must have equal position and size",
@@ -2726,32 +2725,36 @@ void Test::testGraphicsInGroup()
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Should not change when page anchored",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
-        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, true);
         CPPUNIT_ASSERT_EQUAL_MESSAGE("That shouldn't change size or positioning",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
         m_pDoc->ShowRows(0, 100, 0, false);
         m_pDoc->SetDrawPageSize(0);
+
+        const long TOLERANCE = 30; //30 hmm
+
         CPPUNIT_ASSERT_MESSAGE("Left and Right should be unchanged",
-            aOrigRect.Left() == rNewRect.Left() && aOrigRect.Right() == rNewRect.Right());
+            testEqualsWithTolerance(aOrigRect.Left(), rNewRect.Left(), TOLERANCE) &&
+            testEqualsWithTolerance(aOrigRect.Right(), rNewRect.Right(), TOLERANCE));
         CPPUNIT_ASSERT_MESSAGE("Height should be minimum allowed height",
             (rNewRect.Bottom() - rNewRect.Top()) <= 1);
         m_pDoc->ShowRows(0, 100, 0, true);
         m_pDoc->SetDrawPageSize(0);
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Should not change when page anchored",
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Should not change when cell anchored",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
     }
 
     {
         // Add a circle.
         tools::Rectangle aOrigRect = tools::Rectangle(10,10,210,210); // 200 x 200
-        SdrCircObj* pObj = new SdrCircObj(OBJ_CIRC, aOrigRect);
+        SdrCircObj* pObj = new SdrCircObj(*pDrawLayer, OBJ_CIRC, aOrigRect);
         pPage->InsertObject(pObj);
         const tools::Rectangle& rNewRect = pObj->GetLogicRect();
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Position and size of the circle shouldn't change when inserted into the page.",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
-        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, false);
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Size changed when cell anchored. Not good.",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
@@ -2777,14 +2780,14 @@ void Test::testGraphicsInGroup()
         tools::Rectangle aOrigRect(10,200,110,300); // 100 x 100
         aTempPoly.append(basegfx::B2DPoint(aStartPos.X(), aStartPos.Y()));
         aTempPoly.append(basegfx::B2DPoint(aEndPos.X(), aEndPos.Y()));
-        SdrPathObj* pObj = new SdrPathObj(OBJ_LINE, basegfx::B2DPolyPolygon(aTempPoly));
+        SdrPathObj* pObj = new SdrPathObj(*pDrawLayer, OBJ_LINE, basegfx::B2DPolyPolygon(aTempPoly));
         pObj->NbcSetLogicRect(aOrigRect);
         pPage->InsertObject(pObj);
         const tools::Rectangle& rNewRect = pObj->GetLogicRect();
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Size differ.",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
-        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, false);
         CPPUNIT_ASSERT_EQUAL_MESSAGE("Size changed when cell-anchored. Not good.",
                                const_cast<const tools::Rectangle &>(aOrigRect), rNewRect);
 
@@ -2818,9 +2821,9 @@ void Test::testGraphicsOnSheetMove()
 
     // Insert an object.
     tools::Rectangle aObjRect(2,2,100,100);
-    SdrObject* pObj = new SdrRectObj(aObjRect);
+    SdrObject* pObj = new SdrRectObj(*pDrawLayer, aObjRect);
     pPage->InsertObject(pObj);
-    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, false);
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("There should be one object on the 1st sheet.", static_cast<size_t>(1), pPage->GetObjCount());
 
@@ -3041,7 +3044,7 @@ void Test::testAutofilter()
                 m_pDoc->SetString(j, i, 0, OUString::createFromAscii(aData[i][j]));
 
     ScDBData* pDBData = new ScDBData(aDBName, 0, 0, 0, nCols-1, nRows-1);
-    m_pDoc->SetAnonymousDBData(0,pDBData);
+    m_pDoc->SetAnonymousDBData(0, std::unique_ptr<ScDBData>(pDBData));
 
     pDBData->SetAutoFilter(true);
     ScRange aRange;
@@ -3117,7 +3120,7 @@ void Test::testAutoFilterTimeValue()
     m_pDoc->SetValue(ScAddress(0,2,0), 265);
 
     ScDBData* pDBData = new ScDBData(STR_DB_GLOBAL_NONAME, 0, 0, 0, 0, 2);
-    m_pDoc->SetAnonymousDBData(0, pDBData);
+    m_pDoc->SetAnonymousDBData(0, std::unique_ptr<ScDBData>(pDBData));
 
     // Apply the "hour:minute:second" format to A2:A3.
     SvNumberFormatter* pFormatter = m_pDoc->GetFormatTable();
@@ -3192,7 +3195,7 @@ void Test::testAdvancedFilter()
     }
 
     ScDBData* pDBData = new ScDBData(STR_DB_GLOBAL_NONAME, 0, 0, 0, 1, 10);
-    m_pDoc->SetAnonymousDBData(0, pDBData);
+    m_pDoc->SetAnonymousDBData(0, std::unique_ptr<ScDBData>(pDBData));
 
     ScRange aDataRange(0,0,0,1,10,0);
     ScRange aFilterRuleRange(0,12,0,1,13,0);
@@ -3278,17 +3281,17 @@ void Test::testCopyPaste()
     ScRangeData* pGlobal = new ScRangeData( m_pDoc, "global", aAdr);
     const OUString aGlobal2Symbol("$Sheet1.$A$1:$A$23");
     ScRangeData* pGlobal2 = new ScRangeData( m_pDoc, "global2", aGlobal2Symbol);
-    ScRangeName* pGlobalRangeName = new ScRangeName();
+    std::unique_ptr<ScRangeName> pGlobalRangeName(new ScRangeName());
     pGlobalRangeName->insert(pGlobal);
     pGlobalRangeName->insert(pGlobal2);
-    ScRangeName* pLocalRangeName1 = new ScRangeName();
+    std::unique_ptr<ScRangeName> pLocalRangeName1(new ScRangeName());
     pLocalRangeName1->insert(pLocal1);
     pLocalRangeName1->insert(pLocal2);
     pLocalRangeName1->insert(pLocal3);
     pLocalRangeName1->insert(pLocal4);
     pLocalRangeName1->insert(pLocal5);
-    m_pDoc->SetRangeName(pGlobalRangeName);
-    m_pDoc->SetRangeName(0, pLocalRangeName1);
+    m_pDoc->SetRangeName(std::move(pGlobalRangeName));
+    m_pDoc->SetRangeName(0, std::move(pLocalRangeName1));
 
     // Add formula to B1.
     OUString aFormulaString("=local1+global+SUM($C$1:$D$4)+local3+local4+local5");
@@ -3566,9 +3569,9 @@ void Test::testCopyPasteMultiRange()
     // Copy A2:B2, A4:B4, and A6:B6 to clipboard.
     ScDocument aClipDoc(SCDOCMODE_CLIP);
     ScClipParam aClipParam;
-    aClipParam.maRanges.Append(ScRange(0,1,0,1,1,0)); // A2:B2
-    aClipParam.maRanges.Append(ScRange(0,3,0,1,3,0)); // A4:B4
-    aClipParam.maRanges.Append(ScRange(0,5,0,1,5,0)); // A6:B6
+    aClipParam.maRanges.push_back(ScRange(0,1,0,1,1,0)); // A2:B2
+    aClipParam.maRanges.push_back(ScRange(0,3,0,1,3,0)); // A4:B4
+    aClipParam.maRanges.push_back(ScRange(0,5,0,1,5,0)); // A6:B6
     aClipParam.meDirection = ScClipParam::Row;
     m_pDoc->CopyToClip(aClipParam, &aClipDoc, &aMark, false, false);
 
@@ -4270,7 +4273,7 @@ void Test::testCopyPasteRepeatOneFormula()
     }
 
     // Delete row at row 1 to shift the cells up.
-    rFunc.DeleteCells(aRowOne, &aMark, DEL_DELROWS, true);
+    rFunc.DeleteCells(aRowOne, &aMark, DelCellCmd::Rows, true);
 
     // Check the formula results again.
     for (SCROW i = 0; i < 10; ++i)
@@ -5242,7 +5245,7 @@ void Test::testNoteDeleteRow()
     ScDocFunc& rDocFunc = getDocShell().GetDocFunc();
     ScMarkData aMark;
     aMark.SelectOneTable(0);
-    rDocFunc.DeleteCells(ScRange(0,1,0,MAXCOL,1,0), &aMark, DEL_CELLSUP, true);
+    rDocFunc.DeleteCells(ScRange(0,1,0,MAXCOL,1,0), &aMark, DelCellCmd::CellsUp, true);
 
     // Check to make sure the notes have shifted upward.
     pNote = m_pDoc->GetNote(ScAddress(1,1,0));
@@ -5271,7 +5274,7 @@ void Test::testNoteDeleteRow()
     CPPUNIT_ASSERT_EQUAL(OUString("Second Note"), pNote->GetText());
 
     // Delete row 3.
-    rDocFunc.DeleteCells(ScRange(0,2,0,MAXCOL,2,0), &aMark, DEL_CELLSUP, true);
+    rDocFunc.DeleteCells(ScRange(0,2,0,MAXCOL,2,0), &aMark, DelCellCmd::CellsUp, true);
 
     pNote = m_pDoc->GetNote(ScAddress(1,2,0));
     CPPUNIT_ASSERT_MESSAGE("B3 should have a note.", pNote);
@@ -5338,7 +5341,7 @@ void Test::testNoteLifeCycle()
     SdrCaptionObj* pCaption = pNote->GetOrCreateCaption(aPos);
     CPPUNIT_ASSERT_MESSAGE("Failed to create a caption object.", pCaption);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("This caption should belong to the drawing layer of the document.",
-                           m_pDoc->GetDrawLayer(), static_cast<ScDrawLayer*>(pCaption->GetModel()));
+                           m_pDoc->GetDrawLayer(), static_cast<ScDrawLayer*>(&pCaption->getSdrModelFromSdrObject()));
 
     // Copy B2 with note to a clipboard.
 
@@ -5644,7 +5647,7 @@ void Test::testAnchoredRotatedShape()
         tools::Rectangle aRect( 4000, 5000, 10000, 7000 );
 
         tools::Rectangle aRotRect( 6000, 3000, 8000, 9000 );
-        SdrRectObj *pObj = new SdrRectObj(aRect);
+        SdrRectObj *pObj = new SdrRectObj(*pDrawLayer, aRect);
         pPage->InsertObject(pObj);
         Point aRef1(pObj->GetSnapRect().Center());
         int nAngle = 9000; //90 deg.
@@ -5652,7 +5655,7 @@ void Test::testAnchoredRotatedShape()
         double nCos=cos(nAngle*nPi180);
         pObj->Rotate(aRef1,nAngle,nSin,nCos);
 
-        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, true);
 
         tools::Rectangle aSnap = pObj->GetSnapRect();
         CPPUNIT_ASSERT_EQUAL( true, testEqualsWithTolerance( aRotRect.GetHeight(), aSnap.GetHeight(), TOLERANCE ) );
@@ -6417,9 +6420,9 @@ void Test::testUndoDataAnchor()
 
     // Insert an object.
     tools::Rectangle aObjRect(2,1000,100,1100);
-    SdrObject* pObj = new SdrRectObj(aObjRect);
+    SdrObject* pObj = new SdrRectObj(*pDrawLayer, aObjRect);
     pPage->InsertObject(pObj);
-    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0);
+    ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *m_pDoc, 0, false);
 
     // Get anchor data
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
@@ -6962,7 +6965,7 @@ void Test::testProtectedSheetEditByRow()
         ScRange aRow3(0,2,0,MAXCOL,2,0);
         ScMarkData aMark;
         aMark.SelectOneTable(0);
-        bool bDeleted = rDocFunc.DeleteCells(aRow3, &aMark, DEL_DELROWS, true);
+        bool bDeleted = rDocFunc.DeleteCells(aRow3, &aMark, DelCellCmd::Rows, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of row 3 should fail.", !bDeleted);
 
         // Protect the sheet but allow row deletion.
@@ -6970,12 +6973,12 @@ void Test::testProtectedSheetEditByRow()
         m_pDoc->SetTabProtection(0, &aProtect);
 
         // Now we should be able to delete row 3.
-        bDeleted = rDocFunc.DeleteCells(aRow3, &aMark, DEL_DELROWS, true);
+        bDeleted = rDocFunc.DeleteCells(aRow3, &aMark, DelCellCmd::Rows, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of row 3 should succeed.", bDeleted);
 
         // But, row deletion should still fail on a protected row.
         ScRange aRow10(0,9,0,MAXCOL,9,0);
-        bDeleted = rDocFunc.DeleteCells(aRow10, &aMark, DEL_DELROWS, true);
+        bDeleted = rDocFunc.DeleteCells(aRow10, &aMark, DelCellCmd::Rows, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of row 10 should not be allowed.", !bDeleted);
 
         // Try inserting a new row.  It should fail.
@@ -7038,7 +7041,7 @@ void Test::testProtectedSheetEditByColumn()
         ScRange aCol3(2,0,0,2,MAXROW,0);
         ScMarkData aMark;
         aMark.SelectOneTable(0);
-        bool bDeleted = rDocFunc.DeleteCells(aCol3, &aMark, DEL_DELCOLS, true);
+        bool bDeleted = rDocFunc.DeleteCells(aCol3, &aMark, DelCellCmd::Cols, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of column 3 should fail.", !bDeleted);
 
         // Protect the sheet but allow column deletion.
@@ -7046,12 +7049,12 @@ void Test::testProtectedSheetEditByColumn()
         m_pDoc->SetTabProtection(0, &aProtect);
 
         // Now we should be able to delete column C.
-        bDeleted = rDocFunc.DeleteCells(aCol3, &aMark, DEL_DELCOLS, true);
+        bDeleted = rDocFunc.DeleteCells(aCol3, &aMark, DelCellCmd::Cols, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of column 3 should succeed.", bDeleted);
 
         // But, column deletion should still fail on a protected column.
         ScRange aCol10(9,0,0,9,MAXROW,0);
-        bDeleted = rDocFunc.DeleteCells(aCol10, &aMark, DEL_DELCOLS, true);
+        bDeleted = rDocFunc.DeleteCells(aCol10, &aMark, DelCellCmd::Cols, true);
         CPPUNIT_ASSERT_MESSAGE("deletion of column 10 should not be allowed.", !bDeleted);
 
         // Try inserting a new column.  It should fail.

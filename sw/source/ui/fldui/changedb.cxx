@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/msgbox.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/sdb/DatabaseContext.hpp>
@@ -257,7 +256,7 @@ void SwChangeDBDlg::ShowDBName(const SwDBData& rDBData)
 
 IMPL_LINK_NOARG(SwChangeDBDlg, AddDBHdl, Button*, void)
 {
-    const OUString sNewDB = SwDBManager::LoadAndRegisterDataSource(this);
+    const OUString sNewDB = SwDBManager::LoadAndRegisterDataSource(GetFrameWeld());
     if (!sNewDB.isEmpty())
         m_pAvailDBTLB->AddDataSource(sNewDB);
 }

@@ -69,7 +69,6 @@
 #include <svtools/genericunodialog.hxx>
 #include <tools/diagnose_ex.h>
 #include <unotools/sharedunocomponent.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/waitobj.hxx>
 
 namespace dbaui
@@ -193,7 +192,7 @@ namespace dbaui
         virtual ~CopyTableWizard() override;
 
         // OGenericUnoDialog overridables
-        virtual VclPtr<Dialog> createDialog( vcl::Window* _pParent ) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
         virtual void executedDialog( sal_Int16 _nExecutionResult ) override;
 
     private:
@@ -397,9 +396,9 @@ CopyTableWizard::~CopyTableWizard()
 
     // protect some members whose dtor might potentially throw
     try { m_xSourceConnection.clear();  }
-    catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+    catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
     try { m_xDestConnection.clear();  }
-    catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+    catch( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
 
     // TODO: shouldn't we have explicit disposal support? If a listener is registered
     // at our instance, and perhaps holds this our instance by a hard ref, then we'll never
@@ -547,7 +546,7 @@ void SAL_CALL CopyTableWizard::setTitle( const OUString& _rTitle )
 
 OCopyTableWizard& CopyTableWizard::impl_getDialog_throw()
 {
-    OCopyTableWizard* pWizard = dynamic_cast< OCopyTableWizard* >( m_pDialog.get() );
+    OCopyTableWizard* pWizard = dynamic_cast< OCopyTableWizard* >(m_aDialog.m_xVclDialog.get());
     if ( !pWizard )
         throw DisposedException( OUString(), *this );
     return *pWizard;
@@ -1037,7 +1036,7 @@ bool CopyTableWizard::impl_processCopyError_nothrow( const CopyTableRowEvent& _r
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // no listener felt responsible for the error, or a listener told to ask the user
@@ -1080,7 +1079,7 @@ bool CopyTableWizard::impl_processCopyError_nothrow( const CopyTableRowEvent& _r
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // cancel copying
@@ -1417,7 +1416,7 @@ void CopyTableWizard::impl_doCopy_nothrow()
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1509,7 +1508,7 @@ void SAL_CALL CopyTableWizard::initialize( const Sequence< Any >& _rArguments )
     return new ::cppu::OPropertyArrayHelper( aProps );
 }
 
-VclPtr<Dialog> CopyTableWizard::createDialog( vcl::Window* _pParent )
+svt::OGenericUnoDialog::Dialog CopyTableWizard::createDialog( vcl::Window* _pParent )
 {
     OSL_PRECOND( isInitialized(), "CopyTableWizard::createDialog: not initialized!" );
         // this should have been prevented in ::execute already
@@ -1527,7 +1526,7 @@ VclPtr<Dialog> CopyTableWizard::createDialog( vcl::Window* _pParent )
 
     impl_attributesToDialog_nothrow( *pWizard );
 
-    return pWizard;
+    return svt::OGenericUnoDialog::Dialog(pWizard);
 }
 
 void CopyTableWizard::executedDialog( sal_Int16 _nExecutionResult )

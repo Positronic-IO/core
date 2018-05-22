@@ -60,6 +60,7 @@ namespace vcl
 class Window;
 struct MenuLayoutData;
 typedef OutputDevice RenderContext; // same as in include/vcl/outdev.hxx
+class ILibreOfficeKitNotifier;
 }
 
 #define MENU_APPEND        (sal_uInt16(0xFFFF))
@@ -155,7 +156,7 @@ private:
     bool bKilled : 1; ///< Killed
 
     css::uno::Reference<css::accessibility::XAccessible > mxAccessible;
-    mutable vcl::MenuLayoutData* mpLayoutData;
+    mutable std::unique_ptr<vcl::MenuLayoutData> mpLayoutData;
     SalMenu* mpSalMenu;
 
 protected:
@@ -276,6 +277,7 @@ public:
     vcl::KeyCode GetAccelKey( sal_uInt16 nItemId ) const;
 
     void CheckItem( sal_uInt16 nItemId, bool bCheck = true );
+    void CheckItem( const OString &rIdent, bool bCheck = true );
     bool IsItemChecked( sal_uInt16 nItemId ) const;
 
     virtual void SelectItem(sal_uInt16 nItemId) = 0;
@@ -483,6 +485,8 @@ class VCL_DLLPUBLIC PopupMenu : public Menu
     friend struct MenuItemData;
 
 private:
+    const vcl::ILibreOfficeKitNotifier* mpLOKNotifier; ///< To emit the LOK callbacks eg. for dialog tunneling.
+
     SAL_DLLPRIVATE MenuFloatingWindow * ImplGetFloatingWindow() const;
 
 protected:
@@ -516,6 +520,12 @@ public:
 
     static bool IsInExecute();
     static PopupMenu* GetActivePopupMenu();
+
+    /// Interface to register for dialog / window tunneling.
+    void SetLOKNotifier(const vcl::ILibreOfficeKitNotifier* pNotifier)
+    {
+        mpLOKNotifier = pNotifier;
+    }
 
     PopupMenu& operator=( const PopupMenu& rMenu );
 };

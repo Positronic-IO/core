@@ -153,7 +153,7 @@ sal_Int32 SheetViewModel::getPageBreakZoom() const
     return getLimitedValue< sal_Int32 >( nZoom, API_ZOOMVALUE_MIN, API_ZOOMVALUE_MAX );
 }
 
-sal_Int32 SheetViewModel::getGridColor( const FilterBase& rFilter ) const
+::Color SheetViewModel::getGridColor( const FilterBase& rFilter ) const
 {
     return mbDefGridColor ? API_RGB_TRANSPARENT : maGridColor.getColor( rFilter.getGraphicHelper() );
 }

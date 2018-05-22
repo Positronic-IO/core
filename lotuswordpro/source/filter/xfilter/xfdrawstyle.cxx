@@ -64,8 +64,7 @@
 #include "xffontworkstyle.hxx"
 #include <lwpglobalmgr.hxx>
 XFDrawStyle::XFDrawStyle()
-    : m_pFontWorkStyle(nullptr)
-    , m_eWrap(enumXFWrapNone)
+    : m_eWrap(enumXFWrapNone)
     , m_pLineStyle(nullptr)
     , m_pAreaStyle(nullptr)
     , m_fArrowStartSize(0.3)
@@ -77,11 +76,6 @@ XFDrawStyle::XFDrawStyle()
 XFDrawStyle::~XFDrawStyle()
 {
     //don't delete m_pLineStyle, it was managed by XFStyleManager.
-    if (m_pFontWorkStyle)
-    {
-        delete m_pFontWorkStyle;
-        m_pFontWorkStyle = nullptr;
-    }
 }
 
 void    XFDrawStyle::SetLineStyle(double width, XFColor color)
@@ -110,14 +104,14 @@ void    XFDrawStyle::SetLineDashStyle(enumXFLineStyle style, double len1, double
     m_pLineStyle->SetDot2Length(len2);
     m_pLineStyle->SetSpace(space);
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    pXFStyleManager->AddStyle(m_pLineStyle);
+    pXFStyleManager->AddStyle(std::unique_ptr<IXFStyle>(m_pLineStyle));
 }
 
 void XFDrawStyle::SetFontWorkStyle(enumXFFWStyle eStyle, enumXFFWAdjust eAdjust)
 {
     if (!m_pFontWorkStyle)
     {
-        m_pFontWorkStyle = new XFFontWorkStyle();
+        m_pFontWorkStyle.reset( new XFFontWorkStyle() );
     }
 
     m_pFontWorkStyle->SetButtonForm(0);
@@ -149,7 +143,7 @@ void    XFDrawStyle::SetAreaLineStyle(enumXFAreaLineStyle style, sal_Int32 angle
     m_pAreaStyle->SetLineSpace(space);
     m_pAreaStyle->SetLineColor(lineColor);
     XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-    pXFStyleManager->AddStyle(m_pAreaStyle);
+    pXFStyleManager->AddStyle(std::unique_ptr<IXFStyle>(m_pAreaStyle));
 }
 
 enumXFStyle XFDrawStyle::GetStyleFamily()

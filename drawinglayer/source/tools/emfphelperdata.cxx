@@ -27,8 +27,8 @@
 #include "emfpstringformat.hxx"
 #include <basegfx/curve/b2dcubicbezier.hxx>
 #include <wmfemfhelper.hxx>
+#include <drawinglayer/primitive2d/unifiedtransparenceprimitive2d.hxx>
 #include <drawinglayer/primitive2d/polypolygonprimitive2d.hxx>
-#include <drawinglayer/primitive2d/fillgradientprimitive2d.hxx>
 #include <drawinglayer/primitive2d/svggradientprimitive2d.hxx>
 #include <drawinglayer/primitive2d/textprimitive2d.hxx>
 #include <drawinglayer/primitive2d/bitmapprimitive2d.hxx>
@@ -96,15 +96,53 @@ namespace emfplushelper
         return "";
     }
 
-    typedef enum
-    {
-      ImageDataTypeUnknown = 0x00000000,
-      ImageDataTypeBitmap = 0x00000001,
-      ImageDataTypeMetafile = 0x00000002
-    } ImageDataType;
-
     EMFPObject::~EMFPObject()
     {
+    }
+
+    typedef enum
+    {
+        StringAlignmentNear = 0x00000000,
+        StringAlignmentCenter = 0x00000001,
+        StringAlignmentFar = 0x00000002
+    } StringAlignment;
+
+    float EmfPlusHelperData::getUnitToPixelMultiplier(const UnitType aUnitType)
+    {
+        switch (aUnitType)
+        {
+            case UnitTypePixel:
+            {
+                return 1.0f;
+            }
+            case UnitTypePoint:
+            {
+                SAL_INFO("drawinglayer", "EMF+\t Converting Points to Pixels.");
+                return 1.333333f;
+            }
+            case UnitTypeInch:
+            {
+                SAL_INFO("drawinglayer", "EMF+\t TODO Test Converting Inches to Pixels, if it is working correctly.");
+                return 96.0f;
+            }
+            case UnitTypeMillimeter:
+            {
+                SAL_INFO("drawinglayer", "EMF+\t TODO Test Converting Millimeters to Pixels, if it is working correctly.");
+                return 3.779528f;
+            }
+            case UnitTypeDocument:
+            {
+                SAL_INFO("drawinglayer", "EMF+\t TODO Test Converting Documents to Pixels, if it is working correctly.");
+                return 0.32f;
+            }
+            case UnitTypeWorld:
+            case UnitTypeDisplay:
+            default:
+            {
+                SAL_WARN("drawinglayer", "EMF+\tTODO Unimplemented support of Unit Type: 0x" << std::hex << aUnitType);
+            }
+        }
+        return 1.0f;
     }
 
     void EmfPlusHelperData::processObjectRecord(SvMemoryStream& rObjectStream, sal_uInt16 flags, sal_uInt32 dataSize, bool bUseWholeStream)
@@ -300,19 +338,19 @@ namespace emfplushelper
         return maMapTransform * ::basegfx::B2DSize(iwidth, iheight);
     }
 
-    ::basegfx::BColor EmfPlusHelperData::EMFPGetBrushColorOrARGBColor(sal_uInt16 flags, sal_uInt32 brushIndexOrColor) const {
-        basegfx::BColor color;
+    Color EmfPlusHelperData::EMFPGetBrushColorOrARGBColor(const sal_uInt16 flags, const sal_uInt32 brushIndexOrColor) const {
+        Color color;
         if (flags & 0x8000) // we use a color
         {
             color = Color(0xff - (brushIndexOrColor >> 24), (brushIndexOrColor >> 16) & 0xff,
-                                 (brushIndexOrColor >> 8) & 0xff, brushIndexOrColor & 0xff).getBColor();
+                          (brushIndexOrColor >> 8) & 0xff, brushIndexOrColor & 0xff);
         }
         else // we use a pen
         {
             const EMFPPen* pen = static_cast<EMFPPen*>(maEMFPObjects[brushIndexOrColor & 0xff].get());
             if (pen)
             {
-                color = pen->GetColor().getBColor();
+                color = pen->GetColor();
             }
         }
         return color;
@@ -452,7 +490,7 @@ namespace emfplushelper
         }
     }
 
-    void EmfPlusHelperData::EMFPPlusFillPolygon(const ::basegfx::B2DPolyPolygon& polygon, bool isColor, sal_uInt32 brushIndexOrColor)
+    void EmfPlusHelperData::EMFPPlusFillPolygon(const ::basegfx::B2DPolyPolygon& polygon, const bool isColor, const sal_uInt32 brushIndexOrColor)
     {
         if (!polygon.count())
           return;
@@ -460,12 +498,35 @@ namespace emfplushelper
         if (isColor) // use Color
         {
             SAL_INFO("drawinglayer", "EMF+\t Fill polygon, ARGB color: 0x" << std::hex << brushIndexOrColor << std::dec);
-            mrTargetHolders.Current().append(
-                o3tl::make_unique<drawinglayer::primitive2d::PolyPolygonColorPrimitive2D>(
-                    polygon,
-                    ::Color(0xff - (brushIndexOrColor >> 24), (brushIndexOrColor >> 16) & 0xff, (brushIndexOrColor >> 8) & 0xff, brushIndexOrColor & 0xff).getBColor()));
 
-            mrPropertyHolders.Current().setFillColor(::Color(0xff - (brushIndexOrColor >> 24), (brushIndexOrColor >> 16) & 0xff, (brushIndexOrColor >> 8) & 0xff, brushIndexOrColor & 0xff).getBColor());
+            // EMF Alpha (1 byte): An 8-bit unsigned integer that specifies the transparency of the background,
+            // ranging from 0 for completely transparent to 0xFF for completely opaque.
+            const Color color = Color(0xff - (brushIndexOrColor >> 24), (brushIndexOrColor >> 16) & 0xff, (brushIndexOrColor >> 8) & 0xff, brushIndexOrColor & 0xff);
+            if (color.GetTransparency() < 255)
+            {
+                if (color.GetTransparency() == 0)
+                {
+                    // not transparent
+                    mrTargetHolders.Current().append(
+                                o3tl::make_unique<drawinglayer::primitive2d::PolyPolygonColorPrimitive2D>(
+                                    polygon,
+                                    color.getBColor()));
+                }
+                else
+                {
+                    const drawinglayer::primitive2d::Primitive2DReference aPrimitive(
+                                new drawinglayer::primitive2d::PolyPolygonColorPrimitive2D(
+                                    polygon,
+                                    color.getBColor()));
+
+                    mrTargetHolders.Current().append(
+                                o3tl::make_unique<drawinglayer::primitive2d::UnifiedTransparencePrimitive2D>(
+                                    drawinglayer::primitive2d::Primitive2DContainer { aPrimitive },
+                                    color.GetTransparency() / 255.0));
+                }
+            }
+
+            mrPropertyHolders.Current().setFillColor(color.getBColor());
             mrPropertyHolders.Current().setFillColorActive(true);
             mrPropertyHolders.Current().setLineColorActive(false);
         }
@@ -507,7 +568,7 @@ namespace emfplushelper
                         isHatchBlend = false;
                         break;
                 }
-                ::Color fillColor;
+                Color fillColor;
                 if (isHatchBlend)
                 {
                     fillColor = brush->solidColor;
@@ -684,7 +745,8 @@ namespace emfplushelper
         mMFlags(0),
         mMStream(),
         mrTargetHolders(rTargetHolders),
-        mrPropertyHolders(rPropertyHolders)
+        mrPropertyHolders(rPropertyHolders),
+        bIsGetDCProcessing(false)
     {
         rMS.ReadInt32(mnFrameLeft).ReadInt32(mnFrameTop).ReadInt32(mnFrameRight).ReadInt32(mnFrameBottom);
         SAL_INFO("drawinglayer", "EMF+ picture frame: " << mnFrameLeft << "," << mnFrameTop << " - " << mnFrameRight << "," << mnFrameBottom);
@@ -777,6 +839,12 @@ namespace emfplushelper
 
             SAL_INFO("drawinglayer", "EMF+ record size: " << size << " type: " << emfTypeToName(type) << " flags: " << flags << " data size: " << dataSize);
 
+            if (bIsGetDCProcessing)
+            {
+                SAL_INFO("drawinglayer", "EMF+ Resets the current clipping region for the world space to infinity.");
+                wmfemfhelper::HandleNewClipRegion(::basegfx::B2DPolyPolygon(), mrTargetHolders, mrPropertyHolders);
+                bIsGetDCProcessing = false;
+            }
             if (type == EmfPlusRecordTypeObject && ((mbMultipart && (flags & 0x7fff) == (mMFlags & 0x7fff)) || (flags & 0x8000)))
             {
                 if (!mbMultipart)
@@ -851,6 +919,7 @@ namespace emfplushelper
                     }
                     case EmfPlusRecordTypeGetDC:
                     {
+                        bIsGetDCProcessing = true;
                         SAL_INFO("drawinglayer", "EMF+ GetDC");
                         SAL_INFO("drawinglayer", "EMF+\talready used in svtools wmf/emf filter parser");
                         break;
@@ -938,7 +1007,11 @@ namespace emfplushelper
                         rMS.ReadUInt32(brushIndexOrColor);
                         SAL_INFO("drawinglayer", "EMF+ FillPath slot: " << index);
 
-                        EMFPPlusFillPolygon(static_cast<EMFPPath*>(maEMFPObjects[index].get())->GetPolygon(*this), flags & 0x8000, brushIndexOrColor);
+                        EMFPPath* path = dynamic_cast<EMFPPath*>(maEMFPObjects[index].get());
+                        if (path)
+                            EMFPPlusFillPolygon(path->GetPolygon(*this), flags & 0x8000, brushIndexOrColor);
+                        else
+                            SAL_WARN("drawinglayer", "EmfPlusRecordTypeFillPath missing path");
                     }
                     break;
                     case EmfPlusRecordTypeFillRegion:
@@ -986,7 +1059,7 @@ namespace emfplushelper
                         // Silent MSVC warning C4701: potentially uninitialized local variable 'brushIndexOrColor' used
                         sal_uInt32 brushIndexOrColor = 999;
                         sal_Int32 rectangles;
-                        bool isColor = (flags & 0x8000);
+                        const bool isColor = (flags & 0x8000);
                         ::basegfx::B2DPolygon polygon;
 
                         if (EmfPlusRecordTypeFillRects == type)
@@ -1006,14 +1079,14 @@ namespace emfplushelper
                         {
                             float x, y, width, height;
                             ReadRectangle(rMS, x, y, width, height, bool(flags & 0x4000));
-
+                            polygon.clear();
                             polygon.append(Map(x, y));
                             polygon.append(Map(x + width, y));
                             polygon.append(Map(x + width, y + height));
                             polygon.append(Map(x, y + height));
-                            polygon.append(Map(x, y));
+                            polygon.setClosed(true);
 
-                            SAL_INFO("drawinglayer", "EMF+\trectangle: " << x << ", " << width << "x" << height);
+                            SAL_INFO("drawinglayer", "EMF+\t rectangle: " << x << ", "<< y << " " << width << "x" << height);
 
                             ::basegfx::B2DPolyPolygon polyPolygon(polygon);
                             if (type == EmfPlusRecordTypeFillRects)
@@ -1025,13 +1098,13 @@ namespace emfplushelper
                     }
                     case EmfPlusRecordTypeFillPolygon:
                     {
-                        sal_uInt8 index = flags & 0xff;
+                        const sal_uInt8 index = flags & 0xff;
                         sal_uInt32 brushIndexOrColor;
                         sal_Int32 points;
 
                         rMS.ReadUInt32(brushIndexOrColor);
                         rMS.ReadInt32(points);
-                        SAL_INFO("drawinglayer", "EMF+ FillPolygon in slot: " << +index << " points: " << points);
+                        SAL_INFO("drawinglayer", "EMF+ FillPolygon in slot: " << index << " points: " << points);
                         SAL_INFO("drawinglayer", "EMF+\t: " << ((flags & 0x8000) ? "color" : "brush index") << " 0x" << std::hex << brushIndexOrColor << std::dec);
 
                         EMFPPath path(points, true);
@@ -1061,10 +1134,12 @@ namespace emfplushelper
                         rMS.ReadUInt32(penIndex);
                         SAL_INFO("drawinglayer", "EMF+ DrawPath");
                         SAL_INFO("drawinglayer", "EMF+\tpen: " << penIndex);
-                        EMFPPath* path = static_cast<EMFPPath*>(maEMFPObjects[flags & 0xff].get());
-                        SAL_WARN_IF(!path, "drawinglayer", "EmfPlusRecordTypeDrawPath missing path");
 
-                        EMFPPlusDrawPolygon(path->GetPolygon(*this), penIndex);
+                        EMFPPath* path = dynamic_cast<EMFPPath*>(maEMFPObjects[flags & 0xff].get());
+                        if (path)
+                            EMFPPlusDrawPolygon(path->GetPolygon(*this), penIndex);
+                        else
+                            SAL_WARN("drawinglayer", "EmfPlusRecordTypeDrawPath missing path");
 
                         break;
                     }
@@ -1116,10 +1191,10 @@ namespace emfplushelper
                     case EmfPlusRecordTypeDrawImage:
                     case EmfPlusRecordTypeDrawImagePoints:
                     {
-                        sal_uInt32 attrIndex;
+                        sal_uInt32 imageAttributesId;
                         sal_Int32 sourceUnit;
-                        rMS.ReadUInt32(attrIndex).ReadInt32(sourceUnit);
-                        SAL_INFO("drawinglayer", "EMF+ " << (type == EmfPlusRecordTypeDrawImagePoints ? "DrawImagePoints" : "DrawImage") << "attributes index: " << attrIndex << "source unit: " << sourceUnit);
+                        rMS.ReadUInt32(imageAttributesId).ReadInt32(sourceUnit);
+                        SAL_INFO("drawinglayer", "EMF+ " << (type == EmfPlusRecordTypeDrawImagePoints ? "DrawImagePoints" : "DrawImage") << " image attributes Id: " << imageAttributesId << " source unit: " << sourceUnit);
                         SAL_INFO("drawinglayer", "EMF+\tTODO: use image attributes");
 
                         // For DrawImage and DrawImagePoints, source unit of measurement type must be 1 pixel
@@ -1135,8 +1210,8 @@ namespace emfplushelper
 
                             if (type == EmfPlusRecordTypeDrawImagePoints)
                             {
-                                sal_Int32 aCount;
-                                rMS.ReadInt32(aCount);
+                                sal_uInt32 aCount;
+                                rMS.ReadUInt32(aCount);
 
                                 // Number of points used by DrawImagePoints. Exactly 3 points must be specified.
                                 if(aCount == 3)
@@ -1147,15 +1222,15 @@ namespace emfplushelper
                                     ReadPoint(rMS, x2, y2, flags);
                                     ReadPoint(rMS, x3, y3, flags);
 
-                                    SAL_INFO("drawinglayer", "EMF+ destination points: " << x1 << "," << y1 << " " << x2 << "," << y2 << " " << x3 << "," << y3);
-                                    SAL_INFO("drawinglayer", "EMF+ destination rectangle: " << x1 << "," << y1 << " " << x2 - x1 << "x" << y3 - y1);
+                                    SAL_INFO("drawinglayer", "EMF+\t destination points: " << x1 << "," << y1 << " " << x2 << "," << y2 << " " << x3 << "," << y3);
+                                    SAL_INFO("drawinglayer", "EMF+\t destination rectangle: " << x1 << "," << y1 << " " << x2 - x1 << "x" << y3 - y1);
 
                                     aDstPoint = Map(x1, y1);
                                     aDstSize = MapSize(x2 - x1, y3 - y1);
                                 }
                                 else
                                 {
-                                    SAL_WARN("drawinglayer", "EMF+ DrawImagePoints Wrong EMF+ file. Expected 3 points, received: "<< aCount);
+                                    SAL_WARN("drawinglayer", "EMF+\t DrawImagePoints Wrong EMF+ file. Expected 3 points, received: "<< aCount);
                                     break;
                                 }
                             }
@@ -1163,7 +1238,7 @@ namespace emfplushelper
                             {
                                 float dx, dy, dw, dh;
                                 ReadRectangle(rMS, dx, dy, dw, dh, bool(flags & 0x4000));
-                                SAL_INFO("drawinglayer", "EMF+ destination rectangle: " << dx << "," << dy << " " << dw << "x" << dh);
+                                SAL_INFO("drawinglayer", "EMF+\t destination rectangle: " << dx << "," << dy << " " << dw << "x" << dh);
                                 aDstPoint = Map(dx, dy);
                                 aDstSize = MapSize(dw, dh);
                             }
@@ -1180,7 +1255,7 @@ namespace emfplushelper
                                 BitmapEx aBmp(image.graphic.GetBitmapEx());
                                 aBmp.Crop(aSource);
                                 Size aSize(aBmp.GetSizePixel());
-                                SAL_INFO("drawinglayer", "EMF+ bitmap size: " << aSize.Width() << "x" << aSize.Height());
+                                SAL_INFO("drawinglayer", "EMF+\t bitmap size: " << aSize.Width() << "x" << aSize.Height());
                                 if (aSize.Width() > 0 && aSize.Height() > 0)
                                 {
                                     mrTargetHolders.Current().append(
@@ -1188,7 +1263,7 @@ namespace emfplushelper
                                 }
                                 else
                                 {
-                                    SAL_INFO("drawinglayer", "EMF+ warning: empty bitmap");
+                                    SAL_INFO("drawinglayer", "EMF+\t warning: empty bitmap");
                                 }
                             }
                             else if (image.type == ImageDataTypeMetafile)
@@ -1201,7 +1276,7 @@ namespace emfplushelper
                         }
                         else
                         {
-                            SAL_WARN("drawinglayer", "EMF+ DrawImage(Points) Wrong EMF+ file. Only Unit Type Pixel is support by EMF+ standard in DrawImage(Points)");
+                            SAL_WARN("drawinglayer", "EMF+ DrawImage(Points) Wrong EMF+ file. Only Unit Type Pixel is support by EMF+ specification for DrawImage(Points)");
                         }
                         break;
                     }
@@ -1222,12 +1297,12 @@ namespace emfplushelper
 
                             SAL_INFO("drawinglayer", "EMF+ DrawString layoutRect: " << lx << "," << ly << " - " << lw << "x" << lh);
                             // parse the string
-                            OUString text = read_uInt16s_ToOUString(rMS, stringLength);
+                            const OUString text = read_uInt16s_ToOUString(rMS, stringLength);
                             SAL_INFO("drawinglayer", "EMF+ DrawString string: " << text);
                             // get the stringFormat from the Object table ( this is OPTIONAL and may be nullptr )
-                            EMFPStringFormat *stringFormat = static_cast< EMFPStringFormat* >(maEMFPObjects[formatId & 0xff].get());
+                            const EMFPStringFormat *stringFormat = static_cast< EMFPStringFormat* >(maEMFPObjects[formatId & 0xff].get());
                             // get the font from the flags
-                            EMFPFont *font = static_cast< EMFPFont* >( maEMFPObjects[flags & 0xff].get() );
+                            const EMFPFont *font = static_cast< EMFPFont* >( maEMFPObjects[flags & 0xff].get() );
                             if (!font)
                             {
                                 break;
@@ -1253,35 +1328,76 @@ namespace emfplushelper
                                 false);                                                // BiDiStrong
 
                             css::lang::Locale locale;
+                            double stringAlignmentHorizontalOffset = 0.0;
                             if (stringFormat)
                             {
+                                SAL_WARN_IF(stringFormat && stringFormat->DirectionRightToLeft(), "drawinglayer", "EMF+ DrawString Alignment TODO For a right-to-left layout rectangle, the origin should be at the upper right.");
+                                if (stringFormat->stringAlignment == StringAlignmentNear)
+                                // Alignment is to the left side of the layout rectangle (lx, ly, lw, lh)
+                                {
+                                    stringAlignmentHorizontalOffset = stringFormat->leadingMargin * font->emSize;
+                                } else if (stringFormat->stringAlignment == StringAlignmentCenter)
+                                // Alignment is centered between the origin and extent of the layout rectangle
+                                {
+                                    stringAlignmentHorizontalOffset = 0.5 * lw + stringFormat->leadingMargin * font->emSize - 0.3 * font->emSize * stringLength;
+                                } else if (stringFormat->stringAlignment == StringAlignmentFar)
+                                // Alignment is to the right side of the layout rectangle
+                                {
+                                    stringAlignmentHorizontalOffset = lw - stringFormat->trailingMargin * font->emSize - 0.6 * font->emSize * stringLength;
+                                }
+
                                 LanguageTag aLanguageTag(static_cast< LanguageType >(stringFormat->language));
                                 locale = aLanguageTag.getLocale();
                             }
                             else
                             {
                                 // use system default
-                                locale =  Application::GetSettings().GetLanguageTag().getLocale();
+                                locale = Application::GetSettings().GetLanguageTag().getLocale();
                             }
 
-                            basegfx::B2DHomMatrix transformMatrix = basegfx::utils::createScaleTranslateB2DHomMatrix(MapSize(font->emSize,font->emSize),Map(lx,ly+font->emSize));
+                            const basegfx::B2DHomMatrix transformMatrix = basegfx::utils::createScaleTranslateB2DHomMatrix(
+                                        MapSize(font->emSize, font->emSize), Map(lx + stringAlignmentHorizontalOffset, ly + font->emSize));
 
-                            basegfx::BColor color = EMFPGetBrushColorOrARGBColor(flags,brushId);
-
-                            mrPropertyHolders.Current().setTextColor(color);
+                            const Color color = EMFPGetBrushColorOrARGBColor(flags, brushId);
+                            mrPropertyHolders.Current().setTextColor(color.getBColor());
                             mrPropertyHolders.Current().setTextColorActive(true);
 
-                            std::vector<double> emptyVector;
-                            mrTargetHolders.Current().append(
-                                o3tl::make_unique<drawinglayer::primitive2d::TextSimplePortionPrimitive2D>(
-                                    transformMatrix,
-                                    text,
-                                    0,             // text always starts at 0
-                                    stringLength,
-                                    emptyVector,   // EMF-PLUS has no DX-array
-                                    fontAttribute,
-                                    locale,
-                                    color));
+                            if (color.GetTransparency() < 255)
+                            {
+                                std::vector<double> emptyVector;
+                                if (color.GetTransparency() == 0)
+                                {
+                                    // not transparent
+                                    mrTargetHolders.Current().append(
+                                                o3tl::make_unique<drawinglayer::primitive2d::TextSimplePortionPrimitive2D>(
+                                                    transformMatrix,
+                                                    text,
+                                                    0,             // text always starts at 0
+                                                    stringLength,
+                                                    emptyVector,   // EMF-PLUS has no DX-array
+                                                    fontAttribute,
+                                                    locale,
+                                                    color.getBColor()));
+                                }
+                                else
+                                {
+                                    const drawinglayer::primitive2d::Primitive2DReference aPrimitive(
+                                                new drawinglayer::primitive2d::TextSimplePortionPrimitive2D(
+                                                    transformMatrix,
+                                                    text,
+                                                    0,             // text always starts at 0
+                                                    stringLength,
+                                                    emptyVector,   // EMF-PLUS has no DX-array
+                                                    fontAttribute,
+                                                    locale,
+                                                    color.getBColor()));
+
+                                    mrTargetHolders.Current().append(
+                                                o3tl::make_unique<drawinglayer::primitive2d::UnifiedTransparencePrimitive2D>(
+                                                    drawinglayer::primitive2d::Primitive2DContainer { aPrimitive },
+                                                    color.GetTransparency() / 255.0));
+                                }
+                            }
                         }
                         else
                         {
@@ -1295,14 +1411,15 @@ namespace emfplushelper
                         SAL_INFO("drawinglayer", "EMF+ SetPageTransform");
                         SAL_INFO("drawinglayer", "EMF+\tscale: " << mfPageScale << " unit: " << flags);
 
-                        if (flags != UnitTypePixel)
+                        if ((flags == UnitTypeDisplay) || (flags == UnitTypeWorld))
                         {
-                            SAL_WARN("drawinglayer", "EMF+\t TODO Only UnitTypePixel is supported. ");
+                            SAL_WARN("drawinglayer", "EMF+ file error. UnitTypeDisplay and UnitTypeWorld are not supported by SetPageTransform in EMF+ specification.");
                         }
                         else
                         {
-                            mnMmX *= mfPageScale;
-                            mnMmY *= mfPageScale;
+                            const float aPageScaleMul = mfPageScale * getUnitToPixelMultiplier(static_cast<UnitType>(flags));
+                            mnMmX *= aPageScaleMul;
+                            mnMmY *= aPageScaleMul;
                             mappingChanged();
                         }
                         break;
@@ -1635,7 +1752,7 @@ namespace emfplushelper
                                 false,                                           // right-to-left
                                 false);                                          // BiDiStrong
 
-                            basegfx::BColor color = EMFPGetBrushColorOrARGBColor(flags,brushIndexOrColor);
+                            const Color color = EMFPGetBrushColorOrARGBColor(flags, brushIndexOrColor);
                             std::vector<double> aDXArray; // dummy for DX array (not used)
 
                             // generate TextSimplePortionPrimitive2Ds for all portions of text with
@@ -1663,18 +1780,41 @@ namespace emfplushelper
                                     MapSize(font->emSize,font->emSize),Map(charsPosX[pos],charsPosY[pos]));
                                 if (hasMatrix)
                                     transformMatrix *= transform;
+                                if (color.GetTransparency() < 255)
+                                {
+                                    if (color.GetTransparency() == 0)
+                                    {
+                                        // not transparent
+                                        mrTargetHolders.Current().append(
+                                                    o3tl::make_unique<drawinglayer::primitive2d::TextSimplePortionPrimitive2D>(
+                                                        transformMatrix,
+                                                        text,
+                                                        pos,            // take character at current pos
+                                                        aLength,        // use determined length
+                                                        aDXArray,       // generated DXArray
+                                                        fontAttribute,
+                                                        Application::GetSettings().GetLanguageTag().getLocale(),
+                                                        color.getBColor()));
+                                    }
+                                    else
+                                    {
+                                        const drawinglayer::primitive2d::Primitive2DReference aPrimitive(
+                                                    new drawinglayer::primitive2d::TextSimplePortionPrimitive2D(
+                                                        transformMatrix,
+                                                        text,
+                                                        pos,            // take character at current pos
+                                                        aLength,        // use determined length
+                                                        aDXArray,       // generated DXArray
+                                                        fontAttribute,
+                                                        Application::GetSettings().GetLanguageTag().getLocale(),
+                                                        color.getBColor()));
 
-                                //generate TextSimplePortionPrimitive2D
-                                mrTargetHolders.Current().append(
-                                    o3tl::make_unique<drawinglayer::primitive2d::TextSimplePortionPrimitive2D>(
-                                    transformMatrix,
-                                    text,
-                                    pos,            // take character at current pos
-                                    aLength,        // use determined length
-                                    aDXArray,       // generated DXArray
-                                    fontAttribute,
-                                    Application::GetSettings().GetLanguageTag().getLocale(),
-                                    color));
+                                        mrTargetHolders.Current().append(
+                                                    o3tl::make_unique<drawinglayer::primitive2d::UnifiedTransparencePrimitive2D>(
+                                                        drawinglayer::primitive2d::Primitive2DContainer { aPrimitive },
+                                                        color.GetTransparency() / 255.0));
+                                    }
+                                }
 
                                 // update pos
                                 pos += aLength;

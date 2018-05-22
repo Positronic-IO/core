@@ -56,10 +56,8 @@ namespace com { namespace sun { namespace star {
 namespace tools { class Rectangle; }
 class ScDPSaveData;
 class ScDPOutput;
-struct ScPivotParam;
 struct ScImportSourceDesc;
 class ScSheetSourceDesc;
-struct ScPivotField;
 class ScDPTableData;
 class ScDPDimensionSaveData;
 class ScRangeList;
@@ -104,7 +102,7 @@ private:
     SAL_DLLPRIVATE void              CreateObjects();
     SAL_DLLPRIVATE void              CreateOutput();
     SAL_DLLPRIVATE void ClearSource();
-    SAL_DLLPRIVATE bool FillLabelDataForDimension(
+    SAL_DLLPRIVATE void FillLabelDataForDimension(
         const css::uno::Reference< css::container::XIndexAccess>& xDims,
         sal_Int32 nDim, ScDPLabelData& rLabelData);
 

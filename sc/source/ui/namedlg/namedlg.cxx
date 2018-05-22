@@ -22,8 +22,8 @@
 #include <reffact.hxx>
 #include <document.hxx>
 #include <docfunc.hxx>
-#include <scresid.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <namedlg.hxx>
 #include <viewdata.hxx>
 #include <tabvwsh.hxx>
@@ -33,7 +33,6 @@
 
 #include <sfx2/app.hxx>
 
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <formula/errorcodes.hxx>
 #include <o3tl/make_unique.hxx>
@@ -48,10 +47,10 @@ ScNameDlg::ScNameDlg( SfxBindings* pB, SfxChildWindow* pCW, vcl::Window* pParent
         std::map<OUString, std::unique_ptr<ScRangeName>> *const pRangeMap)
     : ScAnyRefDlg(pB, pCW, pParent, "ManageNamesDialog", "modules/scalc/ui/managenamesdialog.ui")
 
-    , maGlobalNameStr(ScGlobal::GetRscString(STR_GLOBAL_SCOPE))
-    , maErrInvalidNameStr(ScGlobal::GetRscString(STR_ERR_NAME_INVALID))
-    , maErrNameInUse(ScGlobal::GetRscString(STR_ERR_NAME_EXISTS))
-    , maStrMultiSelect(ScGlobal::GetRscString(STR_MULTI_SELECT))
+    , maGlobalNameStr(ScResId(STR_GLOBAL_SCOPE))
+    , maErrInvalidNameStr(ScResId(STR_ERR_NAME_INVALID))
+    , maErrNameInUse(ScResId(STR_ERR_NAME_EXISTS))
+    , maStrMultiSelect(ScResId(STR_MULTI_SELECT))
 
     , mpViewData(ptrViewData)
     , mpDoc(ptrViewData->GetDocument())

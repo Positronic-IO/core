@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_java.h>
 
 #include <hintids.hxx>
 #include <rtl/strbuf.hxx>
@@ -49,18 +49,26 @@
 #include <swerror.h>
 #include <ndole.hxx>
 #include <swtable.hxx>
+#include <docsh.hxx>
 #include "swhtml.hxx"
 #include "wrthtml.hxx"
 #include "htmlfly.hxx"
 #include "swcss1.hxx"
+#include "htmlreqifreader.hxx"
 #include <unoframe.hxx>
 #include <com/sun/star/embed/XClassifiedObject.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
+#include <com/sun/star/embed/ElementModes.hpp>
+#include <com/sun/star/io/XActiveDataStreamer.hpp>
 
 #include <comphelper/embeddedobjectcontainer.hxx>
 #include <comphelper/classids.hxx>
+#include <rtl/uri.hxx>
+#include <comphelper/storagehelper.hxx>
+#include <vcl/graphicfilter.hxx>
+#include <unotools/ucbstreamhelper.hxx>
 
 using namespace com::sun::star;
 
@@ -288,9 +296,10 @@ void SwHTMLParser::SetSpace( const Size& rPixSpace,
     }
 }
 
-void SwHTMLParser::InsertEmbed()
+bool SwHTMLParser::InsertEmbed()
 {
     OUString aURL, aType, aName, aAlt, aId, aStyle, aClass;
+    OUString aData;
     Size aSize( USHRT_MAX, USHRT_MAX );
     Size aSpace( USHRT_MAX, USHRT_MAX );
     bool bPrcWidth = false, bPrcHeight = false, bHidden = false;
@@ -357,6 +366,10 @@ void SwHTMLParser::InsertEmbed()
             if( USHRT_MAX==aSpace.Height() )
                 aSpace.setHeight( static_cast<long>(rOption.GetNumber()) );
             break;
+        case HtmlOptionId::DATA:
+            if (m_bXHTML && aURL.isEmpty())
+                aData = rOption.GetString();
+            break;
         case HtmlOptionId::UNKNOWN:
             if (rOption.GetTokenString().equalsIgnoreAsciiCase(
                         OOO_STRING_SW_HTML_O_Hidden))
@@ -371,6 +384,10 @@ void SwHTMLParser::InsertEmbed()
         // All parameters are passed to the plug-in.
         aCmdLst.Append( rOption.GetTokenString(), rOption.GetString() );
     }
+
+    if (aType == "image/png" && m_aEmbeds.empty())
+        // Toplevel <object> for PNG -> that's an image, not an OLE object.
+        return false;
 
     SfxItemSet aItemSet( m_xDoc->GetAttrPool(), m_pCSS1Parser->GetWhichMap() );
     SvxCSS1PropertyInfo aPropInfo;
@@ -399,31 +416,126 @@ void SwHTMLParser::InsertEmbed()
                        URIHelper::SmartRel2Abs(
                            INetURLObject(m_sBaseURL), aURL,
                            URIHelper::GetMaybeFileHdl()) );
+    bool bHasData = !aData.isEmpty();
+    try
+    {
+        aURLObj.SetURL(rtl::Uri::convertRelToAbs(m_sBaseURL, aData));
+    }
+    catch (const rtl::MalformedUriException& /*rException*/)
+    {
+        bHasData = false;
+    }
 
     // do not insert plugin if it has neither URL nor type
     bool bHasType = !aType.isEmpty();
-    if( !bHasURL && !bHasType )
-        return;
+    if( !bHasURL && !bHasType && !bHasData )
+        return true;
+
+    if (!m_aEmbeds.empty())
+    {
+        // Nested XHTML <object> element: points to replacement graphic.
+        SwOLENode* pOLENode = m_aEmbeds.top();
+        svt::EmbeddedObjectRef& rObj = pOLENode->GetOLEObj().GetObject();
+        Graphic aGraphic;
+        if (GraphicFilter::GetGraphicFilter().ImportGraphic(aGraphic, aURLObj) != ERRCODE_NONE)
+            return true;
+
+        rObj.SetGraphic(aGraphic, aType);
+
+        // Set the size of the OLE frame to the size of the graphic.
+        OutputDevice* pDevice = Application::GetDefaultDevice();
+        if (aSize.getHeight() == USHRT_MAX || aSize.getWidth() == USHRT_MAX)
+        {
+            Size aPixelSize = aGraphic.GetSizePixel(pDevice);
+            if (aSize.getWidth() == USHRT_MAX)
+                aSize.setWidth(aPixelSize.getWidth());
+            if (aSize.getHeight() == USHRT_MAX)
+                aSize.setHeight(aPixelSize.getHeight());
+        }
+
+        SwFrameFormat* pFormat = pOLENode->GetFlyFormat();
+        if (!pFormat)
+            return true;
+
+        SwAttrSet aAttrSet(pFormat->GetAttrSet());
+        aAttrSet.ClearItem(RES_CNTNT);
+        Size aTwipSize(pDevice->PixelToLogic(aSize, MapMode(MapUnit::MapTwip)));
+        SwFormatFrameSize aFrameSize(ATT_FIX_SIZE, aTwipSize.Width(), aTwipSize.Height());
+        aAttrSet.Put(aFrameSize);
+        pOLENode->GetDoc()->SetFlyFrameAttr(*pFormat, aAttrSet);
+        return true;
+    }
 
     // create the plug-in
     comphelper::EmbeddedObjectContainer aCnt;
     OUString aObjName;
-    uno::Reference < embed::XEmbeddedObject > xObj = aCnt.CreateEmbeddedObject( SvGlobalName( SO3_PLUGIN_CLASSID ).GetByteSequence(), aObjName );
-    if ( svt::EmbeddedObjectRef::TryRunningState( xObj ) )
+    uno::Reference < embed::XEmbeddedObject > xObj;
+    if (!bHasData)
     {
-        uno::Reference < beans::XPropertySet > xSet( xObj->getComponent(), uno::UNO_QUERY );
-        if ( xSet.is() )
+        xObj = aCnt.CreateEmbeddedObject( SvGlobalName( SO3_PLUGIN_CLASSID ).GetByteSequence(), aObjName );
+        if ( svt::EmbeddedObjectRef::TryRunningState( xObj ) )
         {
-            if( bHasURL )
-                xSet->setPropertyValue("PluginURL", uno::makeAny( aURL ) );
-            if( bHasType )
-                xSet->setPropertyValue("PluginMimeType", uno::makeAny( aType ) );
+            uno::Reference < beans::XPropertySet > xSet( xObj->getComponent(), uno::UNO_QUERY );
+            if ( xSet.is() )
+            {
+                if( bHasURL )
+                    xSet->setPropertyValue("PluginURL", uno::makeAny( aURL ) );
+                if( bHasType )
+                    xSet->setPropertyValue("PluginMimeType", uno::makeAny( aType ) );
 
-            uno::Sequence < beans::PropertyValue > aProps;
-            aCmdLst.FillSequence( aProps );
-            xSet->setPropertyValue("PluginCommands", uno::makeAny( aProps ) );
+                uno::Sequence < beans::PropertyValue > aProps;
+                aCmdLst.FillSequence( aProps );
+                xSet->setPropertyValue("PluginCommands", uno::makeAny( aProps ) );
 
+            }
         }
+    }
+    else if (SwDocShell* pDocSh = m_xDoc->GetDocShell())
+    {
+        // Has non-empty data attribute in XHTML: map that to an OLE object.
+        uno::Reference<embed::XStorage> xStorage = pDocSh->GetStorage();
+        aCnt.SwitchPersistence(xStorage);
+        aObjName = aCnt.CreateUniqueObjectName();
+        {
+            SvFileStream aFileStream(aURLObj.GetMainURL(INetURLObject::DecodeMechanism::NONE),
+                                     StreamMode::READ);
+            uno::Reference<io::XInputStream> xInStream;
+            SvMemoryStream aMemoryStream;
+            if (aType == "text/rtf")
+            {
+                OString aMagic("{\\object");
+                OString aHeader(read_uInt8s_ToOString(aFileStream, aMagic.getLength()));
+                aFileStream.Seek(0);
+                if (aHeader == aMagic)
+                {
+                    // OLE2 wrapped in RTF.
+                    if (SwReqIfReader::ExtractOleFromRtf(aFileStream, aMemoryStream))
+                    {
+                        xInStream.set(new utl::OStreamWrapper(aMemoryStream));
+
+                        // The type is now an OLE2 container, not the original XHTML type.
+                        aType = "application/vnd.sun.star.oleobject";
+                    }
+                }
+            }
+
+            if (!xInStream.is())
+                // Non-RTF case.
+                xInStream.set(new utl::OStreamWrapper(aFileStream));
+
+            uno::Reference<io::XStream> xOutStream
+                = xStorage->openStreamElement(aObjName, embed::ElementModes::READWRITE);
+            comphelper::OStorageHelper::CopyInputToOutput(xInStream, xOutStream->getOutputStream());
+
+            if (!aType.isEmpty())
+            {
+                // Set media type of the native data.
+                uno::Reference<beans::XPropertySet> xOutStreamProps(xOutStream, uno::UNO_QUERY);
+                if (xOutStreamProps.is())
+                    xOutStreamProps->setPropertyValue("MediaType", uno::makeAny(aType));
+            }
+        }
+        xObj = aCnt.GetEmbeddedObject(aObjName);
     }
 
     SfxItemSet aFrameSet( m_xDoc->GetAttrPool(),
@@ -475,13 +587,24 @@ void SwHTMLParser::InsertEmbed()
         // character-bound frame, here we must create the frames by hand.
         RegisterFlyFrame( pFlyFormat );
     }
+
+    if (!bHasData)
+        return true;
+
+    SwOLENode* pOLENode = pNoTextNd->GetOLENode();
+    if (!pOLENode)
+        return true;
+
+    m_aEmbeds.push(pOLENode);
+
+    return true;
 }
 
 #if HAVE_FEATURE_JAVA
 void SwHTMLParser::NewObject()
 {
     OUString aClassID;
-    OUString aName, aStandBy, aId, aStyle, aClass;
+    OUString aStandBy, aId, aStyle, aClass;
     Size aSize( USHRT_MAX, USHRT_MAX );
     Size aSpace( 0, 0 );
     sal_Int16 eVertOri = text::VertOrientation::TOP;
@@ -543,7 +666,6 @@ void SwHTMLParser::NewObject()
         case HtmlOptionId::USEMAP:
             break;
         case HtmlOptionId::NAME:
-            aName = rOption.GetString();
             break;
         case HtmlOptionId::HSPACE:
             aSpace.setWidth( static_cast<long>(rOption.GetNumber()) );
@@ -979,7 +1101,7 @@ Writer& OutHTML_FrameFormatOLENode( Writer& rWrt, const SwFrameFormat& rFrameFor
 
     const SwFormatContent& rFlyContent = rFrameFormat.GetContent();
     sal_uLong nStt = rFlyContent.GetContentIdx()->GetIndex()+1;
-    SwOLENode *pOLENd = rHTMLWrt.pDoc->GetNodes()[ nStt ]->GetOLENode();
+    SwOLENode *pOLENd = rHTMLWrt.m_pDoc->GetNodes()[ nStt ]->GetOLENode();
 
     OSL_ENSURE( pOLENd, "OLE-Node expected" );
     if( !pOLENd )
@@ -1247,7 +1369,7 @@ Writer& OutHTML_FrameFormatOLENodeGrf( Writer& rWrt, const SwFrameFormat& rFrame
 
     const SwFormatContent& rFlyContent = rFrameFormat.GetContent();
     sal_uLong nStt = rFlyContent.GetContentIdx()->GetIndex()+1;
-    SwOLENode *pOLENd = rHTMLWrt.pDoc->GetNodes()[ nStt ]->GetOLENode();
+    SwOLENode *pOLENd = rHTMLWrt.m_pDoc->GetNodes()[ nStt ]->GetOLENode();
 
     OSL_ENSURE( pOLENd, "OLE-Node expected" );
     if( !pOLENd )
@@ -1257,7 +1379,7 @@ Writer& OutHTML_FrameFormatOLENodeGrf( Writer& rWrt, const SwFrameFormat& rFrame
     {
         // If we skip images, embedded objects would be completely lost.
         // Instead, try to use the HTML export of the embedded object.
-        uno::Reference<text::XTextContent> xTextContent = SwXTextEmbeddedObject::CreateXTextEmbeddedObject(*rHTMLWrt.pDoc, const_cast<SwFrameFormat*>(&rFrameFormat));
+        uno::Reference<text::XTextContent> xTextContent = SwXTextEmbeddedObject::CreateXTextEmbeddedObject(*rHTMLWrt.m_pDoc, const_cast<SwFrameFormat*>(&rFrameFormat));
         uno::Reference<document::XEmbeddedObjectSupplier2> xEmbeddedObjectSupplier(xTextContent, uno::UNO_QUERY);
         uno::Reference<frame::XStorable> xStorable(xEmbeddedObjectSupplier->getEmbeddedObject(), uno::UNO_QUERY);
         SAL_WARN_IF(!xStorable.is(), "sw.html", "OutHTML_FrameFormatOLENodeGrf: no embedded object");
@@ -1301,17 +1423,97 @@ Writer& OutHTML_FrameFormatOLENodeGrf( Writer& rWrt, const SwFrameFormat& rFrame
     }
 
     Graphic aGraphic( *pOLENd->GetGraphic() );
+
+    SwDocShell* pDocSh = rHTMLWrt.m_pDoc->GetDocShell();
+    bool bObjectOpened = false;
+    if (rHTMLWrt.mbXHTML && pDocSh)
+    {
+        // Map native data to an outer <object> element.
+
+        // Calculate the file name, which is meant to be the same as the
+        // replacement image, just with a .ole extension.
+        OUString aFileName;
+        if (rHTMLWrt.GetOrigFileName())
+            aFileName = *rHTMLWrt.GetOrigFileName();
+        INetURLObject aURL(aFileName);
+        OUString aName(aURL.getBase());
+        aName += "_";
+        aName += aURL.getExtension();
+        aName += "_";
+        aName += OUString::number(aGraphic.GetChecksum(), 16);
+        aURL.setBase(aName);
+        aURL.setExtension("ole");
+        aFileName = aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE);
+
+        // Write the data.
+        SwOLEObj& rOLEObj = pOLENd->GetOLEObj();
+        uno::Reference<embed::XEmbeddedObject> xEmbeddedObject = rOLEObj.GetOleRef();
+        OUString aFileType;
+        SvFileStream aOutStream(aFileName, StreamMode::WRITE);
+        uno::Reference<io::XActiveDataStreamer> xStreamProvider;
+        if (xEmbeddedObject.is())
+            xStreamProvider.set(xEmbeddedObject, uno::UNO_QUERY);
+        if (xStreamProvider.is())
+        {
+            uno::Reference<io::XInputStream> xStream(xStreamProvider->getStream(), uno::UNO_QUERY);
+            if (xStream.is())
+            {
+                std::unique_ptr<SvStream> pStream(utl::UcbStreamHelper::CreateStream(xStream));
+                if (SwReqIfReader::WrapOleInRtf(*pStream, aOutStream))
+                {
+                    // OLE2 is always wrapped in RTF.
+                    aFileType = "text/rtf";
+                }
+            }
+        }
+        else
+        {
+            OUString aStreamName = rOLEObj.GetCurrentPersistName();
+            uno::Reference<embed::XStorage> xStorage = pDocSh->GetStorage();
+            uno::Reference<io::XStream> xInStream
+                = xStorage->openStreamElement(aStreamName, embed::ElementModes::READ);
+            uno::Reference<io::XStream> xOutStream(new utl::OStreamWrapper(aOutStream));
+            comphelper::OStorageHelper::CopyInputToOutput(xInStream->getInputStream(),
+                                                          xOutStream->getOutputStream());
+            uno::Reference<beans::XPropertySet> xOutStreamProps(xInStream, uno::UNO_QUERY);
+            if (xOutStreamProps.is())
+                xOutStreamProps->getPropertyValue("MediaType") >>= aFileType;
+        }
+        aFileName = URIHelper::simpleNormalizedMakeRelative(rWrt.GetBaseURL(), aFileName);
+
+        // Refer to this data.
+        if (rHTMLWrt.m_bLFPossible)
+            rHTMLWrt.OutNewLine();
+        rWrt.Strm().WriteOString("<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_object);
+        rWrt.Strm().WriteOString(" data=\"" + aFileName.toUtf8() + "\"");
+        if (!aFileType.isEmpty())
+            rWrt.Strm().WriteOString(" type=\"" + aFileType.toUtf8() + "\"");
+        rWrt.Strm().WriteOString(">");
+        bObjectOpened = true;
+        rHTMLWrt.m_bLFPossible = true;
+    }
+
     OUString aGraphicURL;
+    OUString aMimeType;
     if(!rHTMLWrt.mbEmbedImages)
     {
         const OUString* pTempFileName = rHTMLWrt.GetOrigFileName();
         if(pTempFileName)
             aGraphicURL = *pTempFileName;
 
+        OUString aFilterName("JPG");
+        XOutFlags nFlags = XOutFlags::UseGifIfPossible | XOutFlags::UseNativeIfPossible;
+
+        if (bObjectOpened)
+        {
+            aFilterName = "PNG";
+            nFlags = XOutFlags::NONE;
+            aMimeType = "image/png";
+        }
+
         ErrCode nErr = XOutBitmap::WriteGraphic( aGraphic, aGraphicURL,
-                                    "JPG",
-                                    (XOutFlags::UseGifIfPossible |
-                                     XOutFlags::UseNativeIfPossible) );
+                                    aFilterName,
+                                    nFlags );
         if( nErr )              // error, don't write anything
         {
             rHTMLWrt.m_nWarn = WARN_SWG_POOR_LOAD;
@@ -1324,9 +1526,16 @@ Writer& OutHTML_FrameFormatOLENodeGrf( Writer& rWrt, const SwFrameFormat& rFrame
     }
     HtmlFrmOpts nFlags = bInCntnr ? HtmlFrmOpts::GenImgAllMask
         : HtmlFrmOpts::GenImgMask;
+    if (bObjectOpened)
+        nFlags |= HtmlFrmOpts::Replacement;
     OutHTML_Image( rWrt, rFrameFormat, aGraphicURL, aGraphic,
             pOLENd->GetTitle(), pOLENd->GetTwipSize(),
-            nFlags, "ole" );
+            nFlags, "ole", nullptr, aMimeType );
+
+    if (bObjectOpened)
+        // Close native data.
+        rWrt.Strm().WriteOString("</" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_object
+                                 ">");
 
     return rWrt;
 }

@@ -42,7 +42,6 @@
 #include <chgtrack.hxx>
 #include <validat.hxx>
 #include <attrib.hxx>
-#include <globstr.hrc>
 #include <global.hxx>
 
 #include <svx/svdoole2.hxx>
@@ -68,12 +67,12 @@
 #include <svl/zformat.hxx>
 
 #include <test/xmltesttools.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/table/BorderLineStyle.hpp>
 #include <com/sun/star/drawing/XDrawPage.hpp>
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/graphic/GraphicType.hpp>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -162,6 +161,7 @@ public:
     void testCeilingFloorXLS();
     void testCeilingFloorODS();
 
+    void testCustomXml();
 
 #if !defined _WIN32
     void testRelativePathsODS();
@@ -268,6 +268,7 @@ public:
     CPPUNIT_TEST(testCeilingFloorODSToXLSX);
     CPPUNIT_TEST(testCeilingFloorXLS);
     CPPUNIT_TEST(testCeilingFloorODS);
+    CPPUNIT_TEST(testCustomXml);
 #if !defined(_WIN32)
     CPPUNIT_TEST(testRelativePathsODS);
 #endif
@@ -2163,7 +2164,7 @@ void ScExportTest::testCellAnchoredGroupXLS()
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
     CPPUNIT_ASSERT_MESSAGE("Upper left of bounding rectangle should be nonnegative.",
-        pData->maLastRect.Left() >= 0 || pData->maLastRect.Top() >= 0);
+        pData->getShapeRect().Left() >= 0 || pData->getShapeRect().Top() >= 0);
     xDocSh->DoClose();
 }
 
@@ -2688,7 +2689,7 @@ void ScExportTest::testSheetTabColorsXLSX()
 
             for (size_t i = 0; i < SAL_N_ELEMENTS(aXclColors); ++i)
             {
-                if (aXclColors[i] != rDoc.GetTabBgColor(i).GetColor())
+                if (aXclColors[i] != rDoc.GetTabBgColor(i))
                 {
                     cerr << "wrong sheet color for sheet " << i << endl;
                     return false;
@@ -3041,6 +3042,25 @@ void ScExportTest::testCeilingFloorODS()
     testCeilingFloor(FORMAT_ODS);
 }
 
+void ScExportTest::testCustomXml()
+{
+    // Load document and export it to a temporary file
+    ScDocShellRef xShell = loadDoc("customxml.", FORMAT_XLSX);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load the document.", xShell.is());
+
+    std::shared_ptr<utl::TempFile> pXPathFile = ScBootstrapFixture::exportTo(&(*xShell), FORMAT_XLSX);
+    xmlDocPtr pXmlDoc = XPathHelper::parseExport(pXPathFile, m_xSFactory, "customXml/item1.xml");
+    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocPtr pRelsDoc = XPathHelper::parseExport(pXPathFile, m_xSFactory, "customXml/_rels/item1.xml.rels");
+    CPPUNIT_ASSERT(pRelsDoc);
+
+    // Check there is a relation to itemProps1.xml.
+    assertXPath(pRelsDoc, "/r:Relationships/r:Relationship", 1);
+    assertXPath(pRelsDoc, "/r:Relationships/r:Relationship[@Id='rId1']", "Target", "itemProps1.xml");
+
+    std::shared_ptr<SvStream> pStream = XPathHelper::parseExportStream(pXPathFile, m_xSFactory, "ddp/ddpfile.xen");
+    CPPUNIT_ASSERT(pStream);
+}
 
 #if !defined _WIN32
 void ScExportTest::testRelativePathsODS()
@@ -3130,16 +3150,13 @@ void ScExportTest::testSwappedOutImageExport()
 
         uno::Reference<drawing::XShape> xImage(xDraws->getByIndex(0), uno::UNO_QUERY);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width );
@@ -3148,16 +3165,13 @@ void ScExportTest::testSwappedOutImageExport()
         // Second Image
         xImage.set(xDraws->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width );
@@ -3238,9 +3252,8 @@ void ScExportTest::testLinkedGraphicRT()
         CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject->IsLinkedGraphic() );
 
         const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
-        CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), !rGraphicObj.IsSwappedOut());
         CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-        CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
 
         xDocSh2->DoClose();
     }
@@ -3281,16 +3294,13 @@ void ScExportTest::testImageWithSpecialID()
 
         uno::Reference<drawing::XShape> xImage(xDraws->getByIndex(0), uno::UNO_QUERY);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width );
@@ -3299,16 +3309,13 @@ void ScExportTest::testImageWithSpecialID()
         // Second Image
         xImage.set(xDraws->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width );
@@ -3405,8 +3412,8 @@ void ScExportTest::testSheetCondensedCharacterSpaceXLSX()
     OUString CondensedCharSpace = getXPath(pDoc,
         "/xdr:wsDr[1]/xdr:twoCellAnchor[1]/xdr:sp[1]/xdr:txBody[1]/a:p[1]/a:r[1]/a:rPr[1]","spc");
 
-    // make sure that the CondensedCharSpace is -996.
-    CPPUNIT_ASSERT_EQUAL(OUString("-996"), CondensedCharSpace);
+    // make sure that the CondensedCharSpace is -1002.
+    CPPUNIT_ASSERT_EQUAL(OUString("-1002"), CondensedCharSpace);
 
     xDocSh->DoClose();
 }
@@ -3514,12 +3521,12 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
 
     // Check cell anchor state
     ScAnchorType oldType = ScDrawLayer::GetAnchorType(*pObj);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL, oldType);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL_RESIZE, oldType);
 
     // Get anchor data
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
 
     ScAddress aDataStart = pData->maStart;
     ScAddress aDataEnd   = pData->maEnd;
@@ -3527,7 +3534,7 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
     // Get non rotated anchor data
     ScDrawObjData* pNData = ScDrawLayer::GetNonRotatedObjData( pObj );
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve non rotated user data for this object.", pNData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->getShapeRect().IsEmpty());
 
     ScAddress aNDataStart = pNData->maStart;
     ScAddress aNDataEnd   = pNData->maEnd;
@@ -3540,12 +3547,12 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
     // Get anchor data
     pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
 
     // Get non rotated anchor data
     pNData = ScDrawLayer::GetNonRotatedObjData( pObj );
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve non rotated user data for this object.", pNData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->getShapeRect().IsEmpty());
 
     // Check if data has moved to new rows
     CPPUNIT_ASSERT_EQUAL( pData->maStart.Row(), aDataStart.Row() + 2 );
@@ -3576,17 +3583,17 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
 
     // Check cell anchor state
     oldType = ScDrawLayer::GetAnchorType(*pObj);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL, oldType);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL_RESIZE, oldType);
 
     // Get anchor data
     pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
 
     // Get non rotated anchor data
     pNData = ScDrawLayer::GetNonRotatedObjData( pObj );
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve non rotated user data for this object.", pNData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->getShapeRect().IsEmpty());
 
     // Check if data after save it
     CPPUNIT_ASSERT_EQUAL(pData->maStart, aDataStart);
@@ -3601,12 +3608,12 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
     // Get anchor data
     pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
 
     // Get non rotated anchor data
     pNData = ScDrawLayer::GetNonRotatedObjData( pObj );
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve non rotated user data for this object.", pNData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->getShapeRect().IsEmpty());
 
     // Check if data has moved to new rows
     CPPUNIT_ASSERT_EQUAL(pData->maStart.Col(), SCCOL(aDataStart.Col() + 1));
@@ -3637,17 +3644,17 @@ void ScExportTest::testMoveCellAnchoredShapesODS()
 
     // Check cell anchor state
     oldType = ScDrawLayer::GetAnchorType(*pObj);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL, oldType);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Failed to get anchor type", SCA_CELL_RESIZE, oldType);
 
     // Get anchor data
     pData = ScDrawLayer::GetObjData(pObj);
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
 
     // Get non rotated anchor data
     pNData = ScDrawLayer::GetNonRotatedObjData( pObj );
     CPPUNIT_ASSERT_MESSAGE("Failed to retrieve non rotated user data for this object.", pNData);
-    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->maLastRect.IsEmpty());
+    CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pNData->getShapeRect().IsEmpty());
 
     // Check if data after save it
     CPPUNIT_ASSERT_EQUAL(pData->maStart, aDataStart);
@@ -3781,9 +3788,10 @@ void ScExportTest::testHeaderImageODS()
     uno::Reference<container::XNameAccess> xStyleFamilies = xStyleFamiliesSupplier->getStyleFamilies();
     uno::Reference<container::XNameAccess> xPageStyles(xStyleFamilies->getByName("PageStyles"), uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xStyle(xPageStyles->getByName("Default"), uno::UNO_QUERY);
-    OUString aURL;
-    xStyle->getPropertyValue("HeaderBackGraphicURL") >>= aURL;
-    CPPUNIT_ASSERT(aURL.startsWith("vnd.sun.star.GraphicObject:"));
+
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xStyle->getPropertyValue("HeaderBackGraphic") >>= xGraphic;
+    CPPUNIT_ASSERT(xGraphic.is());
     xDocSh->DoClose();
 }
 

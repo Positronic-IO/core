@@ -59,7 +59,6 @@ SvxColorTabPage::SvxColorTabPage(vcl::Window* pParent, const SfxItemSet& rInAttr
     , rOutAttrs           ( rInAttrs )
     // All the horrific pointers we store and should not
     , pnColorListState( nullptr )
-    , aXFillColorItem( OUString(), COL_BLACK )
     , aXFillAttr( rInAttrs.GetPool() )
     , rXFSet( aXFillAttr.GetItemSet() )
     , eCM( ColorModel::RGB )
@@ -109,7 +108,7 @@ SvxColorTabPage::SvxColorTabPage(vcl::Window* pParent, const SfxItemSet& rInAttr
 
     // setting the output device
     rXFSet.Put( XFillStyleItem(drawing::FillStyle_SOLID) );
-    rXFSet.Put( aXFillColorItem );
+    rXFSet.Put( XFillColorItem(OUString(), COL_BLACK) );
     m_pCtlPreviewOld->SetAttributes( aXFillAttr.GetItemSet() );
     m_pCtlPreviewNew->SetAttributes( aXFillAttr.GetItemSet() );
 
@@ -308,10 +307,10 @@ void SvxColorTabPage::Reset( const SfxItemSet* rSet )
 }
 
 
-VclPtr<SfxTabPage> SvxColorTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxColorTabPage::Create( TabPageParent pWindow,
                                             const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxColorTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxColorTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 // is called when the content of the MtrFields is changed for color values
@@ -321,7 +320,7 @@ IMPL_LINK(SvxColorTabPage, ModifiedHdl_Impl, Edit&, rEdit, void)
     {
         // read current MtrFields, if cmyk, then k-value as transparency
         if(&rEdit == m_pHexcustom)
-            aCurrentColor = Color(m_pHexcustom->GetColor());
+            aCurrentColor = m_pHexcustom->GetColor();
         else
         {
             aCurrentColor = Color( static_cast<sal_uInt8>(PercentToColor_Impl( static_cast<sal_uInt16>(m_pRcustom->GetValue()) )),
@@ -364,7 +363,7 @@ IMPL_LINK_NOARG(SvxColorTabPage, ClickAddHdl_Impl, Button*, void)
     }
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
     sal_uInt16 nError = 1;
 
     while (pDlg->Execute() == RET_OK)
@@ -396,7 +395,7 @@ IMPL_LINK_NOARG(SvxColorTabPage, ClickAddHdl_Impl, Button*, void)
         sal_Int32 nSize = aCustomColorList.getLength();
         aCustomColorList.realloc( nSize + 1 );
         aCustomColorNameList.realloc( nSize + 1 );
-        aCustomColorList[nSize] = aCurrentColor.GetColor();
+        aCustomColorList[nSize] = sal_Int32(aCurrentColor);
         aCustomColorNameList[nSize] = aName;
         officecfg::Office::Common::UserColors::CustomColor::set(aCustomColorList, batch);
         officecfg::Office::Common::UserColors::CustomColorName::set(aCustomColorNameList, batch);
@@ -434,7 +433,7 @@ IMPL_LINK_NOARG(SvxColorTabPage, ClickWorkOnHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxColorTabPage, ClickDeleteHdl_Impl, Button*, void)
 {
-    sal_uInt16 nId = m_pValSetColorList->GetSelectItemId();
+    sal_uInt16 nId = m_pValSetColorList->GetSelectedItemId();
     size_t nPos = m_pValSetColorList->GetSelectItemPos();
     if(m_pSelectPalette->GetSelectedEntryPos() == 0 && nPos != VALUESET_ITEM_NOTFOUND )
     {
@@ -500,7 +499,7 @@ IMPL_LINK_NOARG(SvxColorTabPage, SelectPaletteLBHdl, ListBox&, void)
 
 IMPL_LINK(SvxColorTabPage, SelectValSetHdl_Impl, ValueSet*, pValSet, void)
 {
-    sal_Int32 nPos = pValSet->GetSelectItemId();
+    sal_Int32 nPos = pValSet->GetSelectedItemId();
     if( nPos != 0 )
     {
         Color aColor = pValSet->GetItemColor( nPos );
@@ -513,7 +512,7 @@ IMPL_LINK(SvxColorTabPage, SelectValSetHdl_Impl, ValueSet*, pValSet, void)
         if(pValSet == m_pValSetColorList)
         {
             m_pValSetRecentList->SetNoSelection();
-            if(m_pSelectPalette->GetSelectedEntryPos() == 0 && m_pValSetColorList->GetSelectItemId() != 0)
+            if(m_pSelectPalette->GetSelectedEntryPos() == 0 && m_pValSetColorList->GetSelectedItemId() != 0)
                 m_pBtnDelete->Enable();
             else
                 m_pBtnDelete->Disable();
@@ -629,14 +628,14 @@ void SvxColorTabPage::UpdateColorValues( bool bUpdatePreset )
         m_pRcustom->SetValue( ColorToPercent_Impl( aCurrentColor.GetRed() ) );
         m_pGcustom->SetValue( ColorToPercent_Impl( aCurrentColor.GetGreen() ) );
         m_pBcustom->SetValue( ColorToPercent_Impl( aCurrentColor.GetBlue() ) );
-        m_pHexcustom->SetColor( aCurrentColor.GetColor() );
+        m_pHexcustom->SetColor( aCurrentColor );
 
         if( bUpdatePreset )
         {
             m_pRpreset->SetValue( ColorToPercent_Impl( aPreviousColor.GetRed() ) );
             m_pGpreset->SetValue( ColorToPercent_Impl( aPreviousColor.GetGreen() ) );
             m_pBpreset->SetValue( ColorToPercent_Impl( aPreviousColor.GetBlue() ) );
-            m_pHexpreset->SetColor( aPreviousColor.GetColor() );
+            m_pHexpreset->SetColor( aPreviousColor );
         }
     }
 }

@@ -21,7 +21,6 @@
 #include <UITools.hxx>
 #include <dbu_dlg.hxx>
 #include <comphelper/types.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/sdbc/XDatabaseMetaData.hpp>
 #include <com/sun/star/sdbcx/XDataDefinitionSupplier.hpp>
 #include <com/sun/star/sdbcx/XUsersSupplier.hpp>
@@ -203,9 +202,9 @@ void OUserAdmin::FillUserNames()
 
 }
 
-VclPtr<SfxTabPage> OUserAdmin::Create( vcl::Window* pParent, const SfxItemSet* _rAttrSet )
+VclPtr<SfxTabPage> OUserAdmin::Create( TabPageParent pParent, const SfxItemSet* _rAttrSet )
 {
-    return VclPtr<OUserAdmin>::Create( pParent, *_rAttrSet );
+    return VclPtr<OUserAdmin>::Create( pParent.pParent, *_rAttrSet );
 }
 
 IMPL_LINK( OUserAdmin, UserHdl, Button *, pButton, void )
@@ -214,16 +213,16 @@ IMPL_LINK( OUserAdmin, UserHdl, Button *, pButton, void )
     {
         if(pButton == m_pNEWUSER)
         {
-            ScopedVclPtrInstance< SfxPasswordDialog > aPwdDlg(this);
-            aPwdDlg->ShowExtras(SfxShowExtras::ALL);
-            if(aPwdDlg->Execute())
+            SfxPasswordDialog aPwdDlg(GetFrameWeld());
+            aPwdDlg.ShowExtras(SfxShowExtras::ALL);
+            if (aPwdDlg.execute())
             {
                 Reference<XDataDescriptorFactory> xUserFactory(m_xUsers,UNO_QUERY);
                 Reference<XPropertySet> xNewUser = xUserFactory->createDataDescriptor();
                 if(xNewUser.is())
                 {
-                    xNewUser->setPropertyValue(PROPERTY_NAME,makeAny(aPwdDlg->GetUser()));
-                    xNewUser->setPropertyValue(PROPERTY_PASSWORD,makeAny(aPwdDlg->GetPassword()));
+                    xNewUser->setPropertyValue(PROPERTY_NAME,makeAny(aPwdDlg.GetUser()));
+                    xNewUser->setPropertyValue(PROPERTY_PASSWORD,makeAny(aPwdDlg.GetPassword()));
                     Reference<XAppend> xAppend(m_xUsers,UNO_QUERY);
                     if(xAppend.is())
                         xAppend->appendByDescriptor(xNewUser);

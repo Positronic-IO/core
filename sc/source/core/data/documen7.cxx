@@ -39,8 +39,6 @@
 #include <formulagroup.hxx>
 #include <refhint.hxx>
 
-#include <globstr.hrc>
-
 void ScDocument::StartListeningArea(
     const ScRange& rRange, bool bGroupListening, SvtListener* pListener )
 {
@@ -129,7 +127,7 @@ void ScDocument::Broadcast( const ScHint& rHint )
         return ;    // Clipboard or Undo
     if ( eHardRecalcState == HardRecalcState::OFF )
     {
-        ScBulkBroadcast aBulkBroadcast( pBASM, rHint.GetId());     // scoped bulk broadcast
+        ScBulkBroadcast aBulkBroadcast( pBASM.get(), rHint.GetId());     // scoped bulk broadcast
         bool bIsBroadcasted = false;
         SvtBroadcaster* pBC = GetBroadcaster(rHint.GetAddress());
         if ( pBC )
@@ -165,7 +163,7 @@ void ScDocument::BroadcastCells( const ScRange& rRange, SfxHintId nHint, bool bB
 
     if (eHardRecalcState == HardRecalcState::OFF)
     {
-        ScBulkBroadcast aBulkBroadcast( pBASM, nHint);     // scoped bulk broadcast
+        ScBulkBroadcast aBulkBroadcast( pBASM.get(), nHint);     // scoped bulk broadcast
         bool bIsBroadcasted = false;
 
         if (bBroadcastSingleBroadcasters)
@@ -293,7 +291,7 @@ void ScDocument::AreaBroadcast( const ScHint& rHint )
         return ;    // Clipboard or Undo
     if (eHardRecalcState == HardRecalcState::OFF)
     {
-        ScBulkBroadcast aBulkBroadcast( pBASM, rHint.GetId());     // scoped bulk broadcast
+        ScBulkBroadcast aBulkBroadcast( pBASM.get(), rHint.GetId());     // scoped bulk broadcast
         if ( pBASM->AreaBroadcast( rHint ) )
             TrackFormulas( rHint.GetId() );
     }

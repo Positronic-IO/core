@@ -84,7 +84,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
 using namespace ::com::sun::star::uno;
 
-#define SmDocShell
+#define ShellClass_SmDocShell
 #include <smslots.hxx>
 
 
@@ -331,7 +331,7 @@ EditEngine& SmDocShell::GetEditEngine()
 
         SetEditEngineDefaultFonts(*mpEditEngineItemPool, maLinguOptions);
 
-        mpEditEngine = new EditEngine( mpEditEngineItemPool );
+        mpEditEngine.reset( new EditEngine( mpEditEngineItemPool ) );
 
         mpEditEngine->SetAddExtLeading(true);
 
@@ -476,11 +476,11 @@ SmPrinterAccess::SmPrinterAccess( SmDocShell &rDocShell )
         pPrinter->Push( PushFlags::MAPMODE );
         if ( SfxObjectCreateMode::EMBEDDED == rDocShell.GetCreateMode() )
         {
-            // if it is an embedded object (without it's own printer)
+            // if it is an embedded object (without its own printer)
             // we change the MapMode temporarily.
             //!If it is a document with its own printer the MapMode should
             //!be set correct (once) elsewhere(!), in order to avoid numerous
-            //!superfluous pushing and poping of the MapMode when using
+            //!superfluous pushing and popping of the MapMode when using
             //!this class.
 
             const MapUnit eOld = pPrinter->GetMapMode().GetMapUnit();
@@ -501,11 +501,11 @@ SmPrinterAccess::SmPrinterAccess( SmDocShell &rDocShell )
         pRefDev->Push( PushFlags::MAPMODE );
         if ( SfxObjectCreateMode::EMBEDDED == rDocShell.GetCreateMode() )
         {
-            // if it is an embedded object (without it's own printer)
+            // if it is an embedded object (without its own printer)
             // we change the MapMode temporarily.
             //!If it is a document with its own printer the MapMode should
             //!be set correct (once) elsewhere(!), in order to avoid numerous
-            //!superfluous pushing and poping of the MapMode when using
+            //!superfluous pushing and popping of the MapMode when using
             //!this class.
 
             const MapUnit eOld = pRefDev->GetMapMode().GetMapUnit();
@@ -639,7 +639,7 @@ SmDocShell::~SmDocShell()
     EndListening(*pp->GetConfig());
 
     mpCursor.reset();
-    delete mpEditEngine;
+    mpEditEngine.reset();
     SfxItemPool::Free(mpEditEngineItemPool);
     mpPrinter.disposeAndClear();
 }
@@ -673,10 +673,14 @@ bool SmDocShell::ConvertFrom(SfxMedium &rMedium)
                 if ( aStorage->IsStream("Equation Native") )
                 {
                     // is this a MathType Storage?
-                    MathType aEquation( maText );
+                    OUStringBuffer aBuffer;
+                    MathType aEquation(aBuffer);
                     bSuccess = aEquation.Parse( aStorage.get() );
                     if ( bSuccess )
+                    {
+                        maText = aBuffer.makeStringAndClear();
                         Parse();
+                    }
                 }
             }
         }
@@ -928,15 +932,15 @@ void SmDocShell::Execute(SfxRequest& rReq)
                 pDev = &SM_MOD()->GetDefaultVirtualDev();
             OSL_ENSURE (pDev, "device for font list missing" );
 
-            VclPtrInstance< SmFontTypeDialog > xFontTypeDialog( nullptr, pDev );
+            SmFontTypeDialog aFontTypeDialog(rReq.GetFrameWeld(), pDev);
 
             SmFormat aOldFormat  = GetFormat();
-            xFontTypeDialog->ReadFrom( aOldFormat );
-            if (xFontTypeDialog->Execute() == RET_OK)
+            aFontTypeDialog.ReadFrom( aOldFormat );
+            if (aFontTypeDialog.run() == RET_OK)
             {
                 SmFormat aNewFormat( aOldFormat );
 
-                xFontTypeDialog->WriteTo(aNewFormat);
+                aFontTypeDialog.WriteTo(aNewFormat);
                 ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
                     pTmpUndoMgr->AddUndoAction(
@@ -950,15 +954,15 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
         case SID_FONTSIZE:
         {
-            VclPtrInstance< SmFontSizeDialog > xFontSizeDialog(nullptr);
+            SmFontSizeDialog aFontSizeDialog(rReq.GetFrameWeld());
 
             SmFormat aOldFormat  = GetFormat();
-            xFontSizeDialog->ReadFrom( aOldFormat );
-            if (xFontSizeDialog->Execute() == RET_OK)
+            aFontSizeDialog.ReadFrom( aOldFormat );
+            if (aFontSizeDialog.run() == RET_OK)
             {
                 SmFormat aNewFormat( aOldFormat );
 
-                xFontSizeDialog->WriteTo(aNewFormat);
+                aFontSizeDialog.WriteTo(aNewFormat);
 
                 ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
@@ -973,15 +977,15 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
         case SID_DISTANCE:
         {
-            VclPtrInstance< SmDistanceDialog > xDistanceDialog(nullptr);
+            SmDistanceDialog aDistanceDialog(rReq.GetFrameWeld());
 
             SmFormat aOldFormat  = GetFormat();
-            xDistanceDialog->ReadFrom( aOldFormat );
-            if (xDistanceDialog->Execute() == RET_OK)
+            aDistanceDialog.ReadFrom( aOldFormat );
+            if (aDistanceDialog.run() == RET_OK)
             {
                 SmFormat aNewFormat( aOldFormat );
 
-                xDistanceDialog->WriteTo(aNewFormat);
+                aDistanceDialog.WriteTo(aNewFormat);
 
                 ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
@@ -996,19 +1000,19 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
         case SID_ALIGN:
         {
-            VclPtrInstance< SmAlignDialog > xAlignDialog(nullptr);
+            SmAlignDialog aAlignDialog(rReq.GetFrameWeld());
 
             SmFormat aOldFormat  = GetFormat();
-            xAlignDialog->ReadFrom( aOldFormat );
-            if (xAlignDialog->Execute() == RET_OK)
+            aAlignDialog.ReadFrom( aOldFormat );
+            if (aAlignDialog.run() == RET_OK)
             {
                 SmFormat aNewFormat( aOldFormat );
 
-                xAlignDialog->WriteTo(aNewFormat);
+                aAlignDialog.WriteTo(aNewFormat);
 
                 SmModule *pp = SM_MOD();
                 SmFormat aFmt( pp->GetConfig()->GetStandardFormat() );
-                xAlignDialog->WriteTo( aFmt );
+                aAlignDialog.WriteTo( aFmt );
                 pp->GetConfig()->SetStandardFormat( aFmt );
 
                 ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
@@ -1063,7 +1067,7 @@ void SmDocShell::Execute(SfxRequest& rReq)
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("starmath");
                 }
             }
             Repaint();
@@ -1284,7 +1288,8 @@ void SmDocShell::SetModified(bool bModified)
 
 bool SmDocShell::WriteAsMathType3( SfxMedium& rMedium )
 {
-    MathType aEquation( maText, mpTree.get() );
+    OUStringBuffer aTextAsBuffer(maText);
+    MathType aEquation(aTextAsBuffer, mpTree.get());
     return aEquation.ConvertFromStarMath( rMedium );
 }
 

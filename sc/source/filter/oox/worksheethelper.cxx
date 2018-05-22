@@ -763,8 +763,30 @@ void WorksheetGlobals::setColumnModel( const ColumnModel& rModel )
     sal_Int32 nLastCol = rModel.maRange.mnLast - 1;
     if( getAddressConverter().checkCol( nFirstCol, true ) && (nFirstCol <= nLastCol) )
     {
-        // validate last column index
-        if( !getAddressConverter().checkCol( nLastCol, true ) )
+        // Validate last column index.
+        // If last column is equal to last possible column, Excel adds one
+        // more. We do that also in XclExpColinfo::SaveXml() and for 1024 end
+        // up with 1025 instead, which would lead to excess columns in
+        // checkCol(). Cater for this oddity.
+        if (nLastCol == mrMaxApiPos.Col() + 1)
+            --nLastCol;
+        // This is totally fouled up. If we saved 1025 and the file is saved
+        // with Excel again, it increments the value to 1026.
+        else if (nLastCol == mrMaxApiPos.Col() + 2)
+            nLastCol -= 2;
+        // Excel may add a column range for the remaining columns (with
+        // <cols><col .../></cols>), even if not used or only used to grey out
+        // columns in page break view. Don't let that trigger overflow warning,
+        // so check for the last possible column. If there really is content in
+        // the range that should be caught anyway.
+        else if (nLastCol == getAddressConverter().getMaxXlsAddress().Col())
+            nLastCol = mrMaxApiPos.Col();
+        // User may have applied custom column widths to arbitrary excess
+        // columns. Ignore those and don't track as overflow columns (false).
+        // Effectively this does the same as the above cases, just keep them
+        // for explanation.
+        // Actual data present should trigger the overflow detection later.
+        else if( !getAddressConverter().checkCol( nLastCol, false ) )
             nLastCol = mrMaxApiPos.Col();
         // try to find entry in column model map that is able to merge with the passed model
         bool bInsertModel = true;

@@ -20,6 +20,7 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/vector/b2dsize.hxx>
 #include <basegfx/vector/b2dvector.hxx>
+#include <comphelper/processfactory.hxx>
 #include <drawinglayer/attribute/fillgraphicattribute.hxx>
 #include <drawinglayer/attribute/fontattribute.hxx>
 #include <drawinglayer/primitive2d/fillgraphicprimitive2d.hxx>
@@ -30,6 +31,7 @@
 #include <drawinglayer/processor2d/processorfromoutputdevice.hxx>
 #include <rtl/ustring.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
+#include <unotools/ucbstreamhelper.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/scrbar.hxx>
@@ -67,7 +69,7 @@ void ThumbnailView::dispose()
         xComponent->dispose ();
 
     mpScrBar.disposeAndClear();
-    delete mpItemAttrs;
+    mpItemAttrs.reset();
 
     ImplDeleteItems();
     Control::dispose();
@@ -352,7 +354,7 @@ void ThumbnailView::CalculateItemPositions (bool bScrollBarUsed)
             }
 
             pItem->setDrawArea(::tools::Rectangle( Point(x,y), Size(mnItemWidth, mnItemHeight) ));
-            pItem->calculateItemsPosition(mnThumbnailHeight,mnDisplayHeight,mnItemPadding,mpItemAttrs->nMaxTextLength,mpItemAttrs);
+            pItem->calculateItemsPosition(mnThumbnailHeight,mnDisplayHeight,mnItemPadding,mpItemAttrs->nMaxTextLength,mpItemAttrs.get());
 
             if ( !((nCurCount+1) % mnCols) )
             {
@@ -849,7 +851,7 @@ void ThumbnailView::Paint(vcl::RenderContext& rRenderContext, const ::tools::Rec
 
         if (pItem->isVisible())
         {
-            pItem->Paint(pProcessor.get(), mpItemAttrs);
+            pItem->Paint(pProcessor.get(), mpItemAttrs.get());
         }
     }
 

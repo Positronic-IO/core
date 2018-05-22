@@ -20,7 +20,6 @@
 #include <hintids.hxx>
 #include <comphelper/string.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
 #include <editeng/keepitem.hxx>
@@ -400,10 +399,10 @@ void  SwFormatTablePage::ModifyHdl(const Edit * pEdit)
     bModified = true;
 }
 
-VclPtr<SfxTabPage> SwFormatTablePage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwFormatTablePage::Create( TabPageParent pParent,
                                               const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwFormatTablePage>::Create( pParent, *rAttrSet );
+    return VclPtr<SwFormatTablePage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool  SwFormatTablePage::FillItemSet( SfxItemSet* rCoreSet )
@@ -800,10 +799,10 @@ void SwTableColumnPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SwTableColumnPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwTableColumnPage::Create( TabPageParent pParent,
                                               const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTableColumnPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SwTableColumnPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 void  SwTableColumnPage::Reset( const SfxItemSet* )
@@ -983,7 +982,7 @@ void   SwTableColumnPage::ModifyHdl( MetricField const * pField )
         UpdateCols( aValueTable[i] );
 }
 
-void SwTableColumnPage::UpdateCols( sal_uInt16 nAktPos )
+void SwTableColumnPage::UpdateCols( sal_uInt16 nCurrentPos )
 {
     SwTwips nSum = 0;
 
@@ -1002,9 +1001,9 @@ void SwTableColumnPage::UpdateCols( sal_uInt16 nAktPos )
         sal_uInt16 nLoopCount = 0;
         while( nDiff )
         {
-            if( ++nAktPos == nNoOfVisibleCols)
+            if( ++nCurrentPos == nNoOfVisibleCols)
             {
-                nAktPos = 0;
+                nCurrentPos = 0;
                 ++nLoopCount;
                 //#i101353# in small tables it might not be possible to balance column width
                 if( nLoopCount > 1 )
@@ -1012,25 +1011,25 @@ void SwTableColumnPage::UpdateCols( sal_uInt16 nAktPos )
             }
             if( nDiff < 0 )
             {
-                SetVisibleWidth(nAktPos, GetVisibleWidth(nAktPos) -nDiff);
+                SetVisibleWidth(nCurrentPos, GetVisibleWidth(nCurrentPos) -nDiff);
                 nDiff = 0;
             }
-            else if( GetVisibleWidth(nAktPos) >= nDiff + nMinWidth )
+            else if( GetVisibleWidth(nCurrentPos) >= nDiff + nMinWidth )
             {
-                SetVisibleWidth(nAktPos, GetVisibleWidth(nAktPos) -nDiff);
+                SetVisibleWidth(nCurrentPos, GetVisibleWidth(nCurrentPos) -nDiff);
                 nDiff = 0;
             }
-            if( nDiff > 0 && GetVisibleWidth(nAktPos) > nMinWidth )
+            if( nDiff > 0 && GetVisibleWidth(nCurrentPos) > nMinWidth )
             {
-                if( nDiff >= (GetVisibleWidth(nAktPos) - nMinWidth) )
+                if( nDiff >= (GetVisibleWidth(nCurrentPos) - nMinWidth) )
                 {
-                    nDiff -= (GetVisibleWidth(nAktPos) - nMinWidth);
-                    SetVisibleWidth(nAktPos, nMinWidth);
+                    nDiff -= (GetVisibleWidth(nCurrentPos) - nMinWidth);
+                    SetVisibleWidth(nCurrentPos, nMinWidth);
                 }
                 else
                 {
                     nDiff = 0;
-                    SetVisibleWidth(nAktPos, GetVisibleWidth(nAktPos) -nDiff);
+                    SetVisibleWidth(nCurrentPos, GetVisibleWidth(nCurrentPos) -nDiff);
                 }
                 OSL_ENSURE(nDiff >= 0, "nDiff < 0 cannot be here!");
             }
@@ -1045,7 +1044,7 @@ void SwTableColumnPage::UpdateCols( sal_uInt16 nAktPos )
         if(nDiff > nActSpace)
         {
             nTableWidth = pTableData->GetSpace();
-            SetVisibleWidth(nAktPos, GetVisibleWidth(nAktPos) - nDiff + nActSpace );
+            SetVisibleWidth(nCurrentPos, GetVisibleWidth(nCurrentPos) - nDiff + nActSpace );
         }
         else
         {
@@ -1061,13 +1060,13 @@ void SwTableColumnPage::UpdateCols( sal_uInt16 nAktPos )
         if(nDiff * nNoOfVisibleCols > pTableData->GetSpace() - nTableWidth)
         {
             nAdd = (pTableData->GetSpace() - nTableWidth) / nNoOfVisibleCols;
-            SetVisibleWidth(nAktPos, GetVisibleWidth(nAktPos) - nDiff + nAdd );
+            SetVisibleWidth(nCurrentPos, GetVisibleWidth(nCurrentPos) - nDiff + nAdd );
             nDiff = nAdd;
         }
         if(nAdd)
             for( sal_uInt16 i = 0; i < nNoOfVisibleCols; i++ )
             {
-                if(i == nAktPos)
+                if(i == nCurrentPos)
                     continue;
                 SwTwips nVisWidth;
                 if((nVisWidth = GetVisibleWidth(i)) + nDiff < MINLAY)
@@ -1246,7 +1245,7 @@ SwTableTabDlg::SwTableTabDlg(vcl::Window* pParent,
     AddTabPage("table", &SwFormatTablePage::Create, nullptr);
     m_nTextFlowId = AddTabPage("textflow", &SwTextFlowPage::Create, nullptr);
     AddTabPage("columns", &SwTableColumnPage::Create, nullptr);
-    m_nBackgroundId = AddTabPage("background", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_BACKGROUND), nullptr);
+    m_nBackgroundId = AddTabPage("background", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_BKG), nullptr);
     m_nBorderId = AddTabPage("borders", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_BORDER), nullptr);
 }
 
@@ -1255,7 +1254,7 @@ void  SwTableTabDlg::PageCreated(sal_uInt16 nId, SfxTabPage& rPage)
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
     if (nId == m_nBackgroundId)
     {
-        SvxBackgroundTabFlags const nFlagType = SvxBackgroundTabFlags::SHOW_TBLCTL | SvxBackgroundTabFlags::SHOW_SELECTOR;
+        SvxBackgroundTabFlags const nFlagType = SvxBackgroundTabFlags::SHOW_TBLCTL;
         aSet.Put (SfxUInt32Item(SID_FLAG_TYPE, static_cast<sal_uInt32>(nFlagType)));
         rPage.PageCreated(aSet);
     }
@@ -1364,10 +1363,10 @@ void SwTextFlowPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SwTextFlowPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwTextFlowPage::Create( TabPageParent pParent,
                                            const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTextFlowPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwTextFlowPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 bool  SwTextFlowPage::FillItemSet( SfxItemSet* rSet )

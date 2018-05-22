@@ -180,7 +180,7 @@ css::uno::Reference<css::uno::XInterface> create(
             return uno::Reference< uno::XInterface >( static_cast<drawing::XShape*>(SvxDrawPage::CreateShapeByTypeAndInventor( nT, nI, nullptr, nullptr, referer )) );
         }
     }
-    else if ( rServiceSpecifier == "com.sun.star.document.ImportGraphicObjectResolver" )
+    else if (rServiceSpecifier == "com.sun.star.document.ImportGraphicStorageHandler")
     {
         rtl::Reference<SvXMLGraphicHelper> pGraphicHelper = SvXMLGraphicHelper::Create( SvXMLGraphicHelperMode::Read );
         uno::Reference< uno::XInterface> xRet( static_cast< ::cppu::OWeakObject* >( pGraphicHelper.get() ) );
@@ -246,8 +246,27 @@ uno::Sequence< OUString > SvxUnoDrawMSFactory::concatServiceNames( uno::Sequence
     return aSeq;
 }
 
-SvxUnoDrawingModel::SvxUnoDrawingModel( SdrModel* pDoc ) throw()
-: SfxBaseModel(nullptr), mpDoc( pDoc )
+SdrModel& SvxUnoDrawingModel::getSdrModelFromUnoModel() const
+{
+    OSL_ENSURE(mpDoc, "No SdrModel in UnoDrawingModel, should not happen");
+    return *mpDoc;
+}
+
+SvxUnoDrawingModel::SvxUnoDrawingModel(SdrModel* pDoc) throw()
+:   SfxBaseModel(nullptr),
+    SvxFmMSFactory(),
+    css::drawing::XDrawPagesSupplier(),
+    css::lang::XServiceInfo(),
+    css::ucb::XAnyCompareFactory(),
+    mpDoc(pDoc),
+    mxDrawPagesAccess(),
+    mxDashTable(),
+    mxGradientTable(),
+    mxHatchTable(),
+    mxBitmapTable(),
+    mxTransGradientTable(),
+    mxMarkerTable(),
+    maTypeSequence()
 {
 }
 

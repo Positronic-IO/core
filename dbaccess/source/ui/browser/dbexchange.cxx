@@ -25,10 +25,8 @@
 #include <com/sun/star/sdb/XResultSetAccess.hpp>
 #include <TokenWriter.hxx>
 #include <stringconstants.hxx>
-#include <comphelper/uno3.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <UITools.hxx>
-#include <comphelper/processfactory.hxx>
 
 namespace dbaui
 {

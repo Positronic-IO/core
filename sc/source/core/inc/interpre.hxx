@@ -205,7 +205,7 @@ private:
     svl::SharedStringPool& mrStrPool;
     formula::FormulaConstTokenRef  xResult;
     ScJumpMatrix*   pJumpMatrix;        // currently active array condition, if any
-    ScTokenMatrixMap* pTokenMatrixMap;  // map FormulaToken* to formula::FormulaTokenRef if in array condition
+    std::unique_ptr<ScTokenMatrixMap> pTokenMatrixMap;  // map FormulaToken* to formula::FormulaTokenRef if in array condition
     ScFormulaCell* pMyFormulaCell;      // the cell of this formula expression
     SvNumberFormatter* pFormatter;
 
@@ -932,7 +932,7 @@ private:
     void GetSortArray( sal_uInt8 nParamCount, ::std::vector<double>& rSortArray, ::std::vector<long>* pIndexOrder, bool bConvertTextInArray, bool bAllowEmptyArray );
     static void QuickSort(::std::vector<double>& rSortArray, ::std::vector<long>* pIndexOrder);
     void ScModalValue();
-    void ScModalValue_Multi();
+    void ScModalValue_MS( bool bSingle );
     void ScAveDev();
     void ScAggregate();
     void ScDevSq();
@@ -1030,7 +1030,7 @@ inline bool ScInterpreter::MatrixParameterConversion()
 inline ScTokenMatrixMap& ScInterpreter::GetTokenMatrixMap()
 {
     if (!pTokenMatrixMap)
-        pTokenMatrixMap = CreateTokenMatrixMap();
+        pTokenMatrixMap.reset(CreateTokenMatrixMap());
     return *pTokenMatrixMap;
 }
 

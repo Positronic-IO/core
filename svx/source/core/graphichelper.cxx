@@ -30,7 +30,6 @@
 #include <vcl/weld.hxx>
 
 #include <cppuhelper/exc_hlp.hxx>
-#include <comphelper/anytostring.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -92,7 +91,7 @@ void GraphicHelper::GetPreferredExtension( OUString& rExtension, const Graphic& 
         return;
     }
 
-    switch( rGraphic.GetLink().GetType() )
+    switch( rGraphic.GetGfxLink().GetType() )
     {
         case GfxLinkType::NativeGif:
             aExtension = "gif";
@@ -180,7 +179,7 @@ bool lcl_ExecuteFilterDialog( const Sequence< PropertyValue >& rPropsForDialog,
 }
 } // anonymous ns
 
-OUString GraphicHelper::ExportGraphic(const vcl::Window* pParent, const Graphic& rGraphic, const OUString& rGraphicName)
+OUString GraphicHelper::ExportGraphic(weld::Window* pParent, const Graphic& rGraphic, const OUString& rGraphicName)
 {
     SvtPathOptions aPathOpt;
     OUString sGraphicsPath( aPathOpt.GetGraphicPath() );
@@ -337,7 +336,7 @@ OUString GraphicHelper::ExportGraphic(const vcl::Window* pParent, const Graphic&
     return OUString();
 }
 
-void GraphicHelper::SaveShapeAsGraphic(const vcl::Window* pParent,  const Reference< drawing::XShape >& xShape)
+void GraphicHelper::SaveShapeAsGraphic(weld::Window* pParent,  const Reference< drawing::XShape >& xShape)
 {
     try
     {

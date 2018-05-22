@@ -137,13 +137,15 @@ void LwpStory::XFConvert(XFContentContainer* pCont)
 void LwpStory::RegisterStyle()
 {
     rtl::Reference<LwpPara> xPara(dynamic_cast<LwpPara*>(GetFirstPara().obj().get()));
+    std::set<LwpPara*> aSeen;
     while (xPara.is())
     {
-        if (xPara->GetFoundry())
-            throw std::runtime_error("loop in register style");
+        aSeen.insert(xPara.get());
         xPara->SetFoundry(m_pFoundry);
         xPara->DoRegisterStyle();
         xPara.set(dynamic_cast<LwpPara*>(xPara->GetNext().obj().get()));
+        if (aSeen.find(xPara.get()) != aSeen.end())
+            throw std::runtime_error("loop in register style");
     }
 }
 
@@ -243,9 +245,9 @@ void LwpStory::SortPageLayout()
     //put all the sorted  layouts into list
     m_LayoutList.clear();
 
-    for( aIt = aLayoutList.begin(); aIt != aLayoutList.end(); ++aIt)
+    for (auto const& layout : aLayoutList)
     {
-        m_LayoutList.push_back(*aIt);
+        m_LayoutList.push_back(layout);
     }
 }
 
@@ -356,13 +358,17 @@ void LwpStory::XFConvertFrameInFrame(XFContentContainer* pCont)
     while (xLayout.get())
     {
         rtl::Reference<LwpVirtualLayout> xFrameLayout(dynamic_cast<LwpVirtualLayout*>(xLayout->GetChildHead().obj().get()));
+        std::set<LwpVirtualLayout*> aSeen;
         while (xFrameLayout.is())
         {
+            aSeen.insert(xFrameLayout.get());
             if (xFrameLayout->IsAnchorFrame())
             {
                 xFrameLayout->DoXFConvert(pCont);
             }
             xFrameLayout.set(dynamic_cast<LwpVirtualLayout*>(xFrameLayout->GetNext().obj().get()));
+            if (aSeen.find(xFrameLayout.get()) != aSeen.end())
+                throw std::runtime_error("loop in register style");
         }
         xLayout = GetLayout(xLayout.get());
     }
@@ -460,11 +466,11 @@ OUString LwpStory::RegisterFirstFribStyle()
     XFTextStyle* pBaseStyle = pXFStyleManager->FindTextStyle(pFirstFrib->GetStyleName());
     if (pBaseStyle == nullptr)
         return OUString();
-    XFTextStyle* pStyle = new XFTextStyle;
+    std::unique_ptr<XFTextStyle> pStyle(new XFTextStyle);
     *pStyle = *pBaseStyle;
     OUString sName = "Ruby" + pFirstFrib->GetStyleName();
     pStyle->SetStyleName(sName);
-    pXFStyleManager->AddStyle(pStyle);
+    pXFStyleManager->AddStyle(std::move(pStyle));
     return sName;
 }
 

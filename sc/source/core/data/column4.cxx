@@ -261,7 +261,7 @@ void ScColumn::CopyOneCellFromClip( sc::CopyFromClipContext& rCxt, SCROW nRow1, 
                 std::vector<EditTextObject*> aStrs;
                 aStrs.reserve(nDestSize);
                 for (size_t i = 0; i < nDestSize; ++i)
-                    aStrs.push_back(rSrcCell.mpEditText->Clone());
+                    aStrs.push_back(rSrcCell.mpEditText->Clone().release());
 
                 pBlockPos->miCellPos =
                     maCells.set(pBlockPos->miCellPos, nRow1, aStrs.begin(), aStrs.end());
@@ -306,7 +306,7 @@ void ScColumn::CopyOneCellFromClip( sc::CopyFromClipContext& rCxt, SCROW nRow1, 
     }
 }
 
-void ScColumn::SetValues( SCROW nRow, const std::vector<double>& rVals )
+void ScColumn::SetValues( const SCROW nRow, const std::vector<double>& rVals )
 {
     if (!ValidRow(nRow))
         return;

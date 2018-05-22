@@ -23,7 +23,6 @@
 #include <svx/svxids.hrc>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/sdb/DatabaseContext.hpp>
-#include <comphelper/extract.hxx>
 #include <comphelper/processfactory.hxx>
 #include <svl/eitem.hxx>
 #include <svl/itemset.hxx>
@@ -63,7 +62,7 @@ namespace svx
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("cui.options");
         }
 
         _rFillItems.Put( DatabaseMapItem( SID_SB_DB_REGISTER, aSettings ) );

@@ -30,9 +30,9 @@
 #include <userlist.hxx>
 #include <rangeutl.hxx>
 #include <crdlg.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <tpusrlst.hxx>
 
 #define CR  u'\x000D'
@@ -48,10 +48,10 @@ ScTpUserLists::ScTpUserLists( vcl::Window*               pParent,
     :   SfxTabPage      ( pParent,
                           "OptSortLists", "modules/scalc/ui/optsortlists.ui",
                           &rCoreAttrs ),
-        aStrQueryRemove ( ScGlobal::GetRscString( STR_QUERYREMOVE ) ),
-        aStrCopyList    ( ScGlobal::GetRscString( STR_COPYLIST ) ),
-        aStrCopyFrom    ( ScGlobal::GetRscString( STR_COPYFROM ) ),
-        aStrCopyErr     ( ScGlobal::GetRscString( STR_COPYERR ) ),
+        aStrQueryRemove ( ScResId( STR_QUERYREMOVE ) ),
+        aStrCopyList    ( ScResId( STR_COPYLIST ) ),
+        aStrCopyFrom    ( ScResId( STR_COPYFROM ) ),
+        aStrCopyErr     ( ScResId( STR_COPYERR ) ),
         nWhichUserLists ( GetWhich( SID_SCUSERLISTS ) ),
         pUserLists      ( nullptr ),
         pDoc            ( nullptr ),
@@ -149,9 +149,9 @@ void ScTpUserLists::Init()
 
 }
 
-VclPtr<SfxTabPage> ScTpUserLists::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> ScTpUserLists::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<ScTpUserLists>::Create( pParent, *rAttrSet );
+    return VclPtr<ScTpUserLists>::Create( pParent.pParent, *rAttrSet );
 }
 
 void ScTpUserLists::Reset( const SfxItemSet* rCoreAttrs )
@@ -357,7 +357,8 @@ void ScTpUserLists::CopyListFromArea( const ScRefAddress& rStartPos,
 
     if ( (nStartCol != nEndCol) && (nStartRow != nEndRow) )
     {
-        nCellDir = ScopedVclPtrInstance<ScColOrRowDlg>(this, aStrCopyList, aStrCopyFrom)->Execute();
+        ScColOrRowDlg aDialog(GetFrameWeld(), aStrCopyList, aStrCopyFrom);
+        nCellDir = aDialog.run();
     }
     else if ( nStartCol != nEndCol )
         nCellDir = SCRET_ROWS;
@@ -699,7 +700,7 @@ IMPL_LINK( ScTpUserLists, BtnClickHdl, Button*, pBtn, void )
         {
             std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
                         VclMessageType::Warning, VclButtonsType::Ok,
-                        ScGlobal::GetRscString(STR_INVALID_TABREF)));
+                        ScResId(STR_INVALID_TABREF)));
 
             xBox->run();
             mpEdCopyFrom->GrabFocus();

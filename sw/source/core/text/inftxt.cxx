@@ -57,6 +57,7 @@
 #include "porftn.hxx"
 #include "porrst.hxx"
 #include "itratr.hxx"
+#include "portab.hxx"
 #include <accessibilityoptions.hxx>
 #include <wrong.hxx>
 #include <doc.hxx>
@@ -525,7 +526,7 @@ SwTextPaintInfo::SwTextPaintInfo( SwTextFrame *pFrame, const SwRect &rPaint )
 static bool lcl_IsDarkBackground( const SwTextPaintInfo& rInf )
 {
     const Color* pCol = rInf.GetFont()->GetBackColor();
-    if( ! pCol || COL_TRANSPARENT == pCol->GetColor() )
+    if( ! pCol || COL_TRANSPARENT == *pCol )
     {
         const SvxBrushItem* pItem;
         SwRect aOrigBackRect;
@@ -535,7 +536,7 @@ static bool lcl_IsDarkBackground( const SwTextPaintInfo& rInf )
         // See implementation in /core/layout/paintfrm.cxx
         // There is a background color, if there is a background brush and
         // its color is *not* "no fill"/"auto fill".
-        if( rInf.GetTextFrame()->GetBackgroundBrush( aFillAttributes, pItem, pCol, aOrigBackRect, false ) )
+        if( rInf.GetTextFrame()->GetBackgroundBrush( aFillAttributes, pItem, pCol, aOrigBackRect, false, /*bConsiderTextBox=*/false ) )
         {
             if ( !pCol )
                 pCol = &pItem->GetColor();
@@ -1094,7 +1095,7 @@ void SwTextPaintInfo::DrawBackground( const SwLinePortion &rPor ) const
         // For dark background we do not want to have a filled rectangle
         if ( GetVsh() && GetVsh()->GetWin() && lcl_IsDarkBackground( *this ) )
         {
-            pOut->SetLineColor( SwViewOption::GetFontColor().GetColor() );
+            pOut->SetLineColor( SwViewOption::GetFontColor() );
         }
         else
         {
@@ -1686,6 +1687,28 @@ bool SwTextFormatInfo::LastKernPortion()
         return true;
     }
     return false;
+}
+
+SwTwips SwTextFormatInfo::GetLineWidth()
+{
+    SwTwips nLineWidth = Width() - X();
+
+    const bool bTabOverMargin = GetTextFrame()->GetTextNode()->getIDocumentSettingAccess()->get(
+        DocumentSettingId::TAB_OVER_MARGIN);
+    if (!bTabOverMargin)
+        return nLineWidth;
+
+    SwTabPortion* pLastTab = GetLastTab();
+    if (!pLastTab)
+        return nLineWidth;
+
+    if (pLastTab->GetTabPos() <= Width())
+        return nLineWidth;
+
+    // Consider tab portions over the printing bounds of the text frame.
+    nLineWidth = pLastTab->GetTabPos() - X();
+
+    return nLineWidth;
 }
 
 SwTextSlot::SwTextSlot(

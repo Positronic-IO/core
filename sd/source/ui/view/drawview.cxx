@@ -78,12 +78,15 @@ namespace sd {
  * that there is no page a page is created.
  */
 
-DrawView::DrawView( DrawDocShell* pDocSh, OutputDevice* pOutDev, DrawViewShell* pShell)
-: ::sd::View(*pDocSh->GetDoc(), pOutDev, pShell)
-, mpDocShell(pDocSh)
-, mpDrawViewShell(pShell)
-, mpVDev(nullptr)
-, mnPOCHSmph(0)
+DrawView::DrawView(
+    DrawDocShell* pDocSh,
+    OutputDevice* pOutDev,
+    DrawViewShell* pShell)
+:   ::sd::View(*pDocSh->GetDoc(), pOutDev, pShell)
+    ,mpDocShell(pDocSh)
+    ,mpDrawViewShell(pShell)
+    ,mpVDev(nullptr)
+    ,mnPOCHSmph(0)
 {
     SetCurrentObj(OBJ_RECT);
 }
@@ -433,8 +436,7 @@ bool DrawView::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAtt
     {
         if (IsPresObjSelected(false))
         {
-            vcl::Window* pWin = mpDrawViewShell->GetActiveWindow();
-            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+            std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(mpDrawViewShell->GetFrameWeld(),
                                                           VclMessageType::Info, VclButtonsType::Ok,
                                                           SdResId(STR_ACTION_NOTPOSSIBLE)));
             xInfoBox->run();

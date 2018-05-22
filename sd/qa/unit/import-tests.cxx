@@ -180,6 +180,9 @@ public:
     void testTdf115394PPT();
     void testTdf51340();
     void testTdf115639();
+    void testTdf116899();
+    void testTdf77747();
+    void testTdf116266();
 
     bool checkPattern(sd::DrawDocShellRef const & rDocRef, int nShapeNumber, std::vector<sal_uInt8>& rExpected);
     void testPatternImport();
@@ -261,6 +264,9 @@ public:
     CPPUNIT_TEST(testTdf115394PPT);
     CPPUNIT_TEST(testTdf51340);
     CPPUNIT_TEST(testTdf115639);
+    CPPUNIT_TEST(testTdf116899);
+    CPPUNIT_TEST(testTdf77747);
+    CPPUNIT_TEST(testTdf116266);
 
     CPPUNIT_TEST_SUITE_END();
 };
@@ -450,7 +456,7 @@ void SdImportTest::testN862510_4()
         for( std::vector<EECharAttrib>::reverse_iterator it = rLst.rbegin(); it != rLst.rend(); ++it )
         {
             const SvxColorItem *pC = dynamic_cast<const SvxColorItem *>( (*it).pAttr );
-            CPPUNIT_ASSERT_MESSAGE( "gradfill for text color not handled!", !( pC && pC->GetValue().GetColor() == 0 ) );
+            CPPUNIT_ASSERT_MESSAGE( "gradfill for text color not handled!", !( pC && pC->GetValue() == Color(0) ) );
         }
     }
 
@@ -993,11 +999,11 @@ void SdImportTest::testBnc584721_4()
     // Get first run of the paragraph
     uno::Reference<text::XTextRange> xRun( getRunFromParagraph (0, xParagraph ) );
     uno::Reference< beans::XPropertySet > xPropSet( xRun, uno::UNO_QUERY_THROW );
-    sal_Int32 nCharColor;
+    Color nCharColor;
     xPropSet->getPropertyValue( "CharColor" ) >>= nCharColor;
 
     // Color should be black
-    CPPUNIT_ASSERT_EQUAL( sal_Int32(COL_BLACK), nCharColor );
+    CPPUNIT_ASSERT_EQUAL( COL_BLACK, nCharColor );
 
     xDocShRef->DoClose();
 }
@@ -1774,7 +1780,7 @@ void SdImportTest::testTdf103477()
     const EditTextObject& aEdit = pTxtObj->GetOutlinerParaObject()->GetTextObject();
     const SvxNumBulletItem *pNumFmt = aEdit.GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
     CPPUNIT_ASSERT(pNumFmt);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's color is wrong!", sal_uInt32(0x000000), pNumFmt->GetNumRule()->GetLevel(1).GetBulletColor().GetColor());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's color is wrong!", Color(0x000000), pNumFmt->GetNumRule()->GetLevel(1).GetBulletColor());
 
     xDocShRef->DoClose();
 }
@@ -2485,7 +2491,6 @@ void SdImportTest::testTdf51340()
     xDocShRef->DoClose();
 }
 
-
 void SdImportTest::testTdf115639()
 {
     // Check whether the new compatibility option is loaded correctly
@@ -2514,6 +2519,53 @@ void SdImportTest::testTdf115639()
         CPPUNIT_ASSERT( !pDoc->IsHoriAlignIgnoreTrailingWhitespace() );
         xDocShRef->DoClose();
     }
+}
+
+void SdImportTest::testTdf116899()
+{
+    // This is a PPT created in Impress and roundtripped in PP, the key times become [1, -1] in PP,
+    //  a time of -1 (-1000) in PPT means key times have to be distributed evenly between 0 and 1
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/ppt/tdf116899.ppt"), PPT);
+
+    uno::Reference< drawing::XDrawPagesSupplier > xDoc(
+        xDocShRef->GetDoc()->getUnoModel(), uno::UNO_QUERY_THROW );
+    uno::Reference< drawing::XDrawPage > xPage(
+        xDoc->getDrawPages()->getByIndex(0), uno::UNO_QUERY_THROW );
+    uno::Reference< animations::XAnimationNodeSupplier > xAnimNodeSupplier(
+        xPage, uno::UNO_QUERY_THROW );
+    uno::Reference< animations::XAnimationNode > xRootNode(
+        xAnimNodeSupplier->getAnimationNode() );
+    std::vector< uno::Reference< animations::XAnimationNode > > aAnimVector;
+    anim::create_deep_vector(xRootNode, aAnimVector);
+    uno::Reference< animations::XAnimate > xNode(
+        aAnimVector[8], uno::UNO_QUERY_THROW );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Number of key times in the animation node isn't 2.", xNode->getKeyTimes().getLength(), static_cast<sal_Int32>(2) );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "First key time in the animation node isn't 0, key times aren't normalized.", 0., xNode->getKeyTimes()[0] );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Second key time in the animation node isn't 1, key times aren't normalized.", 1., xNode->getKeyTimes()[1] );
+}
+
+void SdImportTest::testTdf77747()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/ppt/tdf77747.ppt"), PPT);
+    CPPUNIT_ASSERT(xDocShRef.is());
+    SdrTextObj *pTxtObj = dynamic_cast<SdrTextObj *>(GetPage(1, xDocShRef)->GetObj(0));
+    CPPUNIT_ASSERT_MESSAGE("No text object", pTxtObj != nullptr);
+    const SvxNumBulletItem *pNumFmt = pTxtObj->GetOutlinerParaObject()->GetTextObject().GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
+    CPPUNIT_ASSERT(pNumFmt);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's suffix is wrong!", pNumFmt->GetNumRule()->GetLevel(0).GetSuffix(), OUString("-") );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's numbering type is wrong!", pNumFmt->GetNumRule()->GetLevel(0).GetNumberingType(),
+            SVX_NUM_NUMBER_HEBREW);
+
+    xDocShRef->DoClose();
+}
+
+void SdImportTest::testTdf116266()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/odp/tdf116266.odp"), ODP);
+    SdDrawDocument *pDoc = xDocShRef->GetDoc();
+    sfx2::LinkManager* rLinkManager = pDoc->GetLinkManager();
+    // The document contains one SVG stored as a link.
+    CPPUNIT_ASSERT_EQUAL(size_t(1), rLinkManager->GetLinks().size());
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdImportTest);

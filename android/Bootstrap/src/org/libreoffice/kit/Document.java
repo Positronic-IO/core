@@ -54,7 +54,7 @@ public class Document {
 
     /**
      * Callback message types
-     * Refer to http://opengrok.libreoffice.org/xref/core/include/LibreOfficeKit/LibreOfficeKitEnums.h
+     * Refer to https://opengrok.libreoffice.org/xref/core/include/LibreOfficeKit/LibreOfficeKitEnums.h
      * for more details about each callback.
      */
     public static final int CALLBACK_INVALIDATE_TILES = 0;
@@ -213,7 +213,7 @@ public class Document {
      * @param command - the command, like ".uno:Bold"
      * @param arguments
      */
-    public native void postUnoCommand(String command, String arguments);
+    public native void postUnoCommand(String command, String arguments, boolean notifyWhenFinished);
 
     /**
      * Change text selection.
@@ -230,6 +230,21 @@ public class Document {
      * @param y - y coordinate
      */
     public native void setGraphicSelection(int type, int x, int y);
+
+    /**
+     * Get selected text
+     * @param mimeType
+     * @return
+     */
+    public native String getTextSelection(String mimeType);
+
+    /**
+     * paste
+     * @param mimeType
+     * @param data
+     * @return
+     */
+    public native boolean paste(String mimeType, String data);
 
     /**
      * Reset current (any kind of) selection.

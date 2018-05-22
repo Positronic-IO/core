@@ -39,7 +39,6 @@
 
 #include <ViewShell.hxx>
 
-#include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 
 #include <EffectMigration.hxx>
@@ -132,7 +131,6 @@ AnimationWindow::AnimationWindow(SfxBindings* pInBindings, SfxChildWindow *pCW, 
     , m_nCurrentFrame(EMPTY_FRAMELIST)
     , bMovie(false)
     , bAllObjects(false)
-    , pBindings(pInBindings)
 {
     get(m_pBtnFirst, "first");
     get(m_pBtnReverse, "prev");
@@ -166,7 +164,7 @@ AnimationWindow::AnimationWindow(SfxBindings* pInBindings, SfxChildWindow *pCW, 
     SdPage* pPage = pMyDoc->AllocSdPage(false);
     pMyDoc->InsertPage(pPage);
 
-    pControllerItem = new AnimationControllerItem( SID_ANIMATOR_STATE, this, pBindings );
+    pControllerItem = new AnimationControllerItem( SID_ANIMATOR_STATE, this, pInBindings );
 
     // as long as not in the resource
     m_pTimeField->SetFormat( TimeFieldFormat::F_SEC_CS );
@@ -778,12 +776,8 @@ void AnimationWindow::AddObj (::sd::View& rView )
 
                 for( size_t nObject = 0; nObject < pObjList->GetObjCount(); ++nObject )
                 {
-                    SdrObject* pSnapShot = pObjList->GetObj( nObject );
-
-                    BitmapEx *const pBitmapEx = new BitmapEx(
-                        SdrExchangeView::GetObjGraphic(
-                            pSnapShot->GetModel(), pSnapShot).GetBitmapEx() );
-
+                    SdrObject* pSnapShot(pObjList->GetObj(nObject));
+                    BitmapEx *const pBitmapEx = new BitmapEx(SdrExchangeView::GetObjGraphic(*pSnapShot).GetBitmapEx());
                     ::tools::Time* pTime = new ::tools::Time( m_pTimeField->GetTime() );
                     size_t nIndex = m_nCurrentFrame + 1;
                     m_FrameList.insert(
@@ -794,7 +788,9 @@ void AnimationWindow::AddObj (::sd::View& rView )
                     ++m_nCurrentFrame;
 
                     // Clone
-                    pPage->InsertObject(pSnapShot->Clone(), m_nCurrentFrame);
+                    pPage->InsertObject(
+                        pSnapShot->CloneSdrObject(pPage->getSdrModelFromSdrPage()),
+                        m_nCurrentFrame);
                 }
                 bAnimObj = true;
             }
@@ -818,7 +814,7 @@ void AnimationWindow::AddObj (::sd::View& rView )
         {
             SdrMark*    pMark   = rMarkList.GetMark(0);
             SdrObject*  pObject = pMark->GetMarkedSdrObj();
-            SdrObject*  pClone  = pObject->Clone();
+            SdrObject* pClone(pObject->CloneSdrObject(pPage->getSdrModelFromSdrPage()));
             size_t nIndex = m_nCurrentFrame + 1;
             pPage->InsertObject(pClone, nIndex);
         }
@@ -831,14 +827,9 @@ void AnimationWindow::AddObj (::sd::View& rView )
                 for( size_t nObject= 0; nObject < nMarkCount; ++nObject )
                 {
                     // Clone
-                    SdrObject* pObject = rMarkList.GetMark( nObject )->GetMarkedSdrObj();
-
-                    BitmapEx *const pBitmapEx = new BitmapEx(
-                        SdrExchangeView::GetObjGraphic(
-                            pObject->GetModel(), pObject).GetBitmapEx() );
-
+                    SdrObject* pObject(rMarkList.GetMark(nObject)->GetMarkedSdrObj());
+                    BitmapEx *const pBitmapEx = new BitmapEx(SdrExchangeView::GetObjGraphic(*pObject).GetBitmapEx());
                     ::tools::Time* pTime = new ::tools::Time( m_pTimeField->GetTime() );
-
                     size_t nIndex = m_nCurrentFrame + 1;
                     m_FrameList.insert(
                         m_FrameList.begin() + nIndex,
@@ -847,17 +838,23 @@ void AnimationWindow::AddObj (::sd::View& rView )
                     // increment => next one inserted after this one
                     ++m_nCurrentFrame;
 
-                    pPage->InsertObject(pObject->Clone(), m_nCurrentFrame);
+                    pPage->InsertObject(
+                        pObject->CloneSdrObject(pPage->getSdrModelFromSdrPage()),
+                        m_nCurrentFrame);
                 }
                 bAnimObj = true; // that we don't change again
             }
             else
             {
-                SdrObjGroup* pCloneGroup = new SdrObjGroup;
+                SdrObjGroup* pCloneGroup = new SdrObjGroup(rView.getSdrModelFromSdrView());
                 SdrObjList*  pObjList    = pCloneGroup->GetSubList();
 
                 for (size_t nObject= 0; nObject < nMarkCount; ++nObject)
-                    pObjList->InsertObject(rMarkList.GetMark(nObject)->GetMarkedSdrObj()->Clone());
+                {
+                    pObjList->InsertObject(
+                        rMarkList.GetMark(nObject)->GetMarkedSdrObj()->CloneSdrObject(
+                            pPage->getSdrModelFromSdrPage()));
+                }
 
                 size_t nIndex = m_nCurrentFrame + 1;
                 pPage->InsertObject(pCloneGroup, nIndex);
@@ -1001,7 +998,9 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
             aAnimation.SetLoopCount( nLoopCount );
         }
 
-        SdrGrafObj* pGrafObj = new SdrGrafObj( Graphic( aAnimation ) );
+        SdrGrafObj* pGrafObj = new SdrGrafObj(
+            rView.getSdrModelFromSdrView(),
+            Graphic(aAnimation));
         const Point aOrg( aWindowCenter.X() - ( aMaxSizeLog.Width() >> 1 ), aWindowCenter.Y() - ( aMaxSizeLog.Height() >> 1 ) );
 
         pGrafObj->SetLogicRect( ::tools::Rectangle( aOrg, aMaxSizeLog ) );
@@ -1074,7 +1073,7 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
         if(pTargetSdPage)
         {
             // create animation group
-            SdrObjGroup* pGroup   = new SdrObjGroup;
+            SdrObjGroup* pGroup   = new SdrObjGroup(rView.getSdrModelFromSdrView());
             SdrObjList*  pObjList = pGroup->GetSubList();
 
             for (size_t i = 0; i < nCount; ++i)
@@ -1082,7 +1081,7 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
                 // the clone remains in the animation; we insert a clone of the
                 // clone into the group
                 pClone = pPage->GetObj(i);
-                SdrObject* pCloneOfClone = pClone->Clone();
+                SdrObject* pCloneOfClone(pClone->CloneSdrObject(pPage->getSdrModelFromSdrPage()));
                 //SdrObject* pCloneOfClone = pPage->GetObj(i)->Clone();
                 pObjList->InsertObject(pCloneOfClone);
             }
@@ -1101,7 +1100,9 @@ void AnimationWindow::CreateAnimObj (::sd::View& rView )
             // #i42894# if that worked, delete the group again
             if(!pGroup->GetSubList()->GetObjCount())
             {
-                delete pGroup;
+                // always use SdrObject::Free(...) for SdrObjects (!)
+                SdrObject* pTemp(pGroup);
+                SdrObject::Free(pTemp);
             }
         }
     }

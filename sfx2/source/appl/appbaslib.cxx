@@ -27,7 +27,6 @@
 
 #include <basic/basmgr.hxx>
 #include <tools/diagnose_ex.h>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/weak.hxx>
 
 using namespace ::com::sun::star::uno;
@@ -77,7 +76,7 @@ void SfxBasicManagerHolder::reset( BasicManager* _pBasicManager )
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sfx.appl");
         }
     }
 #endif
@@ -96,7 +95,7 @@ void SfxBasicManagerHolder::storeAllLibraries()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.appl");
     }
 #endif
 }
@@ -115,7 +114,7 @@ void SfxBasicManagerHolder::setStorage( const Reference< XStorage >& _rxStorage 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.appl");
     }
 #endif
 }

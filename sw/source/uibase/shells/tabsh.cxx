@@ -41,7 +41,6 @@
 #include <svl/zformat.hxx>
 #include <sfx2/bindings.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/objface.hxx>
@@ -77,13 +76,15 @@
 #include <globals.hrc>
 #include <unobaseclass.hxx>
 
-#define SwTableShell
+#define ShellClass_SwTableShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 
 #include <swabstdlg.hxx>
 
 #include <memory>
+
+#include <svx/unobrushitemhelper.hxx>
 
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star;
@@ -99,6 +100,7 @@ void SwTableShell::InitInterface_Impl()
 
 static const sal_uInt16 aUITableAttrRange[] =
 {
+    XATTR_FILL_FIRST,               XATTR_FILL_LAST,
     FN_PARAM_TABLE_NAME,            FN_PARAM_TABLE_NAME,
     FN_PARAM_TABLE_HEADLINE,        FN_PARAM_TABLE_HEADLINE,
     FN_PARAM_TABLE_SPACE,           FN_PARAM_TABLE_SPACE,
@@ -226,9 +228,9 @@ static SwTableRep*  lcl_TableParamToItemSet( SfxItemSet& rSet, SwWrtShell &rSh )
     pRep->SetSpace(aCols.GetRightMax());
 
     sal_uInt16 nPercent = 0;
-    long nWidth = ::GetTableWidth(pFormat, aCols, &nPercent, &rSh );
+    auto nWidth = ::GetTableWidth(pFormat, aCols, &nPercent, &rSh );
     // The table width is wrong for relative values.
-    if(nPercent)
+    if (nPercent)
         nWidth = pRep->GetSpace() * nPercent / 100;
     const sal_uInt16 nAlign = pFormat->GetHoriOrient().GetHoriOrient();
     pRep->SetAlign(nAlign);
@@ -588,6 +590,8 @@ void SwTableShell::Execute(SfxRequest &rReq)
             else
                 aCoreSet.InvalidateItem( RES_BACKGROUND );
 
+            setSvxBrushItemAsFillAttributesToTargetSet(aBrush, aCoreSet);
+
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
@@ -763,8 +767,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
                         break;
                     case TableMergeErr::TooComplex:
                     {
-                        vcl::Window* pWin = GetView().GetWindow();
-                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetView().GetFrameWeld(),
                                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                                       SwResId(STR_ERR_TABLE_MERGE)));
                         xInfoBox->run();
@@ -827,7 +830,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-            ScopedVclPtr<AbstractSwAutoFormatDlg> pDlg(pFact->CreateSwAutoFormatDlg(&GetView().GetViewFrame()->GetWindow(), &rSh));
+            ScopedVclPtr<AbstractSwAutoFormatDlg> pDlg(pFact->CreateSwAutoFormatDlg(GetView().GetFrameWeld(), &rSh));
             OSL_ENSURE(pDlg, "Dialog creation failed!");
             pDlg->Execute();
             break;
@@ -836,7 +839,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
         {
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             assert(pFact && "SwAbstractDialogFactory fail!");
-            ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwTableHeightDialog(GetView().GetWindow(), rSh));
+            ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwTableHeightDialog(GetView().GetFrameWeld(), rSh));
             assert(pDlg && "Dialog creation failed!");
             pDlg->Execute();
             break;
@@ -949,7 +952,8 @@ void SwTableShell::Execute(SfxRequest &rReq)
             if ( FN_TABLE_INSERT_ROW_DLG != nSlot || !rSh.IsInRepeatedHeadline())
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<SvxAbstractInsRowColDlg> pDlg( pFact ? pFact->CreateSvxInsRowColDlg( GetView().GetWindow(), nSlot == FN_TABLE_INSERT_COL_DLG, pSlot->GetCommand() ) : nullptr);
+                ScopedVclPtr<SvxAbstractInsRowColDlg> pDlg(pFact ? pFact->CreateSvxInsRowColDlg(GetView().GetFrameWeld(),
+                                                                                                nSlot == FN_TABLE_INSERT_COL_DLG, pSlot->GetCommand() ) : nullptr);
 
                 if( pDlg.get() && (pDlg->Execute() == 1) )
                 {
@@ -988,7 +992,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
                 if( pFact )
                 {
                     const long nMaxVert = rSh.GetAnyCurRect( CurRectType::Frame ).Width() / MINLAY;
-                    ScopedVclPtr<SvxAbstractSplittTableDialog> pDlg(pFact->CreateSvxSplittTableDialog( GetView().GetWindow(), rSh.IsTableVertical(), nMaxVert ));
+                    ScopedVclPtr<SvxAbstractSplitTableDialog> pDlg(pFact->CreateSvxSplitTableDialog(GetView().GetFrameWeld(), rSh.IsTableVertical(), nMaxVert));
                     if( pDlg && (pDlg->Execute() == RET_OK) )
                     {
                         nCount = pDlg->GetCount();
@@ -1033,7 +1037,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
                 OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-                ScopedVclPtr<AbstractSplitTableDialog> pDlg(pFact->CreateSplitTableDialog( GetView().GetWindow(), rSh ));
+                ScopedVclPtr<AbstractSplitTableDialog> pDlg(pFact->CreateSplitTableDialog(GetView().GetFrameWeld(), rSh));
                 OSL_ENSURE(pDlg, "Dialog creation failed!");
                 pDlg->Execute();
                 rReq.AppendItem( SfxUInt16Item( FN_PARAM_1, static_cast<sal_uInt16>(pDlg->GetSplitMode()) ) );
@@ -1051,7 +1055,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
             {
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
                 OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateTableMergeDialog(GetView().GetWindow(), bPrev));
+                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateTableMergeDialog(GetView().GetFrameWeld(), bPrev));
                 OSL_ENSURE(pDlg, "Dialog creation failed!");
                 if( RET_OK != pDlg->Execute())
                     bPrev = bNext = false;
@@ -1129,7 +1133,6 @@ void SwTableShell::Execute(SfxRequest &rReq)
     }
 
     // Now the slots which are working directly on the TableFormat.
-    SwFrameFormat *pFormat = rSh.GetTableFormat();
     switch ( nSlot )
     {
         case SID_ATTR_ULSPACE:
@@ -1149,9 +1152,6 @@ void SwTableShell::Execute(SfxRequest &rReq)
                 SvxLRSpaceItem aLRSpace( *static_cast<const SvxLRSpaceItem*>(pItem) );
                 aLRSpace.SetWhich( RES_LR_SPACE );
                 aSet.Put( aLRSpace );
-                SwFormatHoriOrient aHori( pFormat->GetHoriOrient() );
-                aHori.SetHoriOrient( text::HoriOrientation::NONE );
-                aSet.Put( aLRSpace );
                 rSh.SetTableAttr( aSet );
             }
             break;
@@ -1159,7 +1159,7 @@ void SwTableShell::Execute(SfxRequest &rReq)
         case FN_TABLE_SET_COL_WIDTH:
         {
             SwTableFUNC aMgr( &rSh );
-            aMgr.ColWidthDlg(GetView().GetWindow());
+            aMgr.ColWidthDlg(GetView().GetFrameWeld());
             break;
         }
         case SID_TABLE_VERT_NONE:

@@ -284,7 +284,7 @@ SalData::SalData()
     mnCacheDCInUse = 0;         // count of CacheDC in use
     mbObjClassInit = false;     // is SALOBJECTCLASS initialised
     mbInPalChange = false;      // is in WM_QUERYNEWPALETTE
-    mnAppThreadId = 0;          // Id from Applikation-Thread
+    mnAppThreadId = 0;          // Id from Application-Thread
     mbScrSvrEnabled = FALSE;    // ScreenSaver enabled
     mpFirstIcon = nullptr;      // icon cache, points to first icon, NULL if none
     mpTempFontItem = nullptr;
@@ -582,6 +582,8 @@ LRESULT CALLBACK SalComWndProc( HWND, UINT nMsg, WPARAM wParam, LPARAM lParam, b
     WinSalInstance *pInst = GetSalData()->mpInstance;
     WinSalTimer *const pTimer = static_cast<WinSalTimer*>( ImplGetSVData()->maSchedCtx.mpSalTimer );
 
+SAL_INFO("vcl.gdi.wndproc", "SalComWndProc(nMsg=" << nMsg << ", wParam=" << wParam << ", lParam=" << lParam << ")");
+
     switch ( nMsg )
     {
         case SAL_MSG_THREADYIELD:
@@ -630,7 +632,7 @@ LRESULT CALLBACK SalComWndProc( HWND, UINT nMsg, WPARAM wParam, LPARAM lParam, b
         CASE_NOYIELDLOCK_RESULT( SAL_MSG_CREATEOBJECT, ImplSalCreateObject(
             GetSalData()->mpInstance, reinterpret_cast<WinSalFrame*>(lParam)) )
         CASE_NOYIELDLOCK( SAL_MSG_DESTROYOBJECT, delete reinterpret_cast<SalObject*>(lParam) )
-        CASE_NOYIELDLOCK_RESULT( SAL_MSG_GETDC, GetDCEx(
+        CASE_NOYIELDLOCK_RESULT( SAL_MSG_GETCACHEDDC, GetDCEx(
             reinterpret_cast<HWND>(wParam), nullptr, DCX_CACHE) )
         CASE_NOYIELDLOCK( SAL_MSG_RELEASEDC, ReleaseDC(
             reinterpret_cast<HWND>(wParam), reinterpret_cast<HDC>(lParam)) )
@@ -921,6 +923,9 @@ OUString WinSalInstance::GetConnectionIdentifier()
 */
 void WinSalInstance::AddToRecentDocumentList(const OUString& rFileUrl, const OUString& /*rMimeType*/, const OUString& rDocumentService)
 {
+    if (Application::IsHeadlessModeEnabled())
+        return;
+
     OUString system_path;
     osl::FileBase::RC rc = osl::FileBase::getSystemPathFromFileURL(rFileUrl, system_path);
 

@@ -27,6 +27,7 @@
 #include <com/sun/star/chart2/XTitled.hpp>
 #include <com/sun/star/chart2/XTitle.hpp>
 #include <com/sun/star/chart2/XDataSeries.hpp>
+#include <tools/diagnose_ex.h>
 
 #include <vector>
 
@@ -83,9 +84,9 @@ void ReferenceSizeProvider::setValuesAtTitle(
 
         setValuesAtPropertySet( xTitleProp, /* bAdaptFontSizes = */ false );
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -97,10 +98,9 @@ void ReferenceSizeProvider::setValuesAtAllDataSeries()
     std::vector< Reference< XDataSeries > > aSeries(
         DiagramHelper::getDataSeriesFromDiagram( xDiagram ));
 
-    for( std::vector< Reference< XDataSeries > >::const_iterator aIt( aSeries.begin());
-         aIt != aSeries.end(); ++aIt )
+    for (auto const& elem : aSeries)
     {
-        Reference< beans::XPropertySet > xSeriesProp( *aIt, uno::UNO_QUERY );
+        Reference< beans::XPropertySet > xSeriesProp(elem, uno::UNO_QUERY );
         if( xSeriesProp.is())
         {
             // data points
@@ -111,12 +111,12 @@ void ReferenceSizeProvider::setValuesAtAllDataSeries()
                 {
                     for( sal_Int32 i=0; i< aPointIndexes.getLength(); ++i )
                         setValuesAtPropertySet(
-                            (*aIt)->getDataPointByIndex( aPointIndexes[i] ) );
+                            elem->getDataPointByIndex( aPointIndexes[i] ) );
                 }
             }
-            catch (const uno::Exception& ex)
+            catch (const uno::Exception&)
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
 
             //it is important to correct the datapoint properties first as they do reference the series properties
@@ -157,9 +157,9 @@ void ReferenceSizeProvider::setValuesAtPropertySet(
             }
         }
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -268,10 +268,9 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
     std::vector< Reference< XDataSeries > > aSeries(
         DiagramHelper::getDataSeriesFromDiagram( xDiagram ));
 
-    for( std::vector< Reference< XDataSeries > >::const_iterator aIt( aSeries.begin());
-         aIt != aSeries.end(); ++aIt )
+    for (auto const& elem : aSeries)
     {
-        Reference< beans::XPropertySet > xSeriesProp( *aIt, uno::UNO_QUERY );
+        Reference< beans::XPropertySet > xSeriesProp(elem, uno::UNO_QUERY);
         if( xSeriesProp.is())
         {
             getAutoResizeFromPropSet( xSeriesProp, eResult );
@@ -287,15 +286,15 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
                     for( sal_Int32 i=0; i< aPointIndexes.getLength(); ++i )
                     {
                         getAutoResizeFromPropSet(
-                            (*aIt)->getDataPointByIndex( aPointIndexes[i] ), eResult );
+                            elem->getDataPointByIndex( aPointIndexes[i] ), eResult );
                         if( eResult == AUTO_RESIZE_AMBIGUOUS )
                             return eResult;
                     }
                 }
             }
-            catch (const uno::Exception& ex)
+            catch (const uno::Exception&)
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
     }

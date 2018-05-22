@@ -29,8 +29,6 @@
 #include <com/sun/star/sdbc/ColumnValue.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
 
-#include <comphelper/enumhelper.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
@@ -123,11 +121,6 @@ OUString SAL_CALL OColumn::getName(  )
 void SAL_CALL OColumn::setName( const OUString& _rName )
 {
     m_sName = _rName;
-}
-
-void OColumn::fireValueChange(const ::connectivity::ORowSetValue& /*_rOldValue*/)
-{
-    OSL_FAIL( "OColumn::fireValueChange: not implemented!" );
 }
 
 void OColumn::registerProperty( const OUString& _rName, sal_Int32 _nHandle, sal_Int32 _nAttributes, void* _pPointerToMember, const Type& _rMemberType )

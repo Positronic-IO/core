@@ -9,7 +9,6 @@
 #include <officecfg/Office/Common.hxx>
 #include "sdmodeltestbase.hxx"
 #include <Outliner.hxx>
-#include <comphelper/propertysequence.hxx>
 #include <svl/stritem.hxx>
 #include <editeng/editobj.hxx>
 #include <editeng/outlobj.hxx>
@@ -101,6 +100,7 @@ public:
     void testParaMarginAndindentation();
     void testTdf111884();
     void testTdf112633();
+    void testCustomXml();
 
     CPPUNIT_TEST_SUITE(SdOOXMLExportTest1);
 
@@ -130,6 +130,7 @@ public:
     CPPUNIT_TEST(testParaMarginAndindentation);
     CPPUNIT_TEST(testTdf111884);
     CPPUNIT_TEST(testTdf112633);
+    CPPUNIT_TEST(testCustomXml);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -375,12 +376,12 @@ void SdOOXMLExportTest1::testBnc880763()
     CPPUNIT_ASSERT(pObjGroup);
     const SdrObject *pObj = pObjGroup->GetSubList()->GetObj(0);
     CPPUNIT_ASSERT_MESSAGE( "no object", pObj != nullptr);
-    CPPUNIT_ASSERT_EQUAL( sal_uInt32(0x0000ff),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue().GetColor());
+    CPPUNIT_ASSERT_EQUAL( Color(0x0000ff),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue());
 
     // Second object at the front has green background color
     pObj = pPage->GetObj(2); // FIXME should be 1, smartart import creates an additional empty group for some reason
     CPPUNIT_ASSERT_MESSAGE( "no object", pObj != nullptr);
-    CPPUNIT_ASSERT_EQUAL( sal_uInt32(0x00ff00),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue().GetColor());
+    CPPUNIT_ASSERT_EQUAL( Color(0x00ff00),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue());
 
     xDocShRef->DoClose();
 }
@@ -615,7 +616,7 @@ void SdOOXMLExportTest1::testBulletColor()
     const EditTextObject& aEdit = pTxtObj->GetOutlinerParaObject()->GetTextObject();
     const SvxNumBulletItem *pNumFmt = aEdit.GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
     CPPUNIT_ASSERT(pNumFmt);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's color is wrong!", sal_uInt32(0xff0000),pNumFmt->GetNumRule()->GetLevel(0).GetBulletColor().GetColor());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's color is wrong!", Color(0xff0000),pNumFmt->GetNumRule()->GetLevel(0).GetBulletColor());
 
     xDocShRef->DoClose();
 }
@@ -829,6 +830,27 @@ void SdOOXMLExportTest1::testTdf112633()
     uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(
             comphelper::getComponentContext(m_xSFactory), tempFile.GetURL());
     CPPUNIT_ASSERT_EQUAL(true, bool(xNameAccess->hasByName("ppt/media/hdphoto1.wdp")));
+}
+
+void SdOOXMLExportTest1::testCustomXml()
+{
+    // Load document and export it to a temporary file
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/customxml.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    xDocShRef->DoClose();
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "customXml/item1.xml");
+    CPPUNIT_ASSERT(pXmlDoc);
+    xmlDocPtr pRelsDoc = parseExport(tempFile, "customXml/_rels/item1.xml.rels");
+    CPPUNIT_ASSERT(pRelsDoc);
+
+    // Check there is a relation to itemProps1.xml.
+    assertXPath(pRelsDoc, "/rels:Relationships/rels:Relationship", 1);
+    assertXPath(pRelsDoc, "/rels:Relationships/rels:Relationship[@Id='rId1']", "Target", "itemProps1.xml");
+
+    std::shared_ptr<SvStream> pStream = parseExportStream(tempFile, "ddp/ddpfile.xen");
+    CPPUNIT_ASSERT(pStream);
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdOOXMLExportTest1);

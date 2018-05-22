@@ -50,6 +50,7 @@
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
 #include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequence.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 
@@ -59,6 +60,7 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/util/DateTime.hpp>
+#include <tools/diagnose_ex.h>
 
 #include <vector>
 #include <algorithm>
@@ -99,15 +101,15 @@ enum eServiceType
     SERVICE_NAME_MARKER_TABLE,
 
     SERVICE_NAME_NAMESPACE_MAP,
-    SERVICE_NAME_EXPORT_GRAPHIC_RESOLVER,
-    SERVICE_NAME_IMPORT_GRAPHIC_RESOLVER
+    SERVICE_NAME_EXPORT_GRAPHIC_STORAGE_RESOLVER,
+    SERVICE_NAME_IMPORT_GRAPHIC_STORAGE_RESOLVER
 };
 
 typedef std::map< OUString, enum eServiceType > tServiceNameMap;
 
 tServiceNameMap & lcl_getStaticServiceNameMap()
 {
-    static tServiceNameMap aServiceNameMap{
+    static tServiceNameMap aServiceNameMap {
         {"com.sun.star.chart.AreaDiagram",                    SERVICE_NAME_AREA_DIAGRAM},
         {"com.sun.star.chart.BarDiagram",                     SERVICE_NAME_BAR_DIAGRAM},
         {"com.sun.star.chart.DonutDiagram",                   SERVICE_NAME_DONUT_DIAGRAM},
@@ -128,8 +130,9 @@ tServiceNameMap & lcl_getStaticServiceNameMap()
         {"com.sun.star.drawing.MarkerTable",                  SERVICE_NAME_MARKER_TABLE},
 
         {"com.sun.star.xml.NamespaceMap",                     SERVICE_NAME_NAMESPACE_MAP},
-        {"com.sun.star.document.ExportGraphicObjectResolver", SERVICE_NAME_EXPORT_GRAPHIC_RESOLVER},
-        {"com.sun.star.document.ImportGraphicObjectResolver", SERVICE_NAME_IMPORT_GRAPHIC_RESOLVER}};
+        {"com.sun.star.document.ExportGraphicStoreageHandler", SERVICE_NAME_EXPORT_GRAPHIC_STORAGE_RESOLVER},
+        {"com.sun.star.document.ImportGraphicStoreageHandler", SERVICE_NAME_IMPORT_GRAPHIC_STORAGE_RESOLVER}
+    };
 
     return aServiceNameMap;
 }
@@ -469,9 +472,9 @@ void WrappedHasLegendProperty::setPropertyValue( const Any& rOuterValue, const R
                 xLegendProp->setPropertyValue("Show", uno::Any( bNewValue ));
         }
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -487,9 +490,9 @@ Any WrappedHasLegendProperty::getPropertyValue( const Reference< beans::XPropert
         else
             aRet <<= false;
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return aRet;
 }
@@ -536,9 +539,9 @@ void WrappedHasMainTitleProperty::setPropertyValue( const Any& rOuterValue, cons
         else
             TitleHelper::removeTitle( TitleHelper::MAIN_TITLE, m_spChart2ModelContact->getChartModel() );
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -549,9 +552,9 @@ Any WrappedHasMainTitleProperty::getPropertyValue( const Reference< beans::XProp
     {
         aRet <<= TitleHelper::getTitle( TitleHelper::MAIN_TITLE, m_spChart2ModelContact->getChartModel() ).is();
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return aRet;
 }
@@ -598,9 +601,9 @@ void WrappedHasSubTitleProperty::setPropertyValue( const Any& rOuterValue, const
         else
             TitleHelper::removeTitle( TitleHelper::SUB_TITLE, m_spChart2ModelContact->getChartModel() );
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -611,9 +614,9 @@ Any WrappedHasSubTitleProperty::getPropertyValue( const Reference< beans::XPrope
     {
         aRet <<= TitleHelper::getTitle( TitleHelper::SUB_TITLE, m_spChart2ModelContact->getChartModel() ).is();
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return aRet;
 }
@@ -697,9 +700,9 @@ Reference< XDiagram > SAL_CALL ChartDocumentWrapper::getDiagram()
         {
             m_xDiagram = new DiagramWrapper( m_spChart2ModelContact );
         }
-        catch (const uno::Exception& ex)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -731,9 +734,9 @@ void SAL_CALL ChartDocumentWrapper::setDiagram( const Reference< XDiagram >& xDi
                 m_xDiagram = xDiagram;
             }
         }
-        catch (const uno::Exception& ex)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }
@@ -884,9 +887,9 @@ void SAL_CALL ChartDocumentWrapper::dispose()
             // this is ok, don't panic
         }
     }
-    catch (const uno::Exception &ex)
+    catch (const uno::Exception &)
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -916,13 +919,13 @@ void ChartDocumentWrapper::impl_resetAddIn()
                 }
             }
         }
-        catch (const uno::RuntimeException& ex)
+        catch (const uno::RuntimeException&)
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
-        catch (const uno::Exception& ex)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }
@@ -997,9 +1000,8 @@ Reference< drawing::XShapes > ChartDocumentWrapper::getAdditionalShapes() const
         OSL_ENSURE( xFoundShapes.is(), "Couldn't create a shape collection!" );
         if( xFoundShapes.is())
         {
-            std::vector< uno::Reference< drawing::XShape > >::iterator aIter;
-            for( aIter = aShapeVector.begin(); aIter != aShapeVector.end(); ++aIter )
-                xFoundShapes->add( *aIter );
+            for (auto const& shape : aShapeVector)
+                xFoundShapes->add(shape);
         }
     }
 
@@ -1191,9 +1193,9 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
 
             case SERVICE_NAME_NAMESPACE_MAP:
                 break;
-            case SERVICE_NAME_EXPORT_GRAPHIC_RESOLVER:
+            case SERVICE_NAME_EXPORT_GRAPHIC_STORAGE_RESOLVER:
                 break;
-            case SERVICE_NAME_IMPORT_GRAPHIC_RESOLVER:
+            case SERVICE_NAME_IMPORT_GRAPHIC_STORAGE_RESOLVER:
                 break;
         }
 
@@ -1231,9 +1233,9 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
 
                 xResult = static_cast< ::cppu::OWeakObject* >( new DiagramWrapper( m_spChart2ModelContact ));
             }
-            catch (const uno::Exception& ex)
+            catch (const uno::Exception&)
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
 
@@ -1266,9 +1268,9 @@ uno::Reference< uno::XInterface > SAL_CALL ChartDocumentWrapper::createInstance(
                         aArguments[1] <<= true; // bRefreshAddIn
                         xViewInit->initialize(aArguments);
                     }
-                    catch (const uno::Exception& ex)
+                    catch (const uno::Exception&)
                     {
-                        SAL_WARN("chart2", "Exception caught. " << ex );
+                        DBG_UNHANDLED_EXCEPTION("chart2");
                     }
                 }
             }
@@ -1371,9 +1373,9 @@ void SAL_CALL ChartDocumentWrapper::setDelegator(
         {
             dispose();
         }
-        catch (const uno::Exception& ex)
+        catch (const uno::Exception&)
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }

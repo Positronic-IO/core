@@ -25,8 +25,8 @@
 #include <xmloff/xmltoken.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
+#include <comphelper/base64.hxx>
 #include <comphelper/extract.hxx>
-#include <comphelper/processfactory.hxx>
 
 #include <com/sun/star/linguistic2/XSupportedLocales.hpp>
 #include <com/sun/star/i18n/XForbiddenCharacters.hpp>
@@ -344,7 +344,7 @@ void XMLSettingsExportHelper::exportbase64Binary(
     if(nLength)
     {
         OUStringBuffer sBuffer;
-        ::sax::Converter::encodeBase64(sBuffer, aProps);
+        ::comphelper::Base64::encode(sBuffer, aProps);
         m_rContext.Characters( sBuffer.makeStringAndClear() );
     }
     m_rContext.EndElement( false );
@@ -507,7 +507,7 @@ void XMLSettingsExportHelper::ManipulateSetting( uno::Any& rAny, const OUString&
             }
             catch( uno::Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("xmloff.core");
             }
         }
 

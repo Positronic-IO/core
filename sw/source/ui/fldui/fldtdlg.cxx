@@ -23,7 +23,6 @@
 #include <comphelper/processfactory.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/dispatch.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <viewopt.hxx>
 #include <docsh.hxx>
@@ -109,7 +108,7 @@ bool SwFieldDlg::Close()
     return true;
 }
 
-void SwFieldDlg::Initialize(SfxChildWinInfo *pInfo)
+void SwFieldDlg::Initialize(SfxChildWinInfo const *pInfo)
 {
     Point aPos;
     Size aSize;

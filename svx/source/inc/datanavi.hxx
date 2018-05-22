@@ -85,7 +85,6 @@ namespace svxform
     class DataNavigatorWindow;
     class AddInstanceDialog;
 
-
     class DataTreeListBox : public SvTreeListBox
     {
     private:
@@ -516,32 +515,30 @@ namespace svxform
         virtual void dispose() override;
     };
 
-
-    class ManageNamespaceDialog : public ModalDialog
+    class ManageNamespaceDialog : public weld::GenericDialogController
     {
     private:
-        VclPtr<Edit>               m_pPrefixED;
-        VclPtr<Edit>               m_pUrlED;
-        VclPtr<OKButton>           m_pOKBtn;
+        VclPtr<AddConditionDialog> m_xConditionDlg;
 
-        VclPtr<AddConditionDialog> m_pConditionDlg;
+        std::unique_ptr<weld::Entry> m_xPrefixED;
+        std::unique_ptr<weld::Entry> m_xUrlED;
+        std::unique_ptr<weld::Button> m_xOKBtn;
+        std::unique_ptr<weld::Label> m_xAltTitle;
 
-        DECL_LINK(OKHdl, Button*, void);
+        DECL_LINK(OKHdl, weld::Button&, void);
 
     public:
-        ManageNamespaceDialog(vcl::Window* pParent, AddConditionDialog* _pCondDlg, bool bIsEdit);
+        ManageNamespaceDialog(weld::Window* pParent, AddConditionDialog* _pCondDlg, bool bIsEdit);
         virtual ~ManageNamespaceDialog() override;
-        virtual void dispose() override;
 
         void SetNamespace(const OUString& _rPrefix, const OUString& _rURL)
         {
-            m_pPrefixED->SetText( _rPrefix );
-            m_pUrlED->SetText( _rURL );
+            m_xPrefixED->set_text(_rPrefix);
+            m_xUrlED->set_text(_rURL);
         }
-        OUString GetPrefix() const { return m_pPrefixED->GetText(); }
-        OUString GetURL() const { return m_pUrlED->GetText(); }
+        OUString GetPrefix() const { return m_xPrefixED->get_text(); }
+        OUString GetURL() const { return m_xUrlED->get_text(); }
     };
-
 
     class AddSubmissionDialog : public ModalDialog
     {
@@ -586,61 +583,54 @@ namespace svxform
         const css::uno::Reference< css::xforms::XSubmission >& GetNewSubmission() const { return m_xNewSubmission; }
     };
 
-
-    class AddModelDialog : public ModalDialog
+    class AddModelDialog : public weld::GenericDialogController
     {
     private:
-        VclPtr<Edit>     m_pNameED;
-        VclPtr<CheckBox> m_pModifyCB;
+        std::unique_ptr<weld::Entry> m_xNameED;
+        std::unique_ptr<weld::CheckButton> m_xModifyCB;
+        std::unique_ptr<weld::Label> m_xAltTitle;
 
     public:
-        AddModelDialog( vcl::Window* pParent, bool _bEdit );
+        AddModelDialog(weld::Window* pParent, bool _bEdit);
         virtual ~AddModelDialog() override;
-        virtual void dispose() override;
 
-        OUString         GetName() const { return m_pNameED->GetText(); }
-        void             SetName( const OUString& _rName ) { m_pNameED->SetText( _rName );}
+        OUString         GetName() const { return m_xNameED->get_text(); }
+        void             SetName( const OUString& _rName ) { m_xNameED->set_text( _rName );}
 
-        bool             GetModifyDoc() const { return m_pModifyCB->IsChecked(); }
-        void             SetModifyDoc( const bool bModify ) { m_pModifyCB->Check( bModify ); }
+        bool             GetModifyDoc() const { return m_xModifyCB->get_active(); }
+        void             SetModifyDoc( const bool bModify ) { m_xModifyCB->set_active(bModify); }
     };
 
-
-    class AddInstanceDialog : public ModalDialog
+    class AddInstanceDialog : public weld::GenericDialogController
     {
     private:
-        VclPtr<Edit>                   m_pNameED;
-        VclPtr<FixedText>              m_pURLFT;
-        VclPtr<SvtURLBox>              m_pURLED;
-        VclPtr<PushButton>             m_pFilePickerBtn;
-        VclPtr<CheckBox>               m_pLinkInstanceCB;
-
         OUString                m_sAllFilterName;
 
-        DECL_LINK(FilePickerHdl, Button*, void);
+        std::unique_ptr<weld::Entry> m_xNameED;
+        std::unique_ptr<weld::Label> m_xURLFT;
+        std::unique_ptr<URLBox> m_xURLED;
+        std::unique_ptr<weld::Button> m_xFilePickerBtn;
+        std::unique_ptr<weld::CheckButton> m_xLinkInstanceCB;
+        std::unique_ptr<weld::Label> m_xAltTitle;
+
+        DECL_LINK(FilePickerHdl, weld::Button&, void);
 
     public:
-        AddInstanceDialog( vcl::Window* pParent, bool _bEdit );
+        AddInstanceDialog(weld::Window* pParent, bool _bEdit);
         virtual ~AddInstanceDialog() override;
-        virtual void dispose() override;
 
-        OUString         GetName() const { return m_pNameED->GetText(); }
-        void             SetName( const OUString& _rName ) { m_pNameED->SetText( _rName );}
-        OUString         GetURL() const { return m_pURLED->GetText(); }
-        void             SetURL( const OUString& _rURL ) { m_pURLED->SetText( _rURL );}
-        bool             IsLinkInstance() const { return m_pLinkInstanceCB->IsChecked(); }
-        void             SetLinkInstance( bool _bLink ) { m_pLinkInstanceCB->Check(_bLink); }
+        OUString         GetName() const { return m_xNameED->get_text(); }
+        void             SetName( const OUString& _rName ) { m_xNameED->set_text( _rName );}
+        OUString         GetURL() const { return m_xURLED->get_active_text(); }
+        void             SetURL( const OUString& _rURL ) { m_xURLED->SetText( _rURL );}
+        bool             IsLinkInstance() const { return m_xLinkInstanceCB->get_active(); }
+        void             SetLinkInstance( bool _bLink ) { m_xLinkInstanceCB->set_active(_bLink); }
     };
 
-
-    class LinkedInstanceWarningBox
+    class LinkedInstanceWarningBox : public weld::MessageDialogController
     {
-    private:
-        std::unique_ptr<weld::Builder> m_xBuilder;
-        std::unique_ptr<weld::MessageDialog> m_xDialog;
     public:
         LinkedInstanceWarningBox(weld::Widget* pParent);
-        short run() { return m_xDialog->run(); }
     };
 }
 

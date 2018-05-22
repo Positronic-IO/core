@@ -24,7 +24,7 @@
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <vcl/graph.hxx>
 #include <svx/svdorect.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <svx/svxdllapi.h>
 #include <o3tl/typed_flags_set.hxx>
 
@@ -84,7 +84,6 @@ private:
     friend class SdrExchangeView; // Only for a ForceSwapIn() call.
     friend class SdrGraphicLink;
 
-private:
     virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
     virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
 
@@ -104,7 +103,6 @@ private:
 
     // #i25616#
     bool mbInsidePaint:1;
-    bool mbIsPreview:1;
 
     bool mbIsSignatureLine;
     OUString maSignatureLineId;
@@ -116,8 +114,6 @@ private:
     bool mbIsSignatureLineCanAddComment;
     css::uno::Reference<css::graphic::XGraphic> mpSignatureLineUnsignedGraphic;
 
-private:
-
     void                    ImpRegisterLink();
     void                    ImpDeregisterLink();
     bool                    ImpUpdateGraphicLink( bool bAsynchron = true ) const;
@@ -127,12 +123,19 @@ private:
     void onGraphicChanged();
     GDIMetaFile             GetMetaFile(GraphicType &rGraphicType) const;
 
-public:
+protected:
+    // protected destructor
+    virtual ~SdrGrafObj() override;
 
-                            SdrGrafObj();
-                            SdrGrafObj(const Graphic& rGrf);
-                            SdrGrafObj(const Graphic& rGrf, const tools::Rectangle& rRect);
-    virtual                 ~SdrGrafObj() override;
+public:
+    SdrGrafObj(SdrModel& rSdrModel);
+    SdrGrafObj(
+        SdrModel& rSdrModel,
+        const Graphic& rGrf);
+    SdrGrafObj(
+        SdrModel& rSdrModel,
+        const Graphic& rGrf,
+        const tools::Rectangle& rRect);
 
     void                    SetGraphicObject( const GraphicObject& rGrfObj );
     const GraphicObject&    GetGraphicObject(bool bForceSwapIn = false) const;
@@ -143,9 +146,7 @@ public:
     const Graphic&          GetGraphic() const;
 
     Graphic                 GetTransformedGraphic( SdrGrafObjTransformsAttrs nTransformFlags = SdrGrafObjTransformsAttrs::ALL ) const;
-
     GraphicType             GetGraphicType() const;
-
     GraphicAttr             GetGraphicAttr( SdrGrafObjTransformsAttrs nTransformFlags = SdrGrafObjTransformsAttrs::ALL  ) const;
 
     // Keep ATM for SD.
@@ -153,8 +154,8 @@ public:
     bool IsEPS() const;
     bool IsSwappedOut() const;
 
-    const MapMode&          GetGrafPrefMapMode() const;
-    const Size&             GetGrafPrefSize() const;
+    MapMode          GetGrafPrefMapMode() const;
+    Size             GetGrafPrefSize() const;
 
     void                    SetGrafStreamURL( const OUString& rGraphicStreamURL );
     OUString const &        GetGrafStreamURL() const;
@@ -182,7 +183,7 @@ public:
     // #i25616#
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
 
-    virtual SdrGrafObj* Clone() const override;
+    virtual SdrGrafObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrGrafObj&             operator=(const SdrGrafObj& rObj);
 
     virtual sal_uInt32 GetHdlCount() const override;
@@ -197,7 +198,6 @@ public:
     bool                    HasGDIMetaFile() const;
 
     virtual void            SetPage(SdrPage* pNewPage) override;
-    virtual void            SetModel(SdrModel* pNewModel) override;
 
     bool isEmbeddedVectorGraphicData() const;
     GDIMetaFile getMetafileFromEmbeddedVectorGraphicData() const;
@@ -210,6 +210,8 @@ public:
 
     bool IsMirrored() const { return bMirrored;}
     void SetMirrored( bool _bMirrored );
+
+    virtual bool shouldKeepAspectRatio() const override { return true; }
 
     // Access to GrafAnimationAllowed flag
     void SetGrafAnimationAllowed(bool bNew);

@@ -29,7 +29,6 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <connectivity/dbcharset.hxx>
 #include <connectivity/FValue.hxx>
-#include <comphelper/extract.hxx>
 #include <connectivity/dbexception.hxx>
 
 #include <string.h>
@@ -231,7 +230,7 @@ SQLRETURN OConnection::Construct(const OUString& url,const Sequence< PropertyVal
             OSL_VERIFY( pBegin->Value >>= sIanaName );
 
             ::dbtools::OCharsetMap aLookupIanaName;
-            ::dbtools::OCharsetMap::const_iterator aLookup = aLookupIanaName.find(sIanaName, ::dbtools::OCharsetMap::IANA());
+            ::dbtools::OCharsetMap::const_iterator aLookup = aLookupIanaName.findIanaName(sIanaName);
             if (aLookup != aLookupIanaName.end())
                 m_nTextEncoding = (*aLookup).getEncoding();
             else

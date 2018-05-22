@@ -23,10 +23,8 @@
 #include <vcl/button.hxx>
 #include <vcl/dialog.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/msgbox.hxx>
 #include "JoinTableView.hxx"
 #include "RelControliFace.hxx"
-#include <core_resource.hxx>
 #include "RelationControl.hxx"
 
 namespace dbaui
@@ -36,7 +34,6 @@ namespace dbaui
                             ,public IRelationControlInterface
     {
         std::unique_ptr<OTableListBoxControl> m_xTableControl;
-        OJoinTableView::OTableWindowMap*        m_pTableMap;
 
         VclPtr<RadioButton> m_pRB_NoCascUpd;
         VclPtr<RadioButton> m_pRB_CascUpd;

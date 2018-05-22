@@ -29,7 +29,6 @@
 #include <view/SlsTheme.hxx>
 #include <model/SlideSorterModel.hxx>
 
-#include <strings.hrc>
 #include <DrawController.hxx>
 #include <ViewShellBase.hxx>
 #include <ViewShellManager.hxx>
@@ -40,7 +39,6 @@
 #include <vcl/settings.hxx>
 
 #include <sfx2/dispatch.hxx>
-#include <sdresid.hxx>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star;
@@ -96,7 +94,6 @@ std::shared_ptr<SlideSorter> SlideSorter::CreateSlideSorter (
     std::shared_ptr<SlideSorter> pSlideSorter(
         new SlideSorter(
             rBase,
-            nullptr,
             rParentWindow),
         o3tl::default_delete<SlideSorter>());
     pSlideSorter->Init();
@@ -127,14 +124,13 @@ SlideSorter::SlideSorter (
 
 SlideSorter::SlideSorter (
     ViewShellBase& rBase,
-    ViewShell* pViewShell,
     vcl::Window& rParentWindow)
     : mbIsValid(false),
       mpSlideSorterController(),
       mpSlideSorterModel(),
       mpSlideSorterView(),
       mxControllerWeak(),
-      mpViewShell(pViewShell),
+      mpViewShell(nullptr),
       mpViewShellBase(&rBase),
       mpContentWindow(VclPtr<ContentWindow>::Create(rParentWindow,*this )),
       mpHorizontalScrollBar(VclPtr<ScrollBar>::Create(&rParentWindow,WinBits(WB_HSCROLL | WB_DRAG))),

@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/processfactory.hxx>
-
 #include <com/sun/star/task/DocumentPasswordRequest.hpp>
 #include <com/sun/star/task/DocumentPasswordRequest2.hpp>
 #include <com/sun/star/task/DocumentMSPasswordRequest.hpp>
@@ -37,7 +35,6 @@
 #include <unotools/resmgr.hxx>
 #include <vcl/errcode.hxx>
 #include <vcl/errinf.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/abstdlg.hxx>
 #include <vcl/svapp.hxx>
 
@@ -61,71 +58,64 @@ namespace {
 
 void
 executeLoginDialog(
-    vcl::Window * pParent,
+    weld::Window* pParent,
     LoginErrorInfo & rInfo,
     OUString const & rRealm)
 {
-    try
+    SolarMutexGuard aGuard;
+
+    bool bAccount = (rInfo.GetFlags() & LOGINERROR_FLAG_MODIFY_ACCOUNT) != 0;
+    bool bSavePassword   = rInfo.GetCanRememberPassword();
+    bool bCanUseSysCreds = rInfo.GetCanUseSystemCredentials();
+
+    LoginFlags nFlags = LoginFlags::NONE;
+    if (rInfo.GetErrorText().isEmpty())
+        nFlags |= LoginFlags::NoErrorText;
+    if (!bAccount)
+        nFlags |= LoginFlags::NoAccount;
+    if (!(rInfo.GetFlags() & LOGINERROR_FLAG_MODIFY_USER_NAME))
+        nFlags |= LoginFlags::UsernameReadonly;
+
+    if (!bSavePassword)
+        nFlags |= LoginFlags::NoSavePassword;
+
+    if (!bCanUseSysCreds)
+        nFlags |= LoginFlags::NoUseSysCreds;
+
+    LoginDialog aDialog(pParent, nFlags, rInfo.GetServer(), rRealm);
+    if (!rInfo.GetErrorText().isEmpty())
+        aDialog.SetErrorText(rInfo.GetErrorText());
+    aDialog.SetName(rInfo.GetUserName());
+    if (bAccount)
+        aDialog.ClearAccount();
+    else
+        aDialog.ClearPassword();
+    aDialog.SetPassword(rInfo.GetPassword());
+
+    if (bSavePassword)
     {
-        SolarMutexGuard aGuard;
+        std::locale aLocale(Translate::Create("uui"));
+        aDialog.SetSavePasswordText(
+            Translate::get(rInfo.GetIsRememberPersistent()
+                      ? RID_SAVE_PASSWORD
+                      : RID_KEEP_PASSWORD,
+                  aLocale));
 
-        bool bAccount = (rInfo.GetFlags() & LOGINERROR_FLAG_MODIFY_ACCOUNT) != 0;
-        bool bSavePassword   = rInfo.GetCanRememberPassword();
-        bool bCanUseSysCreds = rInfo.GetCanUseSystemCredentials();
-
-        LoginFlags nFlags = LoginFlags::NONE;
-        if (rInfo.GetErrorText().isEmpty())
-            nFlags |= LoginFlags::NoErrorText;
-        if (!bAccount)
-            nFlags |= LoginFlags::NoAccount;
-        if (!(rInfo.GetFlags() & LOGINERROR_FLAG_MODIFY_USER_NAME))
-            nFlags |= LoginFlags::UsernameReadonly;
-
-        if (!bSavePassword)
-            nFlags |= LoginFlags::NoSavePassword;
-
-        if (!bCanUseSysCreds)
-            nFlags |= LoginFlags::NoUseSysCreds;
-
-        ScopedVclPtrInstance< LoginDialog > xDialog(pParent, nFlags, rInfo.GetServer(), rRealm);
-        if (!rInfo.GetErrorText().isEmpty())
-            xDialog->SetErrorText(rInfo.GetErrorText());
-        xDialog->SetName(rInfo.GetUserName());
-        if (bAccount)
-            xDialog->ClearAccount();
-        else
-            xDialog->ClearPassword();
-        xDialog->SetPassword(rInfo.GetPassword());
-
-        if (bSavePassword)
-        {
-            std::locale aLocale(Translate::Create("uui"));
-            xDialog->SetSavePasswordText(
-                Translate::get(rInfo.GetIsRememberPersistent()
-                          ? RID_SAVE_PASSWORD
-                          : RID_KEEP_PASSWORD,
-                      aLocale));
-
-            xDialog->SetSavePassword(rInfo.GetIsRememberPassword());
-        }
-
-        if ( bCanUseSysCreds )
-            xDialog->SetUseSystemCredentials( rInfo.GetIsUseSystemCredentials() );
-
-        rInfo.SetResult(xDialog->Execute() == RET_OK ? DialogMask::ButtonsOk :
-                                                       DialogMask::ButtonsCancel);
-        rInfo.SetUserName(xDialog->GetName());
-        rInfo.SetPassword(xDialog->GetPassword());
-        rInfo.SetAccount(xDialog->GetAccount());
-        rInfo.SetIsRememberPassword(xDialog->IsSavePassword());
-
-        if ( bCanUseSysCreds )
-          rInfo.SetIsUseSystemCredentials( xDialog->IsUseSystemCredentials() );
+        aDialog.SetSavePassword(rInfo.GetIsRememberPassword());
     }
-    catch (std::bad_alloc const &)
-    {
-        throw uno::RuntimeException("out of memory");
-    }
+
+    if ( bCanUseSysCreds )
+        aDialog.SetUseSystemCredentials( rInfo.GetIsUseSystemCredentials() );
+
+    rInfo.SetResult(aDialog.run() == RET_OK ? DialogMask::ButtonsOk :
+                                              DialogMask::ButtonsCancel);
+    rInfo.SetUserName(aDialog.GetName());
+    rInfo.SetPassword(aDialog.GetPassword());
+    rInfo.SetAccount(aDialog.GetAccount());
+    rInfo.SetIsRememberPassword(aDialog.IsSavePassword());
+
+    if ( bCanUseSysCreds )
+      rInfo.SetIsUseSystemCredentials( aDialog.IsUseSystemCredentials() );
 }
 
 void getRememberModes(
@@ -182,7 +172,7 @@ void getRememberModes(
 
 void
 handleAuthenticationRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     uno::Reference< task::XInteractionHandler2 > const & xIH,
     uno::Reference< uno::XComponentContext > const & xContext,
     ucb::AuthenticationRequest const & rRequest,
@@ -403,38 +393,31 @@ handleAuthenticationRequest_(
 
 void
 executeMasterPasswordDialog(
-    vcl::Window * pParent,
+    weld::Window* pParent,
     LoginErrorInfo & rInfo,
     task::PasswordRequestMode nMode)
 {
     OString aMaster;
-    try
     {
         SolarMutexGuard aGuard;
 
         std::locale aResLocale(Translate::Create("uui"));
         if( nMode == task::PasswordRequestMode_PASSWORD_CREATE )
         {
-            ScopedVclPtrInstance< MasterPasswordCreateDialog > xDialog(
-                pParent, aResLocale);
-            rInfo.SetResult(xDialog->Execute()
+            MasterPasswordCreateDialog aDialog(pParent, aResLocale);
+            rInfo.SetResult(aDialog.run()
                 == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
             aMaster = OUStringToOString(
-                xDialog->GetMasterPassword(), RTL_TEXTENCODING_UTF8);
+                aDialog.GetMasterPassword(), RTL_TEXTENCODING_UTF8);
         }
         else
         {
-            ScopedVclPtrInstance< MasterPasswordDialog > xDialog(
-                pParent, nMode, aResLocale);
-            rInfo.SetResult(xDialog->Execute()
+            MasterPasswordDialog aDialog(pParent, nMode, aResLocale);
+            rInfo.SetResult(aDialog.run()
                 == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
             aMaster = OUStringToOString(
-                xDialog->GetMasterPassword(), RTL_TEXTENCODING_UTF8);
+                aDialog.GetMasterPassword(), RTL_TEXTENCODING_UTF8);
         }
-    }
-    catch (std::bad_alloc const &)
-    {
-        throw uno::RuntimeException("out of memory");
     }
 
     sal_uInt8 aKey[RTL_DIGEST_LENGTH_MD5];
@@ -461,7 +444,7 @@ executeMasterPasswordDialog(
 
 void
 handleMasterPasswordRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     task::PasswordRequestMode nMode,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
         rContinuations)
@@ -501,7 +484,7 @@ handleMasterPasswordRequest_(
 
 void
 executePasswordDialog(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     LoginErrorInfo & rInfo,
     task::PasswordRequestMode nMode,
     const OUString& aDocName,
@@ -509,57 +492,49 @@ executePasswordDialog(
     bool bIsPasswordToModify,
     bool bIsSimplePasswordRequest )
 {
-    try
+    SolarMutexGuard aGuard;
+
+    std::locale aResLocale(Translate::Create("uui"));
+    if( nMode == task::PasswordRequestMode_PASSWORD_CREATE )
     {
-        SolarMutexGuard aGuard;
-
-        std::locale aResLocale(Translate::Create("uui"));
-        if( nMode == task::PasswordRequestMode_PASSWORD_CREATE )
+        if (bIsSimplePasswordRequest)
         {
-            if (bIsSimplePasswordRequest)
-            {
-                ScopedVclPtrInstance<PasswordDialog> xDialog(pParent, nMode, aResLocale, aDocName,
-                    bIsPasswordToModify, bIsSimplePasswordRequest);
-                xDialog->SetMinLen(0);
-
-                rInfo.SetResult(xDialog->Execute() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
-                rInfo.SetPassword(xDialog->GetPassword());
-            }
-            else
-            {
-                const sal_uInt16 nMaxPasswdLen = bMSCryptoMode ? 15 : 0;   // 0 -> allow any length
-
-                VclAbstractDialogFactory * pFact = VclAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractPasswordToOpenModifyDialog> const pDialog(
-                    pFact->CreatePasswordToOpenModifyDialog(pParent, nMaxPasswdLen, bIsPasswordToModify));
-
-                rInfo.SetResult( pDialog->Execute() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel );
-                rInfo.SetPassword( pDialog->GetPasswordToOpen() );
-                rInfo.SetPasswordToModify( pDialog->GetPasswordToModify() );
-                rInfo.SetRecommendToOpenReadonly( pDialog->IsRecommendToOpenReadonly() );
-            }
-        }
-        else // enter password or reenter password
-        {
-            ScopedVclPtrInstance<PasswordDialog> xDialog(pParent, nMode, aResLocale, aDocName,
-                bIsPasswordToModify, bIsSimplePasswordRequest);
+            std::unique_ptr<PasswordDialog> xDialog(new PasswordDialog(pParent, nMode,
+                aResLocale, aDocName, bIsPasswordToModify, bIsSimplePasswordRequest));
             xDialog->SetMinLen(0);
 
-            rInfo.SetResult(xDialog->Execute() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
-            rInfo.SetPassword(bIsPasswordToModify ? OUString() : xDialog->GetPassword());
-            rInfo.SetPasswordToModify(bIsPasswordToModify ? xDialog->GetPassword() : OUString());
+            rInfo.SetResult(xDialog->run() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
+            rInfo.SetPassword(xDialog->GetPassword());
+        }
+        else
+        {
+            const sal_uInt16 nMaxPasswdLen = bMSCryptoMode ? 15 : 0;   // 0 -> allow any length
+
+            VclAbstractDialogFactory * pFact = VclAbstractDialogFactory::Create();
+            ScopedVclPtr<AbstractPasswordToOpenModifyDialog> const pDialog(
+                pFact->CreatePasswordToOpenModifyDialog(pParent, nMaxPasswdLen, bIsPasswordToModify));
+
+            rInfo.SetResult( pDialog->Execute() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel );
+            rInfo.SetPassword( pDialog->GetPasswordToOpen() );
+            rInfo.SetPasswordToModify( pDialog->GetPasswordToModify() );
+            rInfo.SetRecommendToOpenReadonly( pDialog->IsRecommendToOpenReadonly() );
         }
     }
-    catch (std::bad_alloc const &)
+    else // enter password or reenter password
     {
-        throw uno::RuntimeException("out of memory",
-            uno::Reference< uno::XInterface>());
+        std::unique_ptr<PasswordDialog> xDialog(new PasswordDialog(pParent, nMode,
+            aResLocale, aDocName, bIsPasswordToModify, bIsSimplePasswordRequest));
+        xDialog->SetMinLen(0);
+
+        rInfo.SetResult(xDialog->run() == RET_OK ? DialogMask::ButtonsOk : DialogMask::ButtonsCancel);
+        rInfo.SetPassword(bIsPasswordToModify ? OUString() : xDialog->GetPassword());
+        rInfo.SetPasswordToModify(bIsPasswordToModify ? xDialog->GetPassword() : OUString());
     }
 }
 
 void
 handlePasswordRequest_(
-    vcl::Window * pParent,
+    weld::Window * pParent,
     task::PasswordRequestMode nMode,
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const &
         rContinuations,
@@ -618,11 +593,12 @@ UUIInteractionHelper::handleAuthenticationRequest(
     uno::Reference< task::XInteractionRequest > const & rRequest)
 {
     uno::Any aAnyRequest(rRequest->getRequest());
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
 
     ucb::URLAuthenticationRequest aURLAuthenticationRequest;
     if (aAnyRequest >>= aURLAuthenticationRequest)
     {
-        handleAuthenticationRequest_(getParentProperty(),
+        handleAuthenticationRequest_(Application::GetFrameWeld(xParent),
                                      getInteractionHandler(),
                                      m_xContext,
                                      aURLAuthenticationRequest,
@@ -634,7 +610,7 @@ UUIInteractionHelper::handleAuthenticationRequest(
     ucb::AuthenticationRequest aAuthenticationRequest;
     if (aAnyRequest >>= aAuthenticationRequest)
     {
-        handleAuthenticationRequest_(getParentProperty(),
+        handleAuthenticationRequest_(Application::GetFrameWeld(xParent),
                                      getInteractionHandler(),
                                      m_xContext,
                                      aAuthenticationRequest,
@@ -654,7 +630,9 @@ UUIInteractionHelper::handleMasterPasswordRequest(
     task::MasterPasswordRequest aMasterPasswordRequest;
     if (aAnyRequest >>= aMasterPasswordRequest)
     {
-        handleMasterPasswordRequest_(getParentProperty(),
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+
+        handleMasterPasswordRequest_(Application::GetFrameWeld(xParent),
                                      aMasterPasswordRequest.Mode,
                                      rRequest->getContinuations());
         return true;
@@ -667,7 +645,7 @@ UUIInteractionHelper::handlePasswordRequest(
     uno::Reference< task::XInteractionRequest > const & rRequest)
 {
     // parameters to be filled for the call to handlePasswordRequest_
-    vcl::Window * pParent = getParentProperty();
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
     task::PasswordRequestMode nMode = task::PasswordRequestMode_PASSWORD_ENTER;
     uno::Sequence< uno::Reference< task::XInteractionContinuation > > const & rContinuations = rRequest->getContinuations();
     OUString aDocumentName;
@@ -724,7 +702,7 @@ UUIInteractionHelper::handlePasswordRequest(
 
     if (bDoHandleRequest)
     {
-        handlePasswordRequest_( pParent, nMode, rContinuations,
+        handlePasswordRequest_( Application::GetFrameWeld(xParent), nMode, rContinuations,
                 aDocumentName, bMSCryptoMode, bIsPasswordToModify );
         return true;
     }
@@ -732,7 +710,7 @@ UUIInteractionHelper::handlePasswordRequest(
     task::PasswordRequest aPasswordRequest;
     if( aAnyRequest >>= aPasswordRequest )
     {
-        handlePasswordRequest_(getParentProperty(),
+        handlePasswordRequest_(Application::GetFrameWeld(xParent),
                                aPasswordRequest.Mode,
                                rRequest->getContinuations(),
                                OUString(),
@@ -750,16 +728,16 @@ UUIInteractionHelper::handleAuthFallbackRequest( OUString & instructions,
         OUString & url,
         uno::Sequence< uno::Reference< task::XInteractionContinuation > > const & rContinuations )
 {
-    vcl::Window * pParent = getParentProperty( );
-    VclPtrInstance<AuthFallbackDlg> dlg( pParent, instructions, url );
-    int retCode = dlg->Execute( );
+    uno::Reference<awt::XWindow> xParent = getParentXWindow();
+    AuthFallbackDlg dlg(Application::GetFrameWeld(xParent), instructions, url);
+    int retCode = dlg.run();
     uno::Reference< task::XInteractionAbort > xAbort;
     uno::Reference< ucb::XInteractionAuthFallback > xAuthFallback;
     getContinuations(rContinuations, &xAbort, &xAuthFallback);
 
     if( retCode == RET_OK && xAuthFallback.is( ) )
     {
-        xAuthFallback->setCode( dlg->GetCode( ) );
+        xAuthFallback->setCode(dlg.GetCode());
         xAuthFallback->select( );
     }
 

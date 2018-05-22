@@ -96,7 +96,7 @@ namespace sfx2
     single filters.</p>
 
     <p>Ehm - it was a lie. Not really at the top. Before this group, there is this single "All files" entry. It forms
-    it's own group. But this is uninteresting here.</p>
+    its own group. But this is uninteresting here.</p>
 
     <p>Local classes must consist of filters which - without the classification - would all belong to the same group.
     Then, they're combined to one entry (in the example above: "Microsoft Word 6.0 / 95"), and this entry is inserted
@@ -464,7 +464,7 @@ namespace sfx2
     {
         DBG_ASSERT( !_rWildCard.isEmpty(),
             "AppendWildcardToDescriptor::AppendWildcardToDescriptor: invalid wildcard!" );
-        DBG_ASSERT( _rWildCard[0] != s_cWildcardSeparator,
+        DBG_ASSERT( _rWildCard.isEmpty() || _rWildCard[0] != s_cWildcardSeparator,
             "AppendWildcardToDescriptor::AppendWildcardToDescriptor: wildcard already separated!" );
 
         aWildCards.reserve( comphelper::string::getTokenCount(_rWildCard, s_cWildcardSeparator) );
@@ -830,7 +830,7 @@ namespace sfx2
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sfx.dialog");
             }
         }
 

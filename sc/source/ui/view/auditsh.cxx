@@ -27,11 +27,10 @@
 
 #include <auditsh.hxx>
 #include <tabvwsh.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <document.hxx>
 
-#define ScAuditingShell
+#define ShellClass_ScAuditingShell
 #include <scslots.hxx>
 
 

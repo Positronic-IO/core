@@ -30,7 +30,6 @@
 #include <vcl/metric.hxx>
 #include <vcl/font.hxx>
 #include <vcl/virdev.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/cvtgrf.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/settings.hxx>
@@ -139,7 +138,7 @@ private:
     vcl::Font           maLastFont;
     sal_uInt8           nNextChrSetId;      // first unused ChrSet-Id
 
-    PSLZWCTreeNode*     pTable;             // LZW compression data
+    std::unique_ptr<PSLZWCTreeNode[]> pTable; // LZW compression data
     PSLZWCTreeNode*     pPrefix;            // the compression is as same as the TIFF compression
     sal_uInt16          nDataSize;
     sal_uInt16          nClearCode;
@@ -1612,12 +1611,12 @@ void PSWriter::ImplSetClipRegion( vcl::Region const & rClipRegion )
         RectangleVector aRectangles;
         rClipRegion.GetRegionRectangles(aRectangles);
 
-        for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+        for (auto const& rectangle : aRectangles)
         {
-            double nX1(aRectIter->Left());
-            double nY1(aRectIter->Top());
-            double nX2(aRectIter->Right());
-            double nY2(aRectIter->Bottom());
+            double nX1(rectangle.Left());
+            double nY1(rectangle.Top());
+            double nX2(rectangle.Right());
+            double nY2(rectangle.Bottom());
 
             ImplWriteDouble( nX1 );
             ImplWriteDouble( nY1 );
@@ -1714,21 +1713,21 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
             aRegion.GetRegionRectangles(aRectangles);
             const long nMoveVertical(nHeightLeft - nHeightOrg);
 
-            for(RectangleVector::iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+            for (auto & rectangle : aRectangles)
             {
-                aRectIter->Move(0, nMoveVertical);
+                rectangle.Move(0, nMoveVertical);
 
-                ImplWriteLong( aRectIter->Left() );
-                ImplWriteLong( aRectIter->Top() );
+                ImplWriteLong( rectangle.Left() );
+                ImplWriteLong( rectangle.Top() );
                 ImplWriteByte( 'm' );
-                ImplWriteLong( aRectIter->Right() + 1 );
-                ImplWriteLong( aRectIter->Top() );
+                ImplWriteLong( rectangle.Right() + 1 );
+                ImplWriteLong( rectangle.Top() );
                 ImplWriteByte( 'l' );
-                ImplWriteLong( aRectIter->Right() + 1 );
-                ImplWriteLong( aRectIter->Bottom() + 1 );
+                ImplWriteLong( rectangle.Right() + 1 );
+                ImplWriteLong( rectangle.Bottom() + 1 );
                 ImplWriteByte( 'l' );
-                ImplWriteLong( aRectIter->Left() );
-                ImplWriteLong( aRectIter->Bottom() + 1 );
+                ImplWriteLong( rectangle.Left() );
+                ImplWriteLong( rectangle.Bottom() + 1 );
                 ImplWriteByte( 'l' );
                 ImplWriteByte( 'p', PS_SPACE | PS_WRAP );
             }
@@ -2038,9 +2037,8 @@ void PSWriter::ImplText( const OUString& rUniString, const Point& rPos, const lo
                 ImplWriteF( nRotation, 1 );
                 mpPS->WriteCharPtr( "r " );
             }
-            std::vector<tools::PolyPolygon>::iterator aIter( aPolyPolyVec.begin() );
-            while ( aIter != aPolyPolyVec.end() )
-                ImplPolyPoly( *aIter++, true );
+            for (auto const& elem : aPolyPolyVec)
+                ImplPolyPoly( elem, true );
             ImplWriteLine( "pom" );
         }
         bLineColor = bOldLineColor;
@@ -2509,7 +2507,7 @@ void PSWriter::StartCompression()
     nOffset = 32;                       // number of free unused in dwShift
     dwShift = 0;
 
-    pTable = new PSLZWCTreeNode[ 4096 ];
+    pTable.reset(new PSLZWCTreeNode[ 4096 ]);
 
     for ( i = 0; i < 4096; i++ )
     {
@@ -2528,7 +2526,7 @@ void PSWriter::Compress( sal_uInt8 nCompThis )
 
     if( !pPrefix )
     {
-        pPrefix = pTable + nCompThis;
+        pPrefix = pTable.get() + nCompThis;
     }
     else
     {
@@ -2560,14 +2558,14 @@ void PSWriter::Compress( sal_uInt8 nCompThis )
                 if( nTableSize == static_cast<sal_uInt16>( ( 1 << nCodeSize ) - 1 ) )
                     nCodeSize++;
 
-                p = pTable + ( nTableSize++ );
+                p = pTable.get() + ( nTableSize++ );
                 p->pBrother = pPrefix->pFirstChild;
                 pPrefix->pFirstChild = p;
                 p->nValue = nV;
                 p->pFirstChild = nullptr;
             }
 
-            pPrefix = pTable + nV;
+            pPrefix = pTable.get() + nV;
         }
     }
 }
@@ -2578,7 +2576,7 @@ void PSWriter::EndCompression()
         WriteBits( pPrefix->nCode, nCodeSize );
 
     WriteBits( nEOICode, nCodeSize );
-    delete[] pTable;
+    pTable.reset();
 }
 
 sal_uInt8* PSWriter::ImplSearchEntry( sal_uInt8* pSource, sal_uInt8 const * pDest, sal_uLong nComp, sal_uLong nSize )

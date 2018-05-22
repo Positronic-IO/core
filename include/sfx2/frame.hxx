@@ -26,7 +26,6 @@
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/uno/Any.hxx>
 #include <vcl/vclptr.hxx>
-#include <comphelper/namedvaluecollection.hxx>
 #include <rtl/ustring.hxx>
 #include <svl/poolitem.hxx>
 #include <tools/ref.hxx>
@@ -107,7 +106,7 @@ public:
     static SfxFrame*    Create( const css::uno::Reference< css::frame::XFrame >& xFrame );
     static css::uno::Reference< css::frame::XFrame >
                         CreateBlankFrame();
-    static SfxFrame*    Create( SfxObjectShell const & rDoc, vcl::Window& rWindow, SfxInterfaceId nViewId, bool bHidden );
+    static SfxFrame*    CreateHidden( SfxObjectShell const & rDoc, vcl::Window& rWindow, SfxInterfaceId nViewId );
 
     vcl::Window&        GetWindow() const { return *pWindow;}
     void                CancelTransfers();

@@ -134,7 +134,9 @@ namespace o3tl {
     template<> struct typed_flags<UseOnPage> : is_typed_flags<UseOnPage, 0xffff> {};
 }
 
-class SW_DLLPUBLIC SwPageDesc : public SwModify
+class SW_DLLPUBLIC SwPageDesc
+    : public SwModify
+    , public sw::BroadcasterMixin
 {
     friend class SwDoc;
     friend class SwPageDescs;
@@ -146,7 +148,8 @@ class SW_DLLPUBLIC SwPageDesc : public SwModify
     // FIXME epicycles growing here - page margins need to be stored differently
     SwFrameFormat    m_FirstMaster;
     SwFrameFormat    m_FirstLeft;
-    SwDepend    m_Depend; ///< Because of grid alignment (Registerhaltigkeit).
+    sw::WriterMultiListener m_aDepends; ///< Because of grid alignment (Registerhaltigkeit).
+    mutable const SwTextFormatColl* m_pTextFormatColl;
     SwPageDesc *m_pFollow;
     sal_uInt16  m_nRegHeight; ///< Sentence spacing and fontascent of style.
     sal_uInt16  m_nRegAscent; ///< For grid alignment (Registerhaltigkeit).
@@ -177,7 +180,7 @@ class SW_DLLPUBLIC SwPageDesc : public SwModify
     };
 
 protected:
-    virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNewValue ) override;
+    virtual void SwClientNotify(const SwModify&, const SfxHint&) override;
 
 public:
     const OUString& GetName() const { return m_StyleName; }

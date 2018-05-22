@@ -171,9 +171,9 @@ void SwTextGridPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SwTextGridPage::Create(vcl::Window *pParent, const SfxItemSet *rSet)
+VclPtr<SfxTabPage> SwTextGridPage::Create(TabPageParent pParent, const SfxItemSet *rSet)
 {
-    return VclPtr<SwTextGridPage>::Create(pParent, *rSet);
+    return VclPtr<SwTextGridPage>::Create(pParent.pParent, *rSet);
 }
 
 bool SwTextGridPage::FillItemSet(SfxItemSet *rSet)
@@ -386,7 +386,9 @@ IMPL_LINK(SwTextGridPage, CharorLineChangedHdl, SpinField&, rField, void)
     {
         if(m_pCharsPerLineNF == &rField)
         {
-            long nWidth = static_cast<long>(m_aPageSize.Width() / m_pCharsPerLineNF->GetValue());
+            auto nValue = m_pCharsPerLineNF->GetValue();
+            assert(nValue && "div-by-zero");
+            auto nWidth = m_aPageSize.Width() / nValue;
             m_pTextSizeMF->SetValue(m_pTextSizeMF->Normalize(nWidth), FUNIT_TWIP);
             //prevent rounding errors in the MetricField by saving the used value
             m_nRubyUserValue = nWidth;
@@ -405,9 +407,11 @@ IMPL_LINK(SwTextGridPage, CharorLineChangedHdl, SpinField&, rField, void)
     }
     else//in normal mode
     {
-        if(m_pLinesPerPageNF == &rField)
+        if (m_pLinesPerPageNF == &rField)
         {
-            long nHeight = static_cast< sal_Int32 >(m_aPageSize.Height() / m_pLinesPerPageNF->GetValue());
+            auto nValue = m_pLinesPerPageNF->GetValue();
+            assert(nValue && "div-by-zero");
+            auto nHeight = m_aPageSize.Height() / nValue;
             m_pTextSizeMF->SetValue(m_pTextSizeMF->Normalize(nHeight), FUNIT_TWIP);
             m_pRubySizeMF->SetValue(0, FUNIT_TWIP);
             SetLinesOrCharsRanges( *m_pLinesRangeFT , m_pLinesPerPageNF->GetMax() );
@@ -417,7 +421,9 @@ IMPL_LINK(SwTextGridPage, CharorLineChangedHdl, SpinField&, rField, void)
         }
         else if (m_pCharsPerLineNF == &rField)
         {
-            long nWidth = static_cast< sal_Int32 >(m_aPageSize.Width() / m_pCharsPerLineNF->GetValue());
+            auto nValue = m_pCharsPerLineNF->GetValue();
+            assert(nValue && "div-by-zero");
+            auto nWidth = m_aPageSize.Width() / nValue;
             m_pCharWidthMF->SetValue(m_pCharWidthMF->Normalize(nWidth), FUNIT_TWIP);
             SetLinesOrCharsRanges( *m_pCharsRangeFT , m_pCharsPerLineNF->GetMax() );
         }

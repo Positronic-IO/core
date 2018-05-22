@@ -336,19 +336,9 @@ QueueInfo::QueueInfo()
     mnJobs      = 0;
 }
 
-QueueInfo::QueueInfo( const QueueInfo& rInfo ) :
-    maPrinterName( rInfo.maPrinterName ),
-    maDriver( rInfo.maDriver ),
-    maLocation( rInfo.maLocation ),
-    maComment( rInfo.maComment ),
-    mnStatus( rInfo.mnStatus ),
-    mnJobs( rInfo.mnJobs )
-{
-}
+QueueInfo::QueueInfo( const QueueInfo& ) = default;
 
-QueueInfo::~QueueInfo()
-{
-}
+QueueInfo::~QueueInfo() = default;
 
 SalPrinterQueueInfo::SalPrinterQueueInfo()
 {
@@ -493,7 +483,7 @@ void Printer::ImplInitData()
     mpInfoPrinter       = nullptr;
     mpPrinter           = nullptr;
     mpDisplayDev        = nullptr;
-    mpPrinterOptions    = new PrinterOptions;
+    mpPrinterOptions.reset(new PrinterOptions);
 
     // Add printer to the list
     ImplSVData* pSVData = ImplGetSVData();
@@ -596,17 +586,8 @@ void Printer::ImplReleaseFonts()
         mpFontInstance = nullptr;
     }
 
-    if ( mpDeviceFontList )
-    {
-        delete mpDeviceFontList;
-        mpDeviceFontList = nullptr;
-    }
-
-    if ( mpDeviceFontSizeList )
-    {
-        delete mpDeviceFontSizeList;
-        mpDeviceFontSizeList = nullptr;
-    }
+    mpDeviceFontList.reset();
+    mpDeviceFontSizeList.reset();
 }
 
 void Printer::ReleaseGraphics( bool bRelease )
@@ -871,8 +852,8 @@ void Printer::ImplUpdatePageData()
     mpGraphics->GetResolution( mnDPIX, mnDPIY );
     mpInfoPrinter->GetPageInfo( &maJobSetup.ImplGetConstData(),
                                 mnOutWidth, mnOutHeight,
-                                maPageOffset.X(), maPageOffset.Y(),
-                                maPaperSize.Width(), maPaperSize.Height() );
+                                maPageOffset,
+                                maPaperSize );
 }
 
 void Printer::ImplUpdateFontList()
@@ -953,8 +934,7 @@ void Printer::dispose()
     SAL_WARN_IF( IsPrinting(), "vcl.gdi", "Printer::~Printer() - Job is printing" );
     SAL_WARN_IF( IsJobActive(), "vcl.gdi", "Printer::~Printer() - Job is active" );
 
-    delete mpPrinterOptions;
-    mpPrinterOptions = nullptr;
+    mpPrinterOptions.reset();
 
     ReleaseGraphics();
     if ( mpInfoPrinter )
@@ -971,16 +951,8 @@ void Printer::dispose()
             mpFontInstance->Release();
             mpFontInstance = nullptr;
         }
-        if ( mpDeviceFontList )
-        {
-            delete mpDeviceFontList;
-            mpDeviceFontList = nullptr;
-        }
-        if ( mpDeviceFontSizeList )
-        {
-            delete mpDeviceFontSizeList;
-            mpDeviceFontSizeList = nullptr;
-        }
+        mpDeviceFontList.reset();
+        mpDeviceFontSizeList.reset();
         delete mpFontCache;
         mpFontCache = nullptr;
         // font list deleted by OutputDevice dtor
@@ -1053,7 +1025,7 @@ bool Printer::SetJobSetup( const JobSetup& rSetup )
     return false;
 }
 
-bool Printer::Setup( vcl::Window* pWindow, PrinterSetupMode eMode )
+bool Printer::Setup(weld::Window* pWindow, PrinterSetupMode eMode)
 {
     if ( IsDisplayPrinter() )
         return false;
@@ -1066,18 +1038,19 @@ bool Printer::Setup( vcl::Window* pWindow, PrinterSetupMode eMode )
     rData.SetPrinterSetupMode( eMode );
     // TODO: orig page size
 
-    SalFrame* pFrame;
-    if ( !pWindow )
-        pWindow = ImplGetDefaultWindow();
+    if (!pWindow)
+    {
+        vcl::Window* pDefWin = ImplGetDefaultWindow();
+        pWindow = pDefWin ? pDefWin->GetFrameWeld() : nullptr;
+    }
     if( !pWindow )
         return false;
 
-    pFrame = pWindow->ImplGetFrame();
     ReleaseGraphics();
     ImplSVData* pSVData = ImplGetSVData();
     pSVData->maAppData.mnModalMode++;
     nImplSysDialog++;
-    bool bSetup = mpInfoPrinter->Setup( pFrame, &rData );
+    bool bSetup = mpInfoPrinter->Setup(pWindow, &rData);
     pSVData->maAppData.mnModalMode--;
     nImplSysDialog--;
     if ( bSetup )
@@ -1119,16 +1092,8 @@ bool Printer::SetPrinterProps( const Printer* pPrinter )
                 mpFontInstance->Release();
                 mpFontInstance = nullptr;
             }
-            if ( mpDeviceFontList )
-            {
-                delete mpDeviceFontList;
-                mpDeviceFontList = nullptr;
-            }
-            if ( mpDeviceFontSizeList )
-            {
-                delete mpDeviceFontSizeList;
-                mpDeviceFontSizeList = nullptr;
-            }
+            mpDeviceFontList.reset();
+            mpDeviceFontSizeList.reset();
             // clean up font list
             delete mpFontCache;
             delete mpFontCollection;
@@ -1162,16 +1127,8 @@ bool Printer::SetPrinterProps( const Printer* pPrinter )
                 mpFontInstance->Release();
                 mpFontInstance = nullptr;
             }
-            if ( mpDeviceFontList )
-            {
-                delete mpDeviceFontList;
-                mpDeviceFontList = nullptr;
-            }
-            if ( mpDeviceFontSizeList )
-            {
-                delete mpDeviceFontSizeList;
-                mpDeviceFontSizeList = nullptr;
-            }
+            mpDeviceFontList.reset();
+            mpDeviceFontSizeList.reset();
             delete mpFontCache;
             delete mpFontCollection;
             mpFontCache = nullptr;
@@ -1728,6 +1685,7 @@ void Printer::updatePrinters()
             if( pApp )
             {
                 DataChangedEvent aDCEvt( DataChangedEventType::PRINTER );
+                Application::ImplCallEventListenersApplicationDataChanged(&aDCEvt);
                 Application::NotifyAllWindows( aDCEvt );
             }
         }
@@ -1761,7 +1719,7 @@ void Printer::InitFont() const
     if ( mbInitFont )
     {
         // select font in the device layers
-        mpGraphics->SetFont( &(mpFontInstance->maFontSelData), 0 );
+        mpGraphics->SetFont(&mpFontInstance->GetFontSelectPattern(), 0);
         mbInitFont = false;
     }
 }

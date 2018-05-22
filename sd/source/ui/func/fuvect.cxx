@@ -20,7 +20,6 @@
 #include <fuvect.hxx>
 #include <tools/poly.hxx>
 #include <svx/svdograf.hxx>
-#include <vcl/msgbox.hxx>
 #include <svx/svdedtv.hxx>
 
 #include <View.hxx>
@@ -63,7 +62,7 @@ void FuVectorize::DoExecute( SfxRequest& )
         if( pObj && dynamic_cast< const SdrGrafObj *>( pObj ) !=  nullptr )
         {
             SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-            ScopedVclPtr<AbstractSdVectorizeDlg> pDlg(pFact ? pFact->CreateSdVectorizeDlg( mpWindow, static_cast<SdrGrafObj*>( pObj )->GetGraphic().GetBitmap(), mpDocSh ) : nullptr);
+            ScopedVclPtr<AbstractSdVectorizeDlg> pDlg(pFact ? pFact->CreateSdVectorizeDlg(mpWindow ? mpWindow->GetFrameWeld() : nullptr, static_cast<SdrGrafObj*>( pObj )->GetGraphic().GetBitmap(), mpDocSh ) : nullptr);
             if( pDlg && pDlg->Execute() == RET_OK )
             {
                 const GDIMetaFile&  rMtf = pDlg->GetGDIMetaFile();
@@ -71,7 +70,7 @@ void FuVectorize::DoExecute( SfxRequest& )
 
                 if( pPageView && rMtf.GetActionSize() )
                 {
-                    SdrGrafObj* pVectObj = static_cast<SdrGrafObj*>( pObj->Clone() );
+                    SdrGrafObj* pVectObj = static_cast<SdrGrafObj*>( pObj->CloneSdrObject(pObj->getSdrModelFromSdrObject()) );
                     OUString aStr( mpView->GetDescriptionOfMarkedObjects() );
                     aStr += " " + SdResId( STR_UNDO_VECTORIZE );
                     mpView->BegUndo( aStr );

@@ -107,17 +107,44 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/dispatch.hxx>
-#include <comphelper/propertyvalue.hxx>
 #include <comphelper/configurationhelper.hxx>
 #include <editeng/unolingu.hxx>
 #include <vcl/scheduler.hxx>
 #include <config_features.h>
 #include <sfx2/watermarkitem.hxx>
+#include <sfx2/fcontnr.hxx>
+#include <sfx2/docfile.hxx>
+#include <svtools/htmlout.hxx>
+#include <test/htmltesttools.hxx>
 #include <fmthdft.hxx>
+#include <iodetect.hxx>
+#include <wrthtml.hxx>
 
-static char const DATA_DIRECTORY[] = "/sw/qa/extras/uiwriter/data/";
+namespace
+{
+char const DATA_DIRECTORY[] = "/sw/qa/extras/uiwriter/data/";
 
-class SwUiWriterTest : public SwModelTestBase
+int CountFilesInDirectory(const OUString &rURL)
+{
+    int nRet = 0;
+
+    osl::Directory aDir(rURL);
+    CPPUNIT_ASSERT_EQUAL(osl::FileBase::E_None, aDir.open());
+
+    osl::DirectoryItem aItem;
+    osl::FileStatus aFileStatus(osl_FileStatus_Mask_FileURL|osl_FileStatus_Mask_Type);
+    while (aDir.getNextItem(aItem) == osl::FileBase::E_None)
+    {
+        aItem.getFileStatus(aFileStatus);
+        if (aFileStatus.getFileType() != osl::FileStatus::Directory)
+            ++nRet;
+    }
+
+    return nRet;
+}
+}
+
+class SwUiWriterTest : public SwModelTestBase, public HtmlTestTools
 {
 
 public:
@@ -125,7 +152,12 @@ public:
     //Regression test of fdo#70143
     //EDITING: undo search&replace corrupt text when searching backward
     void testReplaceBackward();
-    void testRedlineFrame();
+    void testRedlineFrame(char const*const file);
+    void testRedlineFrameAtCharStartOutside0();
+    void testRedlineFrameAtCharStartOutside();
+    void testRedlineFrameAtCharStartInside();
+    void testRedlineFrameAtParaStartOutside();
+    void testRedlineFrameAtParaEndInside();
     void testThreadedException();
     void testBookmarkCopy();
     void testFdo69893();
@@ -172,6 +204,7 @@ public:
     void testDeleteTableRedlines();
     void testXFlatParagraph();
     void testTdf81995();
+    void testForcepoint3();
     void testExportToPicture();
     void testTdf77340();
     void testTdf79236();
@@ -240,6 +273,7 @@ public:
     void testTdf84695NormalChar();
     void testTdf84695Tab();
     void testTableStyleUndo();
+    void testRedlineCopyPaste();
     void testRedlineParam();
     void testRedlineViewAuthor();
     void testTdf91292();
@@ -293,6 +327,7 @@ public:
     void testTdf99689TableOfContents();
     void testTdf99689TableOfFigures();
     void testTdf99689TableOfTables();
+    void testTdf112448();
     void testTdf113790();
     void testTdf108048();
     void testTdf114306();
@@ -303,11 +338,19 @@ public:
     void testTdf115065();
     void testTdf115132();
     void testXDrawPagesSupplier();
+    void testTdf116403();
+    void testHtmlCopyImages();
+    void testTdf116789();
+    void testTdf117225();
 
     CPPUNIT_TEST_SUITE(SwUiWriterTest);
     CPPUNIT_TEST(testReplaceForward);
     CPPUNIT_TEST(testReplaceBackward);
-    CPPUNIT_TEST(testRedlineFrame);
+    CPPUNIT_TEST(testRedlineFrameAtCharStartOutside0);
+    CPPUNIT_TEST(testRedlineFrameAtCharStartOutside);
+    CPPUNIT_TEST(testRedlineFrameAtCharStartInside);
+    CPPUNIT_TEST(testRedlineFrameAtParaStartOutside);
+    CPPUNIT_TEST(testRedlineFrameAtParaEndInside);
     CPPUNIT_TEST(testThreadedException);
     CPPUNIT_TEST(testBookmarkCopy);
     CPPUNIT_TEST(testFdo69893);
@@ -354,6 +397,7 @@ public:
     CPPUNIT_TEST(testDeleteTableRedlines);
     CPPUNIT_TEST(testXFlatParagraph);
     CPPUNIT_TEST(testTdf81995);
+    CPPUNIT_TEST(testForcepoint3);
     CPPUNIT_TEST(testExportToPicture);
     CPPUNIT_TEST(testTdf77340);
     CPPUNIT_TEST(testTdf79236);
@@ -422,6 +466,7 @@ public:
     CPPUNIT_TEST(testTdf84695NormalChar);
     CPPUNIT_TEST(testTdf84695Tab);
     CPPUNIT_TEST(testTableStyleUndo);
+    CPPUNIT_TEST(testRedlineCopyPaste);
     CPPUNIT_TEST(testRedlineParam);
     CPPUNIT_TEST(testRedlineViewAuthor);
     CPPUNIT_TEST(testTdf91292);
@@ -475,6 +520,7 @@ public:
     CPPUNIT_TEST(testTdf99689TableOfContents);
     CPPUNIT_TEST(testTdf99689TableOfFigures);
     CPPUNIT_TEST(testTdf99689TableOfTables);
+    CPPUNIT_TEST(testTdf112448);
     CPPUNIT_TEST(testTdf113790);
     CPPUNIT_TEST(testTdf108048);
     CPPUNIT_TEST(testTdf114306);
@@ -485,6 +531,10 @@ public:
     CPPUNIT_TEST(testTdf115065);
     CPPUNIT_TEST(testTdf115132);
     CPPUNIT_TEST(testXDrawPagesSupplier);
+    CPPUNIT_TEST(testTdf116403);
+    CPPUNIT_TEST(testHtmlCopyImages);
+    CPPUNIT_TEST(testTdf116789);
+    CPPUNIT_TEST(testTdf117225);
     CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -506,7 +556,12 @@ SwDoc* SwUiWriterTest::createDoc(const char* pName)
 
 std::unique_ptr<SwTextBlocks> SwUiWriterTest::readDOCXAutotext(const OUString& sFileName, bool bEmpty)
 {
-    OUString rURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + sFileName;
+    utl::TempFile tmp;
+    tmp.EnableKillingFile();
+    OUString rURL = tmp.GetURL();
+    CPPUNIT_ASSERT_EQUAL(
+        osl::FileBase::E_None,
+        osl::File::copy(m_directories.getURLFromSrc(DATA_DIRECTORY) + sFileName, rURL));
 
     SfxMedium aSrcMed(rURL, StreamMode::STD_READ);
     SwDoc* pDoc = createDoc();
@@ -555,9 +610,9 @@ void SwUiWriterTest::testReplaceForward()
     CPPUNIT_ASSERT_EQUAL(ORIGINAL_REPLACE_CONTENT, pTextNode->GetText());
 }
 
-void SwUiWriterTest::testRedlineFrame()
+void SwUiWriterTest::testRedlineFrame(char const*const file)
 {
-    SwDoc * pDoc(createDoc("redlineFrame.fodt"));
+    SwDoc * pDoc(createDoc(file));
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
 
     uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
@@ -578,6 +633,31 @@ void SwUiWriterTest::testRedlineFrame()
 
     // there is still exactly one frame
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xDrawPage->getCount());
+}
+
+void SwUiWriterTest::testRedlineFrameAtCharStartOutside0()
+{
+    testRedlineFrame("redlineFrame.fodt");
+}
+
+void SwUiWriterTest::testRedlineFrameAtCharStartOutside()
+{
+    testRedlineFrame("redlineFrame_at_char_start_outside.fodt");
+}
+
+void SwUiWriterTest::testRedlineFrameAtCharStartInside()
+{
+    testRedlineFrame("redlineFrame_at_char_start_inside.fodt");
+}
+
+void SwUiWriterTest::testRedlineFrameAtParaStartOutside()
+{
+    testRedlineFrame("redline_fly_duplication_at_para_start_outside.fodt");
+}
+
+void SwUiWriterTest::testRedlineFrameAtParaEndInside()
+{
+    testRedlineFrame("redline_fly_duplication_at_para_end_inside.fodt");
 }
 
 void SwUiWriterTest::testThreadedException()
@@ -654,7 +734,7 @@ void SwUiWriterTest::testTdf67238()
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
     //insert a 3X3 table in the newly created document
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     const SwTable& rTable = pWrtShell->InsertTable(TableOpt, 3, 3);
     //checking for the rows and columns
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
@@ -980,7 +1060,7 @@ void SwUiWriterTest::testWatermarkDOCX()
     CPPUNIT_ASSERT_EQUAL(OUString("CustomWatermark"), pWatermark->GetText());
     CPPUNIT_ASSERT_EQUAL(OUString("DejaVu Sans Light"), pWatermark->GetFont());
     CPPUNIT_ASSERT_EQUAL(sal_Int16(45), pWatermark->GetAngle());
-    CPPUNIT_ASSERT_EQUAL(sal_uInt32(0x548dd4), pWatermark->GetColor());
+    CPPUNIT_ASSERT_EQUAL(Color(0x548dd4), pWatermark->GetColor());
     CPPUNIT_ASSERT_EQUAL(sal_Int16(50), pWatermark->GetTransparency());
 }
 
@@ -1798,7 +1878,7 @@ void SwUiWriterTest::testDeleteTableRedlines()
 {
     SwDoc* pDoc = createDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     const SwTable& rTable = pWrtShell->InsertTable(TableOpt, 1, 3);
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTable->getRows()->getCount());
@@ -1892,6 +1972,19 @@ void SwUiWriterTest::testTdf81995()
     }
 }
 
+void SwUiWriterTest::testForcepoint3()
+{
+    createDoc("flowframe_null_ptr_deref.sample");
+    uno::Sequence<beans::PropertyValue> aDescriptor( comphelper::InitPropertySequence({
+        { "FilterName", uno::Any(OUString("writer_pdf_Export")) },
+    }));
+    utl::TempFile aTempFile;
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    // printing asserted in SwFrame::GetNextSctLeaf()
+    xStorable->storeToURL(aTempFile.GetURL(), aDescriptor);
+    aTempFile.EnableKillingFile();
+}
+
 void SwUiWriterTest::testExportToPicture()
 {
     createDoc();
@@ -1945,7 +2038,7 @@ void SwUiWriterTest::testTdf79236()
     //Getting some paragraph style
     SwTextFormatColl* pTextFormat = pDoc->FindTextFormatCollByName("Text Body");
     const SwAttrSet& rAttrSet = pTextFormat->GetAttrSet();
-    SfxItemSet* pNewSet = rAttrSet.Clone();
+    std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
     sal_uInt16 initialCount = pNewSet->Count();
     SvxAdjustItem AdjustItem = rAttrSet.GetAdjust();
     SvxAdjust initialAdjust = AdjustItem.GetAdjust();
@@ -2330,7 +2423,7 @@ void SwUiWriterTest::testTdf60967()
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
     pWrtShell->ChangeHeaderOrFooter("Default Style", true, true, true);
     //Inserting table
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     pWrtShell->InsertTable(TableOpt, 2, 2);
     //getting the cursor's position just after the table insert
     SwPosition aPosAfterTable(*(pCursor->GetPoint()));
@@ -2338,8 +2431,8 @@ void SwUiWriterTest::testTdf60967()
     pCursor->Move(fnMoveBackward);
     SwPosition aPosInTable(*(pCursor->GetPoint()));
     //deleting paragraph following table with Ctrl+Shift+Del
-    sal_Int32 val = pWrtShell->DelToEndOfSentence();
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), val);
+    bool val = pWrtShell->DelToEndOfSentence();
+    CPPUNIT_ASSERT_EQUAL(true, val);
     //getting the cursor's position just after the paragraph deletion
     SwPosition aPosAfterDel(*(pCursor->GetPoint()));
     //moving cursor forward to check whether there is any node following the table, BTW there should not be any such node
@@ -3003,7 +3096,7 @@ void SwUiWriterTest::testTdf80663()
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     //Inserting 2x2 Table
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     pWrtShell->InsertTable(TableOpt, 2, 2);
     //Checking for the number of rows and columns
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
@@ -3090,7 +3183,7 @@ void SwUiWriterTest::testTdf57197()
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     //Inserting 1x1 Table
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     pWrtShell->InsertTable(TableOpt, 1, 1);
     //Checking for the number of rows and columns
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
@@ -3446,7 +3539,7 @@ void SwUiWriterTest::testTableBackgroundColor()
 {
     SwDoc* pDoc = createDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     pWrtShell->InsertTable(TableOpt, 3, 3); //Inserting Table
     //Checking Rows and Columns of Inserted Table
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
@@ -3543,9 +3636,9 @@ void SwUiWriterTest::testUndoDelAsCharTdf107512()
     frameSet.Put(anchor);
     GraphicObject grf;
     pShell->SttEndDoc(true);
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet, nullptr));
+    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
     pShell->SttEndDoc(false);
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet, nullptr));
+    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
     CPPUNIT_ASSERT_EQUAL(size_t(2), pDoc->GetFlyCount(FLYCNTTYPE_GRF));
     SvxCharHiddenItem hidden(true, RES_CHRATR_HIDDEN);
     pShell->SelectText(1, 4);
@@ -3694,7 +3787,7 @@ void SwUiWriterTest::testUndoDelAsChar()
     SwFormatAnchor anchor(RndStdIds::FLY_AS_CHAR);
     frameSet.Put(anchor);
     GraphicObject grf;
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet, nullptr));
+    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
     CPPUNIT_ASSERT_EQUAL(size_t(1), pDoc->GetFlyCount(FLYCNTTYPE_GRF));
     pShell->SetMark();
     pShell->Left(1, CRSR_SKIP_CHARS);
@@ -4754,6 +4847,40 @@ void SwUiWriterTest::testTableStyleUndo()
     CPPUNIT_ASSERT(bool(pStyle->GetBoxFormat(0).GetBackground() == aBackground2));
 }
 
+void SwUiWriterTest::testRedlineCopyPaste()
+{
+    // regressed in tdf#106746
+    SwDoc* pDoc = createDoc();
+
+    SwNodeIndex aIdx(pDoc->GetNodes().GetEndOfContent(), -1);
+    SwPaM aPaM(aIdx);
+
+    pDoc->getIDocumentContentOperations().InsertString(aPaM, "abzdezgh");
+    SwTextNode* pTextNode = aPaM.GetNode().GetTextNode();
+
+    // Turn on track changes, make changes, turn off track changes
+    uno::Reference<beans::XPropertySet> xPropertySet(mxComponent, uno::UNO_QUERY);
+    xPropertySet->setPropertyValue("RecordChanges", uno::makeAny(true));
+    lcl_selectCharacters(aPaM, 2, 3);
+    pDoc->getIDocumentContentOperations().ReplaceRange(aPaM, "c", false);
+    lcl_selectCharacters(aPaM, 6, 7);
+    pDoc->getIDocumentContentOperations().ReplaceRange(aPaM, "f", false);
+    xPropertySet->setPropertyValue("RecordChanges", uno::makeAny(false));
+
+    // Create the clipboard document.
+    SwDoc aClipboard;
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // Select the whole content, copy, delete the original and paste the copied content
+    pWrtShell->SelAll();
+    pWrtShell->Copy(&aClipboard);
+    pWrtShell->Delete();
+    pWrtShell->Paste(&aClipboard);
+
+    // With the bug this is "abzcdefgh", ie. contains the first deleted piece, too
+    CPPUNIT_ASSERT_EQUAL(OUString("abcdefgh"), pTextNode->GetText());
+}
+
 void SwUiWriterTest::testRedlineParam()
 {
     // Create a document with minimal content.
@@ -5775,6 +5902,19 @@ void SwUiWriterTest::testParagraphOfTextRange()
     CPPUNIT_ASSERT_EQUAL(OUString("In section"), xParagraph->getString());
 }
 
+// tdf#112448: Fix: take correct line height
+//
+// When line metrics is not calculated we need to call CalcRealHeight()
+// before usage of the Height() and GetRealHeight().
+void SwUiWriterTest::testTdf112448()
+{
+    createDoc("tdf112448.odt");
+
+    // check actual number of line breaks in the paragraph
+    xmlDocPtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "/root/page/body/txt/LineBreak", 2);
+}
+
 void SwUiWriterTest::testTdf113790()
 {
     SwDoc* pDoc = createDoc("tdf113790.docx");
@@ -5941,7 +6081,7 @@ void SwUiWriterTest::testTdf115132()
     pWrtShell->SplitNode();
     pWrtShell->SttDoc();
     // Create a table at the start of document body
-    SwInsertTableOptions TableOpt(tabopts::DEFAULT_BORDER, 0);
+    SwInsertTableOptions TableOpt(SwInsertTableFlags::DefaultBorder, 0);
     const SwTable* pTable = &pWrtShell->InsertTable(TableOpt, 2, 3);
     const SwTableFormat* pFormat = pTable->GetFrameFormat();
     CPPUNIT_ASSERT(pFormat);
@@ -6001,6 +6141,95 @@ void SwUiWriterTest::testXDrawPagesSupplier()
     uno::Reference<drawing::XDrawPage> xDrawPage = xDrawPageSupplier->getDrawPage();
     CPPUNIT_ASSERT_EQUAL_MESSAGE("The DrawPage accessed using XDrawPages must be the same as using XDrawPageSupplier",
         xDrawPage.get(), xDrawPageFromXDrawPages.get());
+}
+
+void SwUiWriterTest::testTdf116403()
+{
+    createDoc("tdf116403-considerborders.odt");
+    // Check that before ToX update, the tab stop position is the old one
+    uno::Reference<text::XTextRange> xParagraph = getParagraph(2, "1\t1");
+    auto aTabs = getProperty<uno::Sequence<style::TabStop>>(xParagraph, "ParaTabStops");
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), aTabs.getLength());
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(17000), aTabs[0].Position);
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwWrtShell* pWrtShell = pTextDoc->GetDocShell()->GetWrtShell();
+    const SwTOXBase* pTOX = pWrtShell->GetTOX(0);
+    CPPUNIT_ASSERT(pTOX);
+    pWrtShell->UpdateTableOf(*pTOX);
+
+    xParagraph = getParagraph(2, "1\t1");
+    aTabs = getProperty<uno::Sequence<style::TabStop>>(xParagraph, "ParaTabStops");
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), aTabs.getLength());
+    // This was still 17000, refreshing ToX didn't take borders spacings and widths into account
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Page borders must be considered for right-aligned tabstop",
+        static_cast<sal_Int32>(17000 - 2 * 500 - 2 * 1), aTabs[0].Position);
+}
+
+void SwUiWriterTest::testHtmlCopyImages()
+{
+    // Load a document with an image.
+    SwDoc* pDoc = createDoc("image.odt");
+
+    // Trigger the copy part of HTML copy&paste.
+    WriterRef xWrt;
+    xWrt = new SwHTMLWriter( /*rBaseURL=*/OUString() );
+    CPPUNIT_ASSERT(xWrt.is());
+
+    xWrt->m_bWriteClipboardDoc = true;
+    xWrt->m_bWriteOnlyFirstTable = false;
+    xWrt->SetShowProgress(false);
+    {
+        SvFileStream aStream(maTempFile.GetURL(), StreamMode::WRITE|StreamMode::TRUNC);
+        SwWriter aWrt(aStream, *pDoc);
+        aWrt.Write(xWrt);
+    }
+    htmlDocPtr pHtmlDoc = parseHtml(maTempFile);
+    CPPUNIT_ASSERT(pHtmlDoc);
+
+    // This failed, image was lost during HTML copy.
+    OUString aImage = getXPath(pHtmlDoc, "/html/body/p/img", "src");
+    // Also make sure that the image is not embedded (e.g. Word doesn't handle
+    // embedded images).
+    CPPUNIT_ASSERT(aImage.startsWith("file:///"));
+}
+
+void SwUiWriterTest::testTdf116789()
+{
+    createDoc("tdf116789.fodt");
+    uno::Reference<text::XBookmarksSupplier> xBookmarksSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XText> xText1;
+    uno::Reference<text::XText> xText2;
+    {
+        uno::Reference<text::XTextContent> xBookmark(
+            xBookmarksSupplier->getBookmarks()->getByName("Bookmark 1"), uno::UNO_QUERY);
+        xText1 = xBookmark->getAnchor()->getText();
+    }
+    {
+        uno::Reference<text::XTextContent> xBookmark(
+            xBookmarksSupplier->getBookmarks()->getByName("Bookmark 1"), uno::UNO_QUERY);
+        xText2 = xBookmark->getAnchor()->getText();
+    }
+    // This failed, we got two different SwXCell for the same bookmark anchor text.
+    CPPUNIT_ASSERT_EQUAL(xText1, xText2);
+}
+
+void SwUiWriterTest::testTdf117225()
+{
+    // Test that saving a document with an embedded object does not leak
+    // tempfiles in the directory of the target file.
+    OUString aTargetDirectory = m_directories.getURLFromWorkdir("/CppunitTest/sw_uiwriter.test.user/");
+    OUString aTargetFile = aTargetDirectory + "tdf117225.odt";
+    OUString aSourceFile = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf117225.odt";
+    osl::File::copy(aSourceFile, aTargetFile);
+    mxComponent = loadFromDesktop(aTargetFile);
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    int nExpected = CountFilesInDirectory(aTargetDirectory);
+    xStorable->store();
+    int nActual = CountFilesInDirectory(aTargetDirectory);
+    // nActual was nExpected + 1, i.e. we leaked a tempfile.
+    CPPUNIT_ASSERT_EQUAL(nExpected, nActual);
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SwUiWriterTest);

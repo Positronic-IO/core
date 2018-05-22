@@ -18,8 +18,12 @@
  */
 
 #include <memory>
-#include <CommonSalLayout.hxx>
 
+#include <hb-icu.h>
+
+#include <sallayout.hxx>
+
+#include <unotools/configmgr.hxx>
 #include <vcl/unohelp.hxx>
 #include <scrptrun.h>
 #include <com/sun/star/i18n/CharacterIteratorMode.hpp>
@@ -28,119 +32,8 @@
 #include <salgdi.hxx>
 #include <unicode/uchar.h>
 
-#if ENABLE_QT5
-#include <qt5/Qt5Font.hxx>
-#include <QtGui/QRawFont>
-#endif
-
-static inline void decode_hb_tag( const hb_tag_t nTableTag, char *pTagName )
-{
-    pTagName[0] = static_cast<char>(nTableTag >> 24);
-    pTagName[1] = static_cast<char>(nTableTag >> 16);
-    pTagName[2] = static_cast<char>(nTableTag >>  8);
-    pTagName[3] = static_cast<char>(nTableTag);
-    pTagName[4] = 0;
-}
-
-static hb_blob_t* getFontTable(hb_face_t* /*face*/, hb_tag_t nTableTag, void* pUserData)
-{
-    char pTagName[5];
-    decode_hb_tag( nTableTag, pTagName );
-
-    sal_uLong nLength = 0;
-#if defined(_WIN32)
-    unsigned char* pBuffer = nullptr;
-    HFONT hFont = static_cast<HFONT>(pUserData);
-    HDC hDC = GetDC(nullptr);
-    HGDIOBJ hOrigFont = SelectObject(hDC, hFont);
-    nLength = ::GetFontData(hDC, OSL_NETDWORD(nTableTag), 0, nullptr, 0);
-    if (nLength > 0 && nLength != GDI_ERROR)
-    {
-        pBuffer = new unsigned char[nLength];
-        ::GetFontData(hDC, OSL_NETDWORD(nTableTag), 0, pBuffer, nLength);
-    }
-    SelectObject(hDC, hOrigFont);
-    ReleaseDC(nullptr, hDC);
-#elif defined(MACOSX) || defined(IOS)
-    unsigned char* pBuffer = nullptr;
-    CoreTextFontFace* pFont = static_cast<CoreTextFontFace*>(pUserData);
-    nLength = pFont->GetFontTable(pTagName, nullptr);
-    if (nLength > 0)
-    {
-        pBuffer = new unsigned char[nLength];
-        pFont->GetFontTable(pTagName, pBuffer);
-    }
-#else
-    FreetypeFont* pFont = static_cast<FreetypeFont*>( pUserData );
-    const char* pBuffer = reinterpret_cast<const char*>(
-        pFont->GetTable(pTagName, &nLength) );
-#endif
-
-    hb_blob_t* pBlob = nullptr;
-    if (pBuffer != nullptr)
-#if defined(_WIN32) || defined(MACOSX) || defined(IOS)
-        pBlob = hb_blob_create(reinterpret_cast<const char*>(pBuffer), nLength, HB_MEMORY_MODE_READONLY,
-                               pBuffer, [](void* data){ delete[] static_cast<unsigned char*>(data); });
-#else
-        pBlob = hb_blob_create(pBuffer, nLength, HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-#endif
-
-    return pBlob;
-}
-
-#if ENABLE_QT5
-static hb_blob_t* getFontTable_Qt5Font(hb_face_t* /*face*/, hb_tag_t nTableTag, void* pUserData)
-{
-    char pTagName[5];
-    decode_hb_tag( nTableTag, pTagName );
-
-    Qt5Font *pFont = static_cast<Qt5Font*>( pUserData );
-    QRawFont aRawFont( QRawFont::fromFont( *pFont ) );
-    QByteArray aTable = aRawFont.fontTable( pTagName );
-    const sal_uLong nLength = aTable.size();
-
-    hb_blob_t* pBlob = nullptr;
-    if (nLength > 0)
-        pBlob = hb_blob_create(reinterpret_cast<const char*>( aTable.data() ),
-                               nLength, HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-    return pBlob;
-}
-#endif
-
-static hb_font_t* createHbFont(hb_face_t* pHbFace)
-{
-    hb_font_t* pHbFont = hb_font_create(pHbFace);
-    unsigned int nUPEM = hb_face_get_upem(pHbFace);
-    hb_font_set_scale(pHbFont, nUPEM, nUPEM);
-    hb_ot_font_set_funcs(pHbFont);
-
-    hb_face_destroy(pHbFace);
-
-    return pHbFont;
-}
-
-void CommonSalLayout::getScale(double* nXScale, double* nYScale)
-{
-    hb_face_t* pHbFace = hb_font_get_face(mpHbFont);
-    unsigned int nUPEM = hb_face_get_upem(pHbFace);
-
-    double nHeight(mrFontSelData.mnHeight);
-#if defined(_WIN32)
-    // On Windows, mnWidth is relative to average char width not font height,
-    // and we need to keep it that way for GDI to correctly scale the glyphs.
-    // Here we compensate for this so that HarfBuzz gives us the correct glyph
-    // positions.
-    double nWidth(mrFontSelData.mnWidth ? mrFontSelData.mnWidth * mnAveWidthFactor : nHeight);
-#else
-    double nWidth(mrFontSelData.mnWidth ? mrFontSelData.mnWidth : nHeight);
-#endif
-
-    if (nYScale)
-        *nYScale = nHeight / nUPEM;
-
-    if (nXScale)
-        *nXScale = nWidth / nUPEM;
-}
+#include <fontselect.hxx>
+#include <impfontcache.hxx>
 
 #if !HB_VERSION_ATLEAST(1, 1, 0)
 // Disabled Unicode compatibility decomposition, see fdo#66715
@@ -160,7 +53,20 @@ static hb_unicode_funcs_t* getUnicodeFuncs()
 }
 #endif
 
-void CommonSalLayout::ParseFeatures(const OUString& aName)
+GenericSalLayout::GenericSalLayout(LogicalFontInstance &rFont)
+    : mpFont(&rFont)
+    , mpVertGlyphs(nullptr)
+    , mbFuzzing(utl::ConfigManager::IsFuzzing())
+{
+    mpFont->Acquire();
+}
+
+GenericSalLayout::~GenericSalLayout()
+{
+    mpFont->Release();
+}
+
+void GenericSalLayout::ParseFeatures(const OUString& aName)
 {
     if (aName.indexOf(FontSelectPatternAttributes::FEAT_PREFIX) < 0)
         return;
@@ -183,156 +89,6 @@ void CommonSalLayout::ParseFeatures(const OUString& aName)
         }
     }
     while (nIndex >= 0);
-}
-
-#if defined(_WIN32)
-CommonSalLayout::CommonSalLayout(HDC hDC, WinFontInstance& rWinFontInstance, const WinFontFace& rWinFontFace)
-:   mrFontSelData(rWinFontInstance.maFontSelData)
-,   mhDC(hDC)
-,   mhFont(static_cast<HFONT>(GetCurrentObject(hDC, OBJ_FONT)))
-,   mrWinFontInstance(rWinFontInstance)
-,   mnAveWidthFactor(1.0f)
-,   mpVertGlyphs(nullptr)
-{
-    mpHbFont = rWinFontFace.GetHbFont();
-    if (!mpHbFont)
-    {
-        hb_face_t* pHbFace = hb_face_create_for_tables(getFontTable, mhFont, nullptr);
-
-        mpHbFont = createHbFont(pHbFace);
-        rWinFontFace.SetHbFont(mpHbFont);
-    }
-
-    // Calculate the mnAveWidthFactor, see the comment where it is used.
-    if (mrFontSelData.mnWidth)
-    {
-        double nUPEM = hb_face_get_upem(hb_font_get_face(mpHbFont));
-
-        LOGFONTW aLogFont;
-        GetObjectW(mhFont, sizeof(LOGFONTW), &aLogFont);
-
-        // Set the height (font size) to EM to minimize rounding errors.
-        aLogFont.lfHeight = -nUPEM;
-        // Set width to the default to get the original value in the metrics.
-        aLogFont.lfWidth = 0;
-
-        // Get the font metrics.
-        HFONT hNewFont = CreateFontIndirectW(&aLogFont);
-        HFONT hOldFont = static_cast<HFONT>(SelectObject(hDC, hNewFont));
-        TEXTMETRICW aFontMetric;
-        GetTextMetricsW(hDC, &aFontMetric);
-        SelectObject(hDC, hOldFont);
-        DeleteObject(hNewFont);
-
-        mnAveWidthFactor = nUPEM / aFontMetric.tmAveCharWidth;
-    }
-}
-
-bool CommonSalLayout::hasHScale() const
-{
-    int nHeight(mrFontSelData.mnHeight);
-    int nWidth(mrFontSelData.mnWidth ? mrFontSelData.mnWidth * mnAveWidthFactor : nHeight);
-    return nWidth != nHeight;
-}
-
-#elif defined(MACOSX) || defined(IOS)
-CommonSalLayout::CommonSalLayout(const CoreTextStyle& rCoreTextStyle)
-:   mrFontSelData(rCoreTextStyle.maFontSelData)
-,   mrCoreTextStyle(rCoreTextStyle)
-,   mpVertGlyphs(nullptr)
-{
-    mpHbFont = rCoreTextStyle.GetHbFont();
-    if (!mpHbFont)
-    {
-        // On macOS we use HarfBuzz for AAT shaping, but HarfBuzz will then
-        // need a CGFont (as it offloads the actual AAT shaping to Core Text),
-        // if we have one we use it to create the hb_face_t.
-        hb_face_t* pHbFace;
-        CTFontRef pCTFont = static_cast<CTFontRef>(CFDictionaryGetValue(rCoreTextStyle.GetStyleDict(), kCTFontAttributeName));
-        CGFontRef pCGFont = CTFontCopyGraphicsFont(pCTFont, nullptr);
-        if (pCGFont)
-            pHbFace = hb_coretext_face_create(pCGFont);
-        else
-            pHbFace = hb_face_create_for_tables(getFontTable, const_cast<CoreTextFontFace*>(rCoreTextStyle.mpFontData), nullptr);
-        CGFontRelease(pCGFont);
-
-        mpHbFont = createHbFont(pHbFace);
-        rCoreTextStyle.SetHbFont(mpHbFont);
-    }
-}
-
-#else
-
-void CommonSalLayout::InitFromFreetypeFont()
-{
-    mpHbFont = mpFreetypeFont->GetHbFont();
-    if (!mpHbFont)
-    {
-        hb_face_t* pHbFace = hb_face_create_for_tables(getFontTable, mpFreetypeFont, nullptr);
-        mpHbFont = createHbFont(pHbFace);
-        mpFreetypeFont->SetHbFont(mpHbFont);
-    }
-}
-
-#if ENABLE_QT5
-CommonSalLayout::CommonSalLayout(const FontSelectPattern &rFSP,
-                                 FreetypeFont *pFreetypeFont,
-                                 Qt5Font *pQt5Font, bool bUseQt5)
-    : mrFontSelData(rFSP)
-    , mpFreetypeFont(pFreetypeFont)
-    , mbUseQt5(bUseQt5)
-    , mpQFont(pQt5Font)
-    , mpVertGlyphs(nullptr)
-{
-    if (mbUseQt5)
-    {
-        assert( pQt5Font && !pFreetypeFont );
-        mpHbFont = mpQFont->GetHbFont();
-        if (!mpHbFont)
-        {
-            hb_face_t* pHbFace = hb_face_create_for_tables(
-                getFontTable_Qt5Font, pQt5Font, nullptr);
-            mpHbFont = createHbFont(pHbFace);
-            mpQFont->SetHbFont(mpHbFont);
-        }
-    }
-    else
-    {
-        assert( !pQt5Font && pFreetypeFont );
-        InitFromFreetypeFont();
-    }
-}
-
-CommonSalLayout::CommonSalLayout(FreetypeFont& rFreetypeFont)
-    : CommonSalLayout(rFreetypeFont.GetFontSelData(),
-                      &rFreetypeFont, nullptr, false)
-{
-}
-
-CommonSalLayout::CommonSalLayout(Qt5Font& rQFont)
-    : CommonSalLayout(rQFont.GetFontSelData(),
-                      nullptr, &rQFont, true)
-{
-}
-
-#else // ! ENABLE_QT5
-
-CommonSalLayout::CommonSalLayout(FreetypeFont& rFreetypeFont)
-    : mrFontSelData(rFreetypeFont.GetFontSelData())
-    , mpFreetypeFont(&rFreetypeFont)
-    , mpVertGlyphs(nullptr)
-{
-    InitFromFreetypeFont();
-}
-
-#endif
-#endif
-
-void CommonSalLayout::InitFont() const
-{
-#if defined(_WIN32)
-    SelectObject(mhDC, mhFont);
-#endif
 }
 
 struct SubRun
@@ -418,14 +174,14 @@ namespace {
 
 } // namespace
 
-std::shared_ptr<vcl::TextLayoutCache> CommonSalLayout::CreateTextLayoutCache(OUString const& rString) const
+std::shared_ptr<vcl::TextLayoutCache> GenericSalLayout::CreateTextLayoutCache(OUString const& rString) const
 {
     return std::make_shared<vcl::TextLayoutCache>(rString.getStr(), rString.getLength());
 }
 
-void CommonSalLayout::SetNeedFallback(ImplLayoutArgs& rArgs, sal_Int32 nCharPos, bool bRightToLeft)
+void GenericSalLayout::SetNeedFallback(ImplLayoutArgs& rArgs, sal_Int32 nCharPos, bool bRightToLeft)
 {
-    if (nCharPos < 0)
+    if (nCharPos < 0 || mbFuzzing)
         return;
 
     using namespace ::com::sun::star;
@@ -449,7 +205,7 @@ void CommonSalLayout::SetNeedFallback(ImplLayoutArgs& rArgs, sal_Int32 nCharPos,
     rArgs.NeedFallback(nGraphemeStartPos, nGraphemeEndPos, bRightToLeft);
 }
 
-void CommonSalLayout::AdjustLayout(ImplLayoutArgs& rArgs)
+void GenericSalLayout::AdjustLayout(ImplLayoutArgs& rArgs)
 {
     SalLayout::AdjustLayout(rArgs);
 
@@ -465,7 +221,7 @@ void CommonSalLayout::AdjustLayout(ImplLayoutArgs& rArgs)
             ApplyAsianKerning(rArgs.mrStr);
 }
 
-void CommonSalLayout::DrawText(SalGraphics& rSalGraphics) const
+void GenericSalLayout::DrawText(SalGraphics& rSalGraphics) const
 {
     //call platform dependent DrawText functions
     rSalGraphics.DrawTextLayout( *this );
@@ -475,15 +231,16 @@ void CommonSalLayout::DrawText(SalGraphics& rSalGraphics) const
 // We don’t check for a specific script or language as it shouldn’t matter
 // here; if the glyph would be the result from applying “vert” for any
 // script/language then we want to always treat it as upright glyph.
-bool CommonSalLayout::HasVerticalAlternate(sal_UCS4 aChar, sal_UCS4 aVariationSelector)
+bool GenericSalLayout::HasVerticalAlternate(sal_UCS4 aChar, sal_UCS4 aVariationSelector)
 {
     hb_codepoint_t nGlyphIndex = 0;
-    if (!hb_font_get_glyph(mpHbFont, aChar, aVariationSelector, &nGlyphIndex))
+    hb_font_t *pHbFont = mpFont->GetHbFont();
+    if (!hb_font_get_glyph(pHbFont, aChar, aVariationSelector, &nGlyphIndex))
         return false;
 
     if (!mpVertGlyphs)
     {
-        hb_face_t* pHbFace = hb_font_get_face(mpHbFont);
+        hb_face_t* pHbFace = hb_font_get_face(pHbFont);
         mpVertGlyphs = hb_set_create();
 
         // Find all GSUB lookups for “vert” feature.
@@ -511,12 +268,13 @@ bool CommonSalLayout::HasVerticalAlternate(sal_UCS4 aChar, sal_UCS4 aVariationSe
     return hb_set_has(mpVertGlyphs, nGlyphIndex) != 0;
 }
 
-bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
+bool GenericSalLayout::LayoutText(ImplLayoutArgs& rArgs)
 {
-    hb_face_t* pHbFace = hb_font_get_face(mpHbFont);
+    hb_font_t *pHbFont = mpFont->GetHbFont();
+    hb_face_t* pHbFace = hb_font_get_face(pHbFont);
 
     int nGlyphCapacity = 2 * (rArgs.mnEndCharPos - rArgs.mnMinCharPos);
-    Reserve(nGlyphCapacity);
+    m_GlyphItems.reserve(nGlyphCapacity);
 
     const int nLength = rArgs.mrStr.getLength();
     const sal_Unicode *pStr = rArgs.mrStr.getStr();
@@ -540,17 +298,18 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
     hb_buffer_set_unicode_funcs(pHbBuffer, pHbUnicodeFuncs);
 #endif
 
+    const FontSelectPattern& rFontSelData = mpFont->GetFontSelectPattern();
     if (rArgs.mnFlags & SalLayoutFlags::DisableKerning)
     {
-        SAL_INFO("vcl.harfbuzz", "Disabling kerning for font: " << mrFontSelData.maTargetName);
+        SAL_INFO("vcl.harfbuzz", "Disabling kerning for font: " << rFontSelData.maTargetName);
         maFeatures.push_back({ HB_TAG('k','e','r','n'), 0, 0, static_cast<unsigned int>(-1) });
     }
 
-    ParseFeatures(mrFontSelData.maTargetName);
+    ParseFeatures(rFontSelData.maTargetName);
 
     double nXScale = 0;
     double nYScale = 0;
-    getScale(&nXScale, &nYScale);
+    mpFont->GetScale(&nXScale, &nYScale);
 
     Point aCurrPos(0, 0);
     while (true)
@@ -676,7 +435,7 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
             hb_segment_properties_t aHbProps;
             hb_buffer_get_segment_properties(pHbBuffer, &aHbProps);
             hb_shape_plan_t* pHbPlan = hb_shape_plan_create_cached(pHbFace, &aHbProps, maFeatures.data(), maFeatures.size(), pHbShapers);
-            bool ok = hb_shape_plan_execute(pHbPlan, mpHbFont, pHbBuffer, maFeatures.data(), maFeatures.size());
+            bool ok = hb_shape_plan_execute(pHbPlan, pHbFont, pHbBuffer, maFeatures.data(), maFeatures.size());
             assert(ok);
             (void) ok;
             hb_buffer_set_content_type(pHbBuffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
@@ -689,6 +448,63 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
             for (int i = 0; i < nRunGlyphCount; ++i) {
                 int32_t nGlyphIndex = pHbGlyphInfos[i].codepoint;
                 int32_t nCharPos = pHbGlyphInfos[i].cluster;
+                int32_t nCharCount = 0;
+                bool bInCluster = false;
+                bool bClusterStart = false;
+
+                // Find the number of characters that make up this glyph.
+                if (!bRightToLeft)
+                {
+                    // If the cluster is the same as previous glyph, then this
+                    // already consumed, skip.
+                    if (i > 0 && pHbGlyphInfos[i].cluster == pHbGlyphInfos[i - 1].cluster)
+                    {
+                        nCharCount = 0;
+                        bInCluster = true;
+                    }
+                    else
+                    {
+                        // Find the next glyph with a different cluster, or the
+                        // end of text.
+                        int j = i;
+                        int32_t nNextCharPos = nCharPos;
+                        while (nNextCharPos == nCharPos && j < nRunGlyphCount)
+                            nNextCharPos = pHbGlyphInfos[j++].cluster;
+
+                        if (nNextCharPos == nCharPos)
+                            nNextCharPos = nEndRunPos;
+                        nCharCount = nNextCharPos - nCharPos;
+                        if ((i == 0 || pHbGlyphInfos[i].cluster != pHbGlyphInfos[i - 1].cluster) &&
+                            (i < nRunGlyphCount - 1 && pHbGlyphInfos[i].cluster == pHbGlyphInfos[i + 1].cluster))
+                            bClusterStart = true;
+                    }
+                }
+                else
+                {
+                    // If the cluster is the same as previous glyph, then this
+                    // will be consumed later, skip.
+                    if (i < nRunGlyphCount - 1 && pHbGlyphInfos[i].cluster == pHbGlyphInfos[i + 1].cluster)
+                    {
+                        nCharCount = 0;
+                        bInCluster = true;
+                    }
+                    else
+                    {
+                        // Find the previous glyph with a different cluster, or
+                        // the end of text.
+                        int j = i;
+                        int32_t nNextCharPos = nCharPos;
+                        while (nNextCharPos == nCharPos && j >= 0)
+                            nNextCharPos = pHbGlyphInfos[j--].cluster;
+
+                        if (nNextCharPos == nCharPos)
+                            nNextCharPos = nEndRunPos;
+                        nCharCount = nNextCharPos - nCharPos;
+                        if ((i == nRunGlyphCount - 1 || pHbGlyphInfos[i].cluster != pHbGlyphInfos[i + 1].cluster) &&
+                            (i > 0 && pHbGlyphInfos[i].cluster == pHbGlyphInfos[i - 1].cluster))
+                            bClusterStart = true;
+                    }
+                }
 
                 // if needed request glyph fallback by updating LayoutArgs
                 if (!nGlyphIndex)
@@ -698,13 +514,12 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
                         continue;
                 }
 
-                bool bInCluster = false;
-                if (i > 0 && pHbGlyphInfos[i].cluster == pHbGlyphInfos[i - 1].cluster)
-                    bInCluster = true;
-
-                long nGlyphFlags = 0;
+                int nGlyphFlags = 0;
                 if (bRightToLeft)
                     nGlyphFlags |= GlyphItem::IS_RTL_GLYPH;
+
+                if (bClusterStart)
+                    nGlyphFlags |= GlyphItem::IS_CLUSTER_START;
 
                 if (bInCluster)
                     nGlyphFlags |= GlyphItem::IS_IN_CLUSTER;
@@ -716,10 +531,9 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
                     nGlyphFlags |= GlyphItem::IS_DIACRITIC;
 
                 if (u_isUWhiteSpace(aChar))
-                     nGlyphFlags |= GlyphItem::IS_SPACING;
+                    nGlyphFlags |= GlyphItem::IS_SPACING;
 
-                if ((aSubRun.maScript == HB_SCRIPT_ARABIC ||
-                     aSubRun.maScript == HB_SCRIPT_SYRIAC) &&
+                if (aSubRun.maScript == HB_SCRIPT_ARABIC &&
                     HB_DIRECTION_IS_BACKWARD(aSubRun.maDirection) &&
                     (nGlyphFlags & GlyphItem::IS_SPACING) == 0)
                 {
@@ -734,7 +548,7 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
 
                     // We have glyph offsets that is relative to h origin now,
                     // add the origin back so it is relative to v origin.
-                    hb_font_add_glyph_origin_for_direction( mpHbFont,
+                    hb_font_add_glyph_origin_for_direction(pHbFont,
                             nGlyphIndex,
                             HB_DIRECTION_TTB,
                             &pHbPositions[i].x_offset ,
@@ -755,9 +569,9 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
                 nYOffset = std::lround(nYOffset * nYScale);
 
                 Point aNewPos(aCurrPos.X() + nXOffset, aCurrPos.Y() + nYOffset);
-                const GlyphItem aGI(nCharPos, nGlyphIndex, aNewPos, nGlyphFlags,
+                const GlyphItem aGI(nCharPos, nCharCount, nGlyphIndex, aNewPos, nGlyphFlags,
                                     nAdvance, nXOffset);
-                AppendGlyph(aGI);
+                m_GlyphItems.push_back(aGI);
 
                 aCurrPos.AdjustX(nAdvance );
             }
@@ -769,7 +583,7 @@ bool CommonSalLayout::LayoutText(ImplLayoutArgs& rArgs)
     return true;
 }
 
-bool CommonSalLayout::GetCharWidths(DeviceCoordinate* pCharWidths) const
+bool GenericSalLayout::GetCharWidths(DeviceCoordinate* pCharWidths) const
 {
     int nCharCount = mnEndCharPos - mnMinCharPos;
 
@@ -799,7 +613,7 @@ bool CommonSalLayout::GetCharWidths(DeviceCoordinate* pCharWidths) const
 //   * For any RTL glyph that has DX adjustment, insert enough Kashidas to
 //     fill in the added space.
 
-void CommonSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
+void GenericSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
 {
     if (rArgs.mpDXArray == nullptr)
         return;
@@ -826,13 +640,10 @@ void CommonSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
     hb_codepoint_t nKashidaIndex = 0;
     if (rArgs.mnFlags & SalLayoutFlags::KashidaJustification)
     {
+        hb_font_t *pHbFont = mpFont->GetHbFont();
         // Find Kashida glyph width and index.
-        if (hb_font_get_glyph(mpHbFont, 0x0640, 0, &nKashidaIndex))
-        {
-            double nXScale = 0;
-            getScale(&nXScale, nullptr);
-            nKashidaWidth = hb_font_get_glyph_h_advance(mpHbFont, nKashidaIndex) * nXScale;
-        }
+        if (hb_font_get_glyph(pHbFont, 0x0640, 0, &nKashidaIndex))
+            nKashidaWidth = mpFont->GetKashidaWidth();
         bKashidaJustify = nKashidaWidth != 0;
     }
 
@@ -847,52 +658,77 @@ void CommonSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
     size_t i = 0;
     while (i < m_GlyphItems.size())
     {
+        // Accumulate the width difference for all characters corresponding to
+        // this glyph.
         int nCharPos = m_GlyphItems[i].mnCharPos - mnMinCharPos;
-        DeviceCoordinate nDiff = pNewCharWidths[nCharPos] - pOldCharWidths[nCharPos];
+        DeviceCoordinate nDiff = 0;
+        for (int j = 0; j < m_GlyphItems[i].mnCharCount; j++)
+            nDiff += pNewCharWidths[nCharPos + j] - pOldCharWidths[nCharPos + j];
 
-        // Adjust the width of the first glyph in the cluster.
-        m_GlyphItems[i].mnNewWidth += nDiff;
-
-        // Apply the X position of all glyphs in the cluster.
-        size_t j = i;
-        while (j < m_GlyphItems.size())
+        if (!m_GlyphItems[i].IsRTLGlyph())
         {
-            if (m_GlyphItems[j].mnCharPos != m_GlyphItems[i].mnCharPos)
-                break;
-            m_GlyphItems[j].maLinearPos.AdjustX(nDelta );
-            // For RTL, put all DX adjustment space to the left of the glyph.
-            if (m_GlyphItems[i].IsRTLGlyph())
-                m_GlyphItems[j].maLinearPos.AdjustX(nDiff );
-            ++j;
-        }
+            // Adjust the width and position of the first (leftmost) glyph in
+            // the cluster.
+            m_GlyphItems[i].mnNewWidth += nDiff;
+            m_GlyphItems[i].maLinearPos.AdjustX(nDelta);
 
-        // Id this glyph is Kashida-justifiable, then mark this as a Kashida
-        // position. Since this must be a RTL glyph, we mark the last glyph in
-        // the cluster not the first as this would be the base glyph.
-        // nDiff > 1 to ignore rounding errors.
-        if (bKashidaJustify && m_GlyphItems[i].AllowKashida() && nDiff > 1)
-        {
-            pKashidas[j - 1] = nDiff;
-            // Move any non-spacing marks attached to this cluster as well.
-            // Looping backward because this is RTL glyph.
-            if (i > 0)
+            // Adjust the position of the rest of the glyphs in the cluster.
+            while (++i < m_GlyphItems.size())
             {
-                auto pGlyph = m_GlyphItems.begin() + i - 1;
-                while (pGlyph != m_GlyphItems.begin() && pGlyph->IsDiacritic())
-                {
-                    pGlyph->maLinearPos.AdjustX(nDiff );
-                    --pGlyph;
-                }
+                if (!m_GlyphItems[i].IsInCluster())
+                    break;
+                m_GlyphItems[i].maLinearPos.AdjustX(nDelta);
             }
         }
+        else if (m_GlyphItems[i].IsInCluster())
+        {
+            // RTL glyph in the middle of the cluster, will be handled in the
+            // loop below.
+            i++;
+        }
+        else
+        {
+            // Adjust the width and position of the first (rightmost) glyph in
+            // the cluster.
+            // For RTL, we put all the adjustment to the left of the glyph.
+            m_GlyphItems[i].mnNewWidth += nDiff;
+            m_GlyphItems[i].maLinearPos.AdjustX(nDelta + nDiff);
 
+            // Adjust the X position of all glyphs in the cluster.
+            size_t j = i;
+            while (j > 0)
+            {
+                --j;
+                if (!m_GlyphItems[j].IsInCluster())
+                    break;
+                m_GlyphItems[j].maLinearPos.AdjustX(nDelta + nDiff);
+            }
+
+            // If this glyph is Kashida-justifiable, then mark this as a
+            // Kashida position. Since this must be a RTL glyph, we mark the
+            // last glyph in the cluster not the first as this would be the
+            // base glyph.
+            if (bKashidaJustify && m_GlyphItems[i].AllowKashida() &&
+                nDiff > m_GlyphItems[i].mnCharCount) // Rounding errors, 1 pixel per character!
+            {
+                pKashidas[i] = nDiff;
+                // Move any non-spacing marks attached to this cluster as well.
+                // Looping backward because this is RTL glyph.
+                while (j > 0)
+                {
+                    if (!m_GlyphItems[j].IsDiacritic())
+                        break;
+                    m_GlyphItems[j--].maLinearPos.AdjustX(nDiff);
+                }
+            }
+            i++;
+        }
 
         // Increment the delta, the loop above makes sure we do so only once
         // for every character (cluster) not for every glyph (otherwise we
         // would apply it multiple times for each glyphs belonging to the same
         // character which is wrong since DX adjustments are character based).
         nDelta += nDiff;
-        i = j;
     }
 
     // Insert Kashida glyphs.
@@ -928,7 +764,7 @@ void CommonSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
             int const nFlags = GlyphItem::IS_IN_CLUSTER | GlyphItem::IS_RTL_GLYPH;
             while (nCopies--)
             {
-                GlyphItem aKashida(nCharPos, nKashidaIndex, aPos, nFlags, nKashidaWidth);
+                GlyphItem aKashida(nCharPos, 0, nKashidaIndex, aPos, nFlags, nKashidaWidth, 0);
                 pGlyphIter = m_GlyphItems.insert(pGlyphIter, aKashida);
                 aPos.AdjustX(nKashidaWidth );
                 aPos.AdjustX( -nOverlap );
@@ -939,20 +775,20 @@ void CommonSalLayout::ApplyDXArray(ImplLayoutArgs& rArgs)
     }
 }
 
-bool CommonSalLayout::IsKashidaPosValid(int nCharPos) const
+bool GenericSalLayout::IsKashidaPosValid(int nCharPos) const
 {
     for (auto pIter = m_GlyphItems.begin(); pIter != m_GlyphItems.end(); ++pIter)
     {
         if (pIter->mnCharPos == nCharPos)
         {
-            // The position is the first glyphs, this would happen if we
+            // The position is the first glyph, this would happen if we
             // changed the text styling in the middle of a word. Since we don’t
             // do ligatures across layout engine instances, this can’t be a
             // ligature so it should be fine.
             if (pIter == m_GlyphItems.begin())
                 return true;
 
-            // If the character was not supported by this layout, return false
+            // If the character is not supported by this layout, return false
             // so that fallback layouts would be checked for it.
             if (pIter->maGlyphId == 0)
                 break;

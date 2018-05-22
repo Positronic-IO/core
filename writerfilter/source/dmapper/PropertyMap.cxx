@@ -20,6 +20,7 @@
 #include <ooxml/resourceids.hxx>
 #include "DomainMapper_Impl.hxx"
 #include "ConversionHelper.hxx"
+#include <editeng/boxitem.hxx>
 #include <i18nutil/paper.hxx>
 #include <osl/diagnose.h>
 #include <rtl/ustring.hxx>
@@ -48,7 +49,9 @@
 #include <com/sun/star/style/VerticalAlignment.hpp>
 #include <comphelper/sequence.hxx>
 #include <comphelper/propertyvalue.hxx>
+#include <tools/diagnose_ex.h>
 #include "PropertyMapHelper.hxx"
+#include <set>
 
 using namespace com::sun::star;
 
@@ -365,7 +368,8 @@ void PropertyMap::printProperties()
 
 SectionPropertyMap::SectionPropertyMap( bool bIsFirstSection )
     : m_bIsFirstSection( bIsFirstSection )
-    , m_nBorderParams( 0 )
+    , m_eBorderApply( BorderApply::ToAllInSection )
+    , m_eBorderOffsetFrom( BorderOffsetFrom::Text )
     , m_bTitlePage( false )
     , m_nColumnCount( 0 )
     , m_nColumnDistance( 1249 )
@@ -510,9 +514,9 @@ uno::Reference< beans::XPropertySet > SectionPropertyMap::GetPageStyle( const un
         }
 
     }
-    catch ( const uno::Exception& rException )
+    catch ( const uno::Exception& )
     {
-        SAL_WARN( "writerfilter", "SectionPropertyMap::GetPageStyle() failed: " << rException );
+        DBG_UNHANDLED_EXCEPTION( "writerfilter" );
     }
 
     return xRet;
@@ -527,7 +531,7 @@ void SectionPropertyMap::SetBorder( BorderPosition ePos, sal_Int32 nLineDistance
 
 void SectionPropertyMap::ApplyBorderToPageStyles( const uno::Reference< container::XNameContainer >& xPageStyles,
                                                   const uno::Reference < lang::XMultiServiceFactory >& xTextFactory,
-                                                  sal_Int32 nValue )
+                                                  BorderApply eBorderApply, BorderOffsetFrom eOffsetFrom )
 {
     /*
     page border applies to:
@@ -544,26 +548,23 @@ void SectionPropertyMap::ApplyBorderToPageStyles( const uno::Reference< containe
     */
     uno::Reference< beans::XPropertySet > xFirst;
     uno::Reference< beans::XPropertySet > xSecond;
-    sal_Int32 nOffsetFrom = (nValue & 0x00E0) >> 5;
     // todo: negative spacing (from ww8par6.cxx)
-    switch ( nValue & 0x07 )
+    switch ( eBorderApply )
     {
-        case 0: // all styles
+        case BorderApply::ToAllInSection: // all styles
             if ( !m_sFollowPageStyleName.isEmpty() )
                 xFirst = GetPageStyle( xPageStyles, xTextFactory, false );
             if ( !m_sFirstPageStyleName.isEmpty() )
                 xSecond = GetPageStyle( xPageStyles, xTextFactory, true );
             break;
-        case 1: // first page
+        case BorderApply::ToFirstPageInSection: // first page
             if ( !m_sFirstPageStyleName.isEmpty() )
                 xFirst = GetPageStyle( xPageStyles, xTextFactory, true );
             break;
-        case 2: // left and right
+        case BorderApply::ToAllButFirstInSection: // left and right
             if ( !m_sFollowPageStyleName.isEmpty() )
                 xFirst = GetPageStyle( xPageStyles, xTextFactory, false );
             break;
-        case 3: // whole document?
-                // todo: how to apply a border to the whole document - find all sections or access all page styles?
         default:
             return;
     }
@@ -610,10 +611,10 @@ void SectionPropertyMap::ApplyBorderToPageStyles( const uno::Reference< containe
                 nLineWidth = m_oBorderLines[nBorder]->LineWidth;
             if ( xFirst.is() )
                 SetBorderDistance( xFirst, aMarginIds[nBorder], aBorderDistanceIds[nBorder],
-                    m_nBorderDistances[nBorder], nOffsetFrom, nLineWidth );
+                    m_nBorderDistances[nBorder], eOffsetFrom, nLineWidth );
             if ( xSecond.is() )
                 SetBorderDistance( xSecond, aMarginIds[nBorder], aBorderDistanceIds[nBorder],
-                    m_nBorderDistances[nBorder], nOffsetFrom, nLineWidth );
+                    m_nBorderDistances[nBorder], eOffsetFrom, nLineWidth );
         }
     }
 
@@ -644,26 +645,22 @@ void SectionPropertyMap::SetBorderDistance( const uno::Reference< beans::XProper
                                             PropertyIds eMarginId,
                                             PropertyIds eDistId,
                                             sal_Int32 nDistance,
-                                            sal_Int32 nOffsetFrom,
+                                            BorderOffsetFrom eOffsetFrom,
                                             sal_uInt32 nLineWidth )
 {
-    sal_Int32 nDist = nDistance;
-    if ( nOffsetFrom == 1 ) // From page
-    {
-        const OUString sMarginName = getPropertyName( eMarginId );
-        uno::Any aMargin = xStyle->getPropertyValue( sMarginName );
-        sal_Int32 nMargin = 0;
-        aMargin >>= nMargin;
-
-        // Change the margins with the border distance
-        xStyle->setPropertyValue( sMarginName, uno::makeAny( nDistance ) );
-
-        // Set the distance to ( Margin - distance - nLineWidth )
-        nDist = nMargin - nDistance - nLineWidth;
-    }
+    if (!xStyle.is())
+        return;
+    const OUString sMarginName = getPropertyName( eMarginId );
     const OUString sBorderDistanceName = getPropertyName( eDistId );
-    if ( xStyle.is() )
-        xStyle->setPropertyValue( sBorderDistanceName, uno::makeAny( nDist ) );
+    uno::Any aMargin = xStyle->getPropertyValue( sMarginName );
+    sal_Int32 nMargin = 0;
+    aMargin >>= nMargin;
+    editeng::BorderDistanceFromWord(eOffsetFrom == BorderOffsetFrom::Edge, nMargin, nDistance,
+                                    nLineWidth);
+
+    // Change the margins with the border distance
+    xStyle->setPropertyValue( sMarginName, uno::makeAny( nMargin ) );
+    xStyle->setPropertyValue( sBorderDistanceName, uno::makeAny( nDistance ) );
 }
 
 void SectionPropertyMap::DontBalanceTextColumns()
@@ -1149,6 +1146,10 @@ void SectionPropertyMap::HandleIncreasedAnchoredObjectSpacing(DomainMapper_Impl&
     std::vector<AnchoredObjectInfo>& rAnchoredObjectAnchors = rDM_Impl.m_aAnchoredObjectAnchors;
     for (auto& rAnchor : rAnchoredObjectAnchors)
     {
+        // Ignore this paragraph when there is a single shape only.
+        if (rAnchor.m_aAnchoredObjects.size() < 2)
+            continue;
+
         // Analyze the anchored objects of this paragraph, now that we know the
         // page width.
         sal_Int32 nShapesWidth = 0;
@@ -1224,9 +1225,9 @@ void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
     {
         HandleIncreasedAnchoredObjectSpacing(rDM_Impl);
     }
-    catch (const uno::Exception& rException)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("writerfilter", "HandleIncreasedAnchoredObjectSpacing() failed: " << rException);
+        DBG_UNHANDLED_EXCEPTION("writerfilter", "HandleIncreasedAnchoredObjectSpacing() failed");
     }
 
     if ( m_nLnnMod )
@@ -1438,7 +1439,7 @@ void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
                     getPropertyName( PROP_TEXT_COLUMNS ), uno::makeAny( xColumns ) );
         }
 
-        ApplyBorderToPageStyles( rDM_Impl.GetPageStyles(), rDM_Impl.GetTextFactory(), m_nBorderParams );
+        ApplyBorderToPageStyles( rDM_Impl.GetPageStyles(), rDM_Impl.GetTextFactory(), m_eBorderApply, m_eBorderOffsetFrom );
 
         try
         {
@@ -1459,10 +1460,18 @@ void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
                 uno::Reference< beans::XPropertySet > pageProperties( m_bTitlePage ? m_aFirstPageStyle : m_aFollowPageStyle );
                 uno::Reference< beans::XPropertySetInfo > pagePropertiesInfo( pageProperties->getPropertySetInfo() );
                 uno::Sequence< beans::Property > propertyList( pagePropertiesInfo->getProperties() );
+                // Ignore write-only properties.
+                static const std::set<OUString> aBlacklist
+                    = { "FooterBackGraphicURL", "BackGraphicURL", "HeaderBackGraphicURL" };
                 for ( int i = 0; i < propertyList.getLength(); ++i )
                 {
                     if ( (propertyList[i].Attributes & beans::PropertyAttribute::READONLY) == 0 )
-                        evenOddStyle->setPropertyValue( propertyList[i].Name, pageProperties->getPropertyValue( propertyList[i].Name ) );
+                    {
+                        if (aBlacklist.find(propertyList[i].Name) == aBlacklist.end())
+                            evenOddStyle->setPropertyValue(
+                                propertyList[i].Name,
+                                pageProperties->getPropertyValue(propertyList[i].Name));
+                    }
                 }
                 evenOddStyle->setPropertyValue( "FollowStyle", uno::makeAny( *pageStyle ) );
                 rDM_Impl.GetPageStyles()->insertByName( evenOddStyleName, uno::makeAny( evenOddStyle ) );

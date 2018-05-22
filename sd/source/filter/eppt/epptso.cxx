@@ -37,6 +37,7 @@
 #include <sot/storage.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/graph.hxx>
 #include <sfx2/app.hxx>
 #include <svl/languageoptions.hxx>
 #include <editeng/svxenum.hxx>
@@ -57,7 +58,6 @@
 #include <com/sun/star/drawing/PolygonFlags.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/drawing/XControlShape.hpp>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <com/sun/star/i18n/XScriptTypeDetector.hpp>
@@ -66,10 +66,8 @@
 #include <com/sun/star/embed/Aspects.hpp>
 #include <vcl/cvtgrf.hxx>
 #include <tools/urlobj.hxx>
-#include <comphelper/extract.hxx>
 #include <rtl/crc.h>
 #include <comphelper/classids.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <com/sun/star/text/FontRelief.hpp>
 #include <editeng/frmdiritem.hxx>
 #include <vcl/fltcall.hxx>
@@ -104,39 +102,54 @@ PPTExBulletProvider::~PPTExBulletProvider()
 {
 }
 
-sal_uInt16 PPTExBulletProvider::GetId( const OString& rUniqueId, Size& rGraphicSize )
+sal_uInt16 PPTExBulletProvider::GetId(Graphic const & rGraphic, Size& rGraphicSize )
 {
     sal_uInt16 nRetValue = 0xffff;
 
-    if ( !rUniqueId.isEmpty() )
+    if (rGraphic)
     {
-        std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject(rUniqueId));
-        Graphic         aMappedGraphic, aGraphic(xGraphicObject->GetGraphic());
+        Graphic         aMappedGraphic, aGraphic(rGraphic);
+        std::unique_ptr<GraphicObject> xGraphicObject(new GraphicObject(aGraphic));
         Size            aPrefSize( aGraphic.GetPrefSize() );
         BitmapEx        aBmpEx( aGraphic.GetBitmapEx() );
 
         if ( rGraphicSize.Width() && rGraphicSize.Height() )
         {
-            double          fQ1 = ( static_cast<double>(aPrefSize.Width()) / static_cast<double>(aPrefSize.Height()) );
-            double          fQ2 = ( static_cast<double>(rGraphicSize.Width()) / static_cast<double>(rGraphicSize.Height()) );
-            double          fXScale = 1;
-            double          fYScale = 1;
-
-            if ( fQ1 > fQ2 )
-                fYScale = fQ1 / fQ2;
-            else if ( fQ1 < fQ2 )
-                fXScale = fQ2 / fQ1;
-
-            if ( ( fXScale != 1.0 ) || ( fYScale != 1.0 ) )
+            Size aNewSize;
+            bool changed = false;
+            if (aPrefSize.Width() == 0 || aPrefSize.Height() == 0)
             {
-                aBmpEx.Scale( fXScale, fYScale );
-                Size aNewSize( static_cast<sal_Int32>(static_cast<double>(rGraphicSize.Width()) / fXScale + 0.5 ),
-                                static_cast<sal_Int32>(static_cast<double>(rGraphicSize.Height()) / fYScale + 0.5 ) );
+                aBmpEx.Scale(aPrefSize);
+                aNewSize = aPrefSize;
+                changed = true;
+            }
+            else
+            {
+                double          fQ1 = ( static_cast<double>(aPrefSize.Width()) / static_cast<double>(aPrefSize.Height()) );
+                double          fQ2 = ( static_cast<double>(rGraphicSize.Width()) / static_cast<double>(rGraphicSize.Height()) );
+                double          fXScale = 1;
+                double          fYScale = 1;
 
-                rGraphicSize = aNewSize;
+                if ( fQ1 > fQ2 )
+                    fYScale = fQ1 / fQ2;
+                else if ( fQ1 < fQ2 )
+                    fXScale = fQ2 / fQ1;
 
-                aMappedGraphic = Graphic( aBmpEx );
-                xGraphicObject.reset(new GraphicObject(aMappedGraphic));
+                if ( ( fXScale != 1.0 ) || ( fYScale != 1.0 ) )
+                {
+                    aBmpEx.Scale( fXScale, fYScale );
+                    aNewSize = Size( static_cast<sal_Int32>(static_cast<double>(rGraphicSize.Width()) / fXScale + 0.5 ),
+                                     static_cast<sal_Int32>(static_cast<double>(rGraphicSize.Height()) / fYScale + 0.5 ) );
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    rGraphicSize = aNewSize;
+
+                    aMappedGraphic = Graphic( aBmpEx );
+                    xGraphicObject.reset(new GraphicObject(aMappedGraphic));
+                }
             }
         }
         sal_uInt32 nId = pGraphicProv->GetBlibID(aBuExPictureStream, *xGraphicObject.get());
@@ -535,8 +548,8 @@ bool PPTWriter::ImplCloseDocument()
         mpStrm->WriteBytes(aTxMasterStyleAtomStrm.GetData(), aTxMasterStyleAtomStrm.Tell());
         maSoundCollection.Write( *mpStrm );
         mpPptEscherEx->WriteDrawingGroupContainer( *mpStrm );
-        ImplMasterSlideListContainer( mpStrm );
-        ImplDocumentListContainer( mpStrm );
+        ImplMasterSlideListContainer( mpStrm.get() );
+        ImplDocumentListContainer( mpStrm.get() );
 
         sal_uInt32 nOldPos = mpPptEscherEx->PtGetOffsetByID( EPP_Persist_CurrentPos );
         if ( nOldPos )
@@ -828,7 +841,7 @@ void PPTWriter::ImplWritePortions( SvStream& rOut, TextObj& rTextObj )
                     case css::drawing::FillStyle_GRADIENT :
                     {
                         ::tools::Rectangle aRect( Point(), Size( 28000, 21000 ) );
-                        EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm, aRect );
+                        EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm.get(), aRect );
                         aPropOpt.CreateGradientProperties( mXPropSet );
                         aPropOpt.GetOpt( ESCHER_Prop_fillColor, nBackgroundColor );
                     }
@@ -850,7 +863,7 @@ void PPTWriter::ImplWritePortions( SvStream& rOut, TextObj& rTextObj )
                             case css::drawing::FillStyle_GRADIENT :
                             {
                                 ::tools::Rectangle aRect( Point(), Size( 28000, 21000 ) );
-                                EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm, aRect );
+                                EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm.get(), aRect );
                                 aPropOpt.CreateGradientProperties( mXBackgroundPropSet );
                                 aPropOpt.GetOpt( ESCHER_Prop_fillColor, nBackgroundColor );
                             }
@@ -1693,7 +1706,7 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
             const css::awt::Size   aSize100thmm( mXShape->getSize() );
             const css::awt::Point  aPoint100thmm( mXShape->getPosition() );
             ::tools::Rectangle   aRect100thmm( Point( aPoint100thmm.X, aPoint100thmm.Y ), Size( aSize100thmm.Width, aSize100thmm.Height ) );
-            EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm, aRect100thmm );
+            EscherPropertyContainer aPropOpt( mpPptEscherEx->GetGraphicProvider(), mpPicStrm.get(), aRect100thmm );
 
             if ( bGroup )
             {
@@ -1957,10 +1970,10 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
                 mpExEmbed->WriteUInt32( EPP_ExControlAtom << 16 )
                            .WriteUInt32( 4 )
                            .WriteUInt32( nPageId );
-                PPTExOleObjEntry* pEntry = new PPTExOleObjEntry( OCX_CONTROL, mpExEmbed->Tell() );
+                std::unique_ptr<PPTExOleObjEntry> pEntry( new PPTExOleObjEntry( OCX_CONTROL, mpExEmbed->Tell() ) );
                 pEntry->xControlModel = aXControlModel;
                 pEntry->xShape = mXShape;
-                maExOleObj.push_back( pEntry );
+                maExOleObj.push_back( std::move(pEntry) );
 
                 mnExEmbed++;
 
@@ -2409,7 +2422,7 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
                                 else
                                     mpStrm->WriteUInt32( EPP_TEXTTYPE_Body );
                                 mnTextSize = aTextObj.Count();
-                                aTextObj.Write( mpStrm );
+                                aTextObj.Write( mpStrm.get() );
                                 mpPptEscherEx->BeginAtom();
                                 for ( sal_uInt32 i = 0; i < aTextObj.ParagraphCount() ; ++i )
                                 {
@@ -2516,9 +2529,9 @@ void PPTWriter::ImplWritePage( const PHLayout& rLayout, EscherSolverContainer& a
                                .WriteUChar( 0 )     // (bool)is object a world table
                                .WriteUChar( 0 );    // pad byte
 
-                    PPTExOleObjEntry* pE = new PPTExOleObjEntry( NORMAL_OLE_OBJECT, mpExEmbed->Tell() );
+                    std::unique_ptr<PPTExOleObjEntry> pE( new PPTExOleObjEntry( NORMAL_OLE_OBJECT, mpExEmbed->Tell() ) );
                     pE->xShape = mXShape;
-                    maExOleObj.push_back( pE );
+                    maExOleObj.push_back( std::move(pE) );
 
                     mnExEmbed++;
 
@@ -3001,7 +3014,7 @@ bool PPTWriter::ImplCreateCellBorder( const CellBorder* pCellBorder, sal_Int32 n
 
 //get merged cell's width
 sal_Int32 GetCellRight( sal_Int32 nColumn,
-    ::tools::Rectangle& rect,
+    ::tools::Rectangle const & rect,
     std::vector< std::pair< sal_Int32, sal_Int32 > >& aColumns,
     uno::Reference< table::XMergeableCell > const & xCell )
 {
@@ -3018,7 +3031,7 @@ sal_Int32 GetCellRight( sal_Int32 nColumn,
 }
 //get merged cell's height
 sal_Int32 GetCellBottom( sal_Int32 nRow,
-    ::tools::Rectangle& rect,
+    ::tools::Rectangle const & rect,
     std::vector< std::pair< sal_Int32, sal_Int32 > >& aRows,
     uno::Reference< table::XMergeableCell > const & xCell )
 {
@@ -3105,8 +3118,8 @@ void PPTWriter::ImplCreateTable( uno::Reference< drawing::XShape > const & rXSha
                 if ( y == nRowCount - 1 && nPosition != maRect.Bottom())
                     maRect.SetBottom( nPosition );
             }
-            std::unique_ptr<ContainerGuard> xSpgrContainer(new ContainerGuard(mpPptEscherEx, ESCHER_SpgrContainer));
-            std::unique_ptr<ContainerGuard> xSpContainer(new ContainerGuard(mpPptEscherEx, ESCHER_SpContainer));
+            std::unique_ptr<ContainerGuard> xSpgrContainer(new ContainerGuard(mpPptEscherEx.get(), ESCHER_SpgrContainer));
+            std::unique_ptr<ContainerGuard> xSpContainer(new ContainerGuard(mpPptEscherEx.get(), ESCHER_SpContainer));
             mpPptEscherEx->AddAtom( 16, ESCHER_Spgr, 1 );
             mpStrm    ->WriteInt32( maRect.Left() ) // Bounding box for the grouped shapes to which they are attached
                        .WriteInt32( maRect.Top() )
@@ -3164,7 +3177,7 @@ void PPTWriter::ImplCreateTable( uno::Reference< drawing::XShape > const & rXSha
                             aAny >>= mbFontIndependentLineSpacing;
 
                         EscherPropertyContainer aPropOptSp;
-                        std::unique_ptr<ContainerGuard> xCellContainer(new ContainerGuard(mpPptEscherEx, ESCHER_SpContainer));
+                        std::unique_ptr<ContainerGuard> xCellContainer(new ContainerGuard(mpPptEscherEx.get(), ESCHER_SpContainer));
                         ImplCreateShape( ESCHER_ShpInst_Rectangle,
                                          ShapeFlag::HaveAnchor | ShapeFlag::HaveShapeProperty | ShapeFlag::Child,
                                          aSolverContainer );

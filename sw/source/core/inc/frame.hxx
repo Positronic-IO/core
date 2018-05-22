@@ -426,7 +426,7 @@ protected:
     SwPageFrame *InsertPage( SwPageFrame *pSibling, bool bFootnote );
     void PrepareMake(vcl::RenderContext* pRenderContext);
     void OptPrepareMake();
-    void MakePos();
+    virtual void MakePos();
     // Format next frame of table frame to assure keeping attributes.
     // In case of nested tables method <SwFrame::MakeAll()> is called to
     // avoid formatting of superior table frame.
@@ -557,7 +557,8 @@ public:
         const SvxBrushItem*& rpBrush,
         const Color*& rpColor,
         SwRect &rOrigRect,
-        bool bLowerMode ) const;
+        bool bLowerMode,
+        bool bConsiderTextBox ) const;
 
     inline void SetCompletePaint() const;
     inline void ResetCompletePaint() const;
@@ -890,6 +891,7 @@ public:
 public:
     // if writer is NULL, dumps the layout structure as XML in layout.xml
     virtual void dumpAsXml(xmlTextWriterPtr writer = nullptr) const;
+    void dumpTopMostAsXml(xmlTextWriterPtr writer = nullptr) const;
     void dumpInfosAsXml(xmlTextWriterPtr writer) const;
     virtual void dumpAsXmlAttributes(xmlTextWriterPtr writer) const;
     void dumpChildrenAsXml(xmlTextWriterPtr writer) const;

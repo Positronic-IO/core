@@ -37,15 +37,13 @@
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolygonclipper.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
-#include <comphelper/processfactory.hxx>
 #include <editeng/flditem.hxx>
 #include <unotools/tempfile.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <unotools/streamwrap.hxx>
 #include <vcl/cvtgrf.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/outdev.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/svdxcgv.hxx>
 #include <svx/svdobj.hxx>
@@ -200,7 +198,6 @@ private:
     SVGFontExport*                      mpSVGFontExport;
     SVGActionWriter*                    mpSVGWriter;
     SdrPage*                            mpDefaultSdrPage;
-    SdrModel*                           mpSdrModel;
     bool                            mbPresentation;
     bool                            mbSinglePage;
     sal_Int32                           mnVisiblePage;
@@ -224,9 +221,6 @@ private:
 
     Link<EditFieldInfo*,void>           maOldFieldHdl;
     Link<EditFieldInfo*,void>           maNewFieldHdl;
-
-    /// @throws css::uno::RuntimeException
-    bool                            implImport( const Sequence< PropertyValue >& rDescriptor );
 
     /// @throws css::uno::RuntimeException
     bool                            implExport( const Sequence< PropertyValue >& rDescriptor );

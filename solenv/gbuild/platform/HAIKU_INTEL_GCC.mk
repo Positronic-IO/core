@@ -11,6 +11,6 @@
 
 gb_CPUDEFS := -DX86
 
-include $(GBUILDDIR)/platform/unxgcc.mk
+include $(GBUILDDIR)/platform/haiku.mk
 
 # vim: set noet sw=4:

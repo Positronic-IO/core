@@ -21,7 +21,6 @@
 #include <hintids.hxx>
 #include <o3tl/make_unique.hxx>
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/urihelper.hxx>
@@ -63,14 +62,13 @@
 #include <usrpref.hxx>
 #include <edtwin.hxx>
 #include <swwait.hxx>
-#include <strings.hrc>
 #include <svx/extedit.hxx>
 #include <svx/graphichelper.hxx>
 #include <doc.hxx>
 #include <IDocumentDrawModelAccess.hxx>
 //#include <svx/svxids.hrc>
 #include <svx/drawitem.hxx>
-#define SwGrfShell
+#define ShellClass_SwGrfShell
 
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
@@ -158,10 +156,10 @@ void SwGrfShell::Execute(SfxRequest &rReq)
             short nState = RET_CANCEL;
             if (aGraphicAttr != GraphicAttr()) // the image has been modified
             {
-                vcl::Window* pWin = GetView().GetWindow();
+                weld::Window* pWin = GetView().GetFrameWeld();
                 if (pWin)
                 {
-                    nState = GraphicHelper::HasToSaveTransformedImage(pWin->GetFrameWeld());
+                    nState = GraphicHelper::HasToSaveTransformedImage(pWin);
                 }
             }
             else
@@ -178,7 +176,7 @@ void SwGrfShell::Execute(SfxRequest &rReq)
                     OUString sGrfNm;
                     OUString sFilterNm;
                     rSh.GetGrfNms( &sGrfNm, &sFilterNm );
-                    GraphicHelper::ExportGraphic(&GetView().GetViewFrame()->GetWindow(), aGraphic, sGrfNm);
+                    GraphicHelper::ExportGraphic(GetView().GetViewFrame()->GetWindow().GetFrameWeld(), aGraphic, sGrfNm);
                 }
             }
             else if (nState == RET_NO)
@@ -189,7 +187,7 @@ void SwGrfShell::Execute(SfxRequest &rReq)
                     OUString sGrfNm;
                     OUString sFilterNm;
                     rSh.GetGrfNms( &sGrfNm, &sFilterNm );
-                    GraphicHelper::ExportGraphic(&GetView().GetViewFrame()->GetWindow(), *pGraphic, sGrfNm);
+                    GraphicHelper::ExportGraphic(GetView().GetViewFrame()->GetWindow().GetFrameWeld(), *pGraphic, sGrfNm);
                 }
             }
         }
@@ -217,19 +215,19 @@ void SwGrfShell::Execute(SfxRequest &rReq)
 
                 Graphic aGraphic = Graphic( *pGraphic );
 
-                ScopedVclPtrInstance< CompressGraphicsDialog > aDialog( GetView().GetWindow(), aGraphic, aSize, aCropRectangle, GetView().GetViewFrame()->GetBindings() );
-                if( aDialog->Execute() == RET_OK )
+                CompressGraphicsDialog aDialog(GetView().GetFrameWeld(), aGraphic, aSize, aCropRectangle, GetView().GetViewFrame()->GetBindings());
+                if (aDialog.run() == RET_OK)
                 {
                     rSh.StartAllAction();
                     rSh.StartUndo(SwUndoId::START);
-                    tools::Rectangle aScaledCropedRectangle = aDialog->GetScaledCropRectangle();
+                    tools::Rectangle aScaledCropedRectangle = aDialog.GetScaledCropRectangle();
 
                     aCrop.SetLeft(   convertMm100ToTwip( aScaledCropedRectangle.Left() ));
                     aCrop.SetTop(    convertMm100ToTwip( aScaledCropedRectangle.Top() ));
                     aCrop.SetRight(  convertMm100ToTwip( aScaledCropedRectangle.Right() ));
                     aCrop.SetBottom( convertMm100ToTwip( aScaledCropedRectangle.Bottom() ));
 
-                    Graphic aCompressedGraphic( aDialog->GetCompressedGraphic() );
+                    Graphic aCompressedGraphic( aDialog.GetCompressedGraphic() );
                     rSh.ReRead(OUString(), OUString(), const_cast<const Graphic*>(&aCompressedGraphic));
 
                     rSh.SetAttrItem(aCrop);

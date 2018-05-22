@@ -46,7 +46,7 @@
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/document/XExporter.hpp>
-#include <com/sun/star/document/XGraphicObjectResolver.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/document/XEmbeddedObjectResolver.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -128,7 +128,7 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
     css::uno::Reference< css::xml::sax::XDocumentHandler >            mxHandler;      // the handlers
     css::uno::Reference< css::xml::sax::XExtendedDocumentHandler >    mxExtHandler;
     css::uno::Reference< css::util::XNumberFormatsSupplier > mxNumberFormatsSupplier;
-    css::uno::Reference< css::document::XGraphicObjectResolver > mxGraphicResolver;
+    css::uno::Reference< css::document::XGraphicStorageHandler > mxGraphicStorageHandler;
     css::uno::Reference< css::document::XEmbeddedObjectResolver > mxEmbeddedResolver;
     css::uno::Reference< css::task::XStatusIndicator > mxStatusIndicator;
     css::uno::Reference< css::beans::XPropertySet > mxExportInfo;
@@ -137,8 +137,6 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
     rtl::Reference<SvXMLAttributeList>          mxAttrList;        // a common attribute list
 
     OUString     msOrigFileName; // the original URL
-    OUString     msGraphicObjectProtocol;
-    OUString     msEmbeddedObjectProtocol;
     OUString     msFilterName;
     OUString     msImgFilterName;
     std::unique_ptr<SvXMLNamespaceMap> mpNamespaceMap;    // the namepspace map
@@ -258,8 +256,11 @@ protected:
     const css::uno::Reference< css::document::XEmbeddedObjectResolver >& GetEmbeddedResolver() const { return mxEmbeddedResolver; }
     inline void SetEmbeddedResolver( css::uno::Reference< css::document::XEmbeddedObjectResolver > const & _xEmbeddedResolver );
 
-    const css::uno::Reference< css::document::XGraphicObjectResolver >& GetGraphicResolver() const { return mxGraphicResolver; }
-    void SetGraphicResolver( css::uno::Reference< css::document::XGraphicObjectResolver > const & _xGraphicResolver );
+    const css::uno::Reference<css::document::XGraphicStorageHandler> & GetGraphicStorageHandler() const
+    {
+        return mxGraphicStorageHandler;
+    }
+    void SetGraphicStorageHandler(css::uno::Reference<css::document::XGraphicStorageHandler> const & rxGraphicStorageHandler);
 
     void SetDocHandler( const css::uno::Reference< css::xml::sax::XDocumentHandler > &rHandler );
 
@@ -460,17 +461,9 @@ public:
     /// get the export for image maps
     XMLImageMapExport& GetImageMapExport();
 
-    OUString AddEmbeddedGraphicObject(
-                            const OUString& rGraphicObjectURL );
-
     OUString AddEmbeddedXGraphic(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType, OUString const & rRequestedName = OUString());
     bool AddEmbeddedXGraphicAsBase64(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
     bool GetGraphicMimeTypeFromStream(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType);
-
-    css::uno::Reference<css::io::XInputStream> GetEmbeddedGraphicObjectStream(
-        const OUString& rGraphicObjectURL);
-    bool AddEmbeddedGraphicObjectAsBase64(
-                            const OUString& rGraphicObjectURL );
 
     OUString AddEmbeddedObject(
                             const OUString& rEmbeddedObjectURL );
@@ -635,10 +628,10 @@ inline void SvXMLExport::SetEmbeddedResolver(
     mxEmbeddedResolver = _xEmbeddedResolver;
 }
 
-inline void SvXMLExport::SetGraphicResolver(
-    css::uno::Reference< css::document::XGraphicObjectResolver > const & _xGraphicResolver )
+inline void SvXMLExport::SetGraphicStorageHandler(
+    css::uno::Reference<css::document::XGraphicStorageHandler> const & rxGraphicStorageHandler)
 {
-    mxGraphicResolver = _xGraphicResolver;
+    mxGraphicStorageHandler = rxGraphicStorageHandler;
 }
 
 // Helper class to export an element.

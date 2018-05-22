@@ -32,6 +32,7 @@
 #include <vcl/cvtgrf.hxx>
 #include <textboxhelper.hxx>
 #include <dcontact.hxx>
+#include <tools/diagnose_ex.h>
 #include <algorithm>
 #include "rtfexport.hxx"
 
@@ -431,8 +432,8 @@ void RtfSdrExport::Commit(EscherPropertyContainer& rProps, const tools::Rectangl
                     .append(SAL_NEWLINE_STRING);
                 int nHeaderSize
                     = 25; // The first bytes are WW8-specific, we're only interested in the PNG
-                aBuf.append(RtfAttributeOutput::WriteHex(rOpt.pBuf + nHeaderSize,
-                                                         rOpt.nPropSize - nHeaderSize));
+                aBuf.append(msfilter::rtfutil::WriteHex(rOpt.pBuf + nHeaderSize,
+                                                        rOpt.nPropSize - nHeaderSize));
                 aBuf.append('}');
                 m_aShapeProps.insert(
                     std::pair<OString, OString>("fillBlip", aBuf.makeStringAndClear()));
@@ -508,32 +509,14 @@ void RtfSdrExport::impl_writeGraphic()
     {
         xPropertySet->getPropertyValue("Graphic") >>= xGraphic;
     }
-    catch (beans::UnknownPropertyException& rException)
+    catch (beans::UnknownPropertyException const&)
     {
-        SAL_WARN("sw.rtf", "failed. Message: " << rException);
+        DBG_UNHANDLED_EXCEPTION("sw.rtf");
     }
 
     if (xGraphic.is())
     {
         aGraphic = Graphic(xGraphic);
-    }
-    else
-    {
-        OUString sGraphicURL;
-        try
-        {
-            xPropertySet->getPropertyValue("GraphicURL") >>= sGraphicURL;
-        }
-        catch (beans::UnknownPropertyException& rException)
-        {
-            // ATM groupshapes are not supported, just make sure we don't crash on them.
-            SAL_WARN("sw.rtf", "failed. Message: " << rException);
-            return;
-        }
-
-        OString aURLBS(OUStringToOString(sGraphicURL, RTL_TEXTENCODING_UTF8));
-        OString aUrl = aURLBS.copy(RTL_CONSTASCII_LENGTH("vnd.sun.star.GraphicObject:"));
-        aGraphic = GraphicObject(aUrl).GetTransformedGraphic();
     }
 
     // Export it to a stream.
@@ -552,7 +535,7 @@ void RtfSdrExport::impl_writeGraphic()
     aBuf->append(OOO_STRING_SVTOOLS_RTF_PICH)
         .append(sal_Int32(aMapped.Height()))
         .append(SAL_NEWLINE_STRING);
-    aBuf->append(RtfAttributeOutput::WriteHex(pGraphicAry, nSize));
+    aBuf->append(msfilter::rtfutil::WriteHex(pGraphicAry, nSize));
     aBuf->append('}');
     m_aShapeProps.insert(std::pair<OString, OString>("pib", aBuf.makeStringAndClear()));
 }
@@ -706,7 +689,7 @@ void RtfSdrExport::WriteOutliner(const OutlinerParaObject& rParaObj, TextTypes e
         rtl_TextEncoding eChrSet = aAttrIter.GetNodeCharSet();
 
         OUString aStr(rEditObj.GetText(n));
-        sal_Int32 nAktPos = 0;
+        sal_Int32 nCurrentPos = 0;
         const sal_Int32 nEnd = aStr.getLength();
 
         aAttrIter.OutParaAttr(false);
@@ -718,24 +701,24 @@ void RtfSdrExport::WriteOutliner(const OutlinerParaObject& rParaObj, TextTypes e
             const sal_Int32 nNextAttr = std::min(aAttrIter.WhereNext(), nEnd);
             rtl_TextEncoding eNextChrSet = aAttrIter.GetNextCharSet();
 
-            aAttrIter.OutAttr(nAktPos);
+            aAttrIter.OutAttr(nCurrentPos);
             m_rAttrOutput.RunText().append('{');
             m_rAttrOutput.RunText().append(m_rAttrOutput.Styles().makeStringAndClear());
             m_rAttrOutput.RunText().append(m_rAttrOutput.StylesEnd().makeStringAndClear());
             m_rAttrOutput.RunText().append(SAL_NEWLINE_STRING);
-            bool bTextAtr = aAttrIter.IsTextAttr(nAktPos);
+            bool bTextAtr = aAttrIter.IsTextAttr(nCurrentPos);
             if (!bTextAtr)
             {
-                OUString aOut(aStr.copy(nAktPos, nNextAttr - nAktPos));
+                OUString aOut(aStr.copy(nCurrentPos, nNextAttr - nCurrentPos));
                 m_rAttrOutput.RunText().append(msfilter::rtfutil::OutString(aOut, eChrSet));
             }
 
             m_rAttrOutput.RunText().append('}');
 
-            nAktPos = nNextAttr;
+            nCurrentPos = nNextAttr;
             eChrSet = eNextChrSet;
             aAttrIter.NextPos();
-        } while (nAktPos < nEnd);
+        } while (nCurrentPos < nEnd);
         if (bShape || n + 1 < nPara)
             m_rAttrOutput.RunText().append(OOO_STRING_SVTOOLS_RTF_PAR);
     }

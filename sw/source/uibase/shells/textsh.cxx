@@ -32,7 +32,6 @@
 #include <svl/ptitem.hxx>
 #include <svl/stritem.hxx>
 #include <unotools/moduleoptions.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <svx/hlnkitem.hxx>
 #include <svl/srchitem.hxx>
@@ -93,7 +92,7 @@
 
 #include <chartins.hxx>
 
-#define SwTextShell
+#define ShellClass_SwTextShell
 #include <sfx2/msg.hxx>
 #include <vcl/EnumContext.hxx>
 #include <swslots.hxx>
@@ -108,6 +107,7 @@ using namespace ::com::sun::star;
 #include <IDocumentDrawModelAccess.hxx>
 #include <drawdoc.hxx>
 #include <svtools/embedhlp.hxx>
+#include <sfx2/event.hxx>
 
 SFX_IMPL_INTERFACE(SwTextShell, SwBaseShell)
 
@@ -161,7 +161,9 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
             SvxAutoCorrect* pACorr = rACfg.GetAutoCorrect();
             if( pACorr && rACfg.IsAutoFormatByInput()
                 && pACorr->IsAutoCorrFlag(
-                    CapitalStartSentence | CapitalStartWord | AddNonBrkSpace | ChgOrdinalNumber | ChgToEnEmDash | SetINetAttr | Autocorrect ) )
+                    ACFlags::CapitalStartSentence | ACFlags::CapitalStartWord |
+                    ACFlags::AddNonBrkSpace | ACFlags::ChgOrdinalNumber |
+                    ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr | ACFlags::Autocorrect ) )
             {
                 rSh.AutoCorrect( *pACorr, cIns );
             }
@@ -525,9 +527,9 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
     {
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        ScopedVclPtr<VclAbstractDialog> pColDlg(pFact->CreateSwColumnDialog(GetView().GetWindow(), rSh));
+        VclPtr<VclAbstractDialog> pColDlg(pFact->CreateSwColumnDialog(GetView().GetWindow(), rSh));
         assert(pColDlg && "Dialog creation failed!");
-        pColDlg->Execute();
+        pColDlg->StartExecuteAsync([](sal_Int32 /*nResult*/){});
     }
     break;
 
@@ -933,27 +935,9 @@ void SwTextShell::InsertSymbol( SfxRequest& rReq )
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, aFont.GetFamilyName() ) );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSfxDialog( GetView().GetWindow(), aAllSet,
-            GetView().GetViewFrame()->GetFrame().GetFrameInterface(), RID_SVXDLG_CHARMAP ));
-        if( RET_OK == pDlg->Execute() )
-        {
-            const SfxStringItem* pCItem = SfxItemSet::GetItem<SfxStringItem>(pDlg->GetOutputItemSet(), SID_CHARMAP, false);
-            const SvxFontItem* pFontItem = SfxItemSet::GetItem<SvxFontItem>(pDlg->GetOutputItemSet(), SID_ATTR_CHAR_FONT, false);
-            if ( pFontItem )
-            {
-                aNewFont.SetFamilyName( pFontItem->GetFamilyName() );
-                aNewFont.SetStyleName( pFontItem->GetStyleName() );
-                aNewFont.SetCharSet( pFontItem->GetCharSet() );
-                aNewFont.SetPitch( pFontItem->GetPitch() );
-            }
-
-            if ( pCItem )
-            {
-                aChars  = pCItem->GetValue();
-                aOpt.SetSymbolFont(aNewFont.GetFamilyName());
-                SW_MOD()->ApplyUsrPref(aOpt, &GetView());
-            }
-        }
+        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(GetView().GetFrameWeld(), aAllSet, true));
+        pDlg->Execute();
+        return;
     }
 
     if( !aChars.isEmpty() )

@@ -52,8 +52,6 @@
 #include <sfx2/objface.hxx>
 
 #include <app.hrc>
-#include <strings.hrc>
-
 
 #include <drawdoc.hxx>
 #include <DrawViewShell.hxx>
@@ -61,14 +59,13 @@
 #include <ViewShellBase.hxx>
 #include <ToolBarManager.hxx>
 #include <futempl.hxx>
-#include <sdresid.hxx>
 #include <Window.hxx>
 #include <OutlineView.hxx>
 
 using namespace sd;
 using namespace ::com::sun::star;
 
-#define TextObjectBar
+#define ShellClass_TextObjectBar
 #include <sdslots.hxx>
 
 namespace sd {

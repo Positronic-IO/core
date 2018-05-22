@@ -22,10 +22,11 @@
 
 #include <svx/svxdllapi.h>
 #include <svx/svdxcgv.hxx>
+#include <memory>
 
 class SdrUndoGeoObj;
 
-class SVX_DLLPUBLIC SdrDragView: public SdrExchangeView
+class SVX_DLLPUBLIC SdrDragView : public SdrExchangeView
 {
     friend class                SdrPageView;
     friend class                SdrDragMethod;
@@ -38,7 +39,7 @@ class SVX_DLLPUBLIC SdrDragView: public SdrExchangeView
 
 protected:
     SdrHdl*                     mpDragHdl;
-    SdrDragMethod*              mpCurrentSdrDragMethod;
+    std::unique_ptr<SdrDragMethod> mpCurrentSdrDragMethod;
     SdrUndoGeoObj*              mpInsPointUndo;
     tools::Rectangle            maDragLimit;
     OUString                    maInsPointUndoStr;
@@ -69,7 +70,10 @@ protected:
 
 protected:
     // #i71538# make constructors of SdrView sub-components protected to avoid incomplete incarnations which may get casted to SdrView
-    SdrDragView(SdrModel* pModel1, OutputDevice* pOut);
+    SdrDragView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
+
     virtual ~SdrDragView() override;
 
 public:
@@ -101,7 +105,7 @@ public:
     void BrkDragObj();
     bool IsDragObj() const { return mpCurrentSdrDragMethod && !mbInsPolyPoint && !mbInsGluePoint; }
     SdrHdl* GetDragHdl() const { return mpDragHdl; }
-    SdrDragMethod* GetDragMethod() const { return mpCurrentSdrDragMethod; }
+    SdrDragMethod* GetDragMethod() const { return mpCurrentSdrDragMethod.get(); }
     bool IsDraggingPoints() const { return meDragHdl==SdrHdlKind::Poly; }
     bool IsDraggingGluePoints() const { return meDragHdl==SdrHdlKind::Glue; }
 

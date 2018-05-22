@@ -108,7 +108,7 @@
 #include <sfx2/objface.hxx>
 #include <comphelper/storagehelper.hxx>
 
-#define SwDocShell
+#define ShellClass_SwDocShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 #include <com/sun/star/document/UpdateDocMode.hpp>
@@ -119,6 +119,7 @@
 #include <com/sun/star/sdb/XDocumentDataSource.hpp>
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
 #include <com/sun/star/uri/VndSunStarPkgUrlReferenceFactory.hpp>
+#include <com/sun/star/frame/XStorable.hpp>
 
 #include <unomid.h>
 #include <unotextrange.hxx>
@@ -126,6 +127,7 @@
 #include <sfx2/Metadatable.hxx>
 #include <calbck.hxx>
 #include <dbmgr.hxx>
+#include <iodetect.hxx>
 
 #include <sal/log.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -890,6 +892,8 @@ tools::Rectangle SwDocShell::GetVisArea( sal_uInt16 nAspect ) const
         SwContentNode* pNd = m_xDoc->GetNodes().GoNext( &aIdx );
 
         const SwRect aPageRect = pNd->FindPageFrameRect();
+        if (aPageRect.IsEmpty())
+            return tools::Rectangle();
         tools::Rectangle aRect(aPageRect.SVRect());
 
         // tdf#81219 sanitize - nobody is interested in a thumbnail where's

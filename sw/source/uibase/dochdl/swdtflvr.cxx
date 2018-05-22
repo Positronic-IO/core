@@ -43,7 +43,6 @@
 #include <tools/urlobj.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svl/stritem.hxx>
 #include <svtools/imap.hxx>
@@ -125,12 +124,12 @@
 #include <calbck.hxx>
 #include <fmtmeta.hxx>
 #include <itabenum.hxx>
+#include <iodetect.hxx>
 
 #include <vcl/GraphicNativeTransform.hxx>
 #include <vcl/GraphicNativeMetadata.hxx>
 #include <comphelper/lok.hxx>
 #include <sfx2/classificationhelper.hxx>
-#include <sfx2/sfxresid.hxx>
 
 #include <memory>
 
@@ -724,7 +723,7 @@ bool SwTransferable::WriteObject( tools::SvRef<SotStorageStream>& xStream,
             xWrt->SetAsciiOptions( aAOpt );
 
             // no start char for clipboard
-            xWrt->bUCS2_WithStartChar = false;
+            xWrt->m_bUCS2_WithStartChar = false;
         }
         break;
     default: break;
@@ -733,8 +732,8 @@ bool SwTransferable::WriteObject( tools::SvRef<SotStorageStream>& xStream,
     if( xWrt.is() )
     {
         SwDoc* pDoc = static_cast<SwDoc*>(pObject);
-        xWrt->bWriteClipboardDoc = true;
-        xWrt->bWriteOnlyFirstTable = bool(TransferBufferType::Table & m_eBufferType);
+        xWrt->m_bWriteClipboardDoc = true;
+        xWrt->m_bWriteOnlyFirstTable = bool(TransferBufferType::Table & m_eBufferType);
         xWrt->SetShowProgress(false);
 
 #if defined(DEBUGPASTE)
@@ -2184,7 +2183,7 @@ bool SwTransferable::PasteDDE( TransferableDataHelper& rData,
                 }
 
                 rWrtShell.InsertDDETable(
-                    SwInsertTableOptions( tabopts::SPLIT_LAYOUT, 1 ), // TODO MULTIHEADER
+                    SwInsertTableOptions( SwInsertTableFlags::SplitLayout, 1 ), // TODO MULTIHEADER
                     pDDETyp, nRows, nCols );
             }
             else if( 1 < comphelper::string::getTokenCount(aExpand, '\n') )
@@ -2903,7 +2902,7 @@ bool SwTransferable::PasteSpecial( SwWrtShell& rSh, TransferableDataHelper& rDat
 {
     bool bRet = false;
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog( &rSh.GetView().GetEditWin() ));
+    ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(rSh.GetView().GetEditWin().GetFrameWeld()));
 
     DataFlavorExVector aFormats( rData.GetDataFlavorExVector() );
     TransferableObjectDescriptor aDesc;

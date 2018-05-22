@@ -225,8 +225,7 @@ REM ----------------------------------------------------------------------------
 Public Function Properties(ByVal Optional pvIndex As Variant) As Variant
 &apos;	Return
 &apos;		a Collection object if pvIndex absent
-&apos;		a Property object otherwiseREM -----------------------------------------------------------------------------------------------------------------------
-
+&apos;		a Property object otherwise
 
 Const cstThisSub = &quot;Module.Properties&quot;
 	Utils._SetCalledSub(cstThisSub)
@@ -366,8 +365,7 @@ End Function	&apos;	Find
 
 REM -----------------------------------------------------------------------------------------------------------------------
 Public Function getProperty(Optional ByVal pvProperty As Variant) As Variant
-&apos;	Return property value of psProperty property nameREM -----------------------------------------------------------------------------------------------------------------------
-
+&apos;	Return property value of psProperty property name
 
 Const cstThisSub = &quot;Module.Properties&quot;
 
@@ -715,6 +713,5 @@ Error_Function:
 	_PropertyGet = Null
 	GoTo Exit_Function
 End Function		&apos;	_PropertyGet
-
 
 </script:module>

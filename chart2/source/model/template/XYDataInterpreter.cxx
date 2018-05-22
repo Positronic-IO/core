@@ -24,6 +24,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/chart2/data/XDataSink.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
@@ -93,33 +94,30 @@ chart2::InterpretedData SAL_CALL XYDataInterpreter::interpretDataSource(
                     SetRole( aData[nDataIdx]->getValues(), "values-y");
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
     // create DataSeries
-    vector< Reference< data::XLabeledDataSequence > >::const_iterator
-          aSequencesVecIt = aSequencesVec.begin();
-
-    sal_Int32 nSeriesIndex = 0;
     vector< Reference< XDataSeries > > aSeriesVec;
     aSeriesVec.reserve( aSequencesVec.size());
 
     Reference< data::XLabeledDataSequence > xClonedXValues = xValuesX;
     Reference< util::XCloneable > xCloneable( xValuesX, uno::UNO_QUERY );
 
-    for( ;aSequencesVecIt != aSequencesVec.end(); ++aSequencesVecIt, ++nSeriesIndex )
+    sal_Int32 nSeriesIndex = 0;
+    for (auto const& elem : aSequencesVec)
     {
         vector< Reference< data::XLabeledDataSequence > > aNewData;
 
-        if( aSequencesVecIt != aSequencesVec.begin() && xCloneable.is() )
+        if( nSeriesIndex && xCloneable.is() )
             xClonedXValues.set( xCloneable->createClone(), uno::UNO_QUERY );
         if( xValuesX.is() )
             aNewData.push_back( xClonedXValues );
 
-        aNewData.push_back( *aSequencesVecIt );
+        aNewData.push_back(elem);
 
         Reference< XDataSeries > xSeries;
         if( nSeriesIndex < aSeriesToReUse.getLength())
@@ -132,6 +130,7 @@ chart2::InterpretedData SAL_CALL XYDataInterpreter::interpretDataSource(
         xSink->setData( comphelper::containerToSequence( aNewData ) );
 
         aSeriesVec.push_back( xSeries );
+        ++nSeriesIndex;
     }
 
     Sequence< Sequence< Reference< XDataSeries > > > aSeries(1);
@@ -165,7 +164,7 @@ chart2::InterpretedData SAL_CALL XYDataInterpreter::reinterpretDataSeries(
             {
                 vector< Reference< data::XLabeledDataSequence > > aValueSeqVec(
                     DataSeriesHelper::getAllDataSequencesByRole(
-                        xSeriesSource->getDataSequences(), "values", true ));
+                        xSeriesSource->getDataSequences(), "values" ));
                 if( xValuesX.is())
                     aValueSeqVec.erase( find( aValueSeqVec.begin(), aValueSeqVec.end(), xValuesX ));
                 if( xValuesY.is())
@@ -217,9 +216,9 @@ chart2::InterpretedData SAL_CALL XYDataInterpreter::reinterpretDataSeries(
                 xSink->setData( aNewSequences );
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 
@@ -240,9 +239,9 @@ sal_Bool SAL_CALL XYDataInterpreter::isDataCompatible(
             if( aSeq.getLength() != 2 )
                 return false;
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 

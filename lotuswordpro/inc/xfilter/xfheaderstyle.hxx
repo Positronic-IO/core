@@ -65,6 +65,7 @@
 #include <xfilter/xfborders.hxx>
 #include <xfilter/xfpadding.hxx>
 #include <xfilter/xfshadow.hxx>
+#include <memory>
 
 /**
  * @brief
@@ -106,7 +107,7 @@ public:
      */
     void    SetBorders(XFBorders *pBorders);
 
-    void    SetBackImage(XFBGImage *image);
+    void    SetBackImage(std::unique_ptr<XFBGImage>& rImage);
 
     /**
      * @descr   Set header background color.
@@ -124,10 +125,10 @@ protected:
     double      m_fHeight;
     double      m_fMinHeight;
     XFMargins   m_aMargin;
-    XFShadow*   m_pShadow;
+    std::unique_ptr<XFShadow>  m_pShadow;
     XFPadding   m_aPadding;
-    XFBorders   *m_pBorders;
-    XFBGImage   *m_pBGImage;
+    std::unique_ptr<XFBorders> m_pBorders;
+    std::unique_ptr<XFBGImage> m_pBGImage;
     XFColor     m_aBackColor;
 };
 

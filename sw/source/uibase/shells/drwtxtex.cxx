@@ -18,7 +18,6 @@
  */
 
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <sfx2/bindings.hxx>
@@ -53,7 +52,6 @@
 #include <svl/ctloptions.hxx>
 #include <svtools/langtab.hxx>
 #include <svl/languageoptions.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/flditem.hxx>
 #include <editeng/editstat.hxx>
 #include <svx/hlnkitem.hxx>
@@ -84,7 +82,6 @@
 #include <langhelper.hxx>
 #include <chrdlgmodes.hxx>
 #include <pardlg.hxx>
-#include <strings.hrc>
 #include <string.h>
 #include <swdtflvr.hxx>
 #include <swmodule.hxx>

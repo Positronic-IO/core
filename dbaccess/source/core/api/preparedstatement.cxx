@@ -26,6 +26,7 @@
 
 #include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
+#include <connectivity/dbtools.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/typeprovider.hxx>
@@ -52,15 +53,13 @@ OPreparedStatement::OPreparedStatement(const Reference< XConnection > & _xConn,
     m_xAggregateAsParameters.set( m_xAggregateAsSet, UNO_QUERY_THROW );
 
     Reference<XDatabaseMetaData> xMeta = _xConn->getMetaData();
-    m_pColumns = new OColumns(*this, m_aMutex, xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),std::vector< OUString>(), nullptr,nullptr);
+    m_pColumns.reset( new OColumns(*this, m_aMutex, xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers(),std::vector< OUString>(), nullptr,nullptr) );
 }
 
 OPreparedStatement::~OPreparedStatement()
 {
     m_pColumns->acquire();
     m_pColumns->disposing();
-    delete m_pColumns;
-
 }
 
 // css::lang::XTypeProvider
@@ -160,16 +159,22 @@ Reference< css::container::XNameAccess > OPreparedStatement::getColumns()
                 // retrieve the name of the column
                 OUString aName = xMetaData->getColumnName(i + 1);
                 OResultColumn* pColumn = new OResultColumn(xMetaData, i + 1, xDBMeta);
+                // don't silently assume that the name is unique - preparedStatement implementations
+                // are allowed to return duplicate names, but we are required to have
+                // unique column names
+                if ( m_pColumns->hasByName( aName ) )
+                    aName = ::dbtools::createUniqueName( m_pColumns.get(), aName );
+
                 m_pColumns->append(aName, pColumn);
             }
         }
         catch (const SQLException& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         m_pColumns->setInitialized();
     }
-    return m_pColumns;
+    return m_pColumns.get();
 }
 
 // XResultSetMetaDataSupplier

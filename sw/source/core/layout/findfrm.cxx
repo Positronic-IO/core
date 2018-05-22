@@ -750,7 +750,7 @@ SwFrame *SwFrame::FindNext_()
         SwLayoutFrame *pUp = pThis->GetUpper();
         while (pUp && !pUp->IsCellFrame())
             pUp = pUp->GetUpper();
-        SAL_WARN_IF(!pUp, "sw.core", "Content in table but not in cell.");
+        assert(pUp && "Content flag says it's in table but it's not in cell.");
         SwFrame* pNxt = pUp ? static_cast<SwCellFrame*>(pUp)->GetFollowCell() : nullptr;
         if ( pNxt )
             pNxt = static_cast<SwCellFrame*>(pNxt)->ContainsContent();
@@ -1108,7 +1108,7 @@ SwFrame *SwFrame::FindPrev_()
             SwLayoutFrame *pUp = pThis->GetUpper();
             while (pUp && !pUp->IsCellFrame())
                 pUp = pUp->GetUpper();
-            SAL_WARN_IF(!pUp, "sw.core", "Content in table but not in cell.");
+            assert(pUp && "Content flag says it's in table but it's not in cell.");
             if (pUp && pUp->IsAnLower(pPrvCnt))
                 return pPrvCnt;
         }
@@ -1265,9 +1265,12 @@ static bool lcl_IsInSectionDirectly( const SwFrame *pUp )
         else if( pUp->IsSctFrame() )
         {
             auto pSection = static_cast<const SwSectionFrame*>(pUp);
+            const SwFrame* pHeaderFooter = pSection->FindFooterOrHeader();
+            // When the section frame is not in header/footer:
             // Allow move of frame in case our only column is not growable.
             // Also allow if there is a previous section frame (to move back).
-            return bSeenColumn || !pSection->Growable() || pSection->GetPrecede();
+            bool bAllowOutsideHeaderFooter = !pSection->Growable() || pSection->GetPrecede();
+            return bSeenColumn || (!pHeaderFooter && bAllowOutsideHeaderFooter);
         }
         else if( pUp->IsTabFrame() )
             return false;
@@ -1448,11 +1451,11 @@ SwLayoutFrame* SwFrame::GetNextCellLeaf()
 SwLayoutFrame* SwFrame::GetPrevCellLeaf()
 {
     SwFrame* pTmpFrame = this;
-    while ( !pTmpFrame->IsCellFrame() )
+    while (pTmpFrame && !pTmpFrame->IsCellFrame())
         pTmpFrame = pTmpFrame->GetUpper();
 
-    OSL_ENSURE( pTmpFrame, "SwFrame::GetNextPreviousLeaf() without cell" );
-    return static_cast<SwCellFrame*>(pTmpFrame)->GetPreviousCell();
+    SAL_WARN_IF(!pTmpFrame, "sw.core", "SwFrame::GetNextPreviousLeaf() without cell");
+    return pTmpFrame ? static_cast<SwCellFrame*>(pTmpFrame)->GetPreviousCell() : nullptr;
 }
 
 static SwCellFrame* lcl_FindCorrespondingCellFrame( const SwRowFrame& rOrigRow,

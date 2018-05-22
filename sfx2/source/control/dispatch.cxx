@@ -74,8 +74,6 @@
 
 typedef std::vector<SfxShell*> SfxShellStack_Impl;
 
-typedef std::vector<SfxRequest*> SfxRequestPtrArray;
-
 struct SfxToDo_Impl
 {
     SfxShell*  pCluster;
@@ -110,12 +108,8 @@ struct SfxDispatcher_Impl
 
     //The pointers are typically deleted in Post, only if we never get around
     //to posting them do we delete the unposted requests.
-    SfxRequestPtrArray aReqArr;
-    ~SfxDispatcher_Impl()
-    {
-        for (auto const& req : aReqArr)
-            delete req;
-    }
+    std::vector<std::unique_ptr<SfxRequest>>
+                         aReqArr;
     SfxShellStack_Impl   aStack;        // active functionality
     Idle                 aIdle;        // for Flush
     std::deque<SfxToDo_Impl> aToDoStack;    // not processed Push/Pop
@@ -312,22 +306,6 @@ bool SfxDispatcher::IsAppDispatcher() const
     return !xImp->pFrame;
 }
 
-/// Decides if the request is FASTCALL or not, depending on arguments.
-bool lcl_IsConditionalFastCall(SfxRequest const &rReq)
-{
-    sal_uInt16 nId = rReq.GetSlot();
-    bool bRet = false;
-
-    if (nId == SID_UNDO || nId == SID_REDO)
-    {
-        const SfxItemSet* pArgs = rReq.GetArgs();
-        if (pArgs && pArgs->HasItem(SID_REPAIRPACKAGE))
-            bRet = true;
-    }
-
-    return bRet;
-}
-
 /** Helper function to check whether a slot can be executed and
     check the execution itself
 */
@@ -336,7 +314,7 @@ void SfxDispatcher::Call_Impl(SfxShell& rShell, const SfxSlot &rSlot, SfxRequest
     SFX_STACK(SfxDispatcher::Call_Impl);
 
     // The slot may be called (meaning enabled)
-    if ( rSlot.IsMode(SfxSlotMode::FASTCALL) || rShell.CanExecuteSlot_Impl(rSlot) || lcl_IsConditionalFastCall(rReq))
+    if ( rSlot.IsMode(SfxSlotMode::FASTCALL) || rShell.CanExecuteSlot_Impl(rSlot) || rShell.IsConditionalFastCall(rReq))
     {
         if ( GetFrame() )
         {
@@ -940,7 +918,7 @@ const SfxSlot* SfxDispatcher::GetSlot( const OUString& rCommand )
 }
 
 const SfxPoolItem* SfxDispatcher::Execute(sal_uInt16 nSlot, SfxCallMode nCall,
-        SfxItemSet const * pArgs, SfxItemSet const * pInternalArgs, sal_uInt16 nModi, vcl::Window* pDialogParent)
+        SfxItemSet const * pArgs, SfxItemSet const * pInternalArgs, sal_uInt16 nModi)
 {
     if ( IsLocked() )
         return nullptr;
@@ -959,7 +937,7 @@ const SfxPoolItem* SfxDispatcher::Execute(sal_uInt16 nSlot, SfxCallMode nCall,
                 pArg = aIter.NextItem() )
                 MappedPut_Impl( aSet, *pArg );
         }
-        SfxRequest aReq(nSlot, nCall, aSet, pDialogParent);
+        SfxRequest aReq(nSlot, nCall, aSet);
         if (pInternalArgs)
             aReq.SetInternalArgs_Impl( *pInternalArgs );
         aReq.SetModifier( nModi );
@@ -1085,7 +1063,8 @@ const SfxPoolItem* SfxDispatcher::Execute(sal_uInt16 nSlot, SfxCallMode eCall,
         });
 */
 const SfxPoolItem* SfxDispatcher::ExecuteList(sal_uInt16 nSlot, SfxCallMode eCall,
-        std::initializer_list<SfxPoolItem const*> args)
+        std::initializer_list<SfxPoolItem const*> args,
+        std::initializer_list<SfxPoolItem const*> internalargs)
 {
     if ( IsLocked() )
         return nullptr;
@@ -1103,7 +1082,19 @@ const SfxPoolItem* SfxDispatcher::ExecuteList(sal_uInt16 nSlot, SfxCallMode eCal
            MappedPut_Impl( aSet, *pArg );
        }
 
-       SfxRequest aReq( nSlot, eCall, aSet );
+       SfxRequest aReq(nSlot, eCall, aSet);
+
+       if (internalargs.begin() != internalargs.end())
+       {
+           SfxAllItemSet aInternalSet(SfxGetpApp()->GetPool());
+           for (const SfxPoolItem *pArg : internalargs)
+           {
+               assert(pArg);
+               aInternalSet.Put(*pArg);
+           }
+           aReq.SetInternalArgs_Impl(aInternalSet);
+       }
+
        Execute_( *pShell, *pSlot, aReq, eCall );
        return aReq.GetReturnValue();
     }
@@ -1138,7 +1129,7 @@ IMPL_LINK(SfxDispatcher, PostMsgHandler, SfxRequest*, pReq, void)
         else
         {
             if ( xImp->bLocked )
-                xImp->aReqArr.push_back(new SfxRequest(*pReq));
+                xImp->aReqArr.emplace_back(new SfxRequest(*pReq));
             else
                 xImp->xPoster->Post(new SfxRequest(*pReq));
         }
@@ -1965,7 +1956,7 @@ void SfxDispatcher::Lock( bool bLock )
     if ( !bLock )
     {
         for(size_t i = 0; i < xImp->aReqArr.size(); ++i)
-            xImp->xPoster->Post(xImp->aReqArr[i]);
+            xImp->xPoster->Post(xImp->aReqArr[i].get());
         xImp->aReqArr.clear();
     }
 }

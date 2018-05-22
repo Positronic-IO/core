@@ -20,13 +20,10 @@
 #include <bookmarkcontainer.hxx>
 #include <stringconstants.hxx>
 #include <apitools.hxx>
-#include <core_resource.hxx>
-#include <strings.hrc>
 
 #include <osl/diagnose.h>
 #include <comphelper/sequence.hxx>
 #include <comphelper/enumhelper.hxx>
-#include <comphelper/extract.hxx>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/NoSupportException.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
@@ -245,13 +242,11 @@ Sequence< OUString > SAL_CALL OBookmarkContainer::getElementNames(  )
 
     Sequence< OUString > aNames(m_aBookmarks.size());
     OUString* pNames = aNames.getArray();
-    ;
-    for (   MapIteratorVector::const_iterator aNameIter = m_aBookmarksIndexed.begin();
-            aNameIter != m_aBookmarksIndexed.end();
-            ++pNames, ++aNameIter
-        )
+
+    for (auto const& bookmarkIndexed : m_aBookmarksIndexed)
     {
-        *pNames = (*aNameIter)->first;
+        *pNames = bookmarkIndexed->first;
+        ++pNames;
     }
 
     return aNames;

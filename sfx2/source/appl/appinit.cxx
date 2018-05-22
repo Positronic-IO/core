@@ -29,14 +29,12 @@
 #include <basic/sbdef.hxx>
 #include <tools/svlibrary.h>
 #include <svtools/soerr.hxx>
-#include <svtools/strings.hrc>
 #include <unotools/resmgr.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/saveopt.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
-#include <vcl/msgbox.hxx>
 #include <svtools/ehdl.hxx>
 #include <comphelper/processfactory.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -50,7 +48,6 @@
 #include <vcl/edit.hxx>
 
 #include <sfx2/unoctitm.hxx>
-#include <sfx2/strings.hrc>
 #include <appdata.hxx>
 #include <arrdecl.hxx>
 #include <sfx2/dispatch.hxx>
@@ -59,7 +56,6 @@
 #include <sfx2/msgpool.hxx>
 #include <sfx2/progress.hxx>
 #include <sfx2/sfxhelp.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfxtypes.hxx>
 #include <sfx2/viewsh.hxx>
 #include <nochaos.hxx>
@@ -145,7 +141,7 @@ Sequence< OUString > SAL_CALL SfxTerminateListener_Impl::getSupportedServiceName
 }
 
 
-typedef bool ( *PFunc_getSpecialCharsForEdit)( vcl::Window* i_pParent, const vcl::Font& i_rFont, OUString& o_rOutString );
+typedef bool ( *PFunc_getSpecialCharsForEdit)( vcl::Window const * i_pParent, const vcl::Font& i_rFont, OUString& o_rOutString );
 
 
 // Lazy binding of the GetSpecialCharsForEdit function as it resides in
@@ -158,11 +154,11 @@ extern "C" { static void thisModule() {} }
 
 #else
 
-extern "C" bool GetSpecialCharsForEdit( vcl::Window* i_pParent, const vcl::Font& i_rFont, OUString& o_rOutString );
+extern "C" bool GetSpecialCharsForEdit( vcl::Window const * i_pParent, const vcl::Font& i_rFont, OUString& o_rOutString );
 
 #endif
 
-OUString GetSpecialCharsForEdit(vcl::Window* pParent, const vcl::Font& rFont)
+OUString SfxGetSpecialCharsForEdit(vcl::Window* pParent, const vcl::Font& rFont)
 {
     static bool bDetermineFunction = false;
     static PFunc_getSpecialCharsForEdit pfunc_getSpecialCharsForEdit = nullptr;
@@ -254,7 +250,7 @@ void SfxApplication::Initialize_Impl()
     {
         SolarMutexGuard aGuard;
         // Set special characters callback on vcl edit control
-        Edit::SetGetSpecialCharsFunction(&GetSpecialCharsForEdit);
+        Edit::SetGetSpecialCharsFunction(&SfxGetSpecialCharsForEdit);
     }
 }
 

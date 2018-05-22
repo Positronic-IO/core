@@ -211,6 +211,7 @@ public:
 
 class OOXMLHexValue : public OOXMLValue
 {
+protected:
     sal_uInt32 mnValue;
 public:
     explicit OOXMLHexValue(sal_uInt32 nValue);
@@ -222,6 +223,12 @@ public:
     virtual std::string toString() const override;
 #endif
     virtual OOXMLValue * clone() const override;
+};
+
+class OOXMLHexColorValue : public OOXMLHexValue
+{
+public:
+    explicit OOXMLHexColorValue(const char * pValue);
 };
 
 class OOXMLUniversalMeasureValue : public OOXMLValue

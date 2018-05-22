@@ -1409,9 +1409,7 @@ void EndXmlElement::SaveXml( XclExpXmlStream& rStrm )
 XclExpChangeTrack::XclExpChangeTrack( const XclExpRoot& rRoot ) :
     XclExpRoot( rRoot ),
     aActionStack(),
-    pTabIdBuffer( nullptr ),
-    pHeader( nullptr ),
-    bValidGUID( false )
+    pTabIdBuffer( nullptr )
 {
     OSL_ENSURE( GetOldRoot().pTabId, "XclExpChangeTrack::XclExpChangeTrack - root data incomplete" );
     if( !GetOldRoot().pTabId )
@@ -1449,7 +1447,7 @@ XclExpChangeTrack::XclExpChangeTrack( const XclExpRoot& rRoot ) :
     // build record list
     if (GetOutput() == EXC_OUTPUT_BINARY)
     {
-        pHeader = new XclExpChTrHeader;
+        XclExpChTrHeader* pHeader = new XclExpChTrHeader; // header record for last GUID
         maRecList.push_back( std::unique_ptr<ExcRecord>(pHeader) );
         maRecList.push_back( std::unique_ptr<ExcRecord>( new XclExpChTr0x0195 ) );
         maRecList.push_back( std::unique_ptr<ExcRecord>( new XclExpChTr0x0194( *pTempChangeTrack ) ) );
@@ -1458,6 +1456,8 @@ XclExpChangeTrack::XclExpChangeTrack( const XclExpRoot& rRoot ) :
         DateTime aLastDateTime( DateTime::EMPTY );
         sal_uInt32 nIndex = 1;
         sal_Int32 nLogNumber = 1;
+        sal_uInt8 aGUID[ 16 ]; // GUID for action info records
+        bool bValidGUID = false;
         while( !aActionStack.empty() )
         {
             XclExpChTrAction* pAction = aActionStack.top();
@@ -1494,6 +1494,8 @@ XclExpChangeTrack::XclExpChangeTrack( const XclExpRoot& rRoot ) :
         sal_uInt32 nIndex = 1;
         sal_Int32 nLogNumber = 1;
         XclExpXmlChTrHeader* pCurHeader = nullptr;
+        sal_uInt8 aGUID[ 16 ]; // GUID for action info records
+        bool bValidGUID = false;
 
         while (!aActionStack.empty())
         {

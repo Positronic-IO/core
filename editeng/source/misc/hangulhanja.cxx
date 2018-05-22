@@ -18,14 +18,12 @@
  */
 
 #include <editeng/hangulhanja.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/button.hxx>
 #include <unotools/lingucfg.hxx>
 #include <unotools/linguprops.hxx>
 
 #include <set>
 #include <map>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/i18n/BreakIterator.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
@@ -39,7 +37,6 @@
 #include <unotools/charclass.hxx>
 
 #include <editeng/edtdlg.hxx>
-#include <editeng/editrids.hrc>
 #include <editeng/unolingu.hxx>
 
 #define HHC HangulHanjaConversion

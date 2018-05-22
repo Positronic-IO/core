@@ -35,6 +35,7 @@
 #include <shellio.hxx>
 #include <acorrect.hxx>
 #include <swerror.h>
+#include <iodetect.hxx>
 
 void SwEditShell::InsertGlossary( SwTextBlocks& rGlossary, const OUString& rStr )
 {
@@ -289,13 +290,13 @@ bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
             switch( nHndlParaBrk )
             {
             case GETSELTXT_PARABRK_TO_BLANK:
-                xWrt->bASCII_ParaAsBlanc = true;
-                xWrt->bASCII_NoLastLineEnd = true;
+                xWrt->m_bASCII_ParaAsBlank = true;
+                xWrt->m_bASCII_NoLastLineEnd = true;
                 break;
 
             case GETSELTXT_PARABRK_TO_ONLYCR:
-                xWrt->bASCII_ParaAsCR = true;
-                xWrt->bASCII_NoLastLineEnd = true;
+                xWrt->m_bASCII_ParaAsCR = true;
+                xWrt->m_bASCII_NoLastLineEnd = true;
                 break;
             }
 
@@ -303,7 +304,7 @@ bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
             SwAsciiOptions aAsciiOpt( xWrt->GetAsciiOptions() );
             aAsciiOpt.SetCharSet( RTL_TEXTENCODING_UCS2 );
             xWrt->SetAsciiOptions( aAsciiOpt );
-            xWrt->bUCS2_WithStartChar = false;
+            xWrt->m_bUCS2_WithStartChar = false;
 
             if ( ! aWriter.Write(xWrt).IsError() )
             {

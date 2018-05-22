@@ -10,12 +10,17 @@
 #include <test/calc_unoapi_test.hxx>
 #include <test/sheet/scenario.hxx>
 #include <test/sheet/sheetcellrange.hxx>
+#include <test/sheet/spreadsheet.hxx>
+#include <test/sheet/xarrayformularange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
+#include <test/sheet/xcellrangeformula.hxx>
+#include <test/sheet/xcellrangemovement.hxx>
 #include <test/sheet/xcellseries.hxx>
 #include <test/sheet/xdatapilottablessupplier.hxx>
 #include <test/sheet/xmultipleoperation.hxx>
 #include <test/sheet/xprintareas.hxx>
+#include <test/sheet/xscenario.hxx>
 #include <test/sheet/xscenarioenhanced.hxx>
 #include <test/sheet/xscenariossupplier.hxx>
 #include <test/sheet/xsheetannotationssupplier.hxx>
@@ -45,13 +50,18 @@ namespace sc_apitest
 
 class ScTableSheetObj : public CalcUnoApiTest, public apitest::Scenario,
                                                public apitest::SheetCellRange,
+                                               public apitest::Spreadsheet,
+                                               public apitest::XArrayFormulaRange,
                                                public apitest::XCellFormatRangesSupplier,
                                                public apitest::XCellRangeAddressable,
+                                               public apitest::XCellRangeFormula,
+                                               public apitest::XCellRangeMovement,
                                                public apitest::XCellSeries,
                                                public apitest::XDataPilotTablesSupplier,
                                                public apitest::XMultipleOperation,
                                                public apitest::XPrintAreas,
                                                public apitest::XReplaceable,
+                                               public apitest::XScenario,
                                                public apitest::XScenarioEnhanced,
                                                public apitest::XScenariosSupplier,
                                                public apitest::XSearchable,
@@ -76,6 +86,7 @@ public:
     virtual OUString getFileURL() override;
 
     virtual uno::Reference< uno::XInterface > init() override;
+    virtual uno::Reference< uno::XInterface > getXSpreadsheetDocument() override;
     virtual uno::Reference< uno::XInterface > getXSpreadsheet() override;
     virtual uno::Reference< uno::XInterface > getScenarioSpreadsheet() override;
 
@@ -87,11 +98,30 @@ public:
     // SheetCellRange
     CPPUNIT_TEST(testSheetCellRangeProperties);
 
+    // Spreadsheet
+    CPPUNIT_TEST(testSpreadsheetProperties);
+
+    // XArrayFormulaRange
+#if 0 // disable, because it makes no sense to set an ArrayFormula over the whole sheet
+    CPPUNIT_TEST(testGetSetArrayFormula);
+#endif
+
     // XCellFormatRangesSupplier
     CPPUNIT_TEST(testGetCellFormatRanges);
 
     // XCellRangeAddressable
     CPPUNIT_TEST(testGetRangeAddress);
+
+    // XCellRangeFormula
+#if 0 // disable, because it makes no sense to set an FormulaArray over the whole sheet
+    CPPUNIT_TEST(testGetSetFormulaArray);
+#endif
+
+    // XCellRangeMovement
+    CPPUNIT_TEST(testInsertCells);
+    CPPUNIT_TEST(testCopyRange);
+    CPPUNIT_TEST(testMoveRange);
+    CPPUNIT_TEST(testRemoveRange);
 
     // XCellSeries
     CPPUNIT_TEST(testFillAuto);
@@ -117,6 +147,10 @@ public:
     // XReplaceable
     CPPUNIT_TEST(testReplaceAll);
     CPPUNIT_TEST(testCreateReplaceDescriptor);
+
+    // XScenario
+    // test was disabled in qadevOOo/tests/java/ifc/sheet/_XScenario.java
+    CPPUNIT_TEST(testScenario);
 
     // XScenarioEnhanced
     CPPUNIT_TEST(testGetRanges);
@@ -190,8 +224,8 @@ uno::Reference< uno::XInterface > ScTableSheetObj::init()
     CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
-    uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
-    uno::Reference< sheet::XSpreadsheet > xSheet( xIndex->getByIndex(0), UNO_QUERY_THROW);
+    uno::Reference<container::XIndexAccess> xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
+    uno::Reference<sheet::XSpreadsheet> xSheet(xIndex->getByIndex(0), UNO_QUERY_THROW);
 
     xSheet->getCellByPosition(5 ,5)->setValue(15);
     xSheet->getCellByPosition(2 ,0)->setValue(-5.15);
@@ -204,11 +238,19 @@ uno::Reference< uno::XInterface > ScTableSheetObj::init()
 
     uno::Sequence<table::CellRangeAddress> aCellRangeAddr(1);
     aCellRangeAddr[0] = table::CellRangeAddress(0, 0, 0, 10, 10);
+
     uno::Reference<sheet::XScenariosSupplier> xScence(xSheet, UNO_QUERY_THROW);
     xScence->getScenarios()->addNewByName("Scenario", aCellRangeAddr, "Comment");
     xSheets->getByName("Scenario");
 
     return xSheet;
+}
+
+uno::Reference<uno::XInterface> ScTableSheetObj::getXSpreadsheetDocument()
+{
+    uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
+    return xDoc;
 }
 
 uno::Reference<uno::XInterface> ScTableSheetObj::getScenarioSpreadsheet()

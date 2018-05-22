@@ -19,6 +19,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/cppunitassertequals \
     compilerplugins/clang/test/cstylecast \
     compilerplugins/clang/test/datamembershadow \
+    compilerplugins/clang/test/dbgunhandledexception \
     compilerplugins/clang/test/dodgyswitch \
     compilerplugins/clang/test/doubleconvert \
     compilerplugins/clang/test/emptyif \
@@ -42,6 +43,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/refcounting \
     compilerplugins/clang/test/salbool \
     compilerplugins/clang/test/salcall \
+    compilerplugins/clang/test/sallogareas \
     compilerplugins/clang/test/salunicodeliteral \
     compilerplugins/clang/test/simplifybool \
     compilerplugins/clang/test/simplifydynamiccast \
@@ -53,6 +55,7 @@ $(eval $(call gb_CompilerTest_add_exception_objects,compilerplugins_clang, \
     compilerplugins/clang/test/unoany \
     compilerplugins/clang/test/unusedindex \
     compilerplugins/clang/test/unusedvariablecheck \
+    compilerplugins/clang/test/unusedvariablemore \
     compilerplugins/clang/test/useuniqueptr \
     compilerplugins/clang/test/vclwidgets \
 ))

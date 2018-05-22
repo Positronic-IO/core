@@ -129,7 +129,7 @@ void ModifyListenerForewarder::Notify(SfxBroadcaster& /*rBC*/, const SfxHint& /*
         mpStyleSheet->notifyModifyListener();
 }
 
-SdStyleSheet::SdStyleSheet(const OUString& rDisplayName, SfxStyleSheetBasePool& _rPool, SfxStyleFamily eFamily, sal_uInt16 _nMask)
+SdStyleSheet::SdStyleSheet(const OUString& rDisplayName, SfxStyleSheetBasePool& _rPool, SfxStyleFamily eFamily, SfxStyleSearchBits _nMask)
 : SdStyleSheetBase( rDisplayName, _rPool, eFamily, _nMask)
 , ::cppu::BaseMutex()
 , msApiName( rDisplayName )
@@ -162,10 +162,10 @@ void SdStyleSheet::Load (SvStream& rIn, sal_uInt16 nVersion)
     SfxStyleSheetBase::Load(rIn, nVersion);
 
     /* previously, the default mask was 0xAFFE. The needed flags were masked
-       from this mask. Now the flag SFXSTYLEBIT_READONLY was introduced and with
+       from this mask. Now the flag SfxStyleSearchBits::ReadOnly was introduced and with
        this, all style sheets are read only. Since no style sheet should be read
        only in Draw, we reset the flag here.  */
-    nMask &= ~SFXSTYLEBIT_READONLY;
+    nMask &= ~SfxStyleSearchBits::ReadOnly;
 }
 
 bool SdStyleSheet::SetParent(const OUString& rParentName)
@@ -179,7 +179,7 @@ bool SdStyleSheet::SetParent(const OUString& rParentName)
         {
             if( !rParentName.isEmpty() )
             {
-                SfxStyleSheetBase* pStyle = pPool->Find(rParentName, nFamily);
+                SfxStyleSheetBase* pStyle = m_pPool->Find(rParentName, nFamily);
                 if (pStyle)
                 {
                     bResult = true;
@@ -214,7 +214,7 @@ SfxItemSet& SdStyleSheet::GetItemSet()
         if (!pSet)
         {
             pSet = new SfxItemSet(
-                GetPool().GetPool(),
+                GetPool()->GetPool(),
                 svl::Items<
                     XATTR_LINE_FIRST, XATTR_LINE_LAST,
                     XATTR_FILL_FIRST, XATTR_FILL_LAST,
@@ -234,7 +234,7 @@ SfxItemSet& SdStyleSheet::GetItemSet()
         if (!pSet)
         {
             pSet = new SfxItemSet(
-                GetPool().GetPool(),
+                GetPool()->GetPool(),
                 svl::Items<
                     XATTR_LINE_FIRST, XATTR_LINE_LAST,
                     XATTR_FILL_FIRST, XATTR_FILL_LAST,
@@ -265,7 +265,7 @@ SfxItemSet& SdStyleSheet::GetItemSet()
             if (!pSet)
             {
                 pSet = new SfxItemSet(
-                    GetPool().GetPool(),
+                    GetPool()->GetPool(),
                     svl::Items<
                         XATTR_LINE_FIRST, XATTR_LINE_LAST,
                         XATTR_FILL_FIRST, XATTR_FILL_LAST,
@@ -333,7 +333,7 @@ SdStyleSheet* SdStyleSheet::GetRealStyleSheet() const
     OUString aRealStyle;
     OUString aSep( SD_LT_SEPARATOR );
     SdStyleSheet* pRealStyle = nullptr;
-    SdDrawDocument* pDoc = static_cast<SdStyleSheetPool*>(pPool)->GetDoc();
+    SdDrawDocument* pDoc = static_cast<SdStyleSheetPool*>(m_pPool)->GetDoc();
 
     ::sd::DrawViewShell* pDrawViewShell = nullptr;
 
@@ -367,7 +367,7 @@ SdStyleSheet* SdStyleSheet::GetRealStyleSheet() const
         {
             /* no page available yet. This can happen when actualizing the
                document templates.  */
-            SfxStyleSheetIterator aIter(pPool, SfxStyleFamily::Page);
+            SfxStyleSheetIterator aIter(m_pPool, SfxStyleFamily::Page);
             SfxStyleSheetBase* pSheet = aIter.First();
             if( pSheet )
                 aRealStyle = pSheet->GetName();
@@ -417,12 +417,12 @@ SdStyleSheet* SdStyleSheet::GetRealStyleSheet() const
     }
 
     aRealStyle += aInternalName;
-    pRealStyle = static_cast< SdStyleSheet* >( pPool->Find(aRealStyle, SfxStyleFamily::Page) );
+    pRealStyle = static_cast< SdStyleSheet* >( m_pPool->Find(aRealStyle, SfxStyleFamily::Page) );
 
 #ifdef DBG_UTIL
     if( !pRealStyle )
     {
-        SfxStyleSheetIterator aIter(pPool, SfxStyleFamily::Page);
+        SfxStyleSheetIterator aIter(m_pPool, SfxStyleFamily::Page);
         if( aIter.Count() > 0 )
             // StyleSheet not found, but pool already loaded
             DBG_ASSERT(pRealStyle, "Internal StyleSheet not found");
@@ -479,7 +479,7 @@ SdStyleSheet* SdStyleSheet::GetPseudoStyleSheet() const
         }
     }
 
-    pPseudoStyle = static_cast<SdStyleSheet*>(pPool->Find(aStyleName, SfxStyleFamily::Pseudo));
+    pPseudoStyle = static_cast<SdStyleSheet*>(m_pPool->Find(aStyleName, SfxStyleFamily::Pseudo));
     DBG_ASSERT(pPseudoStyle, "PseudoStyleSheet missing");
 
     return pPseudoStyle;
@@ -604,20 +604,21 @@ void SdStyleSheet::SetHelpId( const OUString& r, sal_uLong nId )
             { OUStringLiteral("backgroundobjects"),HID_PSEUDOSHEET_BACKGROUNDOBJECTS },
             { OUStringLiteral("notes"),            HID_PSEUDOSHEET_NOTES },
             { OUStringLiteral("standard"),         HID_STANDARD_STYLESHEET_NAME },
-            { OUStringLiteral("objectwitharrow"),  HID_POOLSHEET_OBJWITHARROW },
-            { OUStringLiteral("objectwithshadow"), HID_POOLSHEET_OBJWITHSHADOW },
             { OUStringLiteral("objectwithoutfill"),HID_POOLSHEET_OBJWITHOUTFILL },
             { OUStringLiteral("text"),             HID_POOLSHEET_TEXT },
-            { OUStringLiteral("textbody"),         HID_POOLSHEET_TEXTBODY },
-            { OUStringLiteral("textbodyjustfied"), HID_POOLSHEET_TEXTBODY_JUSTIFY },
-            { OUStringLiteral("textbodyindent"),   HID_POOLSHEET_TEXTBODY_INDENT },
             { OUStringLiteral("title"),            HID_POOLSHEET_TITLE },
-            { OUStringLiteral("title1"),           HID_POOLSHEET_TITLE1 },
-            { OUStringLiteral("title2"),           HID_POOLSHEET_TITLE2 },
             { OUStringLiteral("headline"),         HID_POOLSHEET_HEADLINE },
-            { OUStringLiteral("headline1"),        HID_POOLSHEET_HEADLINE1 },
-            { OUStringLiteral("headline2"),        HID_POOLSHEET_HEADLINE2 },
-            { OUStringLiteral("measure"),          HID_POOLSHEET_MEASURE }
+            { OUStringLiteral("measure"),          HID_POOLSHEET_MEASURE },
+            { OUStringLiteral("Filled"),           HID_POOLSHEET_FILLED },
+            { OUStringLiteral("Filled Blue"),      HID_POOLSHEET_FILLED_BLUE },
+            { OUStringLiteral("Filled Green"),     HID_POOLSHEET_FILLED_GREEN },
+            { OUStringLiteral("Filled Red"),       HID_POOLSHEET_FILLED_RED },
+            { OUStringLiteral("Filled Yellow"),    HID_POOLSHEET_FILLED_YELLOW },
+            { OUStringLiteral("Outlined"),          HID_POOLSHEET_OUTLINE },
+            { OUStringLiteral("Outlined Blue"),     HID_POOLSHEET_OUTLINE_BLUE },
+            { OUStringLiteral("Outlined Green"),    HID_POOLSHEET_OUTLINE_GREEN },
+            { OUStringLiteral("Outlined Red"),      HID_POOLSHEET_OUTLINE_RED },
+            { OUStringLiteral("Outlined Yellow"),   HID_POOLSHEET_OUTLINE_YELLOW }
         };
 
         for (std::size_t i = 0; i != SAL_N_ELEMENTS(pApiNameMap); ++i)
@@ -661,7 +662,7 @@ SdStyleSheet* SdStyleSheet::CreateEmptyUserStyle( SfxStyleSheetBasePool& rPool, 
     }
     while( rPool.Find( aName, eFamily ) != nullptr );
 
-    return new SdStyleSheet(aName, rPool, eFamily, SFXSTYLEBIT_USERDEF);
+    return new SdStyleSheet(aName, rPool, eFamily, SfxStyleSearchBits::UserDefined);
 }
 
 // XInterface
@@ -735,7 +736,7 @@ void SdStyleSheet::disposing()
         delete pSet;
     }
     pSet = nullptr;
-    pPool = nullptr;
+    m_pPool = nullptr;
     mxPool.clear();
 }
 
@@ -873,7 +874,7 @@ OUString SAL_CALL SdStyleSheet::getParentStyle()
     {
         SdStyleSheet* pParentStyle = static_cast< SdStyleSheet* >( mxPool->Find( GetParent(), nFamily ) );
         if( pParentStyle )
-            return pParentStyle->msApiName;
+            return pParentStyle->GetApiName();
     }
     return OUString();
 }
@@ -974,7 +975,7 @@ void SAL_CALL SdStyleSheet::setPropertyValue( const OUString& aPropertyName, con
         throw IllegalArgumentException();
     }
 
-    SfxItemSet aSet( GetPool().GetPool(),   {{pEntry->nWID, pEntry->nWID}});
+    SfxItemSet aSet( GetPool()->GetPool(),   {{pEntry->nWID, pEntry->nWID}});
     aSet.Put( rStyleSet );
 
     if( !aSet.Count() )
@@ -987,7 +988,7 @@ void SAL_CALL SdStyleSheet::setPropertyValue( const OUString& aPropertyName, con
         }
         else
         {
-            aSet.Put( GetPool().GetPool().GetDefaultItem( pEntry->nWID ) );
+            aSet.Put( GetPool()->GetPool().GetDefaultItem( pEntry->nWID ) );
         }
     }
 
@@ -1080,7 +1081,7 @@ Any SAL_CALL SdStyleSheet::getPropertyValue( const OUString& PropertyName )
     }
     else
     {
-        SfxItemSet aSet( GetPool().GetPool(),   {{pEntry->nWID, pEntry->nWID}});
+        SfxItemSet aSet( GetPool()->GetPool(),   {{pEntry->nWID, pEntry->nWID}});
 
         const SfxPoolItem* pItem;
         SfxItemSet& rStyleSet = GetItemSet();
@@ -1089,7 +1090,7 @@ Any SAL_CALL SdStyleSheet::getPropertyValue( const OUString& PropertyName )
             aSet.Put(  *pItem );
 
         if( !aSet.Count() )
-            aSet.Put( GetPool().GetPool().GetDefaultItem( pEntry->nWID ) );
+            aSet.Put( GetPool()->GetPool().GetDefaultItem( pEntry->nWID ) );
 
         if(SvxUnoTextRangeBase::GetPropertyValueHelper( aSet, pEntry, aAny ))
             return aAny;
@@ -1267,7 +1268,7 @@ Any SAL_CALL SdStyleSheet::getPropertyDefault( const OUString& aPropertyName )
     }
     else
     {
-        SfxItemPool& rMyPool = GetPool().GetPool();
+        SfxItemPool& rMyPool = GetPool()->GetPool();
         SfxItemSet aSet( rMyPool,   {{pEntry->nWID, pEntry->nWID}});
         aSet.Put( rMyPool.GetDefaultItem( pEntry->nWID ) );
         aRet = SvxItemPropertySet_getPropertyValue( pEntry, aSet );

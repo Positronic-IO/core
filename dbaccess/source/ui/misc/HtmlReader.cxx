@@ -23,7 +23,6 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/stream.hxx>
 #include <tools/tenccvt.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/string.hxx>
 #include <strings.hrc>
 #include <stringconstants.hxx>
@@ -320,7 +319,7 @@ void OHTMLReader::TableDataOn(SvxCellHorJustify& eVal)
     }
 }
 
-void OHTMLReader::TableFontOn(FontDescriptor& _rFont,sal_Int32 &_rTextColor)
+void OHTMLReader::TableFontOn(FontDescriptor& _rFont, Color &_rTextColor)
 {
     const HTMLOptions& rHtmlOptions = GetOptions();
     for (const auto & rOption : rHtmlOptions)
@@ -331,7 +330,7 @@ void OHTMLReader::TableFontOn(FontDescriptor& _rFont,sal_Int32 &_rTextColor)
             {
                 Color aColor;
                 rOption.GetColor( aColor );
-                _rTextColor = sal_Int32(aColor.GetRGBColor());
+                _rTextColor = aColor.GetRGBColor();
             }
             break;
         case HtmlOptionId::FACE :
@@ -401,7 +400,7 @@ bool OHTMLReader::CreateTable(HtmlTokenId nToken)
 
     OUString aTableName;
     FontDescriptor aFont = VCLUnoHelper::CreateFontDescriptor(Application::GetSettings().GetStyleSettings().GetAppFont());
-    sal_Int32 nTextColor = 0;
+    Color nTextColor;
     do
     {
         switch (nToken)

@@ -35,7 +35,6 @@
 #include <strings.hrc>
 
 #include <filtdlg.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 
 // DEFINE --------------------------------------------------------------------
@@ -46,7 +45,7 @@ namespace
     {
         std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent,
                                                   VclMessageType::Warning, VclButtonsType::Ok,
-                                                  ScGlobal::GetRscString(rid)));
+                                                  ScResId(rid)));
         xBox->run();
     }
 }

@@ -30,6 +30,7 @@
 #include "xmlsecuritydllapi.h"
 #include "xmlsignaturehelper.hxx"
 
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/xml/sax/XWriter.hpp>
 #include <com/sun/star/xml/crypto/XSEInitializer.hpp>
@@ -119,7 +120,8 @@ public:
         certificate.
      */
     void SetX509Certificate(sal_Int32 nSecurityId, const OUString& ouX509IssuerName,
-        const OUString& ouX509SerialNumber, const OUString& ouX509Cert, const OUString& ouX509CertDigest);
+        const OUString& ouX509SerialNumber, const OUString& ouX509Cert, const OUString& ouX509CertDigest,
+        svl::crypto::SignatureMethodAlgorithm eAlgorithmID);
 
     void AddEncapsulatedX509Certificate(const OUString& ouEncapsulatedX509Certificate);
 
@@ -128,6 +130,12 @@ public:
 
     void        SetDateTime( sal_Int32 nSecurityId, const Date& rDate, const tools::Time& rTime );
     void SetDescription(sal_Int32 nSecurityId, const OUString& rDescription);
+    void SetSignatureLineId(sal_Int32 nSecurityId, const OUString& rSignatureLineId);
+    void
+    SetSignatureLineValidGraphic(sal_Int32 nSecurityId,
+                                 const css::uno::Reference<css::graphic::XGraphic>& xValidGraphic);
+    void SetSignatureLineInvalidGraphic(
+        sal_Int32 nSecurityId, const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic);
 
     void        AddForSigning( sal_Int32 securityId, const OUString& uri, bool bBinary, bool bXAdESCompliantIfODF );
     void        CreateAndWriteSignature( const css::uno::Reference< css::xml::sax::XDocumentHandler >& xDocumentHandler, bool bXAdESCompliantIfODF );

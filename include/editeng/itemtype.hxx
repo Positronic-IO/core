@@ -19,9 +19,6 @@
 #ifndef INCLUDED_EDITENG_ITEMTYPE_HXX
 #define INCLUDED_EDITENG_ITEMTYPE_HXX
 
-#include <editeng/editrids.hrc>
-#include <editeng/eerdll.hxx>
-
 // forward ---------------------------------------------------------------
 #include <rtl/ustring.hxx>
 #include <tools/bigint.hxx>
@@ -34,7 +31,6 @@ class IntlWrapper;
 
 static const sal_Unicode cpDelim[] = { ',' , ' ', '\0' };
 
-EDITENG_DLLPUBLIC OUString GetSvxString(const char* pId);
 EDITENG_DLLPUBLIC OUString GetMetricText( long nVal, MapUnit eSrcUnit, MapUnit eDestUnit, const IntlWrapper * pIntl );
 OUString GetColorString( const Color& rCol );
 EDITENG_DLLPUBLIC const char* GetMetricId(MapUnit eUnit);

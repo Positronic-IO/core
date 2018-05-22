@@ -20,7 +20,6 @@
 #ifndef INCLUDED_BASCTL_SOURCE_BASICIDE_BASDOC_HXX
 #define INCLUDED_BASCTL_SOURCE_BASICIDE_BASDOC_HXX
 
-#include <iderid.hxx>
 #include <sfx2/docfac.hxx>
 #include <svx/ifaceids.hxx>
 #include <vcl/vclptr.hxx>
@@ -36,7 +35,7 @@ class DocShell: public SfxObjectShell
 
 protected:
     virtual void    Draw( OutputDevice *, const JobSetup & rSetup,
-                          sal_uInt16 nAspect = ASPECT_CONTENT ) override;
+                          sal_uInt16 nAspect ) override;
     virtual void    FillClass( SvGlobalName * pClassName,
                                SotClipboardFormatId * pFormat,
                                OUString * pAppName,

@@ -44,7 +44,6 @@
 #include <editeng/frmdiritem.hxx>
 #include <svx/dlgutil.hxx>
 #include <editeng/paperinf.hxx>
-#include <dialmgr.hxx>
 #include <sfx2/module.hxx>
 #include <svl/stritem.hxx>
 #include <editeng/eerdll.hxx>
@@ -139,9 +138,9 @@ bool IsEqualSize_Impl( const SvxSizeItem* pSize, const Size& rSize )
 
 // class SvxPageDescPage --------------------------------------------------
 
-VclPtr<SfxTabPage> SvxPageDescPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxPageDescPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxPageDescPage>::Create( pParent, *rSet );
+    return VclPtr<SvxPageDescPage>::Create( pParent.pParent, *rSet );
 }
 
 SvxPageDescPage::SvxPageDescPage( vcl::Window* pParent, const SfxItemSet& rAttr ) :

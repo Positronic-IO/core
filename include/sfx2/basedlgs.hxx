@@ -45,10 +45,9 @@ class FixedLine;
 
 class SFX2_DLLPUBLIC SfxModalDialog: public ModalDialog
 {
-    sal_uInt32              nUniqId;
     OUString                aExtraData;
     const SfxItemSet*       pInputSet;
-    SfxItemSet*             pOutputSet;
+    std::unique_ptr<SfxItemSet> pOutputSet;
 
 private:
     SfxModalDialog(SfxModalDialog &) = delete;
@@ -61,18 +60,15 @@ protected:
     SfxModalDialog(vcl::Window *pParent, const OUString& rID, const OUString& rUIXMLDescription);
 
     OUString&           GetExtraData()      { return aExtraData; }
-    sal_uInt32          GetUniqId() const   { return nUniqId; }
-    void                SetUniqId(sal_uInt32 nSettingsId)  { nUniqId = nSettingsId; }
-    void                CreateOutputItemSet( SfxItemPool& rPool );
     void                CreateOutputItemSet( const SfxItemSet& rInput );
     void                SetInputSet( const SfxItemSet* pInSet ) { pInputSet = pInSet; }
-    SfxItemSet*         GetOutputSetImpl() { return pOutputSet; }
+    SfxItemSet*         GetOutputSetImpl() { return pOutputSet.get(); }
 
 public:
     virtual ~SfxModalDialog() override;
     virtual void dispose() override;
 
-    const SfxItemSet*   GetOutputItemSet() const { return pOutputSet; }
+    const SfxItemSet*   GetOutputItemSet() const { return pOutputSet.get(); }
     const SfxItemSet*   GetInputItemSet() const { return pInputSet; }
     void                StateChanged( StateChangedType nStateChange ) override;
 };
@@ -177,7 +173,7 @@ public:
     virtual             ~SfxSingleTabDialog() override;
     virtual void        dispose() override;
 
-    void                SetTabPage(SfxTabPage* pTabPage, sal_uInt32 nSettingsId = 0);
+    void                SetTabPage(SfxTabPage* pTabPage);
     SfxTabPage*         GetTabPage() const { return pImpl->m_pSfxPage; }
 
     OKButton*           GetOKButton() const { return pOKBtn; }

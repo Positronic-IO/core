@@ -96,11 +96,9 @@ ScChartListener::ScChartListener( const OUString& rName, ScDocument* pDocP,
     mpExtRefListener(nullptr),
     mpTokens(new vector<ScTokenRef>),
     maName(rName),
-    pUnoData( nullptr ),
     mpDoc( pDocP ),
     bUsed( false ),
-    bDirty( false ),
-    bSeriesRangesScheduled( false )
+    bDirty( false )
 {
     ScRefTokenHelper::getTokensFromRangeList(*mpTokens, *rRangeList);
 }
@@ -110,11 +108,9 @@ ScChartListener::ScChartListener( const OUString& rName, ScDocument* pDocP, vect
     mpExtRefListener(nullptr),
     mpTokens(pTokens),
     maName(rName),
-    pUnoData( nullptr ),
     mpDoc( pDocP ),
     bUsed( false ),
-    bDirty( false ),
-    bSeriesRangesScheduled( false )
+    bDirty( false )
 {
 }
 
@@ -123,14 +119,12 @@ ScChartListener::ScChartListener( const ScChartListener& r ) :
     mpExtRefListener(nullptr),
     mpTokens(new vector<ScTokenRef>(*r.mpTokens)),
     maName(r.maName),
-    pUnoData( nullptr ),
     mpDoc( r.mpDoc ),
     bUsed( false ),
-    bDirty( r.bDirty ),
-    bSeriesRangesScheduled( r.bSeriesRangesScheduled )
+    bDirty( r.bDirty )
 {
     if ( r.pUnoData )
-        pUnoData = new ScChartUnoData( *r.pUnoData );
+        pUnoData.reset( new ScChartUnoData( *r.pUnoData ) );
 
     if (r.mpExtRefListener.get())
     {
@@ -153,7 +147,7 @@ ScChartListener::~ScChartListener()
 {
     if ( HasBroadcaster() )
         EndListeningTo();
-    delete pUnoData;
+    pUnoData.reset();
 
     if (mpExtRefListener.get())
     {
@@ -170,8 +164,7 @@ void ScChartListener::SetUno(
         const uno::Reference< chart::XChartDataChangeEventListener >& rListener,
         const uno::Reference< chart::XChartData >& rSource )
 {
-    delete pUnoData;
-    pUnoData = new ScChartUnoData( rListener, rSource );
+    pUnoData.reset( new ScChartUnoData( rListener, rSource ) );
 }
 
 uno::Reference< chart::XChartDataChangeEventListener > ScChartListener::GetUnoListener() const
@@ -326,15 +319,6 @@ void ScChartListener::ChangeListening( const ScRangeListRef& rRangeListRef,
         SetDirty( true );
 }
 
-void ScChartListener::UpdateScheduledSeriesRanges()
-{
-    if ( bSeriesRangesScheduled )
-    {
-        bSeriesRangesScheduled = false;
-        UpdateSeriesRanges();
-    }
-}
-
 void ScChartListener::UpdateChartIntersecting( const ScRange& rRange )
 {
     ScTokenRef pToken;
@@ -345,13 +329,6 @@ void ScChartListener::UpdateChartIntersecting( const ScRange& rRange )
         // force update (chart has to be loaded), don't use ScChartListener::Update
         mpDoc->UpdateChart(GetName());
     }
-}
-
-void ScChartListener::UpdateSeriesRanges()
-{
-    ScRangeListRef pRangeList(new ScRangeList);
-    ScRefTokenHelper::getRangeListFromTokens(*pRangeList, *mpTokens, ScAddress());
-    mpDoc->SetChartRangeList(GetName(), pRangeList);
 }
 
 ScChartListener::ExternalRefListener* ScChartListener::GetExtRefListener()
@@ -374,7 +351,6 @@ bool ScChartListener::operator==( const ScChartListener& r ) const
     bool b2 = (r.mpTokens.get() && !r.mpTokens->empty());
 
     if (mpDoc != r.mpDoc || bUsed != r.bUsed || bDirty != r.bDirty ||
-        bSeriesRangesScheduled != r.bSeriesRangesScheduled ||
         GetName() != r.GetName() || b1 != b2)
         return false;
 
@@ -694,14 +670,6 @@ void ScChartListenerCollection::SetRangeDirty( const ScRange& rRange )
         {
             itr->first->notify();
         }
-    }
-}
-
-void ScChartListenerCollection::UpdateScheduledSeriesRanges()
-{
-    for (auto const& it : m_Listeners)
-    {
-        it.second->UpdateScheduledSeriesRanges();
     }
 }
 

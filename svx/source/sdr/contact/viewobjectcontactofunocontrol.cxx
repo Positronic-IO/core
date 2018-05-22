@@ -65,31 +65,31 @@ Below is a list of issues which existed in the past. Whenever you change code he
 verify those issues are still fixed. (Whenever you have some additional time, you're encouraged to write
 an automatic test for one or more of those issues for which this is possible :)
 
-http://www.openoffice.org/issues/show_bug.cgi?id=105992
+https://bz.apache.org/ooo/show_bug.cgi?id=105992
 zooming documents containing (alive) form controls improperly positions the controls
 
-http://www.openoffice.org/issues/show_bug.cgi?id=104362
+https://bz.apache.org/ooo/show_bug.cgi?id=104362
 crash when copy a control
 
-http://www.openoffice.org/issues/show_bug.cgi?id=104544
+https://bz.apache.org/ooo/show_bug.cgi?id=104544
 Gridcontrol duplicated after design view on/off
 
-http://www.openoffice.org/issues/show_bug.cgi?id=102089
+https://bz.apache.org/ooo/show_bug.cgi?id=102089
 print preview shows control elements with property printable=false
 
-http://www.openoffice.org/issues/show_bug.cgi?id=102090
+https://bz.apache.org/ooo/show_bug.cgi?id=102090
 problem with setVisible on TextControl
 
-http://www.openoffice.org/issues/show_bug.cgi?id=103138
+https://bz.apache.org/ooo/show_bug.cgi?id=103138
 loop when insert a control in draw
 
-http://www.openoffice.org/issues/show_bug.cgi?id=101398
+https://bz.apache.org/ooo/show_bug.cgi?id=101398
 initially-displaying a document with many controls is very slow
 
-http://www.openoffice.org/issues/show_bug.cgi?id=72429
+https://bz.apache.org/ooo/show_bug.cgi?id=72429
 repaint error in form wizard in bugdoc database
 
-http://www.openoffice.org/issues/show_bug.cgi?id=72694
+https://bz.apache.org/ooo/show_bug.cgi?id=72694
 form control artifacts when scrolling a text fast
 
 */
@@ -321,7 +321,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
         _rControl.clear();
     }
@@ -931,7 +931,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -997,7 +997,7 @@ namespace sdr { namespace contact {
             // We once had a situation where this was called reentrantly, which lead to all kind of strange effects. All
             // those affected the grid control, which is the only control so far which is visible in design mode (and
             // not only in alive mode).
-            // Creating the control triggered an Window::Update on some of its child windows, which triggered a
+            // Creating the control triggered a Window::Update on some of its child windows, which triggered a
             // Paint on parent of the grid control (e.g. the SwEditWin), which triggered a reentrant call to this method,
             // which it is not really prepared for.
 
@@ -1051,7 +1051,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         // start listening at all aspects of the control which are interesting to us ...
@@ -1118,7 +1118,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
 
         if ( !bSuccess )
@@ -1202,7 +1202,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1233,7 +1233,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1264,7 +1264,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1283,7 +1283,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
         return bIsPrintable;
     }
@@ -1378,7 +1378,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1456,7 +1456,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 
@@ -1636,7 +1636,7 @@ namespace sdr { namespace contact {
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
     }
 

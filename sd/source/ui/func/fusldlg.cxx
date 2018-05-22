@@ -19,7 +19,6 @@
 
 #include <fusldlg.hxx>
 #include <svl/itemset.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <drawdoc.hxx>
 #include <sdpage.hxx>
@@ -107,7 +106,7 @@ void FuSlideShowDlg::DoExecute( SfxRequest& )
     aDlgSet.Put( SfxInt32Item( ATTR_PRESENT_DISPLAY, pOptions->GetDisplay() ) );
 
     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-    ScopedVclPtr<AbstractSdStartPresDlg> pDlg(pFact ? pFact->CreateSdStartPresentationDlg(mpWindow, aDlgSet, aPageNameList, pCustomShowList) : nullptr);
+    ScopedVclPtr<AbstractSdStartPresDlg> pDlg(pFact ? pFact->CreateSdStartPresentationDlg(mpWindow ? mpWindow->GetFrameWeld() : nullptr, aDlgSet, aPageNameList, pCustomShowList) : nullptr);
     if( pDlg && (pDlg->Execute() == RET_OK) )
     {
         OUString aPage;

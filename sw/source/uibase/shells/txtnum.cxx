@@ -18,7 +18,6 @@
  */
 
 #include <hintids.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
@@ -184,7 +183,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
 
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        vcl::Window *pParent = rReq.GetDialogParent();
+        vcl::Window *pParent = rReq.GetFrameWindow();
         if (!pParent)
             pParent = GetView().GetWindow();
 

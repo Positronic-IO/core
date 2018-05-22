@@ -40,13 +40,15 @@ class VCLPLUG_GEN_PUBLIC X11SalBitmap : public SalBitmap
 {
 private:
 
-    static BitmapBuffer*        ImplCreateDIB(
+    static std::unique_ptr<BitmapBuffer>
+                                ImplCreateDIB(
                                     const Size& rSize,
                                     sal_uInt16 nBitCount,
                                     const BitmapPalette& rPal
                                 );
 
-    static BitmapBuffer*        ImplCreateDIB(
+    static std::unique_ptr<BitmapBuffer>
+                                ImplCreateDIB(
                                     Drawable aDrawable,
                                     SalX11Screen nXScreen,
                                     long nDrawableDepth,
@@ -68,8 +70,8 @@ public:
 
 private:
 
-    BitmapBuffer*   mpDIB;
-    ImplSalDDB*     mpDDB;
+    std::unique_ptr<BitmapBuffer> mpDIB;
+    mutable std::unique_ptr<ImplSalDDB> mpDDB;
     bool            mbGrey;
 
 public:

@@ -34,7 +34,6 @@
 #include <com/sun/star/mail/MailServiceProvider.hpp>
 #include <com/sun/star/mail/XSmtpService.hpp>
 #include <comphelper/processfactory.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
 
@@ -53,7 +52,7 @@ using namespace ::com::sun::star::sdbcx;
 namespace SwMailMergeHelper
 {
 
-OUString CallSaveAsDialog(const vcl::Window* pParent, OUString& rFilter)
+OUString CallSaveAsDialog(weld::Window* pParent, OUString& rFilter)
 {
     ::sfx2::FileDialogHelper aDialog( ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION,
                 FileDialogFlags::NONE,
@@ -613,10 +612,10 @@ OUString SwAuthenticator::getPassword(  )
 {
     if(!m_aUserName.isEmpty() && m_aPassword.isEmpty() && m_pParentWindow)
     {
-       ScopedVclPtrInstance<SfxPasswordDialog> pPasswdDlg( m_pParentWindow );
-       pPasswdDlg->SetMinLen( 0 );
-       if(RET_OK == pPasswdDlg->Execute())
-            m_aPassword = pPasswdDlg->GetPassword();
+       SfxPasswordDialog aPasswdDlg(m_pParentWindow->GetFrameWeld());
+       aPasswdDlg.SetMinLen(0);
+       if (RET_OK == aPasswdDlg.execute())
+            m_aPassword = aPasswdDlg.GetPassword();
     }
     return m_aPassword;
 }

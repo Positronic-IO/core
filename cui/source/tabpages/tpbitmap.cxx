@@ -48,12 +48,9 @@ using namespace com::sun::star;
 
 enum BitmapStyle
 {
-    ORIGINAL,
-    FILLED,
-    STRETCHED,
-    ZOOMED,
     CUSTOM,
-    TILED
+    TILED,
+    STRETCHED
 };
 
 enum TileOffset
@@ -80,17 +77,12 @@ SvxBitmapTabPage::SvxBitmapTabPage( vcl::Window* pParent, const SfxItemSet& rInA
     m_pBitmapList( nullptr ),
 
     m_pnBitmapListState( nullptr ),
-    m_aXBitmapItem( OUString(), Graphic() ),
     m_fObjectWidth(0.0),
     m_fObjectHeight(0.0),
-
+    m_bLogicalSize(false),
     m_aXFillAttr          ( rInAttrs.GetPool() ),
     m_rXFSet              ( m_aXFillAttr.GetItemSet() ),
-    mpView(nullptr),
-    nFilledWidthPercent(0),
-    nFilledHeightPercent(0),
-    nZoomedWidthPercent(0),
-    nZoomedHeightPercent(0)
+    mpView(nullptr)
 {
     get(m_pBitmapLB,"BITMAP");
     get(m_pBitmapStyleLB, "bitmapstyle");
@@ -111,7 +103,7 @@ SvxBitmapTabPage::SvxBitmapTabPage( vcl::Window* pParent, const SfxItemSet& rInA
 
     // setting the output device
     m_rXFSet.Put( XFillStyleItem(drawing::FillStyle_BITMAP) );
-    m_rXFSet.Put( m_aXBitmapItem );
+    m_rXFSet.Put( XFillBitmapItem(OUString(), Graphic()) );
     m_pCtlBitmapPreview->SetAttributes( m_aXFillAttr.GetItemSet() );
 
     m_pBitmapLB->SetSelectHdl( LINK(this, SvxBitmapTabPage, ModifyBitmapHdl) );
@@ -137,7 +129,11 @@ SvxBitmapTabPage::SvxBitmapTabPage( vcl::Window* pParent, const SfxItemSet& rInA
     m_pCtlBitmapPreview->set_height_request(aSize.Height());
 
     SfxItemPool* pPool = m_rXFSet.GetPool();
-    mePoolUnit = pPool->GetMetric( SID_ATTR_TRANSFORM_WIDTH );
+    mePoolUnit = pPool->GetMetric( XATTR_FILLBMP_SIZEX );
+    meFieldUnit = GetModuleFieldUnit( rInAttrs );
+    SetFieldUnit( *m_pBitmapWidth, meFieldUnit, true );
+    SetFieldUnit( *m_pBitmapHeight, meFieldUnit, true );
+
     SfxViewShell* pViewShell = SfxViewShell::Current();
     if( pViewShell )
         mpView = pViewShell->GetDrawView();
@@ -206,11 +202,12 @@ bool SvxBitmapTabPage::FillItemSet( SfxItemSet* rAttrs )
     if(VALUESET_ITEM_NOTFOUND != nPos)
     {
         const XBitmapEntry* pXBitmapEntry = m_pBitmapList->GetBitmap(nPos);
-        const OUString aString(m_pBitmapLB->GetItemText( m_pBitmapLB->GetSelectItemId() ));
+        const OUString aString(m_pBitmapLB->GetItemText( m_pBitmapLB->GetSelectedItemId() ));
         rAttrs->Put(XFillBitmapItem(aString, pXBitmapEntry->GetGraphicObject()));
     }
 
-    BitmapStyle eStylePos = static_cast<BitmapStyle>(m_pBitmapStyleLB->GetSelectedEntryPos());        bool bIsStretched( eStylePos == STRETCHED );
+    BitmapStyle eStylePos = static_cast<BitmapStyle>(m_pBitmapStyleLB->GetSelectedEntryPos());
+    bool bIsStretched( eStylePos == STRETCHED );
     bool bIsTiled( eStylePos == TILED );
 
     rAttrs->Put( XFillBmpTileItem(bIsTiled) );
@@ -221,35 +218,34 @@ bool SvxBitmapTabPage::FillItemSet( SfxItemSet* rAttrs )
         Size aSetBitmapSize;
         switch(eStylePos)
         {
-            case ORIGINAL:
-                aSetBitmapSize = rBitmapSize;
-                break;
-            case FILLED:
-                aSetBitmapSize = rFilledSize;
-                break;
-            case ZOOMED:
-                aSetBitmapSize = rZoomedSize;
-                break;
             case CUSTOM:
             case TILED:
             {
-                sal_Int64 nWidthPercent = m_pBitmapWidth->Denormalize(m_pBitmapWidth->GetValue());
-                sal_Int64 nHeightPercent = m_pBitmapHeight->Denormalize(m_pBitmapHeight->GetValue());
-                if(eStylePos == CUSTOM && m_pTsbScale->IsEnabled() && m_pTsbScale->GetState() == TRISTATE_TRUE)
+                sal_Int64 nWidthPercent = m_pBitmapWidth->GetValue();
+                sal_Int64 nHeightPercent = m_pBitmapHeight->GetValue();
+                if(m_pTsbScale->IsEnabled() && m_pTsbScale->GetState() == TRISTATE_TRUE)
                 {
                     aSetBitmapSize.setWidth( -nWidthPercent );
                     aSetBitmapSize.setHeight( -nHeightPercent );
                 }
+                else if (!m_bLogicalSize)
+                {
+                    aSetBitmapSize.setWidth( GetCoreValue(*m_pBitmapWidth, mePoolUnit) );
+                    aSetBitmapSize.setHeight( GetCoreValue(*m_pBitmapHeight, mePoolUnit) );
+                }
                 else
                 {
-                    aSetBitmapSize.setWidth( static_cast<long>(nWidthPercent*rBitmapSize.Width()/100) );
-                    aSetBitmapSize.setHeight( static_cast<long>(nHeightPercent*rBitmapSize.Height()/100) );
+                    rAttrs->Put( XFillBmpSizeLogItem(true) );
+                    aSetBitmapSize.setWidth( 0 );
+                    aSetBitmapSize.setHeight( 0 );
                 }
+
                 break;
             }
             default:
                 break;
         }
+
         rAttrs->Put( XFillBmpSizeXItem( aSetBitmapSize.Width() ) );
         rAttrs->Put( XFillBmpSizeYItem( aSetBitmapSize.Height() ) );
     }
@@ -316,29 +312,45 @@ void SvxBitmapTabPage::Reset( const SfxItemSet* rAttrs )
     {
         BitmapEx aBmpEx(pGraphicObject->GetGraphic().GetBitmapEx());
         Size aTempBitmapSize = aBmpEx.GetSizePixel();
-        rBitmapSize.setWidth( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Width()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
-        rBitmapSize.setHeight( (OutputDevice::LogicToLogic(static_cast<sal_Int32>(aTempBitmapSize.Height()),MapUnit::MapPixel, MapUnit::Map100thMM )) / fUIScale );
+        rBitmapSize = PixelToLogic( aTempBitmapSize, MapMode(MapUnit::Map100thMM));
         CalculateBitmapPresetSize();
     }
 
+    bool bTiled = false; bool bStretched = false;
     if(rAttrs->GetItemState( XATTR_FILLBMP_TILE ) != SfxItemState::DONTCARE)
-    {
-        if( rAttrs->Get( XATTR_FILLBMP_TILE ).GetValue() )
-        {
-            m_pBitmapStyleLB->SelectEntryPos(static_cast<sal_Int32>(TILED));
-        }
-    }
+        bTiled = rAttrs->Get( XATTR_FILLBMP_TILE ).GetValue();
+    if(rAttrs->GetItemState( XATTR_FILLBMP_STRETCH ) != SfxItemState::DONTCARE)
+        bStretched = rAttrs->Get( XATTR_FILLBMP_STRETCH ).GetValue();
 
-    if( m_pBitmapStyleLB->GetSelectedEntryPos() == 0 && rAttrs->GetItemState( XATTR_FILLBMP_STRETCH ) != SfxItemState::DONTCARE)
-    {
-        if( rAttrs->Get( XATTR_FILLBMP_STRETCH ).GetValue() )
-        {
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(STRETCHED) );
-        }
-    }
+    if (bTiled)
+        m_pBitmapStyleLB->SelectEntryPos(static_cast<sal_Int32>(TILED));
+    else if (bStretched)
+        m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(STRETCHED) );
+    else
+        m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(CUSTOM) );
 
     long nWidth = 0;
     long nHeight = 0;
+
+    if(rAttrs->GetItemState(XATTR_FILLBMP_SIZELOG) != SfxItemState::DONTCARE)
+    {
+        m_pTsbScale->EnableTriState( false );
+
+        if(  rAttrs->Get( XATTR_FILLBMP_SIZELOG ).GetValue() )
+        {
+            m_pTsbScale->SetState( TRISTATE_FALSE );
+            m_bLogicalSize = true;
+        }
+        else
+        {
+            m_pTsbScale->SetState( TRISTATE_TRUE );
+            m_bLogicalSize = false;
+        }
+
+        ClickScaleHdl( nullptr );
+    }
+    else
+        m_pTsbScale->SetState( TRISTATE_INDET );
 
     TriState eRelative = TRISTATE_FALSE;
     if(rAttrs->GetItemState(XATTR_FILLBMP_SIZEX) != SfxItemState::DONTCARE)
@@ -366,24 +378,6 @@ void SvxBitmapTabPage::Reset( const SfxItemSet* rAttrs )
     }
     m_pTsbScale->SetState(eRelative);
 
-    if(eRelative != TRISTATE_TRUE)
-    {
-        nWidth = (OutputDevice::LogicToLogic(nWidth, mePoolUnit, MapUnit::Map100thMM )) / fUIScale;
-        nHeight = (OutputDevice::LogicToLogic(nHeight, mePoolUnit, MapUnit::Map100thMM )) / fUIScale;
-    }
-
-    if(m_pBitmapStyleLB->GetSelectedEntryPos() == 0)
-    {
-        if( nWidth == rBitmapSize.Width() && nHeight == rBitmapSize.Height() )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(ORIGINAL) );
-        else if( nWidth == rFilledSize.Width() && nHeight == rFilledSize.Height() )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(FILLED) );
-        else if( nWidth == rZoomedSize.Width() && nHeight == rZoomedSize.Height() )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(ZOOMED) );
-        else
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(CUSTOM) );
-    }
-
     if(rBitmapSize.Width() > 0 && rBitmapSize.Height() > 0)
     {
         if(eRelative == TRISTATE_TRUE)
@@ -393,10 +387,8 @@ void SvxBitmapTabPage::Reset( const SfxItemSet* rAttrs )
         }
         else
         {
-            sal_Int64 nWidthPercent = m_pBitmapWidth->Normalize(nWidth*100/rBitmapSize.Width());
-            m_pBitmapWidth->SetValue(nWidthPercent);
-            sal_Int64 nHeightPercent = m_pBitmapHeight->Normalize(nHeight*100/rBitmapSize.Height());
-            m_pBitmapHeight->SetValue(nHeightPercent);
+            SetMetricValue(*m_pBitmapWidth, nWidth, mePoolUnit);
+            SetMetricValue(*m_pBitmapHeight, nHeight, mePoolUnit);
         }
     }
 
@@ -446,10 +438,10 @@ void SvxBitmapTabPage::Reset( const SfxItemSet* rAttrs )
 }
 
 
-VclPtr<SfxTabPage> SvxBitmapTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxBitmapTabPage::Create( TabPageParent pWindow,
                                            const SfxItemSet* rAttrs )
 {
-    return VclPtr<SvxBitmapTabPage>::Create( pWindow, *rAttrs );
+    return VclPtr<SvxBitmapTabPage>::Create( pWindow.pParent, *rAttrs );
 }
 
 
@@ -482,11 +474,6 @@ void SvxBitmapTabPage::CalculateBitmapPresetSize()
             rZoomedSize.setWidth( nObjectWidth );
             rZoomedSize.setHeight( rBitmapSize.Height()*nObjectWidth/rBitmapSize.Width() );
         }
-
-        nFilledWidthPercent = static_cast<sal_Int64>(rFilledSize.Width()*100/rBitmapSize.Width());
-        nFilledHeightPercent = static_cast<sal_Int64>(rFilledSize.Width()*100/rBitmapSize.Height());
-        nZoomedWidthPercent = static_cast<sal_Int64>(rZoomedSize.Width()*100/rBitmapSize.Width());
-        nZoomedHeightPercent = static_cast<sal_Int64>(rZoomedSize.Height()*100/rBitmapSize.Height());
     }
 }
 
@@ -552,7 +539,7 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ModifyBitmapHdl, ValueSet*, void)
 
 IMPL_LINK_NOARG(SvxBitmapTabPage, ClickRenameHdl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pBitmapLB->GetSelectItemId();
+    sal_uInt16 nId = m_pBitmapLB->GetSelectedItemId();
     size_t nPos = m_pBitmapLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -562,7 +549,7 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickRenameHdl, SvxPresetListBox*, void)
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         assert(pFact && "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
         assert(pDlg && "Dialog creation failed!");
 
         bool bLoop = true;
@@ -594,7 +581,7 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickRenameHdl, SvxPresetListBox*, void)
 
 IMPL_LINK_NOARG(SvxBitmapTabPage, ClickDeleteHdl, SvxPresetListBox*, void)
 {
-    sal_uInt16 nId = m_pBitmapLB->GetSelectItemId();
+    sal_uInt16 nId = m_pBitmapLB->GetSelectedItemId();
     size_t nPos = m_pBitmapLB->GetSelectItemPos();
 
     if( nPos != VALUESET_ITEM_NOTFOUND )
@@ -618,17 +605,12 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickDeleteHdl, SvxPresetListBox*, void)
 
 IMPL_LINK_NOARG( SvxBitmapTabPage, ModifyBitmapSizeHdl, Edit&, void )
 {
+    m_bLogicalSize = false;
     if( m_pTsbScale->GetState() != TRISTATE_TRUE && static_cast<BitmapStyle>(m_pBitmapStyleLB->GetSelectedEntryPos()) != TILED )
     {
         sal_Int64 nWidthPercent = m_pBitmapWidth->Denormalize( m_pBitmapWidth->GetValue() );
         sal_Int64 nHeightPercent = m_pBitmapHeight->Denormalize( m_pBitmapHeight->GetValue() );
         if( nWidthPercent == 100 && nHeightPercent == 100 )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(ORIGINAL) );
-        else if( nWidthPercent == nFilledWidthPercent && nHeightPercent == nFilledHeightPercent )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(FILLED) );
-        else if( nWidthPercent == nZoomedWidthPercent && nHeightPercent == nZoomedHeightPercent )
-            m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(ZOOMED) );
-        else
             m_pBitmapStyleLB->SelectEntryPos( static_cast<sal_Int32>(CUSTOM) );
     }
     ModifyBitmapStyleHdl(*m_pBitmapStyleLB);
@@ -639,6 +621,36 @@ IMPL_LINK_NOARG( SvxBitmapTabPage, ModifyBitmapSizeHdl, Edit&, void )
 
 IMPL_LINK_NOARG( SvxBitmapTabPage, ClickScaleHdl, Button*, void )
 {
+   if( m_pTsbScale->GetState() == TRISTATE_TRUE )
+    {
+        m_pBitmapWidth->SetDecimalDigits( 0 );
+        m_pBitmapWidth->SetUnit(FUNIT_PERCENT);
+        m_pBitmapWidth->SetValue( 100 );
+        m_pBitmapWidth->SetMax( 100 );
+        m_pBitmapWidth->SetLast( 100 );
+
+        m_pBitmapHeight->SetDecimalDigits( 0 );
+        m_pBitmapHeight->SetUnit(FUNIT_PERCENT);
+        m_pBitmapHeight->SetValue( 100 );
+        m_pBitmapHeight->SetMax( 100 );
+        m_pBitmapHeight->SetLast( 100 );
+    }
+    else
+    {
+        m_pBitmapWidth->SetDecimalDigits( 2 );
+        m_pBitmapWidth->SetUnit( meFieldUnit );
+        m_pBitmapWidth->SetValue( 100 );
+        m_pBitmapWidth->SetMax( 999900 );
+        m_pBitmapWidth->SetLast( 100000 );
+
+        m_pBitmapHeight->SetDecimalDigits( 2 );
+        m_pBitmapHeight->SetDecimalDigits( 2 );
+        m_pBitmapHeight->SetUnit( meFieldUnit );
+        m_pBitmapHeight->SetValue( 100 );
+        m_pBitmapHeight->SetMax( 999900 );
+        m_pBitmapHeight->SetLast( 100000 );
+    }
+
     ModifyBitmapStyleHdl( *m_pBitmapStyleLB );
 }
 
@@ -649,7 +661,6 @@ IMPL_LINK_NOARG( SvxBitmapTabPage, ModifyBitmapStyleHdl, ListBox&, void )
     bool bIsTiled( eStylePos == TILED );
 
     m_pSizeBox->Enable( !bIsStretched );
-    m_pTsbScale->Enable( eStylePos == CUSTOM );
     m_pPositionBox->Enable( !bIsStretched );
     m_pPositionOffBox->Enable( bIsTiled );
     m_pTileOffBox->Enable( bIsTiled );
@@ -662,50 +673,23 @@ IMPL_LINK_NOARG( SvxBitmapTabPage, ModifyBitmapStyleHdl, ListBox&, void )
         Size aSetBitmapSize;
         switch(eStylePos)
         {
-            case ORIGINAL:
-            {
-                m_pBitmapWidth->SetValue(100);
-                m_pBitmapHeight->SetValue(100);
-                aSetBitmapSize = rBitmapSize;
-            }
-            break;
-            case FILLED:
-            {
-                sal_Int64 nWidthPercent = m_pBitmapWidth->Normalize(nFilledWidthPercent);
-                m_pBitmapWidth->SetValue(nWidthPercent);
-                sal_Int64 nHeightPercent = m_pBitmapHeight->Normalize(nFilledHeightPercent);
-                m_pBitmapHeight->SetValue(nHeightPercent);
-                aSetBitmapSize = rFilledSize;
-            }
-            break;
-            case ZOOMED:
-            {
-                sal_Int64 nWidthPercent = m_pBitmapWidth->Normalize(nZoomedWidthPercent);
-                m_pBitmapWidth->SetValue(nWidthPercent);
-                sal_Int64 nHeightPercent = m_pBitmapHeight->Normalize(nZoomedHeightPercent);
-                m_pBitmapHeight->SetValue(nHeightPercent);
-                aSetBitmapSize = rZoomedSize;
-            }
-            break;
             case CUSTOM:
             case TILED:
             {
-                sal_Int64 nWidthPercent = m_pBitmapWidth->Denormalize( m_pBitmapWidth->GetValue() );
-                sal_Int64 nHeightPercent = m_pBitmapWidth->Denormalize( m_pBitmapHeight->GetValue() );
-                if(eStylePos == CUSTOM && m_pTsbScale->IsEnabled() &&  m_pTsbScale->GetState() == TRISTATE_TRUE)
+                if(m_pTsbScale->IsEnabled() &&  m_pTsbScale->GetState() == TRISTATE_TRUE)
                 {
-                    aSetBitmapSize.setWidth( -nWidthPercent );
-                    aSetBitmapSize.setHeight( -nHeightPercent );
+                    aSetBitmapSize.setWidth( -m_pBitmapWidth->GetValue() );
+                    aSetBitmapSize.setHeight( -m_pBitmapWidth->GetValue() );
                 }
                 else
                 {
-                    aSetBitmapSize.setWidth( static_cast<long>(nWidthPercent*rBitmapSize.Width()/100) );
-                    aSetBitmapSize.setHeight( static_cast<long>(nHeightPercent*rBitmapSize.Height()/100) );
+                    aSetBitmapSize.setWidth( GetCoreValue( *m_pBitmapWidth, mePoolUnit ) );
+                    aSetBitmapSize.setHeight( GetCoreValue( *m_pBitmapHeight, mePoolUnit ) );
                 }
             }
-            break;
+                break;
             default:
-            break;
+                break;
         }
 
         m_rXFSet.Put( XFillBmpSizeXItem( aSetBitmapSize.Width() ) );
@@ -757,7 +741,7 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ModifyTileOffsetHdl, Edit&, void)
 
 IMPL_LINK_NOARG(SvxBitmapTabPage, ClickImportHdl, Button*, void)
 {
-    SvxOpenGraphicDialog aDlg("Import", this);
+    SvxOpenGraphicDialog aDlg("Import", GetFrameWeld());
     aDlg.EnableLink(false);
     long nCount = m_pBitmapList->Count();
 
@@ -778,7 +762,7 @@ IMPL_LINK_NOARG(SvxBitmapTabPage, ClickImportHdl, Button*, void)
             INetURLObject   aURL( aDlg.GetPath() );
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
             DBG_ASSERT(pFact, "Dialog creation failed!");
-            ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aURL.GetName().getToken( 0, '.' ), aDesc ));
+            ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aURL.GetName().getToken(0, '.'), aDesc));
             DBG_ASSERT(pDlg, "Dialog creation failed!");
             nError = ErrCode(1);
 
@@ -847,6 +831,10 @@ sal_Int32 SvxBitmapTabPage::SearchBitmapList(const OUString& rBitmapName)
 }
 
 void SvxBitmapTabPage::PointChanged( vcl::Window* , RectPoint )
+{
+}
+
+void SvxBitmapTabPage::PointChanged( weld::DrawingArea*, RectPoint )
 {
 }
 

@@ -13,9 +13,11 @@
 
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/sequence.hxx>
+#include <cppuhelper/supportsservice.hxx>
 
 #include <com/sun/star/security/KeyUsage.hpp>
 #include <officecfg/Office/Common.hxx>
+#include <svl/sigstruct.hxx>
 
 #include <gpgme.h>
 #include <context.h>
@@ -170,6 +172,11 @@ Sequence<sal_Int8> CertificateImpl::getSHA256Thumbprint()
         keyId, strlen(keyId)+1);
 }
 
+svl::crypto::SignatureMethodAlgorithm CertificateImpl::getSignatureMethodAlgorithm()
+{
+    return svl::crypto::SignatureMethodAlgorithm::RSA;
+}
+
 Sequence< sal_Int8 > SAL_CALL CertificateImpl::getMD5Thumbprint()
 {
     // This is mapped to the shorter keyID for gpg
@@ -245,5 +252,20 @@ const GpgME::Key* CertificateImpl::getCertificate() const
 {
     return &m_pKey;
 }
+
+/* XServiceInfo */
+OUString SAL_CALL CertificateImpl::getImplementationName()
+{
+    return OUString("com.sun.star.xml.security.gpg.XCertificate_GpgImpl");
+}
+
+/* XServiceInfo */
+sal_Bool SAL_CALL CertificateImpl::supportsService(const OUString& serviceName)
+{
+    return cppu::supportsService(this, serviceName);
+}
+
+/* XServiceInfo */
+Sequence<OUString> SAL_CALL CertificateImpl::getSupportedServiceNames() { return { OUString() }; }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -23,7 +23,6 @@
 #include <vcl/metaact.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/dispatch.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <svx/svdograf.hxx>
@@ -280,7 +279,8 @@ void DrawViewShell::ExecBmpMask( SfxRequest const & rReq )
 
             if ( pObj && !mpDrawView->IsTextEdit() )
             {
-                std::unique_ptr<SdrGrafObj> xNewObj(pObj->Clone());
+                typedef std::unique_ptr< SdrGrafObj, SdrObjectFreeOp > SdrGrafObjPtr;
+                SdrGrafObjPtr xNewObj(pObj->CloneSdrObject(pObj->getSdrModelFromSdrObject()));
                 bool bCont = true;
 
                 if (xNewObj->IsLinkedGraphic())

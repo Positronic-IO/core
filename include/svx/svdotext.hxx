@@ -116,7 +116,7 @@ public:
     ImpSdrObjTextLinkUserData();
     virtual ~ImpSdrObjTextLinkUserData() override;
 
-    virtual SdrObjUserData* Clone(SdrObject* pObj1) const override;
+    virtual std::unique_ptr<SdrObjUserData> Clone(SdrObject* pObj1) const override;
 };
 
 namespace sdr
@@ -136,15 +136,12 @@ class SVX_DLLPUBLIC SdrTextObj : public SdrAttrObj, public svx::ITextProvider
 {
 private:
     // Cell needs access to ImpGetDrawOutliner();
-
     friend class                sdr::table::Cell;
     friend class                sdr::table::SdrTableRtfExporter;
     friend class                sdr::table::SdrTableRTFParser;
-
     friend class                TextChain;
     friend class                TextChainFlow;
     friend class                EditingTextChainFlow;
-
 
     // CustomShapeproperties need to access the "bTextFrame" member:
     friend class sdr::properties::CustomShapeProperties;
@@ -198,7 +195,6 @@ protected:
 
     // Possible values for eTextKind are:
     //     OBJ_TEXT         regular text frame
-    //     OBJ_TEXTEXT      text continuation frame
     //     OBJ_TITLETEXT    TitleText for presentations
     //     OBJ_OUTLINETEXT  OutlineText for presentations
     // eTextKind only has meaning when bTextFrame=sal_True, since otherwise
@@ -232,7 +228,6 @@ protected:
     // bTextFrame=sal_True.
     bool                        bTextFrame : 1;
     bool                        bNoShear : 1;            // disable shearing   (->graphic+Ole+TextFrame)
-    bool                        bNoMirror : 1;           // disable mirroring (->Ole,TextFrame)
     bool                        bTextSizeDirty : 1;
 
     bool                        mbInEditMode : 1;   // Is this text object in edit mode?
@@ -272,7 +267,6 @@ private:
     SVX_DLLPRIVATE void ImpRegisterLink();
     SVX_DLLPRIVATE void ImpDeregisterLink();
     SVX_DLLPRIVATE ImpSdrObjTextLinkUserData* GetLinkUserData() const;
-//  void ImpCheckItemSetChanges(const SfxItemSet& rAttr);
 
     /** Appends the style family to a provided style name */
     static void AppendFamilyToStyleName(OUString& styleName, SfxStyleFamily family);
@@ -293,7 +287,7 @@ protected:
     void SetTextSizeDirty() { bTextSizeDirty=true; }
 
     // rAnchorRect is InOut-Parameter!
-    void ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle& rAnchorRect, bool bLineWidth ) const;
+    void ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle const & rAnchorRect, bool bLineWidth ) const;
 
     virtual SdrObjGeoData* NewGeoData() const override;
     virtual void SaveGeoData(SdrObjGeoData& rGeo) const override;
@@ -306,13 +300,21 @@ protected:
     virtual void AdaptTextMinSize();
 
     // constructors for labeled graphical objects
-    SdrTextObj();
-    SdrTextObj(const tools::Rectangle& rNewRect);
+    SdrTextObj(SdrModel& rSdrModel);
+    SdrTextObj(
+        SdrModel& rSdrModel,
+        const tools::Rectangle& rNewRect);
 
     // constructors for text frames
-    SdrTextObj(SdrObjKind eNewTextKind);
-    SdrTextObj(SdrObjKind eNewTextKind, const tools::Rectangle& rNewRect);
+    SdrTextObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewTextKind);
+    SdrTextObj(
+        SdrModel& rSdrModel,
+        SdrObjKind eNewTextKind,
+        const tools::Rectangle& rNewRect);
 
+    // protected destructor
     virtual ~SdrTextObj() override;
 
 public:
@@ -434,7 +436,6 @@ public:
     SdrTextAniDirection GetTextAniDirection() const;
 
     virtual void SetPage(SdrPage* pNewPage) override;
-    virtual void SetModel(SdrModel* pNewModel) override;
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
 
@@ -442,7 +443,7 @@ public:
     virtual void TakeUnrotatedSnapRect(tools::Rectangle& rRect) const;
     virtual OUString TakeObjNameSingul() const override;
     virtual OUString TakeObjNamePlural() const override;
-    virtual SdrTextObj* Clone() const override;
+    virtual SdrTextObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrTextObj& operator=(const SdrTextObj& rObj);
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
     virtual basegfx::B2DPolyPolygon TakeContour() const override;
@@ -479,9 +480,10 @@ public:
     virtual void NbcShear(const Point& rRef, long nAngle, double tn, bool bVShear) override;
 
     virtual bool HasTextEdit() const override;
-    virtual bool BegTextEdit(SdrOutliner& rOutl) override;
+    // returns true if TextEditMode started
+    virtual bool BegTextEdit(SdrOutliner& rOutl);
     virtual void TakeTextEditArea(Size* pPaperMin, Size* pPaperMax, tools::Rectangle* pViewInit, tools::Rectangle* pViewMin) const;
-    virtual void EndTextEdit(SdrOutliner& rOutl) override;
+    virtual void EndTextEdit(SdrOutliner& rOutl);
     virtual EEAnchorMode GetOutlinerViewAnchorMode() const;
 
     virtual void NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject) override;
@@ -493,7 +495,7 @@ public:
     virtual void ReformatText() override;
 
     virtual bool CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_uInt16 nPos,
-        bool bEdit, Color*& rpTxtColor, Color*& rpFldColor, OUString& rRet) const;
+        bool bEdit, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor, OUString& rRet) const;
 
     virtual SdrObject* DoConvertToPolyObj(bool bBezier, bool bAddText) const override;
 

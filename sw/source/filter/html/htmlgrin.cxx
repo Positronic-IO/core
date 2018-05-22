@@ -306,6 +306,7 @@ void SwHTMLParser::InsertImage()
     // and now analyze
     OUString sAltNm, aId, aClass, aStyle, aMap, sHTMLGrfName;
     OUString sGrfNm;
+    OUString aGraphicData;
     sal_Int16 eVertOri = text::VertOrientation::TOP;
     sal_Int16 eHoriOri = text::HoriOrientation::NONE;
     bool bWidthProvided=false, bHeightProvided=false;
@@ -316,6 +317,7 @@ void SwHTMLParser::InsertImage()
     bool bIsMap = false;
     bool bPrcWidth = false;
     bool bPrcHeight = false;
+    OUString sWidthAsString, sHeightAsString;
     SvxMacroItem aMacroItem(RES_FRMMACRO);
 
     ScriptType eDfltScriptType;
@@ -344,6 +346,11 @@ void SwHTMLParser::InsertImage()
                 if( !InternalImgToPrivateURL(sGrfNm) )
                     sGrfNm = INetURLObject::GetAbsURL( m_sBaseURL, sGrfNm );
                 break;
+            case HtmlOptionId::DATA:
+                aGraphicData = rOption.GetString();
+                if (!InternalImgToPrivateURL(aGraphicData))
+                    aGraphicData = INetURLObject::GetAbsURL(m_sBaseURL, aGraphicData);
+                break;
             case HtmlOptionId::ALIGN:
                 eVertOri =
                     rOption.GetEnum( aHTMLImgVAlignTable,
@@ -354,18 +361,23 @@ void SwHTMLParser::InsertImage()
             case HtmlOptionId::WIDTH:
                 // for now only store as pixel value!
                 nWidth = rOption.GetNumber();
-                bPrcWidth = (rOption.GetString().indexOf('%') != -1);
+                sWidthAsString = rOption.GetString();
+                bPrcWidth = (sWidthAsString.indexOf('%') != -1);
                 if( bPrcWidth && nWidth>100 )
                     nWidth = 100;
-                bWidthProvided = true;
+                // width|height = "auto" means viewing app decides the size
+                // i.e. proceed as if no particular size was provided
+                bWidthProvided = (sWidthAsString != "auto");
                 break;
             case HtmlOptionId::HEIGHT:
                 // for now only store as pixel value!
                 nHeight = rOption.GetNumber();
-                bPrcHeight = (rOption.GetString().indexOf('%') != -1);
+                sHeightAsString = rOption.GetString();
+                bPrcHeight = (sHeightAsString.indexOf('%') != -1);
                 if( bPrcHeight && nHeight>100 )
                     nHeight = 100;
-                bHeightProvided = true;
+                // the same as above w/ HtmlOptionId::WIDTH
+                bHeightProvided = (sHeightAsString != "auto");
                 break;
             case HtmlOptionId::VSPACE:
                 nVSpace = rOption.GetNumber();
@@ -427,6 +439,9 @@ IMAGE_SETEVENT:
         }
     }
 
+    if (sGrfNm.isEmpty() && !aGraphicData.isEmpty())
+        sGrfNm = aGraphicData;
+
     if( sGrfNm.isEmpty() )
         return;
 
@@ -465,12 +480,21 @@ IMAGE_SETEVENT:
         std::unique_ptr<SvMemoryStream> const pStream(aGraphicURL.getData());
         if (pStream)
         {
-            if (ERRCODE_NONE == GraphicFilter::GetGraphicFilter().ImportGraphic(aGraphic, "", *pStream))
+            GraphicFilter& rFilter = GraphicFilter::GetGraphicFilter();
+            aGraphic = rFilter.ImportUnloadedGraphic(*pStream);
                 sGrfNm.clear();
+
+            if (!sGrfNm.isEmpty())
+            {
+                if (ERRCODE_NONE == rFilter.ImportGraphic(aGraphic, "", *pStream))
+                    sGrfNm.clear();
+            }
         }
     }
-    else if (m_sBaseURL.isEmpty()) // sBaseURL is empty if the source is clipboard
+    else if (m_sBaseURL.isEmpty() || !aGraphicData.isEmpty())
     {
+        // sBaseURL is empty if the source is clipboard
+        // aGraphicData is non-empty for <object data="..."> -> not a linked graphic.
         if (ERRCODE_NONE == GraphicFilter::GetGraphicFilter().ImportGraphic(aGraphic, aGraphicURL))
             sGrfNm.clear();
     }
@@ -480,7 +504,7 @@ IMAGE_SETEVENT:
         aGraphic.SetDefaultType();
     }
 
-    if (!bHeightProvided || !bWidthProvided)
+    if (!nHeight || !nWidth)
     {
         Size aPixelSize = aGraphic.GetSizePixel(Application::GetDefaultDevice());
         if (!bWidthProvided)
@@ -550,8 +574,18 @@ IMAGE_SETEVENT:
     Size aTwipSz( bPrcWidth ? 0 : nWidth, bPrcHeight ? 0 : nHeight );
     if( (aTwipSz.Width() || aTwipSz.Height()) && Application::GetDefaultDevice() )
     {
-        aTwipSz = Application::GetDefaultDevice()
+        if (bWidthProvided || bHeightProvided || // attributes imply pixel!
+            aGraphic.GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel)
+        {
+            aTwipSz = Application::GetDefaultDevice()
                     ->PixelToLogic( aTwipSz, MapMode( MapUnit::MapTwip ) );
+        }
+        else
+        {   // some bitmaps may have a size in metric units (e.g. PNG); use that
+            assert(aGraphic.GetPrefMapMode().GetMapUnit() < MapUnit::MapPixel);
+            aTwipSz = OutputDevice::LogicToLogic(aGraphic.GetPrefSize(),
+                    aGraphic.GetPrefMapMode(), MapMode(MapUnit::MapTwip));
+        }
     }
 
     // convert CSS1 size to "normal" size
@@ -592,6 +626,20 @@ IMAGE_SETEVENT:
     bool bRequestGrfNow = false;
     bool bSetScaleImageMap = false;
     sal_uInt8 nPrcWidth = 0, nPrcHeight = 0;
+
+    if (!nWidth || !nHeight)
+    {
+        GraphicDescriptor aDescriptor(aGraphicURL);
+        if (aDescriptor.Detect(/*bExtendedInfo=*/true))
+        {
+            // Try to use size info from the image header before defaulting to
+            // HTML_DFLT_IMG_WIDTH/HEIGHT.
+            aTwipSz = Application::GetDefaultDevice()->PixelToLogic(aDescriptor.GetSizePixel(),
+                                                                    MapMode(MapUnit::MapTwip));
+            nWidth = aTwipSz.getWidth();
+            nHeight = aTwipSz.getHeight();
+        }
+    }
 
     if( !nWidth || !nHeight )
     {

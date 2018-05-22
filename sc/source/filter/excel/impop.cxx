@@ -30,11 +30,12 @@
 #include <editeng/editobj.hxx>
 #include <editeng/editstat.hxx>
 #include <editeng/flditem.hxx>
-#include <svx/pageitem.hxx>
 #include <editeng/colritem.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/docfile.hxx>
+#include <svx/pageitem.hxx>
 #include <svl/zforlist.hxx>
+#include <unotools/configmgr.hxx>
 
 #include <sfx2/objsh.hxx>
 #include <tools/urlobj.hxx>
@@ -47,6 +48,7 @@
 #include <patattr.hxx>
 #include <attrib.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <global.hxx>
 #include <markdata.hxx>
 #include <olinetab.hxx>
@@ -97,11 +99,6 @@ ImportTyp::ImportTyp( ScDocument* pDoc, rtl_TextEncoding eQ )
 
 ImportTyp::~ImportTyp()
 {
-}
-
-ErrCode ImportTyp::Read()
-{
-    return SCERR_IMPORT_INTERNAL;
 }
 
 ImportExcel::ImportExcel( XclImpRootData& rImpData, SvStream& rStrm ):
@@ -1084,6 +1081,12 @@ void ImportExcel::TableOp()
     nInpRow2 = aIn.ReaduInt16();
     nInpCol2 = aIn.ReaduInt16();
 
+    if (utl::ConfigManager::IsFuzzing())
+    {
+        //shrink to smallish arbitrary value to not timeout
+        nLastRow = std::min<sal_uInt16>(nLastRow, MAXROW_30);
+    }
+
     if( ValidColRow( nLastCol, nLastRow ) )
     {
         if( nFirstCol && nFirstRow )
@@ -1254,7 +1257,7 @@ void ImportExcel::PostDocLoad()
     /*  Set automatic page numbering in Default page style (default is "page number = 1").
         Otherwise hidden tables (i.e. for scenarios) which have Default page style will
         break automatic page numbering. */
-    if( SfxStyleSheetBase* pStyleSheet = GetStyleSheetPool().Find( ScGlobal::GetRscString( STR_STYLENAME_STANDARD ), SfxStyleFamily::Page ) )
+    if( SfxStyleSheetBase* pStyleSheet = GetStyleSheetPool().Find( ScResId( STR_STYLENAME_STANDARD ), SfxStyleFamily::Page ) )
         pStyleSheet->GetItemSet().Put( SfxUInt16Item( ATTR_PAGE_FIRSTPAGENO, 0 ) );
 
     // outlines for all sheets, sets hidden rows and columns (#i11776# after filtered ranges)
@@ -1348,13 +1351,13 @@ void ImportExcel::PostDocLoad()
                 {
                     if( p->aStart.Col() == 0 && p->aEnd.Col() == MAXCOL && bRowVirgin )
                     {
-                        pD->SetRepeatRowRange( n, p );
+                        pD->SetRepeatRowRange( n, std::unique_ptr<ScRange>(new ScRange(*p)) );
                         bRowVirgin = false;
                     }
 
                     if( p->aStart.Row() == 0 && p->aEnd.Row() == MAXROW && bColVirgin )
                     {
-                        pD->SetRepeatColRange( n, p );
+                        pD->SetRepeatColRange( n, std::unique_ptr<ScRange>(new ScRange(*p)) );
                         bColVirgin = false;
                     }
 

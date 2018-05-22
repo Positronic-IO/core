@@ -26,7 +26,7 @@
 #include <vcl/window.hxx>
 
 #include <salgdi.hxx>
-#include <impbmp.hxx>
+#include <salbmp.hxx>
 #include <outdata.hxx>
 
 void OutputDevice::DrawMask( const Point& rDestPt,
@@ -108,7 +108,7 @@ void OutputDevice::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
 {
     assert(!is_double_buffered_window());
 
-    const std::shared_ptr<ImpBitmap>& xImpBmp = rMask.ImplGetImpBitmap();
+    const std::shared_ptr<SalBitmap>& xImpBmp = rMask.ImplGetSalBitmap();
     if (xImpBmp)
     {
         SalTwoRect aPosAry(rSrcPtPixel.X(), rSrcPtPixel.Y(), rSrcSizePixel.Width(), rSrcSizePixel.Height(),
@@ -117,7 +117,7 @@ void OutputDevice::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
                            ImplLogicHeightToDevicePixel(rDestSize.Height()));
 
         // we don't want to mirror via coordinates
-        const BmpMirrorFlags nMirrFlags = AdjustTwoRect( aPosAry, xImpBmp->ImplGetSize() );
+        const BmpMirrorFlags nMirrFlags = AdjustTwoRect( aPosAry, xImpBmp->GetSize() );
 
         // check if output is necessary
         if( aPosAry.mnSrcWidth && aPosAry.mnSrcHeight && aPosAry.mnDestWidth && aPosAry.mnDestHeight )
@@ -127,12 +127,11 @@ void OutputDevice::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
             {
                 Bitmap aTmp( rMask );
                 aTmp.Mirror( nMirrFlags );
-                mpGraphics->DrawMask( aPosAry, *aTmp.ImplGetImpBitmap()->ImplGetSalBitmap(),
-                                      ImplColorToSal( rMaskColor ) , this);
+                mpGraphics->DrawMask( aPosAry, *aTmp.ImplGetSalBitmap(),
+                                      rMaskColor, this);
             }
             else
-                mpGraphics->DrawMask( aPosAry, *xImpBmp->ImplGetSalBitmap(),
-                                      ImplColorToSal( rMaskColor ), this );
+                mpGraphics->DrawMask( aPosAry, *xImpBmp, rMaskColor, this );
 
         }
     }

@@ -520,7 +520,9 @@ public:
             if (!pMasterPage)
                 continue;
 
-            SdrRectObj* pObject = new SdrRectObj(OBJ_TEXT);
+            SdrRectObj* pObject = new SdrRectObj(
+                *m_rDrawViewShell.GetDoc(), // TTTT should be reference
+                OBJ_TEXT);
             pObject->SetMergedItem(makeSdrTextAutoGrowWidthItem(true));
             pObject->SetOutlinerParaObject(pOutliner->CreateParaObject());
             pMasterPage->InsertObject(pObject);
@@ -786,7 +788,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 DBG_ASSERT(pFact, "Dialog creation failed!");
-                ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog( GetActiveWindow(), aPageName, aDescr ));
+                ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aPageName, aDescr));
                 DBG_ASSERT(aNameDlg, "Dialog creation failed!");
                 aNameDlg->SetText( aTitle );
                 aNameDlg->SetCheckNameHdl( LINK( this, DrawViewShell, RenameSlideHdl ), true );
@@ -908,13 +910,11 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( pArgs )
             {
-                SvxZoomType eZT = static_cast<const SvxZoomItem&>( pArgs->
-                                            Get( SID_ATTR_ZOOM ) ).GetType();
+                SvxZoomType eZT = pArgs->Get( SID_ATTR_ZOOM ).GetType();
                 switch( eZT )
                 {
                     case SvxZoomType::PERCENT:
-                        SetZoom( static_cast<long>(static_cast<const SvxZoomItem&>( pArgs->
-                                            Get( SID_ATTR_ZOOM ) ).GetValue()) );
+                        SetZoom( static_cast<long>( pArgs->Get( SID_ATTR_ZOOM ).GetValue()) );
                         break;
 
                     case SvxZoomType::OPTIMAL:
@@ -940,7 +940,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             else
             {
                 // open zoom dialog
-                SetCurrentFunction( FuScale::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+                SetCurrentFunction( FuScale::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             }
             Cancel();
         }
@@ -956,8 +956,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -973,7 +972,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 {
                     if( mpDrawView->IsVectorizeAllowed() )
                     {
-                        SetCurrentFunction( FuVectorize::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+                        SetCurrentFunction( FuVectorize::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
                     }
                     else
                     {
@@ -1004,8 +1003,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -1035,8 +1033,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected(true,true,true) )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -1090,7 +1087,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 }
 
                 // create new object
-                SdrGrafObj* pGraphicObj = new SdrGrafObj (aGraphic);
+                SdrGrafObj* pGraphicObj = new SdrGrafObj(
+                    *GetDoc(),
+                    aGraphic);
 
                 // get some necessary info and ensure it
                 const SdrMarkList& rMarkList(mpDrawView->GetMarkedObjectList());
@@ -1291,7 +1290,6 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 const SdrGrafObj* pObj = dynamic_cast<const SdrGrafObj*>(rMarkList.GetMark(0)->GetMarkedSdrObj());
                 if (pObj && pObj->GetGraphicType() == GraphicType::Bitmap)
                 {
-                    vcl::Window* pWin = GetActiveWindow();
                     weld::Window* pFrame = GetFrameWeld();
                     GraphicAttr aGraphicAttr = pObj->GetGraphicAttr();
                     short nState = RET_CANCEL;
@@ -1309,12 +1307,12 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
                     if (nState == RET_YES)
                     {
-                        GraphicHelper::ExportGraphic(pWin, pObj->GetTransformedGraphic(), "");
+                        GraphicHelper::ExportGraphic(pFrame, pObj->GetTransformedGraphic(), "");
                     }
                     else if (nState == RET_NO)
                     {
                         GraphicObject aGraphicObject(pObj->GetGraphicObject());
-                        GraphicHelper::ExportGraphic(pWin, aGraphicObject.GetGraphic(), "");
+                        GraphicHelper::ExportGraphic(pFrame, aGraphicObject.GetGraphic(), "");
                     }
                 }
             }
@@ -1334,7 +1332,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     GraphicObject aGraphicObject( static_cast<SdrGrafObj*>(pObj)->GetGraphicObject() );
                     m_ExternalEdits.push_back(
                         o3tl::make_unique<SdrExternalToolEdit>(
-                            mpDrawView, pObj));
+                            mpDrawView.get(), pObj));
                     m_ExternalEdits.back()->Edit( &aGraphicObject );
                 }
             }
@@ -1353,10 +1351,10 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 if( pObj && dynamic_cast< const SdrGrafObj *>( pObj ) !=  nullptr && static_cast<SdrGrafObj*>(pObj)->GetGraphicType() == GraphicType::Bitmap )
                 {
                     SdrGrafObj* pGraphicObj = static_cast<SdrGrafObj*>(pObj);
-                    ScopedVclPtrInstance< CompressGraphicsDialog > dialog( GetParentWindow(), pGraphicObj, GetViewFrame()->GetBindings() );
-                    if ( dialog->Execute() == RET_OK )
+                    CompressGraphicsDialog dialog(GetFrameWeld(), pGraphicObj, GetViewFrame()->GetBindings() );
+                    if (dialog.run() == RET_OK)
                     {
-                        SdrGrafObj* pNewObject = dialog->GetCompressedSdrGrafObj();
+                        SdrGrafObj* pNewObject = dialog.GetCompressedSdrGrafObj();
                         SdrPageView* pPageView = mpDrawView->GetSdrPageView();
                         OUString aUndoString = mpDrawView->GetDescriptionOfMarkedObjects();
                         aUndoString += " Compress";
@@ -1373,36 +1371,42 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_ATTRIBUTES_LINE:  // BASIC
         {
-            SetCurrentFunction( FuLine::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
-            // Cancel() called directly in FuTransform::Create()
+            SetCurrentFunction( FuLine::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
+            if (rReq.GetArgs())
+                Cancel();
         }
         break;
 
         case SID_ATTRIBUTES_AREA:  // BASIC
         {
-            SetCurrentFunction( FuArea::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
-            // Cancel() called directly in FuTransform::Create()
+            SetCurrentFunction( FuArea::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
+            if (rReq.GetArgs())
+                Cancel();
         }
         break;
 
         case SID_ATTR_TRANSFORM:
         {
-            SetCurrentFunction( FuTransform::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
-            // Cancel() and Invalidate() called directly in FuTransform::Create()
+            SetCurrentFunction( FuTransform::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
+            if (rReq.GetArgs())
+            {
+                Invalidate(SID_RULER_OBJECT);
+                Cancel();
+            }
         }
         break;
 
         case SID_CHAR_DLG_EFFECT:
         case SID_CHAR_DLG:  // BASIC
         {
-            SetCurrentFunction( FuChar::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuChar::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
 
         case SID_PARA_DLG:
         {
-            SetCurrentFunction( FuParagraph::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuParagraph::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -1429,7 +1433,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case FN_SVX_SET_BULLET:
         case FN_SVX_SET_NUMBER:
         {
-            SetCurrentFunction( FuOutlineBullet::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuOutlineBullet::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -1443,21 +1447,21 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_INSERT_ZWSP:
         case SID_CHARMAP:
         {
-            SetCurrentFunction( FuBullet::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuBullet::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
 
         case SID_PRESENTATION_LAYOUT:
         {
-            SetCurrentFunction( FuPresentationLayout::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuPresentationLayout::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             Cancel();
         }
         break;
 
         case SID_PASTE_SPECIAL:
         {
-            SetCurrentFunction( FuInsertClipboard::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuInsertClipboard::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1466,7 +1470,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_CHANGE_PICTURE:
         case SID_INSERT_GRAPHIC:
         {
-            SetCurrentFunction( FuInsertGraphic::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq,
+            SetCurrentFunction( FuInsertGraphic::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq,
                                                          nSId == SID_CHANGE_PICTURE ) );
             Cancel();
             rReq.Ignore ();
@@ -1475,7 +1479,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_INSERT_AVMEDIA:
         {
-            SetCurrentFunction( FuInsertAVMedia::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuInsertAVMedia::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
 
             Cancel();
             rReq.Ignore ();
@@ -1488,12 +1492,12 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_INSERT_DIAGRAM:
         case SID_ATTR_TABLE:
         {
-            SetCurrentFunction( FuInsertOLE::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuInsertOLE::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             // Set the selection tool as the old one. This in particular important for the
             // zoom function, in which clicking without dragging zooms as well, and that
             // makes exiting the object editing mode impossible.
             if (dynamic_cast<FuSelection*>( GetOldFunction().get() ) == nullptr)
-                SetOldFunction( FuSelection::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+                SetOldFunction( FuSelection::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1552,8 +1556,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected(false) )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -1565,7 +1568,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     mpDrawView->SdrEndTextEdit();
                 }
 
-                SetCurrentFunction( FuCopy::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+                SetCurrentFunction( FuCopy::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             }
             Cancel();
             rReq.Ignore ();
@@ -1575,7 +1578,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_INSERTFILE:  // BASIC
         {
             Broadcast (ViewShellHint(ViewShellHint::HINT_COMPLEX_MODEL_CHANGE_START));
-            SetCurrentFunction( FuInsertFile::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuInsertFile::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Broadcast (ViewShellHint(ViewShellHint::HINT_COMPLEX_MODEL_CHANGE_END));
             Cancel();
             rReq.Done ();
@@ -1588,7 +1591,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_ATTR_PAGE:
         case SID_PAGESETUP:  // BASIC ??
         {
-            SetCurrentFunction( FuPage::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuPage::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore (); // we generate independent macros !!
         }
@@ -1597,7 +1600,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_BEFORE_OBJ:
         case SID_BEHIND_OBJ:
         {
-            SetCurrentFunction( FuDisplayOrder::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuDisplayOrder::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             rReq.Done();
             // finishes itself, no Cancel() needed!
         }
@@ -1613,14 +1616,14 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_ANIMATION_EFFECTS:
         {
-            SetCurrentFunction( FuObjectAnimationParameters::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuObjectAnimationParameters::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             Cancel();
         }
         break;
 
         case SID_LINEEND_POLYGON:
         {
-            SetCurrentFunction( FuLineEnd::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuLineEnd::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -1631,14 +1634,14 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             SAL_FALLTHROUGH;
         case SID_SET_SNAPITEM:
         {
-            SetCurrentFunction( FuSnapLine::Create(this, GetActiveWindow(), mpDrawView, GetDoc(), rReq) );
+            SetCurrentFunction( FuSnapLine::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq) );
             Cancel();
         }
         break;
 
         case SID_MANAGE_LINKS:
         {
-            SetCurrentFunction( FuLink::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuLink::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1646,7 +1649,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_THESAURUS:
         {
-            SetCurrentFunction( FuThesaurus::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuThesaurus::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1654,7 +1657,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_TEXTATTR_DLG:
         {
-            SetCurrentFunction( FuTextAttrDlg::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuTextAttrDlg::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1662,7 +1665,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_MEASURE_DLG:
         {
-            SetCurrentFunction( FuMeasureDlg::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuMeasureDlg::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Ignore ();
         }
@@ -1670,7 +1673,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_CONNECTION_DLG:
         {
-            SetCurrentFunction( FuConnectionDlg::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuConnectionDlg::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
             rReq.Done();
         }
@@ -1734,8 +1737,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if( !bDone )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
 #ifndef UNX
                                                               SdResId(STR_TWAIN_NO_SOURCE)
@@ -1760,7 +1762,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_POLYGON_MORPHING:
         {
-            SetCurrentFunction( FuMorph::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuMorph::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -1796,7 +1798,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 aNewAttr.Put( makeSdAttrLayerThisPage() );
 
                 SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSdInsertLayerDlg> pDlg(pFact ? pFact->CreateSdInsertLayerDlg(GetActiveWindow(), aNewAttr, true, SdResId(STR_INSERTLAYER)) : nullptr);
+                vcl::Window* pWin = GetActiveWindow();
+                ScopedVclPtr<AbstractSdInsertLayerDlg> pDlg(pFact ? pFact->CreateSdInsertLayerDlg(pWin ? pWin->GetFrameWeld() : nullptr, aNewAttr, true, SdResId(STR_INSERTLAYER)) : nullptr);
                 if( pDlg )
                 {
                     pDlg->SetHelpId( SD_MOD()->GetSlotPool()->GetSlot( SID_INSERTLAYER )->GetCommand() );
@@ -1812,8 +1815,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                             || aLayerName.isEmpty() )
                         {
                             // name already exists
-                            vcl::Window* pWin = GetParentWindow();
-                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
                                                                        VclMessageType::Warning, VclButtonsType::Ok,
                                                                        SdResId(STR_WARN_NAME_DUPLICATE)));
                             xWarn->run();
@@ -1964,7 +1966,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 aNewAttr.Put( makeSdAttrLayerThisPage() );
 
                 SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSdInsertLayerDlg> pDlg(pFact ? pFact->CreateSdInsertLayerDlg(GetActiveWindow(), aNewAttr, bDelete, SdResId(STR_MODIFYLAYER)) : nullptr);
+                vcl::Window* pWin = GetActiveWindow();
+                ScopedVclPtr<AbstractSdInsertLayerDlg> pDlg(pFact ? pFact->CreateSdInsertLayerDlg(pWin ? pWin->GetFrameWeld() : nullptr, aNewAttr, bDelete, SdResId(STR_MODIFYLAYER)) : nullptr);
                 if( pDlg )
                 {
                     pDlg->SetHelpId( SD_MOD()->GetSlotPool()->GetSlot( SID_MODIFYLAYER )->GetCommand() );
@@ -1981,8 +1984,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                              aLayerName != aOldLayerName) || aLayerName.isEmpty() )
                         {
                             // name already exists
-                            vcl::Window* pWin = GetParentWindow();
-                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                            std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(GetFrameWeld(),
                                                                        VclMessageType::Warning, VclButtonsType::Ok,
                                                                        SdResId(STR_WARN_NAME_DUPLICATE)));
                             xWarn->run();
@@ -2139,7 +2141,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if (pReqArgs)
             {
                 const SvxHyperlinkItem* pHLItem =
-                    static_cast<const SvxHyperlinkItem*>( &pReqArgs->Get(SID_HYPERLINK_SETLINK) );
+                    &pReqArgs->Get(SID_HYPERLINK_SETLINK);
 
                 if (pHLItem->GetInsertMode() == HLINK_FIELD)
                 {
@@ -2343,7 +2345,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 pOutl->QuickInsertField( *pFieldItem, ESelection() );
                 OutlinerParaObject* pOutlParaObject = pOutl->CreateParaObject();
 
-                SdrRectObj* pRectObj = new SdrRectObj( OBJ_TEXT );
+                SdrRectObj* pRectObj = new SdrRectObj(
+                    *GetDoc(),
+                    OBJ_TEXT);
                 pRectObj->SetMergedItem(makeSdrTextAutoGrowWidthItem(true));
 
                 pOutl->UpdateFields();
@@ -2388,7 +2392,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 {
                     // Dialog...
                     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-                    ScopedVclPtr<AbstractSdModifyFieldDlg> pDlg(pFact ? pFact->CreateSdModifyFieldDlg(GetActiveWindow(), pFldItem->GetField(), pOLV->GetAttribs() ) : nullptr);
+                    vcl::Window* pWin = GetActiveWindow();
+                    ScopedVclPtr<AbstractSdModifyFieldDlg> pDlg(pFact ? pFact->CreateSdModifyFieldDlg(pWin ? pWin->GetFrameWeld() : nullptr, pFldItem->GetField(), pOLV->GetAttribs() ) : nullptr);
                     if( pDlg && pDlg->Execute() == RET_OK )
                     {
                         // To make a correct SetAttribs() call at the utlinerView
@@ -2452,7 +2457,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             }
             catch( css::uno::RuntimeException& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sd.view");
             }
 
             Cancel();
@@ -2464,8 +2469,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected( true, true, true ) )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2500,7 +2504,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 OSL_ENSURE(pFact, "Dialog creation failed!");
-                ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(aName));
+                ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetFrameWeld(), aName));
                 OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                 pDlg->SetCheckNameHdl(LINK(this, DrawViewShell, NameObjectHdl));
@@ -2533,7 +2537,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 OSL_ENSURE(pFact, "Dialog creation failed!");
-                ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(aTitle, aDescription));
+                ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
+                            GetFrameWeld(), aTitle, aDescription));
                 OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                 if(RET_OK == pDlg->Execute())
@@ -2586,8 +2591,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2606,8 +2610,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2629,8 +2632,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2653,8 +2655,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2677,8 +2678,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2722,8 +2722,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -2799,7 +2798,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
                     if( pFact )
                     {
-                        ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateBreakDlg(GetActiveWindow(), mpDrawView, GetDocSh(), nCount, static_cast<sal_uLong>(nCnt) ));
+                        ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateBreakDlg(GetFrameWeld(), mpDrawView.get(), GetDocSh(), nCount, static_cast<sal_uLong>(nCnt) ));
                         if( pDlg )
                         {
                             pDlg->Execute();
@@ -2817,8 +2816,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( mpDrawView->IsPresObjSelected() )
             {
-                ::sd::Window* pWindow = GetActiveWindow();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWindow ? pWindow->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               SdResId(STR_ACTION_NOTPOSSIBLE)));
                 xInfoBox->run();
@@ -3001,7 +2999,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
             if( rReq.GetArgs() )
             {
-                SetCurrentFunction( FuTemplate::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+                SetCurrentFunction( FuTemplate::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
                 if( rReq.GetSlot() == SID_STYLE_APPLY )
                     GetViewFrame()->GetBindings().Invalidate( SID_STYLE_APPLY );
                 Cancel();
@@ -3100,7 +3098,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_EXTRUSION_LIGHTING_FLOATER:
         case SID_EXTRUSION_SURFACE_FLOATER:
         case SID_EXTRUSION_DEPTH_DIALOG:
-            svx::ExtrusionBar::execute( mpDrawView, rReq, GetViewFrame()->GetBindings() );
+            svx::ExtrusionBar::execute( mpDrawView.get(), rReq, GetViewFrame()->GetBindings() );
             Cancel();
             rReq.Ignore ();
             break;
@@ -3115,7 +3113,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_FONTWORK_CHARACTER_SPACING_FLOATER:
         case SID_FONTWORK_ALIGNMENT_FLOATER:
         case SID_FONTWORK_CHARACTER_SPACING_DIALOG:
-            svx::FontworkBar::execute( mpDrawView, rReq, GetViewFrame()->GetBindings() );
+            svx::FontworkBar::execute( mpDrawView.get(), rReq, GetViewFrame()->GetBindings() );
             Cancel();
             rReq.Ignore ();
             break;
@@ -3221,7 +3219,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_PRESENTATION_DLG:
         {
-            SetCurrentFunction( FuSlideShowDlg::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuSlideShowDlg::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -3242,14 +3240,14 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
 
         case SID_CUSTOMSHOW_DLG:
         {
-            SetCurrentFunction( FuCustomShowDlg::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuCustomShowDlg::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
 
         case SID_EXPAND_PAGE:
         {
-            SetCurrentFunction( FuExpandPage::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuExpandPage::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -3257,7 +3255,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         case SID_SUMMARY_PAGE:
         {
             mpDrawView->SdrEndTextEdit();
-            SetCurrentFunction( FuSummaryPage::Create( this, GetActiveWindow(), mpDrawView, GetDoc(), rReq ) );
+            SetCurrentFunction( FuSummaryPage::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
             Cancel();
         }
         break;
@@ -3323,8 +3321,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
             if (pFact)
             {
+                vcl::Window* pWin = GetActiveWindow();
                 ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSdPhotoAlbumDialog(
-                    GetActiveWindow(),
+                    pWin ? pWin->GetFrameWeld() : nullptr,
                     GetDoc()));
 
                 pDlg->Execute();

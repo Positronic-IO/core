@@ -34,7 +34,6 @@
 #include <com/sun/star/sdbc/XDatabaseMetaData2.hpp>
 
 #include <comphelper/listenernotification.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -152,7 +151,7 @@ namespace connectivity { namespace hsqldb
                 }
                 catch(const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("connectivity.hsqldb");
                 }
             }
 
@@ -161,7 +160,7 @@ namespace connectivity { namespace hsqldb
         }
         catch(const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("connectivity.hsqldb");
         }
    }
 
@@ -256,7 +255,7 @@ namespace connectivity { namespace hsqldb
         {
             // that's a serious error in impl_getTableContainer_throw, or hasByName, however, we're only
             // allowed to throw an IllegalArgumentException ourself
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("connectivity.hsqldb");
         }
 
         if ( !bDoesExist )
@@ -301,7 +300,7 @@ namespace connectivity { namespace hsqldb
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("connectivity.hsqldb");
         }
 
         return bIsTextTable;
@@ -336,7 +335,7 @@ namespace connectivity { namespace hsqldb
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("connectivity.hsqldb");
         }
         return xGraphic;
     }

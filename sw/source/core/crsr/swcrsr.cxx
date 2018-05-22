@@ -20,6 +20,7 @@
 #include <hintids.hxx>
 #include <editeng/protitem.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <unotools/charclass.hxx>
 #include <svl/ctloptions.hxx>
 #include <swmodule.hxx>
@@ -44,7 +45,6 @@
 #include <viewsh.hxx>
 #include <frmatr.hxx>
 #include <breakit.hxx>
-#include <vcl/msgbox.hxx>
 #include <mdiexp.hxx>
 #include <strings.hrc>
 #include <redline.hxx>
@@ -116,7 +116,6 @@ struct PercentHdl
 
 SwCursor::SwCursor( const SwPosition &rPos, SwPaM* pRing )
     : SwPaM( rPos, pRing )
-    , m_pSavePos(nullptr)
     , m_nRowSpanOffset(0)
     , m_nCursorBidiLevel(0)
     , m_bColumnSelection(false)
@@ -126,7 +125,6 @@ SwCursor::SwCursor( const SwPosition &rPos, SwPaM* pRing )
 // @@@ semantic: no copy ctor.
 SwCursor::SwCursor(SwCursor const& rCpy, SwPaM *const pRing)
     : SwPaM( rCpy, pRing )
-    , m_pSavePos(nullptr)
     , m_nRowSpanOffset(rCpy.m_nRowSpanOffset)
     , m_nCursorBidiLevel(rCpy.m_nCursorBidiLevel)
     , m_bColumnSelection(rCpy.m_bColumnSelection)
@@ -135,12 +133,6 @@ SwCursor::SwCursor(SwCursor const& rCpy, SwPaM *const pRing)
 
 SwCursor::~SwCursor()
 {
-    while( m_pSavePos )
-    {
-        SwCursor_SavePos* pNxt = m_pSavePos->pNext;
-        delete m_pSavePos;
-        m_pSavePos = pNxt;
-    }
 }
 
 SwCursor* SwCursor::Create( SwPaM* pRing ) const
@@ -167,18 +159,14 @@ bool SwCursor::IsSkipOverProtectSections() const
 // own SaveObjects if needed and validate them in the virtual check routines.
 void SwCursor::SaveState()
 {
-    SwCursor_SavePos* pNew = new SwCursor_SavePos( *this );
-    pNew->pNext = m_pSavePos;
-    m_pSavePos = pNew;
+    m_vSavePos.emplace_back( *this );
 }
 
 void SwCursor::RestoreState()
 {
-    if (m_pSavePos) // Robust
+    if (!m_vSavePos.empty()) // Robust
     {
-        SwCursor_SavePos* pDel = m_pSavePos;
-        m_pSavePos = m_pSavePos->pNext;
-        delete pDel;
+        m_vSavePos.pop_back();
     }
 }
 
@@ -237,7 +225,7 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
         return true;
     }
 
-    if (m_pSavePos->nNode != GetPoint()->nNode.GetIndex() &&
+    if (m_vSavePos.back().nNode != GetPoint()->nNode.GetIndex() &&
         // (1997) in UI-ReadOnly everything is allowed
         ( !pDoc->GetDocShell() || !pDoc->GetDocShell()->IsReadOnlyUI() ))
     {
@@ -257,8 +245,8 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
 
             // set cursor to new position:
             SwNodeIndex aIdx( rPtIdx );
-            sal_Int32 nContentPos = m_pSavePos->nContent;
-            bool bGoNxt = m_pSavePos->nNode < rPtIdx.GetIndex();
+            sal_Int32 nContentPos = m_vSavePos.back().nContent;
+            bool bGoNxt = m_vSavePos.back().nNode < rPtIdx.GetIndex();
             SwContentNode* pCNd = bGoNxt
                 ? rNds.GoNextSection( &rPtIdx, bSkipOverHiddenSections, bSkipOverProtectSections)
                 : SwNodes::GoPrevSection( &rPtIdx, bSkipOverHiddenSections, bSkipOverProtectSections);
@@ -274,7 +262,7 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
                 ::CheckNodesRange( rPtIdx, aIdx, true );
             if( !bValidNodesRange )
             {
-                rPtIdx = m_pSavePos->nNode;
+                rPtIdx = m_vSavePos.back().nNode;
                 if( nullptr == ( pCNd = rPtIdx.GetNode().GetContentNode() ) )
                 {
                     bIsValidPos = false;
@@ -345,7 +333,7 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
         {
             // skip to the next/prev valid paragraph with a layout
             SwNodeIndex& rPtIdx = GetPoint()->nNode;
-            bool bGoNxt = m_pSavePos->nNode < rPtIdx.GetIndex();
+            bool bGoNxt = m_vSavePos.back().nNode < rPtIdx.GetIndex();
             while( nullptr != ( pFrame = ( bGoNxt ? pFrame->GetNextContentFrame() : pFrame->GetPrevContentFrame() ))
                    && 0 == pFrame->getFrameArea().Height() )
                 ;
@@ -373,8 +361,8 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
                 const sal_Int32 nTmpPos = bGoNxt ? 0 : pCNd->Len();
                 GetPoint()->nContent.Assign( pCNd, nTmpPos );
 
-                if (rPtIdx.GetIndex() == m_pSavePos->nNode
-                    && nTmpPos == m_pSavePos->nContent)
+                if (rPtIdx.GetIndex() == m_vSavePos.back().nNode
+                    && nTmpPos == m_vSavePos.back().nContent)
                 {
                     // new position equals saved one
                     // --> trigger restore of saved pos by setting <pFrame> to NULL - see below
@@ -435,11 +423,11 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
         {
             const sal_uLong nRefNodeIdx =
                 ( SwCursorSelOverFlags::Toggle & eFlags )
-                ? m_pSavePos->nNode
+                ? m_vSavePos.back().nNode
                 : GetMark()->nNode.GetIndex();
             const sal_Int32 nRefContentIdx =
                 ( SwCursorSelOverFlags::Toggle & eFlags )
-                ? m_pSavePos->nContent
+                ? m_vSavePos.back().nContent
                 : GetMark()->nContent.GetIndex();
             const bool bIsForwardSelection =
                 nRefNodeIdx < GetPoint()->nNode.GetIndex()
@@ -485,7 +473,7 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
     {
         bool bSelTop = GetPoint()->nNode.GetIndex() <
             ((SwCursorSelOverFlags::Toggle & eFlags)
-                 ? m_pSavePos->nNode : GetMark()->nNode.GetIndex());
+                 ? m_vSavePos.back().nNode : GetMark()->nNode.GetIndex());
 
         do { // loop for table after table
             sal_uLong nSEIdx = pPtNd->EndOfSectionIndex();
@@ -552,7 +540,7 @@ bool SwCursor::IsInProtectTable( bool bMove, bool bChgCursor )
         return false;
 
     // Current position == last save position?
-    if (m_pSavePos->nNode == GetPoint()->nNode.GetIndex())
+    if (m_vSavePos.back().nNode == GetPoint()->nNode.GetIndex())
         return false;
 
     // Check for covered cell:
@@ -587,7 +575,7 @@ bool SwCursor::IsInProtectTable( bool bMove, bool bChgCursor )
     }
 
     // We are in a protected table cell. Traverse top to bottom?
-    if (m_pSavePos->nNode < GetPoint()->nNode.GetIndex())
+    if (m_vSavePos.back().nNode < GetPoint()->nNode.GetIndex())
     {
         // search next valid box
         // if there is another StartNode after the EndNode of a cell then
@@ -2086,18 +2074,18 @@ void SwCursor::RestoreSavePos()
     // This method is not supposed to be used in cases when nodes may be
     // deleted; detect such cases, but do not crash (example: fdo#40831).
     sal_uLong uNodeCount = GetPoint()->nNode.GetNodes().Count();
-    OSL_ENSURE(!m_pSavePos || m_pSavePos->nNode < uNodeCount,
+    OSL_ENSURE(m_vSavePos.empty() || m_vSavePos.back().nNode < uNodeCount,
         "SwCursor::RestoreSavePos: invalid node: "
         "probably something was deleted; consider using SwUnoCursor instead");
-    if (m_pSavePos && m_pSavePos->nNode < uNodeCount)
+    if (!m_vSavePos.empty() && m_vSavePos.back().nNode < uNodeCount)
     {
-        GetPoint()->nNode = m_pSavePos->nNode;
+        GetPoint()->nNode = m_vSavePos.back().nNode;
 
         sal_Int32 nIdx = 0;
         if ( GetContentNode() )
         {
-            if (m_pSavePos->nContent <= GetContentNode()->Len())
-                nIdx = m_pSavePos->nContent;
+            if (m_vSavePos.back().nContent <= GetContentNode()->Len())
+                nIdx = m_vSavePos.back().nContent;
             else
             {
                 nIdx = GetContentNode()->Len();
@@ -2151,7 +2139,7 @@ lcl_SeekEntry(const SwSelBoxes& rTmp, SwStartNode const*const pSrch,
     return false;
 }
 
-SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pAktCursor )
+SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pCurrentCursor )
 {
     if (m_bChanged)
     {
@@ -2172,9 +2160,9 @@ SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pAktCursor )
         SwSelBoxes aTmp(m_SelectedBoxes);
 
         // compare old and new ones
-        SwNodes& rNds = pAktCursor->GetDoc()->GetNodes();
+        SwNodes& rNds = pCurrentCursor->GetDoc()->GetNodes();
         const SwStartNode* pSttNd;
-        SwPaM* pCur = pAktCursor;
+        SwPaM* pCur = pCurrentCursor;
         do {
             size_t nPos;
             bool bDel = false;
@@ -2214,12 +2202,12 @@ SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pAktCursor )
             {
                 SwPaM* pDel = pCur->GetPrev();
 
-                if( pDel == pAktCursor )
-                    pAktCursor->DeleteMark();
+                if( pDel == pCurrentCursor )
+                    pCurrentCursor->DeleteMark();
                 else
                     delete pDel;
             }
-        } while ( pAktCursor != pCur );
+        } while ( pCurrentCursor != pCur );
 
         for (size_t nPos = 0; nPos < aTmp.size(); ++nPos)
         {
@@ -2232,9 +2220,9 @@ SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pAktCursor )
             if( !pNd->IsContentNode() )
                 pNd = rNds.GoNextSection( &aIdx, true, false );
 
-            SwPaM *const pNew = (!pAktCursor->IsMultiSelection() && !pAktCursor->HasMark())
-                ? pAktCursor
-                : pAktCursor->Create( pAktCursor );
+            SwPaM *const pNew = (!pCurrentCursor->IsMultiSelection() && !pCurrentCursor->HasMark())
+                ? pCurrentCursor
+                : pCurrentCursor->Create( pCurrentCursor );
             pNew->GetPoint()->nNode = *pNd;
             pNew->GetPoint()->nContent.Assign( static_cast<SwContentNode*>(pNd), 0 );
             pNew->SetMark();
@@ -2247,7 +2235,7 @@ SwCursor* SwTableCursor::MakeBoxSels( SwCursor* pAktCursor )
             pPos->nContent.Assign(static_cast<SwContentNode*>(pNd), pNd ? static_cast<SwContentNode*>(pNd)->Len() : 0);
         }
     }
-    return pAktCursor;
+    return pCurrentCursor;
 }
 
 void SwTableCursor::InsertBox( const SwTableBox& rTableBox )

@@ -25,6 +25,7 @@
 #include <svx/deflt3d.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 #include <svx/svxdllapi.h>
+#include <memory>
 
 /*
  * Forward declarations
@@ -49,7 +50,7 @@ protected:
     E3dDragConstraint           eDragConstraint;
 
     // Migrate selections
-    Impl3DMirrorConstructOverlay*                   mpMirrorOverlay;
+    std::unique_ptr<Impl3DMirrorConstructOverlay> mpMirrorOverlay;
 
     void InitView();
 
@@ -63,7 +64,10 @@ protected:
     void BreakSingle3DObj(E3dObject* pObj);
 
 public:
-    E3dView(SdrModel* pModel, OutputDevice* pOut);
+    E3dView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
+
     virtual ~E3dView() override;
 
     // Output all marked Objects on the given OutputDevice.

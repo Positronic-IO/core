@@ -8,13 +8,13 @@
  */
 
 #include <config_features.h>
+#include <config_test.h>
 
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/view/XPrintable.hpp>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/propertyvalue.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <test/bootstrapfixture.hxx>
@@ -23,10 +23,9 @@
 #include <unotools/tempfile.hxx>
 #include <vcl/filter/pdfdocument.hxx>
 #include <tools/zcodec.hxx>
-#if HAVE_FEATURE_PDFIUM
 #include <fpdf_edit.h>
+#include <fpdf_text.h>
 #include <fpdfview.h>
-#endif
 
 using namespace ::com::sun::star;
 
@@ -38,15 +37,12 @@ class PdfExportTest : public test::BootstrapFixture, public unotest::MacrosTest
 {
     uno::Reference<uno::XComponentContext> mxComponentContext;
     uno::Reference<lang::XComponent> mxComponent;
-#if HAVE_FEATURE_PDFIUM
     FPDF_PAGE mpPdfPage = nullptr;
     FPDF_DOCUMENT mpPdfDocument = nullptr;
-#endif
 
 public:
     virtual void setUp() override;
     virtual void tearDown() override;
-#if HAVE_FEATURE_PDFIUM
     void load(const OUString& rFile, vcl::filter::PDFDocument& rDocument);
     /// Tests that a pdf image is roundtripped back to PDF as a vector format.
     void testTdf106059();
@@ -67,10 +63,27 @@ public:
     void testTdf99680();
     void testTdf99680_2();
     void testTdf108963();
+#if HAVE_MORE_FONTS
+    /// Test writing ToUnicode CMAP for LTR ligatures.
+    void testTdf115117_1();
+    /// Text extracting LTR text with ligatures.
+    void testTdf115117_1a();
+    /// Test writing ToUnicode CMAP for RTL ligatures.
+    void testTdf115117_2();
+    /// Test extracting RTL text with ligatures.
+    void testTdf115117_2a();
+    /// Test writing ToUnicode CMAP for doubly encoded glyphs.
+    void testTdf66597_1();
+    /// Test writing ActualText for RTL many to one glyph to Unicode mapping.
+    void testTdf66597_2();
+    /// Test writing ActualText for LTR many to one glyph to Unicode mapping.
+    void testTdf66597_3();
 #endif
+    void testTdf109143();
+    void testTdf105954();
+    void testTdf106702();
 
     CPPUNIT_TEST_SUITE(PdfExportTest);
-#if HAVE_FEATURE_PDFIUM
     CPPUNIT_TEST(testTdf106059);
     CPPUNIT_TEST(testTdf105461);
     CPPUNIT_TEST(testTdf107868);
@@ -85,7 +98,18 @@ public:
     CPPUNIT_TEST(testTdf99680);
     CPPUNIT_TEST(testTdf99680_2);
     CPPUNIT_TEST(testTdf108963);
+#if HAVE_MORE_FONTS
+    CPPUNIT_TEST(testTdf115117_1);
+    CPPUNIT_TEST(testTdf115117_1a);
+    CPPUNIT_TEST(testTdf115117_2);
+    CPPUNIT_TEST(testTdf115117_2a);
+    CPPUNIT_TEST(testTdf66597_1);
+    CPPUNIT_TEST(testTdf66597_2);
+    CPPUNIT_TEST(testTdf66597_3);
 #endif
+    CPPUNIT_TEST(testTdf109143);
+    CPPUNIT_TEST(testTdf105954);
+    CPPUNIT_TEST(testTdf106702);
     CPPUNIT_TEST_SUITE_END();
 };
 
@@ -96,31 +120,25 @@ void PdfExportTest::setUp()
     mxComponentContext.set(comphelper::getComponentContext(getMultiServiceFactory()));
     mxDesktop.set(frame::Desktop::create(mxComponentContext));
 
-#if HAVE_FEATURE_PDFIUM
     FPDF_LIBRARY_CONFIG config;
     config.version = 2;
     config.m_pUserFontPaths = nullptr;
     config.m_pIsolate = nullptr;
     config.m_v8EmbedderSlot = 0;
     FPDF_InitLibraryWithConfig(&config);
-#endif
 }
 
 void PdfExportTest::tearDown()
 {
-#if HAVE_FEATURE_PDFIUM
     FPDF_ClosePage(mpPdfPage);
     FPDF_CloseDocument(mpPdfDocument);
     FPDF_DestroyLibrary();
-#endif
 
     if (mxComponent.is())
         mxComponent->dispose();
 
     test::BootstrapFixture::tearDown();
 }
-
-#if HAVE_FEATURE_PDFIUM
 
 char const DATA_DIRECTORY[] = "/vcl/qa/cppunit/pdfexport/data/";
 
@@ -270,9 +288,10 @@ void PdfExportTest::testTdf105461()
 
 void PdfExportTest::testTdf107868()
 {
+    // No need to run it on Windows, since it would use GDI printing, and not trigger PDF export
+    // which is the intent of the test.
     // FIXME: Why does this fail on macOS?
-    // FIXME: Why does this fail when building 64bit?
-#if !defined MACOSX && !defined _WIN64
+#if !defined MACOSX && !defined _WIN32
     // Import the bugdoc and print to PDF.
     OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf107868.odt";
     mxComponent = loadFromDesktop(aURL);
@@ -407,6 +426,46 @@ void PdfExportTest::testTdf106206()
     it = std::search(pStart, pEnd, aInvalidImage.getStr(), aInvalidImage.getStr() + aInvalidImage.getLength());
     // This failed, object #0 was referenced.
     CPPUNIT_ASSERT(bool(it == pEnd));
+}
+
+void PdfExportTest::testTdf109143()
+{
+    // Import the bugdoc and export as PDF.
+    OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf109143.odt";
+    mxComponent = loadFromDesktop(aURL);
+    CPPUNIT_ASSERT(mxComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    // Parse the export result.
+    vcl::filter::PDFDocument aDocument;
+    SvFileStream aStream(aTempFile.GetURL(), StreamMode::READ);
+    CPPUNIT_ASSERT(aDocument.Read(aStream));
+
+    // The document has one page.
+    std::vector<vcl::filter::PDFObjectElement*> aPages = aDocument.GetPages();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aPages.size());
+
+    // Get access to the only image on the only page.
+    vcl::filter::PDFObjectElement* pResources = aPages[0]->LookupObject("Resources");
+    CPPUNIT_ASSERT(pResources);
+    auto pXObjects = dynamic_cast<vcl::filter::PDFDictionaryElement*>(pResources->Lookup("XObject"));
+    CPPUNIT_ASSERT(pXObjects);
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pXObjects->GetItems().size());
+    vcl::filter::PDFObjectElement* pXObject = pXObjects->LookupObject(pXObjects->GetItems().begin()->first);
+    CPPUNIT_ASSERT(pXObject);
+
+    // Make sure it's re-compressed.
+    auto pLength = dynamic_cast<vcl::filter::PDFNumberElement*>(pXObject->Lookup("Length"));
+    int nLength = pLength->GetValue();
+    // This failed: cropped TIFF-in-JPEG wasn't re-compressed, so crop was
+    // lost. Size was 59416, now is 11827.
+    CPPUNIT_ASSERT(nLength < 50000);
 }
 
 void PdfExportTest::testTdf106972()
@@ -760,7 +819,582 @@ void PdfExportTest::testTdf108963()
 
     CPPUNIT_ASSERT_EQUAL(1, nYellowPathCount);
 }
+
+#if HAVE_MORE_FONTS
+// This requires Carlito font, if it is missing the test will most likely
+// fail.
+void PdfExportTest::testTdf115117_1()
+{
+    vcl::filter::PDFDocument aDocument;
+    load("tdf115117-1.odt", aDocument);
+
+    vcl::filter::PDFObjectElement* pToUnicode = nullptr;
+
+    // Get access to ToUnicode of the first font
+    for (const auto& aElement : aDocument.GetElements())
+    {
+        auto pObject = dynamic_cast<vcl::filter::PDFObjectElement*>(aElement.get());
+        if (!pObject)
+            continue;
+        auto pType = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("Type"));
+        if (pType && pType->GetValue() == "Font")
+        {
+            auto pToUnicodeRef = dynamic_cast<vcl::filter::PDFReferenceElement*>(pObject->Lookup("ToUnicode"));
+            CPPUNIT_ASSERT(pToUnicodeRef);
+            pToUnicode = pToUnicodeRef->LookupObject();
+            break;
+        }
+    }
+
+    CPPUNIT_ASSERT(pToUnicode);
+    auto pStream = pToUnicode->GetStream();
+    CPPUNIT_ASSERT(pStream);
+    SvMemoryStream aObjectStream;
+    ZCodec aZCodec;
+    aZCodec.BeginCompression();
+    pStream->GetMemory().Seek(0);
+    aZCodec.Decompress(pStream->GetMemory(), aObjectStream);
+    CPPUNIT_ASSERT(aZCodec.EndCompression());
+    aObjectStream.Seek(0);
+    // The first values, <01> <02> etc., are glyph ids, they might change order
+    // if we changed how font subsets are created.
+    // The second values, <00740069> etc., are Unicode code points in hex,
+    // <00740069> is U+0074 and U+0069 i.e. "ti" which is a ligature in
+    // Carlito/Calibri. This test is failing if any of the second values
+    // changed which means we are not detecting ligatures and writing CMAP
+    // entries for them correctly. If glyph order in the subset changes then
+    // the order here will changes and the PDF has to be carefully inspected to
+    // ensure that the new values are correct before updating the string below.
+    OString aCmap("9 beginbfchar\n"
+                  "<01> <00740069>\n"
+                  "<02> <0020>\n"
+                  "<03> <0074>\n"
+                  "<04> <0065>\n"
+                  "<05> <0073>\n"
+                  "<06> <00660069>\n"
+                  "<07> <0066006C>\n"
+                  "<08> <006600660069>\n"
+                  "<09> <00660066006C>\n"
+                  "endbfchar");
+    auto pStart = static_cast<const char*>(aObjectStream.GetData());
+    const char* pEnd = pStart + aObjectStream.GetSize();
+    auto it = std::search(pStart, pEnd, aCmap.getStr(), aCmap.getStr() + aCmap.getLength());
+    CPPUNIT_ASSERT(it != pEnd);
+}
+
+// This requires DejaVu Sans font, if it is missing the test will most likely
+// fail.
+void PdfExportTest::testTdf115117_2()
+{
+    // See the comments in testTdf115117_1() for explanation.
+
+    vcl::filter::PDFDocument aDocument;
+    load("tdf115117-2.odt", aDocument);
+
+    vcl::filter::PDFObjectElement* pToUnicode = nullptr;
+
+    for (const auto& aElement : aDocument.GetElements())
+    {
+        auto pObject = dynamic_cast<vcl::filter::PDFObjectElement*>(aElement.get());
+        if (!pObject)
+            continue;
+        auto pType = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("Type"));
+        if (pType && pType->GetValue() == "Font")
+        {
+            auto pToUnicodeRef = dynamic_cast<vcl::filter::PDFReferenceElement*>(pObject->Lookup("ToUnicode"));
+            CPPUNIT_ASSERT(pToUnicodeRef);
+            pToUnicode = pToUnicodeRef->LookupObject();
+            break;
+        }
+    }
+
+    CPPUNIT_ASSERT(pToUnicode);
+    auto pStream = pToUnicode->GetStream();
+    CPPUNIT_ASSERT(pStream);
+    SvMemoryStream aObjectStream;
+    ZCodec aZCodec;
+    aZCodec.BeginCompression();
+    pStream->GetMemory().Seek(0);
+    aZCodec.Decompress(pStream->GetMemory(), aObjectStream);
+    CPPUNIT_ASSERT(aZCodec.EndCompression());
+    aObjectStream.Seek(0);
+    OString aCmap("7 beginbfchar\n"
+                  "<01> <06440627>\n"
+                  "<02> <0020>\n"
+                  "<03> <0641>\n"
+                  "<04> <0642>\n"
+                  "<05> <0648>\n"
+                  "<06> <06440627>\n"
+                  "<07> <0628>\n"
+                  "endbfchar");
+    auto pStart = static_cast<const char*>(aObjectStream.GetData());
+    const char* pEnd = pStart + aObjectStream.GetSize();
+    auto it = std::search(pStart, pEnd, aCmap.getStr(), aCmap.getStr() + aCmap.getLength());
+    CPPUNIT_ASSERT(it != pEnd);
+}
+
+void PdfExportTest::testTdf115117_1a()
+{
+    // Import the bugdoc and export as PDF.
+    OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf115117-1.odt";
+    mxComponent = loadFromDesktop(aURL);
+    CPPUNIT_ASSERT(mxComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    // Parse the export result with pdfium.
+    SvFileStream aFile(aTempFile.GetURL(), StreamMode::READ);
+    SvMemoryStream aMemory;
+    aMemory.WriteStream(aFile);
+    mpPdfDocument = FPDF_LoadMemDocument(aMemory.GetData(), aMemory.GetSize(), /*password=*/nullptr);
+    CPPUNIT_ASSERT(mpPdfDocument);
+
+    // The document has one page.
+    CPPUNIT_ASSERT_EQUAL(1, FPDF_GetPageCount(mpPdfDocument));
+    mpPdfPage = FPDF_LoadPage(mpPdfDocument, /*page_index=*/0);
+    CPPUNIT_ASSERT(mpPdfPage);
+
+    auto pPdfTextPage = FPDFText_LoadPage(mpPdfPage);
+    CPPUNIT_ASSERT(pPdfTextPage);
+
+    // Extract the text from the page. This pdfium API is a bit higher level
+    // than we want and might apply heuristic that give false positive, but it
+    // is a good approximation in addition to the check in testTdf115117_1().
+    int nChars = FPDFText_CountChars(pPdfTextPage);
+    CPPUNIT_ASSERT_EQUAL(44, nChars);
+
+    OUString aExpectedText = "ti ti test ti\r\nti test fi fl ffi ffl test fi";
+    std::vector<sal_uInt32> aChars(nChars);
+    for (int i = 0; i < nChars; i++)
+        aChars[i] = FPDFText_GetUnicode(pPdfTextPage, i);
+    OUString aActualText(aChars.data(), aChars.size());
+    CPPUNIT_ASSERT_EQUAL(aExpectedText, aActualText);
+}
+
+void PdfExportTest::testTdf115117_2a()
+{
+    // See the comments in testTdf115117_1a() for explanation.
+
+    // Import the bugdoc and export as PDF.
+    OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf115117-2.odt";
+    mxComponent = loadFromDesktop(aURL);
+    CPPUNIT_ASSERT(mxComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    // Parse the export result with pdfium.
+    SvFileStream aFile(aTempFile.GetURL(), StreamMode::READ);
+    SvMemoryStream aMemory;
+    aMemory.WriteStream(aFile);
+    mpPdfDocument = FPDF_LoadMemDocument(aMemory.GetData(), aMemory.GetSize(), /*password=*/nullptr);
+    CPPUNIT_ASSERT(mpPdfDocument);
+
+    // The document has one page.
+    CPPUNIT_ASSERT_EQUAL(1, FPDF_GetPageCount(mpPdfDocument));
+    mpPdfPage = FPDF_LoadPage(mpPdfDocument, /*page_index=*/0);
+    CPPUNIT_ASSERT(mpPdfPage);
+
+    auto pPdfTextPage = FPDFText_LoadPage(mpPdfPage);
+    CPPUNIT_ASSERT(pPdfTextPage);
+
+    int nChars = FPDFText_CountChars(pPdfTextPage);
+    CPPUNIT_ASSERT_EQUAL(13, nChars);
+
+    OUString aExpectedText = u"\u0627\u0644 \u0628\u0627\u0644 \u0648\u0642\u0641 \u0627\u0644";
+    std::vector<sal_uInt32> aChars(nChars);
+    for (int i = 0; i < nChars; i++)
+        aChars[i] = FPDFText_GetUnicode(pPdfTextPage, i);
+    OUString aActualText(aChars.data(), aChars.size());
+    CPPUNIT_ASSERT_EQUAL(aExpectedText, aActualText);
+}
+
+// This requires Amiri font, if it is missing the test will fail.
+void PdfExportTest::testTdf66597_1()
+{
+    // FIXME: Fallback font is used on Windows for some reason.
+#if !defined _WIN32
+    vcl::filter::PDFDocument aDocument;
+    load("tdf66597-1.odt", aDocument);
+
+    {
+        // Get access to ToUnicode of the first font
+        vcl::filter::PDFObjectElement* pToUnicode = nullptr;
+        for (const auto& aElement : aDocument.GetElements())
+        {
+            auto pObject = dynamic_cast<vcl::filter::PDFObjectElement*>(aElement.get());
+            if (!pObject)
+                continue;
+            auto pType = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("Type"));
+            if (pType && pType->GetValue() == "Font")
+            {
+                auto pName = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("BaseFont"));
+                auto aName = pName->GetValue().copy(7); // skip the subset id
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected font name", OString("Amiri-Regular"), aName);
+
+                auto pToUnicodeRef = dynamic_cast<vcl::filter::PDFReferenceElement*>(pObject->Lookup("ToUnicode"));
+                CPPUNIT_ASSERT(pToUnicodeRef);
+                pToUnicode = pToUnicodeRef->LookupObject();
+                break;
+            }
+        }
+
+        CPPUNIT_ASSERT(pToUnicode);
+        auto pStream = pToUnicode->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        SvMemoryStream aObjectStream;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        pStream->GetMemory().Seek(0);
+        aZCodec.Decompress(pStream->GetMemory(), aObjectStream);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+        aObjectStream.Seek(0);
+        // The <01> is glyph id, <0020> is code point.
+        // The document has three characters <space><nbspace><space>, but the font
+        // reuses the same glyph for space and nbspace so we should have a single
+        // CMAP entry for the space, and nbspace will be handled with ActualText
+        // (tested above).
+        std::string aCmap("1 beginbfchar\n"
+                          "<01> <0020>\n"
+                          "endbfchar");
+        std::string aData(static_cast<const char*>(aObjectStream.GetData()), aObjectStream.GetSize());
+        auto nPos = aData.find(aCmap);
+        CPPUNIT_ASSERT(nPos != std::string::npos);
+    }
+
+    {
+        auto aPages = aDocument.GetPages();
+        CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aPages.size());
+        // Get page contents and stream.
+        auto pContents = aPages[0]->LookupObject("Contents");
+        CPPUNIT_ASSERT(pContents);
+        auto pStream = pContents->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        auto& rObjectStream = pStream->GetMemory();
+
+        // Uncompress the stream.
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        rObjectStream.Seek(0);
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
+        // Make sure the expected ActualText is present.
+        std::string aData(static_cast<const char*>(aUncompressed.GetData()), aUncompressed.GetSize());
+
+        std::string aActualText("/Span<</ActualText<");
+        size_t nCount = 0;
+        size_t nPos = 0;
+        while ((nPos = aData.find(aActualText, nPos)) != std::string::npos)
+        {
+            nCount++;
+            nPos += aActualText.length();
+        }
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("The should be one ActualText entry!", static_cast<size_t>(1), nCount);
+
+        aActualText = "/Span<</ActualText<FEFF00A0>>>";
+        nPos = aData.find(aActualText);
+        CPPUNIT_ASSERT_MESSAGE("ActualText not found!", nPos != std::string::npos);
+    }
 #endif
+}
+
+// This requires Reem Kufi font, if it is missing the test will fail.
+void PdfExportTest::testTdf66597_2()
+{
+    // FIXME: Fallback font is used on Windows for some reason.
+#if !defined _WIN32
+    vcl::filter::PDFDocument aDocument;
+    load("tdf66597-2.odt", aDocument);
+
+    {
+        // Get access to ToUnicode of the first font
+        vcl::filter::PDFObjectElement* pToUnicode = nullptr;
+        for (const auto& aElement : aDocument.GetElements())
+        {
+            auto pObject = dynamic_cast<vcl::filter::PDFObjectElement*>(aElement.get());
+            if (!pObject)
+                continue;
+            auto pType = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("Type"));
+            if (pType && pType->GetValue() == "Font")
+            {
+                auto pName = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("BaseFont"));
+                auto aName = pName->GetValue().copy(7); // skip the subset id
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected font name", OString("ReemKufi-Regular"), aName);
+
+                auto pToUnicodeRef = dynamic_cast<vcl::filter::PDFReferenceElement*>(pObject->Lookup("ToUnicode"));
+                CPPUNIT_ASSERT(pToUnicodeRef);
+                pToUnicode = pToUnicodeRef->LookupObject();
+                break;
+            }
+        }
+
+        CPPUNIT_ASSERT(pToUnicode);
+        auto pStream = pToUnicode->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        SvMemoryStream aObjectStream;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        pStream->GetMemory().Seek(0);
+        aZCodec.Decompress(pStream->GetMemory(), aObjectStream);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+        aObjectStream.Seek(0);
+        std::string aCmap("8 beginbfchar\n"
+                          "<02> <0632>\n"
+                          "<03> <0020>\n"
+                          "<04> <0648>\n"
+                          "<05> <0647>\n"
+                          "<06> <062F>\n"
+                          "<08> <062C>\n"
+                          "<09> <0628>\n"
+                          "<0B> <0623>\n"
+                          "endbfchar");
+        std::string aData(static_cast<const char*>(aObjectStream.GetData()), aObjectStream.GetSize());
+        auto nPos = aData.find(aCmap);
+        CPPUNIT_ASSERT(nPos != std::string::npos);
+    }
+
+    {
+        auto aPages = aDocument.GetPages();
+        CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aPages.size());
+        // Get page contents and stream.
+        auto pContents = aPages[0]->LookupObject("Contents");
+        CPPUNIT_ASSERT(pContents);
+        auto pStream = pContents->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        auto& rObjectStream = pStream->GetMemory();
+
+        // Uncompress the stream.
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        rObjectStream.Seek(0);
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
+        // Make sure the expected ActualText is present.
+        std::string aData(static_cast<const char*>(aUncompressed.GetData()), aUncompressed.GetSize());
+
+        std::vector<std::string> aCodes({ "0632", "062C", "0628", "0623" });
+        std::string aActualText("/Span<</ActualText<");
+        size_t nCount = 0;
+        size_t nPos = 0;
+        while ((nPos = aData.find(aActualText, nPos)) != std::string::npos)
+        {
+            nCount++;
+            nPos += aActualText.length();
+        }
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Number of ActualText entries does not match!", aCodes.size(), nCount);
+
+        for (const auto& aCode : aCodes)
+        {
+            aActualText = "/Span<</ActualText<FEFF" + aCode + ">>>";
+            nPos = aData.find(aActualText);
+            CPPUNIT_ASSERT_MESSAGE("ActualText not found for " + aCode, nPos != std::string::npos);
+        }
+    }
+#endif
+}
+
+// This requires Gentium Basic font, if it is missing the test will fail.
+void PdfExportTest::testTdf66597_3()
+{
+    vcl::filter::PDFDocument aDocument;
+    load("tdf66597-3.odt", aDocument);
+
+    {
+        // Get access to ToUnicode of the first font
+        vcl::filter::PDFObjectElement* pToUnicode = nullptr;
+        for (const auto& aElement : aDocument.GetElements())
+        {
+            auto pObject = dynamic_cast<vcl::filter::PDFObjectElement*>(aElement.get());
+            if (!pObject)
+                continue;
+            auto pType = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("Type"));
+            if (pType && pType->GetValue() == "Font")
+            {
+                auto pName = dynamic_cast<vcl::filter::PDFNameElement*>(pObject->Lookup("BaseFont"));
+                auto aName = pName->GetValue().copy(7); // skip the subset id
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Unexpected font name", OString("GentiumBasic"), aName);
+
+                auto pToUnicodeRef = dynamic_cast<vcl::filter::PDFReferenceElement*>(pObject->Lookup("ToUnicode"));
+                CPPUNIT_ASSERT(pToUnicodeRef);
+                pToUnicode = pToUnicodeRef->LookupObject();
+                break;
+            }
+        }
+
+        CPPUNIT_ASSERT(pToUnicode);
+        auto pStream = pToUnicode->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        SvMemoryStream aObjectStream;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        pStream->GetMemory().Seek(0);
+        aZCodec.Decompress(pStream->GetMemory(), aObjectStream);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+        aObjectStream.Seek(0);
+        std::string aCmap("2 beginbfchar\n"
+                          "<01> <1ECB0331030B>\n"
+                          "<05> <0020>\n"
+                          "endbfchar");
+        std::string aData(static_cast<const char*>(aObjectStream.GetData()), aObjectStream.GetSize());
+        auto nPos = aData.find(aCmap);
+        CPPUNIT_ASSERT(nPos != std::string::npos);
+    }
+
+    {
+        auto aPages = aDocument.GetPages();
+        CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aPages.size());
+        // Get page contents and stream.
+        auto pContents = aPages[0]->LookupObject("Contents");
+        CPPUNIT_ASSERT(pContents);
+        auto pStream = pContents->GetStream();
+        CPPUNIT_ASSERT(pStream);
+        auto& rObjectStream = pStream->GetMemory();
+
+        // Uncompress the stream.
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        rObjectStream.Seek(0);
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
+        // Make sure the expected ActualText is present.
+        std::string aData(static_cast<const char*>(aUncompressed.GetData()), aUncompressed.GetSize());
+
+        std::string aActualText("/Span<</ActualText<FEFF1ECB0331030B>>>");
+        size_t nCount = 0;
+        size_t nPos = 0;
+        while ((nPos = aData.find(aActualText, nPos)) != std::string::npos)
+        {
+            nCount++;
+            nPos += aActualText.length();
+        }
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Number of ActualText entries does not match!", static_cast<size_t>(4), nCount);
+    }
+}
+#endif
+
+void PdfExportTest::testTdf105954()
+{
+    // Import the bugdoc and export as PDF.
+    OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf105954.odt";
+    mxComponent = loadFromDesktop(aURL);
+    CPPUNIT_ASSERT(mxComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence(
+        { { "ReduceImageResolution", uno::Any(true) },
+          { "MaxImageResolution", uno::Any(static_cast<sal_Int32>(300)) } }));
+    aMediaDescriptor["FilterData"] <<= aFilterData;
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    // Parse the export result with pdfium.
+    SvFileStream aFile(aTempFile.GetURL(), StreamMode::READ);
+    SvMemoryStream aMemory;
+    aMemory.WriteStream(aFile);
+    mpPdfDocument
+        = FPDF_LoadMemDocument(aMemory.GetData(), aMemory.GetSize(), /*password=*/nullptr);
+    CPPUNIT_ASSERT(mpPdfDocument);
+
+    // The document has one page.
+    CPPUNIT_ASSERT_EQUAL(1, FPDF_GetPageCount(mpPdfDocument));
+    mpPdfPage = FPDF_LoadPage(mpPdfDocument, /*page_index=*/0);
+    CPPUNIT_ASSERT(mpPdfPage);
+
+    // There is a single image on the page.
+    int nPageObjectCount = FPDFPage_CountObjects(mpPdfPage);
+    CPPUNIT_ASSERT_EQUAL(1, nPageObjectCount);
+
+    // Check width of the image.
+    FPDF_PAGEOBJECT pPageObject = FPDFPage_GetObject(mpPdfPage, /*index=*/0);
+    FPDF_IMAGEOBJ_METADATA aMeta;
+    CPPUNIT_ASSERT(FPDFImageObj_GetImageMetadata(pPageObject, mpPdfPage, &aMeta));
+    // This was 2000, i.e. the 'reduce to 300 DPI' request was ignored.
+    // This is now around 238 (228 on macOS).
+    CPPUNIT_ASSERT_LESS(static_cast<unsigned int>(250), aMeta.width);
+}
+
+void PdfExportTest::testTdf106702()
+{
+    // Import the bugdoc and export as PDF.
+    OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf106702.odt";
+    mxComponent = loadFromDesktop(aURL);
+    CPPUNIT_ASSERT(mxComponent.is());
+
+    uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    // Parse the export result with pdfium.
+    SvFileStream aFile(aTempFile.GetURL(), StreamMode::READ);
+    SvMemoryStream aMemory;
+    aMemory.WriteStream(aFile);
+    mpPdfDocument
+        = FPDF_LoadMemDocument(aMemory.GetData(), aMemory.GetSize(), /*password=*/nullptr);
+    CPPUNIT_ASSERT(mpPdfDocument);
+
+    // The document has two pages.
+    CPPUNIT_ASSERT_EQUAL(2, FPDF_GetPageCount(mpPdfDocument));
+
+    // First page already has the correct image position.
+    mpPdfPage = FPDF_LoadPage(mpPdfDocument, /*page_index=*/0);
+    CPPUNIT_ASSERT(mpPdfPage);
+    int nExpected = 0;
+    int nPageObjectCount = FPDFPage_CountObjects(mpPdfPage);
+    for (int i = 0; i < nPageObjectCount; ++i)
+    {
+        FPDF_PAGEOBJECT pPageObject = FPDFPage_GetObject(mpPdfPage, i);
+        if (FPDFPageObj_GetType(pPageObject) != FPDF_PAGEOBJ_IMAGE)
+            continue;
+
+        float fLeft = 0, fBottom = 0, fRight = 0, fTop = 0;
+        FPDFPageObj_GetBounds(pPageObject, &fLeft, &fBottom, &fRight, &fTop);
+        nExpected = fTop;
+        break;
+    }
+
+    // Second page had an incorrect image position.
+    FPDF_ClosePage(mpPdfPage);
+    mpPdfPage = FPDF_LoadPage(mpPdfDocument, /*page_index=*/1);
+    CPPUNIT_ASSERT(mpPdfPage);
+    int nActual = 0;
+    nPageObjectCount = FPDFPage_CountObjects(mpPdfPage);
+    for (int i = 0; i < nPageObjectCount; ++i)
+    {
+        FPDF_PAGEOBJECT pPageObject = FPDFPage_GetObject(mpPdfPage, i);
+        if (FPDFPageObj_GetType(pPageObject) != FPDF_PAGEOBJ_IMAGE)
+            continue;
+
+        float fLeft = 0, fBottom = 0, fRight = 0, fTop = 0;
+        FPDFPageObj_GetBounds(pPageObject, &fLeft, &fBottom, &fRight, &fTop);
+        nActual = fTop;
+        break;
+    }
+
+    // This failed, vertical pos is 818 points, was 1674 (outside visible page
+    // bounds).
+    CPPUNIT_ASSERT_EQUAL(nExpected, nActual);
+}
 
 CPPUNIT_TEST_SUITE_REGISTRATION(PdfExportTest);
 

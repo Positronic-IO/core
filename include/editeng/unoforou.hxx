@@ -22,8 +22,8 @@
 
 #include <editeng/unoedsrc.hxx>
 #include <editeng/editengdllapi.h>
-
 #include <editeng/editdata.hxx>
+#include <memory>
 
 class Outliner;
 
@@ -37,14 +37,14 @@ private:
 
     /** this pointer may be null or point to an item set for the attribs of
         the selection maAttribsSelection */
-    mutable SfxItemSet* mpAttribsCache;
+    mutable std::unique_ptr<SfxItemSet> mpAttribsCache;
 
     /** if we have a cached attribute item set, this is the selection of it */
     mutable ESelection  maAttribCacheSelection;
 
     /** this pointer may be null or point to an item set for the paragraph
         mnParaAttribsCache */
-    mutable SfxItemSet* mpParaAttribsCache;
+    mutable std::unique_ptr<SfxItemSet> mpParaAttribsCache;
 
     /** if we have a cached para attribute item set, this is the paragraph of it */
     mutable sal_Int32   mnParaAttribsCache;
@@ -72,7 +72,7 @@ public:
 
     virtual SfxItemPool* GetPool() const override;
 
-    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rpTxtColor, Color*& rpFldColor ) override;
+    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor ) override;
     virtual void        FieldClicked( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos ) override;
 
     virtual bool        IsValid() const override;

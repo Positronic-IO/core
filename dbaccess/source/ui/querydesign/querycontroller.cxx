@@ -78,7 +78,6 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <osl/mutex.hxx>
@@ -140,75 +139,6 @@ extern "C" void createRegistryInfo_OViewControl()
 namespace dbaui
 {
     using namespace ::connectivity;
-#if OSL_DEBUG_LEVEL > 0
-    namespace
-    {
-        void insertParseTree(SvTreeListBox* _pBox, ::connectivity::OSQLParseNode const * _pNode,SvTreeListEntry* _pParent = nullptr)
-        {
-            OUString rString;
-            if (!_pNode->isToken())
-            {
-                // rule name as rule: ...
-                rString = "RULE_ID: " + OUString::number( static_cast<sal_Int32>(_pNode->getRuleID()) ) +
-                          "(" + OSQLParser::RuleIDToStr(_pNode->getRuleID()) + ")";
-
-                _pParent = _pBox->InsertEntry(rString,_pParent);
-
-                // determine how much subtrees this node has
-                sal_uInt32 nStop = _pNode->count();
-                // fetch first subtree
-                for(sal_uInt32 i=0;i<nStop;++i)
-                    insertParseTree(_pBox,_pNode->getChild(i),_pParent);
-            }
-            else
-            {
-                // token found
-                // tabs to insert according to nLevel
-
-                switch (_pNode->getNodeType())
-                {
-
-                case SQLNodeType::Keyword:
-                    {
-                        rString += "SQL_KEYWORD:";
-                        OString sT = OSQLParser::TokenIDToStr(_pNode->getTokenID());
-                        rString += OStringToOUString(sT, RTL_TEXTENCODING_UTF8);
-                     break;}
-
-                case SQLNodeType::Name:
-                    {
-                        rString += "SQL_NAME:\"" + _pNode->getTokenValue() + "\"";
-                        break;}
-
-                case SQLNodeType::String:
-                    {
-                        rString += "SQL_STRING:'" + _pNode->getTokenValue();
-                        break;}
-
-                case SQLNodeType::IntNum:
-                    {
-                        rString += "SQL_INTNUM:" + _pNode->getTokenValue();
-                        break;}
-
-                case SQLNodeType::ApproxNum:
-                    {
-                        rString += "SQL_APPROXNUM:" + _pNode->getTokenValue();
-                        break;}
-
-                case SQLNodeType::Punctuation:
-                    {
-                        rString += "SQL_PUNCTUATION:" + _pNode->getTokenValue(); // append Nodevalue
-                        break;}
-
-                default:
-                    OSL_FAIL("OSQLParser::ShowParseTree: unzulaessiger NodeType");
-                    rString += _pNode->getTokenValue();
-                }
-                _pBox->InsertEntry(rString,_pParent);
-            }
-        }
-    }
-#endif // OSL_DEBUG_LEVEL
 
     namespace
     {
@@ -599,7 +529,7 @@ void OQueryController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >&
                         else
                         {
                             const OSQLTables& rTabs = m_pSqlIterator->getTables();
-                            if ( m_pSqlIterator->getStatementType() != OSQLStatementType::Select || rTabs.begin() == rTabs.end() )
+                            if ( m_pSqlIterator->getStatementType() != OSQLStatementType::Select || rTabs.empty() )
                             {
                                 aError = SQLException(
                                     DBA_RES(STR_QRY_NOSELECT),
@@ -640,7 +570,7 @@ void OQueryController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >&
             }
             catch(const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
 
             if ( aError.isValid() )
@@ -712,56 +642,6 @@ void OQueryController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >&
             {
             }
             break;
-#if OSL_DEBUG_LEVEL > 0
-        case ID_EDIT_QUERY_DESIGN:
-        case ID_EDIT_QUERY_SQL:
-            {
-                OUString aErrorMsg;
-                setStatement_fireEvent( getContainer()->getStatement() );
-                ::connectivity::OSQLParseNode* pNode = m_aSqlParser.parseTree( aErrorMsg, m_sStatement, m_bGraphicalDesign );
-                if ( pNode )
-                {
-                    vcl::Window* pView = getView();
-                    ScopedVclPtrInstance<ModalDialog> pWindow( pView, WB_STDMODAL | WB_SIZEMOVE | WB_CENTER );
-                    pWindow->SetSizePixel( ::Size( pView->GetSizePixel().Width() / 2, pView->GetSizePixel().Height() / 2 ) );
-                    ScopedVclPtrInstance<SvTreeListBox> pTreeBox( pWindow, WB_BORDER | WB_HASLINES | WB_HASBUTTONS | WB_HASBUTTONSATROOT | WB_HASLINESATROOT | WB_VSCROLL );
-                    pTreeBox->SetPosSizePixel( ::Point( 6, 6 ), ::Size( pWindow->GetSizePixel().Width() - 12, pWindow->GetSizePixel().Height() - 12 ));
-                    pTreeBox->SetNodeDefaultImages();
-
-                    if ( _nId == ID_EDIT_QUERY_DESIGN )
-                    {
-                        ::connectivity::OSQLParseNode* pTemp = pNode ? pNode->getChild(3)->getChild(1) : nullptr;
-                        // no where clause found
-                        if ( pTemp && !pTemp->isLeaf() )
-                        {
-                            ::connectivity::OSQLParseNode * pCondition = pTemp->getChild(1);
-                            if ( pCondition ) // no where clause
-                            {
-                                ::connectivity::OSQLParseNode::negateSearchCondition(pCondition);
-                                ::connectivity::OSQLParseNode *pNodeTmp = pTemp->getChild(1);
-
-                                ::connectivity::OSQLParseNode::disjunctiveNormalForm(pNodeTmp);
-                                pNodeTmp = pTemp->getChild(1);
-                                ::connectivity::OSQLParseNode::absorptions(pNodeTmp);
-                                pNodeTmp = pTemp->getChild(1);
-                                OSQLParseNode::compress(pNodeTmp);
-                            }
-                            OUString sTemp;
-                            pNode->parseNodeToStr(sTemp,getConnection());
-                            getContainer()->setStatement(sTemp);
-                        }
-                    }
-
-                    insertParseTree(pTreeBox,pNode);
-
-                    pTreeBox->Show();
-                    pWindow->Execute();
-
-                    delete pNode;
-                }
-                break;
-            }
-#endif
         default:
             OJoinController::Execute(_nId,aArgs);
             return; // else we would invalidate twice
@@ -941,9 +821,8 @@ void OQueryController::impl_initialize()
             {
                 OUString aTitle(DBA_RES(STR_QUERYDESIGN_NO_VIEW_SUPPORT));
                 OUString aMessage(DBA_RES(STR_QUERYDESIGN_NO_VIEW_ASK));
-                ODataView* pWindow = getView();
-                ScopedVclPtrInstance< OSQLMessageBox > aDlg( pWindow, aTitle, aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, OSQLMessageBox::Query );
-                bClose = aDlg->Execute() == RET_NO;
+                OSQLMessageBox aDlg(getFrameWeld(), aTitle, aMessage, MessBoxStyle::YesNo | MessBoxStyle::DefaultYes, MessageType::Query);
+                bClose = aDlg.run() == RET_NO;
             }
             if ( bClose )
                 throw VetoException();
@@ -1009,13 +888,13 @@ void OQueryController::impl_initialize()
     }
     catch(const SQLException& e)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         // we caught an exception so we switch to text only mode
         {
             m_bGraphicalDesign = false;
             getContainer()->initialize();
-            ODataView* pWindow = getView();
-            ScopedVclPtrInstance<OSQLMessageBox>(pWindow,e)->Execute();
+            OSQLMessageBox aBox(getFrameWeld(), e);
+            aBox.run();
         }
         throw;
     }
@@ -1160,21 +1039,20 @@ void OQueryController::saveViewSettings( ::comphelper::NamedValueCollection& o_r
 {
     saveTableWindows( o_rViewSettings );
 
-    OTableFields::const_iterator field = m_vTableFieldDesc.begin();
-    OTableFields::const_iterator fieldEnd = m_vTableFieldDesc.end();
-
     ::comphelper::NamedValueCollection aAllFieldsData;
     ::comphelper::NamedValueCollection aFieldData;
-    for ( sal_Int32 i = 1; field != fieldEnd; ++field, ++i )
+    sal_Int32 i = 1;
+    for (auto const& fieldDesc : m_vTableFieldDesc)
     {
-        if ( !(*field)->IsEmpty() )
+        if ( !fieldDesc->IsEmpty() )
         {
             aFieldData.clear();
-            (*field)->Save( aFieldData, i_includingCriteria );
+            fieldDesc->Save( aFieldData, i_includingCriteria );
 
             const OUString sFieldSettingName = "Field" + OUString::number( i );
             aAllFieldsData.put( sFieldSettingName, aFieldData.getPropertyValues() );
         }
+        ++i;
     }
 
     o_rViewSettings.put( "Fields", aAllFieldsData.getPropertyValues() );
@@ -1367,7 +1245,8 @@ bool OQueryController::doSaveAsDoc(bool _bSaveAs)
     if ( !editingCommand() && !haveDataSource() )
     {
         OUString aMessage(DBA_RES(STR_DATASOURCE_DELETED));
-        ScopedVclPtrInstance<OSQLWarningBox>(getView(), aMessage)->Execute();
+        OSQLWarningBox aBox(getFrameWeld(), aMessage);
+        aBox.run();
         return false;
     }
 
@@ -1498,7 +1377,7 @@ bool OQueryController::doSaveAsDoc(bool _bSaveAs)
                     m_xAlterView.set( xElements->getByName( m_sName ), UNO_QUERY );
 
                 // now check if our datasource has set a tablefilter and if so, append the new table name to it
-                ::dbaui::appendToFilter( getConnection(), m_sName, getORB(), getView() );
+                ::dbaui::appendToFilter(getConnection(), m_sName, getORB(), getFrameWeld());
             }
             Reference< XTitleChangeListener> xEventListener(impl_getTitleHelper_throw(),UNO_QUERY);
             if ( xEventListener.is() )
@@ -1521,9 +1400,9 @@ bool OQueryController::doSaveAsDoc(bool _bSaveAs)
     }
     catch(const Exception&)
     {
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
         if ( !bNew )
             m_sName = sOriginalName;
-        DBG_UNHANDLED_EXCEPTION();
     }
 
     showError( aInfo );
@@ -1817,7 +1696,7 @@ void OQueryController::impl_reset( const bool i_bForceCurrentControllerSettings 
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
 
@@ -1856,8 +1735,8 @@ void OQueryController::impl_reset( const bool i_bForceCurrentControllerSettings 
                     if ( !i_bForceCurrentControllerSettings && !editingView() )
                     {
                         OUString aTitle(DBA_RES(STR_SVT_SQL_SYNTAX_ERROR));
-                        ScopedVclPtrInstance< OSQLMessageBox > aDlg(getView(),aTitle,aErrorMsg);
-                        aDlg->Execute();
+                        OSQLMessageBox aDlg(getFrameWeld(), aTitle, aErrorMsg);
+                        aDlg.run();
                     }
                     bError = true;
                 }

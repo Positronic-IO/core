@@ -20,7 +20,6 @@
 
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/gdimtf.hxx>
@@ -1460,15 +1459,11 @@ bool ImpEditEngine::CreateLines( sal_Int32 nPara, sal_uInt32 nStartPosY )
                 else if ( rLSItem.GetPropLineSpace() && ( rLSItem.GetPropLineSpace() != 100 ) )
                 {
                     sal_uInt16 nTxtHeight = pLine->GetHeight();
-                    sal_Int32 nH = nTxtHeight;
-                    nH *= rLSItem.GetPropLineSpace();
-                    nH /= 100;
+                    sal_Int32 nPropTextHeight = nTxtHeight * rLSItem.GetPropLineSpace() / 100;
                     // The Ascent has to be adjusted for the difference:
-                    long nDiff = pLine->GetHeight() - nH;
-                    if ( nDiff > pLine->GetMaxAscent() )
-                        nDiff = pLine->GetMaxAscent();
-                    pLine->SetMaxAscent( static_cast<sal_uInt16>( pLine->GetMaxAscent() - nDiff ) * 4 / 5 ); // 80%
-                    pLine->SetHeight( static_cast<sal_uInt16>(nH), nTxtHeight );
+                    long nDiff = pLine->GetHeight() - nPropTextHeight;
+                    pLine->SetMaxAscent( static_cast<sal_uInt16>( pLine->GetMaxAscent() - nDiff ) );
+                    pLine->SetHeight( static_cast<sal_uInt16>( nPropTextHeight ), nTxtHeight );
                 }
             }
         }
@@ -2192,9 +2187,8 @@ void ImpEditEngine::ImpAdjustBlocks( ParaPortion* pParaPortion, EditLine* pLine,
 
     // Correct the positions in the Array and the portion widths:
     // Last character won't be considered ...
-    for ( std::vector<sal_Int32>::const_iterator it(aPositions.begin()); it != aPositions.end(); ++it )
+    for (auto const& nChar : aPositions)
     {
-        sal_Int32 nChar = *it;
         if ( nChar < nLastChar )
         {
             sal_Int32 nPortionStart, nPortion;
@@ -3155,12 +3149,13 @@ void ImpEditEngine::Paint( OutputDevice* pOutDev, tools::Rectangle aClipRect, Po
                                 }
 
 #if OSL_DEBUG_LEVEL > 2
-                                if ( rTextPortion.GetKind() == PORTIONKIND_HYPHENATOR )
+                                // Do we really need this if statement?
+                                if ( rTextPortion.GetKind() == PortionKind::HYPHENATOR )
                                 {
                                     aTmpFont.SetFillColor( COL_LIGHTGRAY );
                                     aTmpFont.SetTransparent( sal_False );
                                 }
-                                if ( rTextPortion.GetRightToLeft()  )
+                                if ( rTextPortion.IsRightToLeft()  )
                                 {
                                     aTmpFont.SetFillColor( COL_LIGHTGRAY );
                                     aTmpFont.SetTransparent( sal_False );

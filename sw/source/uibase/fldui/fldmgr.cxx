@@ -40,9 +40,7 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/app.hxx>
-#include <svx/dialmgr.hxx>
 #include <svx/dialogs.hrc>
-#include <svx/strings.hrc>
 #include <svx/strarray.hxx>
 #include <basic/basmgr.hxx>
 #include <editeng/langitem.hxx>
@@ -1512,7 +1510,7 @@ bool SwFieldMgr::InsertField(
         // start dialog, not before the field is inserted tdf#99529
         pCurShell->Left(CRSR_SKIP_CHARS,
                 false, (INP_VAR == (nSubType & 0xff)) ? 1 : 2, false );
-        pCurShell->StartInputFieldDlg(pField, false, true, rData.m_pParent);
+        pCurShell->StartInputFieldDlg(pField, false, true, rData.m_pParent ? rData.m_pParent->GetFrameWeld() : nullptr);
 
         pCurShell->Pop(SwCursorShell::PopMode::DeleteCurrent);
     }

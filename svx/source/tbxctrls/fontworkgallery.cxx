@@ -185,7 +185,7 @@ void FontWorkGalleryDialog::SetSdrObjectRef( SdrObject** ppSdrObject, SdrModel* 
 
 void FontWorkGalleryDialog::insertSelectedFontwork()
 {
-    sal_uInt16 nItemId = mpCtlFavorites->GetSelectItemId();
+    sal_uInt16 nItemId = mpCtlFavorites->GetSelectedItemId();
 
     if( nItemId > 0 )
     {
@@ -197,29 +197,50 @@ void FontWorkGalleryDialog::insertSelectedFontwork()
             SdrPage* pPage = pModel->GetPage(0);
             if( pPage && pPage->GetObjCount() )
             {
-                SdrObject* pNewObject = pPage->GetObj(0)->Clone();
+                // tdf#116993 Calc uses a 'special' mode for this dialog in being the
+                // only caller of ::SetSdrObjectRef. Only in that case mpDestModel seems
+                // to be the correct target SdrModel.
+                // If this is not used, the correct SdrModel seems to be the one from
+                // the mpSdrView that is used to insert (InsertObjectAtView below) the
+                // cloned SdrObject.
+                const bool bUseSpecialCalcMode(nullptr != mppSdrObject && nullptr != mpDestModel);
+                const bool bSdrViewInsertMode(nullptr != mpSdrView);
 
                 // center shape on current view
-                OutputDevice* pOutDev = mpSdrView->GetFirstOutputDevice();
-                if( pOutDev )
+                OutputDevice* pOutDev(mpSdrView->GetFirstOutputDevice());
+
+                if(pOutDev && (bUseSpecialCalcMode || bSdrViewInsertMode))
                 {
+                    // Clone directly to target SdrModel (may be different due to user/caller (!))
+                    SdrObject* pNewObject(
+                        pPage->GetObj(0)->CloneSdrObject(
+                            bUseSpecialCalcMode ? *mpDestModel : mpSdrView->getSdrModelFromSdrView()));
+
                     tools::Rectangle aObjRect( pNewObject->GetLogicRect() );
                     tools::Rectangle aVisArea = pOutDev->PixelToLogic(tools::Rectangle(Point(0,0), pOutDev->GetOutputSizePixel()));
                     Point aPagePos = aVisArea.Center();
                     aPagePos.AdjustX( -(aObjRect.GetWidth() / 2) );
                     aPagePos.AdjustY( -(aObjRect.GetHeight() / 2) );
                     tools::Rectangle aNewObjectRectangle(aPagePos, aObjRect.GetSize());
-                    SdrPageView* pPV = mpSdrView->GetSdrPageView();
-
                     pNewObject->SetLogicRect(aNewObjectRectangle);
-                    if ( mppSdrObject )
+
+                    if(bUseSpecialCalcMode)
                     {
                         *mppSdrObject = pNewObject;
-                        (*mppSdrObject)->SetModel( mpDestModel );
                     }
-                    else if( pPV )
+                    else // bSdrViewInsertMode
                     {
+                        SdrPageView* pPV(mpSdrView->GetSdrPageView());
+
+                        if(nullptr != pPV)
+                        {
                             mpSdrView->InsertObjectAtView( pNewObject, *pPV );
+                        }
+                        else
+                        {
+                            // tdf#116993 no target -> delete clone
+                            SdrObject::Free(pNewObject);
+                        }
                     }
                 }
             }
@@ -252,12 +273,6 @@ public:
 private:
     svt::ToolboxController& mrController;
 
-    Image maImgAlgin1;
-    Image maImgAlgin2;
-    Image maImgAlgin3;
-    Image maImgAlgin4;
-    Image maImgAlgin5;
-
     const OUString msFontworkAlignment;
 
     DECL_LINK( SelectHdl, ToolbarMenu*, void );
@@ -268,20 +283,21 @@ private:
 FontworkAlignmentWindow::FontworkAlignmentWindow(svt::ToolboxController& rController, vcl::Window* pParentWindow)
     : ToolbarMenu(rController.getFrameInterface(), pParentWindow, WB_STDPOPUP)
     , mrController(rController)
-    , maImgAlgin1(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_LEFT))
-    , maImgAlgin2(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_CENTER))
-    , maImgAlgin3(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_RIGHT))
-    , maImgAlgin4(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_WORD))
-    , maImgAlgin5(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_STRETCH))
     , msFontworkAlignment(".uno:FontworkAlignment")
 {
     SetSelectHdl( LINK( this, FontworkAlignmentWindow, SelectHdl ) );
 
-    appendEntry(0, SvxResId(RID_SVXSTR_ALIGN_LEFT), maImgAlgin1);
-    appendEntry(1, SvxResId(RID_SVXSTR_ALIGN_CENTER), maImgAlgin2);
-    appendEntry(2, SvxResId(RID_SVXSTR_ALIGN_RIGHT), maImgAlgin3);
-    appendEntry(3, SvxResId(RID_SVXSTR_ALIGN_WORD), maImgAlgin4);
-    appendEntry(4, SvxResId(RID_SVXSTR_ALIGN_STRETCH), maImgAlgin5);
+    Image aImgAlgin1(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_LEFT));
+    Image aImgAlgin2(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_CENTER));
+    Image aImgAlgin3(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_RIGHT));
+    Image aImgAlgin4(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_WORD));
+    Image aImgAlgin5(BitmapEx(RID_SVXBMP_FONTWORK_ALIGN_STRETCH));
+
+    appendEntry(0, SvxResId(RID_SVXSTR_ALIGN_LEFT), aImgAlgin1);
+    appendEntry(1, SvxResId(RID_SVXSTR_ALIGN_CENTER), aImgAlgin2);
+    appendEntry(2, SvxResId(RID_SVXSTR_ALIGN_RIGHT), aImgAlgin3);
+    appendEntry(3, SvxResId(RID_SVXSTR_ALIGN_WORD), aImgAlgin4);
+    appendEntry(4, SvxResId(RID_SVXSTR_ALIGN_STRETCH), aImgAlgin5);
 
     SetOutputSizePixel( getMenuSize() );
 

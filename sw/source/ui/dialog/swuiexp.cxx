@@ -22,7 +22,9 @@
 #include <abstract.hxx>
 #include <ascfldlg.hxx>
 #include <break.hxx>
+#include <colwd.hxx>
 #include <convert.hxx>
+#include <srtdlg.hxx>
 #include <dbinsdlg.hxx>
 #include <DropDownFieldDialog.hxx>
 #include <fldtdlg.hxx>
@@ -34,7 +36,10 @@
 #include <label.hxx>
 #include <mailmrge.hxx>
 #include <mailmergewizard.hxx>
+#include <mergetbl.hxx>
+#include <multmrk.hxx>
 #include <regionsw.hxx>
+#include <rowht.hxx>
 #include <selglos.hxx>
 #include <splittbl.hxx>
 #include <tautofmt.hxx>

@@ -278,15 +278,6 @@ namespace connectivity
             free();
         }
 
-        static void * operator new( size_t nSize )
-            { return ::rtl_allocateMemory( nSize ); }
-        static void * operator new( size_t,void* _pHint )
-            { return _pHint; }
-        static void operator delete( void * pMem )
-            { ::rtl_freeMemory( pMem ); }
-        static void operator delete( void *,void* )
-            {  }
-
         ORowSetValue& operator=(const ORowSetValue& _rRH);
         ORowSetValue& operator=(ORowSetValue&& _rRH);
 
@@ -512,8 +503,8 @@ namespace connectivity
         OValueRefVector(){}
         OValueRefVector(size_t _st) : ODeleteVector< ORowSetValueDecoratorRef >(_st)
         {
-            for(OValueRefVector::Vector::iterator aIter = get().begin() ; aIter != get().end() ;++aIter)
-                *aIter = new ORowSetValueDecorator;
+            for (auto & elem : get())
+                elem = new ORowSetValueDecorator;
         }
     };
 

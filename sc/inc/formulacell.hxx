@@ -20,13 +20,9 @@
 #ifndef INCLUDED_SC_INC_FORMULACELL_HXX
 #define INCLUDED_SC_INC_FORMULACELL_HXX
 
-#include <set>
 #include <memory>
 
 #include <formula/tokenarray.hxx>
-#include <osl/conditn.hxx>
-#include <osl/mutex.hxx>
-#include <rtl/ref.hxx>
 #include <svl/listener.hxx>
 
 #include "types.hxx"
@@ -202,11 +198,13 @@ public:
     ScFormulaVectorState GetVectorState() const;
 
     void            GetFormula( OUString& rFormula,
-                                const formula::FormulaGrammar::Grammar = formula::FormulaGrammar::GRAM_DEFAULT ) const;
+                                const formula::FormulaGrammar::Grammar = formula::FormulaGrammar::GRAM_DEFAULT,
+                                const ScInterpreterContext* pContext = nullptr ) const;
     void            GetFormula( OUStringBuffer& rBuffer,
-                                const formula::FormulaGrammar::Grammar = formula::FormulaGrammar::GRAM_DEFAULT ) const;
+                                const formula::FormulaGrammar::Grammar = formula::FormulaGrammar::GRAM_DEFAULT,
+                                const ScInterpreterContext* pContext = nullptr ) const;
 
-    OUString GetFormula( sc::CompileFormulaContext& rCxt ) const;
+    OUString GetFormula( sc::CompileFormulaContext& rCxt, const ScInterpreterContext* pContext = nullptr ) const;
 
     void            SetDirty( bool bDirtyFlag=true );
     void            SetDirtyVar();
@@ -398,7 +396,7 @@ public:
     void SetResultError( FormulaError n );
 
     bool IsHyperLinkCell() const;
-    EditTextObject* CreateURLObject();
+    std::unique_ptr<EditTextObject> CreateURLObject();
     void GetURLResult( OUString& rURL, OUString& rCellText );
 
     /** Determines whether or not the result string contains more than one paragraph */

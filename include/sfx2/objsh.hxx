@@ -29,6 +29,7 @@
 #include <com/sun/star/script/XLibraryContainer.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/security/DocumentSignatureInformation.hpp>
 #include <com/sun/star/security/XDocumentDigitalSignatures.hpp>
 #include <com/sun/star/task/XInteractionHandler.hpp>
@@ -332,11 +333,6 @@ public:
                                     const css::uno::Reference< css::embed::XStorage >& xStorage );
     virtual void                UpdateLinks();
     virtual bool                LoadExternal( SfxMedium& rMedium );
-    /**
-     * Called when the Options dialog is dismissed with the OK button, to
-     * handle potentially conflicting option settings.
-     */
-    virtual void                CheckConfigOptions();
     bool                        IsConfigOptionsChecked() const;
     void                        SetConfigOptionsChecked( bool bChecked );
 
@@ -358,9 +354,18 @@ public:
             css::uno::Reference<css::text::XTextRange> const& xInsertPosition);
     bool                        ExportTo( SfxMedium &rMedium );
 
-    // xmlsec05, check with SFX team
+    /** Returns to if preparing was succesful, else false. */
+    bool PrepareForSigning();
+    bool CheckIsReadonly(bool bSignScriptingContent);
+    void AfterSigning(bool bSignSuccess, bool bSignScriptingContent);
+    bool HasValidSignatures();
     SignatureState              GetDocumentSignatureState();
     void                        SignDocumentContent();
+    void SignSignatureLine(const OUString& aSignatureLineId,
+                           const css::uno::Reference<css::security::XCertificate> xCert,
+                           const css::uno::Reference<css::graphic::XGraphic> xValidGraphic,
+                           const css::uno::Reference<css::graphic::XGraphic> xInvalidGraphic,
+                           const OUString& aComment);
     SignatureState              GetScriptingSignatureState();
     void                        SignScriptingContent();
     DECL_LINK(SignDocumentHandler, Button*, void);
@@ -635,7 +640,7 @@ public:
                             const JobSetup & rSetup,
                             sal_uInt16 nAspect = ASPECT_CONTENT );
     virtual void    Draw( OutputDevice *, const JobSetup & rSetup,
-                          sal_uInt16 nAspect = ASPECT_CONTENT ) = 0;
+                          sal_uInt16 nAspect ) = 0;
 
 
     virtual void    FillClass( SvGlobalName * pClassName,
@@ -743,8 +748,10 @@ public:
             const css::uno::Reference< css::security::XDocumentDigitalSignatures >& xSigner
                 = css::uno::Reference< css::security::XDocumentDigitalSignatures >() );
 
-    SAL_DLLPRIVATE void ImplSign( bool bScriptingContent = false );
     SAL_DLLPRIVATE bool QuerySaveSizeExceededModules_Impl( const css::uno::Reference< css::task::XInteractionHandler >& xHandler );
+    SAL_DLLPRIVATE bool QueryAllowExoticFormat_Impl( const css::uno::Reference< css::task::XInteractionHandler >& xHandler,
+                                                     const OUString& rURL,
+                                                     const OUString& rFilterUIName);
 
     SAL_DLLPRIVATE void CheckOut( );
     SAL_DLLPRIVATE void CancelCheckOut( );

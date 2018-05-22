@@ -178,6 +178,7 @@ $(call gb_Helper_abbreviate_dirs,\
 			-LIBPATH:$(UCRTSDKDIR)lib/$(UCRTVERSION)/ucrt/x64 \
 		    $(if $(filter 80 81 10,$(WINDOWS_SDK_VERSION)),-LIBPATH:$(WINDOWS_SDK_HOME)/lib/$(WINDOWS_SDK_LIB_SUBDIR)/um/x64)) \
 		$(T_LDFLAGS) \
+		$(if $(filter Library CppunitTest Executable,$(TARGETTYPE)),/NATVIS:$(SRCDIR)/solenv/vs/LibreOffice.natvis) \
 		@$${RESPONSEFILE} \
 		$(foreach lib,$(sort $(LINKED_LIBS)),$(call gb_Library_get_ilibfilename,$(lib))) \
 		$(foreach lib,$(sort $(LINKED_STATIC_LIBS)),$(call gb_StaticLibrary_get_filename,$(lib))) \
@@ -583,7 +584,7 @@ $(call gb_Helper_abbreviate_dirs,\
 	FILES=$(call var2file,$(shell $(gb_MKTEMP)),100,$(UIFILES)) && \
 	$(gb_UIConfig_LXML_PATH) $(gb_Helper_set_ld_path) \
 	$(call gb_ExternalExecutable_get_command,python) \
-	$(gb_UIConfig_gla11y_SCRIPT) -s $(UI_A11YSUPPRS) $(GEN_A11Y_SUPPRS) -P $(SRCDIR)/ -o $@ -L $$FILES
+	$(gb_UIConfig_gla11y_SCRIPT) $(gb_UIConfig_gla11y_PARAMETERS) -o $@ -L $$FILES
 )
 
 endef

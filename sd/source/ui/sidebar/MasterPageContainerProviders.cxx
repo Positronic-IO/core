@@ -22,11 +22,9 @@
 #include <DrawDocShell.hxx>
 #include <drawdoc.hxx>
 #include <PreviewRenderer.hxx>
-#include <comphelper/processfactory.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/thumbnailview.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <vcl/image.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/StorageFactory.hpp>
@@ -131,7 +129,7 @@ SdPage* TemplatePageObjectProvider::operator() (SdDrawDocument*)
     }
     catch (const uno::RuntimeException&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd");
         pPage = nullptr;
     }
 

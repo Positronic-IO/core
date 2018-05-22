@@ -202,7 +202,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     static const sal_uInt16* GetRanges() { return pLineRanges; }
 
     virtual bool FillItemSet( SfxItemSet* ) override;
@@ -212,6 +212,7 @@ public:
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
 
     virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
+    virtual void PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     virtual void FillUserData() override;
 
@@ -259,8 +260,6 @@ private:
     const SfxItemSet&   rOutAttrs;
     XDash               aDash;
 
-    XLineDashItem       aXDash;
-    XLineColorItem      aXColor;
     XLineAttrSetItem    aXLineAttr;
     SfxItemSet&         rXLSet;
 
@@ -300,7 +299,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 
@@ -338,7 +337,6 @@ private:
     const SfxItemSet&   rOutAttrs;
     const SdrObject*    pPolyObj;
 
-    XLineColorItem      aXColor;
     XLineAttrSetItem    aXLineAttr;
     SfxItemSet&         rXLSet;
 
@@ -365,7 +363,7 @@ public:
 
     void    Construct();
 
-    static VclPtr<SfxTabPage> Create( vcl::Window*, const SfxItemSet* );
+    static VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 

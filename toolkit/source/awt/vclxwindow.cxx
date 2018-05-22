@@ -269,6 +269,8 @@ IMPL_LINK_NOARG(VCLXWindowImpl, OnProcessCallbacks, void*, void)
 {
     const Reference< uno::XInterface > xKeepAlive( mrAntiImpl );
 
+    SAL_INFO("toolkit.controls", "OnProcessCallbacks grabbing solarmutex");
+
     // work on a copy of the callback array
     CallbackArray aCallbacksCopy;
     {
@@ -287,6 +289,7 @@ IMPL_LINK_NOARG(VCLXWindowImpl, OnProcessCallbacks, void*, void)
     }
 
     {
+        SAL_INFO("toolkit.controls", "OnProcessCallbacks relinquished solarmutex");
         SolarMutexReleaser aReleaseSolar;
         for (   CallbackArray::const_iterator loop = aCallbacksCopy.begin();
                 loop != aCallbacksCopy.end();
@@ -1157,7 +1160,7 @@ void VCLXWindow::setBackground( sal_Int32 nColor )
 
     if ( GetWindow() )
     {
-        Color aColor( static_cast<sal_uInt32>(nColor) );
+        Color aColor = Color(nColor);
         GetWindow()->SetBackground( aColor );
         GetWindow()->SetControlBackground( aColor );
 
@@ -1231,8 +1234,7 @@ void VCLXWindow::setForeground( sal_Int32 nColor )
 
     if ( GetWindow() )
     {
-        Color aColor( static_cast<sal_uInt32>(nColor) );
-        GetWindow()->SetControlForeground( aColor );
+        GetWindow()->SetControlForeground( Color(nColor) );
     }
 }
 
@@ -1257,15 +1259,15 @@ void VCLXWindow::getStyles( sal_Int16 nType, css::awt::FontDescriptor& Font, sal
             case css::awt::Style::FRAME:
             {
                 Font = VCLUnoHelper::CreateFontDescriptor( rStyleSettings.GetAppFont() );
-                ForegroundColor = rStyleSettings.GetWindowTextColor().GetColor();
-                BackgroundColor = rStyleSettings.GetWindowColor().GetColor();
+                ForegroundColor = sal_Int32(rStyleSettings.GetWindowTextColor());
+                BackgroundColor = sal_Int32(rStyleSettings.GetWindowColor());
             }
             break;
             case css::awt::Style::DIALOG:
             {
                 Font = VCLUnoHelper::CreateFontDescriptor( rStyleSettings.GetAppFont() );
-                ForegroundColor = rStyleSettings.GetDialogTextColor().GetColor();
-                BackgroundColor = rStyleSettings.GetDialogColor().GetColor();
+                ForegroundColor = sal_Int32(rStyleSettings.GetDialogTextColor());
+                BackgroundColor = sal_Int32(rStyleSettings.GetDialogColor());
             }
             break;
             default: OSL_FAIL( "VCLWindow::getStyles() - unknown Type" );
@@ -1281,7 +1283,7 @@ namespace toolkit
     {
         sal_Int32 nColor = 0;
         if ( !( _rValue >>= nColor ) )
-            nColor = (Application::GetSettings().GetStyleSettings().*pGetter)().GetColor();
+            nColor = sal_Int32((Application::GetSettings().GetStyleSettings().*pGetter)());
 
         AllSettings aSettings = _pWindow->GetSettings();
         StyleSettings aStyleSettings = aSettings.GetStyleSettings();
@@ -1638,7 +1640,7 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
                 sal_Int32 nColor = 0;
                 if ( Value >>= nColor )
                 {
-                    Color aColor( nColor );
+                    Color aColor = Color( nColor );
                     pWindow->SetControlBackground( aColor );
                     pWindow->SetBackground( aColor );
                     switch ( eWinType )
@@ -1668,7 +1670,7 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
                 sal_Int32 nColor = 0;
                 if ( Value >>= nColor )
                 {
-                    Color aColor( nColor );
+                    Color aColor = Color( nColor );
                     pWindow->SetTextColor( aColor );
                     pWindow->SetControlForeground( aColor );
                 }
@@ -1684,7 +1686,7 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
                 sal_Int32 nColor = 0;
                 if ( Value >>= nColor )
                 {
-                    Color aColor( nColor );
+                    Color aColor = Color( nColor );
                     pWindow->SetTextLineColor( aColor );
                 }
             }
@@ -1697,7 +1699,7 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
                 sal_Int32 nColor = 0;
                 if ( Value >>= nColor )
                 {
-                    Color aColor( nColor );
+                    Color aColor = Color( nColor );
                     pWindow->SetFillColor( aColor );
                 }
             }
@@ -1710,7 +1712,7 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
                 sal_Int32 nColor = 0;
                 if ( Value >>= nColor )
                 {
-                    Color aColor( nColor );
+                    Color aColor = Color( nColor );
                     pWindow->SetLineColor( aColor );
                 }
             }
@@ -2021,10 +2023,10 @@ css::uno::Any VCLXWindow::getProperty( const OUString& PropertyName )
             }
             break;
             case BASEPROPERTY_BACKGROUNDCOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetControlBackground().GetColor());
+                aProp <<= GetWindow()->GetControlBackground();
             break;
             case BASEPROPERTY_DISPLAYBACKGROUNDCOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetDisplayBackground().GetColor().GetColor());
+                aProp <<= GetWindow()->GetDisplayBackground().GetColor();
             break;
             case BASEPROPERTY_FONTRELIEF:
                 aProp <<= static_cast<sal_Int16>(GetWindow()->GetControlFont().GetRelief());
@@ -2033,16 +2035,16 @@ css::uno::Any VCLXWindow::getProperty( const OUString& PropertyName )
                 aProp <<= static_cast<sal_Int16>(GetWindow()->GetControlFont().GetEmphasisMark());
             break;
             case BASEPROPERTY_TEXTCOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetControlForeground().GetColor());
+                aProp <<= GetWindow()->GetControlForeground();
             break;
             case BASEPROPERTY_TEXTLINECOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetTextLineColor().GetColor());
+                aProp <<= GetWindow()->GetTextLineColor();
             break;
             case BASEPROPERTY_FILLCOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetFillColor().GetColor());
+                aProp <<= GetWindow()->GetFillColor();
             break;
             case BASEPROPERTY_LINECOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetLineColor().GetColor());
+                aProp <<= GetWindow()->GetLineColor();
             break;
             case BASEPROPERTY_BORDER:
             {
@@ -2139,11 +2141,11 @@ css::uno::Any VCLXWindow::getProperty( const OUString& PropertyName )
             break;
 
             case BASEPROPERTY_SYMBOL_COLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetSettings().GetStyleSettings().GetButtonTextColor().GetColor());
+                aProp <<= GetWindow()->GetSettings().GetStyleSettings().GetButtonTextColor();
                 break;
 
             case BASEPROPERTY_BORDERCOLOR:
-                aProp <<= static_cast<sal_Int32>(GetWindow()->GetSettings().GetStyleSettings().GetMonoColor().GetColor());
+                aProp <<= GetWindow()->GetSettings().GetStyleSettings().GetMonoColor();
                 break;
         }
     }

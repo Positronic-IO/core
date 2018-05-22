@@ -339,7 +339,7 @@ namespace
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
         return -1;
     }
@@ -677,7 +677,7 @@ Reference< css::frame::XModel > FmXFormShell::getContextDocument_Lock() const
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
     return xModel;
 }
@@ -1239,7 +1239,7 @@ bool FmXFormShell::executeControlConversionSlot_Lock(const Reference<XFormCompon
                     }
                     catch(const Exception&)
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("svx");
                     }
                 }
             }
@@ -1257,7 +1257,7 @@ bool FmXFormShell::executeControlConversionSlot_Lock(const Reference<XFormCompon
                     }
                     catch(const Exception&)
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("svx");
                     }
                 }
             }
@@ -2259,7 +2259,7 @@ IMPL_LINK(FmXFormShell, OnFoundData_Lock, FmFoundRecordInformation&, rfriWhere, 
         Reference< XPropertySet> xModelSet(xControlModel, UNO_QUERY);
         DBG_ASSERT(xModelSet.is(), "FmXFormShell::OnFoundData : invalid control model (no property set) !");
         xModelSet->setPropertyValue( FM_PROP_ALWAYSSHOWCURSOR, makeAny( true ) );
-        xModelSet->setPropertyValue( FM_PROP_CURSORCOLOR, makeAny( sal_Int32( COL_LIGHTRED ) ) );
+        xModelSet->setPropertyValue( FM_PROP_CURSORCOLOR, makeAny( COL_LIGHTRED ) );
         m_xLastGridFound = xControlModel;
 
         if ( xGrid.is() )
@@ -2874,7 +2874,7 @@ Reference< XControl> FmXFormShell::impl_getControl_Lock(const Reference<XControl
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     OSL_ENSURE( xControl.is(), "FmXFormShell::impl_getControl: no control found!" );
@@ -2934,7 +2934,7 @@ void FmXFormShell::impl_collectFormSearchContexts_nothrow_Lock( const Reference<
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -3009,7 +3009,7 @@ void saveFilter(const Reference< runtime::XFormController >& _rxController)
     }
     catch (const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
 }
@@ -3108,7 +3108,7 @@ void FmXFormShell::stopFiltering_Lock(bool bSave)
                     }
                     catch(const Exception&)
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("svx");
                     }
                 }
             }
@@ -3714,7 +3714,7 @@ void FmXFormShell::impl_defaultCurrentForm_nothrow_Lock()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 }
 
@@ -3818,7 +3818,7 @@ namespace
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("svx");
         }
         return false;
     }
@@ -3845,10 +3845,8 @@ void FmXFormShell::loadForms_Lock(FmFormPage* _pPage, const LoadFormsFlags _nBeh
     {
         // lock the undo env so the forms can change non-transient properties while loading
         // (without this my doc's modified flag would be set)
-        FmFormModel* pModel = dynamic_cast<FmFormModel*>( _pPage->GetModel()  );
-        DBG_ASSERT( pModel, "FmXFormShell::loadForms: invalid model!" );
-        if ( pModel )
-            pModel->GetUndoEnv().Lock();
+        FmFormModel& rFmFormModel(dynamic_cast< FmFormModel& >(_pPage->getSdrModelFromSdrPage()));
+        rFmFormModel.GetUndoEnv().Lock();
 
         // load all forms
         Reference< XIndexAccess >  xForms;
@@ -3880,7 +3878,7 @@ void FmXFormShell::loadForms_Lock(FmFormPage* _pPage, const LoadFormsFlags _nBeh
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("svx");
                 }
 
                 // reset the form if it was loaded
@@ -3894,9 +3892,8 @@ void FmXFormShell::loadForms_Lock(FmFormPage* _pPage, const LoadFormsFlags _nBeh
             }
         }
 
-        if ( pModel )
-            // unlock the environment
-            pModel->GetUndoEnv().UnLock();
+        // unlock the environment
+        rFmFormModel.GetUndoEnv().UnLock();
     }
 }
 
@@ -3974,7 +3971,7 @@ bool FmXFormShell::HasControlFocus_Lock() const
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svx");
     }
 
     return bHasControlFocus;

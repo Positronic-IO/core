@@ -31,7 +31,6 @@
 #include <comphelper/propertysequence.hxx>
 #include <framework/interaction.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/configuration.hxx>
 #include <officecfg/Office/Common.hxx>
 
 #include <com/sun/star/awt/XWindow.hpp>
@@ -963,6 +962,38 @@ bool LoadEnv::impl_furtherDocsAllowed()
     return bAllowed;
 }
 
+bool LoadEnv::impl_filterHasInteractiveDialog() const
+{
+    //show the frame now so it can be the parent for any message dialogs shown during import
+
+    //unless (tdf#114648) an Interactive case such as the new database wizard
+    if (m_aURL.Arguments == "Interactive")
+       return true;
+
+    // unless (tdf#116277) its the labels/business cards slave frame
+    if (m_aURL.Arguments.indexOf("slot=") != -1)
+        return true;
+
+    OUString sFilter = m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_FILTERNAME(), OUString());
+    if (sFilter.isEmpty())
+        return false;
+
+    // unless (tdf#115683) the filter has a UIComponent
+    OUString sUIComponent;
+    css::uno::Reference<css::container::XNameAccess> xFilterCont(m_xContext->getServiceManager()->createInstanceWithContext(SERVICENAME_FILTERFACTORY, m_xContext),
+                                                                 css::uno::UNO_QUERY_THROW);
+    try
+    {
+        ::comphelper::SequenceAsHashMap lFilterProps(xFilterCont->getByName(sFilter));
+        sUIComponent = lFilterProps.getUnpackedValueOrDefault("UIComponent", OUString());
+    }
+    catch(const css::container::NoSuchElementException&)
+    {
+    }
+
+    return !sUIComponent.isEmpty();
+}
+
 bool LoadEnv::impl_loadContent()
 {
     // SAFE -> -----------------------------------
@@ -1076,7 +1107,9 @@ bool LoadEnv::impl_loadContent()
                 {"Parent", uno::Any(xWindow)}
             }));
             xHandler->initialize(aArguments);
-            impl_makeFrameWindowVisible(xWindow, false);
+            //show the frame as early as possible to make it the parent of any message dialogs
+            if (!impl_filterHasInteractiveDialog())
+                impl_makeFrameWindowVisible(xWindow, false);
         }
     }
 

@@ -20,6 +20,7 @@
 #include <reffact.hxx>
 #include <docfunc.hxx>
 #include <SamplingDialog.hxx>
+#include <scresid.hxx>
 #include <strings.hrc>
 
 ScSamplingDialog::ScSamplingDialog(
@@ -201,6 +202,7 @@ ScRange ScSamplingDialog::PerformPeriodicSampling(ScDocShell* pDocShell)
             outRow = mOutputAddress.Row();
             for (SCROW inRow = aStart.Row(); inRow <= aEnd.Row(); inRow++)
             {
+                assert(aPeriod && "div-by-zero");
                 if (i % aPeriod == aPeriod - 1 ) // Sample the last of period
                 {
                     double aValue = mDocument->GetValue(ScAddress(inCol, inRow, inTab));
@@ -344,7 +346,7 @@ IMPL_LINK_NOARG(ScSamplingDialog, RefInputModifyHandler, Edit&, void)
         {
             ScRangeList aRangeList;
             bool bValid = ParseWithNames( aRangeList, mpInputRangeEdit->GetText(), mDocument);
-            const ScRange* pRange = (bValid && aRangeList.size() == 1) ? aRangeList[0] : nullptr;
+            const ScRange* pRange = (bValid && aRangeList.size() == 1) ? &aRangeList[0] : nullptr;
             if (pRange)
             {
                 mInputRange = *pRange;
@@ -360,7 +362,7 @@ IMPL_LINK_NOARG(ScSamplingDialog, RefInputModifyHandler, Edit&, void)
         {
             ScRangeList aRangeList;
             bool bValid = ParseWithNames( aRangeList, mpOutputRangeEdit->GetText(), mDocument);
-            const ScRange* pRange = (bValid && aRangeList.size() == 1) ? aRangeList[0] : nullptr;
+            const ScRange* pRange = (bValid && aRangeList.size() == 1) ? &aRangeList[0] : nullptr;
             if (pRange)
             {
                 mOutputAddress = pRange->aStart;

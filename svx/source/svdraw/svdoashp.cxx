@@ -46,7 +46,7 @@
 #include <svx/svdtrans.hxx>
 #include <svx/svdetc.hxx>
 #include <svx/svdoedge.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <editeng/eeitem.hxx>
 #include <editeng/editstat.hxx>
@@ -82,7 +82,6 @@
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <basegfx/utils/unotools.hxx>
-#include "svdconv.hxx"
 #include <svdobjplusdata.hxx>
 
 using namespace ::com::sun::star;
@@ -217,7 +216,7 @@ SdrObject* ImpCreateShadowObjectClone(const SdrObject& rOriginal, const SfxItemS
         const sal_Int32 nYDist(rOriginalSet.Get(SDRATTR_SHADOWYDIST).GetValue());
         const ::Color aShadowColor(rOriginalSet.Get(SDRATTR_SHADOWCOLOR).GetColorValue());
         const sal_uInt16 nShadowTransparence(rOriginalSet.Get(SDRATTR_SHADOWTRANSPARENCE).GetValue());
-        pRetval = rOriginal.Clone();
+        pRetval = rOriginal.CloneSdrObject(rOriginal.getSdrModelFromSdrObject());
         DBG_ASSERT(pRetval, "ImpCreateShadowObjectClone: Could not clone object (!)");
 
         // look for used stuff
@@ -810,8 +809,8 @@ sdr::properties::BaseProperties* SdrObjCustomShape::CreateObjectSpecificProperti
     return new sdr::properties::CustomShapeProperties(*this);
 }
 
-SdrObjCustomShape::SdrObjCustomShape()
-    : SdrTextObj()
+SdrObjCustomShape::SdrObjCustomShape(SdrModel& rSdrModel)
+:   SdrTextObj(rSdrModel)
     , fObjectRotation(0.0)
     , mbAdjustingTextFrameWidthAndHeight(false)
     , mpLastShadowGeometry(nullptr)
@@ -1346,23 +1345,16 @@ void SdrObjCustomShape::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
     }
 }
 
-void SdrObjCustomShape::SetModel(SdrModel* pNewModel)
-{
-    SdrTextObj::SetModel(pNewModel);
-    mXRenderedCustomShape.clear();
-}
-
 sal_uInt16 SdrObjCustomShape::GetObjIdentifier() const
 {
     return sal_uInt16(OBJ_CUSTOMSHAPE);
 }
 
-
 // #115391# This implementation is based on the TextFrame size of the CustomShape and the
 // state of the ResizeShapeToFitText flag to correctly set TextMinFrameWidth/Height
 void SdrObjCustomShape::AdaptTextMinSize()
 {
-    if (!pModel || (!pModel->IsCreatingDataObj() && !pModel->IsPasteResize()))
+    if (!getSdrModelFromSdrObject().IsCreatingDataObj() && !getSdrModelFromSdrObject().IsPasteResize())
     {
         const bool bResizeShapeToFitText(GetObjectItem(SDRATTR_TEXT_AUTOGROWHEIGHT).GetValue());
         SfxItemSet aSet(
@@ -2232,7 +2224,7 @@ bool SdrObjCustomShape::AdjustTextFrameWidthAndHeight(tools::Rectangle& rR, bool
 {
     // Either we have text or the application has native text and suggested its size to us.
     bool bHasText = HasText() || (m_aSuggestedTextFrameSize.Width() != 0 && m_aSuggestedTextFrameSize.Height() != 0);
-    if ( pModel && bHasText && !rR.IsEmpty() )
+    if ( bHasText && !rR.IsEmpty() )
     {
         bool bWdtGrow=bWdt && IsAutoGrowWidth();
         bool bHgtGrow=bHgt && IsAutoGrowHeight();
@@ -2243,7 +2235,7 @@ bool SdrObjCustomShape::AdjustTextFrameWidthAndHeight(tools::Rectangle& rR, bool
             long nWdt=0,nMinWdt=0,nMaxWdt=0;
             Size aSiz(rR.GetSize()); aSiz.AdjustWidth( -1 ); aSiz.AdjustHeight( -1 );
             Size aMaxSiz(100000,100000);
-            Size aTmpSiz(pModel->GetMaxObjSize());
+            Size aTmpSiz(getSdrModelFromSdrObject().GetMaxObjSize());
             if (aTmpSiz.Width()!=0) aMaxSiz.setWidth(aTmpSiz.Width() );
             if (aTmpSiz.Height()!=0) aMaxSiz.setHeight(aTmpSiz.Height() );
             if (bWdtGrow)
@@ -2499,8 +2491,8 @@ void SdrObjCustomShape::TakeTextEditArea(Size* pPaperMin, Size* pPaperMax, tools
     Size aAnkSiz(aViewInit.GetSize());
     aAnkSiz.AdjustWidth( -1 ); aAnkSiz.AdjustHeight( -1 ); // because GetSize() adds 1
     Size aMaxSiz(1000000,1000000);
-    if (pModel!=nullptr) {
-        Size aTmpSiz(pModel->GetMaxObjSize());
+    {
+        Size aTmpSiz(getSdrModelFromSdrObject().GetMaxObjSize());
         if (aTmpSiz.Width()!=0) aMaxSiz.setWidth(aTmpSiz.Width() );
         if (aTmpSiz.Height()!=0) aMaxSiz.setHeight(aTmpSiz.Height() );
     }
@@ -2646,11 +2638,9 @@ void SdrObjCustomShape::TakeTextRect( SdrOutliner& rOutliner, tools::Rectangle& 
 
     if (pPara)
     {
-        bool bHitTest = false;
-        if( pModel )
-            bHitTest = &pModel->GetHitTestOutliner() == &rOutliner;
-
+        bool bHitTest(&getSdrModelFromSdrObject().GetHitTestOutliner() == &rOutliner);
         const SdrTextObj* pTestObj = rOutliner.GetTextObj();
+
         if( !pTestObj || !bHitTest || pTestObj != this ||
             pTestObj->GetOutlinerParaObject() != GetOutlinerParaObject() )
         {
@@ -2746,9 +2736,9 @@ void SdrObjCustomShape::NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject
     InvalidateRenderGeometry();
 }
 
-SdrObjCustomShape* SdrObjCustomShape::Clone() const
+SdrObjCustomShape* SdrObjCustomShape::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrObjCustomShape >();
+    return CloneHelper< SdrObjCustomShape >(rTargetModel);
 }
 
 SdrObjCustomShape& SdrObjCustomShape::operator=(const SdrObjCustomShape& rObj)
@@ -2766,7 +2756,7 @@ SdrObjCustomShape& SdrObjCustomShape::operator=(const SdrObjCustomShape& rObj)
 
 OUString SdrObjCustomShape::TakeObjNameSingul() const
 {
-    OUStringBuffer sName(ImpGetResStr(STR_ObjNameSingulCUSTOMSHAPE));
+    OUStringBuffer sName(SvxResId(STR_ObjNameSingulCUSTOMSHAPE));
     OUString aNm(GetName());
     if (!aNm.isEmpty())
     {
@@ -2780,7 +2770,7 @@ OUString SdrObjCustomShape::TakeObjNameSingul() const
 
 OUString SdrObjCustomShape::TakeObjNamePlural() const
 {
-    return ImpGetResStr(STR_ObjNamePluralCUSTOMSHAPE);
+    return SvxResId(STR_ObjNamePluralCUSTOMSHAPE);
 }
 
 basegfx::B2DPolyPolygon SdrObjCustomShape::TakeXorPoly() const
@@ -2815,9 +2805,9 @@ SdrObject* SdrObjCustomShape::DoConvertToPolyObj(bool bBezier, bool bAddText) co
 
     if ( pRenderedCustomShape )
     {
-        SdrObject* pCandidate = pRenderedCustomShape->Clone();
+        // Clone to same SdrModel
+        SdrObject* pCandidate(pRenderedCustomShape->CloneSdrObject(pRenderedCustomShape->getSdrModelFromSdrObject()));
         DBG_ASSERT(pCandidate, "SdrObjCustomShape::DoConvertToPolyObj: Could not clone SdrObject (!)");
-        pCandidate->SetModel(GetModel());
         pRetval = pCandidate->DoConvertToPolyObj(bBezier, bAddText);
         SdrObject::Free( pCandidate );
 
@@ -2922,33 +2912,8 @@ void SdrObjCustomShape::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, 
     aGeo.nShearAngle = 0;
     aGeo.RecalcTan();
 
-    // force metric to pool metric
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplMMToTwips(aTranslate.getX()));
-                aTranslate.setY(ImplMMToTwips(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplMMToTwips(aScale.getX()));
-                aScale.setY(ImplMMToTwips(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRSetBaseGeometry: Missing unit translation to PoolMetric!");
-            }
-        }
-    }
-
     // if anchor is used, make position relative to it
-    if( pModel && pModel->IsWriter() )
+    if(getSdrModelFromSdrObject().IsWriter())
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {
@@ -3065,36 +3030,11 @@ bool SdrObjCustomShape::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegf
     basegfx::B2DTuple aTranslate(aRectangle.Left(), aRectangle.Top());
 
     // position may be relative to anchorpos, convert
-    if( pModel && pModel->IsWriter() )
+    if(getSdrModelFromSdrObject().IsWriter())
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {
             aTranslate -= basegfx::B2DTuple(GetAnchorPos().X(), GetAnchorPos().Y());
-        }
-    }
-
-    // force MapUnit to 100th mm
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplTwipsToMM(aTranslate.getX()));
-                aTranslate.setY(ImplTwipsToMM(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplTwipsToMM(aScale.getX()));
-                aScale.setY(ImplTwipsToMM(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRGetBaseGeometry: Missing unit translation to 100th mm!");
-            }
         }
     }
 

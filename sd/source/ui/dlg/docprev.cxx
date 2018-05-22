@@ -87,37 +87,8 @@ void SdDocPreviewWin::Resize()
         mxSlideShow->resize( GetSizePixel() );
 }
 
-void SdDocPreviewWin::CalcSizeAndPos( Size& rSize, Point& rPoint )
-{
-    long nWidth = rSize.Width() - 2*FRAME;
-    long nHeight = rSize.Height() - 2*FRAME;
-    if( nWidth < 0 ) nWidth = 0;
-    if( nHeight < 0 ) nHeight = 0;
-
-    double dRatio = 1;
-    double dRatioPreV = nHeight ? (static_cast<double>(nWidth) / nHeight) : 0.0;
-
-    if (dRatio > dRatioPreV)
-    {
-        rSize=Size(nWidth, static_cast<sal_uInt16>(nWidth/dRatio));
-        rPoint=Point( 0, static_cast<sal_uInt16>((nHeight-rSize.Height())/2));
-    }
-    else
-    {
-        rSize=Size(static_cast<sal_uInt16>(nHeight*dRatio), nHeight);
-        rPoint=Point(static_cast<sal_uInt16>((nWidth-rSize.Width())/2),0);
-    }
-}
-
 void SdDocPreviewWin::ImpPaint( OutputDevice* pVDev )
 {
-    Point aPoint;
-    Size aSize = pVDev->GetOutputSize();
-    Point bPoint(aSize.Width()-2*FRAME, aSize.Height()-2*FRAME );
-    CalcSizeAndPos( aSize, aPoint );
-    bPoint -= aPoint;
-    aPoint += Point( FRAME, FRAME );
-
     svtools::ColorConfig aColorConfig;
 
     pVDev->SetLineColor();

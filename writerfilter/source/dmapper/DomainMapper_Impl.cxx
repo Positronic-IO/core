@@ -70,7 +70,7 @@
 #include <com/sun/star/text/XTextColumns.hpp>
 #include <com/sun/star/awt/CharSet.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
-
+#include <o3tl/temporary.hxx>
 #include <oox/mathml/import.hxx>
 #include <rtl/uri.hxx>
 #include "GraphicHelpers.hxx"
@@ -78,6 +78,7 @@
 
 #include <oox/token/tokens.hxx>
 
+#include <cmath>
 #include <map>
 #include <tuple>
 #include <unordered_map>
@@ -91,6 +92,7 @@
 #include <comphelper/propertysequence.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/mediadescriptor.hxx>
+#include <tools/diagnose_ex.h>
 
 
 using namespace ::com::sun::star;
@@ -205,7 +207,7 @@ DomainMapper_Impl::DomainMapper_Impl(
         m_sCurrentPermId(0),
         m_pLastSectionContext( ),
         m_pLastCharacterContext(),
-        m_sCurrentParaStyleId(),
+        m_sCurrentParaStyleName(),
         m_bInStyleSheetImport( false ),
         m_bInAnyTableImport( false ),
         m_bInHeaderFooterImport( false ),
@@ -242,6 +244,7 @@ DomainMapper_Impl::DomainMapper_Impl(
         m_bHasFtn(false),
         m_bHasFtnSep(false),
         m_bIgnoreNextPara(false),
+        m_bCheckFirstFootnoteTab(false),
         m_bIgnoreNextTab(false),
         m_bFrameBtLr(false),
         m_bIsSplitPara(false),
@@ -390,6 +393,9 @@ void DomainMapper_Impl::AddDummyParaForTableInSection()
 
 void DomainMapper_Impl::RemoveLastParagraph( )
 {
+    if (m_bDiscardHeaderFooter)
+        return;
+
     if (m_aTextAppendStack.empty())
         return;
     uno::Reference< text::XTextAppend > xTextAppend = m_aTextAppendStack.top().xTextAppend;
@@ -642,6 +648,17 @@ uno::Sequence< style::TabStop > DomainMapper_Impl::GetCurrentTabStopAndClear()
     return comphelper::containerToSequence(aRet);
 }
 
+const OUString DomainMapper_Impl::GetCurrentParaStyleName()
+{
+    // use saved currParaStyleName as a fallback, in case no particular para style name applied.
+    OUString sName = m_sCurrentParaStyleName;
+    PropertyMapPtr pParaContext = GetTopContextOfType(CONTEXT_PARAGRAPH);
+    if ( pParaContext && pParaContext->isSet(PROP_PARA_STYLE_NAME) )
+        pParaContext->getProperty(PROP_PARA_STYLE_NAME)->second >>= sName;
+
+    return sName;
+}
+
 /*-------------------------------------------------------------------------
     returns a the value from the current paragraph style - if available
     TODO: What about parent styles?
@@ -652,8 +669,7 @@ uno::Any DomainMapper_Impl::GetPropertyFromStyleSheet(PropertyIds eId)
     if( m_bInStyleSheetImport )
         pEntry = GetStyleSheetTable()->FindParentStyleSheet(OUString());
     else
-        pEntry =
-                GetStyleSheetTable()->FindStyleSheetByISTD(GetCurrentParaStyleId());
+        pEntry = GetStyleSheetTable()->FindStyleSheetByConvertedStyleName(GetCurrentParaStyleName());
     while(pEntry.get( ) )
     {
         //is there a tab stop set?
@@ -1087,6 +1103,9 @@ static sal_Int32 lcl_getListId(const StyleSheetEntryPtr& rEntry, const StyleShee
 
 void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
 {
+    if (m_bDiscardHeaderFooter)
+        return;
+
 #ifdef DEBUG_WRITERFILTER
     TagLogger::getInstance().startElement("finishParagraph");
 #endif
@@ -1106,7 +1125,7 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap )
     //does not specify the numbering
     if( pParaContext && !pParaContext->isSet(PROP_NUMBERING_RULES) )
     {
-        const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByISTD( GetCurrentParaStyleId() );
+        const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByConvertedStyleName( GetCurrentParaStyleName() );
         OSL_ENSURE( pEntry.get(), "no style sheet found" );
         const StyleSheetPropertyMap* pStyleSheetProperties = dynamic_cast<const StyleSheetPropertyMap*>(pEntry ? pEntry->pProperties.get() : nullptr);
 
@@ -1799,6 +1818,7 @@ void DomainMapper_Impl::PopPageHeaderFooter()
 void DomainMapper_Impl::PushFootOrEndnote( bool bIsFootnote )
 {
     m_bInFootOrEndnote = true;
+    m_bCheckFirstFootnoteTab = true;
     try
     {
         // Redlines outside the footnote should not affect footnote content
@@ -1821,20 +1841,6 @@ void DomainMapper_Impl::PushFootOrEndnote( bool bIsFootnote )
         // Redlines for the footnote anchor
         CheckRedline( xFootnote->getAnchor( ) );
 
-        // Word has a leading tab on footnotes, but we may implement space
-        // between the footnote number and text using a paragraph margin, not a
-        // tab (Writer default). So ignore that in case there is a margin set.
-        uno::Reference<style::XStyleFamiliesSupplier> xStylesSupplier( GetTextDocument(), uno::UNO_QUERY);
-        uno::Reference<container::XNameAccess> xStyleFamilies = xStylesSupplier->getStyleFamilies();
-        uno::Reference<container::XNameContainer> xStyles;
-        xStyleFamilies->getByName("ParagraphStyles") >>= xStyles;
-        uno::Reference<beans::XPropertySet> xStyle(xStyles->getByName("Footnote"), uno::UNO_QUERY);
-        if (xStyle.is())
-        {
-            sal_Int32 nMargin = 0;
-            xStyle->getPropertyValue("ParaLeftMargin") >>= nMargin;
-            m_bIgnoreNextTab = nMargin > 0;
-        }
     }
     catch( const uno::Exception& e )
     {
@@ -1953,9 +1959,9 @@ void DomainMapper_Impl::PushAnnotation()
         m_aTextAppendStack.push(TextAppendContext(uno::Reference< text::XTextAppend >( xAnnotationText, uno::UNO_QUERY_THROW ),
                     m_bIsNewDoc ? uno::Reference<text::XTextCursor>() : xAnnotationText->createTextCursorByRange(xAnnotationText->getStart())));
     }
-    catch( const uno::Exception& rException)
+    catch( const uno::Exception&)
     {
-        SAL_WARN("writerfilter.dmapper", "exception in PushAnnotation: " << rException);
+        DBG_UNHANDLED_EXCEPTION("writerfilter.dmapper");
     }
 }
 
@@ -2248,7 +2254,8 @@ void DomainMapper_Impl::PopShapeContext()
         if ( !m_aAnchoredStack.top().bToRemove )
         {
             RemoveLastParagraph();
-            m_aTextAppendStack.pop();
+            if (!m_aTextAppendStack.empty())
+                m_aTextAppendStack.pop();
         }
 
         uno::Reference< text::XTextContent > xObj = m_aAnchoredStack.top( ).xTextContent;
@@ -2284,8 +2291,11 @@ void DomainMapper_Impl::PopShapeContext()
         {
             const uno::Reference<beans::XPropertySet> xShapePropertySet( xShape, uno::UNO_QUERY );
             SectionPropertyMap* pSectionContext = GetSectionContext();
-            if ( pSectionContext && !getTableManager().isInTable() && xShapePropertySet->getPropertySetInfo()->hasPropertyByName(getPropertyName(PROP_RELATIVE_WIDTH)) )
+            if ( pSectionContext && (!hasTableManager() || !getTableManager().isInTable()) &&
+                 xShapePropertySet->getPropertySetInfo()->hasPropertyByName(getPropertyName(PROP_RELATIVE_WIDTH)) )
+            {
                 pSectionContext->addRelativeWidthShape(xShape);
+            }
         }
 
         m_aAnchoredStack.pop();
@@ -2841,9 +2851,9 @@ void DomainMapper_Impl::ChainTextFrames()
         }
         m_vTextFramesForChaining.clear(); //clear the vector
     }
-    catch (const uno::Exception& rException)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("writerfilter.dmapper", "failed. message: " << rException);
+        DBG_UNHANDLED_EXCEPTION("writerfilter.dmapper");
     }
 }
 
@@ -3205,7 +3215,6 @@ void  DomainMapper_Impl::handleRubyEQField( const FieldContextPtr& pContext)
 {
     const OUString & rCommand(pContext->GetCommand());
     sal_Int32 nIndex = 0, nEnd = 0;
-    OUString aToken ,sFont;
     RubyInfo aInfo ;
     nIndex = rCommand.indexOf("\\* jc" );
     if (nIndex != -1)
@@ -3224,13 +3233,8 @@ void  DomainMapper_Impl::handleRubyEQField( const FieldContextPtr& pContext)
         aInfo.nRubyAlign = aRubyAlignValues[(nJc<SAL_N_ELEMENTS(aRubyAlignValues))?nJc:0];
     }
 
-    nIndex = rCommand.indexOf("\\* \"Font:" );
-    if (nIndex != -1)
-    {
-        nIndex += 9;
-        aToken = rCommand.getToken(0, '"',nIndex);
-        sFont = aToken;
-    }
+    // we don't parse or use the font field in rCommand
+
     nIndex = rCommand.indexOf("\\* hps" );
     if (nIndex != -1)
     {
@@ -3683,6 +3687,9 @@ void DomainMapper_Impl::handleToc
     }
     pContext->SetTOC( xTOC );
     m_bParaHadField = false;
+
+    if (m_aTextAppendStack.empty())
+        return;
 
     OUString const sMarker("Y");
     //insert index
@@ -4514,7 +4521,7 @@ void DomainMapper_Impl::CloseFieldCommand()
                  */
                 OUString aCode( pContext->GetCommand().trim() );
                 // Don't waste resources on wrapping shapes inside a fieldmark.
-                if (aCode != "SHAPE" && m_xTextFactory.is())
+                if (aCode != "SHAPE" && m_xTextFactory.is() && !m_aTextAppendStack.empty())
                 {
                     xFieldInterface = m_xTextFactory->createInstance("com.sun.star.text.Fieldmark");
                     const uno::Reference<text::XTextContent> xTextContent(xFieldInterface, uno::UNO_QUERY_THROW);
@@ -4580,7 +4587,7 @@ static util::DateTime lcl_dateTimeFromSerial(const double& dSerial)
     DateTime d(Date(30, 12, 1899));
     d.AddDays( static_cast<sal_Int32>(dSerial) );
 
-    double frac = dSerial - static_cast<sal_Int32>(dSerial);
+    double frac = std::modf(dSerial, &o3tl::temporary(double()));
     sal_uInt32 seconds = frac * secondsPerDay;
 
     util::DateTime date;
@@ -4914,7 +4921,7 @@ void DomainMapper_Impl::StartOrEndBookmark( const OUString& rId )
      * iff the first element in the section is a table. If the dummy para is not added yet, then add it;
      * So bookmark is not attached to the wrong paragraph.
      */
-    if(getTableManager( ).isInCell() && m_nTableDepth == 0 && GetIsFirstParagraphInSection()
+    if(hasTableManager() && getTableManager().isInCell() && m_nTableDepth == 0 && GetIsFirstParagraphInSection()
                     && !GetIsDummyParaAddedForTableInSection() &&!GetIsTextFrameInserted())
     {
         AddDummyParaForTableInSection();
@@ -5322,9 +5329,9 @@ void DomainMapper_Impl::ExecuteFrameConversion()
                 m_xFrameEndRange,
                 comphelper::containerToSequence(m_aFrameProperties) );
         }
-        catch( const uno::Exception& rEx)
+        catch( const uno::Exception&)
         {
-            SAL_WARN( "writerfilter.dmapper", "Exception caught when converting to frame: " << rEx );
+            DBG_UNHANDLED_EXCEPTION( "writerfilter.dmapper", "Exception caught when converting to frame");
         }
     }
     m_xFrameStartRange = nullptr;
@@ -5501,10 +5508,10 @@ uno::Reference<container::XIndexAccess> DomainMapper_Impl::GetCurrentNumberingRu
     uno::Reference<container::XIndexAccess> xRet;
     try
     {
-        OUString aStyle = GetCurrentParaStyleId();
+        OUString aStyle = GetCurrentParaStyleName();
         if (aStyle.isEmpty())
             return xRet;
-        const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByISTD(aStyle);
+        const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByConvertedStyleName(aStyle);
         if (!pEntry)
             return xRet;
         const StyleSheetPropertyMap* pStyleSheetProperties = dynamic_cast<const StyleSheetPropertyMap*>(pEntry->pProperties.get());

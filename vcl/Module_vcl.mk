@@ -115,6 +115,15 @@ $(eval $(call gb_Module_add_targets,vcl,\
 ))
 endif
 
+ifeq ($(OS),HAIKU)
+ifneq ($(ENABLE_QT5),)
+$(eval $(call gb_Module_add_targets,vcl,\
+    CustomTarget_qt5_moc \
+    Library_vclplug_qt5 \
+))
+endif
+endif
+
 ifneq ($(ENABLE_FUZZERS),)
 $(eval $(call gb_Module_add_targets,vcl,\
     CustomTarget_nativecore \
@@ -180,6 +189,7 @@ $(eval $(call gb_Module_add_check_targets,vcl,\
 	CppunitTest_vcl_lifecycle \
 	CppunitTest_vcl_bitmap_test \
 	CppunitTest_vcl_bitmapprocessor_test \
+	CppunitTest_vcl_graphic_test \
 	CppunitTest_vcl_fontcharmap \
 	CppunitTest_vcl_font \
 	CppunitTest_vcl_fontmetric \
@@ -190,10 +200,16 @@ $(eval $(call gb_Module_add_check_targets,vcl,\
 	CppunitTest_vcl_app_test \
 	CppunitTest_vcl_jpeg_read_write_test \
 	CppunitTest_vcl_svm_test \
-	CppunitTest_vcl_pdfexport \
-    CppunitTest_vcl_errorhandler \
+	CppunitTest_vcl_errorhandler \
+	CppunitTest_vcl_bitmap_render_test \
+	CppunitTest_vcl_apitests \
 ))
 
+ifneq (,$(filter PDFIUM,$(BUILD_TYPE)))
+$(eval $(call gb_Module_add_check_targets,vcl,\
+	CppunitTest_vcl_pdfexport \
+))
+endif
 
 ifeq ($(USING_X11),TRUE)
 $(eval $(call gb_Module_add_check_targets,vcl,\

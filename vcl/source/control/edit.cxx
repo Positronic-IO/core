@@ -206,11 +206,9 @@ bool Edit::set_property(const OString &rKey, const OUString &rValue)
     }
     else if (rKey == "visibility")
     {
-        WinBits nBits = GetStyle();
-        nBits &= ~WB_PASSWORD;
+        mbPassword = false;
         if (!toBool(rValue))
-            nBits |= WB_PASSWORD;
-        SetStyle(nBits);
+            mbPassword = true;
     }
     else if (rKey == "placeholder-text")
         SetPlaceholderText(rValue);
@@ -227,9 +225,7 @@ Edit::~Edit()
 void Edit::dispose()
 {
     mpUIBuilder.reset();
-
-    delete mpDDInfo;
-    mpDDInfo = nullptr;
+    mpDDInfo.reset();
 
     vcl::Cursor* pCursor = GetCursor();
     if ( pCursor )
@@ -238,11 +234,8 @@ void Edit::dispose()
         delete pCursor;
     }
 
-    delete mpIMEInfos;
-    mpIMEInfos = nullptr;
-
-    delete mpUpdateDataTimer;
-    mpUpdateDataTimer = nullptr;
+    mpIMEInfos.reset();
+    mpUpdateDataTimer.reset();
 
     if ( mxDnDListener.is() )
     {
@@ -286,6 +279,7 @@ void Edit::ImplInitEditData()
     mbActivePopup           = false;
     mbIsSubEdit             = false;
     mbForceControlBackground = false;
+    mbPassword              = false;
     mpDDInfo                = nullptr;
     mpIMEInfos              = nullptr;
     mcEchoChar              = 0;
@@ -436,7 +430,7 @@ long Edit::ImplGetExtraYOffset() const
 
 OUString Edit::ImplGetText() const
 {
-    if ( mcEchoChar || (GetStyle() & WB_PASSWORD) )
+    if ( mcEchoChar || mbPassword )
     {
         sal_Unicode cEchoChar;
         if ( mcEchoChar )
@@ -532,7 +526,7 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
     else
         rRenderContext.SetTextFillColor(IsControlBackground() ? GetControlBackground() : rStyleSettings.GetFieldColor());
 
-    ImplPaintBorder(rRenderContext, 0, GetOutputSizePixel().Width());
+    ImplPaintBorder(rRenderContext);
 
     bool bDrawSelection = maSelection.Len() && (HasFocus() || (GetStyle() & WB_NOHIDESELECTION) || mbActivePopup);
 
@@ -1000,15 +994,11 @@ void Edit::ImplClearBackground(vcl::RenderContext& rRenderContext, const tools::
     }
 }
 
-void Edit::ImplPaintBorder(vcl::RenderContext const & rRenderContext, long nXStart, long nXEnd)
+void Edit::ImplPaintBorder(vcl::RenderContext const & rRenderContext)
 {
     // this is not needed when double-buffering
     if (SupportsDoubleBuffering())
         return;
-
-    tools::Rectangle aRect(Point(), GetOutputSizePixel());
-    aRect.SetLeft( nXStart );
-    aRect.SetRight( nXEnd );
 
     if (ImplUseNativeBorder(rRenderContext, GetStyle()) || IsPaintTransparent())
     {
@@ -1415,7 +1405,7 @@ bool Edit::ImplHandleKeyEvent( const KeyEvent& rKEvt )
         {
             case KeyFuncType::CUT:
             {
-                if ( !mbReadOnly && maSelection.Len() && !(GetStyle() & WB_PASSWORD) )
+                if ( !mbReadOnly && maSelection.Len() && !mbPassword )
                 {
                     Cut();
                     ImplModified();
@@ -1426,7 +1416,7 @@ bool Edit::ImplHandleKeyEvent( const KeyEvent& rKEvt )
 
             case KeyFuncType::COPY:
             {
-                if ( !(GetStyle() & WB_PASSWORD) )
+                if ( !mbPassword )
                 {
                     Copy();
                     bDone = true;
@@ -1675,6 +1665,14 @@ bool Edit::ImplHandleKeyEvent( const KeyEvent& rKEvt )
                     bDone = true;
                 }
             }
+            break;
+
+            case KEY_RETURN:
+                if (maActivateHdl.IsSet())
+                {
+                    maActivateHdl.Call(*this);
+                    bDone = true;
+                }
             break;
 
             default:
@@ -2035,16 +2033,14 @@ void Edit::Command( const CommandEvent& rCEvt )
     else if ( rCEvt.GetCommand() == CommandEventId::StartExtTextInput )
     {
         DeleteSelected();
-        delete mpIMEInfos;
         sal_Int32 nPos = static_cast<sal_Int32>(maSelection.Max());
-        mpIMEInfos = new Impl_IMEInfos( nPos, OUString(maText.getStr() + nPos ) );
+        mpIMEInfos.reset(new Impl_IMEInfos( nPos, OUString(maText.getStr() + nPos ) ));
         mpIMEInfos->bWasCursorOverwrite = !IsInsertMode();
     }
     else if ( rCEvt.GetCommand() == CommandEventId::EndExtTextInput )
     {
         bool bInsertMode = !mpIMEInfos->bWasCursorOverwrite;
-        delete mpIMEInfos;
-        mpIMEInfos = nullptr;
+        mpIMEInfos.reset();
 
         SetInsertMode(bInsertMode);
         ImplModified();
@@ -2386,7 +2382,7 @@ void Edit::EnableUpdateData( sal_uLong nTimeout )
     {
         if ( !mpUpdateDataTimer )
         {
-            mpUpdateDataTimer = new Timer("UpdateDataTimer");
+            mpUpdateDataTimer.reset(new Timer("UpdateDataTimer"));
             mpUpdateDataTimer->SetInvokeHandler( LINK( this, Edit, ImplUpdateDataHdl ) );
             mpUpdateDataTimer->SetDebugName( "vcl::Edit mpUpdateDataTimer" );
         }
@@ -2397,8 +2393,7 @@ void Edit::EnableUpdateData( sal_uLong nTimeout )
 
 void Edit::DisableUpdateData()
 {
-    delete mpUpdateDataTimer;
-    mpUpdateDataTimer = nullptr;
+    mpUpdateDataTimer.reset();
 }
 
 void Edit::SetEchoChar( sal_Unicode c )
@@ -2568,7 +2563,7 @@ OUString Edit::GetSelected() const
 
 void Edit::Cut()
 {
-    if ( !(GetStyle() & WB_PASSWORD ) )
+    if ( !mbPassword )
     {
         Copy();
         ReplaceSelected( OUString() );
@@ -2577,7 +2572,7 @@ void Edit::Cut()
 
 void Edit::Copy()
 {
-    if ( !(GetStyle() & WB_PASSWORD ) )
+    if ( !mbPassword )
     {
         css::uno::Reference<css::datatransfer::clipboard::XClipboard> aClipboard(GetClipboard());
         ImplCopy( aClipboard );
@@ -2805,6 +2800,8 @@ VclPtr<PopupMenu> Edit::CreatePopupMenu()
         pPopup->SetAccelKey(pPopup->GetItemId("copy"), vcl::KeyCode( KeyFuncType::COPY));
         pPopup->SetAccelKey(pPopup->GetItemId("paste"), vcl::KeyCode( KeyFuncType::PASTE));
         pPopup->SetAccelKey(pPopup->GetItemId("delete"), vcl::KeyCode( KeyFuncType::DELETE));
+        pPopup->SetAccelKey(pPopup->GetItemId("selectall"), vcl::KeyCode( KEY_A, false, true, false, false));
+        pPopup->SetAccelKey(pPopup->GetItemId("specialchar"), vcl::KeyCode( KEY_S, true, true, false, false));
     }
     return pPopup;
 }
@@ -2815,7 +2812,7 @@ void Edit::dragGestureRecognized( const css::datatransfer::dnd::DragGestureEvent
     SolarMutexGuard aVclGuard;
 
     if ( !IsTracking() && maSelection.Len() &&
-         !(GetStyle() & WB_PASSWORD) && (!mpDDInfo || !mpDDInfo->bStarterOfDD) ) // no repeated D&D
+         !mbPassword && (!mpDDInfo || !mpDDInfo->bStarterOfDD) ) // no repeated D&D
     {
         Selection aSel( maSelection );
         aSel.Justify();
@@ -2826,7 +2823,7 @@ void Edit::dragGestureRecognized( const css::datatransfer::dnd::DragGestureEvent
         if ( (nCharPos >= aSel.Min()) && (nCharPos < aSel.Max()) )
         {
             if ( !mpDDInfo )
-                mpDDInfo = new DDInfo;
+                mpDDInfo.reset(new DDInfo);
 
             mpDDInfo->bStarterOfDD = true;
             mpDDInfo->aDndStartSel = aSel;
@@ -2868,8 +2865,7 @@ void Edit::dragDropEnd( const css::datatransfer::dnd::DragSourceDropEvent& rDSDE
     }
 
     ImplHideDDCursor();
-    delete mpDDInfo;
-    mpDDInfo = nullptr;
+    mpDDInfo.reset();
 }
 
 // css::datatransfer::dnd::XDropTargetListener
@@ -2912,8 +2908,7 @@ void Edit::drop( const css::datatransfer::dnd::DropTargetDropEvent& rDTDE )
 
         if ( !mpDDInfo->bStarterOfDD )
         {
-            delete mpDDInfo;
-            mpDDInfo = nullptr;
+            mpDDInfo.reset();
         }
     }
 
@@ -2924,7 +2919,7 @@ void Edit::dragEnter( const css::datatransfer::dnd::DropTargetDragEnterEvent& rD
 {
     if ( !mpDDInfo )
     {
-        mpDDInfo = new DDInfo;
+        mpDDInfo.reset(new DDInfo);
     }
     // search for string data type
     const Sequence< css::datatransfer::DataFlavor >& rFlavors( rDTDE.SupportedDataFlavors );

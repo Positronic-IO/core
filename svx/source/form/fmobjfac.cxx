@@ -36,7 +36,6 @@
 #include <svx/svxids.hrc>
 #include <tbxform.hxx>
 
-#include <svx/dialmgr.hxx>
 #include <tabwin.hxx>
 #include <fmexpl.hxx>
 #include <filtnav.hxx>
@@ -100,16 +99,16 @@ namespace
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("svx");
             OSL_FAIL( "lcl_initProperty: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 }
 
-IMPL_STATIC_LINK(
-    FmFormObjFactory, MakeObject, SdrObjCreatorParams, aParams, SdrObject*)
+IMPL_STATIC_LINK(FmFormObjFactory, MakeObject, SdrObjCreatorParams, aParams, SdrObject*)
 {
     SdrObject* pNewObj = nullptr;
+
     if (aParams.nInventor == SdrInventor::FmForm)
     {
         OUString sServiceSpecifier;
@@ -213,9 +212,9 @@ IMPL_STATIC_LINK(
 
         // create the actual object
         if ( !sServiceSpecifier.isEmpty() )
-            pNewObj = new FmFormObj(sServiceSpecifier);
+            pNewObj = new FmFormObj(aParams.rSdrModel, sServiceSpecifier);
         else
-            pNewObj = new FmFormObj();
+            pNewObj = new FmFormObj(aParams.rSdrModel);
 
         // initialize some properties which we want to differ from the defaults
         for (   PropertyValueArray::const_iterator aInitProp = aInitialProperties.begin();

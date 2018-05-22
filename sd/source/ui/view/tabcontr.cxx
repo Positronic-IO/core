@@ -27,7 +27,6 @@
 #include <sdattr.hxx>
 #include <sdmod.hxx>
 #include <app.hrc>
-#include <strings.hrc>
 
 #include <DrawViewShell.hxx>
 #include <GraphicViewShell.hxx>
@@ -38,7 +37,6 @@
 #include <Window.hxx>
 #include <unmodpg.hxx>
 #include <DrawDocShell.hxx>
-#include <sdresid.hxx>
 
 namespace sd {
 
@@ -319,7 +317,7 @@ TabBarAllowRenamingReturnCode TabControl::AllowRenaming()
     if( aCompareName != aNewName )
     {
         // rename page
-        if( pDrViewSh->GetDocSh()->CheckPageName( this, aNewName ) )
+        if (pDrViewSh->GetDocSh()->CheckPageName(GetFrameWeld(), aNewName))
         {
             SetEditText( aNewName );
             EndRenaming();

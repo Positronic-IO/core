@@ -38,15 +38,15 @@ ThemeBuffer::~ThemeBuffer()
 {
 }
 
-sal_Int32 ThemeBuffer::getColorByToken( sal_Int32 nToken ) const
+::Color ThemeBuffer::getColorByToken( sal_Int32 nToken ) const
 {
-    sal_Int32 nColor = 0;
+    ::Color nColor = 0;
     return getClrScheme().getColor( nToken, nColor ) ? nColor : API_RGB_TRANSPARENT;
 }
 
-sal_Int32 ThemeBuffer::getColorByIndex(size_t nIndex) const
+::Color ThemeBuffer::getColorByIndex(size_t nIndex) const
 {
-    sal_Int32 nColor = 0;
+    ::Color nColor = 0;
     return getClrScheme().getColorByIndex(nIndex, nColor) ? nColor : API_RGB_TRANSPARENT;
 }
 

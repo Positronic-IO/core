@@ -62,7 +62,7 @@ constexpr size_t NF_MAX_FORMAT_SYMBOLS = 100;
 /// number formatter was constructed with.
 constexpr sal_uInt32 NF_STANDARD_FORMAT_TEXT = SV_MAX_COUNT_STANDARD_FORMATS;
 
-#define NUMBERFORMAT_ENTRY_NOT_FOUND sal_uInt32(0xffffffff)   /// MAX_ULONG
+constexpr sal_uInt32 NUMBERFORMAT_ENTRY_NOT_FOUND  = 0xffffffff;   /// MAX_ULONG
 
 enum class SvNumFormatType : sal_Int16
 {
@@ -776,7 +776,7 @@ public:
         returned, even if the format code only contains [$xxx] !
      */
     bool    GetNewCurrencySymbolString( sal_uInt32 nFormat, OUString& rSymbol,
-                                        const NfCurrencyEntry** ppEntry = nullptr,
+                                        const NfCurrencyEntry** ppEntry,
                                         bool* pBank = nullptr ) const;
 
     /** Look up the corresponding NfCurrencyEntry matching
@@ -881,6 +881,10 @@ public:
 
     /** Access for unit tests. */
     size_t GetMaxDefaultColors() const;
+
+    struct InputScannerPrivateAccess { friend class ImpSvNumberInputScan; private: InputScannerPrivateAccess() {} };
+    /** Access for input scanner to temporarily (!) switch locales. */
+    OnDemandLocaleDataWrapper& GetOnDemandLocaleDataWrapper( const InputScannerPrivateAccess& ) { return xLocaleData; }
 
 private:
     mutable ::osl::Mutex m_aMutex;

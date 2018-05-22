@@ -12,8 +12,6 @@
 
 #include <com/sun/star/awt/FontDescriptor.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
-#include <com/sun/star/document/XFilter.hpp>
-#include <com/sun/star/document/XImporter.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeParameterPair.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegment.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
@@ -38,15 +36,26 @@
 #include <com/sun/star/text/WrapTextMode.hpp>
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
-#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/text/XFormField.hpp>
 
 #include <rtl/ustring.hxx>
 #include <vcl/settings.hxx>
-#include <unotools/ucbstreamhelper.hxx>
-#include <unotools/streamwrap.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/configuration.hxx>
+
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace graphic
+{
+class XGraphic;
+}
+}
+}
+}
 
 class Test : public SwModelTestBase
 {
@@ -57,31 +66,6 @@ public:
     }
 
 protected:
-    /// Copy&paste helper.
-    void paste(const OUString& aFilename, uno::Reference<text::XTextRange> const& xTextRange
-                                          = uno::Reference<text::XTextRange>())
-    {
-        uno::Reference<document::XFilter> xFilter(
-            m_xSFactory->createInstance("com.sun.star.comp.Writer.RtfFilter"),
-            uno::UNO_QUERY_THROW);
-        uno::Reference<document::XImporter> xImporter(xFilter, uno::UNO_QUERY_THROW);
-        xImporter->setTargetDocument(mxComponent);
-        uno::Sequence<beans::PropertyValue> aDescriptor(xTextRange.is() ? 3 : 2);
-        aDescriptor[0].Name = "InputStream";
-        SvStream* pStream = utl::UcbStreamHelper::CreateStream(
-            m_directories.getURLFromSrc("/sw/qa/extras/rtfimport/data/") + aFilename,
-            StreamMode::WRITE);
-        uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
-        aDescriptor[0].Value <<= xStream;
-        aDescriptor[1].Name = "InsertMode";
-        aDescriptor[1].Value <<= true;
-        if (xTextRange.is())
-        {
-            aDescriptor[2].Name = "TextInsertModeRange";
-            aDescriptor[2].Value <<= xTextRange;
-        }
-        xFilter->filter(aDescriptor);
-    }
     AllSettings m_aSavedSettings;
 };
 
@@ -132,6 +116,12 @@ DECLARE_RTFIMPORT_TEST(testN695479, "n695479.rtf")
     }
     CPPUNIT_ASSERT(bFrameFound);
     CPPUNIT_ASSERT(bDrawFound);
+}
+
+DECLARE_RTFIMPORT_TEST(testTdf117246, "tdf117246.rtf")
+{
+    // This was 2, all but the last \page was lost.
+    CPPUNIT_ASSERT_EQUAL(3, getPages());
 }
 
 DECLARE_RTFIMPORT_TEST(testTdf108943, "tdf108943.rtf")
@@ -656,6 +646,22 @@ DECLARE_RTFIMPORT_TEST(testFdo81033, "fdo81033.rtf")
     CPPUNIT_ASSERT_EQUAL(u'_', tabs[1].FillChar);
 }
 
+DECLARE_RTFIMPORT_TEST(testTdf116269, "tdf116269.rtf")
+{
+    // This was 2540, implicit 0 left margin was ignored on import (inherited
+    // value from list definition is repeated if it's not 0).
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
+                         getProperty<sal_Int32>(getParagraph(1), "ParaLeftMargin"));
+}
+
+DECLARE_RTFIMPORT_TEST(testTdf116265, "tdf116265.rtf")
+{
+    // This was -635, \fi as direct formatting has to be ignored due to
+    // matching \fi in list definition (and with invalid level numbers).
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaFirstLineIndent"));
+}
+
 DECLARE_RTFIMPORT_TEST(testFdo66565, "fdo66565.rtf")
 {
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
@@ -735,7 +741,7 @@ DECLARE_RTFIMPORT_TEST(testFdo68291, "fdo68291.odt")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("fdo68291-paste.rtf", xEnd);
+    paste("rtfimport/data/fdo68291-paste.rtf", xEnd);
 
     // This was "Standard", causing an unwanted page break on next paste.
     CPPUNIT_ASSERT_EQUAL(uno::Any(),
@@ -1124,7 +1130,7 @@ DECLARE_RTFIMPORT_TEST(testTdf90260Par, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("tdf90260-par.rtf", xEnd);
+    paste("rtfimport/data/tdf90260-par.rtf", xEnd);
     CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
 }
 
@@ -1220,12 +1226,12 @@ DECLARE_RTFIMPORT_TEST(testClassificatonPaste, "hello.rtf")
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
 
     // Not classified source, not classified destination: OK.
-    paste("classification-no.rtf", xEnd);
+    paste("rtfimport/data/classification-no.rtf", xEnd);
     CPPUNIT_ASSERT_EQUAL(OUString("classification-no"), getParagraph(2)->getString());
 
     // Classified source, not classified destination: nothing should happen.
     OUString aOld = xText->getString();
-    paste("classification-yes.rtf", xEnd);
+    paste("rtfimport/data/classification-yes.rtf", xEnd);
     CPPUNIT_ASSERT_EQUAL(aOld, xText->getString());
 }
 
@@ -1298,6 +1304,20 @@ DECLARE_RTFIMPORT_TEST(testTdf78506, "tdf78506.rtf")
     }
 }
 
+DECLARE_RTFIMPORT_TEST(testTdf117403, "tdf117403.rtf")
+{
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xCell.is());
+    table::BorderLine2 aExpected(static_cast<sal_Int32>(COL_BLACK), 0, 4, 0,
+                                 table::BorderLineStyle::SOLID, 4);
+    // This failed, border was not imported, OuterLineWidth was 0 instead of 4.
+    CPPUNIT_ASSERT_BORDER_EQUAL(aExpected, getProperty<table::BorderLine2>(xCell, "BottomBorder"));
+}
+
 DECLARE_RTFIMPORT_TEST(testImportHeaderFooter, "tdf108055.rtf")
 {
     // The RTF import sometimes added Header and Footer multiple Times
@@ -1357,9 +1377,6 @@ DECLARE_RTFIMPORT_TEST(testImportHeaderFooter, "tdf108055.rtf")
 
 DECLARE_RTFIMPORT_TEST(testTdf108947, "tdf108947.rtf")
 {
-    //Check page count
-    CPPUNIT_ASSERT_EQUAL(2, getPages());
-
     //Check if Headers/Footers contain what they should in this document
     uno::Reference<text::XText> xHeaderTextRight = getProperty<uno::Reference<text::XText>>(
         getStyles("PageStyles")->getByName("Default Style"), "HeaderTextRight");

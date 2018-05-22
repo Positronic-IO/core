@@ -60,10 +60,11 @@
 #include <rtl/ref.hxx>
 
 #include <vector>
+#include <memory>
 
 #include <basecontainercontrol.hxx>
 
-namespace unocontrols{
+namespace unocontrols {
 
 class ProgressBar;
 
@@ -83,8 +84,6 @@ class ProgressBar;
 #define PROGRESSMONITOR_DEFAULT_WIDTH                   350
 #define PROGRESSMONITOR_DEFAULT_HEIGHT                  100
 
-//  structs, types
-
 /// Item of TextList
 struct IMPL_TextlistItem
 {
@@ -92,23 +91,19 @@ struct IMPL_TextlistItem
     OUString sText;          /// Right site of textline in dialog
 };
 
-//  class declaration
-
 class ProgressMonitor   : public css::awt::XLayoutConstrains
                         , public css::awt::XButton
                         , public css::awt::XProgressMonitor
                         , public BaseContainerControl
 {
-
 public:
-
     ProgressMonitor( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
 
     virtual ~ProgressMonitor() override;
 
     //  XInterface
 
-    /**_______________________________________________________________________________________________________
+    /**
         @short      give answer, if interface is supported
         @descr      The interfaces are searched by type.
 
@@ -123,7 +118,7 @@ public:
 
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
 
-    /**_______________________________________________________________________________________________________
+    /**
         @short      increment refcount
         @seealso    XInterface
         @seealso    release()
@@ -132,7 +127,7 @@ public:
 
     virtual void SAL_CALL acquire() throw() override;
 
-    /**_______________________________________________________________________________________________________
+    /**
         @short      decrement refcount
         @seealso    XInterface
         @seealso    acquire()
@@ -143,7 +138,7 @@ public:
 
     //  XTypeProvider
 
-    /**_______________________________________________________________________________________________________
+    /**
         @short      get information about supported interfaces
         @seealso    XTypeProvider
         @return     Sequence of types of all supported interfaces
@@ -159,7 +154,7 @@ public:
 
     //  XProgressMonitor
 
-    /**_______________________________________________________________________________________________________
+    /**
         @short      add topic to dialog
         @descr      Add a topic with a text in right textlist (used for FixedText-member).<BR>
                     ( "beforeProgress" fix the right list ). The dialog metric is recalculated.
@@ -258,7 +253,6 @@ public:
     static const OUString impl_getStaticImplementationName();
 
 protected:
-
     virtual void impl_paint( sal_Int32 nX ,
                              sal_Int32 nY ,
                              const css::uno::Reference< css::awt::XGraphics >& xGraphics ) override;
@@ -277,28 +271,26 @@ private:
 // debug methods
 
 private:
-
     static bool impl_debug_checkParameter( const OUString& sTopic, const OUString& sText );    // addText, updateText
     static bool impl_debug_checkParameter( const OUString& rTopic );                           // removeText
 
 // private variables
 
 private:
-    ::std::vector < IMPL_TextlistItem* >          maTextlist_Top;         // Elements before progress
+    ::std::vector < std::unique_ptr<IMPL_TextlistItem> > maTextlist_Top;         // Elements before progress
     css::uno::Reference< css::awt::XFixedText >   m_xTopic_Top;   // (used, if parameter "beforeProgress"=true in "addText, updateText, removeText")
     css::uno::Reference< css::awt::XFixedText >   m_xText_Top;
 
-    ::std::vector < IMPL_TextlistItem* >          maTextlist_Bottom;      // Elements below of progress
+    ::std::vector < std::unique_ptr<IMPL_TextlistItem> > maTextlist_Bottom;      // Elements below of progress
     css::uno::Reference< css::awt::XFixedText >   m_xTopic_Bottom;   // (used, if parameter "beforeProgress"=false in "addText, updateText, removeText")
     css::uno::Reference< css::awt::XFixedText >   m_xText_Bottom;
 
     rtl::Reference<ProgressBar>                   m_xProgressBar;
     css::uno::Reference< css::awt::XButton >      m_xButton;
     css::awt::Rectangle                           m_a3DLine;
+};
 
-};  // class ProgressMonitor
-
-}   // namespace unocontrols
+}
 
 #endif // INCLUDED_UNOCONTROLS_SOURCE_INC_PROGRESSMONITOR_HXX
 

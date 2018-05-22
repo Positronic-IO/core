@@ -29,51 +29,51 @@
 #include <vcl/outdev.hxx>
 #include <vcl/vclptr.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/font.hxx>
 
 #include "wrtsh.hxx"
 #include <tblafmt.hxx>
 
-class AutoFormatPreview : public vcl::Window
+class AutoFormatPreview
 {
 public:
-    AutoFormatPreview(vcl::Window* pParent, WinBits nStyle);
-    virtual ~AutoFormatPreview() override;
-    virtual void dispose() override;
+    AutoFormatPreview(weld::DrawingArea* pDrawingArea);
 
     void NotifyChange(const SwTableAutoFormat& rNewData);
 
     void DetectRTL(SwWrtShell const* pWrtShell);
 
-    virtual void Resize() override;
-
-protected:
-    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
+    void set_size_request(int nWidth, int nHeight)
+    {
+        mxDrawingArea->set_size_request(nWidth, nHeight);
+    }
 
 private:
-    SwTableAutoFormat aCurData;
-    ScopedVclPtr<VirtualDevice> aVD;
+    std::unique_ptr<weld::DrawingArea> mxDrawingArea;
+    SwTableAutoFormat maCurrentData;
     svx::frame::Array maArray; /// Implementation to draw the frame borders.
-    bool bFitWidth;
+    bool mbFitWidth;
     bool mbRTL;
-    Size aPrvSize;
-    long nLabelColWidth;
-    long nDataColWidth1;
-    long nDataColWidth2;
-    long nRowHeight;
-    const OUString aStrJan;
-    const OUString aStrFeb;
-    const OUString aStrMar;
-    const OUString aStrNorth;
-    const OUString aStrMid;
-    const OUString aStrSouth;
-    const OUString aStrSum;
-    SvNumberFormatter* pNumFormat;
+    Size maPreviousSize;
+    long mnLabelColumnWidth;
+    long mnDataColumnWidth1;
+    long mnDataColumnWidth2;
+    long mnRowHeight;
+    const OUString maStringJan;
+    const OUString maStringFeb;
+    const OUString maStringMar;
+    const OUString maStringNorth;
+    const OUString maStringMid;
+    const OUString maStringSouth;
+    const OUString maStringSum;
+    std::unique_ptr<SvNumberFormatter> mxNumFormat;
 
     uno::Reference<i18n::XBreakIterator> m_xBreak;
 
     void Init();
-    void DoPaint(vcl::RenderContext& rRenderContext);
+    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
+    DECL_LINK(DoResize, const Size& rSize, void);
     void CalcCellArray(bool bFitWidth);
     void CalcLineMap();
     void PaintCells(vcl::RenderContext& rRenderContext);
@@ -83,7 +83,8 @@ private:
     void DrawString(vcl::RenderContext& rRenderContext, size_t nCol, size_t nRow);
     void DrawBackground(vcl::RenderContext& rRenderContext);
 
-    void MakeFonts(sal_uInt8 nIndex, vcl::Font& rFont, vcl::Font& rCJKFont, vcl::Font& rCTLFont);
+    void MakeFonts(vcl::RenderContext const& rRenderContext, sal_uInt8 nIndex, vcl::Font& rFont,
+                   vcl::Font& rCJKFont, vcl::Font& rCTLFont);
 };
 
 #endif

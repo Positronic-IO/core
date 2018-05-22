@@ -14,8 +14,23 @@
 
 #include <vector>
 
-#include <com/sun/star/task/XStatusIndicator.hpp>
+#include <com/sun/star/uno/Reference.h>
 
+#include <rtl/ustring.hxx>
+
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace task
+{
+class XStatusIndicator;
+}
+}
+}
+}
 class SvStream;
 
 namespace writerfilter
@@ -31,7 +46,6 @@ public:
     ~RTFTokenizer();
 
     RTFError resolveParse();
-    static int asHex(char ch);
     /// Number of states on the stack.
     int getGroup() const { return m_nGroup; }
     /// To be invoked by the pushState() callback to signal when the importer enters a group.

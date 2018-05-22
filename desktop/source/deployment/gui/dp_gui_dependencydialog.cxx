@@ -26,9 +26,7 @@
 #include <rtl/ustring.hxx>
 #include <vcl/dialog.hxx>
 
-#include <strings.hrc>
 #include "dp_gui_dependencydialog.hxx"
-#include <dp_shared.hxx>
 
 namespace vcl { class Window; }
 
@@ -42,10 +40,9 @@ DependencyDialog::DependencyDialog(
     set_height_request(200);
     SetMinOutputSizePixel(GetOutputSizePixel());
     m_list->SetReadOnly();
-    for (std::vector< OUString >::const_iterator i(dependencies.begin());
-         i != dependencies.end(); ++i)
+    for (auto const& dependency : dependencies)
     {
-        m_list->InsertEntry(*i);
+        m_list->InsertEntry(dependency);
     }
 }
 

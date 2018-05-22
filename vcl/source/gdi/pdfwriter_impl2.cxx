@@ -102,7 +102,7 @@ void PDFWriterImpl::implWriteBitmapEx( const Point& i_rPoint, const Size& i_rSiz
     bool bIsJpeg = false, bIsPng = false;
     if( i_Graphic.GetType() != GraphicType::NONE && i_Graphic.GetBitmapEx() == aBitmapEx )
     {
-        GfxLinkType eType = i_Graphic.GetLink().GetType();
+        GfxLinkType eType = i_Graphic.GetGfxLink().GetType();
         bIsJpeg = (eType == GfxLinkType::NativeJpg);
         bIsPng = (eType == GfxLinkType::NativePng);
     }
@@ -269,7 +269,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
 
     for( sal_uInt32 i = 0, nCount = aMtf.GetActionSize(); i < nCount; )
     {
-        if ( !i_pOutDevData || !i_pOutDevData->PlaySyncPageAct( m_rOuterFace, i ) )
+        if ( !i_pOutDevData || !i_pOutDevData->PlaySyncPageAct( m_rOuterFace, i, aMtf ) )
         {
             const MetaAction*    pAction = aMtf.GetAction( i );
             const MetaActionType nType = pAction->GetType();

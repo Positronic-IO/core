@@ -34,7 +34,6 @@
 
 #include <memory>
 
-#include <comphelper/processfactory.hxx>
 #include <i18nutil/unicode.hxx>
 #include <unotools/pathoptions.hxx>
 #include <vcl/tabctrl.hxx>
@@ -45,7 +44,6 @@
 #include <vcl/field.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/combobox.hxx>
@@ -58,7 +56,6 @@
 #include <sfx2/objsh.hxx>
 
 #include <svx/svxids.hrc>
-#include <svx/dialmgr.hxx>
 #include <editeng/flstitem.hxx>
 #include <svx/drawitem.hxx>
 
@@ -206,7 +203,7 @@ ColorPropertyBox::ColorPropertyBox( sal_Int32 nControlType, vcl::Window* pParent
 
     sal_Int32 nColor = 0;
     rValue >>= nColor;
-    mpControl->SelectEntry(static_cast<Color>(nColor));
+    mpControl->SelectEntry(Color(nColor));
 }
 
 IMPL_LINK_NOARG(ColorPropertyBox, OnSelect, SvxColorListBox&, void)
@@ -227,13 +224,13 @@ void ColorPropertyBox::setValue( const Any& rValue, const OUString& )
         rValue >>= nColor;
 
         mpControl->SetNoSelection();
-        mpControl->SelectEntry(static_cast<Color>(nColor));
+        mpControl->SelectEntry(Color(nColor));
     }
 }
 
 Any ColorPropertyBox::getValue()
 {
-    return makeAny( static_cast<sal_Int32>(mpControl->GetSelectEntryColor().GetRGBColor()) );
+    return makeAny( sal_Int32(mpControl->GetSelectEntryColor().GetRGBColor()) );
 }
 
 Control* ColorPropertyBox::getControl()
@@ -639,13 +636,13 @@ void RotationPropertyBox::updateMenu()
     bool bDirection = nValue >= 0;
     nValue = (nValue < 0 ? -nValue : nValue);
 
-    mpMenu->CheckItem(mpMenu->GetItemId("90"), nValue == 90);
-    mpMenu->CheckItem(mpMenu->GetItemId("180"), nValue == 180);
-    mpMenu->CheckItem(mpMenu->GetItemId("360"), nValue == 360);
-    mpMenu->CheckItem(mpMenu->GetItemId("720"), nValue == 720);
+    mpMenu->CheckItem("90", nValue == 90);
+    mpMenu->CheckItem("180", nValue == 180);
+    mpMenu->CheckItem("360", nValue == 360);
+    mpMenu->CheckItem("720", nValue == 720);
 
-    mpMenu->CheckItem(mpMenu->GetItemId("closewise"), bDirection);
-    mpMenu->CheckItem(mpMenu->GetItemId("counterclock"), !bDirection);
+    mpMenu->CheckItem("closewise", bDirection);
+    mpMenu->CheckItem("counterclock", !bDirection);
 }
 
 IMPL_LINK_NOARG(RotationPropertyBox, implModifyHdl, Edit&, void)
@@ -756,14 +753,14 @@ void ScalePropertyBox::updateMenu()
 {
     sal_Int64 nValue = mpMetric->GetValue();
 
-    mpMenu->CheckItem(mpMenu->GetItemId("25"), nValue == 25);
-    mpMenu->CheckItem(mpMenu->GetItemId("50"), nValue == 50);
-    mpMenu->CheckItem(mpMenu->GetItemId("150"), nValue == 150);
-    mpMenu->CheckItem(mpMenu->GetItemId("400"), nValue == 400);
+    mpMenu->CheckItem("25", nValue == 25);
+    mpMenu->CheckItem("50", nValue == 50);
+    mpMenu->CheckItem("150", nValue == 150);
+    mpMenu->CheckItem("400", nValue == 400);
 
-    mpMenu->CheckItem(mpMenu->GetItemId("hori"), mnDirection == 1);
-    mpMenu->CheckItem(mpMenu->GetItemId("vert"), mnDirection == 2);
-    mpMenu->CheckItem(mpMenu->GetItemId("both"), mnDirection == 3);
+    mpMenu->CheckItem("hori", mnDirection == 1);
+    mpMenu->CheckItem("vert", mnDirection == 2);
+    mpMenu->CheckItem("both", mnDirection == 3);
 }
 
 IMPL_LINK_NOARG(ScalePropertyBox, implModifyHdl, Edit&, void)
@@ -930,9 +927,9 @@ FontStylePropertyBox::~FontStylePropertyBox()
 void FontStylePropertyBox::update()
 {
     // update menu
-    mpMenu->CheckItem(mpMenu->GetItemId("bold"), mfFontWeight == awt::FontWeight::BOLD);
-    mpMenu->CheckItem(mpMenu->GetItemId("italic"), meFontSlant == awt::FontSlant_ITALIC);
-    mpMenu->CheckItem(mpMenu->GetItemId("underline"), mnFontUnderline != awt::FontUnderline::NONE );
+    mpMenu->CheckItem("bold", mfFontWeight == awt::FontWeight::BOLD);
+    mpMenu->CheckItem("italic", meFontSlant == awt::FontSlant_ITALIC);
+    mpMenu->CheckItem("underline", mnFontUnderline != awt::FontUnderline::NONE );
 
     // update sample edit
     vcl::Font aFont( mpEdit->GetFont() );
@@ -1149,7 +1146,7 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
             {
                 sal_Int32 nColor = 0;
                 aDimColor >>= nColor;
-                Color aColor(nColor);
+                Color aColor = Color(nColor);
                 mpCLBDimColor->SelectEntry(aColor);
             }
             else
@@ -1382,7 +1379,7 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
         if( nPos == 1 )
         {
             Color aSelectedColor = mpCLBDimColor->GetSelectEntryColor();
-            aDimColor <<= static_cast<sal_Int32>(aSelectedColor.GetRGBColor());
+            aDimColor <<= aSelectedColor.GetRGBColor();
         }
 
         if( (mpSet->getPropertyState( nHandleDimColor ) == STLPropertyState::Ambiguous) ||
@@ -1496,10 +1493,7 @@ sal_Int32 CustomAnimationEffectTabPage::getSoundObject( const OUString& rStr )
 
 void CustomAnimationEffectTabPage::openSoundFileDialog()
 {
-    SdOpenSoundFileDialog aFileDialog(this);
-
-    OUString aFile( SvtPathOptions().GetWorkPath() );
-    aFileDialog.SetPath( aFile );
+    SdOpenSoundFileDialog aFileDialog(GetFrameWeld());
 
     bool bValidSoundFile = false;
     bool bQuitLoop = false;
@@ -1507,7 +1501,7 @@ void CustomAnimationEffectTabPage::openSoundFileDialog()
 
     while( !bQuitLoop && (aFileDialog.Execute() == ERRCODE_NONE) )
     {
-        aFile = aFileDialog.GetPath();
+        OUString aFile = aFileDialog.GetPath();
         nPos = getSoundObject( aFile );
 
         if( nPos < 0 ) // not in Soundliste

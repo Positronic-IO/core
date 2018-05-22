@@ -37,12 +37,10 @@
 #include <tools/diagnose_ex.h>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
-#include <comphelper/processfactory.hxx>
 #include <toolkit/helper/property.hxx>
 #include <toolkit/helper/servicenames.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <toolkit/controls/accessiblecontrolcontext.hxx>
-#include <comphelper/container.hxx>
 
 #include <algorithm>
 #include <map>
@@ -239,7 +237,7 @@ bool UnoControl::ImplCheckLocalize( OUString& _rPossiblyLocalizable )
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("toolkit.controls");
     }
     return false;
 }
@@ -1354,7 +1352,7 @@ sal_Bool UnoControl::setModel( const Reference< XControlModel >& rxModel )
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("toolkit.controls");
             mxModel.clear();
         }
     }

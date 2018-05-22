@@ -213,9 +213,9 @@ void ChartController::TheModel::tryTermination()
             return;
         }
     }
-    catch(const uno::Exception& ex)
+    catch(const uno::Exception&)
     {
-        SAL_WARN( "chart2", "Termination of model failed: " << ex );
+        DBG_UNHANDLED_EXCEPTION( "chart2", "Termination of model failed" );
     }
 }
 
@@ -487,9 +487,9 @@ void SAL_CALL ChartController::attachFrame(
                         m_xLayoutManagerEventBroadcaster->addLayoutManagerEventListener( this );
                 }
             }
-            catch( const uno::Exception & ex )
+            catch( const uno::Exception & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
     }
@@ -727,7 +727,7 @@ void ChartController::impl_createDrawViewController()
     {
         if( m_pDrawModelWrapper )
         {
-            m_pDrawViewWrapper = new DrawViewWrapper(&m_pDrawModelWrapper->getSdrModel(),GetChartWindow());
+            m_pDrawViewWrapper = new DrawViewWrapper(m_pDrawModelWrapper->getSdrModel(),GetChartWindow());
             m_pDrawViewWrapper->attachParentReferenceDevice( getModel() );
         }
     }
@@ -842,9 +842,9 @@ void SAL_CALL ChartController::dispose()
                 if( xMBroadcaster.is())
                     xMBroadcaster->removeModifyListener( this );
             }
-            catch( const uno::Exception & ex )
+            catch( const uno::Exception & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
 #endif
             aModelRef->tryTermination();
@@ -856,10 +856,10 @@ void SAL_CALL ChartController::dispose()
         SolarMutexGuard g;
         m_aDispatchContainer.DisposeAndClear();
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
+        DBG_UNHANDLED_EXCEPTION("chart2");
         assert(!m_xChartView.is());
-        SAL_WARN("chart2", "Exception caught. " << ex );
     }
  }
 
@@ -1446,7 +1446,7 @@ IMPL_LINK( ChartController, NotifyUndoActionHdl, SdrUndoAction*, pUndoAction, vo
         }
         catch( const uno::Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }
@@ -1485,6 +1485,15 @@ VclPtr<ChartWindow> ChartController::GetChartWindow()
     if(!m_xViewWindow.is())
         return nullptr;
     return dynamic_cast<ChartWindow*>(VCLUnoHelper::GetWindow(m_xViewWindow).get());
+}
+
+weld::Window* ChartController::GetChartFrame()
+{
+    // clients getting the naked VCL Window from UNO should always have the
+    // solar mutex (and keep it over the lifetime of this ptr), as VCL might
+    // might deinit otherwise
+    DBG_TESTSOLARMUTEX();
+    return Application::GetFrameWeld(m_xViewWindow);
 }
 
 bool ChartController::isAdditionalShapeSelected()
@@ -1537,7 +1546,7 @@ void ChartController::impl_initializeAccessible( const uno::Reference< lang::XIn
     {
         uno::Sequence< uno::Any > aArguments(5);
         aArguments[0] <<= uno::Reference<view::XSelectionSupplier>(this);
-        aArguments[1] <<= uno::Reference<frame::XModel>(getModel());
+        aArguments[1] <<= getModel();
         aArguments[2] <<= m_xChartView;
         uno::Reference< XAccessible > xParent;
         {

@@ -27,7 +27,6 @@
 
 #include <svx/ofaitem.hxx>
 #include <svx/svxerr.hxx>
-#include <svx/dialmgr.hxx>
 #include <svl/srchitem.hxx>
 #include <svl/languageoptions.hxx>
 #include <svtools/langtab.hxx>
@@ -43,9 +42,6 @@
 #include <editeng/eeitem.hxx>
 #include <com/sun/star/i18n/TextConversionOption.hpp>
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
-
-#include <strings.hrc>
-
 
 #include <sdmod.hxx>
 #include <drawdoc.hxx>
@@ -145,13 +141,9 @@ void DrawDocShell::Execute( SfxRequest& rReq )
 
             if (pReqArgs)
             {
-                const SvxSearchItem* pSearchItem = static_cast<const SvxSearchItem*>( &pReqArgs->Get(SID_SEARCH_ITEM) );
+                const SvxSearchItem & rSearchItem = pReqArgs->Get(SID_SEARCH_ITEM);
 
-                // would be nice to have an assign operation at SearchItem
-                SvxSearchItem* pAppSearchItem = SD_MOD()->GetSearchItem();
-                delete pAppSearchItem;
-                pAppSearchItem = static_cast<SvxSearchItem*>( pSearchItem->Clone() );
-                SD_MOD()->SetSearchItem(pAppSearchItem);
+                SD_MOD()->SetSearchItem(std::unique_ptr<SvxSearchItem>(static_cast<SvxSearchItem*>(rSearchItem.Clone())));
             }
 
             rReq.Done();
@@ -212,15 +204,10 @@ void DrawDocShell::Execute( SfxRequest& rReq )
 
                 if( xFuSearch.is() )
                 {
-                    const SvxSearchItem* pSearchItem =
-                        static_cast<const SvxSearchItem*>( &pReqArgs->Get(SID_SEARCH_ITEM) );
+                    const SvxSearchItem& rSearchItem = pReqArgs->Get(SID_SEARCH_ITEM);
 
-                    // would be nice to have an assign operation at SearchItem
-                    SvxSearchItem* pAppSearchItem = SD_MOD()->GetSearchItem();
-                    delete pAppSearchItem;
-                    pAppSearchItem = static_cast<SvxSearchItem*>( pSearchItem->Clone() );
-                    SD_MOD()->SetSearchItem(pAppSearchItem);
-                    xFuSearch->SearchAndReplace(pSearchItem);
+                    SD_MOD()->SetSearchItem(std::unique_ptr<SvxSearchItem>(static_cast<SvxSearchItem*>( rSearchItem.Clone() )));
+                    xFuSearch->SearchAndReplace(&rSearchItem);
                 }
             }
 

@@ -333,7 +333,7 @@ void RenderTools::DrawSelectionBackground(vcl::RenderContext& rRenderContext, vc
 
     if (!bDark && !bBright && std::abs(c2 - c1) < (pPaintColor ? 40 : 75))
     {
-        // constrast too low
+        // contrast too low
         sal_uInt16 h, s, b;
         aSelectionFillColor.RGBtoHSB( h, s, b );
         if( b > 50 )    b -= 40;
@@ -510,7 +510,7 @@ void Window::PopPaintHelper(PaintHelper const *pHelper)
     if (mpWindowImpl->mpWinData)
     {
         if (mpWindowImpl->mbFocusVisible)
-            ImplInvertFocus(*(mpWindowImpl->mpWinData->mpFocusRect));
+            ImplInvertFocus(*mpWindowImpl->mpWinData->mpFocusRect);
     }
     mpWindowImpl->mbInPaint = false;
     mbInitClipRegion = true;
@@ -546,7 +546,7 @@ PaintHelper::~PaintHelper()
         /* #98602# need to invert the tracking rect AFTER
         * the children have painted
         */
-        m_pWindow->InvertTracking( *(pWindowImpl->mpWinData->mpTrackRect), pWindowImpl->mpWinData->mnTrackFlags );
+        m_pWindow->InvertTracking( *pWindowImpl->mpWinData->mpTrackRect, pWindowImpl->mpWinData->mnTrackFlags );
 
     // double-buffering: paint in case we created the buffer, the children are
     // already painted inside
@@ -1189,6 +1189,17 @@ void Window::Invalidate( const vcl::Region& rRegion, InvalidateFlags nFlags )
 
 void Window::LogicInvalidate(const tools::Rectangle* pRectangle)
 {
+    if(pRectangle)
+    {
+        tools::Rectangle aRect = GetOutDev()->ImplLogicToDevicePixel( *pRectangle );
+        PixelInvalidate(&aRect);
+    }
+    else
+        PixelInvalidate(nullptr);
+}
+
+void Window::PixelInvalidate(const tools::Rectangle* pRectangle)
+{
     if (comphelper::LibreOfficeKit::isDialogPainting() || !comphelper::LibreOfficeKit::isActive())
         return;
 
@@ -1198,14 +1209,19 @@ void Window::LogicInvalidate(const tools::Rectangle* pRectangle)
         std::vector<vcl::LOKPayloadItem> aPayload;
         if (pRectangle)
             aPayload.push_back(std::make_pair(OString("rectangle"), pRectangle->toString()));
+        else
+        {
+            const tools::Rectangle aRect(Point(0, 0), GetSizePixel());
+            aPayload.push_back(std::make_pair(OString("rectangle"), aRect.toString()));
+        }
 
         pNotifier->notifyWindow(GetLOKWindowId(), "invalidate", aPayload);
     }
     // Added for dialog items. Pass invalidation to the parent window.
     else if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
     {
-        const tools::Rectangle aRect(Point(GetOutOffXPixel(), GetOutOffYPixel()), Size(GetOutputWidthPixel(), GetOutputHeightPixel()));
-        pParent->LogicInvalidate(&aRect);
+        const tools::Rectangle aRect(Point(GetOutOffXPixel(), GetOutOffYPixel()), GetSizePixel());
+        pParent->PixelInvalidate(&aRect);
     }
 }
 
@@ -1635,9 +1651,9 @@ void Window::ImplScroll( const tools::Rectangle& rRect,
         if ( mpWindowImpl->mpWinData )
         {
             if ( mpWindowImpl->mbFocusVisible )
-                ImplInvertFocus( *(mpWindowImpl->mpWinData->mpFocusRect) );
+                ImplInvertFocus( *mpWindowImpl->mpWinData->mpFocusRect );
             if ( mpWindowImpl->mbTrackVisible && (mpWindowImpl->mpWinData->mnTrackFlags & ShowTrackFlags::TrackWindow) )
-                InvertTracking( *(mpWindowImpl->mpWinData->mpTrackRect), mpWindowImpl->mpWinData->mnTrackFlags );
+                InvertTracking( *mpWindowImpl->mpWinData->mpTrackRect, mpWindowImpl->mpWinData->mnTrackFlags );
         }
 #ifndef IOS
         // This seems completely unnecessary with tiled rendering, and
@@ -1670,9 +1686,9 @@ void Window::ImplScroll( const tools::Rectangle& rRect,
         if ( mpWindowImpl->mpWinData )
         {
             if ( mpWindowImpl->mbFocusVisible )
-                ImplInvertFocus( *(mpWindowImpl->mpWinData->mpFocusRect) );
+                ImplInvertFocus( *mpWindowImpl->mpWinData->mpFocusRect );
             if ( mpWindowImpl->mbTrackVisible && (mpWindowImpl->mpWinData->mnTrackFlags & ShowTrackFlags::TrackWindow) )
-                InvertTracking( *(mpWindowImpl->mpWinData->mpTrackRect), mpWindowImpl->mpWinData->mnTrackFlags );
+                InvertTracking( *mpWindowImpl->mpWinData->mpTrackRect, mpWindowImpl->mpWinData->mnTrackFlags );
         }
     }
 

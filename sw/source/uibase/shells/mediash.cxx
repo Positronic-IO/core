@@ -19,7 +19,6 @@
 
 #include <cmdid.h>
 #include <hintids.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/urihelper.hxx>
@@ -54,7 +53,6 @@
 #include <usrpref.hxx>
 #include <edtwin.hxx>
 #include <swwait.hxx>
-#include <strings.hrc>
 
 #include <sfx2/objface.hxx>
 #include <vcl/EnumContext.hxx>
@@ -62,7 +60,7 @@
 #include <svx/sdr/contact/viewcontactofsdrmediaobj.hxx>
 #include <avmedia/mediaitem.hxx>
 
-#define SwMediaShell
+#define ShellClass_SwMediaShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 #include <swabstdlg.hxx>

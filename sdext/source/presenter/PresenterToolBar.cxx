@@ -57,8 +57,6 @@ using namespace ::com::sun::star::drawing::framework;
 namespace sdext { namespace presenter {
 
 static const sal_Int32 gnGapSize (20);
-static const sal_Int32 gnMinimalSeparatorSize (20);
-static const sal_Int32 gnSeparatorInset (0);
 
 namespace {
 
@@ -1392,7 +1390,6 @@ void ElementMode::ReadElementMode (
         PresenterConfigurationAccess::GetProperty(xProperties, "Font"), UNO_QUERY);
     PresenterTheme::SharedFontDescriptor pFont (PresenterTheme::ReadFont(
         xFontNode,
-        "",
         rpDefaultMode.get()!=nullptr
             ? rpDefaultMode->maText.GetFont()
             : PresenterTheme::SharedFontDescriptor()));
@@ -1902,11 +1899,6 @@ void VerticalSeparator::Paint (
             PresenterCanvasHelper::SetDeviceColor(aRenderState, pFont->mnColor);
     }
 
-    if (aBBox.Height >= gnMinimalSeparatorSize + 2*gnSeparatorInset)
-    {
-        aBBox.Height -= 2*gnSeparatorInset;
-        aBBox.Y += gnSeparatorInset;
-    }
     rxCanvas->fillPolyPolygon(
         PresenterGeometryHelper::CreatePolygon(aBBox, rxCanvas->getDevice()),
         rViewState,
@@ -1952,11 +1944,6 @@ void HorizontalSeparator::Paint (
             PresenterCanvasHelper::SetDeviceColor(aRenderState, pFont->mnColor);
     }
 
-    if (aBBox.Width >= gnMinimalSeparatorSize+2*gnSeparatorInset)
-    {
-        aBBox.Width -= 2*gnSeparatorInset;
-        aBBox.X += gnSeparatorInset;
-    }
     rxCanvas->fillPolyPolygon(
         PresenterGeometryHelper::CreatePolygon(aBBox, rxCanvas->getDevice()),
         rViewState,

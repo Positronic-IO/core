@@ -31,10 +31,10 @@
 
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <tabvwsh.hxx>
 #include <viewdata.hxx>
 #include <document.hxx>
-#include <scresid.hxx>
 #include <scendlg.hxx>
 
 ScNewScenarioDlg::ScNewScenarioDlg( vcl::Window* pParent, const OUString& rName, bool bEdit, bool bSheetProtected)
@@ -153,7 +153,7 @@ IMPL_LINK_NOARG(ScNewScenarioDlg, OkHdl, Button*, void)
     {
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_INVALIDTABNAME)));
+                                                      ScResId(STR_INVALIDTABNAME)));
         xInfoBox->run();
         m_pEdName->GrabFocus();
     }
@@ -161,7 +161,7 @@ IMPL_LINK_NOARG(ScNewScenarioDlg, OkHdl, Button*, void)
     {
         std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                       VclMessageType::Info, VclButtonsType::Ok,
-                                                      ScGlobal::GetRscString(STR_NEWTABNAMENOTUNIQUE)));
+                                                      ScResId(STR_NEWTABNAMENOTUNIQUE)));
         xInfoBox->run();
         m_pEdName->GrabFocus();
     }

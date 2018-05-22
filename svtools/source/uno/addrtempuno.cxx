@@ -20,9 +20,7 @@
 #include <svtools/addresstemplate.hxx>
 #include <svtools/genericunodialog.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <com/sun/star/sdbc/XDataSource.hpp>
 #include <rtl/ref.hxx>
@@ -71,7 +69,7 @@ namespace {
 
     protected:
     // OGenericUnoDialog overridables
-        virtual VclPtr<Dialog> createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
 
         virtual void implInitialize(const css::uno::Any& _rValue) override;
 
@@ -132,8 +130,8 @@ namespace {
         OGenericUnoDialog::executedDialog(_nExecutionResult);
 
         if ( _nExecutionResult )
-            if ( m_pDialog )
-                static_cast< AddressBookSourceDialog* >( m_pDialog.get() )->getFieldMapping( m_aAliases );
+            if ( m_aDialog )
+                static_cast< AddressBookSourceDialog* >( m_aDialog.m_xVclDialog.get() )->getFieldMapping( m_aAliases );
     }
 
     void SAL_CALL OAddressBookSourceDialogUno::initialize(const Sequence< Any >& rArguments)
@@ -199,12 +197,12 @@ namespace {
     }
 
 
-    VclPtr<Dialog> OAddressBookSourceDialogUno::createDialog(vcl::Window* _pParent)
+    svt::OGenericUnoDialog::Dialog OAddressBookSourceDialogUno::createDialog(vcl::Window* _pParent)
     {
         if ( m_xDataSource.is() && !m_sTable.isEmpty() )
-            return VclPtr<AddressBookSourceDialog>::Create(_pParent, m_aContext, m_xDataSource, m_sDataSourceName, m_sTable, m_aAliases );
+            return svt::OGenericUnoDialog::Dialog(VclPtr<AddressBookSourceDialog>::Create(_pParent, m_aContext, m_xDataSource, m_sDataSourceName, m_sTable, m_aAliases));
         else
-            return VclPtr<AddressBookSourceDialog>::Create( _pParent, m_aContext );
+            return svt::OGenericUnoDialog::Dialog(VclPtr<AddressBookSourceDialog>::Create(_pParent, m_aContext));
     }
 
 }

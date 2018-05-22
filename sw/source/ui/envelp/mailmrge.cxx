@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 
@@ -521,7 +520,7 @@ bool SwMailMergeDlg::ExecQryShell()
             pModOpt->SetNameFromColumn(OUString());
             //start save as dialog
             OUString sFilter;
-            m_sFilename = SwMailMergeHelper::CallSaveAsDialog(this, sFilter);
+            m_sFilename = SwMailMergeHelper::CallSaveAsDialog(GetFrameWeld(), sFilter);
             if (m_sFilename.isEmpty())
                 return false;
             m_sSaveFilter = sFilter;

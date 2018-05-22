@@ -27,6 +27,7 @@
 #include <vcl/svapp.hxx>
 #include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -37,11 +38,9 @@ using ::com::sun::star::uno::Reference;
 namespace chart
 {
 
-ChartType::ChartType(
-    const Reference< uno::XComponentContext > & xContext ) :
+ChartType::ChartType() :
         ::property::OPropertySet( m_aMutex ),
         m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
-        m_xContext( xContext ),
         m_bNotifyChanges( true )
 {}
 
@@ -50,7 +49,6 @@ ChartType::ChartType( const ChartType & rOther ) :
         impl::ChartType_Base(),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
-    m_xContext( rOther.m_xContext ),
     m_bNotifyChanges( true )
 {
     {
@@ -252,9 +250,9 @@ void SAL_CALL ChartType::addModifyListener( const uno::Reference< util::XModifyL
         uno::Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->addModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -265,9 +263,9 @@ void SAL_CALL ChartType::removeModifyListener( const uno::Reference< util::XModi
         uno::Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->removeModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 

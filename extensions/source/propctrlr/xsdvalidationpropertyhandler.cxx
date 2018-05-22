@@ -403,7 +403,7 @@ namespace pcr
             aDescriptor.Control = PropertyHandlerHelper::createListBoxControl( _rxControlFactory, aListEntries, false, false );
             break;
         case PropertyControlType::NumericField:
-            aDescriptor.Control = PropertyHandlerHelper::createNumericControl( _rxControlFactory, 0, aMinValue, aMaxValue, false );
+            aDescriptor.Control = PropertyHandlerHelper::createNumericControl( _rxControlFactory, 0, aMinValue, aMaxValue );
             break;
         default:
             aDescriptor.Control = _rxControlFactory->createPropertyControl( nControlType, false );
@@ -655,14 +655,11 @@ namespace pcr
         _rNames.reserve( aAllTypes.size() );
 
         // then allow only those which are "compatible" with our control
-        for ( std::vector< OUString >::const_iterator dataType = aAllTypes.begin();
-              dataType != aAllTypes.end();
-              ++dataType
-            )
+        for (auto const& dataType : aAllTypes)
         {
-            ::rtl::Reference< XSDDataType > pType = m_pHelper->getDataTypeByName( *dataType );
+            ::rtl::Reference< XSDDataType > pType = m_pHelper->getDataTypeByName(dataType);
             if ( pType.is() && m_pHelper->canBindToDataType( pType->classify() ) )
-                _rNames.push_back( *dataType );
+                _rNames.push_back(dataType);
         }
     }
 

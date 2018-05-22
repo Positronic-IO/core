@@ -20,11 +20,8 @@
 #include <textconnectionsettings.hxx>
 #include "TextConnectionHelper.hxx"
 #include <dbu_pageids.hxx>
-#include <core_resource.hxx>
 #include <dsitems.hxx>
 #include <stringconstants.hxx>
-
-#include <vcl/msgbox.hxx>
 
 namespace dbaui
 {

@@ -21,7 +21,6 @@
 #include "svgfontexport.hxx"
 #include "svgfilter.hxx"
 #include <svgscript.hxx>
-#include "impsvgdialog.hxx"
 
 #include <com/sun/star/animations/XAnimationNodeSupplier.hpp>
 #include <com/sun/star/drawing/XMasterPageTarget.hpp>
@@ -47,6 +46,7 @@
 #include <comphelper/sequenceashashmap.hxx>
 #include <i18nlangtag/lang.h>
 #include <svl/zforlist.hxx>
+#include <unotools/ucbstreamhelper.hxx>
 #include <xmloff/unointerfacetouniqueidentifiermapper.hxx>
 #include <xmloff/nmspmap.hxx>
 #include <xmloff/xmlnmspe.hxx>
@@ -65,6 +65,13 @@ using namespace ::xmloff::token;
 // - ooo elements and attributes -
 
 #define NSPREFIX "ooo:"
+
+#define SVG_PROP_TINYPROFILE                "TinyMode"
+#define SVG_PROP_DTDSTRING                  "DTDString"
+#define SVG_PROP_EMBEDFONTS                 "EmbedFonts"
+#define SVG_PROP_NATIVEDECORATION           "UseNativeTextDecoration"
+#define SVG_PROP_OPACITY                    "Opacity"
+#define SVG_PROP_POSITIONED_CHARACTERS      "UsePositionedCharacters"
 
 // ooo xml elements
 static const char    aOOOElemTextField[] = NSPREFIX "text_field";
@@ -115,10 +122,9 @@ protected:
     {
         const sal_Unicode * ustr = sText.getStr();
         sal_Int32 nLength = sText.getLength();
-        SVGFilter::ObjectSet::const_iterator aMasterPageIt = mMasterPageSet.begin();
-        for( ; aMasterPageIt != mMasterPageSet.end(); ++aMasterPageIt )
+        for (auto const& masterPage : mMasterPageSet)
         {
-            const Reference< XInterface > & xMasterPage = *aMasterPageIt;
+            const Reference< XInterface > & xMasterPage = masterPage;
             for( sal_Int32 i = 0; i < nLength; ++i )
             {
                 aTextFieldCharSets[ xMasterPage ][ sTextFieldId ].insert( ustr[i] );
@@ -284,10 +290,9 @@ public:
         // we use the unicode char set in an improper way: we put in the date/time format
         // in order to pass it to the CalcFieldValue method
         static const OUString sFieldId = aOOOAttrDateTimeField + "-variable";
-        SVGFilter::ObjectSet::const_iterator aMasterPageIt = mMasterPageSet.begin();
-        for( ; aMasterPageIt != mMasterPageSet.end(); ++aMasterPageIt )
+        for (auto const& masterPage : mMasterPageSet)
         {
-            aTextFieldCharSets[ *aMasterPageIt ][ sFieldId ].insert( static_cast<sal_Unicode>( format ) );
+            aTextFieldCharSets[ masterPage ][ sFieldId ].insert( static_cast<sal_Unicode>( format ) );
         }
     }
 };
@@ -550,6 +555,8 @@ bool SVGFilter::implExport( const Sequence< PropertyValue >& rDescriptor )
                 for(uno::Reference<drawing::XDrawPage> & mMasterPageTarget : mMasterPageTargets)
                     implRegisterInterface( mMasterPageTarget );
 
+                SdrModel* pSdrModel(nullptr);
+
                 try
                 {
                     mxDefaultPage = mSelectedPages[0];
@@ -561,17 +568,14 @@ bool SVGFilter::implExport( const Sequence< PropertyValue >& rDescriptor )
                         if( pSvxDrawPage )
                         {
                             mpDefaultSdrPage = pSvxDrawPage->GetSdrPage();
-                            mpSdrModel = mpDefaultSdrPage->GetModel();
+                            pSdrModel = &mpDefaultSdrPage->getSdrModelFromSdrPage();
+                            SdrOutliner& rOutl = pSdrModel->GetDrawOutliner();
 
-                            if( mpSdrModel )
-                            {
-                                SdrOutliner& rOutl = mpSdrModel->GetDrawOutliner();
-
-                                maOldFieldHdl = rOutl.GetCalcFieldValueHdl();
-                                maNewFieldHdl = LINK(this, SVGFilter, CalcFieldHdl);
-                                rOutl.SetCalcFieldValueHdl(maNewFieldHdl);
-                            }
+                            maOldFieldHdl = rOutl.GetCalcFieldValueHdl();
+                            maNewFieldHdl = LINK(this, SVGFilter, CalcFieldHdl);
+                            rOutl.SetCalcFieldValueHdl(maNewFieldHdl);
                         }
+
                         bRet = implExportDocument();
                     }
                 }
@@ -582,19 +586,18 @@ bool SVGFilter::implExport( const Sequence< PropertyValue >& rDescriptor )
                     OSL_FAIL( "Exception caught" );
                 }
 
-                if( mpSdrModel )
+                if( nullptr != pSdrModel )
                 {
                     // fdo#62682 The maNewFieldHdl can end up getting copied
                     // into various other outliners which live past this
                     // method, so get the full list of outliners and restore
                     // the maOldFieldHdl for all that have ended up using
                     // maNewFieldHdl
-                    std::vector<SdrOutliner*> aOutliners(mpSdrModel->GetActiveOutliners());
-                    for (auto aIter = aOutliners.begin(); aIter != aOutliners.end(); ++aIter)
+                    std::vector<SdrOutliner*> aOutliners(pSdrModel->GetActiveOutliners());
+                    for (auto const& outliner : aOutliners)
                     {
-                        SdrOutliner* pOutliner = *aIter;
-                        if (maNewFieldHdl == pOutliner->GetCalcFieldValueHdl())
-                            pOutliner->SetCalcFieldValueHdl(maOldFieldHdl);
+                        if (maNewFieldHdl == outliner->GetCalcFieldValueHdl())
+                            outliner->SetCalcFieldValueHdl(maOldFieldHdl);
                     }
                 }
 
@@ -827,14 +830,12 @@ bool SVGFilter::implExportDocument()
         // Create the (Shape, GDIMetaFile) map
         if( implCreateObjects() )
         {
-            ObjectMap::const_iterator                aIter( mpObjects->begin() );
             ::std::vector< ObjectRepresentation >    aObjects( mpObjects->size() );
             sal_uInt32                               nPos = 0;
 
-            while( aIter != mpObjects->end() )
+            for (auto const& elem : *mpObjects)
             {
-                aObjects[ nPos++ ] = (*aIter).second;
-                ++aIter;
+                aObjects[ nPos++ ] = elem.second;
             }
 
             mpSVGFontExport = new SVGFontExport( *mpSVGExport, aObjects );
@@ -925,8 +926,8 @@ void SVGFilter::implGenerateMetaData()
         if( pSvxDrawPage )
         {
             SdrPage* pSdrPage = pSvxDrawPage->GetSdrPage();
-            SdrModel* pSdrModel = pSdrPage->GetModel();
-            nPageNumberingType = pSdrModel->GetPageNumType();
+            SdrModel& rSdrModel(pSdrPage->getSdrModelFromSdrPage());
+            nPageNumberingType = rSdrModel.GetPageNumType();
 
             // That is used by CalcFieldHdl method.
             mVisiblePagePropSet.nPageNumberingType = nPageNumberingType;
@@ -1262,11 +1263,9 @@ void SVGFilter::implExportTextEmbeddedBitmaps()
 
     OUString sId;
 
-    MetaBitmapActionSet::const_iterator it = mEmbeddedBitmapActionSet.begin();
-    MetaBitmapActionSet::const_iterator end = mEmbeddedBitmapActionSet.end();
-    for( ; it != end; ++it)
+    for (auto const& embeddedBitmapAction : mEmbeddedBitmapActionSet)
     {
-        const GDIMetaFile& aMtf = it->GetRepresentation();
+        const GDIMetaFile& aMtf = embeddedBitmapAction.GetRepresentation();
 
         if( aMtf.GetActionSize() == 1 )
         {
@@ -1277,7 +1276,7 @@ void SVGFilter::implExportTextEmbeddedBitmaps()
                 sId = "bitmap(" + OUString::number( nId ) + ")";
                 mpSVGExport->AddAttribute( XML_NAMESPACE_NONE, "id", sId );
 
-                const Reference< XInterface >& rxShape = it->GetObject();
+                const Reference< XInterface >& rxShape = embeddedBitmapAction.GetObject();
                 Reference< XPropertySet > xShapePropSet( rxShape, UNO_QUERY );
                 css::awt::Rectangle    aBoundRect;
                 if( xShapePropSet.is() && ( xShapePropSet->getPropertyValue( "BoundRect" ) >>= aBoundRect ) )
@@ -1390,8 +1389,8 @@ void SVGFilter::implGetPagePropSet( const Reference< css::drawing::XDrawPage > &
                 if( pSvxDrawPage )
                 {
                     SdrPage* pSdrPage = pSvxDrawPage->GetSdrPage();
-                    SdrModel* pSdrModel = pSdrPage->GetModel();
-                    mVisiblePagePropSet.nPageNumberingType = pSdrModel->GetPageNumType();
+                    SdrModel& rSdrModel(pSdrPage->getSdrModelFromSdrPage());
+                    mVisiblePagePropSet.nPageNumberingType = rSdrModel.GetPageNumType();
                 }
             }
         }
@@ -1895,9 +1894,7 @@ bool SVGFilter::implCreateObjects()
                 }
             }
 #endif
-
-            if( xDrawPage.is() )
-                implCreateObjectsFromShapes( xDrawPage, xDrawPage );
+            implCreateObjectsFromShapes( xDrawPage, xDrawPage );
         }
     }
     return true;
@@ -1937,7 +1934,7 @@ bool SVGFilter::implCreateObjectsFromShape( const Reference< css::drawing::XDraw
 
         if( pObj )
         {
-            Graphic aGraphic( SdrExchangeView::GetObjGraphic( pObj->GetModel(), pObj ) );
+            const Graphic aGraphic(SdrExchangeView::GetObjGraphic(*pObj));
 
             if( aGraphic.GetType() != GraphicType::NONE )
             {
@@ -2011,12 +2008,10 @@ bool SVGFilter::implCreateObjectsFromShape( const Reference< css::drawing::XDraw
                                         if( bIsTextShapeStarted && ( nType == MetaActionType::BMPSCALE  || nType == MetaActionType::BMPEXSCALE ) )
                                         {
                                             GDIMetaFile aEmbeddedBitmapMtf;
-                                            pAction->Duplicate();
                                             aEmbeddedBitmapMtf.AddAction( pAction );
                                             aEmbeddedBitmapMtf.SetPrefSize( aSize );
                                             aEmbeddedBitmapMtf.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
                                             mEmbeddedBitmapActionSet.insert( ObjectRepresentation( rxShape, aEmbeddedBitmapMtf ) );
-                                            pAction->Duplicate();
                                             aMtf.AddAction( pAction );
                                         }
                                     }
@@ -2168,11 +2163,10 @@ IMPL_LINK( SVGFilter, CalcFieldHdl, EditFieldInfo*, pInfo, void )
                 {
                     SvxDateFormat eDateFormat = SvxDateFormat::B, eCurDateFormat;
                     const UCharSet & aCharSet = (*pCharSetMap)[ aVariableDateTimeId ];
-                    UCharSet::const_iterator aChar = aCharSet.begin();
                     // we look for the most verbose date format
-                    for( ; aChar != aCharSet.end(); ++aChar )
+                    for (auto const& elem : aCharSet)
                     {
-                        eCurDateFormat = static_cast<SvxDateFormat>( static_cast<int>( *aChar ) & 0x0f );
+                        eCurDateFormat = static_cast<SvxDateFormat>( static_cast<int>(elem) & 0x0f );
                         switch( eDateFormat )
                         {
                             case SvxDateFormat::StdSmall:
@@ -2284,10 +2278,9 @@ IMPL_LINK( SVGFilter, CalcFieldHdl, EditFieldInfo*, pInfo, void )
             {
                 if( pCharSet != nullptr )
                 {
-                    UCharSet::const_iterator aChar = pCharSet->begin();
-                    for( ; aChar != pCharSet->end(); ++aChar )
+                    for (auto const& elem : *pCharSet)
                     {
-                        aRepresentation += OUStringLiteral1( *aChar );
+                        aRepresentation += OUStringLiteral1(elem);
                     }
                 }
                 pInfo->SetRepresentation( aRepresentation );

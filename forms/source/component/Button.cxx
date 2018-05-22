@@ -24,7 +24,6 @@
 
 #include <comphelper/streamsection.hxx>
 #include <comphelper/basicio.hxx>
-#include <comphelper/processfactory.hxx>
 #include <o3tl/any.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/debug.hxx>
@@ -321,7 +320,7 @@ void OButtonModel::impl_resetNoBroadcast_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("forms.component");
     }
 }
 

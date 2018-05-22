@@ -66,6 +66,7 @@
 #include <svx/numinf.hxx>
 
 #include <svl/cjkoptions.hxx>
+#include <tools/diagnose_ex.h>
 
 namespace chart
 {
@@ -238,9 +239,9 @@ void ObjectPropertiesDialogParameter::init( const uno::Reference< frame::XModel 
                     }
                 }
             }
-            catch( const Exception & ex )
+            catch( const Exception & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
         if( !bXValuesFound && bYValuesFound )
@@ -324,7 +325,6 @@ SchAttribTabDlg::SchAttribTabDlg(vcl::Window* pParent,
                                  const uno::Reference< util::XNumberFormatsSupplier >& xNumberFormatsSupplier
                                  )
     : SfxTabDialog(pParent, "AttributeDialog", "modules/schart/ui/attributedialog.ui", pAttr)
-    , eObjectType(pDialogParameter->getObjectType())
     , nDlgType(nNoArrowNoShadowDlg)
     , m_pParameter( pDialogParameter )
     , m_pViewElementListProvider( pViewElementListProvider )
@@ -341,7 +341,7 @@ SchAttribTabDlg::SchAttribTabDlg(vcl::Window* pParent,
 
     SvtCJKOptions aCJKOptions;
 
-    switch (eObjectType)
+    switch (pDialogParameter->getObjectType())
     {
         case OBJECTTYPE_TITLE:
             AddTabPage(RID_SVXPAGE_LINE, SchResId(STR_PAGE_BORDER));

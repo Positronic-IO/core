@@ -22,6 +22,7 @@ $(eval $(call gb_CppunitTest_use_libraries,sw_ww8import, \
     sal \
     test \
     unotest \
+    vcl \
     sfx \
     sw \
 	utl \
@@ -71,6 +72,7 @@ $(eval $(call gb_CppunitTest_use_components,sw_ww8import,\
     unoxml/source/rdf/unordf \
     unoxml/source/service/unoxml \
     uui/util/uui \
+    vcl/vcl.common \
     $(if $(filter DESKTOP,$(BUILD_TYPE)),xmlhelp/util/ucpchelp1) \
 ))
 

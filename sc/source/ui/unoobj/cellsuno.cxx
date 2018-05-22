@@ -113,6 +113,7 @@
 #include <brdcst.hxx>
 #include <cellform.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <unonames.hxx>
 #include <styleuno.hxx>
 #include <rangeseq.hxx>
@@ -919,19 +920,17 @@ static SCTAB lcl_FirstTab( const ScRangeList& rRanges )
 {
     if (rRanges.empty())
         throw std::out_of_range("empty range");
-    const ScRange* pFirst = rRanges[0];
-    if (pFirst)
-        return pFirst->aStart.Tab();
-    return 0;   // shouldn't happen
+    const ScRange & rFirst = rRanges[0];
+    return rFirst.aStart.Tab();
 }
 
 static bool lcl_WholeSheet( const ScRangeList& rRanges )
 {
     if ( rRanges.size() == 1 )
     {
-        const ScRange* pRange = rRanges[0];
-        if ( pRange && pRange->aStart.Col() == 0 && pRange->aEnd.Col() == MAXCOL &&
-                       pRange->aStart.Row() == 0 && pRange->aEnd.Row() == MAXROW )
+        const ScRange & rRange = rRanges[0];
+        if ( rRange.aStart.Col() == 0 && rRange.aEnd.Col() == MAXCOL &&
+             rRange.aStart.Row() == 0 && rRange.aEnd.Row() == MAXROW )
             return true;
     }
     return false;
@@ -1062,8 +1061,8 @@ void ScHelperFunctions::ApplyBorder( ScDocShell* pDocShell, const ScRangeList& r
     size_t nCount = rRanges.size();
     for (size_t i = 0; i < nCount; ++i)
     {
-        ScRange aRange( *rRanges[ i ] );
-        SCTAB nTab = aRange.aStart.Tab();
+        ScRange const & rRange = rRanges[ i ];
+        SCTAB nTab = rRange.aStart.Tab();
 
         if (bUndo)
         {
@@ -1071,11 +1070,11 @@ void ScHelperFunctions::ApplyBorder( ScDocShell* pDocShell, const ScRangeList& r
                 pUndoDoc->InitUndo( &rDoc, nTab, nTab );
             else
                 pUndoDoc->AddUndoTab( nTab, nTab );
-            rDoc.CopyToDocument(aRange, InsertDeleteFlags::ATTRIB, false, *pUndoDoc);
+            rDoc.CopyToDocument(rRange, InsertDeleteFlags::ATTRIB, false, *pUndoDoc);
         }
 
         ScMarkData aMark;
-        aMark.SetMarkArea( aRange );
+        aMark.SetMarkArea( rRange );
         aMark.SelectTable( nTab, true );
 
         rDoc.ApplySelectionFrame(aMark, rOuter, &rInner);
@@ -1089,7 +1088,7 @@ void ScHelperFunctions::ApplyBorder( ScDocShell* pDocShell, const ScRangeList& r
     }
 
     for (size_t i = 0; i < nCount; ++i )
-        pDocShell->PostPaint( *rRanges[ i ], PaintPartFlags::Grid, SC_PF_LINES | SC_PF_TESTMERGE );
+        pDocShell->PostPaint( rRanges[ i ], PaintPartFlags::Grid, SC_PF_LINES | SC_PF_TESTMERGE );
 
     pDocShell->SetDocumentModified();
 }
@@ -1422,7 +1421,7 @@ ScCellRangesBase::ScCellRangesBase(ScDocShell* pDocSh, const ScRange& rR) :
 
     ScRange aCellRange(rR);
     aCellRange.PutInOrder();
-    aRanges.Append( aCellRange );
+    aRanges.push_back( aCellRange );
 
     if (pDocShell)  // Null if created with createInstance
     {
@@ -1487,12 +1486,10 @@ ScCellRangesBase::~ScCellRangesBase()
 
 void ScCellRangesBase::ForgetCurrentAttrs()
 {
-    delete pCurrentFlat;
-    delete pCurrentDeep;
+    pCurrentFlat.reset();
+    pCurrentDeep.reset();
     delete pCurrentDataSet;
     delete pNoDfltCurrentDataSet;
-    pCurrentFlat = nullptr;
-    pCurrentDeep = nullptr;
     pCurrentDataSet = nullptr;
     pNoDfltCurrentDataSet = nullptr;
 
@@ -1514,7 +1511,7 @@ const ScPatternAttr* ScCellRangesBase::GetCurrentAttrsFlat()
         ScDocument& rDoc = pDocShell->GetDocument();
         pCurrentFlat = rDoc.CreateSelectionPattern( *GetMarkData(), false );
     }
-    return pCurrentFlat;
+    return pCurrentFlat.get();
 }
 
 const ScPatternAttr* ScCellRangesBase::GetCurrentAttrsDeep()
@@ -1526,7 +1523,7 @@ const ScPatternAttr* ScCellRangesBase::GetCurrentAttrsDeep()
         ScDocument& rDoc = pDocShell->GetDocument();
         pCurrentDeep = rDoc.CreateSelectionPattern( *GetMarkData() );
     }
-    return pCurrentDeep;
+    return pCurrentDeep.get();
 }
 
 SfxItemSet* ScCellRangesBase::GetCurrentDataSet(bool bNoDflt)
@@ -1585,14 +1582,11 @@ void ScCellRangesBase::Notify( SfxBroadcaster&, const SfxHint& rHint )
                )
             {
                 // #101755#; the range size of a sheet does not change
-                ScRange* pR = aRanges.front();
-                if (pR)
-                {
-                    pR->aStart.SetCol(0);
-                    pR->aStart.SetRow(0);
-                    pR->aEnd.SetCol(MAXCOL);
-                    pR->aEnd.SetRow(MAXROW);
-                }
+                ScRange & rR = aRanges.front();
+                rR.aStart.SetCol(0);
+                rR.aStart.SetRow(0);
+                rR.aEnd.SetCol(MAXCOL);
+                rR.aEnd.SetRow(MAXROW);
             }
             RefChanged();
 
@@ -1689,7 +1683,7 @@ void ScCellRangesBase::RefChanged()
 
         ScDocument& rDoc = pDocShell->GetDocument();
         for ( size_t i = 0, nCount = aRanges.size(); i < nCount; ++i )
-            rDoc.StartListeningArea( *aRanges[ i ], false, pValueListener );
+            rDoc.StartListeningArea( aRanges[ i ], false, pValueListener );
     }
 
     ForgetCurrentAttrs();
@@ -1713,7 +1707,7 @@ void ScCellRangesBase::InitInsertRange(ScDocShell* pDocSh, const ScRange& rR)
         ScRange aCellRange(rR);
         aCellRange.PutInOrder();
         aRanges.RemoveAll();
-        aRanges.Append( aCellRange );
+        aRanges.push_back( aCellRange );
 
         pDocShell->GetDocument().AddUnoObject(*this);
 
@@ -1726,7 +1720,7 @@ void ScCellRangesBase::AddRange(const ScRange& rRange, const bool bMergeRanges)
     if (bMergeRanges)
         aRanges.Join(rRange);
     else
-        aRanges.Append(rRange);
+        aRanges.push_back(rRange);
     RefChanged();
 }
 
@@ -1736,7 +1730,7 @@ void ScCellRangesBase::SetNewRange(const ScRange& rNew)
     aCellRange.PutInOrder();
 
     aRanges.RemoveAll();
-    aRanges.Append( aCellRange );
+    aRanges.push_back( aCellRange );
     RefChanged();
 }
 
@@ -1818,7 +1812,7 @@ uno::Sequence<sal_Int8> SAL_CALL ScCellRangesBase::getImplementationId()
 void ScCellRangesBase::PaintGridRanges_Impl( )
 {
     for (size_t i = 0, nCount = aRanges.size(); i < nCount; ++i)
-        pDocShell->PostPaint( *aRanges[ i ], PaintPartFlags::Grid );
+        pDocShell->PostPaint( aRanges[ i ], PaintPartFlags::Grid );
 }
 
 // XSheetOperation
@@ -2013,7 +2007,7 @@ void SAL_CALL ScCellRangesBase::setPropertyToDefault( const OUString& aPropertyN
                 bChartRowAsHdr = false;
             else if ( pEntry->nWID == SC_WID_UNO_CELLSTYL )
             {
-                OUString aStyleName( ScGlobal::GetRscString( STR_STYLENAME_STANDARD ) );
+                OUString aStyleName( ScResId( STR_STYLENAME_STANDARD ) );
                 pDocShell->GetDocFunc().ApplyStyle( *GetMarkData(), aStyleName, true );
             }
         }
@@ -2065,7 +2059,7 @@ uno::Any SAL_CALL ScCellRangesBase::getPropertyDefault( const OUString& aPropert
                         break;
                     case SC_WID_UNO_CELLSTYL:
                         aAny <<= ScStyleNameConversion::DisplayToProgrammaticName(
-                                    ScGlobal::GetRscString(STR_STYLENAME_STANDARD), SfxStyleFamily::Para );
+                                    ScResId(STR_STYLENAME_STANDARD), SfxStyleFamily::Para );
                         break;
                     case SC_WID_UNO_TBLBORD:
                     case SC_WID_UNO_TBLBORD2:
@@ -2095,7 +2089,7 @@ uno::Any SAL_CALL ScCellRangesBase::getPropertyDefault( const OUString& aPropert
                                    formula::FormulaGrammar::mapAPItoGrammar( bEnglish, bXML));
 
                             aAny <<= uno::Reference<sheet::XSheetConditionalEntries>(
-                                    new ScTableConditionalFormat( &rDoc, 0, aRanges[0]->aStart.Tab(), eGrammar ));
+                                    new ScTableConditionalFormat( &rDoc, 0, aRanges[0].aStart.Tab(), eGrammar ));
                         }
                         break;
                     case SC_WID_UNO_VALIDAT:
@@ -2114,7 +2108,7 @@ uno::Any SAL_CALL ScCellRangesBase::getPropertyDefault( const OUString& aPropert
                         break;
                     case SC_WID_UNO_NUMRULES:
                         {
-                            aAny <<= uno::Reference<container::XIndexReplace>(ScStyleObj::CreateEmptyNumberingRules());
+                            aAny <<= ScStyleObj::CreateEmptyNumberingRules();
                         }
                         break;
                 }
@@ -2301,10 +2295,10 @@ void ScCellRangesBase::SetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                     {
                         for (size_t i = 0, n = aRanges.size(); i < n; ++i)
                         {
-                            ScRange aRange = *aRanges[i];
+                            ScRange const & rRange = aRanges[i];
 
                             /* TODO: Iterate through the range */
-                            ScAddress aAddr = aRange.aStart;
+                            ScAddress aAddr = rRange.aStart;
                             ScDocument& rDoc = pDocShell->GetDocument();
                             ScRefCellValue aCell(rDoc, aAddr);
 
@@ -2327,7 +2321,7 @@ void ScCellRangesBase::SetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                             aEngine.QuickSetAttribs(aAttr, ESelection(0, 0, 0, aStr.getLength()));
 
                             // The cell will own the text object instance.
-                            rDoc.SetEditText(aRanges[0]->aStart, aEngine.CreateTextObject());
+                            rDoc.SetEditText(aRanges[0].aStart, aEngine.CreateTextObject());
                         }
                     }
                 }
@@ -2392,16 +2386,16 @@ void ScCellRangesBase::SetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                                        formula::FormulaGrammar::GRAM_UNSPECIFIED :
                                        formula::FormulaGrammar::mapAPItoGrammar( bEnglish, bXML));
 
-                                SCTAB nTab = aRanges.front()->aStart.Tab();
+                                SCTAB nTab = aRanges.front().aStart.Tab();
                                 // To remove conditional formats for all cells in aRanges we need to:
                                 // Remove conditional format data from cells' attributes
                                 rDoc.RemoveCondFormatData( aRanges, nTab,  0 );
                                 // And also remove ranges from conditional formats list
                                 for (size_t i = 0; i < aRanges.size(); ++i)
                                 {
-                                    rDoc.GetCondFormList( aRanges[i]->aStart.Tab() )->DeleteArea(
-                                        aRanges[i]->aStart.Col(), aRanges[i]->aStart.Row(),
-                                        aRanges[i]->aEnd.Col(), aRanges[i]->aEnd.Row() );
+                                    rDoc.GetCondFormList( aRanges[i].aStart.Tab() )->DeleteArea(
+                                        aRanges[i].aStart.Col(), aRanges[i].aStart.Row(),
+                                        aRanges[i].aEnd.Col(), aRanges[i].aEnd.Row() );
                                 }
 
                                 // Then we can apply new conditional format if there is one
@@ -2415,7 +2409,7 @@ void ScCellRangesBase::SetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
 
                                 // and repaint
                                 for (size_t i = 0; i < aRanges.size(); ++i)
-                                    pDocShell->PostPaint(*aRanges[i], PaintPartFlags::Grid);
+                                    pDocShell->PostPaint(aRanges[i], PaintPartFlags::Grid);
                                 pDocShell->SetDocumentModified();
                             }
                         }
@@ -2535,17 +2529,17 @@ void ScCellRangesBase::GetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                 case SC_WID_UNO_TBLBORD:
                 case SC_WID_UNO_TBLBORD2:
                     {
-                        //! loop throgh all ranges
+                        //! loop through all ranges
                         if ( !aRanges.empty() )
                         {
-                            const ScRange* pFirst = aRanges[ 0 ];
+                            const ScRange & rFirst = aRanges[ 0 ];
                             SvxBoxItem aOuter(ATTR_BORDER);
                             SvxBoxInfoItem aInner(ATTR_BORDER_INNER);
 
                             ScDocument& rDoc = pDocShell->GetDocument();
                             ScMarkData aMark;
-                            aMark.SetMarkArea( *pFirst );
-                            aMark.SelectTable( pFirst->aStart.Tab(), true );
+                            aMark.SetMarkArea( rFirst );
+                            aMark.SelectTable( rFirst.aStart.Tab(), true );
                             rDoc.GetSelectionFrame( aMark, aOuter, aInner );
 
                             if (pEntry->nWID == SC_WID_UNO_TBLBORD2)
@@ -2574,7 +2568,7 @@ void ScCellRangesBase::GetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                             if(!rIndex.empty())
                                 nIndex = rIndex[0];
                             rAny <<= uno::Reference<sheet::XSheetConditionalEntries>(
-                                    new ScTableConditionalFormat( &rDoc, nIndex, aRanges.front()->aStart.Tab(), eGrammar ));
+                                    new ScTableConditionalFormat( &rDoc, nIndex, aRanges.front().aStart.Tab(), eGrammar ));
                         }
                     }
                     break;
@@ -2601,7 +2595,7 @@ void ScCellRangesBase::GetOnePropertyValue( const SfxItemPropertySimpleEntry* pE
                 case SC_WID_UNO_NUMRULES:
                     {
                         // always return empty numbering rules object
-                        rAny <<= uno::Reference<container::XIndexReplace>(ScStyleObj::CreateEmptyNumberingRules());
+                        rAny <<= ScStyleObj::CreateEmptyNumberingRules();
                     }
                     break;
                 case SC_WID_UNO_ABSNAME:
@@ -3012,11 +3006,11 @@ ScMemChart* ScCellRangesBase::CreateMemChart_Impl() const
             //  (only here - Listeners are registered for the whole area)
             //! check immediately if a ScTableSheetObj?
 
-            const ScRange* pRange = aRanges[0];
-            if ( pRange->aStart.Col() == 0 && pRange->aEnd.Col() == MAXCOL &&
-                 pRange->aStart.Row() == 0 && pRange->aEnd.Row() == MAXROW )
+            const ScRange & rRange = aRanges[0];
+            if ( rRange.aStart.Col() == 0 && rRange.aEnd.Col() == MAXCOL &&
+                 rRange.aStart.Row() == 0 && rRange.aEnd.Row() == MAXROW )
             {
-                SCTAB nTab = pRange->aStart.Tab();
+                SCTAB nTab = rRange.aStart.Tab();
 
                 SCCOL nStartX;
                 SCROW nStartY; // Get start
@@ -3034,8 +3028,7 @@ ScMemChart* ScCellRangesBase::CreateMemChart_Impl() const
                     nEndY = 0;
                 }
 
-                xChartRanges = new ScRangeList;
-                xChartRanges->Append( ScRange( nStartX, nStartY, nTab, nEndX, nEndY, nTab ) );
+                xChartRanges = new ScRangeList( ScRange( nStartX, nStartY, nTab, nEndX, nEndY, nTab ) );
             }
         }
         if (!xChartRanges.is())         //  otherwise take Ranges directly
@@ -3081,13 +3074,13 @@ ScRangeListRef ScCellRangesBase::GetLimitedChartRanges_Impl( long nDataColumns, 
 {
     if ( aRanges.size() == 1 )
     {
-        const ScRange* pRange = aRanges[0];
-        if ( pRange->aStart.Col() == 0 && pRange->aEnd.Col() == MAXCOL &&
-             pRange->aStart.Row() == 0 && pRange->aEnd.Row() == MAXROW )
+        const ScRange & rRange = aRanges[0];
+        if ( rRange.aStart.Col() == 0 && rRange.aEnd.Col() == MAXCOL &&
+             rRange.aStart.Row() == 0 && rRange.aEnd.Row() == MAXROW )
         {
             //  if aRanges is a complete sheet, limit to given size
 
-            SCTAB nTab = pRange->aStart.Tab();
+            SCTAB nTab = rRange.aStart.Tab();
 
             long nEndColumn = nDataColumns - 1 + ( bChartColAsHdr ? 1 : 0 );
             if ( nEndColumn < 0 )
@@ -3101,8 +3094,7 @@ ScRangeListRef ScCellRangesBase::GetLimitedChartRanges_Impl( long nDataColumns, 
             if ( nEndRow > MAXROW )
                 nEndRow = MAXROW;
 
-            ScRangeListRef xChartRanges = new ScRangeList;
-            xChartRanges->Append( ScRange( 0, 0, nTab, static_cast<SCCOL>(nEndColumn), static_cast<SCROW>(nEndRow), nTab ) );
+            ScRangeListRef xChartRanges = new ScRangeList( ScRange( 0, 0, nTab, static_cast<SCCOL>(nEndColumn), static_cast<SCROW>(nEndRow), nTab ) );
             return xChartRanges;
         }
     }
@@ -3386,7 +3378,7 @@ void SAL_CALL ScCellRangesBase::addModifyListener(const uno::Reference<util::XMo
 
         ScDocument& rDoc = pDocShell->GetDocument();
         for ( size_t i = 0, nCount = aRanges.size(); i < nCount; i++)
-            rDoc.StartListeningArea( *aRanges[ i ], false, pValueListener );
+            rDoc.StartListeningArea( aRanges[ i ], false, pValueListener );
 
         acquire();  // don't lose this object (one ref for all listeners)
     }
@@ -3439,7 +3431,7 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryVisibleC
         while (nCol <= MAXCOL)
         {
             if (rDoc.ColHidden(nCol, nTab, nullptr, &nLastCol))
-                // hidden columns.  Unselect them.
+                // hidden columns.  Deselect them.
                 aMarkData.SetMultiMarkArea(ScRange(nCol, 0, nTab, nLastCol, MAXROW, nTab), false);
 
             nCol = nLastCol + 1;
@@ -3449,7 +3441,7 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryVisibleC
         while (nRow <= MAXROW)
         {
             if (rDoc.RowHidden(nRow, nTab, nullptr, &nLastRow))
-                // These rows are hidden.  Unselect them.
+                // These rows are hidden.  Deselect them.
                 aMarkData.SetMultiMarkArea(ScRange(0, nRow, nTab, MAXCOL, nLastRow, nTab), false);
 
             nRow = nLastRow + 1;
@@ -3475,9 +3467,9 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryEmptyCel
         //  mark occupied cells
         for (size_t i = 0, nCount = aRanges.size(); i < nCount; ++i)
         {
-            ScRange aRange = *aRanges[ i ];
+            ScRange const & rRange = aRanges[ i ];
 
-            ScCellIterator aIter( &rDoc, aRange );
+            ScCellIterator aIter( &rDoc, rRange );
             for (bool bHasCell = aIter.first(); bHasCell; bHasCell = aIter.next())
             {
                 //  notes count as non-empty
@@ -3510,9 +3502,9 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryContentC
         //  select matching cells
         for ( size_t i = 0, nCount = aRanges.size(); i < nCount; ++i )
         {
-            ScRange aRange = *aRanges[ i ];
+            ScRange const & rRange = aRanges[ i ];
 
-            ScCellIterator aIter( &rDoc, aRange );
+            ScCellIterator aIter( &rDoc, rRange );
             for (bool bHasCell = aIter.first(); bHasCell; bHasCell = aIter.next())
             {
                 bool bAdd = false;
@@ -3599,9 +3591,9 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryFormulaC
         //  select matching cells
         for ( size_t i = 0, nCount = aRanges.size(); i < nCount; ++i )
         {
-            ScRange aRange = *aRanges[ i ];
+            ScRange const & rRange = aRanges[ i ];
 
-            ScCellIterator aIter( &rDoc, aRange );
+            ScCellIterator aIter( &rDoc, rRange );
             for (bool bHasCell = aIter.first(); bHasCell; bHasCell = aIter.next())
             {
                 if (aIter.getType() == CELLTYPE_FORMULA)
@@ -3673,7 +3665,7 @@ uno::Reference<sheet::XSheetCellRanges> ScCellRangesBase::QueryDifferences_Impl(
 
             for (i=0; i<nRangeCount; i++)
             {
-                ScRange aRange( *aRanges[ i ] );
+                ScRange aRange( aRanges[ i ] );
                 if ( aRange.Intersects( aCellRange ) )
                 {
                     if (bColumnDiff)
@@ -3697,9 +3689,9 @@ uno::Reference<sheet::XSheetCellRanges> ScCellRangesBase::QueryDifferences_Impl(
         ScAddress aCmpAddr;
         for (i=0; i<nRangeCount; i++)
         {
-            ScRange aRange( *aRanges[ i ] );
+            ScRange const & rRange = aRanges[ i ];
 
-            ScCellIterator aIter( &rDoc, aRange );
+            ScCellIterator aIter( &rDoc, rRange );
             for (bool bHasCell = aIter.first(); bHasCell; bHasCell = aIter.next())
             {
                 if (bColumnDiff)
@@ -3748,7 +3740,7 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryIntersec
     ScRangeList aNew;
     for ( size_t i = 0, nCount = aRanges.size(); i < nCount; ++i )
     {
-        ScRange aTemp( *aRanges[ i ] );
+        ScRange aTemp( aRanges[ i ] );
         if ( aTemp.Intersects( aMask ) )
             aNew.Join( ScRange( std::max( aTemp.aStart.Col(), aMask.aStart.Col() ),
                                 std::max( aTemp.aStart.Row(), aMask.aStart.Row() ),
@@ -3784,8 +3776,8 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryPreceden
 
             for (size_t nR = 0, nCount = aNewRanges.size(); nR<nCount; ++nR)
             {
-                ScRange aRange( *aNewRanges[ nR] );
-                ScCellIterator aIter( &rDoc, aRange );
+                ScRange const & rRange = aNewRanges[ nR];
+                ScCellIterator aIter( &rDoc, rRange );
                 for (bool bHasCell = aIter.first(); bHasCell; bHasCell = aIter.next())
                 {
                     if (aIter.getType() != CELLTYPE_FORMULA)
@@ -3842,14 +3834,17 @@ uno::Reference<sheet::XSheetCellRanges> SAL_CALL ScCellRangesBase::queryDependen
                 bool bMark = false;
                 ScDetectiveRefIter aIter(aCellIter.getFormulaCell());
                 ScRange aRefRange;
-                while ( aIter.GetNextRef( aRefRange) )
+                while ( aIter.GetNextRef( aRefRange) && !bMark )
                 {
                     size_t nRangesCount = aNewRanges.size();
                     for (size_t nR = 0; nR < nRangesCount; ++nR)
                     {
-                        ScRange aRange( *aNewRanges[ nR ] );
-                        if (aRange.Intersects(aRefRange))
+                        ScRange const & rRange = aNewRanges[ nR ];
+                        if (rRange.Intersects(aRefRange))
+                        {
                             bMark = true;                   // depending on part of Range
+                            break;
+                        }
                     }
                 }
                 if (bMark)
@@ -3984,7 +3979,7 @@ uno::Reference<uno::XInterface> SAL_CALL ScCellRangesBase::findNext(
             const ScRangeList& rStartRanges = pRangesImp->GetRangeList();
             if ( rStartRanges.size() == 1 )
             {
-                ScAddress aStartPos = rStartRanges[ 0 ]->aStart;
+                ScAddress aStartPos = rStartRanges[ 0 ].aStart;
                 return Find_Impl( xDesc, &aStartPos );
             }
         }
@@ -4194,11 +4189,11 @@ ScCellRangeObj* ScCellRangesObj::GetObjectByIndex_Impl(sal_Int32 nIndex) const
     const ScRangeList& rRanges = GetRangeList();
     if ( pDocSh && nIndex >= 0 && nIndex < sal::static_int_cast<sal_Int32>(rRanges.size()) )
     {
-        ScRange aRange( *rRanges[ nIndex ] );
-        if ( aRange.aStart == aRange.aEnd )
-            return new ScCellObj( pDocSh, aRange.aStart );
+        ScRange const & rRange = rRanges[ nIndex ];
+        if ( rRange.aStart == rRange.aEnd )
+            return new ScCellObj( pDocSh, rRange.aStart );
         else
-            return new ScCellRangeObj( pDocSh, aRange );
+            return new ScCellRangeObj( pDocSh, rRange );
     }
 
     return nullptr;        // no DocShell or wrong index
@@ -4217,7 +4212,7 @@ uno::Sequence<table::CellRangeAddress> SAL_CALL ScCellRangesObj::getRangeAddress
         table::CellRangeAddress* pAry = aSeq.getArray();
         for ( size_t i=0; i < nCount; i++)
         {
-            ScUnoConversion::FillApiRange( aRangeAddress, *rRanges[ i ] );
+            ScUnoConversion::FillApiRange( aRangeAddress, rRanges[ i ] );
             pAry[i] = aRangeAddress;
         }
         return aSeq;
@@ -4285,13 +4280,13 @@ void SAL_CALL ScCellRangesObj::removeRangeAddress( const table::CellRangeAddress
     ScRangeList aNotSheetRanges;
     for (size_t i = 0; i < rRanges.size(); ++i)
     {
-        if (rRanges[ i]->aStart.Tab() == rRange.Sheet)
+        if (rRanges[ i].aStart.Tab() == rRange.Sheet)
         {
-            aSheetRanges.Append( *rRanges[ i ] );
+            aSheetRanges.push_back( rRanges[ i ] );
         }
         else
         {
-            aNotSheetRanges.Append( *rRanges[ i ] );
+            aNotSheetRanges.push_back( rRanges[ i ] );
         }
     }
     ScMarkData aMarkData;
@@ -4317,7 +4312,7 @@ void SAL_CALL ScCellRangesObj::removeRangeAddress( const table::CellRangeAddress
     aMarkData.FillRangeListWithMarks( &aNew, false );
     for ( size_t j = 0; j < aNew.size(); ++j)
     {
-        AddRange(*aNew[ j ], false);
+        AddRange(aNew[ j ], false);
     }
 }
 
@@ -4396,7 +4391,7 @@ void SAL_CALL ScCellRangesObj::insertByName( const OUString& aName, const uno::A
             const ScRangeList& rAddRanges = pRangesImp->GetRangeList();
             size_t nAddCount = rAddRanges.size();
             for ( size_t i = 0; i < nAddCount; i++ )
-                aNew.Join( *rAddRanges[ i ] );
+                aNew.Join( rAddRanges[ i ] );
             SetNewRanges(aNew);
             bDone = true;
 
@@ -4405,7 +4400,7 @@ void SAL_CALL ScCellRangesObj::insertByName( const OUString& aName, const uno::A
                 //  if a name is given, also insert into list of named entries
                 //  (only possible for a single range)
                 //  name is not in m_pImpl->m_aNamedEntries (tested above)
-                m_pImpl->m_aNamedEntries.emplace_back( aName, *rAddRanges[ 0 ] );
+                m_pImpl->m_aNamedEntries.emplace_back( aName, rAddRanges[ 0 ] );
             }
         }
     }
@@ -4426,7 +4421,7 @@ static bool lcl_FindRangeByName( const ScRangeList& rRanges, ScDocShell* pDocSh,
         ScDocument& rDoc = pDocSh->GetDocument();
         for ( size_t i = 0, nCount = rRanges.size(); i < nCount; i++ )
         {
-            aRangeStr = rRanges[ i ]->Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, &rDoc);
+            aRangeStr = rRanges[ i ].Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, &rDoc);
             if ( aRangeStr == rName )
             {
                 rIndex = i;
@@ -4446,7 +4441,7 @@ static bool lcl_FindRangeOrEntry( const ScNamedEntryArr_Impl& rNamedEntries,
     size_t nIndex = 0;
     if ( lcl_FindRangeByName( rRanges, pDocSh, rName, nIndex ) )
     {
-        rFound = *rRanges[ nIndex ];
+        rFound = rRanges[ nIndex ];
         return true;
     }
 
@@ -4504,7 +4499,7 @@ void SAL_CALL ScCellRangesObj::removeByName( const OUString& aName )
         ScRangeList aNew;
         for ( size_t i = 0, nCount = rRanges.size(); i < nCount; i++ )
             if (i != nIndex)
-                aNew.Append( *rRanges[ i ] );
+                aNew.push_back( rRanges[ i ] );
         SetNewRanges(aNew);
         bDone = true;
     }
@@ -4521,7 +4516,7 @@ void SAL_CALL ScCellRangesObj::removeByName( const OUString& aName )
                 if (m_pImpl->m_aNamedEntries[n].GetName() == aName)
                 {
                     aDiff.RemoveAll();
-                    aDiff.Append(m_pImpl->m_aNamedEntries[n].GetRange());
+                    aDiff.push_back(m_pImpl->m_aNamedEntries[n].GetRange());
                     bValid = true;
                 }
         }
@@ -4532,9 +4527,9 @@ void SAL_CALL ScCellRangesObj::removeByName( const OUString& aName )
 
             for ( size_t i = 0, nDiffCount = aDiff.size(); i < nDiffCount; i++ )
             {
-                ScRange* pDiffRange = aDiff[ i ];
-                if (aMarkData.GetTableSelect( pDiffRange->aStart.Tab() ))
-                    aMarkData.SetMultiMarkArea( *pDiffRange, false );
+                ScRange const & rDiffRange = aDiff[ i ];
+                if (aMarkData.GetTableSelect( rDiffRange.aStart.Tab() ))
+                    aMarkData.SetMultiMarkArea( rDiffRange, false );
             }
 
             ScRangeList aNew;
@@ -4616,11 +4611,11 @@ uno::Sequence<OUString> SAL_CALL ScCellRangesObj::getElementNames()
         for (size_t i=0; i < nCount; i++)
         {
             //  use given name if for exactly this range, otherwise just format
-            ScRange aRange = *rRanges[ i ];
+            ScRange const & rRange = rRanges[ i ];
             if (m_pImpl->m_aNamedEntries.empty() ||
-                !lcl_FindEntryName(m_pImpl->m_aNamedEntries, aRange, aRangeStr))
+                !lcl_FindEntryName(m_pImpl->m_aNamedEntries, rRange, aRangeStr))
             {
-                aRangeStr = aRange.Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, &rDoc);
+                aRangeStr = rRange.Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, &rDoc);
             }
             pAry[i] = aRangeStr;
         }
@@ -4727,8 +4722,8 @@ void ScCellRangeObj::RefChanged()
     OSL_ENSURE(rRanges.size() == 1, "What ranges ?!?!");
     if ( !rRanges.empty() )
     {
-        const ScRange* pFirst = rRanges[0];
-        aRange = ScRange(*pFirst);
+        const ScRange & rFirst = rRanges[0];
+        aRange = rFirst;
         aRange.PutInOrder();
     }
 }
@@ -5979,8 +5974,7 @@ void ScCellObj::RefChanged()
     OSL_ENSURE(rRanges.size() == 1, "What ranges ?!?!");
     if ( !rRanges.empty() )
     {
-        const ScRange* pFirst = rRanges[ 0 ];
-        aCellPos = pFirst->aStart;
+        aCellPos = rRanges[ 0 ].aStart;
     }
 }
 
@@ -6827,8 +6821,7 @@ SCTAB ScTableSheetObj::GetTab_Impl() const
     OSL_ENSURE(rRanges.size() == 1, "What ranges ?!?!");
     if ( !rRanges.empty() )
     {
-        const ScRange* pFirst = rRanges[ 0 ];
-        return pFirst->aStart.Tab();
+        return rRanges[ 0 ].aStart.Tab();
     }
     return 0;
 }
@@ -6924,7 +6917,7 @@ uno::Reference<sheet::XSheetCellCursor> SAL_CALL ScTableSheetObj::createCursorBy
         {
             const ScRangeList& rRanges = pRangesImp->GetRangeList();
             OSL_ENSURE( rRanges.size() == 1, "Range? Ranges?" );
-            return new ScCellCursorObj( pDocSh, *rRanges[ 0 ] );
+            return new ScCellCursorObj( pDocSh, rRanges[ 0 ] );
         }
     }
     return nullptr;
@@ -7136,14 +7129,14 @@ void SAL_CALL ScTableSheetObj::removeRange( const table::CellRangeAddress& rRang
     if ( pDocSh )
     {
         bool bDo = true;
-        DelCellCmd eCmd = DEL_NONE;
+        DelCellCmd eCmd = DelCellCmd::NONE;
         switch (nMode)
         {
             case sheet::CellDeleteMode_NONE:     bDo = false;           break;
-            case sheet::CellDeleteMode_UP:       eCmd = DEL_CELLSUP;    break;
-            case sheet::CellDeleteMode_LEFT:     eCmd = DEL_CELLSLEFT;  break;
-            case sheet::CellDeleteMode_ROWS:     eCmd = DEL_DELROWS;    break;
-            case sheet::CellDeleteMode_COLUMNS:  eCmd = DEL_DELCOLS;    break;
+            case sheet::CellDeleteMode_UP:       eCmd = DelCellCmd::CellsUp;    break;
+            case sheet::CellDeleteMode_LEFT:     eCmd = DelCellCmd::CellsLeft;  break;
+            case sheet::CellDeleteMode_ROWS:     eCmd = DelCellCmd::Rows;    break;
+            case sheet::CellDeleteMode_COLUMNS:  eCmd = DelCellCmd::Cols;    break;
             default:
                 OSL_FAIL("deleteCells: wrong mode");
                 bDo = false;
@@ -7319,8 +7312,7 @@ void SAL_CALL ScTableSheetObj::setPrintTitleColumns( sal_Bool bPrintTitleColumns
         {
             if ( !rDoc.GetRepeatColRange( nTab ) )         // do not change existing area
             {
-                ScRange aNew( 0, 0, nTab, 0, 0, nTab );
-                rDoc.SetRepeatColRange( nTab, &aNew );     // enable
+                rDoc.SetRepeatColRange( nTab, std::unique_ptr<ScRange>(new ScRange( 0, 0, nTab, 0, 0, nTab )) );     // enable
             }
         }
         else
@@ -7362,9 +7354,9 @@ void SAL_CALL ScTableSheetObj::setTitleColumns( const table::CellRangeAddress& a
 
         ScPrintRangeSaver* pOldRanges = rDoc.CreatePrintRangeSaver();
 
-        ScRange aNew;
-        ScUnoConversion::FillScRange( aNew, aTitleColumns );
-        rDoc.SetRepeatColRange( nTab, &aNew );     // also always enable
+        std::unique_ptr<ScRange> pNew(new ScRange);
+        ScUnoConversion::FillScRange( *pNew, aTitleColumns );
+        rDoc.SetRepeatColRange( nTab, std::move(pNew) );     // also always enable
 
         PrintAreaUndo_Impl( pOldRanges );           // undo, page breaks, modified etc.
     }
@@ -7398,8 +7390,8 @@ void SAL_CALL ScTableSheetObj::setPrintTitleRows( sal_Bool bPrintTitleRows )
         {
             if ( !rDoc.GetRepeatRowRange( nTab ) )         // do not change existing area
             {
-                ScRange aNew( 0, 0, nTab, 0, 0, nTab );
-                rDoc.SetRepeatRowRange( nTab, &aNew );     // enable
+                std::unique_ptr<ScRange> pNew( new ScRange(0, 0, nTab, 0, 0, nTab) );
+                rDoc.SetRepeatRowRange( nTab, std::move(pNew) );     // enable
             }
         }
         else
@@ -7441,9 +7433,9 @@ void SAL_CALL ScTableSheetObj::setTitleRows( const table::CellRangeAddress& aTit
 
         ScPrintRangeSaver* pOldRanges = rDoc.CreatePrintRangeSaver();
 
-        ScRange aNew;
-        ScUnoConversion::FillScRange( aNew, aTitleRows );
-        rDoc.SetRepeatRowRange( nTab, &aNew );     // also always enable
+        std::unique_ptr<ScRange> pNew(new ScRange);
+        ScUnoConversion::FillScRange( *pNew, aTitleRows );
+        rDoc.SetRepeatRowRange( nTab, std::move(pNew) );     // also always enable
 
         PrintAreaUndo_Impl( pOldRanges );           // Undo, page breaks, modified etc.
     }
@@ -7933,12 +7925,12 @@ uno::Sequence< table::CellRangeAddress > SAL_CALL ScTableSheetObj::getRanges(  )
             table::CellRangeAddress* pAry = aRetRanges.getArray();
             for( size_t nIndex = 0; nIndex < nCount; nIndex++ )
             {
-                const ScRange* pRange = (*pRangeList)[nIndex];
-                pAry->StartColumn = pRange->aStart.Col();
-                pAry->StartRow = pRange->aStart.Row();
-                pAry->EndColumn = pRange->aEnd.Col();
-                pAry->EndRow = pRange->aEnd.Row();
-                pAry->Sheet = pRange->aStart.Tab();
+                const ScRange & rRange = (*pRangeList)[nIndex];
+                pAry->StartColumn = rRange.aStart.Col();
+                pAry->StartRow = rRange.aStart.Row();
+                pAry->EndColumn = rRange.aEnd.Col();
+                pAry->EndRow = rRange.aEnd.Row();
+                pAry->Sheet = rRange.aStart.Tab();
                 ++pAry;
             }
             return aRetRanges;
@@ -8366,7 +8358,7 @@ void ScTableSheetObj::GetOnePropertyValue( const SfxItemPropertySimpleEntry* pEn
                 ScScenarioFlags nFlags;
                 rDoc.GetScenarioData( nTab, aComment, aColor, nFlags );
 
-                rAny <<= static_cast<sal_Int32>(aColor.GetColor());
+                rAny <<= aColor;
             }
         }
         else if ( pEntry->nWID == SC_WID_UNO_PROTECT )
@@ -8443,7 +8435,7 @@ void ScTableSheetObj::GetOnePropertyValue( const SfxItemPropertySimpleEntry* pEn
         }
         else if ( pEntry->nWID == SC_WID_UNO_TABCOLOR )
         {
-            rAny <<= sal_Int32(rDoc.GetTabBgColor(nTab).GetColor());
+            rAny <<= rDoc.GetTabBgColor(nTab);
         }
         else if ( pEntry->nWID == SC_WID_UNO_CODENAME )
         {
@@ -8941,10 +8933,7 @@ ScCellsEnumeration::ScCellsEnumeration(ScDocShell* pDocSh, const ScRangeList& rR
         bAtEnd = true;
     else
     {
-        SCTAB nTab = 0;
-        const ScRange* pFirst = aRanges[ 0 ];
-        if (pFirst)
-            nTab = pFirst->aStart.Tab();
+        SCTAB nTab = aRanges[ 0 ].aStart.Tab();
         aPos = ScAddress(0,0,nTab);
         CheckPos_Impl();                    // set aPos on first matching cell
     }
@@ -9016,13 +9005,12 @@ void ScCellsEnumeration::Notify( SfxBroadcaster&, const SfxHint& rHint )
 
             if (!bAtEnd)        // adjust aPos
             {
-                ScRangeList aNew;
-                aNew.Append(ScRange(aPos));
+                ScRangeList aNew { ScRange(aPos) };
                 aNew.UpdateReference( pRefHint->GetMode(), &pDocShell->GetDocument(), pRefHint->GetRange(),
                                       pRefHint->GetDx(), pRefHint->GetDy(), pRefHint->GetDz() );
                 if (aNew.size()==1)
                 {
-                    aPos = aNew[ 0 ]->aStart;
+                    aPos = aNew[ 0 ].aStart;
                     CheckPos_Impl();
                 }
             }
@@ -9401,8 +9389,7 @@ const ScRangeList& ScUniqueFormatsEntry::GetRanges()
 {
     if ( eState == STATE_SINGLE )
     {
-        aReturnRanges = new ScRangeList;
-        aReturnRanges->Append( aSingleRange );
+        aReturnRanges = new ScRangeList( aSingleRange );
         return *aReturnRanges;
     }
 
@@ -9422,7 +9409,7 @@ const ScRangeList& ScUniqueFormatsEntry::GetRanges()
     aReturnRanges = new ScRangeList;
     ScRangeVector::const_iterator aCompEnd( aCompletedRanges.end() );
     for ( ScRangeVector::const_iterator aCompIter( aCompletedRanges.begin() ); aCompIter != aCompEnd; ++aCompIter )
-        aReturnRanges->Append( *aCompIter );
+        aReturnRanges->push_back( *aCompIter );
     aCompletedRanges.clear();
 
     return *aReturnRanges;
@@ -9439,7 +9426,7 @@ struct ScUniqueFormatsOrder
         OSL_ENSURE( rList1.size() > 0 && rList2.size() > 0, "ScUniqueFormatsOrder: empty list" );
 
         // compare start positions using ScAddress comparison operator
-        return ( rList1[ 0 ]->aStart < rList2[ 0 ]->aStart );
+        return ( rList1[ 0 ].aStart < rList2[ 0 ].aStart );
     }
 };
 

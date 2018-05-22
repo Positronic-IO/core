@@ -84,11 +84,9 @@ void ScDocument::TransferDrawPage(ScDocument* pSrcDoc, SCTAB nSrcPos, SCTAB nDes
             SdrObject* pOldObject = aIter.Next();
             while (pOldObject)
             {
-                SdrObject* pNewObject = pOldObject->Clone();
-                // SdrObject* pNewObject = pOldObject->Clone( pNewPage, mpDrawLayer );
-                pNewObject->SetModel(mpDrawLayer);
+                // Clone to target SdrModel
+                SdrObject* pNewObject(pOldObject->CloneSdrObject(*mpDrawLayer));
                 pNewObject->SetPage(pNewPage);
-
                 pNewObject->NbcMove(Size(0,0));
                 pNewPage->InsertObject( pNewObject );
 
@@ -519,8 +517,7 @@ void ScDocument::Clear( bool bFromDestructor )
         delete *it;
 
     maTabs.clear();
-    delete pSelectionAttr;
-    pSelectionAttr = nullptr;
+    pSelectionAttr.reset();
 
     if (mpDrawLayer)
     {

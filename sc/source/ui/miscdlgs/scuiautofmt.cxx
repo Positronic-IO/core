@@ -34,7 +34,6 @@
 #include <svl/zforlist.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
-#include <comphelper/processfactory.hxx>
 #include <sfx2/strings.hrc>
 #include <sfx2/sfxresid.hxx>
 #include <strings.hrc>
@@ -262,7 +261,7 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, AddHdl, Button*, void)
                 {
                     std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
                                 VclMessageType::Error, VclButtonsType::OkCancel,
-                                ScGlobal::GetRscString(STR_INVALID_AFNAME)));
+                                ScResId(STR_INVALID_AFNAME)));
 
                     sal_uInt16 nRet = xBox->run();
 
@@ -382,7 +381,7 @@ IMPL_LINK_NOARG(ScAutoFormatDlg, RenameHdl, Button*, void)
             {
                 std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
                             VclMessageType::Error, VclButtonsType::OkCancel,
-                            ScGlobal::GetRscString(STR_INVALID_AFNAME)));
+                            ScResId(STR_INVALID_AFNAME)));
 
                 bOk = RET_CANCEL == xBox->run();
             }

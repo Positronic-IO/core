@@ -46,6 +46,7 @@ $(BUILDDIR)/config_host.mk : $(wildcard \
 		$(SRCDIR)/instsetoo_native/util/openoffice.lst.in \
 		$(SRCDIR)/configure.ac \
 		$(SRCDIR)/config_host/*.h.in \
+		$(SRCDIR)/download.lst \
 		$(BUILDDIR)/autogen.input \
 		$(BUILDDIR)/autogen.lastrun \
 		$(BUILDDIR)/autogen.sh \
@@ -165,6 +166,9 @@ gbuild_TARGETS := AllLangHelp \
 $(foreach target,$(gbuild_TARGETS),$(target)_% $(foreach module,$(gbuild_modules),$(target)_$(module)/%)) UIConfig_modules/% %.genpatch: bootstrap fetch
 	$(MAKE) $(PARALLELISM_OPTION) $(GMAKE_OPTIONS) -f $(SRCDIR)/Makefile.gbuild $@
 
+$(gbuild_TARGETS):
+	$(MAKE) $(PARALLELISM_OPTION) $(GMAKE_OPTIONS) -f $(SRCDIR)/Makefile.gbuild $@
+
 #
 # Clean
 #
@@ -238,10 +242,12 @@ fetch: get-submodules
 
 ifneq (,$(wildcard $(SRCDIR)/.git))
 get-submodules:
-ifneq ($(foreach i,$(GIT_NEEDED_SUBMODULES),$(i)/.git),$(wildcard $(foreach i,$(GIT_NEEDED_SUBMODULES),$(i)/.git)))
+ifneq ($(foreach i,$(GIT_NEEDED_SUBMODULES),$(SRCDIR)/$(i)/.git),$(wildcard $(foreach i,$(GIT_NEEDED_SUBMODULES),$(SRCDIR)/$(i)/.git)))
 	cd $(SRCDIR) && ./g -f clone
 endif
+ifeq ($(shell test -d $(SRCDIR)/.git; echo $$?),0)
 	@cd $(SRCDIR) && ./g -z # make sure the git hooks are in place even if no submodules are needed
+endif
 
 else # these sources are from a tarball, so get the other source tarballs
 gb_LO_VER := $(shell . $(SRCDIR)/sources.ver && echo $$lo_sources_ver)
@@ -376,12 +382,6 @@ ifneq ($(ENABLE_MACOSX_SANDBOX),)
 	rm $(TESTINSTALLDIR)/$(PRODUCTNAME_WITHOUT_SPACES).app/Contents/MacOS/gengal
 	rm $(TESTINSTALLDIR)/$(PRODUCTNAME_WITHOUT_SPACES).app/Contents/MacOS/unopkg
 	rm $(TESTINSTALLDIR)/$(PRODUCTNAME_WITHOUT_SPACES).app/Contents/MacOS/unoinfo
-
-# Fix the protection of some externally sourced files that keep their original protection that
-# ridiculously doesn't allow 'read' by 'other'. (Which makes the files unusable anyway.) The App
-# Store validation catches this.
-
-	find $(TESTINSTALLDIR)/$(PRODUCTNAME_WITHOUT_SPACES).app/Contents ! -perm -o=r -print0 | xargs -0 chmod o+r
 endif
 #
 # Then use the macosx-codesign-app-bundle script

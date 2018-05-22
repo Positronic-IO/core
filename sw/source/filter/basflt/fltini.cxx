@@ -23,7 +23,6 @@
 #include <i18nlangtag/languagetag.hxx>
 #include <o3tl/any.hxx>
 #include <tools/svlibrary.h>
-#include <vcl/msgbox.hxx>
 #include <svtools/parhtml.hxx>
 #include <sot/storage.hxx>
 #include <comphelper/classids.hxx>
@@ -53,8 +52,8 @@
 #include <swfltopt.hxx>
 #include <swerror.h>
 #include <swdll.hxx>
+#include <iodetect.hxx>
 #include <osl/module.hxx>
-#include <comphelper/processfactory.hxx>
 #include <rtl/bootstrap.hxx>
 
 using namespace utl;

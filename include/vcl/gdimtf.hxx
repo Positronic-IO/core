@@ -38,7 +38,7 @@ namespace tools {
     class PolyPolygon;
 }
 class Gradient;
-
+struct ImplMetaReadData;
 
 #define GDI_METAFILE_END                (size_t(0xFFFFFFFF))
 
@@ -52,10 +52,13 @@ enum class MtfConversion
 typedef Color (*ColorExchangeFnc)( const Color& rColor, const void* pColParam );
 typedef BitmapEx (*BmpExchangeFnc)( const BitmapEx& rBmpEx, const void* pBmpParam );
 
+VCL_DLLPUBLIC SvStream& ReadGDIMetaFile(SvStream& rIStm, GDIMetaFile& rGDIMetaFile, ImplMetaReadData* pReadData = nullptr);
+VCL_DLLPUBLIC SvStream& WriteGDIMetaFile( SvStream& rOStm, const GDIMetaFile& rGDIMetaFile );
+
 class VCL_DLLPUBLIC GDIMetaFile final
 {
 private:
-    ::std::vector< MetaAction* > m_aList;
+    ::std::vector< rtl::Reference<MetaAction> > m_aList;
     size_t          m_nCurrentActionElement;
 
     MapMode         m_aPrefMapMode;
@@ -154,14 +157,14 @@ public:
 
     size_t          GetActionSize() const;
 
-    void            AddAction( MetaAction* pAction );
-    void            AddAction( MetaAction* pAction, size_t nPos );
-    void            push_back( MetaAction* pAction );
+    void            AddAction( rtl::Reference<MetaAction> pAction );
+    void            AddAction( rtl::Reference<MetaAction> pAction, size_t nPos );
+    void            push_back( rtl::Reference<MetaAction> pAction );
     /**
      * @param pAction takes ownership
      * @param nAction the action to replace
      */
-    MetaAction*     ReplaceAction( MetaAction* pAction, size_t nAction );
+    void ReplaceAction( rtl::Reference<MetaAction> pAction, size_t nAction );
 
     MetaAction*     FirstAction();
     MetaAction*     NextAction();
@@ -185,8 +188,8 @@ public:
 
     // Stream-operators write (still) the old format
     // and read both the old and the new format
-    friend VCL_DLLPUBLIC SvStream& ReadGDIMetaFile( SvStream& rIStm, GDIMetaFile& rGDIMetaFile );
-    friend VCL_DLLPUBLIC SvStream& WriteGDIMetaFile( SvStream& rOStm, const GDIMetaFile& rGDIMetaFile );
+    friend VCL_DLLPUBLIC SvStream& ReadGDIMetaFile(SvStream& rIStm, GDIMetaFile& rGDIMetaFile, ImplMetaReadData* pReadData);
+    friend VCL_DLLPUBLIC SvStream& WriteGDIMetaFile(SvStream& rOStm, const GDIMetaFile& rGDIMetaFile);
 
     /// Creates an antialiased thumbnail
     bool            CreateThumbnail(BitmapEx& rBitmapEx,

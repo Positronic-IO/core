@@ -88,7 +88,6 @@
 #include <barcfg.hxx>
 #include <pview.hxx>
 #include <swdtflvr.hxx>
-#include <strings.hrc>
 #include <cfgitems.hxx>
 #include <prtopt.hxx>
 #include <linguistic/lngprops.hxx>
@@ -1412,7 +1411,7 @@ void SwView::ReadUserDataSequence ( const uno::Sequence < beans::PropertyValue >
 
             // In case we have a 'fixed' view layout of 2 or more columns,
             // we have to apply the view options *before* starting the action.
-            // Otherwsie the SetZoom function cannot work correctly, because
+            // Otherwise the SetZoom function cannot work correctly, because
             // the view layout hasn't been calculated.
             const bool bZoomNeedsViewLayout = bSetViewLayoutSettings &&
                                               1 < nViewLayoutColumns &&

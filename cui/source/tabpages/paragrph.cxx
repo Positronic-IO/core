@@ -30,6 +30,7 @@
 #include <svl/cjkoptions.hxx>
 #include <editeng/pgrditem.hxx>
 #include <svx/strings.hrc>
+#include <svx/dialmgr.hxx>
 #include <paragrph.hxx>
 #include <editeng/frmdiritem.hxx>
 #include <editeng/lspcitem.hxx>
@@ -45,7 +46,6 @@
 #include <editeng/formatbreakitem.hxx>
 #include <editeng/keepitem.hxx>
 #include <svx/dlgutil.hxx>
-#include <dialmgr.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <editeng/paravertalignitem.hxx>
 #include <svl/eitem.hxx>
@@ -124,7 +124,7 @@ void SetLineSpace_Impl( SvxLineSpacingItem& rLineSpace,
 
         case LLINESPACE_PROP:
             rLineSpace.SetLineSpaceRule( SvxLineSpaceRule::Auto );
-            rLineSpace.SetPropLineSpace( static_cast<sal_uInt8>(lValue) );
+            rLineSpace.SetPropLineSpace( static_cast<sal_uInt16>(lValue) );
             break;
 
         case LLINESPACE_MIN:
@@ -197,9 +197,9 @@ IMPL_LINK_NOARG(SvxStdParagraphTabPage, ELRLoseFocusHdl, Control&, void)
         m_pRightIndent->SetEmptyFieldValue();
 }
 
-VclPtr<SfxTabPage> SvxStdParagraphTabPage::Create( vcl::Window* pParent, const SfxItemSet* rSet)
+VclPtr<SfxTabPage> SvxStdParagraphTabPage::Create( TabPageParent pParent, const SfxItemSet* rSet)
 {
-    return VclPtr<SvxStdParagraphTabPage>::Create( pParent, *rSet );
+    return VclPtr<SvxStdParagraphTabPage>::Create( pParent.pParent, *rSet );
 }
 
 bool SvxStdParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
@@ -1073,10 +1073,9 @@ SvxParaAlignTabPage::SvxParaAlignTabPage( vcl::Window* pParent, const SfxItemSet
     m_pLastLineLB->SetSelectHdl( LINK( this, SvxParaAlignTabPage, LastLineHdl_Impl ) );
     m_pTextDirectionLB->SetSelectHdl( LINK( this, SvxParaAlignTabPage, TextDirectionHdl_Impl ) );
 
-    std::locale loc(Translate::Create("svx"));
-    m_pTextDirectionLB->InsertEntryValue( Translate::get( RID_SVXSTR_FRAMEDIR_SUPER, loc ), SvxFrameDirection::Environment );
-    m_pTextDirectionLB->InsertEntryValue( Translate::get( RID_SVXSTR_FRAMEDIR_LTR, loc ), SvxFrameDirection::Horizontal_LR_TB );
-    m_pTextDirectionLB->InsertEntryValue( Translate::get( RID_SVXSTR_FRAMEDIR_RTL, loc ), SvxFrameDirection::Horizontal_RL_TB );
+    m_pTextDirectionLB->InsertEntryValue( SvxResId( RID_SVXSTR_FRAMEDIR_SUPER ), SvxFrameDirection::Environment );
+    m_pTextDirectionLB->InsertEntryValue( SvxResId( RID_SVXSTR_FRAMEDIR_LTR ), SvxFrameDirection::Horizontal_LR_TB );
+    m_pTextDirectionLB->InsertEntryValue( SvxResId( RID_SVXSTR_FRAMEDIR_RTL ), SvxFrameDirection::Horizontal_RL_TB );
 
     setPreviewsToSamePlace(pParent, this);
 }
@@ -1113,9 +1112,9 @@ DeactivateRC SvxParaAlignTabPage::DeactivatePage( SfxItemSet* _pSet )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SvxParaAlignTabPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxParaAlignTabPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxParaAlignTabPage>::Create(pParent, *rSet);
+    return VclPtr<SvxParaAlignTabPage>::Create(pParent.pParent, *rSet);
 }
 
 bool SvxParaAlignTabPage::FillItemSet( SfxItemSet* rOutSet )
@@ -1391,10 +1390,10 @@ void SvxParaAlignTabPage::PageCreated (const SfxAllItemSet& aSet)
             EnableJustifyExt();
 }
 
-VclPtr<SfxTabPage> SvxExtParagraphTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SvxExtParagraphTabPage::Create( TabPageParent pParent,
                                             const SfxItemSet* rSet )
 {
-    return VclPtr<SvxExtParagraphTabPage>::Create( pParent, *rSet );
+    return VclPtr<SvxExtParagraphTabPage>::Create( pParent.pParent, *rSet );
 }
 
 bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
@@ -2268,9 +2267,9 @@ void SvxAsianTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxAsianTabPage::Create( vcl::Window* pParent, const SfxItemSet* rSet )
+VclPtr<SfxTabPage> SvxAsianTabPage::Create( TabPageParent pParent, const SfxItemSet* rSet )
 {
-    return VclPtr<SvxAsianTabPage>::Create(pParent, *rSet);
+    return VclPtr<SvxAsianTabPage>::Create(pParent.pParent, *rSet);
 }
 
 const sal_uInt16*     SvxAsianTabPage::GetRanges()

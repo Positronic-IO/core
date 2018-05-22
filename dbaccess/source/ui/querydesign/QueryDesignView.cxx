@@ -30,14 +30,12 @@
 #include <adtabdlg.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/combobox.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <browserids.hxx>
 #include "SelectionBrowseBox.hxx"
 #include <strings.hrc>
 #include <strings.hxx>
 #include <unotools/configmgr.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
@@ -156,7 +154,7 @@ namespace
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
 
@@ -372,7 +370,7 @@ namespace
             }
             catch(const SQLException&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
         }
         return aDBName;
@@ -500,11 +498,10 @@ namespace
 
         // first search for the "to" window
         const auto& rConnections = pEntryConn->GetParent()->getTableConnections();
-        auto aIter = rConnections.begin();
-        auto aEnd = rConnections.end();
-        for(;aIter != aEnd;++aIter)
+        bool bFound = false;
+        for (auto const& connection : rConnections)
         {
-            OQueryTableConnection* pNext = static_cast<OQueryTableConnection*>((*aIter).get());
+            OQueryTableConnection* pNext = static_cast<OQueryTableConnection*>(connection.get());
             if(!pNext->IsVisited() && (pNext->GetSourceWin() == pEntryTabTo || pNext->GetDestWin() == pEntryTabTo))
             {
                 OQueryTableWindow* pEntryTab = pNext->GetSourceWin() == pEntryTabTo ? static_cast<OQueryTableWindow*>(pNext->GetDestWin()) : static_cast<OQueryTableWindow*>(pNext->GetSourceWin());
@@ -512,17 +509,17 @@ namespace
                 JoinCycle(_xConnection,pNext,pEntryTab,aJoin);
                 if(!pNext->IsVisited())
                     GetNextJoin(_xConnection, pNext, pEntryTab, aJoin, _rTableNames);
+                bFound = true;
             }
         }
 
         // when nothing found look for the "from" window
-        if(aIter == aEnd)
+        if(!bFound)
         {
             OQueryTableWindow* pEntryTabFrom = static_cast<OQueryTableWindow*>(pEntryConn->GetSourceWin());
-            aIter = rConnections.begin();
-            for(;aIter != aEnd;++aIter)
+            for (auto const& connection : rConnections)
             {
-                OQueryTableConnection* pNext = static_cast<OQueryTableConnection*>((*aIter).get());
+                OQueryTableConnection* pNext = static_cast<OQueryTableConnection*>(connection.get());
                 if(!pNext->IsVisited() && (pNext->GetSourceWin() == pEntryTabFrom || pNext->GetDestWin() == pEntryTabFrom))
                 {
                     OQueryTableWindow* pEntryTab = pNext->GetSourceWin() == pEntryTabFrom ? static_cast<OQueryTableWindow*>(pNext->GetDestWin()) : static_cast<OQueryTableWindow*>(pNext->GetSourceWin());
@@ -643,13 +640,11 @@ namespace
                     {
                         // we have to look if we have alias.* here but before we have to check if the column doesn't already exist
                         OTableFieldDescRef  aInfo = new OTableFieldDesc();
-                        bool bFound = false;
                         for (auto const& table : rTabList)
                         {
                             OQueryTableWindow* pTabWin = static_cast<OQueryTableWindow*>(table.second.get());
 
-                            bFound = pTabWin->ExistsField( rFieldName, aInfo );
-                            if ( bFound )
+                            if ( pTabWin->ExistsField( rFieldName, aInfo ) )
                             {
                                 rFieldName = aInfo->GetField();
                                 break;
@@ -697,7 +692,7 @@ namespace
         }
         return aFieldListStr.makeStringAndClear();
     }
-    bool GenerateCriterias( OQueryDesignView* _pView,
+    bool GenerateCriterias( OQueryDesignView const * _pView,
                                 OUStringBuffer& rRetStr,
                                 OUStringBuffer& rHavingStr,
                                 OTableFields& _rFieldList,
@@ -864,7 +859,7 @@ namespace
         }
         return true;
     }
-    SqlParseError GenerateOrder(    OQueryDesignView* _pView,
+    SqlParseError GenerateOrder(    OQueryDesignView const * _pView,
                                     OTableFields& _rFieldList,
                                     bool bMulti,
                                     OUString& _rsRet)
@@ -1199,7 +1194,7 @@ namespace
             pNodeTmp = pNode->getChild(1);
             ::connectivity::OSQLParseNode::absorptions(pNodeTmp);
             pNodeTmp = pNode->getChild(1);
-            // compress sort the criteria @see http://www.openoffice.org/issues/show_bug.cgi?id=24079
+            // compress sort the criteria @see https://bz.apache.org/ooo/show_bug.cgi?id=24079
             OSQLParseNode::compress(pNodeTmp);
             pNodeTmp = pNode->getChild(1);
 
@@ -3072,7 +3067,7 @@ bool OQueryDesignView::initByParseIterator( ::dbtools::SQLExceptionInfo* _pError
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return eErrorCode == eOk;
 }

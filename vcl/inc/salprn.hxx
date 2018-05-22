@@ -31,6 +31,7 @@ class SalGraphics;
 class SalFrame;
 class ImplJobSetup;
 namespace vcl { class PrinterController; }
+namespace weld { class Window; }
 
 struct VCL_PLUGIN_PUBLIC SalPrinterQueueInfo
 {
@@ -60,7 +61,7 @@ public:
     virtual SalGraphics*            AcquireGraphics() = 0;
     virtual void                    ReleaseGraphics( SalGraphics* pGraphics ) = 0;
 
-    virtual bool                    Setup( SalFrame* pFrame, ImplJobSetup* pSetupData ) = 0;
+    virtual bool                    Setup(weld::Window* pFrame, ImplJobSetup* pSetupData) = 0;
     // This function set the driver data and
     // set the new indepen data in pSetupData
     virtual bool                    SetPrinterData( ImplJobSetup* pSetupData ) = 0;
@@ -72,8 +73,8 @@ public:
 
     virtual void                    GetPageInfo( const ImplJobSetup* pSetupData,
                                                  long& rOutWidth, long& rOutHeight,
-                                                 long& rPageOffX, long& rPageOffY,
-                                                 long& rPageWidth, long& rPageHeight ) = 0;
+                                                 Point& rPageOffset,
+                                                 Size& rPaperSize ) = 0;
     virtual sal_uInt32              GetCapabilities( const ImplJobSetup* pSetupData, PrinterCapType nType ) = 0;
     virtual sal_uInt16              GetPaperBinCount( const ImplJobSetup* pSetupData ) = 0;
     virtual OUString                GetPaperBinName( const ImplJobSetup* pSetupData, sal_uInt16 nPaperBin ) = 0;

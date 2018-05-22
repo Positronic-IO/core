@@ -23,7 +23,6 @@
 #include <vcl/graph.hxx>
 #include <vcl/metaact.hxx>
 #include <impgraph.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/graphic/XGraphicProvider.hpp>
@@ -31,6 +30,9 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <cppuhelper/typeprovider.hxx>
+#include <graphic/UnoGraphic.hxx>
+#include <vcl/GraphicExternalLink.hxx>
+
 
 using namespace ::com::sun::star;
 
@@ -182,14 +184,14 @@ void ImplDrawDefault( OutputDevice* pOutDev, const OUString* pText,
 } // end anonymous namespace
 
 Graphic::Graphic()
-    : mxImpGraphic(new ImpGraphic)
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance())
 {
 }
 
 Graphic::Graphic(const Graphic& rGraphic)
 {
     if( rGraphic.IsAnimated() )
-        mxImpGraphic.reset(new ImpGraphic(*rGraphic.mxImpGraphic));
+        mxImpGraphic = vcl::graphic::Manager::get().copy(rGraphic.mxImpGraphic);
     else
         mxImpGraphic = rGraphic.mxImpGraphic;
 }
@@ -199,28 +201,33 @@ Graphic::Graphic(Graphic&& rGraphic)
 {
 }
 
+Graphic::Graphic(GraphicExternalLink const & rGraphicExternalLink)
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rGraphicExternalLink))
+{
+}
+
 Graphic::Graphic(const Bitmap& rBmp)
-    : mxImpGraphic(new ImpGraphic(rBmp))
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rBmp))
 {
 }
 
 Graphic::Graphic(const BitmapEx& rBmpEx)
-    : mxImpGraphic(new ImpGraphic(rBmpEx))
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rBmpEx))
 {
 }
 
 Graphic::Graphic(const VectorGraphicDataPtr& rVectorGraphicDataPtr)
-    : mxImpGraphic(new ImpGraphic(rVectorGraphicDataPtr))
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rVectorGraphicDataPtr))
 {
 }
 
 Graphic::Graphic(const Animation& rAnimation)
-    : mxImpGraphic(new ImpGraphic(rAnimation))
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rAnimation))
 {
 }
 
 Graphic::Graphic(const GDIMetaFile& rMtf)
-    : mxImpGraphic(new ImpGraphic(rMtf))
+    : mxImpGraphic(vcl::graphic::Manager::get().newInstance(rMtf))
 {
 }
 
@@ -234,20 +241,30 @@ Graphic::Graphic( const css::uno::Reference< css::graphic::XGraphic >& rxGraphic
     if( pGraphic )
     {
         if (pGraphic->IsAnimated())
-            mxImpGraphic.reset(new ImpGraphic(*pGraphic->mxImpGraphic));
+            mxImpGraphic = vcl::graphic::Manager::get().copy(pGraphic->mxImpGraphic);
         else
             mxImpGraphic = pGraphic->mxImpGraphic;
     }
     else
-        mxImpGraphic.reset(new ImpGraphic);
+        mxImpGraphic = vcl::graphic::Manager::get().newInstance();
 }
 
 void Graphic::ImplTestRefCount()
 {
     if (mxImpGraphic.use_count() > 1)
     {
-        mxImpGraphic.reset(new ImpGraphic(*mxImpGraphic));
+        mxImpGraphic = vcl::graphic::Manager::get().copy(mxImpGraphic);
     }
+}
+
+bool Graphic::isAvailable() const
+{
+    return mxImpGraphic->isAvailable();
+}
+
+bool Graphic::makeAvailable()
+{
+    return mxImpGraphic->makeAvailable();
 }
 
 Graphic& Graphic::operator=( const Graphic& rGraphic )
@@ -255,13 +272,9 @@ Graphic& Graphic::operator=( const Graphic& rGraphic )
     if( &rGraphic != this )
     {
         if( rGraphic.IsAnimated() )
-        {
-            mxImpGraphic.reset(new ImpGraphic(*rGraphic.mxImpGraphic));
-        }
+            mxImpGraphic = vcl::graphic::Manager::get().copy(rGraphic.mxImpGraphic);
         else
-        {
             mxImpGraphic = rGraphic.mxImpGraphic;
-        }
     }
 
     return *this;
@@ -360,25 +373,18 @@ const BitmapEx& Graphic::GetBitmapExRef() const
     return mxImpGraphic->ImplGetBitmapExRef();
 }
 
-uno::Reference< graphic::XGraphic > Graphic::GetXGraphic() const
+uno::Reference<graphic::XGraphic> Graphic::GetXGraphic() const
 {
-    uno::Reference< graphic::XGraphic > xRet;
+    uno::Reference<graphic::XGraphic> xGraphic;
 
-    if( GetType() != GraphicType::NONE )
+    if (GetType() != GraphicType::NONE)
     {
-        uno::Reference < uno::XComponentContext > xContext( ::comphelper::getProcessComponentContext() );
-        uno::Reference< graphic::XGraphicProvider > xProv( graphic::GraphicProvider::create( xContext ) );
-
-        uno::Sequence< beans::PropertyValue > aLoadProps( 1 );
-        OUString aURL = "private:memorygraphic/" + OUString::number( reinterpret_cast< sal_Int64 >( this ) );
-
-        aLoadProps[ 0 ].Name = "URL";
-        aLoadProps[ 0 ].Value <<= aURL;
-
-        xRet = xProv->queryGraphic( aLoadProps );
+        unographic::Graphic* pUnoGraphic = new unographic::Graphic;
+        pUnoGraphic->init(*this);
+        xGraphic = pUnoGraphic;
     }
 
-    return xRet;
+    return xGraphic;
 }
 
 Size Graphic::GetPrefSize() const
@@ -432,7 +438,7 @@ Size Graphic::GetSizePixel( const OutputDevice* pRefDevice ) const
     Size aRet;
 
     if( GraphicType::Bitmap == mxImpGraphic->ImplGetType() )
-        aRet = mxImpGraphic->ImplGetBitmapEx(GraphicConversionParameters()).GetSizePixel();
+        aRet = mxImpGraphic->ImplGetSizePixel();
     else
         aRet = ( pRefDevice ? pRefDevice : Application::GetDefaultDevice() )->LogicToPixel( GetPrefSize(), GetPrefMapMode() );
 
@@ -514,53 +520,18 @@ bool Graphic::IsDummyContext()
     return mxImpGraphic->ImplIsDummyContext();
 }
 
-bool Graphic::SwapOut()
-{
-    ImplTestRefCount();
-    return mxImpGraphic->ImplSwapOut();
-}
-
-void Graphic::SwapOutAsLink()
-{
-    ImplTestRefCount();
-    mxImpGraphic->ImplSwapOutAsLink();
-}
-
-bool Graphic::SwapOut( SvStream* pOStream )
-{
-    ImplTestRefCount();
-    return mxImpGraphic->ImplSwapOut( pOStream );
-}
-
-bool Graphic::SwapIn()
-{
-    ImplTestRefCount();
-    return mxImpGraphic->ImplSwapIn();
-}
-
-bool Graphic::SwapIn( SvStream* pStrm )
-{
-    ImplTestRefCount();
-    return mxImpGraphic->ImplSwapIn( pStrm );
-}
-
-bool Graphic::IsSwapOut() const
-{
-    return mxImpGraphic->ImplIsSwapOut();
-}
-
-void Graphic::SetLink( const GfxLink& rGfxLink )
+void Graphic::SetGfxLink( const GfxLink& rGfxLink )
 {
     ImplTestRefCount();
     mxImpGraphic->ImplSetLink( rGfxLink );
 }
 
-GfxLink Graphic::GetLink() const
+GfxLink Graphic::GetGfxLink() const
 {
     return mxImpGraphic->ImplGetLink();
 }
 
-bool Graphic::IsLink() const
+bool Graphic::IsGfxLink() const
 {
     return mxImpGraphic->ImplIsLink();
 }
@@ -594,12 +565,12 @@ const VectorGraphicDataPtr& Graphic::getVectorGraphicData() const
 void Graphic::setPdfData(const uno::Sequence<sal_Int8>& rPdfData)
 {
     ImplTestRefCount();
-    mxImpGraphic->maPdfData = rPdfData;
+    mxImpGraphic->setPdfData(rPdfData);
 }
 
 const uno::Sequence<sal_Int8>& Graphic::getPdfData() const
 {
-    return mxImpGraphic->maPdfData;
+    return mxImpGraphic->getPdfData();
 }
 
 OUString Graphic::getOriginURL() const
@@ -617,6 +588,14 @@ void Graphic::setOriginURL(OUString const & rOriginURL)
     {
         mxImpGraphic->setOriginURL(rOriginURL);
     }
+}
+
+OString Graphic::getUniqueID() const
+{
+    OString aUniqueString;
+    if (mxImpGraphic)
+        aUniqueString = mxImpGraphic->getUniqueID();
+    return aUniqueString;
 }
 
 namespace {

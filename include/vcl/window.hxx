@@ -376,11 +376,10 @@ enum class DrawFlags
     NoMnemonic          = 0x0010,
     NoSelection         = 0x0020,
     NoBackground        = 0x0040,
-    NoRollover          = 0x0080,
 };
 namespace o3tl
 {
-    template<> struct typed_flags<DrawFlags> : is_typed_flags<DrawFlags, 0x00ff> {};
+    template<> struct typed_flags<DrawFlags> : is_typed_flags<DrawFlags, 0x007f> {};
 }
 
 // DialogControl-Flags
@@ -603,8 +602,8 @@ public:
     SAL_DLLPRIVATE void                 ImplCallResize();
     SAL_DLLPRIVATE void                 ImplCallMove();
 
-    SAL_DLLPRIVATE void                 ImplIncModalCount();
-    SAL_DLLPRIVATE void                 ImplDecModalCount();
+                   void                 IncModalCount();
+                   void                 DecModalCount();
 
     SAL_DLLPRIVATE static void          ImplCalcSymbolRect( tools::Rectangle& rRect );
 
@@ -1074,7 +1073,21 @@ public:
     virtual void                        Invalidate( InvalidateFlags nFlags = InvalidateFlags::NONE );
     virtual void                        Invalidate( const tools::Rectangle& rRect, InvalidateFlags nFlags = InvalidateFlags::NONE );
     virtual void                        Invalidate( const vcl::Region& rRegion, InvalidateFlags nFlags = InvalidateFlags::NONE );
-    virtual void                        LogicInvalidate(const tools::Rectangle* pRectangle) override;
+    /**
+     * Notification about some rectangle of the output device got invalidated.Used for the main
+     * document window.
+     *
+     * @param pRectangle If 0, that means the whole area, otherwise the area in logic coordinates.
+     */
+    virtual void                        LogicInvalidate(const tools::Rectangle* pRectangle);
+
+    /**
+     * Notification about some rectangle of the output device got invalidated. Used for the
+     * dialogs and floating windows (e.g. context menu, popup).
+     *
+     * @param pRectangle If 0, that means the whole area, otherwise the area in pixel coordinates.
+     */
+    virtual void                        PixelInvalidate(const tools::Rectangle* pRectangle);
     void                                Validate();
     bool                                HasPaintEvent() const;
     void                                Update();

@@ -361,7 +361,7 @@ long ScColumn::GetNeededSize(
         MapMode aHMMMode( MapUnit::Map100thMM, Point(), rZoomX, rZoomY );
 
         // save in document ?
-        ScFieldEditEngine* pEngine = pDocument->CreateFieldEditEngine();
+        std::unique_ptr<ScFieldEditEngine> pEngine = pDocument->CreateFieldEditEngine();
 
         pEngine->SetUpdateMode( false );
         bool bTextWysiwyg = ( pDev->GetOutDevType() == OUTDEV_PRINTER );
@@ -786,7 +786,7 @@ void ScColumn::GetOptimalHeight(
 {
     ScDocument* pDocument = GetDoc();
     ScFlatUInt16RowSegments& rHeights = rCxt.getHeightArray();
-    ScAttrIterator aIter( pAttrArray, nStartRow, nEndRow, pDocument->GetDefPattern() );
+    ScAttrIterator aIter( pAttrArray.get(), nStartRow, nEndRow, pDocument->GetDefPattern() );
 
     SCROW nStart = -1;
     SCROW nEnd = -1;
@@ -1107,7 +1107,7 @@ public:
 
             // Overwrite the existing object.
             delete pObj;
-            pObj = mpEngine->CreateTextObject();
+            pObj = mpEngine->CreateTextObject().release();
         }
         else                                            // create String
         {
@@ -1990,7 +1990,7 @@ SvtScriptType ScColumn::GetScriptType( SCROW nRow ) const
 }
 
 SvtScriptType ScColumn::GetRangeScriptType(
-    sc::CellTextAttrStoreType::iterator& itPos, SCROW nRow1, SCROW nRow2, const sc::CellStoreType::iterator& itrCells )
+    sc::CellTextAttrStoreType::iterator& itPos, SCROW nRow1, SCROW nRow2, const sc::CellStoreType::iterator& itrCells_ )
 {
     if (!ValidRow(nRow1) || !ValidRow(nRow2) || nRow1 > nRow2)
         return SvtScriptType::NONE;
@@ -2000,6 +2000,7 @@ SvtScriptType ScColumn::GetRangeScriptType(
         maCellTextAttrs.position(itPos, nRow1);
 
     itPos = aRet.first; // Track the position of cell text attribute array.
+    sc::CellStoreType::iterator itrCells = itrCells_;
 
     SvtScriptType nScriptType = SvtScriptType::NONE;
     bool bUpdated = false;

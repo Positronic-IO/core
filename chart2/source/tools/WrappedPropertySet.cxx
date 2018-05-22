@@ -20,6 +20,7 @@
 #include <WrappedPropertySet.hxx>
 
 #include <tools/solar.h>
+#include <tools/diagnose_ex.h>
 
 namespace chart
 {
@@ -53,10 +54,9 @@ void WrappedPropertySet::clearWrappedPropertySet()
     //delete all wrapped properties
     if(m_pWrappedPropertyMap)
     {
-        for( tWrappedPropertyMap::iterator aIt = m_pWrappedPropertyMap->begin()
-            ; aIt!= m_pWrappedPropertyMap->end(); ++aIt )
+        for (auto const& elem : *m_pWrappedPropertyMap)
         {
-            const WrappedProperty* pWrappedProperty = (*aIt).second;
+            const WrappedProperty* pWrappedProperty = elem.second;
             DELETEZ(pWrappedProperty);
         }
     }
@@ -235,9 +235,9 @@ void SAL_CALL WrappedPropertySet::setPropertyValues( const Sequence< OUString >&
         {
             setPropertyValue( aPropertyName, rValueSeq[nN] );
         }
-        catch( const beans::UnknownPropertyException& ex )
+        catch( const beans::UnknownPropertyException& )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
             bUnknownProperty = true;
         }
     }
@@ -259,13 +259,13 @@ Sequence< Any > SAL_CALL WrappedPropertySet::getPropertyValues( const Sequence< 
                 OUString aPropertyName( rNameSeq[nN] );
                 aRetSeq[nN] = getPropertyValue( aPropertyName );
             }
-            catch( const beans::UnknownPropertyException& ex )
+            catch( const beans::UnknownPropertyException& )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
-            catch( const lang::WrappedTargetException& ex )
+            catch( const lang::WrappedTargetException& )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
     }
@@ -426,26 +426,25 @@ tWrappedPropertyMap& WrappedPropertySet::getWrappedPropertyMap()
             std::vector< WrappedProperty* > aPropList( createWrappedProperties() );
             p = new tWrappedPropertyMap;
 
-            for( std::vector< WrappedProperty* >::const_iterator aIt = aPropList.begin(); aIt!=aPropList.end(); ++aIt )
+            for (auto const& elem : aPropList)
             {
-                WrappedProperty* pProperty = *aIt;
-                if(pProperty)
+                if(elem)
                 {
-                    sal_Int32 nHandle = getInfoHelper().getHandleByName( pProperty->getOuterName() );
+                    sal_Int32 nHandle = getInfoHelper().getHandleByName( elem->getOuterName() );
 
                     if( nHandle == -1 )
                     {
                         OSL_FAIL( "missing property in property list" );
-                        delete pProperty;//we are owner or the created WrappedProperties
+                        delete elem;//we are owner or the created WrappedProperties
                     }
                     else if( p->find( nHandle ) != p->end() )
                     {
                         //duplicate Wrapped property
                         OSL_FAIL( "duplicate Wrapped property" );
-                        delete pProperty;//we are owner or the created WrappedProperties
+                        delete elem;//we are owner or the created WrappedProperties
                     }
                     else
-                        (*p)[ nHandle ] = pProperty;
+                        (*p)[ nHandle ] = elem;
                 }
             }
 

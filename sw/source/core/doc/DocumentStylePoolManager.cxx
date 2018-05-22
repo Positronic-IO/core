@@ -369,6 +369,7 @@ static const char* STR_POOLCOLL_EXTRA_ARY[]
     STR_POOLCOLL_LABEL_ABB,
     STR_POOLCOLL_LABEL_TABLE,
     STR_POOLCOLL_LABEL_FRAME,
+    STR_POOLCOLL_LABEL_FIGURE,
     // Miscellaneous
     STR_POOLCOLL_FRAME,
     STR_POOLCOLL_FOOTNOTE,
@@ -677,7 +678,7 @@ SwTextFormatColl* DocumentStylePoolManager::GetTextCollFromPool( sal_uInt16 nId,
             {
                 SvxLineSpacingItem aLSpc( LINE_SPACE_DEFAULT_HEIGHT, RES_PARATR_LINESPACING );
                 SvxULSpaceItem aUL( 0, PT_7, RES_UL_SPACE );
-                aLSpc.SetPropLineSpace( sal_uInt8(115) );
+                aLSpc.SetPropLineSpace( 115 );
                 if( m_rDoc.GetDocumentSettingManager().get(DocumentSettingId::HTML_MODE) ) aUL.SetLower( HTML_PARSPACE );
                 aSet.Put( aUL );
                 aSet.Put( aLSpc );
@@ -936,6 +937,7 @@ SwTextFormatColl* DocumentStylePoolManager::GetTextCollFromPool( sal_uInt16 nId,
         case RES_POOLCOLL_LABEL_TABLE:          // caption table
         case RES_POOLCOLL_LABEL_FRAME:          // caption frame
         case RES_POOLCOLL_LABEL_DRAWING:        // caption drawing
+        case RES_POOLCOLL_LABEL_FIGURE:
             break;
 
         case RES_POOLCOLL_JAKETADRESS:          // envelope address

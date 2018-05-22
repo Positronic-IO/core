@@ -19,7 +19,6 @@
 
 #include <redline.hxx>
 #include <tools/datetime.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/eitem.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/dispatch.hxx>
@@ -946,7 +945,7 @@ IMPL_LINK_NOARG(SwRedlineAcceptDlg, GotoHdl, Timer *, void)
     bool bIsNotFormated = false;
     bool bSel = false;
 
-    //#98883# don't select redlines while the dialog is not focussed
+    //#98883# don't select redlines while the dialog is not focused
     //#107938# But not only ask pTable if it has the focus. To move
     //         the selection to the selected redline any child of pParentDlg
     //         may the focus.
@@ -1089,7 +1088,7 @@ IMPL_LINK_NOARG(SwRedlineAcceptDlg, CommandHdl, SvSimpleTable*, void)
                         rRedline.GetRedlineData().GetTimeStamp() ),
                         SID_ATTR_POSTIT_DATE ));
 
-            ScopedVclPtr<AbstractSvxPostItDialog> pDlg(pFact->CreateSvxPostItDialog( m_pParentDlg, aSet ));
+            ScopedVclPtr<AbstractSvxPostItDialog> pDlg(pFact->CreateSvxPostItDialog(m_pParentDlg->GetFrameWeld(), aSet));
             OSL_ENSURE(pDlg, "Dialog creation failed!");
 
             pDlg->HideAuthor();
@@ -1117,7 +1116,7 @@ IMPL_LINK_NOARG(SwRedlineAcceptDlg, CommandHdl, SvSimpleTable*, void)
                 sTitle += SwResId(pResId);
             pDlg->SetText(sTitle);
 
-            SwViewShell::SetCareWin(pDlg->GetWindow());
+            SwViewShell::SetCareDialog(pDlg->GetDialog());
 
             if ( pDlg->Execute() == RET_OK )
             {
@@ -1130,7 +1129,7 @@ IMPL_LINK_NOARG(SwRedlineAcceptDlg, CommandHdl, SvSimpleTable*, void)
             }
 
             pDlg.disposeAndClear();
-            SwViewShell::SetCareWin(nullptr);
+            SwViewShell::SetCareDialog(nullptr);
         }
     }
     else if (nRet)

@@ -20,7 +20,6 @@
 #include <sfx2/request.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <cmdid.h>
 #include <uitool.hxx>
@@ -36,7 +35,7 @@
 #include <strings.hrc>
 #include <SwStyleNameMapper.hxx>
 
-short SwBreakDlg::run()
+short SwBreakDlg::execute()
 {
     short nRet = m_xDialog->run();
     if (nRet == RET_OK)
@@ -52,7 +51,12 @@ short SwBreakDlg::run()
             const int nPos = m_xPageCollBox->get_active();
             if (nPos != 0 && nPos != -1)
             {
-                oPgNum = static_cast<sal_uInt16>(m_xPageNumEdit->get_value());
+                m_aTemplate = m_xPageCollBox->get_active_text();
+                oPgNum = boost::none;
+                if (m_xPageNumBox->get_active())
+                {
+                    oPgNum = static_cast<sal_uInt16>(m_xPageNumEdit->get_value());
+                }
             }
         }
     }
@@ -126,21 +130,19 @@ IMPL_LINK_NOARG(SwBreakDlg, OkHdl, weld::Button&, void)
 }
 
 SwBreakDlg::SwBreakDlg(weld::Window *pParent, SwWrtShell &rS)
-    : rSh(rS)
-    , m_xBuilder(Application::CreateBuilder(pParent, "modules/swriter/ui/insertbreak.ui"))
+    : GenericDialogController(pParent, "modules/swriter/ui/insertbreak.ui", "BreakDialog")
+    , m_xLineBtn(m_xBuilder->weld_radio_button("linerb"))
+    , m_xColumnBtn(m_xBuilder->weld_radio_button("columnrb"))
+    , m_xPageBtn(m_xBuilder->weld_radio_button("pagerb"))
+    , m_xPageCollText(m_xBuilder->weld_label("styleft"))
+    , m_xPageCollBox(m_xBuilder->weld_combo_box_text("stylelb"))
+    , m_xPageNumBox(m_xBuilder->weld_check_button("pagenumcb"))
+    , m_xPageNumEdit(m_xBuilder->weld_spin_button("pagenumsb"))
+    , m_xOkBtn(m_xBuilder->weld_button("ok"))
+    , rSh(rS)
     , nKind(0)
     , bHtmlMode(0 != ::GetHtmlMode(rS.GetView().GetDocShell()))
 {
-    m_xDialog.reset(m_xBuilder->weld_dialog("BreakDialog"));
-    m_xLineBtn.reset(m_xBuilder->weld_radio_button("linerb"));
-    m_xColumnBtn.reset(m_xBuilder->weld_radio_button("columnrb"));
-    m_xPageBtn.reset(m_xBuilder->weld_radio_button("pagerb"));
-    m_xPageCollBox.reset(m_xBuilder->weld_combo_box_text("stylelb"));
-    m_xPageNumBox.reset(m_xBuilder->weld_check_button("pagenumcb"));
-    m_xPageNumEdit.reset(m_xBuilder->weld_spin_button("pagenumsb"));
-    m_xPageCollText.reset(m_xBuilder->weld_label("styleft"));
-    m_xOkBtn.reset(m_xBuilder->weld_button("ok"));
-
     Link<weld::ToggleButton&,void> aLk = LINK(this, SwBreakDlg, ToggleHdl);
     m_xPageBtn->connect_toggled(aLk);
     m_xLineBtn->connect_toggled(aLk);
@@ -156,7 +158,7 @@ SwBreakDlg::SwBreakDlg(weld::Window *pParent, SwWrtShell &rS)
     for (size_t i = 0; i < nCount; ++i)
     {
         const SwPageDesc &rPageDesc = rSh.GetPageDesc(i);
-        ::InsertStringSorted(rPageDesc.GetName(), *m_xPageCollBox, 1 );
+        ::InsertStringSorted("", rPageDesc.GetName(), *m_xPageCollBox, 1 );
     }
 
     OUString aFormatName;
@@ -164,12 +166,12 @@ SwBreakDlg::SwBreakDlg(weld::Window *pParent, SwWrtShell &rS)
     {
         aFormatName = SwStyleNameMapper::GetUIName( i, aFormatName );
         if (m_xPageCollBox->find_text(aFormatName) == -1)
-            ::InsertStringSorted(aFormatName, *m_xPageCollBox, 1 );
+            ::InsertStringSorted("", aFormatName, *m_xPageCollBox, 1 );
     }
     //add landscape page
     aFormatName = SwStyleNameMapper::GetUIName( RES_POOLPAGE_LANDSCAPE, aFormatName );
     if (m_xPageCollBox->find_text(aFormatName) == -1)
-        ::InsertStringSorted(aFormatName, *m_xPageCollBox, 1);
+        ::InsertStringSorted("", aFormatName, *m_xPageCollBox, 1);
     CheckEnable();
     m_xPageNumEdit->set_text(OUString());
 }

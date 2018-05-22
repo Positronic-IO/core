@@ -20,9 +20,9 @@
 
 #include <memory>
 #include <sal/macros.h>
+#include <vcl/image.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 
 #include <com/sun/star/i18n/WordType.hpp>
@@ -66,6 +66,7 @@
 #include <vcl/settings.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
+#include <sfx2/viewsh.hxx>
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
 
@@ -685,7 +686,7 @@ EVControlBits EditView::GetControlWord() const
     return pImpEditView->nControl;
 }
 
-EditTextObject* EditView::CreateTextObject()
+std::unique_ptr<EditTextObject> EditView::CreateTextObject()
 {
     return pImpEditView->pEditEngine->pImpEditEngine->CreateTextObject( pImpEditView->GetEditSelection() );
 }
@@ -1025,11 +1026,10 @@ void EditView::ExecuteSpellPopup( const Point& rPosPixel, Link<SpellCallbackInfo
         EPaM aP = pImpEditView->pEditEngine->pImpEditEngine->CreateEPaM(aPaM);
         EPaM aP2 = pImpEditView->pEditEngine->pImpEditEngine->CreateEPaM(aPaM2);
 
-        sal_uInt16 nId = 0;
-        // TODO for LOK, we'll need to convert the spelling popup menu to
-        // something much more sfx2-based & non-modal...
-        if (!comphelper::LibreOfficeKit::isActive())
-            nId = aPopupMenu->Execute( pImpEditView->GetWindow(), aTempRect, PopupMenuFlags::NoMouseUpClose );
+
+        if (comphelper::LibreOfficeKit::isActive())
+            aPopupMenu->SetLOKNotifier(SfxViewShell::Current());
+        sal_uInt16 nId = aPopupMenu->Execute(pImpEditView->GetWindow(), aTempRect, PopupMenuFlags::NoMouseUpClose);
 
         aPaM2 = pImpEditView->pEditEngine->pImpEditEngine->CreateEditPaM(aP2);
         aPaM = pImpEditView->pEditEngine->pImpEditEngine->CreateEditPaM(aP);
@@ -1068,7 +1068,7 @@ void EditView::ExecuteSpellPopup( const Point& rPosPixel, Link<SpellCallbackInfo
 
             if ( pCallBack )
             {
-                SpellCallbackInfo aInf( ( nId == MN_WORDLANGUAGE ) ? SpellCallbackCommand::WORDLANGUAGE : SpellCallbackCommand::PARALANGUAGE, nLangToUse );
+                SpellCallbackInfo aInf( ( nId == MN_WORDLANGUAGE ) ? SpellCallbackCommand::WORDLANGUAGE : SpellCallbackCommand::PARALANGUAGE );
                 pCallBack->Call( aInf );
             }
             SetSelection( aOldSel );

@@ -26,7 +26,8 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/graph.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
+#include <vcl/GraphicLoader.hxx>
 
 #include <editeng/brushitem.hxx>
 #include <editeng/unoprnms.hxx>
@@ -252,7 +253,7 @@ Sequence<beans::PropertyValue> SvxUnoNumberingRules::getNumberingRuleByIndex(sal
 
     pArray[nIdx++] = beans::PropertyValue("SymbolTextDistance", -1, aVal, beans::PropertyState_DIRECT_VALUE);
 
-    aVal <<= static_cast<sal_Int32>(rFmt.GetBulletColor().GetColor());
+    aVal <<= rFmt.GetBulletColor();
     pArray[nIdx++] = beans::PropertyValue(UNO_NAME_NRULE_BULLET_COLOR, -1, aVal, beans::PropertyState_DIRECT_VALUE);
 
     aVal <<= static_cast<sal_Int16>(rFmt.GetBulletRelSize());
@@ -352,25 +353,28 @@ void SvxUnoNumberingRules::setNumberingRuleByIndex(const Sequence<beans::Propert
                 continue;
             }
         }
+        else if ( rPropName == "GraphicURL" )
+        {
+            OUString aURL;
+            if (aVal >>= aURL)
+            {
+                Graphic aGraphic = vcl::graphic::loadFromURL(aURL);
+                if (aGraphic)
+                {
+                    SvxBrushItem aBrushItem(aGraphic, GPOS_AREA, SID_ATTR_BRUSH);
+                    aFmt.SetGraphicBrush(&aBrushItem);
+                }
+                continue;
+            }
+        }
         else if ( rPropName == "GraphicBitmap" )
         {
             uno::Reference<awt::XBitmap> xBitmap;
-            if(aVal >>= xBitmap)
+            if (aVal >>= xBitmap)
             {
                 uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
                 Graphic aGraphic(xGraphic);
                 SvxBrushItem aBrushItem(aGraphic, GPOS_AREA, SID_ATTR_BRUSH);
-                aFmt.SetGraphicBrush( &aBrushItem );
-                continue;
-            }
-        }
-        else if ( rPropName == "GraphicURL" )
-        {
-            OUString aURL;
-            if( aVal >>= aURL )
-            {
-                GraphicObject aGrafObj( GraphicObject::CreateGraphicObjectFromURL( aURL ) );
-                SvxBrushItem aBrushItem( aGrafObj, GPOS_AREA, SID_ATTR_BRUSH );
                 aFmt.SetGraphicBrush( &aBrushItem );
                 continue;
             }

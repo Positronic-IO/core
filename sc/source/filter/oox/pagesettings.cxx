@@ -334,9 +334,11 @@ void PageSettings::finalizeImport()
 
 void PageSettings::importPictureData( const Relations& rRelations, const OUString& rRelId )
 {
-    OUString aPicturePath = rRelations.getFragmentPathFromRelId( rRelId );
-    if( !aPicturePath.isEmpty() )
-        maModel.maGraphicUrl = getBaseFilter().getGraphicHelper().importEmbeddedGraphicObject( aPicturePath );
+    OUString aPicturePath = rRelations.getFragmentPathFromRelId(rRelId);
+    if (!aPicturePath.isEmpty())
+    {
+        maModel.mxGraphic = getBaseFilter().getGraphicHelper().importEmbeddedGraphic(aPicturePath);
+    }
 }
 
 enum HFPortionId
@@ -848,7 +850,7 @@ void HeaderFooterParser::convertFontColor( const OUString& rColor )
             static_cast< double >( rColor.copy( 2 ).toInt32() ) / 100.0 );
     else
         // RGB color: RRGGBB
-        maFontModel.maColor.setRgb( rColor.toUInt32( 16 ) );
+        maFontModel.maColor.setRgb( ::Color(rColor.toUInt32( 16 )) );
 }
 
 void HeaderFooterParser::finalizePortion()
@@ -979,10 +981,10 @@ void PageSettingsConverter::writePageSettingsProperties(
     aPropMap.setProperty( PROP_FooterHeight, maFooterData.mnHeight);
     aPropMap.setProperty( PROP_FooterBodyDistance, maFooterData.mnBodyDist);
     // background image
-    if( !rModel.maGraphicUrl.isEmpty() )
+    if (rModel.mxGraphic.is())
     {
-        aPropMap.setProperty( PROP_BackGraphicURL, rModel.maGraphicUrl);
-        aPropMap.setProperty( PROP_BackGraphicLocation, css::style::GraphicLocation_TILED);
+        aPropMap.setProperty(PROP_BackGraphic, rModel.mxGraphic);
+        aPropMap.setProperty(PROP_BackGraphicLocation, css::style::GraphicLocation_TILED);
     }
 
     rPropSet.setProperties( aPropMap );

@@ -27,9 +27,9 @@
 #include <attrib.hxx>
 #include <dpshttab.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 
 #include <test/xmltesttools.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/sheet/DataPilotFieldOrientation.hpp>
 #include <com/sun/star/sheet/DataPilotFieldGroupBy.hpp>
 
@@ -2308,9 +2308,9 @@ void ScPivotTableFiltersTest::testTdf112106()
     // Check that we have an existing data layout dimension
     const ScDPSaveDimension* pDim = pSaveData->GetExistingDataLayoutDimension();
     CPPUNIT_ASSERT(pDim);
-    const OUString* pLayoutName = pDim->GetLayoutName();
+    const boost::optional<OUString> & pLayoutName = pDim->GetLayoutName();
     CPPUNIT_ASSERT(pLayoutName);
-    CPPUNIT_ASSERT_EQUAL(ScGlobal::GetRscString(STR_PIVOT_DATA), (*pLayoutName));
+    CPPUNIT_ASSERT_EQUAL(ScResId(STR_PIVOT_DATA), (*pLayoutName));
 
     xDocSh->DoClose();
 }

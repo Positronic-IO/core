@@ -34,7 +34,6 @@
 #include <swerror.h>
 #include <swtypes.hxx>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <i18nlangtag/lang.h>
@@ -1342,7 +1341,7 @@ WW8_BRCVer9::WW8_BRCVer9(const WW8_BRC& brcVer8)
     else
     {
         sal_uInt32 _cv = brcVer8.ico() == 0 ? 0xff000000 // "auto" colour
-            : wwUtility::RGBToBGR(sal_uInt32(SwWW8ImplReader::GetCol(brcVer8.ico())));
+            : wwUtility::RGBToBGR(SwWW8ImplReader::GetCol(brcVer8.ico()));
         *this = WW8_BRCVer9(_cv, brcVer8.dptLineWidth(), brcVer8.brcType(),
             brcVer8.dptSpace(), brcVer8.fShadow(), brcVer8.fFrame());
     }
@@ -1501,12 +1500,18 @@ WW8_CP WW8ScannerBase::WW8Fc2Cp( WW8_FC nFcPos ) const
                     SAL_WARN("sw.ww8", "broken offset, ignoring");
                     return WW8_CP_MAX;
                 }
-                if (nFcPos < nFcStart + nLen)
+                WW8_FC nFcEnd;
+                if (o3tl::checked_add(nFcStart, nLen, nFcEnd))
+                {
+                    SAL_WARN("sw.ww8", "broken offset, ignoring");
+                    return WW8_CP_MAX;
+                }
+                if (nFcPos < nFcEnd)
                 {
                     m_pPieceIter->SetIdx( nOldPos );
                     return nTempCp;
                 }
-                else if (nFcPos == nFcStart + nLen)
+                else if (nFcPos == nFcEnd)
                 {
                     //Keep this cp as its on a piece boundary because we might
                     //need it if tests fail
@@ -1988,13 +1993,33 @@ static bool WW8GetFieldPara(WW8PLCFspecial& rPLCF, WW8FieldDesc& rF)
             if (!rPLCF.Get(rF.nLRes, pData) || rF.nLRes < 0)
                 goto Err;
         }
-        rF.nLen = rF.nLRes - rF.nSCode + 2;         // nLRes is still the final position
+        WW8_CP nTmp;
+        if (o3tl::checked_sub<WW8_CP>(rF.nLRes, rF.nSCode, nTmp))
+        {
+            rF.nLen = 0;
+            goto Err;
+        }
+        if (o3tl::checked_add<WW8_CP>(nTmp, 2, rF.nLen)) // nLRes is still the final position
+        {
+            rF.nLen = 0;
+            goto Err;
+        }
         rF.nLRes -= rF.nSRes;                       // now: nLRes = length
         rF.nSRes++;                                 // Endpos including Markers
         rF.nLRes--;
     }else{
         rF.nLRes = 0;                               // no result found
-        rF.nLen = rF.nSRes - rF.nSCode + 2;         // total length
+        WW8_CP nTmp;
+        if (o3tl::checked_sub<WW8_CP>(rF.nSRes, rF.nSCode, nTmp))
+        {
+            rF.nLen = 0;
+            goto Err;
+        }
+        if (o3tl::checked_add<WW8_CP>(nTmp, 2, rF.nLen)) // total length
+        {
+            rF.nLen = 0;
+            goto Err;
+        }
     }
 
     if (rF.nLen < 0)
@@ -6779,32 +6804,32 @@ void WW8SmartTagData::Write(WW8Export& rExport)
 }
 
 WW8Style::WW8Style(SvStream& rStream, WW8Fib& rFibPara)
-    : rFib(rFibPara), rSt(rStream), cstd(0), cbSTDBaseInFile(0), fStdStylenamesWritten(0)
-    , stiMaxWhenSaved(0), istdMaxFixedWhenSaved(0), nVerBuiltInNamesWhenSaved(0)
-    , ftcAsci(0), ftcFE(0), ftcOther(0), ftcBi(0)
+    : m_rFib(rFibPara), m_rStream(rStream), m_cstd(0), m_cbSTDBaseInFile(0), m_fStdStylenamesWritten(0)
+    , m_stiMaxWhenSaved(0), m_istdMaxFixedWhenSaved(0), m_nVerBuiltInNamesWhenSaved(0)
+    , m_ftcAsci(0), m_ftcFE(0), m_ftcOther(0), m_ftcBi(0)
 {
-    if (!checkSeek(rSt, rFib.m_fcStshf))
+    if (!checkSeek(m_rStream, m_rFib.m_fcStshf))
         return;
 
     sal_uInt16 cbStshi = 0; //  2 bytes size of the following STSHI structure
-    sal_uInt32 nRemaining = rFib.m_lcbStshf;
+    sal_uInt32 nRemaining = m_rFib.m_lcbStshf;
     const sal_uInt32 nMinValidStshi = 4;
 
-    if (rFib.GetFIBVersion() <= ww::eWW2)
+    if (m_rFib.GetFIBVersion() <= ww::eWW2)
     {
         cbStshi = 0;
-        cstd = 256;
+        m_cstd = 256;
     }
     else
     {
-        if (rFib.m_nFib < 67) // old Version ? (need to find this again to fix)
+        if (m_rFib.m_nFib < 67) // old Version ? (need to find this again to fix)
             cbStshi = nMinValidStshi;
         else    // new version
         {
             if (nRemaining < sizeof(cbStshi))
                 return;
             // reads the length of the structure in the file
-            rSt.ReadUInt16( cbStshi );
+            m_rStream.ReadUInt16( cbStshi );
             nRemaining-=2;
         }
     }
@@ -6816,42 +6841,42 @@ WW8Style::WW8Style(SvStream& rStream, WW8Fib& rFibPara)
     const sal_uInt16 nRead = cbStshi;
     do
     {
-        rSt.ReadUInt16( cstd );
+        m_rStream.ReadUInt16( m_cstd );
 
-        rSt.ReadUInt16( cbSTDBaseInFile );
+        m_rStream.ReadUInt16( m_cbSTDBaseInFile );
 
         if(  6 > nRead ) break;
 
         sal_uInt16 a16Bit;
-        rSt.ReadUInt16( a16Bit );
-        fStdStylenamesWritten = a16Bit & 0x0001;
+        m_rStream.ReadUInt16( a16Bit );
+        m_fStdStylenamesWritten = a16Bit & 0x0001;
 
         if(  8 > nRead ) break;
-        rSt.ReadUInt16( stiMaxWhenSaved );
+        m_rStream.ReadUInt16( m_stiMaxWhenSaved );
 
         if( 10 > nRead ) break;
-        rSt.ReadUInt16( istdMaxFixedWhenSaved );
+        m_rStream.ReadUInt16( m_istdMaxFixedWhenSaved );
 
         if( 12 > nRead ) break;
-        rSt.ReadUInt16( nVerBuiltInNamesWhenSaved );
+        m_rStream.ReadUInt16( m_nVerBuiltInNamesWhenSaved );
 
         if( 14 > nRead ) break;
-        rSt.ReadUInt16( ftcAsci );
+        m_rStream.ReadUInt16( m_ftcAsci );
 
         if( 16 > nRead ) break;
-        rSt.ReadUInt16( ftcFE );
+        m_rStream.ReadUInt16( m_ftcFE );
 
         if ( 18 > nRead ) break;
-        rSt.ReadUInt16( ftcOther );
+        m_rStream.ReadUInt16( m_ftcOther );
 
-        ftcBi = ftcOther;
+        m_ftcBi = m_ftcOther;
 
         if ( 20 > nRead ) break;
-        rSt.ReadUInt16( ftcBi );
+        m_rStream.ReadUInt16( m_ftcBi );
 
         // p.r.n. ignore the rest
         if( 20 < nRead )
-            rSt.SeekRel( nRead-20 );
+            m_rStream.SeekRel( nRead-20 );
     }
     while( false ); // trick: the block above will be passed through exactly one time
                 //            and that's why we can early exit with "break".
@@ -6863,9 +6888,9 @@ WW8Style::WW8Style(SvStream& rStream, WW8Fib& rFibPara)
     const sal_uInt32 nMinRecordSize = sizeof(sal_uInt16);
     const sal_uInt16 nMaxPossibleRecords = nRemaining/nMinRecordSize;
 
-    OSL_ENSURE(cstd <= nMaxPossibleRecords,
+    OSL_ENSURE(m_cstd <= nMaxPossibleRecords,
         "allegedly more styles that available data");
-    cstd = std::min(cstd, nMaxPossibleRecords);
+    m_cstd = std::min(m_cstd, nMaxPossibleRecords);
 }
 
 // Read1STDFixed() reads a style. If the style is completely existent,
@@ -6877,10 +6902,10 @@ WW8_STD* WW8Style::Read1STDFixed(sal_uInt16& rSkip)
     WW8_STD* pStd = nullptr;
 
     sal_uInt16 cbStd(0);
-    rSt.ReadUInt16(cbStd);   // read length
+    m_rStream.ReadUInt16(cbStd);   // read length
 
-    const sal_uInt16 nRead = cbSTDBaseInFile;
-    if( cbStd >= cbSTDBaseInFile )
+    const sal_uInt16 nRead = m_cbSTDBaseInFile;
+    if( cbStd >= m_cbSTDBaseInFile )
     {
         // Fixed part completely available
 
@@ -6893,7 +6918,7 @@ WW8_STD* WW8Style::Read1STDFixed(sal_uInt16& rSkip)
             if( 2 > nRead ) break;
 
             sal_uInt16 a16Bit = 0;
-            rSt.ReadUInt16( a16Bit );
+            m_rStream.ReadUInt16( a16Bit );
             pStd->sti          =        a16Bit & 0x0fff  ;
             pStd->fScratch     = sal_uInt16(0 != ( a16Bit & 0x1000 ));
             pStd->fInvalHeight = sal_uInt16(0 != ( a16Bit & 0x2000 ));
@@ -6902,47 +6927,47 @@ WW8_STD* WW8Style::Read1STDFixed(sal_uInt16& rSkip)
 
             if( 4 > nRead ) break;
             a16Bit = 0;
-            rSt.ReadUInt16( a16Bit );
+            m_rStream.ReadUInt16( a16Bit );
             pStd->sgc      =   a16Bit & 0x000f       ;
             pStd->istdBase = ( a16Bit & 0xfff0 ) >> 4;
 
             if( 6 > nRead ) break;
             a16Bit = 0;
-            rSt.ReadUInt16( a16Bit );
+            m_rStream.ReadUInt16( a16Bit );
             pStd->cupx     =   a16Bit & 0x000f       ;
             pStd->istdNext = ( a16Bit & 0xfff0 ) >> 4;
 
             if( 8 > nRead ) break;
-            rSt.ReadUInt16( pStd->bchUpe );
+            m_rStream.ReadUInt16( pStd->bchUpe );
 
             // from Ver8 this two fields should be added:
             if(10 > nRead ) break;
             a16Bit = 0;
-            rSt.ReadUInt16( a16Bit );
+            m_rStream.ReadUInt16( a16Bit );
             pStd->fAutoRedef =   a16Bit & 0x0001       ;
             pStd->fHidden    = ( a16Bit & 0x0002 ) >> 1;
             // You never know: cautionary skipped
             if (nRead > 10)
             {
-                auto nSkip = std::min<sal_uInt64>(nRead - 10, rSt.remainingSize());
-                rSt.Seek(rSt.Tell() + nSkip);
+                auto nSkip = std::min<sal_uInt64>(nRead - 10, m_rStream.remainingSize());
+                m_rStream.Seek(m_rStream.Tell() + nSkip);
             }
         }
         while( false ); // trick: the block above will passed through exactly one time
                     //   and can be left early with a "break"
 
-        if (!rSt.good() || !nRead)
+        if (!m_rStream.good() || !nRead)
         {
             delete pStd;
             pStd = nullptr;       // report error with NULL
         }
 
-        rSkip = cbStd - cbSTDBaseInFile;
+        rSkip = cbStd - m_cbSTDBaseInFile;
     }
     else
     {           // Fixed part too short
         if( cbStd )
-            rSt.SeekRel( cbStd );           // skip leftovers
+            m_rStream.SeekRel( cbStd );           // skip leftovers
         rSkip = 0;
     }
     return pStd;
@@ -6961,21 +6986,21 @@ WW8_STD* WW8Style::Read1Style(sal_uInt16& rSkip, OUString* pString)
         if ( pStd )
         {
             sal_Int32 nLenStringBytes = 0;
-            switch( rFib.m_nVersion )
+            switch( m_rFib.m_nVersion )
             {
                 case 6:
                 case 7:
                     // read pascal string
-                    *pString = read_uInt8_BeltAndBracesString(rSt, RTL_TEXTENCODING_MS_1252);
+                    *pString = read_uInt8_BeltAndBracesString(m_rStream, RTL_TEXTENCODING_MS_1252);
                     // leading len and trailing zero --> 2
                     nLenStringBytes = pString->getLength() + 2;
                     break;
                 case 8:
                     // handle Unicode-String with leading length short and
                     // trailing zero
-                    if (TestBeltAndBraces(rSt))
+                    if (TestBeltAndBraces(m_rStream))
                     {
-                        *pString = read_uInt16_BeltAndBracesString(rSt);
+                        *pString = read_uInt16_BeltAndBracesString(m_rStream);
                         nLenStringBytes = (pString->getLength() + 2) * 2;
                     }
                     else
@@ -6990,7 +7015,7 @@ WW8_STD* WW8Style::Read1Style(sal_uInt16& rSkip, OUString* pString)
                         they are not corrupt. If they are then we try them as
                         8bit ones
                         */
-                        *pString = read_uInt8_BeltAndBracesString(rSt,RTL_TEXTENCODING_MS_1252);
+                        *pString = read_uInt8_BeltAndBracesString(m_rStream,RTL_TEXTENCODING_MS_1252);
                         // leading len and trailing zero --> 2
                         nLenStringBytes = pString->getLength() + 2;
                     }
@@ -7496,9 +7521,14 @@ void WW8PLCF_HdFt::GetTextPosExact(short nIdx, WW8_CP& rStart, WW8_CP& rLen)
     if (nEnd < rStart)
     {
         SAL_WARN("sw.ww8", "End " << nEnd << " before Start " << rStart);
+        rLen = 0;
         return;
     }
-    rLen = nEnd - rStart;
+    if (o3tl::checked_sub(nEnd, rStart, rLen))
+    {
+        SAL_WARN("sw.ww8", "GetTextPosExact overflow");
+        rLen = 0;
+    }
 }
 
 void WW8PLCF_HdFt::UpdateIndex( sal_uInt8 grpfIhdt )

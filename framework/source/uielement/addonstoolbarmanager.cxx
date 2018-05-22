@@ -23,9 +23,7 @@
 #include <uielement/generictoolbarcontroller.hxx>
 #include <services.h>
 #include <framework/sfxhelperfunctions.hxx>
-#include <classes/fwkresid.hxx>
 #include <classes/resource.hxx>
-#include <strings.hrc>
 #include <framework/addonsoptions.hxx>
 #include <uielement/comboboxtoolbarcontroller.hxx>
 #include <uielement/imagebuttontoolbarcontroller.hxx>
@@ -43,7 +41,6 @@
 #include <com/sun/star/ui/DockingArea.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <comphelper/propertysequence.hxx>
-#include <comphelper/processfactory.hxx>
 #include <svtools/imgdef.hxx>
 #include <svtools/toolboxcontroller.hxx>
 #include <toolkit/helper/vclunohelper.hxx>

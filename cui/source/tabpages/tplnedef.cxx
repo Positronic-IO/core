@@ -18,7 +18,6 @@
  */
 
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/weld.hxx>
 #include <unotools/pathoptions.hxx>
@@ -63,8 +62,6 @@ SvxLineDefTabPage::SvxLineDefTabPage
               , &rInAttrs ),
     rOutAttrs       ( rInAttrs ),
 
-    aXDash              ( OUString(), XDash( css::drawing::DashStyle_RECT, 3, 7, 2, 40, 15 ) ),
-    aXColor             ( OUString(), COL_BLACK ),
     aXLineAttr          ( rInAttrs.GetPool() ),
     rXLSet              ( aXLineAttr.GetItemSet() ),
     pnDashListState(nullptr),
@@ -117,8 +114,8 @@ SvxLineDefTabPage::SvxLineDefTabPage
 
     rXLSet.Put( XLineStyleItem(drawing::LineStyle_DASH) );
     rXLSet.Put( XLineWidthItem(XOUT_WIDTH) );
-    rXLSet.Put( aXDash );
-    rXLSet.Put( aXColor );
+    rXLSet.Put( XLineDashItem( OUString(), XDash( css::drawing::DashStyle_RECT, 3, 7, 2, 40, 15 ) ) );
+    rXLSet.Put( XLineColorItem(OUString(), COL_BLACK) );
 
     // #i34740#
     m_pCtlPreview->SetLineAttributes(aXLineAttr.GetItemSet());
@@ -239,16 +236,14 @@ void SvxLineDefTabPage::CheckChanges_Impl()
         m_pLbType2->IsValueChangedFromSaved() ||
         m_pMtrDistance->IsValueChangedFromSaved() )
     {
-        Image aWarningBoxImage = GetStandardWarningBoxImage();
-        ScopedVclPtrInstance<SvxMessDialog> aMessDlg( GetParentDialog(),
-                                                      SvxResId( RID_SVXSTR_LINESTYLE ),
-                                                      CuiResId(RID_SVXSTR_ASK_CHANGE_LINESTYLE),
-                                                      &aWarningBoxImage );
-        DBG_ASSERT(aMessDlg, "Dialog creation failed!");
-        aMessDlg->SetButtonText( SvxMessDialogButton::N1, CuiResId(RID_SVXSTR_CHANGE) );
-        aMessDlg->SetButtonText( SvxMessDialogButton::N2, CuiResId(RID_SVXSTR_ADD) );
+        std::unique_ptr<weld::MessageDialog> xMessDlg(Application::CreateMessageDialog(GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Cancel,
+                                                      CuiResId(RID_SVXSTR_ASK_CHANGE_LINESTYLE)));
+        xMessDlg->set_title(SvxResId(RID_SVXSTR_LINESTYLE));
+        xMessDlg->add_button(CuiResId(RID_SVXSTR_CHANGE), RET_BTN_1);
+        xMessDlg->add_button(CuiResId(RID_SVXSTR_ADD), RET_BTN_2);
 
-        short nRet = aMessDlg->Execute();
+        short nRet = xMessDlg->run();
 
         switch( nRet )
         {
@@ -340,9 +335,9 @@ void SvxLineDefTabPage::Reset( const SfxItemSet* rAttrs )
 }
 
 
-VclPtr<SfxTabPage> SvxLineDefTabPage::Create( vcl::Window* pWindow, const SfxItemSet* rOutAttrs )
+VclPtr<SfxTabPage> SvxLineDefTabPage::Create( TabPageParent pWindow, const SfxItemSet* rOutAttrs )
 {
-    return VclPtr<SvxLineDefTabPage>::Create( pWindow, *rOutAttrs );
+    return VclPtr<SvxLineDefTabPage>::Create( pWindow.pParent, *rOutAttrs );
 }
 
 
@@ -550,7 +545,7 @@ IMPL_LINK_NOARG(SvxLineDefTabPage, ClickAddHdl_Impl, Button*, void)
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     DBG_ASSERT(pFact, "Dialog creation failed!");
-    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+    ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
     DBG_ASSERT(pDlg, "Dialog creation failed!");
     bool bLoop = true;
 
@@ -620,7 +615,7 @@ IMPL_LINK_NOARG(SvxLineDefTabPage, ClickModifyHdl_Impl, Button*, void)
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         DBG_ASSERT(pFact, "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog( GetParentDialog(), aName, aDesc ));
+        ScopedVclPtr<AbstractSvxNameDialog> pDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aName, aDesc));
         DBG_ASSERT(pDlg, "Dialog creation failed!");
 
         long nCount = pDashList->Count();
@@ -722,7 +717,7 @@ IMPL_LINK_NOARG(SvxLineDefTabPage, ClickLoadHdl_Impl, Button*, void)
     if ( nReturn != RET_CANCEL )
     {
         ::sfx2::FileDialogHelper aDlg(css::ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE,
-                                      FileDialogFlags::NONE, this);
+                                      FileDialogFlags::NONE, GetFrameWeld());
         OUString aStrFilterType( "*.sod" );
         aDlg.AddFilter( aStrFilterType, aStrFilterType );
         OUString aPalettePath(SvtPathOptions().GetPalettePath());
@@ -788,7 +783,7 @@ IMPL_LINK_NOARG(SvxLineDefTabPage, ClickLoadHdl_Impl, Button*, void)
 
 IMPL_LINK_NOARG(SvxLineDefTabPage, ClickSaveHdl_Impl, Button*, void)
 {
-    ::sfx2::FileDialogHelper aDlg(css::ui::dialogs::TemplateDescription::FILESAVE_SIMPLE, FileDialogFlags::NONE, this);
+    ::sfx2::FileDialogHelper aDlg(css::ui::dialogs::TemplateDescription::FILESAVE_SIMPLE, FileDialogFlags::NONE, GetFrameWeld());
     OUString aStrFilterType( "*.sod" );
     aDlg.AddFilter( aStrFilterType, aStrFilterType );
 

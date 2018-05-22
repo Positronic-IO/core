@@ -8,7 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
-#include <test/sheet/globalsheetsettings.hxx>
+#include <test/sheet/spreadsheetdocumentsettings.hxx>
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -23,7 +23,7 @@ using namespace com::sun::star;
 
 namespace sc_apitest
 {
-class ScSpreadsheetSettingsObj : public CalcUnoApiTest, public apitest::GlobalSheetSettings
+class ScSpreadsheetSettingsObj : public CalcUnoApiTest, public apitest::SpreadsheetDocumentSettings
 {
 public:
     ScSpreadsheetSettingsObj();
@@ -34,8 +34,8 @@ public:
 
     CPPUNIT_TEST_SUITE(ScSpreadsheetSettingsObj);
 
-    // GlobalSheetSettings
-    CPPUNIT_TEST(testGlobalSheetSettingsProperties);
+    // SpreadsheetDocumentSettings
+    CPPUNIT_TEST(testSpreadsheetDocumentSettingsProperties);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -53,8 +53,7 @@ uno::Reference<uno::XInterface> ScSpreadsheetSettingsObj::init()
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
     CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
-    uno::Reference<lang::XMultiServiceFactory> xMSF(xDoc, UNO_QUERY_THROW);
-    return xMSF->createInstance("com.sun.star.sheet.GlobalSheetSettings");
+    return xDoc;
 }
 
 void ScSpreadsheetSettingsObj::setUp()

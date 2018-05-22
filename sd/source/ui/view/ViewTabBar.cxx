@@ -27,8 +27,6 @@
 #include <framework/Pane.hxx>
 #include <DrawController.hxx>
 
-#include <sdresid.hxx>
-#include <strings.hrc>
 #include <Client.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/tabpage.hxx>
@@ -372,7 +370,7 @@ bool ViewTabBar::ActivatePage()
     }
     catch (const RuntimeException&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.view");
     }
 
     return false;

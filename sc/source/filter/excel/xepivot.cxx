@@ -37,6 +37,7 @@
 #include <dpdimsave.hxx>
 #include <dpshttab.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <fapihelper.hxx>
 #include <xestring.hxx>
 #include <xelink.hxx>
@@ -881,7 +882,7 @@ OUString lclGetDataFieldCaption( const OUString& rFieldName, ScGeneralFunction e
         default:;
     }
     if (pResIdx)
-        aCaption = ScGlobal::GetRscString(pResIdx) + " - ";
+        aCaption = ScResId(pResIdx) + " - ";
     aCaption += rFieldName;
     return aCaption;
 }
@@ -919,7 +920,7 @@ void XclExpPTItem::SetPropertiesFromMember( const ScDPSaveMember& rSaveMem )
     ::set_flag( maItemInfo.mnFlags, EXC_SXVI_HIDEDETAIL, rSaveMem.HasShowDetails() && !rSaveMem.GetShowDetails() );
 
     // visible name
-    const OUString* pVisName = rSaveMem.GetLayoutName();
+    const boost::optional<OUString> & pVisName = rSaveMem.GetLayoutName();
     if (pVisName && *pVisName != GetItemName())
         maItemInfo.SetVisName(*pVisName);
 }
@@ -1002,15 +1003,15 @@ void XclExpPTField::SetPropertiesFromDim( const ScDPSaveDimension& rSaveDim )
     ::set_flag( maFieldExtInfo.mnFlags, EXC_SXVDEX_SHOWALL, rSaveDim.HasShowEmpty() && rSaveDim.GetShowEmpty() );
 
     // visible name
-    const OUString* pLayoutName = rSaveDim.GetLayoutName();
+    const boost::optional<OUString> & pLayoutName = rSaveDim.GetLayoutName();
     if (pLayoutName && *pLayoutName != GetFieldName())
         maFieldInfo.SetVisName(*pLayoutName);
 
-    const OUString* pSubtotalName = rSaveDim.GetSubtotalName();
+    const boost::optional<OUString> & pSubtotalName = rSaveDim.GetSubtotalName();
     if (pSubtotalName)
     {
         OUString aSubName = lcl_convertCalcSubtotalName(*pSubtotalName);
-        maFieldExtInfo.mpFieldTotalName.reset(new OUString(aSubName));
+        maFieldExtInfo.mpFieldTotalName = aSubName;
     }
 
     // subtotals
@@ -1073,7 +1074,7 @@ void XclExpPTField::SetDataPropertiesFromDim( const ScDPSaveDimension& rSaveDim 
     rDataInfo.SetApiAggFunc( eFunc );
 
     // visible name
-    const OUString* pVisName = rSaveDim.GetLayoutName();
+    const boost::optional<OUString> & pVisName = rSaveDim.GetLayoutName();
     if (pVisName)
         rDataInfo.SetVisName(*pVisName);
     else
@@ -1305,11 +1306,10 @@ void XclExpPivotTable::SetPropertiesFromDP( const ScDPSaveData& rSaveData )
     mbFilterBtn = rSaveData.GetFilterButton();
     const ScDPSaveDimension* pDim = rSaveData.GetExistingDataLayoutDimension();
 
-    const OUString* pLayoutName = pDim ? pDim->GetLayoutName() : nullptr;
-    if (pLayoutName)
-        maPTInfo.maDataName = *pLayoutName;
+    if (pDim && pDim->GetLayoutName())
+        maPTInfo.maDataName = *pDim->GetLayoutName();
     else
-        maPTInfo.maDataName = ScGlobal::GetRscString(STR_PIVOT_DATA);
+        maPTInfo.maDataName = ScResId(STR_PIVOT_DATA);
 }
 
 void XclExpPivotTable::SetFieldPropertiesFromDim( const ScDPSaveDimension& rSaveDim )

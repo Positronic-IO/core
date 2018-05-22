@@ -21,8 +21,8 @@
 #include <com/sun/star/awt/XWindow.hpp>
 #include <svx/svdpntv.hxx>
 #include <vcl/weld.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <svx/sdrpaintwindow.hxx>
-#include <svtools/grfmgr.hxx>
 #include <svx/svdmodel.hxx>
 
 #include <svx/svdpage.hxx>
@@ -181,9 +181,11 @@ void SdrPaintView::ImpClearVars()
     maGridColor = COL_BLACK;
 }
 
-SdrPaintView::SdrPaintView(SdrModel* pModel, OutputDevice* pOut)
-:   mpPageView(nullptr),
-    maDefaultAttr(pModel->GetItemPool()),
+SdrPaintView::SdrPaintView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   mrSdrModelFromSdrView(rSdrModel),
+    maDefaultAttr(rSdrModel.GetItemPool()),
     mbBufferedOutputAllowed(false),
     mbBufferedOverlayAllowed(false),
     mbPagePaintingAllowed(true),
@@ -192,7 +194,7 @@ SdrPaintView::SdrPaintView(SdrModel* pModel, OutputDevice* pOut)
     mbHideDraw(false),
     mbHideFormControl(false)
 {
-    mpModel=pModel;
+    mpModel=&rSdrModel;
     ImpClearVars();
 
     if(pOut)
@@ -341,13 +343,6 @@ bool SdrPaintView::IsTextEdit() const
     return false;
 }
 
-// info about TextEditPageView. Default is 0L.
-SdrPageView* SdrPaintView::GetTextEditPageView() const
-{
-    return nullptr;
-}
-
-
 sal_uInt16 SdrPaintView::ImpGetMinMovLogic(short nMinMov, const OutputDevice* pOut) const
 {
     if (nMinMov>=0) return sal_uInt16(nMinMov);
@@ -398,8 +393,7 @@ void SdrPaintView::ClearPageView()
     if(mpPageView)
     {
         InvalidateAllWin();
-        delete mpPageView;
-        mpPageView = nullptr;
+        mpPageView.reset();
     }
 }
 
@@ -410,14 +404,14 @@ SdrPageView* SdrPaintView::ShowSdrPage(SdrPage* pPage)
         if(mpPageView)
         {
             InvalidateAllWin();
-            delete mpPageView;
+            mpPageView.reset();
         }
 
-        mpPageView = new SdrPageView(pPage, *static_cast<SdrView*>(this));
+        mpPageView.reset(new SdrPageView(pPage, *static_cast<SdrView*>(this)));
         mpPageView->Show();
     }
 
-    return mpPageView;
+    return mpPageView.get();
 }
 
 void SdrPaintView::HideSdrPage()
@@ -425,8 +419,7 @@ void SdrPaintView::HideSdrPage()
     if(mpPageView)
     {
         mpPageView->Hide();
-        delete mpPageView;
-        mpPageView = nullptr;
+        mpPageView.reset();
     }
 }
 
@@ -595,7 +588,7 @@ void SdrPaintView::CompleteRedraw(OutputDevice* pOut, const vcl::Region& rReg, s
 
                     //while(aOptimizedRepaintRegion.GetEnumRects(aRegionHandle, aRegionRectangle))
                     //{
-                    //  pWindow->SetLineColor(COL_LIGHTGREEN);
+                    //  pWindow->SetLineCOL_LIGHTGREEN);
                     //  pWindow->SetFillColor();
                     //  pWindow->DrawRect(aRegionRectangle);
                     //}

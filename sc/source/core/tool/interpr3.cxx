@@ -29,7 +29,6 @@
 #include <dociter.hxx>
 #include <matrixoperators.hxx>
 #include <scmatrix.hxx>
-#include <globstr.hrc>
 
 #include <math.h>
 #include <memory>
@@ -1845,7 +1844,7 @@ static void lcl_PutFactorialElements( ::std::vector< double >& cn, double fLower
 
     @see fdo#71722
     @see tdf#102948, make Calc function ODFF1.2-compliant
-
+    @see tdf#117041, implement note at bottom of ODFF1.2 par.6.18.37
  */
 void ScInterpreter::ScHypGeomDist( int nMinParamCount )
 {
@@ -1859,23 +1858,21 @@ void ScInterpreter::ScHypGeomDist( int nMinParamCount )
     double n = ::rtl::math::approxFloor(GetDouble());
     double x = ::rtl::math::approxFloor(GetDouble());
 
-    if( (x < 0.0) || (n < x) || (M < x) || (N < n) || (N < M) || (x < n - N + M) )
+    if ( (x < 0.0) || (n < x) || (N < n) || (N < M) || (M < 0.0) )
     {
         PushIllegalArgument();
         return;
     }
 
-    if ( bCumulative )
+    double fVal = 0.0;
+
+    for ( int i = ( bCumulative ? 0 : x ); i <= x && nGlobalError == FormulaError::NONE; i++ )
     {
-        double fVal = 0.0;
-
-        for ( int i = 0; i <= x && nGlobalError == FormulaError::NONE; i++ )
-            fVal += GetHypGeomDist( i, n, M, N );
-
-        PushDouble( fVal );
+        if ( (n - i <= N - M) && (i <= M) )
+            fVal +=  GetHypGeomDist( i, n, M, N );
     }
-    else
-        PushDouble( GetHypGeomDist( x, n, M, N ) );
+
+    PushDouble( fVal );
 }
 
 /** Calculates a value of the hypergeometric distribution.
@@ -2541,7 +2538,7 @@ void ScInterpreter::ScZTest()
                 else
                 {
                     for (SCSIZE i = 0; i < nCount; i++)
-                        if (!pMat->IsString(i))
+                        if (!pMat->IsStringOrEmpty(i))
                         {
                             fVal= pMat->GetDouble(i);
                             fSum += fVal;
@@ -2586,7 +2583,7 @@ bool ScInterpreter::CalculateTest(bool _bTemplin
     for (i = 0; i < nC1; i++)
         for (j = 0; j < nR1; j++)
         {
-            if (!pMat1->IsString(i,j))
+            if (!pMat1->IsStringOrEmpty(i,j))
             {
                 fVal = pMat1->GetDouble(i,j);
                 fSum1    += fVal;
@@ -2597,7 +2594,7 @@ bool ScInterpreter::CalculateTest(bool _bTemplin
     for (i = 0; i < nC2; i++)
         for (j = 0; j < nR2; j++)
         {
-            if (!pMat2->IsString(i,j))
+            if (!pMat2->IsStringOrEmpty(i,j))
             {
                 fVal = pMat2->GetDouble(i,j);
                 fSum2    += fVal;
@@ -2677,7 +2674,7 @@ void ScInterpreter::ScTTest()
         for (i = 0; i < nC1; i++)
             for (j = 0; j < nR1; j++)
             {
-                if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+                if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
                 {
                     fVal1 = pMat1->GetDouble(i,j);
                     fVal2 = pMat2->GetDouble(i,j);
@@ -2814,7 +2811,7 @@ void ScInterpreter::ScChiTest()
             if (!(pMat1->IsEmpty(i,j) || pMat2->IsEmpty(i,j)))
             {
                 bEmpty = false;
-                if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+                if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
                 {
                     double fValX = pMat1->GetDouble(i,j);
                     double fValE = pMat2->GetDouble(i,j);
@@ -2998,7 +2995,7 @@ void ScInterpreter::ScHarMean()
                     else
                     {
                         for (SCSIZE nElem = 0; nElem < nCount; nElem++)
-                            if (!pMat->IsString(nElem))
+                            if (!pMat->IsStringOrEmpty(nElem))
                             {
                                 double x = pMat->GetDouble(nElem);
                                 if (x > 0.0)
@@ -3161,7 +3158,7 @@ void ScInterpreter::ScGeoMean()
                     {
                         for (SCSIZE ui = 0; ui < nCount; ui++)
                         {
-                            if (!pMat->IsString(ui))
+                            if (!pMat->IsStringOrEmpty(ui))
                             {
                                 double x = pMat->GetDouble(ui);
                                 if (x > 0.0)
@@ -3290,7 +3287,7 @@ bool ScInterpreter::CalculateSkew(double& fSum,double& fCount,double& vSum,std::
                     else
                     {
                         for (SCSIZE nElem = 0; nElem < nCount; nElem++)
-                            if (!pMat->IsString(nElem))
+                            if (!pMat->IsStringOrEmpty(nElem))
                             {
                                 fVal = pMat->GetDouble(nElem);
                                 fSum += fVal;
@@ -3510,7 +3507,6 @@ void ScInterpreter::ScModalValue()
         SCSIZE nMaxIndex = 0, nMax = 1, nCount = 1;
         double nOldVal = aSortArray[0];
         SCSIZE i;
-
         for ( i = 1; i < nSize; i++)
         {
             if (aSortArray[i] == nOldVal)
@@ -3537,6 +3533,92 @@ void ScInterpreter::ScModalValue()
             PushDouble(nOldVal);
         else
             PushDouble(aSortArray[nMaxIndex]);
+    }
+}
+
+void ScInterpreter::ScModalValue_MS( bool bSingle )
+{
+    sal_uInt8 nParamCount = GetByte();
+    if ( !MustHaveParamCountMin( nParamCount, 1 ) )
+        return;
+    vector<double> aArray;
+    GetNumberSequenceArray( nParamCount, aArray, false );
+    vector< double > aSortArray( aArray );
+    QuickSort( aSortArray, nullptr );
+    SCSIZE nSize = aSortArray.size();
+    if ( nSize == 0 || nGlobalError != FormulaError::NONE )
+        PushNoValue();
+    else
+    {
+        SCSIZE nMax = 1, nCount = 1;
+        double nOldVal = aSortArray[ 0 ];
+        vector< double > aResultArray( 1 );
+        SCSIZE i;
+        for ( i = 1; i < nSize; i++ )
+        {
+            if ( aSortArray[ i ] == nOldVal )
+                nCount++;
+            else
+            {
+                if ( nCount >= nMax && nCount > 1 )
+                {
+                    if ( nCount > nMax )
+                    {
+                        nMax = nCount;
+                        if ( aResultArray.size() != 1 )
+                            vector< double >( 1 ).swap( aResultArray );
+                        aResultArray[ 0 ] = nOldVal;
+                    }
+                    else
+                        aResultArray.emplace_back( nOldVal );
+                }
+                nOldVal = aSortArray[ i ];
+                nCount = 1;
+            }
+        }
+        if ( nCount >= nMax && nCount > 1 )
+        {
+            if ( nCount > nMax )
+                vector< double >().swap( aResultArray );
+            aResultArray.emplace_back( nOldVal );
+        }
+        if ( nMax == 1 && nCount == 1 )
+            PushNoValue();
+        else if ( nMax == 1 )
+            PushDouble( nOldVal ); // there is only 1 result, no reordering needed
+        else
+        {
+            // sort resultArray according to ordering of aArray
+            vector< vector< double > > aOrder;
+            aOrder.resize( aResultArray.size(), vector< double >( 2 ) );
+            for ( i = 0; i < aResultArray.size(); i++ )
+            {
+                for ( SCSIZE j = 0; j < nSize; j++ )
+                {
+                    if ( aArray[ j ] == aResultArray[ i ] )
+                    {
+                        aOrder[ i ][ 0 ] = aResultArray[ i ];
+                        aOrder[ i ][ 1 ] = j;
+                        break;
+                    }
+                }
+            }
+            sort( aOrder.begin(), aOrder.end(), []( const std::vector< double >& lhs,
+                                                    const std::vector< double >& rhs )
+                                                    { return lhs[ 1 ] < rhs[ 1 ]; } );
+
+            if ( bSingle )
+                PushDouble( aOrder[ 0 ][ 0 ] );
+            else
+            {
+                // put result in correct order in aResultArray
+                for ( i = 0; i < aResultArray.size(); i++ )
+                    aResultArray[ i ] = aOrder[ i ][ 0 ];
+                ScMatrixRef pResMatrix = GetNewMat( 1, aResultArray.size(), true );
+                pResMatrix->PutDoubleVector( aResultArray, 0, 0 );
+                PushMatrix( pResMatrix );
+            }
+        }
     }
 }
 
@@ -3709,6 +3791,7 @@ void ScInterpreter::GetNumberSequenceArray( sal_uInt8 nParamCount, vector<double
     ScRange aRange;
     short nParam = nParamCount;
     size_t nRefInList = 0;
+    ReverseStack( nParamCount );
     while (nParam-- > 0)
     {
         const StackVar eStackType = GetStackType();
@@ -4052,7 +4135,7 @@ void ScInterpreter::ScAveDev()
                     else
                     {
                         for (SCSIZE nElem = 0; nElem < nCount; nElem++)
-                            if (!pMat->IsString(nElem))
+                            if (!pMat->IsStringOrEmpty(nElem))
                             {
                                 rVal += pMat->GetDouble(nElem);
                                 rValCount++;
@@ -4125,7 +4208,7 @@ void ScInterpreter::ScAveDev()
                     {
                         for (SCSIZE nElem = 0; nElem < nCount; nElem++)
                         {
-                            if (!pMat->IsString(nElem))
+                            if (!pMat->IsStringOrEmpty(nElem))
                                 rVal += fabs(pMat->GetDouble(nElem) - nMiddle);
                         }
                     }
@@ -4266,7 +4349,7 @@ void ScInterpreter::CalculatePearsonCovar( bool _bPearson, bool _bStexy, bool _b
     {
         for (SCSIZE j = 0; j < nR1; j++)
         {
-            if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+            if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
             {
                 double fValX = pMat1->GetDouble(i,j);
                 double fValY = pMat2->GetDouble(i,j);
@@ -4289,7 +4372,7 @@ void ScInterpreter::CalculatePearsonCovar( bool _bPearson, bool _bStexy, bool _b
         {
             for (SCSIZE j = 0; j < nR1; j++)
             {
-                if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+                if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
                 {
                     const double fValX = pMat1->GetDouble(i,j);
                     const double fValY = pMat2->GetDouble(i,j);
@@ -4376,7 +4459,7 @@ void ScInterpreter::CalculateSlopeIntercept(bool bSlope)
     {
         for (SCSIZE j = 0; j < nR1; j++)
         {
-            if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+            if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
             {
                 double fValX = pMat1->GetDouble(i,j);
                 double fValY = pMat2->GetDouble(i,j);
@@ -4398,7 +4481,7 @@ void ScInterpreter::CalculateSlopeIntercept(bool bSlope)
         {
             for (SCSIZE j = 0; j < nR1; j++)
             {
-                if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+                if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
                 {
                     double fValX = pMat1->GetDouble(i,j);
                     double fValY = pMat2->GetDouble(i,j);
@@ -4459,7 +4542,7 @@ void ScInterpreter::ScForecast()
     {
         for (SCSIZE j = 0; j < nR1; j++)
         {
-            if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+            if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
             {
                 double fValX = pMat1->GetDouble(i,j);
                 double fValY = pMat2->GetDouble(i,j);
@@ -4481,7 +4564,7 @@ void ScInterpreter::ScForecast()
         {
             for (SCSIZE j = 0; j < nR1; j++)
             {
-                if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+                if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
                 {
                     double fValX = pMat1->GetDouble(i,j);
                     double fValY = pMat2->GetDouble(i,j);

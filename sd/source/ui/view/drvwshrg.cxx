@@ -37,10 +37,8 @@
 #include <avmedia/mediaplayer.hxx>
 
 #include <app.hrc>
-#include <strings.hrc>
 
 #include <SpellDialogChildWindow.hxx>
-#include <sdresid.hxx>
 #include <DrawDocShell.hxx>
 #include <GraphicDocShell.hxx>
 #include <GraphicViewShell.hxx>
@@ -48,9 +46,9 @@
 #include <NavigatorChildWindow.hxx>
 
 using namespace sd;
-#define DrawViewShell
+#define ShellClass_DrawViewShell
 #include <sdslots.hxx>
-#define GraphicViewShell
+#define ShellClass_GraphicViewShell
 #include <sdgslots.hxx>
 
 namespace sd {

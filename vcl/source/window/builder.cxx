@@ -8,9 +8,9 @@
  */
 
 #include <memory>
+#include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/packages/zip/ZipFileAccess.hpp>
 
-#include <comphelper/processfactory.hxx>
 #include <i18nutil/unicode.hxx>
 #include <osl/module.hxx>
 #include <osl/file.hxx>
@@ -43,13 +43,14 @@
 #include <vcl/commandinfoprovider.hxx>
 #include <svdata.hxx>
 #include <bitmaps.hlst>
-#include <vcl/messagedialog.hxx>
+#include <messagedialog.hxx>
 #include <window.h>
 #include <xmlreader/xmlreader.hxx>
 #include <desktop/crashreport.hxx>
 #include <salinst.hxx>
 #include <strings.hrc>
 #include <tools/svlibrary.h>
+#include <tools/diagnose_ex.h>
 
 #ifdef DISABLE_DYNLOADING
 #include <dlfcn.h>
@@ -130,10 +131,20 @@ weld::Builder* Application::CreateBuilder(weld::Widget* pParent, const OUString 
     return ImplGetSVData()->mpDefInst->CreateBuilder(pParent, VclBuilderContainer::getUIRootDir(), rUIFile);
 }
 
+weld::Builder* Application::CreateInterimBuilder(vcl::Window* pParent, const OUString &rUIFile)
+{
+    return ImplGetSVData()->mpDefInst->CreateInterimBuilder(pParent, VclBuilderContainer::getUIRootDir(), rUIFile);
+}
+
 weld::MessageDialog* Application::CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType,
                                                       VclButtonsType eButtonType, const OUString& rPrimaryMessage)
 {
     return ImplGetSVData()->mpDefInst->CreateMessageDialog(pParent, eMessageType, eButtonType, rPrimaryMessage);
+}
+
+weld::Window* Application::GetFrameWeld(const css::uno::Reference<css::awt::XWindow>& rWindow)
+{
+    return ImplGetSVData()->mpDefInst->GetFrameWeld(rWindow);
 }
 
 namespace
@@ -173,7 +184,7 @@ namespace weld
         m_xSpinButton->get_range(min, max);
         auto width = std::max(m_xSpinButton->get_pixel_size(format_number(min)).Width(),
                               m_xSpinButton->get_pixel_size(format_number(max)).Width());
-        int chars = ceil(width / m_xSpinButton->get_approximate_char_width());
+        int chars = ceil(width / m_xSpinButton->get_approximate_digit_width());
         m_xSpinButton->set_width_chars(chars);
     }
 
@@ -231,6 +242,84 @@ namespace weld
     {
         return MetricField::ConvertValue(nValue, 0, m_xSpinButton->get_digits(), eInUnit, eOutUnit);
     }
+
+    IMPL_LINK_NOARG(TimeSpinButton, spin_button_cursor_position, Entry&, void)
+    {
+        int nStartPos, nEndPos;
+        m_xSpinButton->get_selection_bounds(nStartPos, nEndPos);
+
+        const SvtSysLocale aSysLocale;
+        const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
+        const int nTimeArea = TimeFormatter::GetTimeArea(m_eFormat, m_xSpinButton->get_text(), nEndPos,
+                                                         rLocaleData);
+
+        int nIncrements = 1;
+
+        if (nTimeArea == 1)
+            nIncrements = 1000 * 60 * 60;
+        else if (nTimeArea == 2)
+            nIncrements = 1000 * 60;
+        else if (nTimeArea == 3)
+            nIncrements = 1000;
+
+        m_xSpinButton->set_increments(nIncrements, nIncrements * 10);
+    }
+
+    IMPL_LINK_NOARG(TimeSpinButton, spin_button_value_changed, SpinButton&, void)
+    {
+        signal_value_changed();
+    }
+
+    IMPL_LINK(TimeSpinButton, spin_button_output, SpinButton&, rSpinButton, void)
+    {
+        int nStartPos, nEndPos;
+        rSpinButton.get_selection_bounds(nStartPos, nEndPos);
+        rSpinButton.set_text(format_number(rSpinButton.get_value()));
+        rSpinButton.set_position(nEndPos);
+    }
+
+    IMPL_LINK(TimeSpinButton, spin_button_input, int*, result, bool)
+    {
+        int nStartPos, nEndPos;
+        m_xSpinButton->get_selection_bounds(nStartPos, nEndPos);
+
+        const SvtSysLocale aSysLocale;
+        const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
+        tools::Time aResult(0);
+        bool bRet = TimeFormatter::TextToTime(m_xSpinButton->get_text(), aResult, m_eFormat, true, rLocaleData);
+        if (bRet)
+            *result = ConvertValue(aResult);
+        return bRet;
+    }
+
+    void TimeSpinButton::update_width_chars()
+    {
+        int min, max;
+        m_xSpinButton->get_range(min, max);
+        auto width = std::max(m_xSpinButton->get_pixel_size(format_number(min)).Width(),
+                              m_xSpinButton->get_pixel_size(format_number(max)).Width());
+        int chars = ceil(width / m_xSpinButton->get_approximate_digit_width());
+        m_xSpinButton->set_width_chars(chars);
+    }
+
+    tools::Time TimeSpinButton::ConvertValue(int nValue) const
+    {
+        tools::Time aTime(0);
+        aTime.MakeTimeFromMS(nValue);
+        return aTime;
+    }
+
+    int TimeSpinButton::ConvertValue(const tools::Time& rTime) const
+    {
+        return rTime.GetMSFromTime();
+    }
+
+    OUString TimeSpinButton::format_number(int nValue) const
+    {
+        const SvtSysLocale aSysLocale;
+        const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
+        return TimeFormatter::FormatTime(ConvertValue(nValue), m_eFormat, TimeFormat::Hour24, true, rLocaleData);
+    }
 }
 
 VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUString& sUIFile, const OString& sID,
@@ -264,7 +353,7 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
     }
     catch (const css::uno::Exception &rExcept)
     {
-        SAL_WARN("vcl.layout", "Unable to read .ui file: " << rExcept);
+        DBG_UNHANDLED_EXCEPTION("vcl.layout", "Unable to read .ui file");
         CrashReporter::AddKeyValue("VclBuilderException", "Unable to read .ui file: " + rExcept.Message);
         throw;
     }
@@ -314,7 +403,12 @@ VclBuilder::VclBuilder(vcl::Window *pParent, const OUString& sUIDir, const OUStr
         RadioButton *pOther = get<RadioButton>(elem.m_sValue);
         SAL_WARN_IF(!pOne || !pOther, "vcl", "missing member of radiobutton group");
         if (pOne && pOther)
-            pOne->group(*pOther);
+        {
+            if (m_bLegacy)
+                pOne->group(*pOther);
+            else
+                pOther->group(*pOne);
+        }
     }
 
     //Set ComboBox models when everything has been imported
@@ -590,6 +684,18 @@ namespace
             rMap.erase(aFind);
         }
         return bDrawValue;
+    }
+
+    OUString extractPopupMenu(VclBuilder::stringmap& rMap)
+    {
+        OUString sRet;
+        VclBuilder::stringmap::iterator aFind = rMap.find(OString("popup"));
+        if (aFind != rMap.end())
+        {
+            sRet = aFind->second;
+            rMap.erase(aFind);
+        }
+        return sRet;
     }
 
     OUString extractValuePos(VclBuilder::stringmap& rMap)
@@ -1219,18 +1325,23 @@ void VclBuilder::cleanupWidgetOwnScrolling(vcl::Window *pScrollParent, vcl::Wind
 }
 
 #ifndef DISABLE_DYNLOADING
+
 extern "C" { static void thisModule() {} }
-#endif
 
 // We store these forever, closing modules is non-ideal from a performance
 // perspective, code pages will be freed up by the OS anyway if unused for
 // a while in many cases, and this helps us pre-init.
-typedef std::map<OUString, std::unique_ptr<osl::Module>> ModuleMap;
+typedef std::map<OUString, std::shared_ptr<osl::Module>> ModuleMap;
 static ModuleMap g_aModuleMap;
-static osl::Module g_aMergedLib;
+
+#if ENABLE_MERGELIBS
+static std::shared_ptr<osl::Module> g_pMergedLib = std::make_shared<osl::Module>();
+#endif
 
 #ifndef SAL_DLLPREFIX
 #  define SAL_DLLPREFIX ""
+#endif
+
 #endif
 
 void VclBuilder::preload()
@@ -1238,8 +1349,8 @@ void VclBuilder::preload()
 #ifndef DISABLE_DYNLOADING
 
 #if ENABLE_MERGELIBS
-    g_aMergedLib.loadRelative(&thisModule, SVLIBRARY("merged"));
-#endif
+    g_pMergedLib->loadRelative(&thisModule, SVLIBRARY("merged"));
+#else
 // find -name '*ui*' | xargs grep 'class=".*lo-' |
 //     sed 's/.*class="//' | sed 's/-.*$//' | sort | uniq
     static const char *aWidgetLibs[] = {
@@ -1262,6 +1373,7 @@ void VclBuilder::preload()
         else
             delete pModule;
     }
+#endif // ENABLE_MERGELIBS
 #endif // DISABLE_DYNLOADING
 }
 
@@ -1321,7 +1433,11 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         VclPtr<MessageDialog> xDialog(VclPtr<MessageDialog>::Create(pParent, nBits));
         m_pParserState->m_aMessageDialogs.push_back(xDialog);
         xWindow = xDialog;
+#if defined WNT
+        xWindow->set_border_width(3);
+#else
         xWindow->set_border_width(12);
+#endif
     }
     else if (name == "GtkBox")
     {
@@ -1365,7 +1481,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
     }
     else if (name == "GtkAlignment")
         xWindow = VclPtr<VclAlignment>::Create(pParent);
-    else if (name == "GtkButton")
+    else if (name == "GtkButton" || (!m_bLegacy && name == "GtkToggleButton"))
     {
         VclPtr<Button> xButton;
         OUString sMenu = BuilderUtils::extractCustomProperty(rMap);
@@ -1373,6 +1489,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
             xButton = extractStockAndBuildPushButton(pParent, rMap, m_bLegacy);
         else
         {
+            assert(m_bLegacy && "use GtkMenuButton");
             xButton = extractStockAndBuildMenuButton(pParent, rMap);
             m_pParserState->m_aButtonMenuMaps.emplace_back(id, sMenu);
         }
@@ -1380,7 +1497,19 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         setupFromActionName(xButton, rMap, m_xFrame);
         xWindow = xButton;
     }
-    else if (name == "GtkToggleButton")
+    else if (name == "GtkMenuButton")
+    {
+        VclPtr<Button> xButton;
+        xButton = extractStockAndBuildMenuButton(pParent, rMap);
+        OUString sMenu = extractPopupMenu(rMap);
+        assert(!sMenu.isEmpty());
+        m_pParserState->m_aButtonMenuMaps.emplace_back(id, sMenu);
+        xButton->SetImageAlign(ImageAlign::Left); //default to left
+        xButton->SetAccessibleRole(css::accessibility::AccessibleRole::BUTTON_MENU);
+        setupFromActionName(xButton, rMap, m_xFrame);
+        xWindow = xButton;
+    }
+    else if (name == "GtkToggleButton" && m_bLegacy)
     {
         VclPtr<Button> xButton;
         OUString sMenu = BuilderUtils::extractCustomProperty(rMap);
@@ -1416,7 +1545,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         //maybe always import as TriStateBox and enable/disable tristate
         bool bIsTriState = extractInconsistent(rMap);
         VclPtr<CheckBox> xCheckBox;
-        if (bIsTriState)
+        if (bIsTriState && m_bLegacy)
             xCheckBox = VclPtr<TriStateBox>::Create(pParent, nBits);
         else
             xCheckBox = VclPtr<CheckBox>::Create(pParent, nBits);
@@ -1566,11 +1695,16 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         //d) remove the users of makeSvTreeViewBox
         extractModel(id, rMap);
         WinBits nWinStyle = WB_CLIPCHILDREN|WB_LEFT|WB_VCENTER|WB_3DLOOK|WB_SIMPLEMODE;
-        OUString sBorder = BuilderUtils::extractCustomProperty(rMap);
-        if (!sBorder.isEmpty())
-            nWinStyle |= WB_BORDER;
+        if (m_bLegacy)
+        {
+            OUString sBorder = BuilderUtils::extractCustomProperty(rMap);
+            if (!sBorder.isEmpty())
+                nWinStyle |= WB_BORDER;
+        }
         //ListBox manages its own scrolling,
         vcl::Window *pRealParent = prepareWidgetOwnScrolling(pParent, nWinStyle);
+        if (pRealParent != pParent)
+            nWinStyle |= WB_BORDER;
         xWindow = VclPtr<ListBox>::Create(pRealParent, nWinStyle);
         if (pRealParent != pParent)
             cleanupWidgetOwnScrolling(pParent, xWindow, rMap);
@@ -1755,6 +1889,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
         {
             OUString sFunction(OStringToOUString(OString("make") + name.copy(nDelim+1), RTL_TEXTENCODING_UTF8));
 
+            customMakeWidget pFunction = nullptr;
 #ifndef DISABLE_DYNLOADING
             OUStringBuffer sModuleBuf;
             sModuleBuf.append(SAL_DLLPREFIX);
@@ -1765,21 +1900,27 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
             ModuleMap::iterator aI = g_aModuleMap.find(sModule);
             if (aI == g_aModuleMap.end())
             {
-                osl::Module* pModule = new osl::Module;
-                bool ok = false;
+                std::shared_ptr<osl::Module> pModule;
 #if ENABLE_MERGELIBS
-                if (!g_aMergedLib.is())
-                    g_aMergedLib.loadRelative(&thisModule, SVLIBRARY("merged"));
-                ok = g_aMergedLib.getFunctionSymbol(sFunction);
+                if (!g_pMergedLib->is())
+                    g_pMergedLib->loadRelative(&thisModule, SVLIBRARY("merged"));
+                if ((pFunction = reinterpret_cast<customMakeWidget>(g_pMergedLib->getFunctionSymbol(sFunction))))
+                    pModule = g_pMergedLib;
 #endif
-                if (!ok)
-                    ok = pModule->loadRelative(&thisModule, sModule);
-                assert(ok && "bad module name in .ui");
-                aI = g_aModuleMap.insert(std::make_pair(sModule, std::unique_ptr<osl::Module>(pModule))).first;
+                if (!pFunction)
+                {
+                    pModule.reset(new osl::Module);
+                    bool ok = pModule->loadRelative(&thisModule, sModule);
+                    assert(ok && "bad module name in .ui");
+                    (void) ok;
+                    pFunction = reinterpret_cast<customMakeWidget>(pModule->getFunctionSymbol(sFunction));
+                }
+                g_aModuleMap.insert(std::make_pair(sModule, pModule));
             }
-            customMakeWidget pFunction = reinterpret_cast<customMakeWidget>(aI->second->getFunctionSymbol(sFunction));
+            else
+                pFunction = reinterpret_cast<customMakeWidget>(aI->second->getFunctionSymbol(sFunction));
 #else
-            customMakeWidget pFunction = reinterpret_cast<customMakeWidget>(osl_getFunctionSymbol((oslModule) RTLD_DEFAULT, sFunction.pData));
+            pFunction = reinterpret_cast<customMakeWidget>(osl_getFunctionSymbol((oslModule) RTLD_DEFAULT, sFunction.pData));
 #endif
             if (pFunction)
             {
@@ -1797,7 +1938,7 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OString &
             }
         }
     }
-    SAL_WARN_IF(!xWindow, "vcl.layout", "probably need to implement " << name << " or add a make" << name << " function");
+    SAL_INFO_IF(!xWindow, "vcl.layout", "probably need to implement " << name << " or add a make" << name << " function");
     if (xWindow)
     {
         xWindow->SetHelpId(m_sHelpRoot + id);

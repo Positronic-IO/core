@@ -246,9 +246,8 @@ bool SwEditShell::IsLinkedGrfSwapOut() const
 {
     SwGrfNode *pGrfNode = GetGrfNode_();
     return pGrfNode &&
-        ( pGrfNode->IsLinkedFile() &&
-          ( GraphicType::Default == pGrfNode->GetGrfObj().GetType() ||
-            pGrfNode->GetGrfObj().IsSwappedOut()));
+           pGrfNode->IsLinkedFile() &&
+           GraphicType::Default == pGrfNode->GetGrfObj().GetType();
 }
 
 const GraphicObject* SwEditShell::GetGraphicObj() const
@@ -292,7 +291,7 @@ void SwEditShell::ReRead( const OUString& rGrfName, const OUString& rFltName,
                     const Graphic* pGraphic )
 {
     StartAllAction();
-    mxDoc->getIDocumentContentOperations().ReRead( *GetCursor(), rGrfName, rFltName, pGraphic, nullptr );
+    mxDoc->getIDocumentContentOperations().ReRead( *GetCursor(), rGrfName, rFltName, pGraphic );
     EndAllAction();
 }
 
@@ -544,7 +543,7 @@ OUString SwEditShell::Calculate()
 
                     OUString sVar = aStr.copy( nTmpStt, nPos - nTmpStt );
                     if( !::FindOperator( sVar ) &&
-                        (::Find( sVar, aCalc.GetVarTable(),TBLSZ) ||
+                        (aCalc.GetVarTable().Find(sVar) ||
                          aCalc.VarLook( sVar )) )
                     {
                         if( !bValidFields )

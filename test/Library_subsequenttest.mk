@@ -9,6 +9,10 @@
 
 $(eval $(call gb_Library_Library,subsequenttest))
 
+$(eval $(call gb_Library_set_include,subsequenttest,\
+    $$(INCLUDE) \
+))
+
 $(eval $(call gb_Library_add_defs,subsequenttest,\
 	-DOOO_DLLIMPLEMENTATION_TEST \
 ))
@@ -42,6 +46,7 @@ $(eval $(call gb_Library_add_exception_objects,subsequenttest,\
 	test/source/container/xnamecontainer \
 	test/source/container/xnamereplace \
 	test/source/container/xnamed \
+	test/source/drawing/captionshape \
 	test/source/sheet/cellarealink \
 	test/source/sheet/cellproperties \
 	test/source/sheet/databaseimportdescriptor \
@@ -49,22 +54,33 @@ $(eval $(call gb_Library_add_exception_objects,subsequenttest,\
 	test/source/sheet/datapilotfield \
 	test/source/sheet/datapilotitem \
 	test/source/sheet/documentsettings \
+	test/source/sheet/functiondescription \
 	test/source/sheet/globalsheetsettings \
 	test/source/sheet/scenario \
+	test/source/sheet/spreadsheetdocumentsettings \
 	test/source/sheet/spreadsheetviewsettings \
 	test/source/sheet/subtotaldescriptor \
+	test/source/sheet/shape \
 	test/source/sheet/sheetcell \
 	test/source/sheet/sheetcellrange \
 	test/source/sheet/sheetcellranges \
 	test/source/sheet/sheetfilterdescriptor \
+	test/source/sheet/sheetlink \
+	test/source/sheet/sheetsortdescriptor2 \
+	test/source/sheet/spreadsheet \
 	test/source/sheet/tableautoformat \
 	test/source/sheet/tablevalidation \
+	test/source/sheet/xactivationbroadcaster \
 	test/source/sheet/xarealink \
 	test/source/sheet/xarealinks \
+	test/source/sheet/xarrayformularange \
+	test/source/sheet/xcalculatable \
 	test/source/sheet/xcelladdressable \
 	test/source/sheet/xcellformatrangessupplier \
 	test/source/sheet/xcellrangeaddressable \
 	test/source/sheet/xcellrangedata \
+	test/source/sheet/xcellrangeformula \
+	test/source/sheet/xcellrangemovement \
 	test/source/sheet/xcellrangereferrer \
 	test/source/sheet/xcellrangesquery \
 	test/source/sheet/xcellseries \
@@ -80,6 +96,7 @@ $(eval $(call gb_Library_add_exception_objects,subsequenttest,\
 	test/source/sheet/xdatapilottable2 \
 	test/source/sheet/xdatapilottables \
 	test/source/sheet/xdatapilottablessupplier \
+	test/source/sheet/xddelink \
 	test/source/sheet/xfunctiondescriptions \
 	test/source/sheet/xheaderfootercontent \
 	test/source/sheet/xlabelrange \
@@ -89,6 +106,7 @@ $(eval $(call gb_Library_add_exception_objects,subsequenttest,\
 	test/source/sheet/xmultipleoperation \
 	test/source/sheet/xprintareas \
 	test/source/sheet/xrecentfunctions \
+	test/source/sheet/xscenario \
 	test/source/sheet/xscenarioenhanced \
 	test/source/sheet/xscenarios \
 	test/source/sheet/xscenariossupplier \

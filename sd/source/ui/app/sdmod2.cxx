@@ -28,7 +28,6 @@
 #include <svl/flagitem.hxx>
 #include <unotools/useroptions.hxx>
 #include <sfx2/bindings.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/request.hxx>
@@ -161,7 +160,7 @@ IMPL_LINK(SdModule, CalcFieldValueHdl, EditFieldInfo*, pInfo, void)
         const SdrTextObj* pTextObj = pSdrOutliner->GetTextObj();
 
         if( pTextObj )
-            pDoc = dynamic_cast< SdDrawDocument* >( pTextObj->GetModel() );
+            pDoc = dynamic_cast< SdDrawDocument* >( &pTextObj->getSdrModelFromSdrObject() );
 
         if( pDoc )
             pDocShell = pDoc->GetDocSh();
@@ -408,10 +407,9 @@ IMPL_LINK(SdModule, CalcFieldValueHdl, EditFieldInfo*, pInfo, void)
                     }
                     else
                     {
-                        Date aDate( Date::SYSTEM );
-                        tools::Time aTime( tools::Time::SYSTEM );
+                        DateTime aDateTime( DateTime::SYSTEM );
                         LanguageType eLang = pInfo->GetOutliner()->GetLanguage( pInfo->GetPara(), pInfo->GetPos() );
-                        aRepresentation = SvxDateTimeField::GetFormatted( aDate, aTime,
+                        aRepresentation = SvxDateTimeField::GetFormatted( aDateTime, aDateTime,
                                               rSettings.meDateFormat, rSettings.meTimeFormat, *GetNumberFormatter(), eLang );
                     }
                 }
@@ -741,7 +739,7 @@ void SdModule::ApplyItemSet( sal_uInt16 nSlot, const SfxItemSet& rSet )
         pViewShell->GetViewFrame()->GetBindings().InvalidateAll( true );
 }
 
-VclPtr<SfxTabPage> SdModule::CreateTabPage( sal_uInt16 nId, vcl::Window* pParent, const SfxItemSet& rSet )
+VclPtr<SfxTabPage> SdModule::CreateTabPage( sal_uInt16 nId, TabPageParent pParent, const SfxItemSet& rSet )
 {
     VclPtr<SfxTabPage> pRet;
     SfxAllItemSet aSet(*(rSet.GetPool()));

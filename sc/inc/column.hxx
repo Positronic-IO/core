@@ -20,10 +20,8 @@
 #ifndef INCLUDED_SC_INC_COLUMN_HXX
 #define INCLUDED_SC_INC_COLUMN_HXX
 
-#include "markarr.hxx"
 #include "global.hxx"
 #include "address.hxx"
-#include "rangenam.hxx"
 #include "rangelst.hxx"
 #include "types.hxx"
 #include "mtvelements.hxx"
@@ -35,7 +33,6 @@
 #include <set>
 #include <vector>
 
-#include <boost/intrusive_ptr.hpp>
 #include <mdds/flat_segment_tree.hpp>
 
 namespace editeng { class SvxBorderLine; }
@@ -82,9 +79,6 @@ class SfxStyleSheetBase;
 class SvxBoxInfoItem;
 class SvxBoxItem;
 
-class ScAttrIterator;
-class ScAttrArray;
-struct ScAttrEntry;
 class ScDocument;
 class ScEditDataArray;
 class ScFormulaCell;
@@ -95,16 +89,11 @@ class SvtBroadcaster;
 class ScTypedStrData;
 class ScProgress;
 struct ScFunctionData;
-struct ScLineFlags;
-struct ScMergePatternState;
 class ScFlatBoolRowSegments;
 struct ScSetStringParam;
 struct ScColWidthParam;
-class ScColumnTextWidthIterator;
-struct ScFormulaCellGroup;
 struct ScRefCellValue;
 struct ScCellValue;
-class ScDocumentImport;
 class ScHint;
 enum class ScMF;
 struct ScFilterEntries;
@@ -141,7 +130,7 @@ class ScColumn
     // Cell values.
     sc::CellStoreType maCells;
 
-    ScAttrArray* pAttrArray;
+    std::unique_ptr<ScAttrArray> pAttrArray;
 
     size_t mnBlkCountFormula;
 
@@ -327,8 +316,8 @@ public:
         SCROW nRow, SCTAB nTab, const OUString& rString, formula::FormulaGrammar::AddressConvention eConv,
         const ScSetStringParam* pParam = nullptr );
 
-    void SetEditText( SCROW nRow, EditTextObject* pEditText );
-    void SetEditText( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, EditTextObject* pEditText );
+    void SetEditText( SCROW nRow, std::unique_ptr<EditTextObject> pEditText );
+    void SetEditText( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, std::unique_ptr<EditTextObject> pEditText );
     void SetEditText( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, const EditTextObject& rEditText );
     void SetEditText( SCROW nRow, const EditTextObject& rEditText, const SfxItemPool* pEditPool );
     void SetFormula( SCROW nRow, const ScTokenArray& rArray, formula::FormulaGrammar::Grammar eGram );
@@ -362,7 +351,7 @@ public:
     void SetRawString( SCROW nRow, const svl::SharedString& rStr );
     void SetRawString( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, const svl::SharedString& rStr, bool bBroadcast = true );
     void SetValue( SCROW nRow, double fVal );
-    void SetValues( SCROW nRow, const std::vector<double>& rVals );
+    void SetValues( const SCROW nRow, const std::vector<double>& rVals );
     void SetValue( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, double fVal, bool bBroadcast = true );
     void        SetError( SCROW nRow, const FormulaError nError);
 
@@ -713,7 +702,7 @@ private:
 
     void AttachNewFormulaCells( const sc::CellStoreType::position_type& aPos, size_t nLength );
     void BroadcastNewCell( SCROW nRow );
-    bool UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, const sc::CellStoreType::iterator& itr );
+    bool UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, sc::CellStoreType::iterator& itr );
 
     const ScFormulaCell* FetchFormulaCell( SCROW nRow ) const;
 

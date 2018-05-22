@@ -36,8 +36,6 @@
 #include <editeng/borderline.hxx>
 #include <editeng/boxitem.hxx>
 #include <svx/svdmodel.hxx>
-#include <svx/strings.hrc>
-#include <svdglob.hxx>
 
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star::uno;
@@ -850,7 +848,7 @@ void TableLayouter::LayoutTable( tools::Rectangle& rRectangle, bool bFitWidth, b
 }
 
 
-void TableLayouter::updateCells( tools::Rectangle& rRectangle )
+void TableLayouter::updateCells( tools::Rectangle const & rRectangle )
 {
     const sal_Int32 nColCount = getColumnCount();
     const sal_Int32 nRowCount = getRowCount();

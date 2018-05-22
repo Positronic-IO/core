@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_REDCOM_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_REDCOM_HXX
 
+#include <vcl/weld.hxx>
 #include <chgtrack.hxx>
 
 class ScDocShell;
@@ -43,7 +44,7 @@ class ScRedComDialog final
 
 public:
 
-    ScRedComDialog( vcl::Window* pParent, const SfxItemSet& rCoreSet,
+    ScRedComDialog( weld::Window* pParent, const SfxItemSet& rCoreSet,
                     ScDocShell *pShell, ScChangeAction *pAction, bool bPrevNext);
     ~ScRedComDialog();
 

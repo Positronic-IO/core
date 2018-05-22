@@ -43,14 +43,13 @@ namespace svx
     ODocumentLinkDialog::ODocumentLinkDialog( vcl::Window* _pParent, bool _bCreateNew )
         : ModalDialog(_pParent, "DatabaseLinkDialog",
             "cui/ui/databaselinkdialog.ui")
-        ,m_bCreatingNew(_bCreateNew)
     {
         get(m_pURL, "url");
         get(m_pOK, "ok");
         get(m_pName, "name");
         get(m_pBrowseFile, "browse");
 
-        if (!m_bCreatingNew)
+        if (!_bCreateNew)
             SetText(get<FixedText>("alttitle")->GetText());
 
         m_pURL->SetFilter("*.odb");
@@ -166,7 +165,7 @@ namespace svx
     IMPL_LINK_NOARG(ODocumentLinkDialog, OnBrowseFile, Button*, void)
     {
         ::sfx2::FileDialogHelper aFileDlg(
-                ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION, FileDialogFlags::NONE, this);
+                ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION, FileDialogFlags::NONE, GetFrameWeld());
         std::shared_ptr<const SfxFilter> pFilter = SfxFilter::GetFilterByName("StarOffice XML (Base)");
         if ( pFilter )
         {

@@ -37,6 +37,7 @@
 #include <sc.hrc>
 #include <mid.h>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <textuno.hxx>
 
 using namespace com::sun::star;
@@ -278,8 +279,8 @@ bool ScProtectionAttr::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
 
 OUString ScProtectionAttr::GetValueText() const
 {
-    const OUString aStrYes ( ScGlobal::GetRscString(STR_YES) );
-    const OUString aStrNo  ( ScGlobal::GetRscString(STR_NO) );
+    const OUString aStrYes ( ScResId(STR_YES) );
+    const OUString aStrNo  ( ScResId(STR_NO) );
 
     const OUString aValue  = "("
         + (bProtection ? aStrYes : aStrNo)
@@ -303,8 +304,8 @@ bool ScProtectionAttr::GetPresentation
         const IntlWrapper& /* rIntl */
     ) const
 {
-    const OUString aStrYes ( ScGlobal::GetRscString(STR_YES) );
-    const OUString aStrNo  ( ScGlobal::GetRscString(STR_NO) );
+    const OUString aStrYes ( ScResId(STR_YES) );
+    const OUString aStrNo  ( ScResId(STR_NO) );
 
     switch ( ePres )
     {
@@ -313,19 +314,19 @@ bool ScProtectionAttr::GetPresentation
             break;
 
         case SfxItemPresentation::Complete:
-            rText  = ScGlobal::GetRscString(STR_PROTECTION)
+            rText  = ScResId(STR_PROTECTION)
                 + ": "
                 + (bProtection ? aStrYes : aStrNo)
                 + ", "
-                + ScGlobal::GetRscString(STR_FORMULAS)
+                + ScResId(STR_FORMULAS)
                 + ": "
                 + (!bHideFormula ? aStrYes : aStrNo)
                 + ", "
-                + ScGlobal::GetRscString(STR_HIDE)
+                + ScResId(STR_HIDE)
                 + ": "
                 + (bHideCell ? aStrYes : aStrNo)
                 + ", "
-                + ScGlobal::GetRscString(STR_PRINT)
+                + ScResId(STR_PRINT)
                 + ": "
                 + (!bHidePrint ? aStrYes : aStrNo);
             break;
@@ -398,16 +399,13 @@ ScPageHFItem::ScPageHFItem( const ScPageHFItem& rItem )
 
 ScPageHFItem::~ScPageHFItem()
 {
-    delete pLeftArea;
-    delete pCenterArea;
-    delete pRightArea;
 }
 
 bool ScPageHFItem::QueryValue( uno::Any& rVal, sal_uInt8 /* nMemberId */ ) const
 {
     rtl::Reference<ScHeaderFooterContentObj> xContent =
         new ScHeaderFooterContentObj();
-    xContent->Init(pLeftArea, pCenterArea, pRightArea);
+    xContent->Init(pLeftArea.get(), pCenterArea.get(), pRightArea.get());
 
     uno::Reference<sheet::XHeaderFooterContent> xCont(xContent.get());
 
@@ -428,16 +426,19 @@ bool ScPageHFItem::PutValue( const uno::Any& rVal, sal_uInt8 /* nMemberId */ )
             if (pImp.is())
             {
                 const EditTextObject* pImpLeft = pImp->GetLeftEditObject();
-                delete pLeftArea;
-                pLeftArea = pImpLeft ? pImpLeft->Clone() : nullptr;
+                pLeftArea.reset();
+                if (pImpLeft)
+                    pLeftArea = pImpLeft->Clone();
 
                 const EditTextObject* pImpCenter = pImp->GetCenterEditObject();
-                delete pCenterArea;
-                pCenterArea = pImpCenter ? pImpCenter->Clone() : nullptr;
+                pCenterArea.reset();
+                if (pImpCenter)
+                    pCenterArea = pImpCenter->Clone();
 
                 const EditTextObject* pImpRight = pImp->GetRightEditObject();
-                delete pRightArea;
-                pRightArea = pImpRight ? pImpRight->Clone() : nullptr;
+                pRightArea.reset();
+                if (pImpRight)
+                    pRightArea = pImpRight->Clone();
 
                 if ( !pLeftArea || !pCenterArea || !pRightArea )
                 {
@@ -470,9 +471,9 @@ bool ScPageHFItem::operator==( const SfxPoolItem& rItem ) const
 
     const ScPageHFItem& r = static_cast<const ScPageHFItem&>(rItem);
 
-    return    ScGlobal::EETextObjEqual(pLeftArea,   r.pLeftArea)
-           && ScGlobal::EETextObjEqual(pCenterArea, r.pCenterArea)
-           && ScGlobal::EETextObjEqual(pRightArea,  r.pRightArea);
+    return    ScGlobal::EETextObjEqual(pLeftArea.get(),   r.pLeftArea.get())
+           && ScGlobal::EETextObjEqual(pCenterArea.get(), r.pCenterArea.get())
+           && ScGlobal::EETextObjEqual(pRightArea.get(),  r.pRightArea.get());
 }
 
 SfxPoolItem* ScPageHFItem::Clone( SfxItemPool* ) const
@@ -482,19 +483,16 @@ SfxPoolItem* ScPageHFItem::Clone( SfxItemPool* ) const
 
 void ScPageHFItem::SetLeftArea( const EditTextObject& rNew )
 {
-    delete pLeftArea;
     pLeftArea = rNew.Clone();
 }
 
 void ScPageHFItem::SetCenterArea( const EditTextObject& rNew )
 {
-    delete pCenterArea;
     pCenterArea = rNew.Clone();
 }
 
 void ScPageHFItem::SetRightArea( const EditTextObject& rNew )
 {
-    delete pRightArea;
     pRightArea = rNew.Clone();
 }
 
@@ -533,15 +531,15 @@ bool ScViewObjectModeItem::GetPresentation
             switch( Which() )
             {
                 case SID_SCATTR_PAGE_CHARTS:
-                rText = ScGlobal::GetRscString(STR_VOBJ_CHART) + aDel;
+                rText = ScResId(STR_VOBJ_CHART) + aDel;
                 break;
 
                 case SID_SCATTR_PAGE_OBJECTS:
-                rText = ScGlobal::GetRscString(STR_VOBJ_OBJECT) + aDel;
+                rText = ScResId(STR_VOBJ_OBJECT) + aDel;
                 break;
 
                 case SID_SCATTR_PAGE_DRAWINGS:
-                rText = ScGlobal::GetRscString(STR_VOBJ_DRAWINGS) + aDel;
+                rText = ScResId(STR_VOBJ_DRAWINGS) + aDel;
                 break;
 
                 default: break;
@@ -549,9 +547,9 @@ bool ScViewObjectModeItem::GetPresentation
             SAL_FALLTHROUGH;
         case SfxItemPresentation::Nameless:
             if (GetValue() == VOBJ_MODE_SHOW)
-                rText += ScGlobal::GetRscString(STR_VOBJ_MODE_SHOW);
+                rText += ScResId(STR_VOBJ_MODE_SHOW);
             else
-                rText += ScGlobal::GetRscString(STR_VOBJ_MODE_HIDE);
+                rText += ScResId(STR_VOBJ_MODE_HIDE);
             return true;
             break;
 
@@ -644,11 +642,11 @@ void lclAppendScalePageCount( OUString& rText, sal_uInt16 nPages )
     rText += ": ";
     if( nPages )
     {
-        OUString aPages( ScGlobal::GetRscString( STR_SCATTR_PAGE_SCALE_PAGES ) );
+        OUString aPages( ScResId( STR_SCATTR_PAGE_SCALE_PAGES ) );
         rText += aPages.replaceFirst( "%1", OUString::number( nPages ) );
     }
     else
-        rText += ScGlobal::GetRscString( STR_SCATTR_PAGE_SCALE_AUTO );
+        rText += ScResId( STR_SCATTR_PAGE_SCALE_AUTO );
 }
 } // namespace
 
@@ -659,10 +657,10 @@ bool ScPageScaleToItem::GetPresentation(
     if( !IsValid())
         return false;
 
-    OUString aName( ScGlobal::GetRscString( STR_SCATTR_PAGE_SCALETO ) );
-    OUString aValue( ScGlobal::GetRscString( STR_SCATTR_PAGE_SCALE_WIDTH ) );
+    OUString aName( ScResId( STR_SCATTR_PAGE_SCALETO ) );
+    OUString aValue( ScResId( STR_SCATTR_PAGE_SCALE_WIDTH ) );
     lclAppendScalePageCount( aValue, mnWidth );
-    aValue = aValue + ", " + ScGlobal::GetRscString( STR_SCATTR_PAGE_SCALE_HEIGHT );
+    aValue = aValue + ", " + ScResId( STR_SCATTR_PAGE_SCALE_HEIGHT );
     lclAppendScalePageCount( aValue, mnHeight );
 
     switch( ePres )

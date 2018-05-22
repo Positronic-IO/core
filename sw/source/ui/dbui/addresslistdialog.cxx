@@ -27,7 +27,6 @@
 #include <dbmgr.hxx>
 #include <dbconfig.hxx>
 #include <unotools/tempfile.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/processfactory.hxx>
@@ -156,9 +155,9 @@ void SwAddrSourceLB::setColSizes()
 
     long nWidth = rHB.GetSizePixel().Width();
 
-    long nTabs[] = { 2, 0, nWidth/2 };
+    long nTabs[] = { 0, nWidth/2 };
 
-    SvSimpleTable::SetTabs(&nTabs[0], MapUnit::MapPixel);
+    SvSimpleTable::SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
 }
 
 SwAddressListDialog::SwAddressListDialog(SwMailMergeAddressBlockPage* pParent)
@@ -344,7 +343,7 @@ IMPL_LINK_NOARG(SwAddressListDialog, LoadHdl_Impl, Button*, void)
 {
     SwView* pView = m_pAddressPage->GetWizard()->GetSwView();
 
-    const OUString sNewSource = SwDBManager::LoadAndRegisterDataSource(this, pView ? pView->GetDocShell() : nullptr);
+    const OUString sNewSource = SwDBManager::LoadAndRegisterDataSource(GetFrameWeld(), pView ? pView->GetDocShell() : nullptr);
     if(!sNewSource.isEmpty())
     {
         SvTreeListEntry* pNewSource = m_pListLB->InsertEntry(sNewSource);

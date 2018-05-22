@@ -79,10 +79,14 @@ LwpVirtualLayout::LwpVirtualLayout(LwpObjectHeader const &objHdr, LwpSvStream* p
     , m_bGettingMarginsSameAsParent(false)
     , m_bGettingHasProtection(false)
     , m_bGettingIsProtected(false)
+    , m_bGettingIsAutoGrowDown(false)
     , m_bGettingMarginsValue(false)
     , m_bGettingExtMarginsValue(false)
     , m_bGettingUsePrinterSettings(false)
+    , m_bGettingScaleCenter(false)
+    , m_bGettingBorderStuff(false)
     , m_bGettingUseWhen(false)
+    , m_bGettingStyleLayout(false)
     , m_nAttributes(0)
     , m_nAttributes2(0)
     , m_nAttributes3(0)
@@ -364,13 +368,22 @@ bool LwpVirtualLayout::NoContentReference()
 
 bool LwpVirtualLayout::IsStyleLayout()
 {
-    if (m_nAttributes3 & STYLE3_STYLELAYOUT)
-        return true;
+    if (m_bGettingStyleLayout)
+        throw std::runtime_error("recursion in layout");
+    m_bGettingStyleLayout = true;
 
-    rtl::Reference<LwpVirtualLayout> xParent(dynamic_cast<LwpVirtualLayout*>(GetParent().obj().get()));
-    if (xParent.is())
-        return xParent->IsStyleLayout();
-    return false;
+    bool bRet = false;
+    if (m_nAttributes3 & STYLE3_STYLELAYOUT)
+        bRet = true;
+    else
+    {
+        rtl::Reference<LwpVirtualLayout> xParent(dynamic_cast<LwpVirtualLayout*>(GetParent().obj().get()));
+        if (xParent.is())
+            bRet = xParent->IsStyleLayout();
+    }
+
+    m_bGettingStyleLayout = false;
+    return bRet;
 }
 
 /**
@@ -411,7 +424,7 @@ LwpVirtualLayout* LwpVirtualLayout::FindChildByType(LWP_LAYOUT_TYPE eType)
 */
 bool LwpVirtualLayout::IsFitGraphic()
 {
-    return IsAutoGrowRight() && !IsAutoGrowLeft() && IsAutoGrowDown();
+    return IsAutoGrowRight() && !IsAutoGrowLeft() && GetIsAutoGrowDown();
 }
 
 /**
@@ -776,20 +789,28 @@ double LwpMiddleLayout::ExtMarginsValue(sal_uInt8 nWhichSide)
 */
 LwpBorderStuff* LwpMiddleLayout::GetBorderStuff()
 {
+    if (m_bGettingBorderStuff)
+        throw std::runtime_error("recursion in layout");
+    m_bGettingBorderStuff = true;
+
+    LwpBorderStuff* pRet = nullptr;
+
     if(m_nOverrideFlag & OVER_BORDERS)
     {
         LwpLayoutBorder* pLayoutBorder = dynamic_cast<LwpLayoutBorder*>(m_LayBorderStuff.obj().get());
-        return pLayoutBorder ? &pLayoutBorder->GetBorderStuff() : nullptr;
+        pRet = pLayoutBorder ? &pLayoutBorder->GetBorderStuff() : nullptr;
     }
     else
     {
         rtl::Reference<LwpObject> xBase(GetBasedOnStyle());
         if (LwpMiddleLayout* pLay = dynamic_cast<LwpMiddleLayout*>(xBase.get()))
         {
-            return pLay->GetBorderStuff();
+            pRet = pLay->GetBorderStuff();
         }
     }
-    return nullptr;
+
+    m_bGettingBorderStuff= false;
+    return pRet;
 }
 
 /**
@@ -942,16 +963,26 @@ sal_uInt16 LwpMiddleLayout::GetScaleTile()
 
 sal_uInt16 LwpMiddleLayout::GetScaleCenter()
 {
+    if (m_bGettingScaleCenter)
+        throw std::runtime_error("recursion in layout");
+    m_bGettingScaleCenter = true;
+
+    sal_uInt16 nRet = 0;
+
     if ((m_nOverrideFlag & OVER_SCALING) && m_LayScale.obj().is() && GetLayoutScale())
     {
-        return (GetLayoutScale()->GetPlacement() & LwpLayoutScale::CENTERED)
+        nRet = (GetLayoutScale()->GetPlacement() & LwpLayoutScale::CENTERED)
             ? 1 : 0;
     }
-    rtl::Reference<LwpObject> xBase(GetBasedOnStyle());
-    if (xBase.is())
-        return dynamic_cast<LwpMiddleLayout&>(*xBase.get()).GetScaleCenter();
     else
-        return 0;
+    {
+        rtl::Reference<LwpObject> xBase(GetBasedOnStyle());
+        if (xBase.is())
+            nRet = dynamic_cast<LwpMiddleLayout&>(*xBase.get()).GetScaleCenter();
+    }
+
+    m_bGettingScaleCenter = false;
+    return nRet;
 }
 
 bool LwpMiddleLayout::CanSizeRight()
@@ -1090,7 +1121,7 @@ bool LwpMiddleLayout::IsPatternFill()
 * @descr:   Get the fill pattern style. Data are saved in a XFBGImage object
 * @return:  the fill pattern style.
 */
-XFBGImage* LwpMiddleLayout::GetFillPattern()
+std::unique_ptr<XFBGImage> LwpMiddleLayout::GetFillPattern()
 {
     LwpBackgroundStuff* pBackgroundStuff = GetBackgroundStuff();
     if (pBackgroundStuff)
@@ -1098,8 +1129,7 @@ XFBGImage* LwpMiddleLayout::GetFillPattern()
         return pBackgroundStuff->GetFillPattern();
     }
 
-    return nullptr;
-
+    return std::unique_ptr<XFBGImage>();
 }
 
 /**
@@ -1140,7 +1170,7 @@ bool LwpMiddleLayout::IsAutoGrowDown()
         rtl::Reference<LwpObject> xBase(GetBasedOnStyle());
         if (LwpMiddleLayout* pLay = dynamic_cast<LwpMiddleLayout*>(xBase.get()))
         {
-            return pLay->IsAutoGrowDown();
+            return pLay->GetIsAutoGrowDown();
         }
     }
     return LwpVirtualLayout::IsAutoGrowDown();
@@ -1350,8 +1380,10 @@ rtl::Reference<LwpVirtualLayout> LwpMiddleLayout::GetWaterMarkLayout()
 * @descr:   Create and reture xfbgimage object for watermark
 *
 */
-XFBGImage* LwpMiddleLayout::GetXFBGImage()
+std::unique_ptr<XFBGImage> LwpMiddleLayout::GetXFBGImage()
 {
+    std::unique_ptr<XFBGImage> xXFBGImage;
+
     rtl::Reference<LwpVirtualLayout> xWaterMarkLayout(GetWaterMarkLayout());
     LwpMiddleLayout* pLay = dynamic_cast<LwpMiddleLayout*>(xWaterMarkLayout.get());
     if(pLay)
@@ -1360,45 +1392,43 @@ XFBGImage* LwpMiddleLayout::GetXFBGImage()
         LwpGraphicObject* pGrfObj = dynamic_cast<LwpGraphicObject*>(pLay->GetContent().obj().get());
         if(pGrfObj)
         {
-            XFBGImage* pXFBGImage = new XFBGImage();
-
+            xXFBGImage.reset(new XFBGImage);
             if(pGrfObj->IsLinked())
             {
                 //set file link
                 OUString linkedfilepath = pGrfObj->GetLinkedFilePath();
                 OUString fileURL = LwpTools::convertToFileUrl(OUStringToOString(linkedfilepath, osl_getThreadTextEncoding()));
-                pXFBGImage->SetFileLink(fileURL);
+                xXFBGImage->SetFileLink(fileURL);
             }
             else
             {
                 std::vector<sal_uInt8> aGrafData = pGrfObj->GetRawGrafData();
-                pXFBGImage->SetImageData(aGrafData.data(), aGrafData.size());
+                xXFBGImage->SetImageData(aGrafData.data(), aGrafData.size());
             }
 
             //automatic, top left
-            pXFBGImage->SetPosition(enumXFAlignStart,enumXFAlignTop);
+            xXFBGImage->SetPosition(enumXFAlignStart,enumXFAlignTop);
             if(pLay->GetScaleCenter())
             {
                 //center
-                pXFBGImage->SetPosition();
+                xXFBGImage->SetPosition();
             }
             else if(pLay->GetScaleTile())
             {
                 //tile
-                pXFBGImage->SetRepeate();
+                xXFBGImage->SetRepeate();
             }
             //fit type, area type
             if((pLay->GetScaleMode()& LwpLayoutScale::FIT_IN_FRAME)!=0)
             {
                 if((pLay->GetScaleMode()& LwpLayoutScale::MAINTAIN_ASPECT_RATIO)==0)
                 {
-                    pXFBGImage->SetStretch();
+                    xXFBGImage->SetStretch();
                 }
             }
-            return pXFBGImage;
         }
     }
-    return nullptr;
+    return xXFBGImage;
 }
 
 /**

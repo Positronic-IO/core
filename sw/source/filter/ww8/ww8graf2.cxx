@@ -245,7 +245,7 @@ bool SwWW8ImplReader::GetPictGrafFromStream(Graphic& rGraphic, SvStream& rSrc)
     return ERRCODE_NONE == GraphicFilter::GetGraphicFilter().ImportGraphic(rGraphic, OUString(), rSrc);
 }
 
-bool SwWW8ImplReader::ReadGrafFile(OUString& rFileName, Graphic*& rpGraphic,
+bool SwWW8ImplReader::ReadGrafFile(OUString& rFileName, std::unique_ptr<Graphic>& rpGraphic,
     const WW8_PIC& rPic, SvStream* pSt, sal_uLong nFilePos, bool* pbInDoc)
 {                                                  // Write the graphic to the file
     *pbInDoc = true;                               // default
@@ -283,7 +283,7 @@ bool SwWW8ImplReader::ReadGrafFile(OUString& rFileName, Graphic*& rpGraphic,
 
     if (m_xWwFib->m_envr != 1) // !MAC as creator
     {
-        rpGraphic = new Graphic( aWMF );
+        rpGraphic.reset(new Graphic(aWMF));
         return true;
     }
 
@@ -295,10 +295,10 @@ bool SwWW8ImplReader::ReadGrafFile(OUString& rFileName, Graphic*& rpGraphic,
     long nData = rPic.lcb - ( pSt->Tell() - nPosFc );
     if (nData > 0)
     {
-        rpGraphic = new Graphic();
+        rpGraphic.reset(new Graphic());
         bOk = SwWW8ImplReader::GetPictGrafFromStream(*rpGraphic, *pSt);
         if (!bOk)
-            DELETEZ(rpGraphic);
+            rpGraphic.reset();
     }
     return bOk; // Contains graphic
 }
@@ -322,14 +322,14 @@ WW8PicDesc::WW8PicDesc( const WW8_PIC& rPic )
     nCT = rPic.dyaCropTop;
     nCB = rPic.dyaCropBottom;
 
-    long nAktWidth  = nOriWidth - (nCL + nCR);  // Size after crop
-    long nAktHeight = nOriHeight - (nCT + nCB);
-    if (!nAktWidth)
-        nAktWidth  = 1;
-    if (!nAktHeight)
-        nAktHeight = 1;
-    nWidth = nAktWidth * rPic.mx / 1000;        // Writer Size
-    nHeight = nAktHeight * rPic.my / 1000;
+    long nCurrentWidth  = nOriWidth - (nCL + nCR);  // Size after crop
+    long nCurrentHeight = nOriHeight - (nCT + nCB);
+    if (!nCurrentWidth)
+        nCurrentWidth  = 1;
+    if (!nCurrentHeight)
+        nCurrentHeight = 1;
+    nWidth = nCurrentWidth * rPic.mx / 1000;        // Writer Size
+    nHeight = nCurrentHeight * rPic.my / 1000;
 }
 
 void SwWW8ImplReader::ReplaceObj(const SdrObject &rReplaceObj,
@@ -426,13 +426,12 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf1(WW8_PIC const & rPic, SvStream* pSt,
 
     OUString aFileName;
     bool bInDoc;
-    Graphic* pGraph = nullptr;
+    std::unique_ptr<Graphic> pGraph;
     bool bOk = ReadGrafFile(aFileName, pGraph, rPic, pSt, nFilePos, &bInDoc);
 
     if (!bOk)
     {
-        delete pGraph;
-        return nullptr;                       // Graphic could not be readed correctly
+        return nullptr;                       // Graphic could not be read correctly
     }
 
     WW8PicDesc aPD( rPic );
@@ -445,10 +444,9 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf1(WW8_PIC const & rPic, SvStream* pSt,
     }
 
     if (m_xWFlyPara && m_xWFlyPara->bGrafApo)
-        pRet = MakeGrafNotInContent(aPD,pGraph,aFileName,aGrfSet);
+        pRet = MakeGrafNotInContent(aPD, pGraph.get(), aFileName, aGrfSet);
     else
-        pRet = MakeGrafInContent(rPic,aPD,pGraph,aFileName,aGrfSet);
-    delete pGraph;
+        pRet = MakeGrafInContent(rPic, aPD, pGraph.get(), aFileName, aGrfSet);
     return pRet;
 }
 
@@ -586,10 +584,11 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
                         relativeWidth = pRecord->isHorizontalRule ? 1000 : 0;
                     if( relativeWidth != 0 )
                     {
+                        const sal_Int16 nScale = aPic.dxaGoal ? aPic.dxaGoal : 1000;
                         aPic.mx = msword_cast<sal_uInt16>(
                             m_aSectionManager.GetPageWidth() -
                             m_aSectionManager.GetPageRight() -
-                            m_aSectionManager.GetPageLeft()) * relativeWidth / aPic.dxaGoal;
+                            m_aSectionManager.GetPageLeft()) * relativeWidth / nScale;
                         aPD = WW8PicDesc( aPic );
                         // This SetSnapRect() call adjusts the size of the
                         // object itself, no idea why it's this call (or even

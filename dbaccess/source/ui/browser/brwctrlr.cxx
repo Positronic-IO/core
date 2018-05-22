@@ -69,7 +69,6 @@
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/extract.hxx>
 #include <comphelper/interaction.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/string.hxx>
 #include <connectivity/dbexception.hxx>
@@ -121,7 +120,7 @@ using namespace ::svt;
     }                                                                       \
     catch(Exception&)                                                       \
     {                                                                       \
-        DBG_UNHANDLED_EXCEPTION();                                          \
+        DBG_UNHANDLED_EXCEPTION("dbaccess");                                          \
     }                                                                       \
 
 #define DO_SAFE( action, message ) try { action; } catch(Exception&) { SAL_WARN("dbaccess.ui",message); } ;
@@ -609,7 +608,7 @@ void SbaXDataBrowserController::onStartLoading( const Reference< XLoadable >& _r
         }
         catch(const SQLException& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -677,7 +676,7 @@ bool SbaXDataBrowserController::reloadForm( const Reference< XLoadable >& _rxLoa
         }
         catch(const SQLException& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -1213,7 +1212,7 @@ void SbaXDataBrowserController::disposing()
     }
     catch(Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     m_xParser.clear();
         // don't dispose, just reset - it's owned by the RowSet
@@ -1259,8 +1258,8 @@ IMPL_LINK_NOARG( SbaXDataBrowserController, OnAsyncDisplayError, void*, void )
 {
     if ( m_aCurrentError.isValid() )
     {
-        ScopedVclPtrInstance< OSQLMessageBox > aDlg( getBrowserView(), m_aCurrentError );
-        aDlg->Execute();
+        OSQLMessageBox aDlg(getFrameWeld(), m_aCurrentError);
+        aDlg.run();
     }
 }
 
@@ -1353,7 +1352,7 @@ sal_Bool SbaXDataBrowserController::approveParameter(const css::form::DatabasePa
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return true;
@@ -1428,7 +1427,7 @@ FeatureState SbaXDataBrowserController::GetState(sal_uInt16 nId) const
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                     aReturn.bEnabled = bInsertPrivilege && bAllowInsertions;
                 }
@@ -1449,7 +1448,7 @@ FeatureState SbaXDataBrowserController::GetState(sal_uInt16 nId) const
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
                     aReturn.bEnabled = bDeletePrivilege && bAllowDeletions && ( nRowCount != 0 ) && !bInsertionRow;
                 }
@@ -1599,7 +1598,7 @@ FeatureState SbaXDataBrowserController::GetState(sal_uInt16 nId) const
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return aReturn;
@@ -1731,7 +1730,7 @@ Reference< XSingleSelectQueryComposer > SbaXDataBrowserController::createParser_
     }
     catch ( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return xComposer;
 }
@@ -1826,7 +1825,7 @@ void SbaXDataBrowserController::ExecuteSearch()
     OSL_ENSURE(xModelSet.is(), "SbaXDataBrowserController::ExecuteSearch : no model set ?!");
     xModelSet->setPropertyValue("DisplayIsSynchron", css::uno::Any(false));
     xModelSet->setPropertyValue("AlwaysShowCursor", css::uno::Any(true));
-    xModelSet->setPropertyValue("CursorColor", makeAny(sal_Int32(COL_LIGHTRED)));
+    xModelSet->setPropertyValue("CursorColor", makeAny(COL_LIGHTRED));
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     VclPtr<AbstractFmSearchDialog> pDialog;
@@ -2387,7 +2386,7 @@ IMPL_LINK(SbaXDataBrowserController, OnCanceledNotFound, FmFoundRecordInformatio
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     try
@@ -2401,7 +2400,7 @@ IMPL_LINK(SbaXDataBrowserController, OnCanceledNotFound, FmFoundRecordInformatio
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2433,7 +2432,7 @@ void SbaXDataBrowserController::LoadFinished(bool /*bWasSynch*/)
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
         // switch the control to alive mode
@@ -2463,7 +2462,7 @@ void SbaXDataBrowserController::initializeParser() const
         }
         catch(Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
             m_xParser = nullptr;
             // no further handling, we ignore the error
         }
@@ -2605,10 +2604,6 @@ void SbaXDataBrowserController::addColumnListeners(const Reference< css::awt::XC
             AddColumnListener(xCol);
         }
     }
-}
-
-void SbaXDataBrowserController::InitializeGridModel(const Reference< css::form::XFormComponent > & /*xGrid*/)
-{
 }
 
 }   // namespace dbaui

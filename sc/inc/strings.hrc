@@ -24,7 +24,8 @@
 
 // Strings for interface names -------------------------------------------
 
-#define SCSTR_LONG_SCDOC_NAME                       NC_("SCSTR_LONG_SCDOC_NAME", "%PRODUCTNAME %PRODUCTVERSION Spreadsheet")
+#define SCSTR_LONG_SCDOC_NAME_60                    NC_("SCSTR_LONG_SCDOC_NAME", "%PRODUCTNAME Spreadsheet format (calc6)")
+#define SCSTR_LONG_SCDOC_NAME_80                    NC_("SCSTR_LONG_SCDOC_NAME", "%PRODUCTNAME %PRODUCTVERSION Spreadsheet")
 #define SCSTR_SHORT_SCDOC_NAME                      NC_("SCSTR_SHORT_SCDOC_NAME", "Spreadsheet")
 #define SCSTR_UNDEFINED                             NC_("SCSTR_UNDEFINED", "- undefined -")
 #define SCSTR_NONE                                  NC_("SCSTR_NONE", "- none -")
@@ -47,6 +48,7 @@
 #define SCSTR_NO_TAB_BG_COLOR                       NC_("SCSTR_NO_TAB_BG_COLOR", "Default")
 #define SCSTR_RENAMEOBJECT                          NC_("SCSTR_RENAMEOBJECT", "Name Object")
 #define STR_INSERTGRAPHIC                           NC_("STR_INSERTGRAPHIC", "Insert Image")
+#define STR_QUERYROTATION                           NC_("STR_QUERYROTATION", "This image is rotated. Would you like to rotate it into standard orientation?")
 #define SCSTR_TOTAL                                 NC_("SCSTR_TOTAL", "%1 results found")
 #define SCSTR_SKIPPED                               NC_("SCSTR_SKIPPED", "(only %1 are listed)")
 // Attribute
@@ -163,7 +165,6 @@
 #define SCSTR_QHLP_SCEN_LISTBOX                     NC_("SCSTR_QHLP_SCEN_LISTBOX", "Scenario Name")
 #define SCSTR_QHLP_SCEN_COMMENT                     NC_("SCSTR_QHLP_SCEN_COMMENT", "Comment")
 
-#define STR_MENU_AUTOFILTER                         NC_("STR_MENU_AUTOFILTER", "AutoFilter")
 #define STR_MENU_SORT_ASC                           NC_("STR_MENU_SORT_ASC", "Sort Ascending")
 #define STR_MENU_SORT_DESC                          NC_("STR_MENU_SORT_DESC", "Sort Descending")
 #define STR_MENU_SORT_CUSTOM                        NC_("STR_MENU_SORT_CUSTOM", "Custom Sort")
@@ -331,6 +332,7 @@
 #define STR_ENABLE_CONTENT                          NC_("STR_ENABLE_CONTENT", "Enable Content")
 /*Insert image dialog*/
 #define STR_ANCHOR_TO_CELL                          NC_("STR_ANCHOR_TO_CELL", "To cell")
+#define STR_ANCHOR_TO_CELL_RESIZE                   NC_("STR_ANCHOR_TO_CELL_RESIZE", "To cell (resize with cell)")
 #define STR_ANCHOR_TO_PAGE                          NC_("STR_ANCHOR_TO_PAGE", "To page")
 
 #endif

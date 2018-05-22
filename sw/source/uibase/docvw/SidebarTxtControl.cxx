@@ -38,7 +38,6 @@
 #include <vcl/svapp.hxx>
 #include <vcl/help.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/scrbar.hxx>
 #include <vcl/settings.hxx>
@@ -56,6 +55,7 @@
 #include <wrtsh.hxx>
 #include <shellres.hxx>
 #include <AnnotationWin.hxx>
+#include <redline.hxx>
 #include <memory>
 
 namespace sw { namespace sidebarwindows {
@@ -242,12 +242,9 @@ void SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
     {
         mrSidebarWin.SwitchToFieldPos();
     }
-    else if ( nKey == KEY_INSERT )
+    else if ( rKeyCode.GetFullCode() == KEY_INSERT )
     {
-        if ( !rKeyCode.IsMod1() && !rKeyCode.IsMod2() )
-        {
-            mrSidebarWin.ToggleInsMode();
-        }
+        mrSidebarWin.ToggleInsMode();
     }
     else
     {

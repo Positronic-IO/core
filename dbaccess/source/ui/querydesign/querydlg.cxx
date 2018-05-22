@@ -28,7 +28,6 @@
 #include <QueryDesignView.hxx>
 #include <com/sun/star/sdbc/XDatabaseMetaData.hpp>
 #include <RelationControl.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 
 #define ID_INNER_JOIN       1
@@ -49,7 +48,6 @@ DlgQryJoin::DlgQryJoin( OQueryTableView * pParent,
                        bool _bAllowTableSelect)
     : ModalDialog( pParent, "JoinDialog", "dbaccess/ui/joindialog.ui" )
     , m_pTableControl( nullptr )
-    , m_pTableMap(_pTableMap)
     , eJoinType(static_cast<OQueryTableConnectionData*>(_pData.get())->GetJoinType())
     , m_pOrigConnData(_pData)
     , m_xConnection(_xConnection)
@@ -69,7 +67,7 @@ DlgQryJoin::DlgQryJoin( OQueryTableView * pParent,
     m_pConnData.reset(_pData->NewInstance());
     m_pConnData->CopyFrom(*_pData);
 
-    m_pTableControl = new OTableListBoxControl(this, m_pTableMap, this);
+    m_pTableControl = new OTableListBoxControl(this, _pTableMap, this);
 
     m_pCBNatural->Check(static_cast<OQueryTableConnectionData*>(m_pConnData.get())->isNatural());
 
@@ -269,7 +267,7 @@ IMPL_LINK_NOARG( DlgQryJoin, NaturalToggleHdl, CheckBox&, void )
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         m_pTableControl->NotifyCellChange();
         m_pTableControl->Invalidate();

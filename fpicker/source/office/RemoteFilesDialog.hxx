@@ -10,8 +10,6 @@
 #ifndef INCLUDED_SVTOOLS_REMOTEFILESDIALOG_HXX
 #define INCLUDED_SVTOOLS_REMOTEFILESDIALOG_HXX
 
-#include <comphelper/docpasswordrequest.hxx>
-
 #include <svtools/autocmpledit.hxx>
 #include <svtools/foldertree.hxx>
 #include <svtools/place.hxx>
@@ -40,9 +38,7 @@
 #include <vector>
 
 #include "fpdialogbase.hxx"
-#include <fpsofficeResMgr.hxx>
 #include "QueryFolderName.hxx"
-#include <strings.hrc>
 
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::task;
@@ -126,7 +122,6 @@ private:
 
     SvtRemoteDlgMode m_eMode;
     SvtRemoteDlgType m_eType;
-    bool m_bMultiselection;
     bool m_bIsUpdated;
     bool m_bIsConnected;
     bool m_bServiceChanged;

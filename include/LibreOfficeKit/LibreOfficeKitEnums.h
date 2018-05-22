@@ -84,7 +84,13 @@ typedef enum
     /**
      * Enable range based header data
      */
-    LOK_FEATURE_RANGE_HEADERS = (1ULL << 4)
+    LOK_FEATURE_RANGE_HEADERS = (1ULL << 4),
+
+    /**
+     * Request to have the active view's Id as the 1st value in the
+     * LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR payload.
+     */
+    LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK = (1ULL << 5)
 }
 LibreOfficeKitOptionalFeatures;
 
@@ -568,6 +574,26 @@ typedef enum
      * - "close" - window is closed
      */
     LOK_CALLBACK_WINDOW = 36,
+
+    /**
+     * When for the current cell is defined a validity list we need to show
+     * a drop down button in the form of a marker.
+     *
+     * The payload format is: "x, y, visible" where x, y are the current
+     * cell cursor coordinates and visible is set to 0 or 1.
+     */
+    LOK_CALLBACK_VALIDITY_LIST_BUTTON = 37,
+
+    /**
+     * Notification that the clipboard contents have changed.
+     * Typically fired in response to copying to clipboard.
+     *
+     * The payload currently is empty and it's up to the
+     * client to get the contents, if necessary. However,
+     * in the future the contents might be included for
+     * convenience.
+     */
+    LOK_CALLBACK_CLIPBOARD_CHANGED = 38,
 }
 LibreOfficeKitCallbackType;
 

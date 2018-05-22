@@ -27,7 +27,6 @@
 #include <com/sun/star/sdbc/XRowSet.hpp>
 
 #include <svtools/genericunodialog.hxx>
-#include <core_resource.hxx>
 #include <apitools.hxx>
 
 namespace dbaui
@@ -60,7 +59,7 @@ namespace dbaui
 
     protected:
         // own overridables
-        virtual VclPtr<Dialog> createComposerDialog(
+        virtual VclPtr<::Dialog> createComposerDialog(
             vcl::Window* _pParent,
             const css::uno::Reference< css::sdbc::XConnection >& _rxConnection,
             const css::uno::Reference< css::container::XNameAccess >& _rxColumns
@@ -68,7 +67,7 @@ namespace dbaui
 
     private:
         // OGenericUnoDialog overridables
-        virtual VclPtr<Dialog> createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
     };
 
     // RowsetFilterDialog
@@ -89,7 +88,7 @@ namespace dbaui
 
     protected:
         // own overridables
-        virtual VclPtr<Dialog> createComposerDialog(
+        virtual VclPtr<::Dialog> createComposerDialog(
             vcl::Window* _pParent,
             const css::uno::Reference< css::sdbc::XConnection >& _rxConnection,
             const css::uno::Reference< css::container::XNameAccess >& _rxColumns
@@ -119,7 +118,7 @@ namespace dbaui
 
     protected:
         // own overridables
-        virtual VclPtr<Dialog> createComposerDialog(
+        virtual VclPtr<::Dialog> createComposerDialog(
             vcl::Window* _pParent,
             const css::uno::Reference< css::sdbc::XConnection >& _rxConnection,
             const css::uno::Reference< css::container::XNameAccess >& _rxColumns

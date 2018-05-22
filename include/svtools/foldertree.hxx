@@ -17,8 +17,6 @@
 #include <officecfg/Office/Common.hxx>
 
 #include <svtools/svtdllapi.h>
-#include <svtools/strings.hrc>
-#include <svtools/svtresid.hxx>
 #include <svtools/treelistentry.hxx>
 
 #include <tools/urlobj.hxx>
@@ -39,8 +37,6 @@ private:
     Reference< XCommandEnvironment > m_xEnv;
     ::osl::Mutex m_aMutex;
     Sequence< OUString > m_aBlackList;
-    Image m_aFolderImage;
-    Image m_aFolderExpandedImage;
 
     OUString m_sLastUpdatedDir;
 

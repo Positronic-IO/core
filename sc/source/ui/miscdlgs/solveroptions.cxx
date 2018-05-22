@@ -19,13 +19,11 @@
 
 #include <memory>
 #include <solveroptions.hxx>
-#include <scresid.hxx>
 #include <global.hxx>
 #include <miscuno.hxx>
 #include <solverutil.hxx>
 
 #include <rtl/math.hxx>
-#include <vcl/msgbox.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <svtools/svlbitm.hxx>
@@ -324,23 +322,23 @@ void ScSolverOptionsDialog::EditOption()
             {
                 if ( pStringItem->IsDouble() )
                 {
-                    ScopedVclPtrInstance< ScSolverValueDialog > aValDialog( this );
-                    aValDialog->SetOptionName( pStringItem->GetText() );
-                    aValDialog->SetValue( pStringItem->GetDoubleValue() );
-                    if ( aValDialog->Execute() == RET_OK )
+                    ScSolverValueDialog aValDialog(GetFrameWeld());
+                    aValDialog.SetOptionName( pStringItem->GetText() );
+                    aValDialog.SetValue( pStringItem->GetDoubleValue() );
+                    if (aValDialog.run() == RET_OK)
                     {
-                        pStringItem->SetDoubleValue( aValDialog->GetValue() );
+                        pStringItem->SetDoubleValue( aValDialog.GetValue() );
                         m_pLbSettings->InvalidateEntry( pEntry );
                     }
                 }
                 else
                 {
-                    ScopedVclPtrInstance< ScSolverIntegerDialog > aIntDialog( this );
-                    aIntDialog->SetOptionName( pStringItem->GetText() );
-                    aIntDialog->SetValue( pStringItem->GetIntValue() );
-                    if ( aIntDialog->Execute() == RET_OK )
+                    ScSolverIntegerDialog aIntDialog(GetFrameWeld());
+                    aIntDialog.SetOptionName( pStringItem->GetText() );
+                    aIntDialog.SetValue( pStringItem->GetIntValue() );
+                    if (aIntDialog.run() == RET_OK)
                     {
-                        pStringItem->SetIntValue( aIntDialog->GetValue() );
+                        pStringItem->SetIntValue(aIntDialog.GetValue());
                         m_pLbSettings->InvalidateEntry( pEntry );
                     }
                 }
@@ -391,81 +389,58 @@ IMPL_LINK_NOARG(ScSolverOptionsDialog, SettingsSelHdl, SvTreeListBox*, void)
     m_pBtnEdit->Enable( !bCheckbox );
 }
 
-ScSolverIntegerDialog::ScSolverIntegerDialog(vcl::Window * pParent)
-    : ModalDialog( pParent, "IntegerDialog",
-        "modules/scalc/ui/integerdialog.ui" )
+ScSolverIntegerDialog::ScSolverIntegerDialog(weld::Window * pParent)
+    : GenericDialogController(pParent, "modules/scalc/ui/integerdialog.ui", "IntegerDialog")
+    , m_xFrame(m_xBuilder->weld_frame("frame"))
+    , m_xNfValue(m_xBuilder->weld_spin_button("value"))
 {
-    get(m_pFrame, "frame");
-    get(m_pNfValue, "value");
 }
 
 ScSolverIntegerDialog::~ScSolverIntegerDialog()
 {
-    disposeOnce();
-}
-
-void ScSolverIntegerDialog::dispose()
-{
-    m_pFrame.clear();
-    m_pNfValue.clear();
-    ModalDialog::dispose();
 }
 
 void ScSolverIntegerDialog::SetOptionName( const OUString& rName )
 {
-    m_pFrame->set_label(rName);
+    m_xFrame->set_label(rName);
 }
 
 void ScSolverIntegerDialog::SetValue( sal_Int32 nValue )
 {
-    m_pNfValue->SetValue( nValue );
+    m_xNfValue->set_value( nValue );
 }
 
 sal_Int32 ScSolverIntegerDialog::GetValue() const
 {
-    sal_Int64 nValue = m_pNfValue->GetValue();
-    if ( nValue < SAL_MIN_INT32 )
-        return SAL_MIN_INT32;
-    if ( nValue > SAL_MAX_INT32 )
-        return SAL_MAX_INT32;
-    return static_cast<sal_Int32>(nValue);
+    return m_xNfValue->get_value();
 }
 
-ScSolverValueDialog::ScSolverValueDialog( vcl::Window * pParent )
-    : ModalDialog( pParent, "DoubleDialog",
-        "modules/scalc/ui/doubledialog.ui" )
+ScSolverValueDialog::ScSolverValueDialog(weld::Window* pParent)
+    : GenericDialogController(pParent, "modules/scalc/ui/doubledialog.ui", "DoubleDialog")
+    , m_xFrame(m_xBuilder->weld_frame("frame"))
+    , m_xEdValue(m_xBuilder->weld_entry("value"))
 {
-    get(m_pFrame, "frame");
-    get(m_pEdValue, "value");
 }
 
 ScSolverValueDialog::~ScSolverValueDialog()
 {
-    disposeOnce();
-}
-
-void ScSolverValueDialog::dispose()
-{
-    m_pFrame.clear();
-    m_pEdValue.clear();
-    ModalDialog::dispose();
 }
 
 void ScSolverValueDialog::SetOptionName( const OUString& rName )
 {
-    m_pFrame->set_label(rName);
+    m_xFrame->set_label(rName);
 }
 
 void ScSolverValueDialog::SetValue( double fValue )
 {
-    m_pEdValue->SetText( rtl::math::doubleToUString( fValue,
+    m_xEdValue->set_text( rtl::math::doubleToUString( fValue,
             rtl_math_StringFormat_Automatic, rtl_math_DecimalPlaces_Max,
             ScGlobal::GetpLocaleData()->getNumDecimalSep()[0], true ) );
 }
 
 double ScSolverValueDialog::GetValue() const
 {
-    OUString aInput = m_pEdValue->GetText();
+    OUString aInput = m_xEdValue->get_text();
 
     rtl_math_ConversionStatus eStatus = rtl_math_ConversionStatus_Ok;
     sal_Int32 nParseEnd = 0;

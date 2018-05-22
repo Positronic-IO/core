@@ -682,13 +682,13 @@ bool WW8ListManager::ReadLVL(SwNumFormat& rNumFormat, std::unique_ptr<SfxItemSet
         rpItemSet.reset(new SfxItemSet( rDoc.GetAttrPool(), svl::Items<RES_CHRATR_BEGIN, RES_CHRATR_END - 1>{}));
 
         // Set Reader-ItemSet-Pointer to the newly created set
-        rReader.SetAktItemSet(rpItemSet.release());
+        rReader.SetCurrentItemSet(rpItemSet.release());
         // Set Reader-Style to Style of this Level
-        sal_uInt16 nOldColl = rReader.GetNAktColl();
+        sal_uInt16 nOldColl = rReader.GetCurrentColl();
         sal_uInt16 nNewColl = nLevelStyle;
         if (ww::stiNil == nNewColl)
             nNewColl = 0;
-        rReader.SetNAktColl( nNewColl );
+        rReader.SetNCurrentColl( nNewColl );
 
         // The Read_xy() methods in WW8PAR6.cxx are calling their respective
         // NewAttr() or GetFormatAttr() which can determine, by using the assigned
@@ -706,8 +706,8 @@ bool WW8ListManager::ReadLVL(SwNumFormat& rNumFormat, std::unique_ptr<SfxItemSet
         }
 
         // Reset Reader-ItemSet-Pointer and Reader-Style
-        rpItemSet = rReader.SetAktItemSet(nullptr);
-        rReader.SetNAktColl( nOldColl );
+        rpItemSet = rReader.SetCurrentItemSet(nullptr);
+        rReader.SetNCurrentColl( nOldColl );
         rReader.SetToggleAttrFlags(nOldFlags1);
         rReader.SetToggleBiDiAttrFlags(nOldFlags2);
     }
@@ -1869,7 +1869,7 @@ void SwWW8ImplReader::RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO,
                 */
                 if (short nLen = static_cast< short >(aParaSprms.size()))
                 {
-                    std::unique_ptr<SfxItemSet> xOldAktItemSet(SetAktItemSet(xListIndent.release()));
+                    std::unique_ptr<SfxItemSet> xOldCurrentItemSet(SetCurrentItemSet(xListIndent.release()));
 
                     sal_uInt8* pSprms1  = &aParaSprms[0];
                     while (0 < nLen)
@@ -1879,7 +1879,7 @@ void SwWW8ImplReader::RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO,
                         pSprms1 += nL1;
                     }
 
-                    xListIndent = SetAktItemSet(xOldAktItemSet.release());
+                    xListIndent = SetCurrentItemSet(xOldCurrentItemSet.release());
                 }
 
                 if (const SvxLRSpaceItem *pLR = xListIndent->GetItem<SvxLRSpaceItem>(RES_LR_SPACE))
@@ -1912,7 +1912,7 @@ void SwWW8ImplReader::Read_ListLevel(sal_uInt16, const sal_uInt8* pData,
         // the current level is finished, what should we do ?
         m_nListLevel = WW8ListManager::nMaxLevel;
         if (m_xStyles && !m_bVer67)
-            m_xStyles->nWwNumLevel = 0;
+            m_xStyles->mnWwNumLevel = 0;
     }
     else
     {
@@ -1931,7 +1931,7 @@ void SwWW8ImplReader::Read_ListLevel(sal_uInt16, const sal_uInt8* pData,
             to set the ww6 list level information which we will need when we
             reach the true ww6 list def.  So set it now
             */
-            m_xStyles->nWwNumLevel = m_nListLevel;
+            m_xStyles->mnWwNumLevel = m_nListLevel;
         }
 
         if (WW8ListManager::nMaxLevel <= m_nListLevel )
@@ -2293,7 +2293,7 @@ awt::Size SwWW8ImplReader::MiserableDropDownFormHack(const OUString &rString,
                 OUString aNm;
                 if (xPropSetInfo->hasPropertyByName(aNm = "TextColor"))
                 {
-                    aTmp <<= static_cast<sal_Int32>(static_cast<const SvxColorItem*>(pItem)->GetValue().GetColor());
+                    aTmp <<= static_cast<sal_Int32>(static_cast<const SvxColorItem*>(pItem)->GetValue());
                     rPropSet->setPropertyValue(aNm, aTmp);
                 }
             }

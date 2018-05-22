@@ -43,7 +43,6 @@
 #include <formulacell.hxx>
 #include <scmatrix.hxx>
 #include <docoptio.hxx>
-#include <globstr.hrc>
 #include <attrib.hxx>
 #include <jumpmatrix.hxx>
 #include <cellkeytranslator.hxx>
@@ -130,8 +129,10 @@ void ScInterpreter::ScIfJump()
                             else
                             {
                                 // Treat empty and empty path as 0, but string
-                                // as error.
-                                bIsValue = (!pMat->IsString(nC, nR) || pMat->IsEmpty(nC, nR));
+                                // as error. ScMatrix::IsValueOrEmpty() returns
+                                // true for any empty, empty path, empty cell,
+                                // empty result.
+                                bIsValue = pMat->IsValueOrEmpty(nC, nR);
                                 bTrue = false;
                                 fVal = (bIsValue ? 0.0 : CreateDoubleError( FormulaError::NoValue));
                             }
@@ -784,28 +785,32 @@ bool ScInterpreter::JumpMatrix( short nStackLevel )
         }
         if ( bCont && nStart != nNext )
         {
-            const ScTokenVec* pParams = pJumpMatrix->GetJumpParameters();
-            if ( pParams )
+            const ScTokenVec & rParams = pJumpMatrix->GetJumpParameters();
+            for ( auto const & i : rParams )
             {
-                for ( ScTokenVec::const_iterator i = pParams->begin(); i != pParams->end(); ++i )
-                {
-                    // This is not the current state of the interpreter, so
-                    // push without error, and elements' errors are coded into
-                    // double.
-                    PushWithoutError( *(*i));
-                }
+                // This is not the current state of the interpreter, so
+                // push without error, and elements' errors are coded into
+                // double.
+                PushWithoutError(*i);
             }
             aCode.Jump( nStart, nNext, nStop );
         }
     }
     if ( !bCont )
     {   // We're done with it, throw away jump matrix, keep result.
-        // For an intermediate result of Reference use the array of references,
+        // For an intermediate result of Reference use the array of references
+        // if there are more than one reference and the current ForceArray
+        // context is not ForceArray or related, suppressed, ...,
         // else (also for a final result of Reference) use the matrix.
         // Treat the result of a jump command as final and use the matrix (see
         // tdf#115493 for why).
+        ParamClass eParamClass;
         if (!FormulaCompiler::IsOpCodeJumpCommand( pJumpMatrix->GetOpCode()) &&
+                pJumpMatrix->GetRefList().size() > 1 &&
                 ScParameterClassification::GetParameterType( pCur, SAL_MAX_UINT16) == ParamClass::Reference &&
+                (eParamClass = pCur->GetInForceArray()) != ParamClass::ForceArray &&
+                eParamClass != ParamClass::ReferenceOrForceArray &&
+                eParamClass != ParamClass::SuppressedReferenceOrForceArray &&
                 aCode.PeekNextOperator())
         {
             FormulaTokenRef xRef = new ScRefListToken(true);
@@ -903,7 +908,7 @@ double ScInterpreter::Compare( ScQueryOp eOp )
                 }
                 if (pMat->IsEmpty(0, 0))
                     rCell.mbEmpty = true;
-                else if (pMat->IsString(0, 0))
+                else if (pMat->IsStringOrEmpty(0, 0))
                 {
                     rCell.maStr = pMat->GetString(0, 0);
                     rCell.mbValue = false;
@@ -1030,7 +1035,7 @@ sc::RangeMatrix ScInterpreter::CompareMat( ScQueryOp eOp, sc::CompareOptions* pO
                     {
                         sc::Compare::Cell& rCell = aComp.maCells[i];
 
-                        if (aMat[i].mpMat->IsString(j, k))
+                        if (aMat[i].mpMat->IsStringOrEmpty(j, k))
                         {
                             rCell.mbValue = false;
                             rCell.maStr = aMat[i].mpMat->GetString(j, k);
@@ -1949,14 +1954,14 @@ bool ScInterpreter::IsString()
             if ( !pMat )
                 ;   // nothing
             else if ( !pJumpMatrix )
-                bRes = pMat->IsString(0, 0) && !pMat->IsEmpty(0, 0);
+                bRes = pMat->IsStringOrEmpty(0, 0) && !pMat->IsEmpty(0, 0);
             else
             {
                 SCSIZE nCols, nRows, nC, nR;
                 pMat->GetDimensions( nCols, nRows);
                 pJumpMatrix->GetPos( nC, nR);
                 if ( nC < nCols && nR < nRows )
-                    bRes = pMat->IsString( nC, nR) && !pMat->IsEmpty( nC, nR);
+                    bRes = pMat->IsStringOrEmpty( nC, nR) && !pMat->IsEmpty( nC, nR);
             }
         }
         break;
@@ -2674,7 +2679,7 @@ void ScInterpreter::ScFormula()
                         switch (aCell.meType)
                         {
                             case CELLTYPE_FORMULA :
-                                aCell.mpFormula->GetFormula(aFormula);
+                                aCell.mpFormula->GetFormula(aFormula, formula::FormulaGrammar::GRAM_UNSPECIFIED, &mrContext);
                                 pResMat->PutString( mrStrPool.intern( aFormula), i,j);
                                 break;
                             default:
@@ -2700,7 +2705,7 @@ void ScInterpreter::ScFormula()
             switch (aCell.meType)
             {
                 case CELLTYPE_FORMULA :
-                    aCell.mpFormula->GetFormula(aFormula);
+                    aCell.mpFormula->GetFormula(aFormula, formula::FormulaGrammar::GRAM_UNSPECIFIED, &mrContext);
                 break;
                 default:
                     SetError( FormulaError::NotAvailable );
@@ -3930,9 +3935,11 @@ void ScInterpreter::GetStVarParams( bool bTextAsZero, double(*VarResult)( double
                 }
             }
             break;
+            case svExternalSingleRef :
+            case svExternalDoubleRef :
             case svMatrix :
             {
-                ScMatrixRef pMat = PopMatrix();
+                ScMatrixRef pMat = GetMatrix();
                 if (pMat)
                 {
                     SCSIZE nC, nR;
@@ -3941,7 +3948,7 @@ void ScInterpreter::GetStVarParams( bool bTextAsZero, double(*VarResult)( double
                     {
                         for (SCSIZE nMatRow = 0; nMatRow < nR; nMatRow++)
                         {
-                            if (!pMat->IsString(nMatCol,nMatRow))
+                            if (!pMat->IsStringOrEmpty(nMatCol,nMatRow))
                             {
                                 fVal= pMat->GetDouble(nMatCol,nMatRow);
                                 if (nGlobalError == FormulaError::NONE)
@@ -4483,9 +4490,9 @@ public:
         return mbColVec ? mrMat.IsValue(0, i) : mrMat.IsValue(i, 0);
     }
 
-    bool IsString(SCSIZE i) const
+    bool IsStringOrEmpty(SCSIZE i) const
     {
-        return mbColVec ? mrMat.IsString(0, i) : mrMat.IsString(i, 0);
+        return mbColVec ? mrMat.IsStringOrEmpty(0, i) : mrMat.IsStringOrEmpty(i, 0);
     }
 
     double GetDouble(SCSIZE i) const
@@ -4529,11 +4536,20 @@ sal_Int32 lcl_CompareMatrix2Query(
     bool bByString = rEntry.GetQueryItem().meType == ScQueryEntry::ByString;
     if (rMat.IsValue(i))
     {
+        const double nVal1 = rMat.GetDouble(i);
+        if (!rtl::math::isFinite(nVal1))
+        {
+            // XXX Querying for error values is not required, otherwise we'd
+            // need to check here.
+            return 1;   // error always greater than numeric or string
+        }
+
         if (bByString)
             return -1;  // numeric always less than string
 
-        const double nVal1 = rMat.GetDouble(i);
         const double nVal2 = rEntry.GetQueryItem().mfVal;
+        // XXX Querying for error values is not required, otherwise we'd need
+        // to check here and move that check before the bByString check.
         if (nVal1 == nVal2)
             return 0;
 
@@ -4566,7 +4582,7 @@ void lcl_GetLastMatch( SCSIZE& rIndex, const VectorMatrixAccessor& rMat,
                     nVal == rMat.GetDouble(rIndex+1))
                 ++rIndex;
     }
-    // Order of IsEmptyPath, IsEmpty, IsString is significant!
+    // Order of IsEmptyPath, IsEmpty, IsStringOrEmpty is significant!
     else if (rMat.IsEmptyPath(rIndex))
     {
         if (bReverse)
@@ -4585,15 +4601,15 @@ void lcl_GetLastMatch( SCSIZE& rIndex, const VectorMatrixAccessor& rMat,
             while (rIndex < nMatCount-1 && rMat.IsEmpty(rIndex+1))
                 ++rIndex;
     }
-    else if (rMat.IsString(rIndex))
+    else if (rMat.IsStringOrEmpty(rIndex))
     {
         OUString aStr( rMat.GetString(rIndex));
         if (bReverse)
-            while (rIndex > 0 && rMat.IsString(rIndex-1) &&
+            while (rIndex > 0 && rMat.IsStringOrEmpty(rIndex-1) &&
                     aStr == rMat.GetString(rIndex-1))
                 --rIndex;
         else
-            while (rIndex < nMatCount-1 && rMat.IsString(rIndex+1) &&
+            while (rIndex < nMatCount-1 && rMat.IsStringOrEmpty(rIndex+1) &&
                     aStr == rMat.GetString(rIndex+1))
                 ++rIndex;
     }
@@ -4773,6 +4789,10 @@ void ScInterpreter::ScMatch()
                     PushIllegalParameter();
                     return;
                 }
+
+                // Do not propagate errors from matrix while searching.
+                pMatSrc->SetErrorInterpreter( nullptr);
+
                 SCSIZE nMatCount = (nC == 1) ? nR : nC;
                 VectorMatrixAccessor aMatAcc(*pMatSrc, nC == 1);
 
@@ -5876,8 +5896,6 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
                 if (rItem.meType == ScQueryEntry::ByString)
                     rParam.eSearchType = DetectSearchType(rItem.maString.getString(), pDok);
             }
-            ScAddress aAdr;
-            aAdr.SetTab( nTab1 );
             rParam.nCol1  = nCol1;
             rParam.nCol2  = nCol2;
             rEntry.nField = nCol1;
@@ -6556,6 +6574,9 @@ void ScInterpreter::ScLookup()
         SCSIZE nC, nR;
         pDataMat->GetDimensions(nC, nR);
 
+        // Do not propagate errors from matrix while copying to vector.
+        pDataMat->SetErrorInterpreter( nullptr);
+
         // In case of non-vector matrix, only search the first row or column.
         ScMatrixRef pDataMat2;
         if (bVertical)
@@ -6578,6 +6599,9 @@ void ScInterpreter::ScLookup()
                     pTempMat->PutString(pDataMat->GetString(i, 0), i, 0);
             pDataMat2 = pTempMat;
         }
+
+        // Do not propagate errors from matrix while searching.
+        pDataMat2->SetErrorInterpreter( nullptr);
 
         VectorMatrixAccessor aMatAcc2(*pDataMat2, bVertical);
 
@@ -6701,7 +6725,9 @@ void ScInterpreter::ScLookup()
         }
         else
         {
-            // no result array.  Use the data array to get the final value from.
+            // No result array. Use the data array to get the final value from.
+            // Propagate errors from matrix again.
+            pDataMat->SetErrorInterpreter( this);
             if (bVertical)
             {
                 if (pDataMat->IsValue(nC-1, nDelta))
@@ -6981,7 +7007,7 @@ void ScInterpreter::CalculateLookup(bool bHLookup)
                 CollatorWrapper* pCollator = ScGlobal::GetCollator();
                 for (SCSIZE i = 0; i < nMatCount; i++)
                 {
-                    if (bHLookup ? pMat->IsString(i, 0) : pMat->IsString(0, i))
+                    if (bHLookup ? pMat->IsStringOrEmpty(i, 0) : pMat->IsStringOrEmpty(0, i))
                     {
                         sal_Int32 nRes =
                             pCollator->compareString(
@@ -7001,7 +7027,7 @@ void ScInterpreter::CalculateLookup(bool bHLookup)
                 {
                     for (SCSIZE i = 0; i < nMatCount; i++)
                     {
-                        if (pMat->IsString(i, 0))
+                        if (pMat->IsStringOrEmpty(i, 0))
                         {
                             if (pMat->GetString(i,0).getDataIgnoreCase() == aParamStr.getDataIgnoreCase())
                             {
@@ -7024,7 +7050,7 @@ void ScInterpreter::CalculateLookup(bool bHLookup)
                 // #i2168# ignore strings
                 for (SCSIZE i = 0; i < nMatCount; i++)
                 {
-                    if (!(bHLookup ? pMat->IsString(i, 0) : pMat->IsString(0, i)))
+                    if (!(bHLookup ? pMat->IsStringOrEmpty(i, 0) : pMat->IsStringOrEmpty(0, i)))
                     {
                         if ((bHLookup ? pMat->GetDouble(i,0) : pMat->GetDouble(0,i)) <= rItem.mfVal)
                             nDelta = i;
@@ -7039,7 +7065,7 @@ void ScInterpreter::CalculateLookup(bool bHLookup)
                 {
                     for (SCSIZE i = 0; i < nMatCount; i++)
                     {
-                        if (! pMat->IsString(i, 0) )
+                        if (! pMat->IsStringOrEmpty(i, 0) )
                         {
                             if ( pMat->GetDouble(i,0) == rItem.mfVal)
                             {
@@ -7065,7 +7091,7 @@ void ScInterpreter::CalculateLookup(bool bHLookup)
                 nY = static_cast<SCSIZE>(nZIndex);
             }
             assert( nX < nC && nY < nR );
-            if ( pMat->IsString( nX, nY) )
+            if ( pMat->IsStringOrEmpty( nX, nY) )
                 PushString(pMat->GetString( nX,nY).getString());
             else
                 PushDouble(pMat->GetDouble( nX,nY));
@@ -8192,7 +8218,7 @@ void ScInterpreter::ScIndex()
                         else if (bVector)
                         {
                             --nElement;
-                            if (pMat->IsString( nElement))
+                            if (pMat->IsStringOrEmpty( nElement))
                                 PushString( pMat->GetString(nElement).getString());
                             else
                                 PushDouble( pMat->GetDouble( nElement));
@@ -8204,7 +8230,7 @@ void ScInterpreter::ScIndex()
                             {
                                 SCSIZE nRowMinus1 = static_cast<SCSIZE>(nRow - 1);
                                 for (SCSIZE i = 0; i < nC; i++)
-                                    if (!pMat->IsString(i, nRowMinus1))
+                                    if (!pMat->IsStringOrEmpty(i, nRowMinus1))
                                         pResMat->PutDouble(pMat->GetDouble(i,
                                                     nRowMinus1), i, 0);
                                     else
@@ -8222,7 +8248,7 @@ void ScInterpreter::ScIndex()
                             {
                                 SCSIZE nColMinus1 = static_cast<SCSIZE>(nCol - 1);
                                 for (SCSIZE i = 0; i < nR; i++)
-                                    if (!pMat->IsString(nColMinus1, i))
+                                    if (!pMat->IsStringOrEmpty(nColMinus1, i))
                                         pResMat->PutDouble(pMat->GetDouble(nColMinus1,
                                                     i), i);
                                     else
@@ -8234,7 +8260,7 @@ void ScInterpreter::ScIndex()
                         }
                         else
                         {
-                            if (!pMat->IsString( static_cast<SCSIZE>(nCol-1),
+                            if (!pMat->IsStringOrEmpty( static_cast<SCSIZE>(nCol-1),
                                         static_cast<SCSIZE>(nRow-1)))
                                 PushDouble( pMat->GetDouble(
                                             static_cast<SCSIZE>(nCol-1),

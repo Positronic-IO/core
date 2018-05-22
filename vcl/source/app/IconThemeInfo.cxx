@@ -13,21 +13,19 @@
 #include <stdexcept>
 #include <algorithm>
 
-// constants for theme ids and display names. Only the theme id for hicontrast is used
+// constants for theme ids and display names. Only the theme id for high contrast is used
 // outside of this class and hence made public.
 
-const OUStringLiteral vcl::IconThemeInfo::HIGH_CONTRAST_ID("hicontrast");
+const OUStringLiteral vcl::IconThemeInfo::HIGH_CONTRAST_ID("sifr");
 
 namespace {
 
-static const OUStringLiteral HIGH_CONTRAST_DISPLAY_NAME("High Contrast");
-static const OUStringLiteral TANGO_TESTING_ID("tango_testing");
-static const OUStringLiteral TANGO_TESTING_DISPLAY_NAME("Tango Testing");
 static const OUStringLiteral BREEZE_DARK_ID("breeze_dark");
 static const OUStringLiteral BREEZE_DARK_DISPLAY_NAME("Breeze Dark");
 static const OUStringLiteral SIFR_DARK_ID("sifr_dark");
 static const OUStringLiteral SIFR_DARK_DISPLAY_NAME("Sifr Dark");
-
+static const OUStringLiteral KARASA_JAGA_ID("karasa_jaga");
+static const OUStringLiteral KARASA_JAGA_DISPLAY_NAME("Karasa Jaga");
 static const OUStringLiteral HELPIMG_FAKE_THEME("helpimg");
 
 OUString
@@ -69,15 +67,12 @@ IconThemeInfo::IconThemeInfo(const OUString& urlToFile)
 /*static*/ Size
 IconThemeInfo::SizeByThemeName(const OUString& themeName)
 {
-    if (themeName == "crystal") {
-        return Size( 22, 22 );
-    }
-    else if (themeName == "galaxy") {
-        return Size( 26, 26 );
-    }
-    else {
-        return Size( 24, 24 );
-    }
+   if (themeName == "galaxy") { //kept for compiler because of unused parameter 'themeName'
+     return Size( 26, 26 );
+   }
+   else {
+     return Size( 24, 24 );
+   }
 }
 
 /*static*/ bool
@@ -128,17 +123,15 @@ IconThemeInfo::ThemeIdToDisplayName(const OUString& themeId)
     }
 
     // special cases
-    if (themeId.equalsIgnoreAsciiCase(HIGH_CONTRAST_ID)) {
-        return HIGH_CONTRAST_DISPLAY_NAME;
-    }
-    else if (themeId.equalsIgnoreAsciiCase(TANGO_TESTING_ID)) {
-        return TANGO_TESTING_DISPLAY_NAME;
-    }
-    else if (themeId.equalsIgnoreAsciiCase(BREEZE_DARK_ID)) {
+    if (themeId.equalsIgnoreAsciiCase(BREEZE_DARK_ID)) {
         return BREEZE_DARK_DISPLAY_NAME;
     }
     else if (themeId.equalsIgnoreAsciiCase(SIFR_DARK_ID)) {
         return SIFR_DARK_DISPLAY_NAME;
+    }
+
+    else if (themeId.equalsIgnoreAsciiCase(KARASA_JAGA_ID)) {
+        return KARASA_JAGA_DISPLAY_NAME;
     }
 
     // make the first letter uppercase

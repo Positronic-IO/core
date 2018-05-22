@@ -19,7 +19,6 @@
 
 #include <comphelper/string.hxx>
 #include <vcl/weld.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/field.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
@@ -93,7 +92,7 @@ SfxManageStyleSheetPage::SfxManageStyleSheetPage(vcl::Window* pParent, const Sfx
     else
         m_pEditLinkStyleBtn->Enable();
 
-    pFamilies = SfxApplication::GetModule_Impl()->CreateStyleFamilies();
+    pFamilies.reset(SfxApplication::GetModule_Impl()->CreateStyleFamilies());
 
     SfxStyleSheetBasePool* pPool = nullptr;
     SfxObjectShell* pDocShell = SfxObjectShell::Current();
@@ -190,19 +189,19 @@ SfxManageStyleSheetPage::SfxManageStyleSheetPage(vcl::Window* pParent, const Sfx
         const SfxStyleFilter& rList = pItem->GetFilterList();
         nCount = rList.size();
         sal_uInt16 nIdx = 0;
-        sal_uInt16 nMask = pStyle->GetMask() & ~SFXSTYLEBIT_USERDEF;
+        SfxStyleSearchBits nMask = pStyle->GetMask() & ~SfxStyleSearchBits::UserDefined;
 
-        if ( !nMask )   // User Template?
+        if ( nMask == SfxStyleSearchBits::Auto )   // User Template?
             nMask = pStyle->GetMask();
 
         for ( i = 0; i < nCount; ++i )
         {
             const SfxFilterTupel& rTupel = rList[ i ];
 
-            if ( rTupel.nFlags != SFXSTYLEBIT_AUTO     &&
-                 rTupel.nFlags != SFXSTYLEBIT_USED     &&
-                 rTupel.nFlags != SFXSTYLEBIT_ALL_VISIBLE &&
-                 rTupel.nFlags != SFXSTYLEBIT_ALL )
+            if ( rTupel.nFlags != SfxStyleSearchBits::Auto     &&
+                 rTupel.nFlags != SfxStyleSearchBits::Used     &&
+                 rTupel.nFlags != SfxStyleSearchBits::AllVisible &&
+                 rTupel.nFlags != SfxStyleSearchBits::All )
             {
                 m_pFilterLb->InsertEntry( rTupel.aName, nIdx );
                 m_pFilterLb->SetEntryData(nIdx, reinterpret_cast<void*>(i));
@@ -253,7 +252,7 @@ void SfxManageStyleSheetPage::dispose()
 {
     m_pNameRw->SetGetFocusHdl( Link<Control&,void>() );
     m_pNameRw->SetLoseFocusHdl( Link<Control&,void>() );
-    delete pFamilies;
+    pFamilies.reset();
     pItem = nullptr;
     pStyle = nullptr;
     m_pNameRo.clear();
@@ -348,7 +347,7 @@ IMPL_LINK_NOARG( SfxManageStyleSheetPage, EditStyleSelectHdl_Impl, ListBox&, voi
 IMPL_LINK_NOARG( SfxManageStyleSheetPage, EditStyleHdl_Impl, Button*, void )
 {
     OUString aTemplName(m_pFollowLb->GetSelectedEntry());
-    Execute_Impl(SID_STYLE_EDIT, aTemplName, OUString(), static_cast<sal_uInt16>(pStyle->GetFamily()));
+    Execute_Impl(SID_STYLE_EDIT, aTemplName, static_cast<sal_uInt16>(pStyle->GetFamily()));
 }
 
 IMPL_LINK_NOARG( SfxManageStyleSheetPage, EditLinkStyleSelectHdl_Impl, ListBox&, void )
@@ -364,25 +363,22 @@ IMPL_LINK_NOARG( SfxManageStyleSheetPage, EditLinkStyleHdl_Impl, Button*, void )
 {
     OUString aTemplName(m_pBaseLb->GetSelectedEntry());
     if (aTemplName != SfxResId(STR_NONE))
-        Execute_Impl( SID_STYLE_EDIT, aTemplName, OUString(),static_cast<sal_uInt16>(pStyle->GetFamily()) );
+        Execute_Impl( SID_STYLE_EDIT, aTemplName, static_cast<sal_uInt16>(pStyle->GetFamily()) );
 }
 
 // Internal: Perform functions through the Dispatcher
 bool SfxManageStyleSheetPage::Execute_Impl(
-    sal_uInt16 nId, const OUString &rStr, const OUString& rRefStr, sal_uInt16 nFamily)
+    sal_uInt16 nId, const OUString &rStr, sal_uInt16 nFamily)
 {
 
     SfxDispatcher &rDispatcher = *SfxGetpApp()->GetDispatcher_Impl();
     SfxStringItem aItem(nId, rStr);
     SfxUInt16Item aFamily(SID_STYLE_FAMILY, nFamily);
-    SfxStringItem aRefName( SID_STYLE_REFERENCE, rRefStr );
     const SfxPoolItem* pItems[ 6 ];
     sal_uInt16 nCount = 0;
     if( !rStr.isEmpty() )
         pItems[ nCount++ ] = &aItem;
     pItems[ nCount++ ] = &aFamily;
-    if ( !rRefStr.isEmpty() )
-        pItems[ nCount++ ] = &aRefName;
 
     pItems[ nCount++ ] = nullptr;
 
@@ -457,7 +453,7 @@ bool SfxManageStyleSheetPage::FillItemSet( SfxItemSet* rSet )
         bModified = true;
         OSL_ENSURE( pItem, "No Item" );
         // is only possibly for user templates
-        sal_uInt16 nMask = pItem->GetFilterList()[ reinterpret_cast<size_t>(m_pFilterLb->GetEntryData( nFilterIdx )) ].nFlags | SFXSTYLEBIT_USERDEF;
+        SfxStyleSearchBits nMask = pItem->GetFilterList()[ reinterpret_cast<size_t>(m_pFilterLb->GetEntryData( nFilterIdx )) ].nFlags | SfxStyleSearchBits::UserDefined;
         pStyle->SetMask( nMask );
     }
     if(m_pAutoCB->IsVisible() &&
@@ -529,7 +525,7 @@ void SfxManageStyleSheetPage::Reset( const SfxItemSet* /*rAttrSet*/ )
 
     if ( m_pFilterLb->IsEnabled() )
     {
-        sal_uInt16 nCmp = pStyle->GetMask();
+        SfxStyleSearchBits nCmp = pStyle->GetMask();
 
         if ( nCmp != nFlags )
             pStyle->SetMask( nFlags );
@@ -538,10 +534,10 @@ void SfxManageStyleSheetPage::Reset( const SfxItemSet* /*rAttrSet*/ )
 }
 
 
-VclPtr<SfxTabPage> SfxManageStyleSheetPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SfxManageStyleSheetPage::Create( TabPageParent pParent,
                                                     const SfxItemSet *rAttrSet )
 {
-    return VclPtr<SfxManageStyleSheetPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SfxManageStyleSheetPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 

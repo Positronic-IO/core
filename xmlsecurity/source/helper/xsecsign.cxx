@@ -19,7 +19,9 @@
 
 
 #include <xsecctl.hxx>
+#include <certificate.hxx>
 
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/xml/crypto/sax/ElementMarkPriority.hpp>
 #include <com/sun/star/xml/crypto/sax/XReferenceResolvedBroadcaster.hpp>
 #include <com/sun/star/xml/crypto/sax/XBlockerMonitor.hpp>
@@ -32,7 +34,9 @@
 #include <framework/signaturecreatorimpl.hxx>
 #include <framework/saxeventkeeperimpl.hxx>
 
-using namespace com::sun::star;
+using namespace css;
+using namespace css::uno;
+using namespace css::graphic;
 namespace cssu = com::sun::star::uno;
 namespace cssl = com::sun::star::lang;
 namespace cssxc = com::sun::star::xml::crypto;
@@ -201,7 +205,8 @@ void XSecController::setX509Certificate(
     const OUString& ouX509IssuerName,
     const OUString& ouX509SerialNumber,
     const OUString& ouX509Cert,
-    const OUString& ouX509CertDigest)
+    const OUString& ouX509CertDigest,
+    svl::crypto::SignatureMethodAlgorithm eAlgorithmID)
 {
     int index = findSignatureInfor( nSecurityId );
 
@@ -212,6 +217,7 @@ void XSecController::setX509Certificate(
         isi.signatureInfor.ouX509SerialNumber = ouX509SerialNumber;
         isi.signatureInfor.ouX509Certificate = ouX509Cert;
         isi.signatureInfor.ouCertDigest = ouX509CertDigest;
+        isi.signatureInfor.eAlgorithmID = eAlgorithmID;
         m_vInternalSignatureInformations.push_back( isi );
     }
     else
@@ -285,6 +291,61 @@ void XSecController::setDescription(sal_Int32 nSecurityId, const OUString& rDesc
     {
         SignatureInformation& rInformation = m_vInternalSignatureInformations[nIndex].signatureInfor;
         rInformation.ouDescription = rDescription;
+    }
+}
+
+void XSecController::setSignatureLineId(sal_Int32 nSecurityId, const OUString& rSignatureLineId)
+{
+    int nIndex = findSignatureInfor(nSecurityId);
+
+    if (nIndex == -1)
+    {
+        InternalSignatureInformation aInformation(nSecurityId, nullptr);
+        aInformation.signatureInfor.ouSignatureLineId = rSignatureLineId;
+        m_vInternalSignatureInformations.push_back(aInformation);
+    }
+    else
+    {
+        SignatureInformation& rInformation = m_vInternalSignatureInformations[nIndex].signatureInfor;
+        rInformation.ouSignatureLineId = rSignatureLineId;
+    }
+}
+
+void XSecController::setSignatureLineValidGraphic(sal_Int32 nSecurityId,
+                                                  const Reference<XGraphic>& xValidGraphic)
+{
+    int nIndex = findSignatureInfor(nSecurityId);
+
+    if (nIndex == -1)
+    {
+        InternalSignatureInformation aInformation(nSecurityId, nullptr);
+        aInformation.signatureInfor.aValidSignatureImage = xValidGraphic;
+        m_vInternalSignatureInformations.push_back(aInformation);
+    }
+    else
+    {
+        SignatureInformation& rInformation
+            = m_vInternalSignatureInformations[nIndex].signatureInfor;
+        rInformation.aValidSignatureImage = xValidGraphic;
+    }
+}
+
+void XSecController::setSignatureLineInvalidGraphic(
+    sal_Int32 nSecurityId, const Reference<XGraphic>& xInvalidGraphic)
+{
+    int nIndex = findSignatureInfor(nSecurityId);
+
+    if (nIndex == -1)
+    {
+        InternalSignatureInformation aInformation(nSecurityId, nullptr);
+        aInformation.signatureInfor.aInvalidSignatureImage = xInvalidGraphic;
+        m_vInternalSignatureInformations.push_back(aInformation);
+    }
+    else
+    {
+        SignatureInformation& rInformation
+            = m_vInternalSignatureInformations[nIndex].signatureInfor;
+        rInformation.aInvalidSignatureImage = xInvalidGraphic;
     }
 }
 

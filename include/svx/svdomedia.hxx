@@ -34,13 +34,15 @@ class SVX_DLLPUBLIC SdrMediaObj final : public SdrRectObj
 {
     friend class sdr::contact::ViewContactOfSdrMediaObj;
 
+private:
+    // protected destructor - due to final, make private
+    virtual ~SdrMediaObj() override;
+
 public:
-
-
-                                    SdrMediaObj();
-                                    SdrMediaObj( const tools::Rectangle& rRect );
-
-        virtual                     ~SdrMediaObj() override;
+        SdrMediaObj(SdrModel& rSdrModel);
+        SdrMediaObj(
+                SdrModel& rSdrModel,
+                const tools::Rectangle& rRect);
 
         virtual bool                HasTextEdit() const override;
 
@@ -50,12 +52,10 @@ public:
         virtual OUString            TakeObjNameSingul() const override;
         virtual OUString            TakeObjNamePlural() const override;
 
-        virtual SdrMediaObj*            Clone() const override;
+        virtual SdrMediaObj*        CloneSdrObject(SdrModel& rTargetModel) const override;
         SdrMediaObj&                operator=(const SdrMediaObj& rObj);
 
         virtual void                AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrinkOnly = false ) override;
-
-public:
 
         void                        setURL( const OUString& rURL, const OUString& rReferer, const OUString& rMimeType = OUString() );
         const OUString&      getURL() const;
@@ -69,8 +69,9 @@ public:
                                     GetInputStream();
         void                        SetInputStream(css::uno::Reference<css::io::XInputStream> const&);
 
-private:
+        virtual bool shouldKeepAspectRatio() const override { return true; }
 
+private:
         void                mediaPropertiesChanged( const ::avmedia::MediaItem& rNewState );
         virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
 

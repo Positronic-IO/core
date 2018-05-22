@@ -24,7 +24,6 @@
 #include "address.hxx"
 #include "scdllapi.h"
 
-#include <map>
 #include <memory>
 
 class EditTextObject;
@@ -84,9 +83,8 @@ public:
     /** Forget the SdrCaptionObj pointer in this one instance.
         Decrements a use count but does not destroy the object, it's up to the
         caller to manage this mess..
-        @returns <TRUE/> if the last reference was decremented.
      */
-    bool forget();
+    void forget();
 
     /** Flag that this instance is in Undo, so drawing layer owns it. */
     void setNotOwner();
@@ -330,21 +328,14 @@ public:
             object. The rectangle may be empty, in this case the default
             position and size is used.
 
-        @param bAlwaysCreateCaption  If sal_True is passed, the caption drawing
-            object will be created immediately. If sal_False is passed, the caption
-            drawing object will not be created if the note is not visible
-            (bShown = sal_False), but the cell note will cache the passed data.
-            MUST be set to sal_False outside of import filter implementations!
-
         @return  Pointer to the new cell note object if insertion was
             successful (i.e. the passed cell position was valid), null
             otherwise. The Calc document is the owner of the note object.
      */
     static ScPostIt*    CreateNoteFromObjectData(
                             ScDocument& rDoc, const ScAddress& rPos,
-                            SfxItemSet* pItemSet, OutlinerParaObject* pOutlinerObj,
-                            const tools::Rectangle& rCaptionRect, bool bShown,
-                            bool bAlwaysCreateCaption );
+                            std::unique_ptr<SfxItemSet> pItemSet, OutlinerParaObject* pOutlinerObj,
+                            const tools::Rectangle& rCaptionRect, bool bShown );
 
     /** Creates a cell note based on the passed string and inserts it into the
         document.

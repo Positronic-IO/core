@@ -47,13 +47,12 @@
 #include <unordered_map>
 #include <hb-ot.h>
 
+#include "fontinstance.hxx"
+
 class AquaSalFrame;
 class FontAttributes;
 class CoreTextStyle;
 class XorEmulation;
-class CommonSalLayout;
-
-typedef sal_uInt32 sal_GlyphId;
 
 // CoreText-specific physically available font face
 class CoreTextFontFace : public PhysicalFontFace
@@ -65,11 +64,14 @@ public:
     PhysicalFontFace*               Clone() const override;
     sal_IntPtr                      GetFontId() const override;
 
+    int                             GetFontTable( uint32_t nTagCode, unsigned char* ) const;
     int                             GetFontTable( const char pTagName[5], unsigned char* ) const;
 
     const FontCharMapRef            GetFontCharMap() const;
     bool                            GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const;
     bool                            HasChar( sal_uInt32 cChar ) const;
+
+    LogicalFontInstance*            CreateFontInstance(const FontSelectPattern&) const override;
 
 protected:
                                     CoreTextFontFace( const CoreTextFontFace& );
@@ -81,31 +83,31 @@ private:
     mutable bool                    mbFontCapabilitiesRead;
 };
 
-class CoreTextStyle
+class CoreTextStyle : public LogicalFontInstance
 {
-public:
-    CoreTextStyle( const FontSelectPattern& );
-    ~CoreTextStyle( void );
+    friend LogicalFontInstance* CoreTextFontFace::CreateFontInstance(const FontSelectPattern&) const;
 
-    void       GetFontMetric( ImplFontMetricDataRef const & ) const;
+public:
+    ~CoreTextStyle();
+
+    void       GetFontMetric( ImplFontMetricDataRef const & );
     bool       GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) const;
     bool       GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) const;
-    hb_font_t* GetHbFont() const { return mpHbFont; }
-    void       SetHbFont(hb_font_t* pHbFont) const { mpHbFont = pHbFont; }
 
     CFMutableDictionaryRef  GetStyleDict( void ) const { return mpStyleDict; }
 
-    const CoreTextFontFace*  mpFontData;
     /// <1.0: font is squeezed, >1.0 font is stretched, else 1.0
     float               mfFontStretch;
     /// text rotation in radian
     float               mfFontRotation;
-    FontSelectPattern   maFontSelData;
 
 private:
+    explicit CoreTextStyle(const PhysicalFontFace&, const FontSelectPattern&);
+
+    virtual hb_font_t* ImplInitHbFont() override;
+
     /// CoreText text style object
     CFMutableDictionaryRef  mpStyleDict;
-    mutable hb_font_t*      mpHbFont;
 };
 
 // TODO: move into cross-platform headers
@@ -157,7 +159,6 @@ class AquaSalGraphics : public SalGraphics
     RGBAColor                               maFillColor;
 
     // Device Font settings
-    const CoreTextFontFace*                 mpFontData[MAX_FALLBACK];
     CoreTextStyle*                          mpTextStyle[MAX_FALLBACK];
     RGBAColor                               maTextColor;
     /// allows text to be rendered without antialiasing
@@ -223,7 +224,7 @@ public:
 
     // draw --> LineColor and FillColor and RasterOp and ClipRegion
     virtual void            drawPixel( long nX, long nY ) override;
-    virtual void            drawPixel( long nX, long nY, SalColor nSalColor ) override;
+    virtual void            drawPixel( long nX, long nY, Color nColor ) override;
     virtual void            drawLine( long nX1, long nY1, long nX2, long nY2 ) override;
     virtual void            drawRect( long nX, long nY, long nWidth, long nHeight ) override;
     virtual void            drawPolyLine( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
@@ -255,10 +256,10 @@ public:
                                         const SalBitmap& rTransparentBitmap ) override;
     virtual void            drawMask( const SalTwoRect& rPosAry,
                                       const SalBitmap& rSalBitmap,
-                                      SalColor nMaskColor ) override;
+                                      Color nMaskColor ) override;
 
     virtual SalBitmap*      getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
-    virtual SalColor        getPixel( long nX, long nY ) override;
+    virtual Color           getPixel( long nX, long nY ) override;
 
     // invert --> ClipRegion (only Windows or VirDevs)
     virtual void            invert( long nX, long nY, long nWidth, long nHeight, SalInvert nFlags) override;
@@ -313,12 +314,12 @@ public:
     // set the line color to transparent (= don't draw lines)
     virtual void            SetLineColor() override;
     // set the line color to a specific color
-    virtual void            SetLineColor( SalColor nSalColor ) override;
+    virtual void            SetLineColor( Color nColor ) override;
     // set the fill color to transparent (= don't fill)
     virtual void            SetFillColor() override;
     // set the fill color to a specific color, shapes will be
     // filled accordingly
-    virtual void            SetFillColor( SalColor nSalColor ) override;
+    virtual void            SetFillColor( Color nColor ) override;
     // enable/disable XOR drawing
     virtual void            SetXORMode( bool bSet ) override;
     // set line color for raster operations
@@ -326,7 +327,7 @@ public:
     // set fill color for raster operations
     virtual void            SetROPFillColor( SalROPColor nROPColor ) override;
     // set the text color to a specific color
-    virtual void            SetTextColor( SalColor nSalColor ) override;
+    virtual void            SetTextColor( Color nColor ) override;
     // set the font
     virtual void            SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
     // get the current font's metrics
@@ -378,7 +379,7 @@ public:
 
     virtual std::unique_ptr<SalLayout>
                             GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;
-    virtual void            DrawTextLayout( const CommonSalLayout& ) override;
+    virtual void            DrawTextLayout( const GenericSalLayout& ) override;
     virtual bool            supportsOperation( OutDevSupportType ) const override;
 
 #ifdef MACOSX

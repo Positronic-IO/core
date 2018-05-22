@@ -49,9 +49,7 @@
 #include <com/sun/star/document/XEmbeddedScripts.hpp>
 
 #include <comphelper/documentinfo.hxx>
-#include <comphelper/uno3.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/broadcasthelper.hxx>
 #include <comphelper/propertycontainer.hxx>
 #include <comphelper/proparrhlp.hxx>
 
@@ -403,45 +401,32 @@ void SFTreeListBox::ExpandedHdl()
 {
 }
 
-
 // CuiInputDialog ------------------------------------------------------------
-
-CuiInputDialog::CuiInputDialog(vcl::Window * pParent, InputDialogMode nMode )
-    : ModalDialog(pParent, "NewLibDialog",
-        "cui/ui/newlibdialog.ui")
+CuiInputDialog::CuiInputDialog(weld::Window * pParent, InputDialogMode nMode)
+    : GenericDialogController(pParent, "cui/ui/newlibdialog.ui", "NewLibDialog")
+    , m_xEdit(m_xBuilder->weld_entry("entry"))
 {
-    get(m_pEdit, "entry");
-    m_pEdit->GrabFocus();
+    m_xEdit->grab_focus();
 
-    FixedText *pNewLibFT = get<FixedText>("newlibft");
+    std::unique_ptr<weld::Label> xNewLibFT(m_xBuilder->weld_label("newlibft"));
 
     if ( nMode == InputDialogMode::NEWMACRO )
     {
-        pNewLibFT->Hide();
-        FixedText *pNewMacroFT = get<FixedText>("newmacroft");
-        pNewMacroFT->Show();
-        SetText(get<FixedText>("altmacrotitle")->GetText());
+        xNewLibFT->hide();
+        std::unique_ptr<weld::Label> xNewMacroFT(m_xBuilder->weld_label("newmacroft"));
+        xNewMacroFT->show();
+        std::unique_ptr<weld::Label> xAltTitle(m_xBuilder->weld_label("altmacrotitle"));
+        m_xDialog->set_title(xAltTitle->get_label());
     }
     else if ( nMode == InputDialogMode::RENAME )
     {
-        pNewLibFT->Hide();
-        FixedText *pRenameFT = get<FixedText>("renameft");
-        pRenameFT->Show();
-        SetText(get<FixedText>("altrenametitle")->GetText());
+        xNewLibFT->hide();
+        std::unique_ptr<weld::Label> xRenameFT(m_xBuilder->weld_label("renameft"));
+        xRenameFT->show();
+        std::unique_ptr<weld::Label> xAltTitle(m_xBuilder->weld_label("altrenametitle"));
+        m_xDialog->set_title(xAltTitle->get_label());
     }
 }
-
-CuiInputDialog::~CuiInputDialog()
-{
-    disposeOnce();
-}
-
-void CuiInputDialog::dispose()
-{
-    m_pEdit.clear();
-    ModalDialog::dispose();
-}
-
 
 // ScriptOrgDialog ------------------------------------------------------------
 
@@ -713,10 +698,9 @@ IMPL_LINK( SvxScriptOrgDialog, ButtonHdl, Button *, pButton, void )
                             mspNode->getScript( scriptURL ), UNO_QUERY_THROW );
 
                             const Sequence< Any > args(0);
-                            Any aRet;
                             Sequence< sal_Int16 > outIndex;
                             Sequence< Any > outArgs( 0 );
-                            aRet = xScript->invoke( args, outIndex, outArgs );
+                            xScript->invoke( args, outIndex, outArgs );
                         }
                         catch ( reflection::InvocationTargetException& ite )
                         {
@@ -881,14 +865,14 @@ void SvxScriptOrgDialog::createEntry( SvTreeListEntry* pEntry )
             }
         }
 
-        ScopedVclPtrInstance< CuiInputDialog > xNewDlg( static_cast<vcl::Window*>(this), nMode );
-        xNewDlg->SetObjectName( aNewName );
+        CuiInputDialog aNewDlg(GetFrameWeld(), nMode);
+        aNewDlg.SetObjectName(aNewName);
 
         do
         {
-            if ( xNewDlg->Execute() && !xNewDlg->GetObjectName().isEmpty() )
+            if (aNewDlg.run() && !aNewDlg.GetObjectName().isEmpty())
             {
-                OUString aUserSuppliedName = xNewDlg->GetObjectName();
+                OUString aUserSuppliedName = aNewDlg.GetObjectName();
                 bValid = true;
                 for( sal_Int32 index = 0; index < childNodes.getLength(); index++ )
                 {
@@ -901,7 +885,7 @@ void SvxScriptOrgDialog::createEntry( SvTreeListEntry* pEntry )
                                                                        VclMessageType::Warning, VclButtonsType::Ok, aError));
                         xErrorBox->set_title(m_createErrTitleStr);
                         xErrorBox->run();
-                        xNewDlg->SetObjectName( aNewName );
+                        aNewDlg.SetObjectName(aNewName);
                         break;
                     }
                 }
@@ -996,19 +980,17 @@ void SvxScriptOrgDialog::renameEntry( SvTreeListEntry* pEntry )
     {
         OUString aNewName = node->getName();
         sal_Int32 extnPos = aNewName.lastIndexOf( '.' );
-        OUString extn;
         if(extnPos>0)
         {
-            extn = aNewName.copy(extnPos);
             aNewName = aNewName.copy(0,extnPos);
         }
-        ScopedVclPtrInstance< CuiInputDialog > xNewDlg( static_cast<vcl::Window*>(this), InputDialogMode::RENAME );
-        xNewDlg->SetObjectName( aNewName );
+        CuiInputDialog aNewDlg(GetFrameWeld(), InputDialogMode::RENAME);
+        aNewDlg.SetObjectName(aNewName);
 
-        if ( !xNewDlg->Execute() || xNewDlg->GetObjectName().isEmpty() )
+        if (!aNewDlg.run() || aNewDlg.GetObjectName().isEmpty())
             return; // user hit cancel or hit OK with nothing in the editbox
 
-        aNewName = xNewDlg->GetObjectName();
+        aNewName = aNewDlg.GetObjectName();
 
         Sequence< Any > args( 1 );
         args[ 0 ] <<= aNewName;

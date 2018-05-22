@@ -46,6 +46,7 @@
 #include "WrappedAutomaticPositionProperties.hxx"
 #include <CommonConverters.hxx>
 #include <unonames.hxx>
+#include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -66,6 +67,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <com/sun/star/lang/XServiceName.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 using namespace ::chart::wrapper;
@@ -1467,9 +1469,9 @@ bool WrappedNumberOfLinesProperty::detectInnerValue( uno::Any& rInnerValue ) con
                     xProp->getPropertyValue( m_aOuterName ) >>= nNumberOfLines;
                     bHasDetectableInnerValue = true;
                 }
-                catch( const uno::Exception & ex )
+                catch( const uno::Exception & )
                 {
-                    SAL_WARN("chart2", "Exception caught. " << ex );
+                    DBG_UNHANDLED_EXCEPTION("chart2");
                 }
             }
         }
@@ -1510,9 +1512,9 @@ void WrappedNumberOfLinesProperty::setPropertyValue( const Any& rOuterValue, con
                     if( nOldValue == nNewValue )
                         return;
                 }
-                catch( const uno::Exception & ex )
+                catch( const uno::Exception & )
                 {
-                    SAL_WARN("chart2", "Exception caught. " << ex );
+                    DBG_UNHANDLED_EXCEPTION("chart2");
                 }
             }
             else
@@ -1537,9 +1539,9 @@ void WrappedNumberOfLinesProperty::setPropertyValue( const Any& rOuterValue, con
                 xProp->setPropertyValue( "NumberOfLines", uno::Any(nNewValue) );
                 xTemplate->changeDiagram( xDiagram );
             }
-            catch( const uno::Exception & ex )
+            catch( const uno::Exception & )
             {
-                SAL_WARN("chart2", "Exception caught. " << ex );
+                DBG_UNHANDLED_EXCEPTION("chart2");
             }
         }
     }
@@ -1600,12 +1602,10 @@ void WrappedAttributedDataPointsProperty::setPropertyValue( const Any& rOuterVal
     {
         std::vector< Reference< chart2::XDataSeries > > aSeriesVector(
             ::chart::DiagramHelper::getDataSeriesFromDiagram( xDiagram ) );
-        std::vector< Reference< chart2::XDataSeries > >::const_iterator aIt =
-                aSeriesVector.begin();
         sal_Int32 i = 0;
-        for( ; aIt != aSeriesVector.end(); ++aIt, ++i )
+        for (auto const& series : aSeriesVector)
         {
-            Reference< beans::XPropertySet > xProp( *aIt, uno::UNO_QUERY );
+            Reference< beans::XPropertySet > xProp(series, uno::UNO_QUERY);
             if( xProp.is())
             {
                 uno::Any aVal;
@@ -1619,6 +1619,7 @@ void WrappedAttributedDataPointsProperty::setPropertyValue( const Any& rOuterVal
                 }
                 xProp->setPropertyValue( "AttributedDataPoints", aVal );
             }
+            ++i;
         }
     }
 }
@@ -1635,12 +1636,10 @@ Any WrappedAttributedDataPointsProperty::getPropertyValue( const Reference< bean
 
         uno::Sequence< uno::Sequence< sal_Int32 > > aResult( aSeriesVector.size() );
 
-        std::vector< Reference< chart2::XDataSeries > >::const_iterator aIt =
-                aSeriesVector.begin();
         sal_Int32 i = 0;
-        for( ; aIt != aSeriesVector.end(); ++aIt, ++i )
+        for (auto const& series : aSeriesVector)
         {
-            Reference< beans::XPropertySet > xProp( *aIt, uno::UNO_QUERY );
+            Reference< beans::XPropertySet > xProp(series, uno::UNO_QUERY);
             if( xProp.is())
             {
                 uno::Any aVal(
@@ -1649,6 +1648,7 @@ Any WrappedAttributedDataPointsProperty::getPropertyValue( const Reference< bean
                 if( aVal >>= aSeq )
                     aResult[ i ] = aSeq;
             }
+            ++i;
         }
         m_aOuterValue <<= aResult;
     }
@@ -1760,9 +1760,9 @@ void WrappedAutomaticSizeProperty::setPropertyValue( const Any& rOuterValue, con
                     xInnerPropertySet->setPropertyValue( "RelativeSize", Any() );
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 }

@@ -42,9 +42,11 @@
 
 #include <memory>
 
+using namespace css;
+
 void SwView::ExecDlgExt(SfxRequest const &rReq)
 {
-    vcl::Window *pMDI = &GetViewFrame()->GetWindow();
+    vcl::Window& rMDI = GetViewFrame()->GetWindow();
 
     switch ( rReq.GetSlot() )
     {
@@ -53,7 +55,7 @@ void SwView::ExecDlgExt(SfxRequest const &rReq)
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             assert(pFact && "SwAbstractDialogFactory fail!");
 
-            ScopedVclPtr<VclAbstractDialog> pDialog(pFact->CreateSwCaptionDialog( pMDI, *this ));
+            ScopedVclPtr<VclAbstractDialog> pDialog(pFact->CreateSwCaptionDialog( &rMDI, *this ));
             assert(pDialog && "Dialog creation failed!");
             if ( pDialog )
             {
@@ -61,14 +63,31 @@ void SwView::ExecDlgExt(SfxRequest const &rReq)
             }
             break;
         }
-        case FN_INSERT_SIGNATURELINE:
-        case FN_EDIT_SIGNATURELINE:
+        case SID_INSERT_SIGNATURELINE:
+        case SID_EDIT_SIGNATURELINE:
         {
-            SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            assert(pFact && "SwAbstractDialogFactory fail!");
+            VclAbstractDialogFactory* pFact = VclAbstractDialogFactory::Create();
+            assert(pFact && "VclAbstractDialogFactory fail!");
 
-            ScopedVclPtr<VclAbstractDialog> pDialog(pFact->CreateSignatureLineDialog(pMDI, *this));
+            const uno::Reference<frame::XModel> xModel(GetCurrentDocument());
+            ScopedVclPtr<AbstractSignatureLineDialog> pDialog(pFact->CreateSignatureLineDialog(
+                GetFrameWeld(), xModel, rReq.GetSlot() == SID_EDIT_SIGNATURELINE));
             assert(pDialog && "Dialog creation failed!");
+
+            if (pDialog)
+                pDialog->Execute();
+            break;
+        }
+        case SID_SIGN_SIGNATURELINE:
+        {
+            VclAbstractDialogFactory* pFact = VclAbstractDialogFactory::Create();
+            assert(pFact && "VclAbstractDialogFactory fail!");
+
+            const uno::Reference<frame::XModel> xModel(GetCurrentDocument());
+            VclPtr<AbstractSignSignatureLineDialog> pDialog
+                = pFact->CreateSignSignatureLineDialog(GetFrameWeld(), xModel);
+            assert(pDialog && "Dialog creation failed!");
+
             if (pDialog)
                 pDialog->Execute();
             break;
@@ -78,7 +97,7 @@ void SwView::ExecDlgExt(SfxRequest const &rReq)
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
             assert(pFact && "Dialog creation failed!");
             ScopedVclPtr<AbstractInsFootNoteDlg> pDlg(pFact->CreateInsFootNoteDlg(
-                pMDI, *m_pWrtShell, true));
+                GetFrameWeld(), *m_pWrtShell, true));
             assert(pDlg && "Dialog creation failed!");
 
             pDlg->SetHelpId(GetStaticInterface()->GetSlot(FN_EDIT_FOOTNOTE)->GetCommand());

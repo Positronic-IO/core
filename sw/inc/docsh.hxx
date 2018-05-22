@@ -21,7 +21,6 @@
 
 #include <memory>
 #include <rtl/ref.hxx>
-#include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/uno/Sequence.h>
 #include <sfx2/docfac.hxx>
 #include <sfx2/objsh.hxx>
@@ -34,7 +33,6 @@
 
 class SwDoc;
 class SfxDocumentInfoDialog;
-class SfxStyleSheetBasePool;
 class SfxInPlaceClient;
 class FontList;
 class SwEditShell;
@@ -47,9 +45,7 @@ class SwCursorShell;
 class SwSrcView;
 class SwPaM;
 class SwgReaderOption;
-class SwOLEObj;
 class IDocumentDeviceAccess;
-class IDocumentSettingAccess;
 class IDocumentChartDataProviderAccess;
 class SwDocShell;
 class SwDrawModel;
@@ -57,6 +53,7 @@ namespace svt
 {
 class EmbeddedObjectRef;
 }
+namespace com { namespace sun { namespace star { namespace frame { class XController; } } } }
 
 // initialize DrawModel (in form of a SwDrawModel) and DocShell (in form of a SwDocShell)
 // as needed, one or both parameters may be zero
@@ -114,7 +111,7 @@ class SW_DLLPUBLIC SwDocShell
     /// Make DocInfo known to the Doc.
     SAL_DLLPRIVATE virtual VclPtr<SfxDocumentInfoDialog> CreateDocumentInfoDialog(const SfxItemSet &) override;
     /// OLE-stuff
-    SAL_DLLPRIVATE virtual void          Draw( OutputDevice*, const JobSetup&, sal_uInt16 = ASPECT_CONTENT) override;
+    SAL_DLLPRIVATE virtual void          Draw( OutputDevice*, const JobSetup&, sal_uInt16 nAspect) override;
 
     /// Methods for StyleSheets
 
@@ -125,7 +122,7 @@ class SW_DLLPUBLIC SwDocShell
         const OUString &rName,
         const OUString& rParent,
         const SfxStyleFamily nFamily,
-        sal_uInt16 nMask,
+        SfxStyleSearchBits nMask,
         const bool bNew,
         const OString& sPageId,
         SwWrtShell* pActShell,
@@ -141,7 +138,7 @@ class SW_DLLPUBLIC SwDocShell
     SAL_DLLPRIVATE SfxStyleFamily        DoWaterCan( const OUString &rName, SfxStyleFamily nFamily);
     SAL_DLLPRIVATE void                  UpdateStyle(const OUString &rName, SfxStyleFamily nFamily, SwWrtShell* pShell);
     SAL_DLLPRIVATE void                  MakeByExample(const OUString &rName,
-                                               SfxStyleFamily nFamily, sal_uInt16 nMask, SwWrtShell* pShell);
+                                               SfxStyleFamily nFamily, SfxStyleSearchBits nMask, SwWrtShell* pShell);
 
     SAL_DLLPRIVATE void                  SubInitNew();   ///< for InitNew and HtmlSourceMode.
 

@@ -35,6 +35,7 @@
 #include <com/sun/star/chart2/data/XDataSink.hpp>
 
 #include <rtl/ustrbuf.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <functional>
 #include <algorithm>
@@ -125,7 +126,7 @@ OUString lcl_GetSequenceNameForLabel( ::chart::SeriesEntry const * pEntry )
 }
 
 static long lcl_pRoleListBoxTabs[] =
-    {   3,        // Number of Tabs
+    {
         0, 0, 75
     };
 
@@ -256,7 +257,7 @@ DataSourceTabPage::DataSourceTabPage(
     m_pBTN_DOWN->SetText( OUString( cBlackDownPointingTriangle ));
 
     // init controls
-    m_pLB_ROLE->SetTabs( lcl_pRoleListBoxTabs );
+    m_pLB_ROLE->SetTabs( SAL_N_ELEMENTS(lcl_pRoleListBoxTabs), lcl_pRoleListBoxTabs );
     m_pLB_ROLE->Show();
 
     updateControlsFromDialogModel();
@@ -405,10 +406,9 @@ void DataSourceTabPage::fillSeriesListBox()
         m_rDialogModel.getAllDataSeriesWithLabel() );
 
     sal_Int32 nUnnamedSeriesIndex = 1;
-    for( std::vector< DialogModel::tSeriesWithChartTypeByName >::const_iterator aIt = aSeries.begin();
-         aIt != aSeries.end(); ++aIt )
+    for (auto const& series : aSeries)
     {
-        OUString aLabel( (*aIt).first );
+        OUString aLabel(series.first);
         if( aLabel.isEmpty())
         {
             if( nUnnamedSeriesIndex > 1 )
@@ -432,9 +432,9 @@ void DataSourceTabPage::fillSeriesListBox()
             m_pLB_SERIES->InsertEntry( aLabel ));
         if( pEntry )
         {
-            pEntry->m_xDataSeries.set( (*aIt).second.first );
-            pEntry->m_xChartType.set(  (*aIt).second.second );
-            if( bHasSelectedEntry && ((*aIt).second.first == xSelected))
+            pEntry->m_xDataSeries.set(series.second.first);
+            pEntry->m_xChartType.set(series.second.second);
+            if( bHasSelectedEntry && (series.second.first == xSelected))
                 pSelectedEntry = pEntry;
         }
     }
@@ -468,10 +468,9 @@ void DataSourceTabPage::fillRoleListBox()
         m_pLB_ROLE->Clear();
         m_pLB_ROLE->RemoveSelection();
 
-        for( DialogModel::tRolesWithRanges::const_iterator aIt( aRoles.begin());
-             aIt != aRoles.end(); ++ aIt )
+        for (auto const& elemRole : aRoles)
         {
-            m_pLB_ROLE->InsertEntry( lcl_GetRoleLBEntry( aIt->first, aIt->second ));
+            m_pLB_ROLE->InsertEntry( lcl_GetRoleLBEntry(elemRole.first, elemRole.second));
         }
 
         // series may contain no roles, check listbox size before selecting entries
@@ -838,10 +837,10 @@ bool DataSourceTabPage::updateModelFromControl( Edit * pField )
                 {
                     xLabeledSeq->setValues( xDataProvider->createDataSequenceByRangeRepresentation( aRange ));
                 }
-                catch( const uno::Exception & ex )
+                catch( const uno::Exception & )
                 {
                     // should work as validation should have happened before
-                    SAL_WARN("chart2", "Exception caught. " << ex );
+                    DBG_UNHANDLED_EXCEPTION("chart2");
                 }
             }
             else if( xLabeledSeq.is())
@@ -899,10 +898,10 @@ bool DataSourceTabPage::updateModelFromControl( Edit * pField )
                                 {
                                     xNewSeq.set( xDataProvider->createDataSequenceByRangeRepresentation( aRange ));
                                 }
-                                catch( const uno::Exception & ex )
+                                catch( const uno::Exception & )
                                 {
                                     // should work as validation should have happened before
-                                    SAL_WARN("chart2", "Exception caught. " << ex );
+                                    DBG_UNHANDLED_EXCEPTION("chart2");
                                 }
                                 if( xNewSeq.is())
                                 {
@@ -930,10 +929,10 @@ bool DataSourceTabPage::updateModelFromControl( Edit * pField )
                             {
                                 xNewSeq.set( xDataProvider->createDataSequenceByRangeRepresentation( aRange ));
                             }
-                            catch( const uno::Exception & ex )
+                            catch( const uno::Exception & )
                             {
                                 // should work as validation should have happened before
-                                SAL_WARN("chart2", "Exception caught. " << ex );
+                                DBG_UNHANDLED_EXCEPTION("chart2");
                             }
                             if( xNewSeq.is())
                             {
@@ -962,10 +961,10 @@ bool DataSourceTabPage::updateModelFromControl( Edit * pField )
 
                 lcl_UpdateCurrentRange( *m_pLB_ROLE, aSelectedRole, aRange );
             }
-            catch( const uno::Exception & ex )
+            catch( const uno::Exception & )
             {
+                DBG_UNHANDLED_EXCEPTION("chart2");
                 bResult = false;
-                SAL_WARN("chart2", "Exception caught. " << ex );
             }
         }
     }
@@ -985,9 +984,9 @@ bool DataSourceTabPage::updateModelFromControl( Edit * pField )
                 m_rDialogModel.setTimeBasedRange(rInfo.bTimeBased, rInfo.nStart, rInfo.nEnd);
             }
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
 

@@ -30,6 +30,7 @@
 #include <chartpos.hxx>
 #include <unonames.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <convuno.hxx>
 #include <rangeutl.hxx>
 #include <hints.hxx>
@@ -2645,7 +2646,7 @@ sal_Int32 ScChart2DataSequence::FillCacheFromExternalRef(const ScTokenRef& pToke
                     m_aDataArray.push_back(aItem);
                     ++nDataCount;
                 }
-                else if (pMat->IsString(nC, nR))
+                else if (pMat->IsStringOrEmpty(nC, nR))
                 {
                     Item aItem;
 
@@ -2669,10 +2670,9 @@ void ScChart2DataSequence::UpdateTokensFromRanges(const ScRangeList& rRanges)
     for ( size_t i = 0, nCount = rRanges.size(); i < nCount; ++i )
     {
         ScTokenRef pToken;
-        const ScRange* pRange = rRanges[i];
-        OSL_ENSURE(pRange, "range object is nullptr.");
+        const ScRange & rRange = rRanges[i];
 
-        ScRefTokenHelper::getTokenFromRange(pToken, *pRange);
+        ScRefTokenHelper::getTokenFromRange(pToken, rRange);
         sal_uInt32 nOrigPos = (*m_pRangeIndices)[i];
         m_aTokens[nOrigPos] = pToken;
     }
@@ -2756,7 +2756,7 @@ void ScChart2DataSequence::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint
             {
                 ScRange aRange;
                 ScRefTokenHelper::getRangeFromToken(aRange, *itr, ScAddress());
-                aRanges.Append(aRange);
+                aRanges.push_back(aRange);
                 sal_uInt32 nPos = distance(itrBeg, itr);
                 m_pRangeIndices->push_back(nPos);
             }
@@ -3061,7 +3061,7 @@ public:
             {
                 if ( meOrigin != chart2::data::LabelOrigin_LONG_SIDE)
                 {
-                    OUString aString = ScGlobal::GetRscString(STR_COLUMN);
+                    OUString aString = ScResId(STR_COLUMN);
                     aString += " ";
                     ScAddress aPos( nCol, 0, 0 );
                     OUString aColStr(aPos.Format(ScRefFlags::COL_VALID));
@@ -3079,7 +3079,7 @@ public:
             {
                 if (meOrigin != chart2::data::LabelOrigin_LONG_SIDE)
                 {
-                    OUString aString = ScGlobal::GetRscString(STR_ROW) +
+                    OUString aString = ScResId(STR_ROW) +
                                        " " + OUString::number( nRow+1 );
                     pArr[mnCount] = aString;
                 }

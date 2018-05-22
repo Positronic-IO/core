@@ -29,14 +29,12 @@
 #include "UserAdmin.hxx"
 #include <UserAdminDlg.hxx>
 
-#include <comphelper/processfactory.hxx>
 #include <connectivity/dbmetadata.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <tools/diagnose_ex.h>
-#include <vcl/msgbox.hxx>
 #include <vcl/stdtext.hxx>
 
 namespace dbaui
@@ -114,7 +112,7 @@ namespace dbaui
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         short nRet = SfxTabDialog::Execute();
         if ( nRet == RET_OK )

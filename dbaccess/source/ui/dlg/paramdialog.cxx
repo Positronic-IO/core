@@ -25,7 +25,6 @@
 #include <commontypes.hxx>
 #include <com/sun/star/util/NumberFormatter.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
-#include <comphelper/processfactory.hxx>
 #include <connectivity/dbtools.hxx>
 #include <stringconstants.hxx>
 #include <vcl/svapp.hxx>
@@ -101,7 +100,7 @@ namespace dbaui
         }
         catch(Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
 
         Construct();
@@ -196,7 +195,7 @@ namespace dbaui
                     }
                     catch(Exception&)
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
 
                     OUString sMessage(DBA_RES(STR_COULD_NOT_CONVERT_PARAM));
@@ -254,7 +253,7 @@ namespace dbaui
                 }
                 catch(Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
 
             }
@@ -339,16 +338,16 @@ namespace dbaui
         m_aVisitedParams[m_nCurrentlySelected] |= VisitFlags::Visited;
 
         // was it the last "not visited yet" entry ?
-        std::vector<VisitFlags>::const_iterator aIter;
-        for (   aIter = m_aVisitedParams.begin();
-                aIter < m_aVisitedParams.end();
-                ++aIter
-            )
+        bool bVisited = false;
+        for (auto const& visitedParam : m_aVisitedParams)
         {
-            if (!((*aIter) & VisitFlags::Visited))
+            if (!(visitedParam & VisitFlags::Visited))
+            {
+                bVisited = true;
                 break;
+            }
         }
-        if (aIter == m_aVisitedParams.end())
+        if (!bVisited)
         {   // yes, there isn't another one -> change the "default button"
             m_pTravelNext->SetStyle(m_pTravelNext->GetStyle() & ~WB_DEFBUTTON);
             m_pOKBtn->SetStyle(m_pOKBtn->GetStyle() | WB_DEFBUTTON);

@@ -136,7 +136,7 @@ namespace frm
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("forms.richtext");
             }
             return nBits;
         }
@@ -153,7 +153,7 @@ namespace frm
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.richtext");
         }
 
         if ( !bReallyActAsRichText )
@@ -293,13 +293,10 @@ namespace frm
 
             if ( pRichTextControl )
             {
-                for (   AttributeDispatchers::iterator aDisposeLoop = m_aDispatchers.begin();
-                        aDisposeLoop != m_aDispatchers.end();
-                        ++aDisposeLoop
-                    )
+                for (auto const& dispatcher : m_aDispatchers)
                 {
-                    pRichTextControl->disableAttributeNotification( aDisposeLoop->first );
-                    aDisposeLoop->second->dispose();
+                    pRichTextControl->disableAttributeNotification(dispatcher.first);
+                    dispatcher.second->dispose();
                 }
             }
 
@@ -357,9 +354,9 @@ namespace frm
             }
             else
             {
-                sal_Int32 nColor(COL_TRANSPARENT);
+                Color nColor = COL_TRANSPARENT;
                 _rValue >>= nColor;
-                pControl->SetBackgroundColor( Color( nColor ) );
+                pControl->SetBackgroundColor( nColor );
             }
         }
         else if ( _rPropertyName == PROPERTY_HSCROLL )
@@ -382,12 +379,9 @@ namespace frm
             pControl->SetReadOnly( bReadOnly );
 
             // update the dispatchers
-            for (   AttributeDispatchers::iterator aDispatcherLoop = m_aDispatchers.begin();
-                    aDispatcherLoop != m_aDispatchers.end();
-                    ++aDispatcherLoop
-                )
+            for (auto const& dispatcher : m_aDispatchers)
             {
-                aDispatcherLoop->second->invalidate();
+                dispatcher.second->invalidate();
             }
         }
         else if ( _rPropertyName == PROPERTY_HIDEINACTIVESELECTION )

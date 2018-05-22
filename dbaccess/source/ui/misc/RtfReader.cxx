@@ -36,10 +36,8 @@
 #include <svtools/rtftoken.h>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <strings.hrc>
-#include <vcl/msgbox.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <connectivity/dbtools.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/string.hxx>
 #include <tools/color.hxx>
 #include <WExtendPages.hxx>
@@ -122,7 +120,7 @@ void ORTFReader::NextToken( int nToken )
                             nTmpToken2 = GetNextToken();
                         }
                         while(aToken[0] != ';' && eState != SvParserState::Error && eState != SvParserState::Accepted);
-                        m_vecColor.push_back(sal_uInt32(aColor.GetRGBColor()));
+                        m_vecColor.push_back(aColor.GetRGBColor());
                         nTmpToken2 = GetNextToken();
                     }
                     while(nTmpToken2 == RTF_RED && eState != SvParserState::Error && eState != SvParserState::Accepted);

@@ -42,9 +42,7 @@
 #include <sfx2/objsh.hxx>
 #include <osl/mutex.hxx>
 #include <services.hxx>
-#include <comphelper/container.hxx>
 #include <comphelper/listenernotification.hxx>
-#include <comphelper/processfactory.hxx>
 #include <svtools/imageresourceaccess.hxx>
 #define LOCAL_URL_PREFIX    '#'
 

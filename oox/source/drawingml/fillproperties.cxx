@@ -59,56 +59,46 @@ namespace drawingml {
 
 namespace {
 
-Reference< XGraphic > lclCheckAndApplyDuotoneTransform( const BlipFillProperties& aBlipProps, Reference< XGraphic > const & xGraphic,
-                                                        const GraphicHelper& rGraphicHelper, const sal_Int32 nPhClr )
+Reference< XGraphic > lclCheckAndApplyDuotoneTransform(const BlipFillProperties& aBlipProps, uno::Reference<graphic::XGraphic> const & xGraphic,
+                                                       const GraphicHelper& rGraphicHelper, const ::Color nPhClr)
 {
-    if( aBlipProps.maDuotoneColors[0].isUsed() && aBlipProps.maDuotoneColors[1].isUsed() )
+    if (aBlipProps.maDuotoneColors[0].isUsed() && aBlipProps.maDuotoneColors[1].isUsed())
     {
-        sal_Int32 nColor1 = aBlipProps.maDuotoneColors[0].getColor( rGraphicHelper, nPhClr );
-        sal_Int32 nColor2 = aBlipProps.maDuotoneColors[1].getColor( rGraphicHelper, nPhClr );
-        try
-        {
-            Reference< XGraphicTransformer > xTransformer( aBlipProps.mxGraphic, UNO_QUERY_THROW );
-            return xTransformer->applyDuotone( xGraphic, nColor1, nColor2 );
-        }
-        catch( Exception& )
-        {
-        }
+        ::Color nColor1 = aBlipProps.maDuotoneColors[0].getColor( rGraphicHelper, nPhClr );
+        ::Color nColor2 = aBlipProps.maDuotoneColors[1].getColor( rGraphicHelper, nPhClr );
+
+        uno::Reference<graphic::XGraphicTransformer> xTransformer(aBlipProps.mxFillGraphic, uno::UNO_QUERY);
+        if (xTransformer.is())
+            return xTransformer->applyDuotone(xGraphic, sal_Int32(nColor1), sal_Int32(nColor2));
     }
     return xGraphic;
 }
 
-Reference< XGraphic > lclCheckAndApplyChangeColorTransform( const BlipFillProperties &aBlipProps, Reference< XGraphic >  const & xGraphic,
-                                                            const GraphicHelper& rGraphicHelper, const sal_Int32 nPhClr )
+Reference< XGraphic > lclCheckAndApplyChangeColorTransform(const BlipFillProperties &aBlipProps, uno::Reference<graphic::XGraphic> const & xGraphic,
+                                                           const GraphicHelper& rGraphicHelper, const ::Color nPhClr)
 {
     if( aBlipProps.maColorChangeFrom.isUsed() && aBlipProps.maColorChangeTo.isUsed() )
     {
-        sal_Int32 nFromColor = aBlipProps.maColorChangeFrom.getColor( rGraphicHelper, nPhClr );
-        sal_Int32 nToColor = aBlipProps.maColorChangeTo.getColor( rGraphicHelper, nPhClr );
-        if ( (nFromColor != nToColor) || aBlipProps.maColorChangeTo.hasTransparency() ) try
+        ::Color nFromColor = aBlipProps.maColorChangeFrom.getColor( rGraphicHelper, nPhClr );
+        ::Color nToColor = aBlipProps.maColorChangeTo.getColor( rGraphicHelper, nPhClr );
+        if ( (nFromColor != nToColor) || aBlipProps.maColorChangeTo.hasTransparency() )
         {
             sal_Int16 nToTransparence = aBlipProps.maColorChangeTo.getTransparency();
             sal_Int8 nToAlpha = static_cast< sal_Int8 >( (100 - nToTransparence) * 2.55 );
-            Reference< XGraphicTransformer > xTransformer( aBlipProps.mxGraphic, UNO_QUERY_THROW );
-            return xTransformer->colorChange( xGraphic, nFromColor, 9, nToColor, nToAlpha );
-        }
-        catch( Exception& )
-        {
+
+            uno::Reference<graphic::XGraphicTransformer> xTransformer(aBlipProps.mxFillGraphic, uno::UNO_QUERY);
+            if (xTransformer.is())
+                return xTransformer->colorChange(xGraphic, sal_Int32(nFromColor), 9, sal_Int32(nToColor), nToAlpha);
         }
     }
     return xGraphic;
 }
 
-Reference< XGraphic > applyBrightnessContrast( Reference< XGraphic > const & xGraphic, sal_Int32 brightness, sal_Int32 contrast )
+uno::Reference<graphic::XGraphic> applyBrightnessContrast(uno::Reference<graphic::XGraphic> const & xGraphic, sal_Int32 brightness, sal_Int32 contrast)
 {
-    try
-        {
-            Reference< XGraphicTransformer > xTransformer( xGraphic, UNO_QUERY_THROW );
-            return xTransformer->applyBrightnessContrast( xGraphic, brightness, contrast, true );
-        }
-        catch( Exception& )
-        {
-        }
+    uno::Reference<graphic::XGraphicTransformer> xTransformer(xGraphic, uno::UNO_QUERY);
+    if (xTransformer.is())
+        return xTransformer->applyBrightnessContrast(xGraphic, brightness, contrast, true);
     return xGraphic;
 }
 
@@ -187,8 +177,8 @@ void PatternFillProperties::assignUsed( const PatternFillProperties& rSourceProp
 
 void BlipFillProperties::assignUsed( const BlipFillProperties& rSourceProps )
 {
-    if( rSourceProps.mxGraphic.is() )
-        mxGraphic = rSourceProps.mxGraphic;
+    if(rSourceProps.mxFillGraphic.is())
+        mxFillGraphic = rSourceProps.mxFillGraphic;
     moBitmapMode.assignIfUsed( rSourceProps.moBitmapMode );
     moFillRect.assignIfUsed( rSourceProps.moFillRect );
     moTileOffsetX.assignIfUsed( rSourceProps.moTileOffsetX );
@@ -244,10 +234,10 @@ Color FillProperties::getBestSolidColor() const
 }
 
 /// Maps the hatch token to drawing::Hatch.
-static drawing::Hatch createHatch( sal_Int32 nHatchToken, sal_Int32 nColor )
+static drawing::Hatch createHatch( sal_Int32 nHatchToken, ::Color nColor )
 {
     drawing::Hatch aHatch;
-    aHatch.Color = nColor;
+    aHatch.Color = sal_Int32(nColor);
 
     // best-effort mapping; we do not support all the styles in core
     switch ( nHatchToken )
@@ -312,7 +302,7 @@ static drawing::Hatch createHatch( sal_Int32 nHatchToken, sal_Int32 nColor )
 }
 
 void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
-        const GraphicHelper& rGraphicHelper, sal_Int32 nShapeRotation, sal_Int32 nPhClr,
+        const GraphicHelper& rGraphicHelper, sal_Int32 nShapeRotation, ::Color nPhClr,
         bool bFlipH, bool bFlipV ) const
 {
     if( moFillType.has() )
@@ -349,8 +339,8 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
                     // Old code, values in aGradient overwritten in many cases by newer code below
                     if( maGradientProps.maGradientStops.size() > 1 )
                     {
-                        aGradient.StartColor = maGradientProps.maGradientStops.begin()->second.getColor( rGraphicHelper, nPhClr );
-                        aGradient.EndColor = maGradientProps.maGradientStops.rbegin()->second.getColor( rGraphicHelper, nPhClr );
+                        aGradient.StartColor = sal_Int32(maGradientProps.maGradientStops.begin()->second.getColor( rGraphicHelper, nPhClr ));
+                        aGradient.EndColor = sal_Int32(maGradientProps.maGradientStops.rbegin()->second.getColor( rGraphicHelper, nPhClr ));
                         if( maGradientProps.maGradientStops.rbegin()->second.hasTransparency() )
                             nEndTrans = maGradientProps.maGradientStops.rbegin()->second.getTransparency()*255/100;
                         if( maGradientProps.maGradientStops.begin()->second.hasTransparency() )
@@ -439,13 +429,12 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
 
                         SAL_INFO("oox.drawingml.gradient", "symmetric: " << (bSymmetric ? "YES" : "NO") <<
                                  ", number of stops: " << aGradientStops.size());
-                        for (GradientFillProperties::GradientStopMap::iterator p(aGradientStops.begin());
-                             p != aGradientStops.end();
-                             ++p)
-                            SAL_INFO("oox.drawingml.gradient", "  " << std::distance(aGradientStops.begin(), p) << ": " <<
-                                     p->first << ": " <<
-                                     std::hex << p->second.getColor( rGraphicHelper, nPhClr ) << std::dec <<
-                                     "@" << (100-p->second.getTransparency()) << "%");
+                        size_t nIndex = 0;
+                        for (auto const& gradientStop : aGradientStops)
+                            SAL_INFO("oox.drawingml.gradient", "  " << nIndex++ << ": " <<
+                                     gradientStop.first << ": " <<
+                                     std::hex << sal_Int32(gradientStop.second.getColor( rGraphicHelper, nPhClr )) << std::dec <<
+                                     "@" << (100 - gradientStop.second.getTransparency()) << "%");
 
                         // Now estimate the simple LO style gradient (only two stops, at n% and 100%, where n ==
                         // the "border") that best emulates the gradient between begin() and prior(end()).
@@ -562,13 +551,13 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
                             aEndColor = std::next(aWidestSegmentStart)->second;
                         }
 
-                        SAL_INFO("oox.drawingml.gradient", "start color: " << std::hex << aStartColor.getColor( rGraphicHelper, nPhClr ) << std::dec <<
+                        SAL_INFO("oox.drawingml.gradient", "start color: " << std::hex << sal_Int32(aStartColor.getColor( rGraphicHelper, nPhClr )) << std::dec <<
                                  "@" << (100-aStartColor.getTransparency()) << "%"
-                                 ", end color: " << std::hex << aEndColor.getColor( rGraphicHelper, nPhClr ) << std::dec <<
+                                 ", end color: " << std::hex << sal_Int32(aEndColor.getColor( rGraphicHelper, nPhClr )) << std::dec <<
                                  "@" << (100-aEndColor.getTransparency()) << "%");
 
-                        aGradient.StartColor = aStartColor.getColor( rGraphicHelper, nPhClr );
-                        aGradient.EndColor = aEndColor.getColor( rGraphicHelper, nPhClr );
+                        aGradient.StartColor = sal_Int32(aStartColor.getColor( rGraphicHelper, nPhClr ));
+                        aGradient.EndColor = sal_Int32(aEndColor.getColor( rGraphicHelper, nPhClr ));
 
                         if( aStartColor.hasTransparency() )
                             nStartTrans = aStartColor.getTransparency()*255/100;
@@ -598,23 +587,19 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
 
             case XML_blipFill:
                 // do not start complex graphic transformation if property is not supported...
-                if( maBlipProps.mxGraphic.is() && rPropMap.supportsProperty( ShapeProperty::FillBitmapUrl ) )
+                if (maBlipProps.mxFillGraphic.is() && rPropMap.supportsProperty(ShapeProperty::FillBitmap))
                 {
-                    Reference< XGraphic > xGraphic = lclCheckAndApplyDuotoneTransform( maBlipProps, maBlipProps.mxGraphic, rGraphicHelper, nPhClr );
-                    uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
+                    uno::Reference<graphic::XGraphic> xGraphic = lclCheckAndApplyDuotoneTransform(maBlipProps, maBlipProps.mxFillGraphic, rGraphicHelper, nPhClr);
                     // TODO: "rotate with shape" is not possible with our current core
 
-                    OUString aGraphicUrl = rGraphicHelper.createGraphicObject( xGraphic );
-                    // push bitmap or named bitmap to property map
-
-                    if (!aGraphicUrl.isEmpty())
+                    if (xGraphic.is())
                     {
-                        if (rPropMap.supportsProperty(ShapeProperty::FillBitmapNameFromUrl) &&
-                            rPropMap.setProperty(ShapeProperty::FillBitmapNameFromUrl, xGraphic))
+                        if (rPropMap.supportsProperty(ShapeProperty::FillBitmapName) &&
+                            rPropMap.setProperty(ShapeProperty::FillBitmapName, xGraphic))
                         {
                             eFillStyle = FillStyle_BITMAP;
                         }
-                        else if (rPropMap.setProperty(ShapeProperty::FillBitmapUrl, aGraphicUrl))
+                        else if (rPropMap.setProperty(ShapeProperty::FillBitmap, xGraphic))
                         {
                             eFillStyle = FillStyle_BITMAP;
                         }
@@ -634,7 +619,7 @@ void FillProperties::pushToPropMap( ShapePropertyMap& rPropMap,
                             RectanglePoint eRectPoint = lclGetRectanglePoint( maBlipProps.moTileAlign.get( XML_tl ) );
                             rPropMap.setProperty( ShapeProperty::FillBitmapRectanglePoint, eRectPoint );
 
-                            awt::Size aOriginalSize = lclGetOriginalSize( rGraphicHelper, maBlipProps.mxGraphic );
+                            awt::Size aOriginalSize = lclGetOriginalSize(rGraphicHelper, maBlipProps.mxFillGraphic);
                             if( (aOriginalSize.Width > 0) && (aOriginalSize.Height > 0) )
                             {
                                 // size of one bitmap tile (given as 1/1000 percent of bitmap size), convert to 1/100 mm
@@ -729,10 +714,10 @@ void GraphicProperties::pushToPropMap( PropertyMap& rPropMap, const GraphicHelpe
         case XML_grayscl:   eColorMode = ColorMode_GREYS;   break;
     }
 
-    if( maBlipProps.mxGraphic.is() )
+    if (maBlipProps.mxFillGraphic.is())
     {
         // created transformed graphic
-        Reference< XGraphic > xGraphic = lclCheckAndApplyChangeColorTransform(maBlipProps, maBlipProps.mxGraphic, rGraphicHelper, API_RGB_TRANSPARENT);
+        uno::Reference<graphic::XGraphic> xGraphic = lclCheckAndApplyChangeColorTransform(maBlipProps, maBlipProps.mxFillGraphic, rGraphicHelper, API_RGB_TRANSPARENT);
         xGraphic = lclCheckAndApplyDuotoneTransform(maBlipProps, xGraphic, rGraphicHelper, API_RGB_TRANSPARENT);
 
         if (eColorMode == ColorMode_STANDARD && nBrightness == 70 && nContrast == -70)
@@ -800,10 +785,10 @@ css::beans::PropertyValue ArtisticEffectProperties::getEffect()
 
     css::uno::Sequence< css::beans::PropertyValue > aSeq( maAttribs.size() + 1 );
     sal_uInt32 i = 0;
-    for( std::map< OUString, css::uno::Any >::iterator it = maAttribs.begin(); it != maAttribs.end(); ++it )
+    for (auto const& attrib : maAttribs)
     {
-        aSeq[i].Name = it->first;
-        aSeq[i].Value = it->second;
+        aSeq[i].Name = attrib.first;
+        aSeq[i].Value = attrib.second;
         i++;
     }
 

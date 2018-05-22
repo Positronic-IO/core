@@ -33,7 +33,6 @@
 
 #include <unotools/resmgr.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <strings.hrc>
 #include "getcontinuations.hxx"
@@ -74,73 +73,66 @@ handleLockedDocumentRequest_(
     if ( !xApprove.is() || !xDisapprove.is() || !xAbort.is() )
         return;
 
-    try
+    SolarMutexGuard aGuard;
+    std::locale aResLocale = Translate::Create("uui");
+
+    OUString aMessage;
+    std::vector< OUString > aArguments;
+    aArguments.push_back( aDocumentURL );
+
+    sal_Int32 nResult = RET_CANCEL;
+    if ( nMode == UUI_DOC_LOAD_LOCK )
     {
-        SolarMutexGuard aGuard;
-        std::locale aResLocale = Translate::Create("uui");
+        aArguments.push_back( !aInfo.isEmpty()
+                              ? aInfo
+                              : Translate::get( STR_UNKNOWNUSER, aResLocale) );
+        aArguments.push_back( xRetry.is()
+                              ? Translate::get( STR_OPENLOCKED_ALLOWIGNORE_MSG, aResLocale )
+                              : "" );
+        aMessage = Translate::get(STR_OPENLOCKED_MSG, aResLocale);
+        aMessage = UUIInteractionHelper::replaceMessageWithArguments(
+            aMessage, aArguments );
 
-        OUString aMessage;
-        std::vector< OUString > aArguments;
-        aArguments.push_back( aDocumentURL );
-
-        sal_Int32 nResult = RET_CANCEL;
-        if ( nMode == UUI_DOC_LOAD_LOCK )
-        {
-            aArguments.push_back( !aInfo.isEmpty()
-                                  ? aInfo
-                                  : Translate::get( STR_UNKNOWNUSER, aResLocale) );
-            aArguments.push_back( xRetry.is()
-                                  ? Translate::get( STR_OPENLOCKED_ALLOWIGNORE_MSG, aResLocale )
-                                  : "" );
-            aMessage = Translate::get(STR_OPENLOCKED_MSG, aResLocale);
-            aMessage = UUIInteractionHelper::replaceMessageWithArguments(
-                aMessage, aArguments );
-
-            OpenLockedQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
-            nResult = aDialog.run();
-        }
-        else if ( nMode == UUI_DOC_SAVE_LOCK )
-        {
-            aArguments.push_back( !aInfo.isEmpty()
-                                  ? aInfo
-                                  : Translate::get( STR_UNKNOWNUSER,
-                                               aResLocale ) );
-            aMessage = Translate::get(xRetry.is() ? STR_OVERWRITE_IGNORELOCK_MSG : STR_TRYLATER_MSG,
-                aResLocale);
-            aMessage = UUIInteractionHelper::replaceMessageWithArguments(
-                aMessage, aArguments );
-
-            TryLaterQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
-            nResult = aDialog.run();
-        }
-        else if ( nMode == UUI_DOC_OWN_LOAD_LOCK ||
-                  nMode == UUI_DOC_OWN_SAVE_LOCK )
-        {
-            aArguments.push_back( aInfo );
-            aMessage = Translate::get(nMode == UUI_DOC_OWN_SAVE_LOCK
-                                          ? STR_ALREADYOPEN_SAVE_MSG
-                                          : STR_ALREADYOPEN_MSG,
-                                      aResLocale );
-            aMessage = UUIInteractionHelper::replaceMessageWithArguments(
-                aMessage, aArguments );
-
-            AlreadyOpenQueryBox aDialog(pParent, aResLocale, aMessage, nMode == UUI_DOC_OWN_SAVE_LOCK);
-            nResult = aDialog.run();
-        }
-
-        if ( nResult == RET_YES )
-            xApprove->select();
-        else if ( nResult == RET_NO )
-            xDisapprove->select();
-        else if ( nResult == RET_IGNORE && xRetry.is() )
-            xRetry->select();
-        else
-            xAbort->select();
+        OpenLockedQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
+        nResult = aDialog.run();
     }
-    catch (std::bad_alloc const &)
+    else if ( nMode == UUI_DOC_SAVE_LOCK )
     {
-        throw uno::RuntimeException("out of memory");
+        aArguments.push_back( !aInfo.isEmpty()
+                              ? aInfo
+                              : Translate::get( STR_UNKNOWNUSER,
+                                           aResLocale ) );
+        aMessage = Translate::get(xRetry.is() ? STR_OVERWRITE_IGNORELOCK_MSG : STR_TRYLATER_MSG,
+            aResLocale);
+        aMessage = UUIInteractionHelper::replaceMessageWithArguments(
+            aMessage, aArguments );
+
+        TryLaterQueryBox aDialog(pParent, aResLocale, aMessage, xRetry.is());
+        nResult = aDialog.run();
     }
+    else if ( nMode == UUI_DOC_OWN_LOAD_LOCK ||
+              nMode == UUI_DOC_OWN_SAVE_LOCK )
+    {
+        aArguments.push_back( aInfo );
+        aMessage = Translate::get(nMode == UUI_DOC_OWN_SAVE_LOCK
+                                      ? STR_ALREADYOPEN_SAVE_MSG
+                                      : STR_ALREADYOPEN_MSG,
+                                  aResLocale );
+        aMessage = UUIInteractionHelper::replaceMessageWithArguments(
+            aMessage, aArguments );
+
+        AlreadyOpenQueryBox aDialog(pParent, aResLocale, aMessage, nMode == UUI_DOC_OWN_SAVE_LOCK);
+        nResult = aDialog.run();
+    }
+
+    if ( nResult == RET_YES )
+        xApprove->select();
+    else if ( nResult == RET_NO )
+        xDisapprove->select();
+    else if ( nResult == RET_IGNORE && xRetry.is() )
+        xRetry->select();
+    else
+        xAbort->select();
 }
 
 void
@@ -156,22 +148,15 @@ handleChangedByOthersRequest_(
     if ( !xApprove.is() || !xAbort.is() )
         return;
 
-    try
-    {
-        SolarMutexGuard aGuard;
-        std::locale aResLocale = Translate::Create("uui");
-        FileChangedQueryBox aDialog(pParent, aResLocale);
-        sal_Int32 nResult = aDialog.run();
+    SolarMutexGuard aGuard;
+    std::locale aResLocale = Translate::Create("uui");
+    FileChangedQueryBox aDialog(pParent, aResLocale);
+    sal_Int32 nResult = aDialog.run();
 
-        if ( nResult == RET_YES )
-            xApprove->select();
-        else
-            xAbort->select();
-    }
-    catch (std::bad_alloc const &)
-    {
-        throw uno::RuntimeException("out of memory");
-    }
+    if ( nResult == RET_YES )
+        xApprove->select();
+    else
+        xAbort->select();
 }
 
 const sal_uInt16  UUI_DOC_CreateErrDlg  = 0;
@@ -192,33 +177,26 @@ handleLockFileProblemRequest_(
     if ( !xApprove.is() || !xAbort.is() )
         return;
 
-    try
+    SolarMutexGuard aGuard;
+    std::locale aResLocale = Translate::Create("uui");
+
+    sal_Int32 nResult;
+
+    if (nWhichDlg == UUI_DOC_CreateErrDlg)
     {
-        SolarMutexGuard aGuard;
-        std::locale aResLocale = Translate::Create("uui");
-
-        sal_Int32 nResult;
-
-        if (nWhichDlg == UUI_DOC_CreateErrDlg)
-        {
-            LockFailedQueryBox aDialog(pParent, aResLocale);
-            nResult = aDialog.run();
-        }
-        else
-        {
-            LockCorruptQueryBox aDialog(pParent, aResLocale);
-            nResult = aDialog.run();
-        }
-
-        if ( nResult == RET_OK )
-            xApprove->select();
-        else
-            xAbort->select();
+        LockFailedQueryBox aDialog(pParent, aResLocale);
+        nResult = aDialog.run();
     }
-    catch (std::bad_alloc const &)
+    else
     {
-        throw uno::RuntimeException("out of memory");
+        LockCorruptQueryBox aDialog(pParent, aResLocale);
+        nResult = aDialog.run();
     }
+
+    if ( nResult == RET_OK )
+        xApprove->select();
+    else
+        xAbort->select();
 }
 
 } // namespace
@@ -232,38 +210,38 @@ UUIInteractionHelper::handleLockedDocumentRequest(
     document::LockedDocumentRequest aLockedDocumentRequest;
     if (aAnyRequest >>= aLockedDocumentRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                      aLockedDocumentRequest.DocumentURL,
-                                      aLockedDocumentRequest.UserInfo,
-                                      rRequest->getContinuations(),
-                                      UUI_DOC_LOAD_LOCK );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleLockedDocumentRequest_(Application::GetFrameWeld(xParent),
+                                     aLockedDocumentRequest.DocumentURL,
+                                     aLockedDocumentRequest.UserInfo,
+                                     rRequest->getContinuations(),
+                                     UUI_DOC_LOAD_LOCK);
         return true;
     }
 
     document::OwnLockOnDocumentRequest aOwnLockOnDocumentRequest;
     if (aAnyRequest >>= aOwnLockOnDocumentRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                      aOwnLockOnDocumentRequest.DocumentURL,
-                                      aOwnLockOnDocumentRequest.TimeInfo,
-                                      rRequest->getContinuations(),
-                                      aOwnLockOnDocumentRequest.IsStoring
-                                          ? UUI_DOC_OWN_SAVE_LOCK
-                                          : UUI_DOC_OWN_LOAD_LOCK );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleLockedDocumentRequest_(Application::GetFrameWeld(xParent),
+                                     aOwnLockOnDocumentRequest.DocumentURL,
+                                     aOwnLockOnDocumentRequest.TimeInfo,
+                                     rRequest->getContinuations(),
+                                     aOwnLockOnDocumentRequest.IsStoring
+                                         ? UUI_DOC_OWN_SAVE_LOCK
+                                         : UUI_DOC_OWN_LOAD_LOCK);
         return true;
     }
 
     document::LockedOnSavingRequest aLockedOnSavingRequest;
     if (aAnyRequest >>= aLockedOnSavingRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleLockedDocumentRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                      aLockedOnSavingRequest.DocumentURL,
-                                      aLockedOnSavingRequest.UserInfo,
-                                      rRequest->getContinuations(),
-                                      UUI_DOC_SAVE_LOCK );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleLockedDocumentRequest_(Application::GetFrameWeld(xParent),
+                                     aLockedOnSavingRequest.DocumentURL,
+                                     aLockedOnSavingRequest.UserInfo,
+                                     rRequest->getContinuations(),
+                                     UUI_DOC_SAVE_LOCK);
         return true;
     }
     return false;
@@ -278,9 +256,9 @@ UUIInteractionHelper::handleChangedByOthersRequest(
     document::ChangedByOthersRequest aChangedByOthersRequest;
     if (aAnyRequest >>= aChangedByOthersRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleChangedByOthersRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                       rRequest->getContinuations() );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleChangedByOthersRequest_(Application::GetFrameWeld(xParent),
+                                      rRequest->getContinuations());
         return true;
     }
     return false;
@@ -296,18 +274,18 @@ UUIInteractionHelper::handleLockFileProblemRequest(
     document::LockFileIgnoreRequest aLockFileIgnoreRequest;
     if (aAnyRequest >>= aLockFileIgnoreRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleLockFileProblemRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                      rRequest->getContinuations(), UUI_DOC_CreateErrDlg );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleLockFileProblemRequest_(Application::GetFrameWeld(xParent),
+                                      rRequest->getContinuations(), UUI_DOC_CreateErrDlg);
         return true;
     }
 
     document::LockFileCorruptRequest aLockFileCorruptRequest;
     if (aAnyRequest >>= aLockFileCorruptRequest )
     {
-        vcl::Window* pWin = getParentProperty();
-        handleLockFileProblemRequest_( pWin ? pWin->GetFrameWeld() : nullptr,
-                                      rRequest->getContinuations(), UUI_DOC_CorruptErrDlg );
+        uno::Reference<awt::XWindow> xParent = getParentXWindow();
+        handleLockFileProblemRequest_(Application::GetFrameWeld(xParent),
+                                      rRequest->getContinuations(), UUI_DOC_CorruptErrDlg);
         return true;
     }
 

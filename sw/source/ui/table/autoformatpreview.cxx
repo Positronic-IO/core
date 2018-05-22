@@ -19,6 +19,7 @@
 
 #include <vcl/builderfactory.hxx>
 #include <com/sun/star/i18n/BreakIterator.hpp>
+#include <comphelper/processfactory.hxx>
 #include <svtools/scriptedtext.hxx>
 #include <drawinglayer/processor2d/processor2dtools.hxx>
 #include <strings.hrc>
@@ -27,37 +28,37 @@
 
 #define FRAME_OFFSET 4
 
-AutoFormatPreview::AutoFormatPreview(vcl::Window* pParent, WinBits nStyle)
-    : Window(pParent, nStyle)
-    , aCurData(OUString())
-    , aVD(VclPtr<VirtualDevice>::Create(*this))
-    , bFitWidth(false)
+AutoFormatPreview::AutoFormatPreview(weld::DrawingArea* pDrawingArea)
+    : mxDrawingArea(pDrawingArea)
+    , maCurrentData(OUString())
+    , mbFitWidth(false)
     , mbRTL(false)
-    , aStrJan(SwResId(STR_JAN))
-    , aStrFeb(SwResId(STR_FEB))
-    , aStrMar(SwResId(STR_MAR))
-    , aStrNorth(SwResId(STR_NORTH))
-    , aStrMid(SwResId(STR_MID))
-    , aStrSouth(SwResId(STR_SOUTH))
-    , aStrSum(SwResId(STR_SUM))
+    , maStringJan(SwResId(STR_JAN))
+    , maStringFeb(SwResId(STR_FEB))
+    , maStringMar(SwResId(STR_MAR))
+    , maStringNorth(SwResId(STR_NORTH))
+    , maStringMid(SwResId(STR_MID))
+    , maStringSouth(SwResId(STR_SOUTH))
+    , maStringSum(SwResId(STR_SUM))
 {
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
     m_xBreak = i18n::BreakIterator::create(xContext);
-    pNumFormat = new SvNumberFormatter(xContext, LANGUAGE_SYSTEM);
+    mxNumFormat.reset(new SvNumberFormatter(xContext, LANGUAGE_SYSTEM));
 
     Init();
+
+    mxDrawingArea->connect_size_allocate(LINK(this, AutoFormatPreview, DoResize));
+    mxDrawingArea->connect_draw(LINK(this, AutoFormatPreview, DoPaint));
 }
 
-VCL_BUILDER_FACTORY_CONSTRUCTOR(AutoFormatPreview, 0)
-
-void AutoFormatPreview::Resize()
+IMPL_LINK(AutoFormatPreview, DoResize, const Size&, rSize, void)
 {
-    aPrvSize = Size(GetSizePixel().Width() - 6, GetSizePixel().Height() - 30);
-    nLabelColWidth = (aPrvSize.Width() - 4) / 4 - 12;
-    nDataColWidth1 = (aPrvSize.Width() - 4 - 2 * nLabelColWidth) / 3;
-    nDataColWidth2 = (aPrvSize.Width() - 4 - 2 * nLabelColWidth) / 4;
-    nRowHeight = (aPrvSize.Height() - 4) / 5;
-    NotifyChange(aCurData);
+    maPreviousSize = Size(rSize.Width() - 6, rSize.Height() - 30);
+    mnLabelColumnWidth = (maPreviousSize.Width() - 4) / 4 - 12;
+    mnDataColumnWidth1 = (maPreviousSize.Width() - 4 - 2 * mnLabelColumnWidth) / 3;
+    mnDataColumnWidth2 = (maPreviousSize.Width() - 4 - 2 * mnLabelColumnWidth) / 4;
+    mnRowHeight = (maPreviousSize.Height() - 4) / 5;
+    NotifyChange(maCurrentData);
 }
 
 void AutoFormatPreview::DetectRTL(SwWrtShell const* pWrtShell)
@@ -66,14 +67,6 @@ void AutoFormatPreview::DetectRTL(SwWrtShell const* pWrtShell)
         mbRTL = AllSettings::GetLayoutRTL();
     else
         mbRTL = pWrtShell->IsTableRightToLeft();
-}
-
-AutoFormatPreview::~AutoFormatPreview() { disposeOnce(); }
-
-void AutoFormatPreview::dispose()
-{
-    delete pNumFormat;
-    vcl::Window::dispose();
 }
 
 static void lcl_SetFontProperties(vcl::Font& rFont, const SvxFontItem& rFontItem,
@@ -94,13 +87,13 @@ static void lcl_SetFontProperties(vcl::Font& rFont, const SvxFontItem& rFontItem
     rCJKFont.MethodName(Value);                                                                    \
     rCTLFont.MethodName(Value);
 
-void AutoFormatPreview::MakeFonts(sal_uInt8 nIndex, vcl::Font& rFont, vcl::Font& rCJKFont,
-                                  vcl::Font& rCTLFont)
+void AutoFormatPreview::MakeFonts(vcl::RenderContext const& rRenderContext, sal_uInt8 nIndex,
+                                  vcl::Font& rFont, vcl::Font& rCJKFont, vcl::Font& rCTLFont)
 {
-    const SwBoxAutoFormat& rBoxFormat = aCurData.GetBoxFormat(nIndex);
+    const SwBoxAutoFormat& rBoxFormat = maCurrentData.GetBoxFormat(nIndex);
 
-    rFont = rCJKFont = rCTLFont = GetFont();
-    Size aFontSize(rFont.GetFontSize().Width(), 10 * GetDPIScaleFactor());
+    rFont = rCJKFont = rCTLFont = rRenderContext.GetFont();
+    Size aFontSize(rFont.GetFontSize().Width(), 10 * rRenderContext.GetDPIScaleFactor());
 
     lcl_SetFontProperties(rFont, rBoxFormat.GetFont(), rBoxFormat.GetWeight(),
                           rBoxFormat.GetPosture());
@@ -137,26 +130,26 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
     switch (nIndex)
     {
         case 1:
-            cellString = aStrJan;
+            cellString = maStringJan;
             break;
         case 2:
-            cellString = aStrFeb;
+            cellString = maStringFeb;
             break;
         case 3:
-            cellString = aStrMar;
+            cellString = maStringMar;
             break;
         case 5:
-            cellString = aStrNorth;
+            cellString = maStringNorth;
             break;
         case 10:
-            cellString = aStrMid;
+            cellString = maStringMid;
             break;
         case 15:
-            cellString = aStrSouth;
+            cellString = maStringSouth;
             break;
         case 4:
         case 20:
-            cellString = aStrSum;
+            cellString = maStringSum;
             break;
         case 6:
         case 8:
@@ -206,19 +199,19 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
             goto MAKENUMSTR;
 
         MAKENUMSTR:
-            if (aCurData.IsValueFormat())
+            if (maCurrentData.IsValueFormat())
             {
                 OUString sFormat;
                 LanguageType eLng, eSys;
-                aCurData.GetBoxFormat(sal_uInt8(nNum)).GetValueFormat(sFormat, eLng, eSys);
+                maCurrentData.GetBoxFormat(sal_uInt8(nNum)).GetValueFormat(sFormat, eLng, eSys);
 
                 SvNumFormatType nType;
                 bool bNew;
                 sal_Int32 nCheckPos;
-                sal_uInt32 nKey = pNumFormat->GetIndexPuttingAndConverting(sFormat, eLng, eSys,
-                                                                           nType, bNew, nCheckPos);
+                sal_uInt32 nKey = mxNumFormat->GetIndexPuttingAndConverting(sFormat, eLng, eSys,
+                                                                            nType, bNew, nCheckPos);
                 Color* pDummy;
-                pNumFormat->GetOutputString(nVal, nKey, cellString, &pDummy);
+                mxNumFormat->GetOutputString(nVal, nKey, cellString, &pDummy);
             }
             else
                 cellString = OUString::number(sal_Int32(nVal));
@@ -239,10 +232,10 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
     long nRightX = 0;
 
     Size theMaxStrSize(cellRect.GetWidth() - FRAME_OFFSET, cellRect.GetHeight() - FRAME_OFFSET);
-    if (aCurData.IsFont())
+    if (maCurrentData.IsFont())
     {
         vcl::Font aFont, aCJKFont, aCTLFont;
-        MakeFonts(nFormatIndex, aFont, aCJKFont, aCTLFont);
+        MakeFonts(rRenderContext, nFormatIndex, aFont, aCJKFont, aCTLFont);
         aScriptedText.SetFonts(&aFont, &aCJKFont, &aCTLFont);
     }
     else
@@ -251,7 +244,7 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
     aScriptedText.SetText(cellString, m_xBreak);
     aStrSize = aScriptedText.GetTextSize();
 
-    if (aCurData.IsFont() && theMaxStrSize.Height() < aStrSize.Height())
+    if (maCurrentData.IsFont() && theMaxStrSize.Height() < aStrSize.Height())
     {
         // If the string in this font does not
         // fit into the cell, the standard font
@@ -270,14 +263,14 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
     nRightX = cellRect.GetWidth() - aStrSize.Width() - FRAME_OFFSET;
 
     // vertical (always centering):
-    aPos.AdjustY((nRowHeight - aStrSize.Height()) / 2);
+    aPos.AdjustY((mnRowHeight - aStrSize.Height()) / 2);
 
     // horizontal
     if (mbRTL)
         aPos.AdjustX(nRightX);
-    else if (aCurData.IsJustify())
+    else if (maCurrentData.IsJustify())
     {
-        const SvxAdjustItem& rAdj = aCurData.GetBoxFormat(nFormatIndex).GetAdjust();
+        const SvxAdjustItem& rAdj = maCurrentData.GetBoxFormat(nFormatIndex).GetAdjust();
         switch (rAdj.GetAdjust())
         {
             case SvxAdjust::Left:
@@ -309,8 +302,6 @@ void AutoFormatPreview::DrawString(vcl::RenderContext& rRenderContext, size_t nC
     aScriptedText.DrawText(aPos);
 }
 
-#undef FRAME_OFFSET
-
 void AutoFormatPreview::DrawBackground(vcl::RenderContext& rRenderContext)
 {
     for (size_t nRow = 0; nRow < 5; ++nRow)
@@ -318,7 +309,7 @@ void AutoFormatPreview::DrawBackground(vcl::RenderContext& rRenderContext)
         for (size_t nCol = 0; nCol < 5; ++nCol)
         {
             SvxBrushItem aBrushItem(
-                aCurData.GetBoxFormat(GetFormatIndex(nCol, nRow)).GetBackground());
+                maCurrentData.GetBoxFormat(GetFormatIndex(nCol, nRow)).GetBackground());
 
             rRenderContext.Push(PushFlags::LINECOLOR | PushFlags::FILLCOLOR);
             rRenderContext.SetLineColor();
@@ -335,7 +326,7 @@ void AutoFormatPreview::DrawBackground(vcl::RenderContext& rRenderContext)
 void AutoFormatPreview::PaintCells(vcl::RenderContext& rRenderContext)
 {
     // 1) background
-    if (aCurData.IsBackground())
+    if (maCurrentData.IsBackground())
         DrawBackground(rRenderContext);
 
     // 2) values
@@ -344,7 +335,7 @@ void AutoFormatPreview::PaintCells(vcl::RenderContext& rRenderContext)
             DrawString(rRenderContext, nCol, nRow);
 
     // 3) border
-    if (aCurData.IsFrame())
+    if (maCurrentData.IsFrame())
     {
         const drawinglayer::geometry::ViewInformation2D aNewViewInformation2D;
         std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> pProcessor2D(
@@ -361,28 +352,25 @@ void AutoFormatPreview::PaintCells(vcl::RenderContext& rRenderContext)
 
 void AutoFormatPreview::Init()
 {
-    SetBorderStyle(GetBorderStyle() | WindowBorderStyle::MONO);
     maArray.Initialize(5, 5);
-    nLabelColWidth = 0;
-    nDataColWidth1 = 0;
-    nDataColWidth2 = 0;
-    nRowHeight = 0;
+    mnLabelColumnWidth = 0;
+    mnDataColumnWidth1 = 0;
+    mnDataColumnWidth2 = 0;
+    mnRowHeight = 0;
     CalcCellArray(false);
     CalcLineMap();
 }
 
 void AutoFormatPreview::CalcCellArray(bool _bFitWidth)
 {
-    maArray.SetXOffset(2);
-    maArray.SetAllColWidths(_bFitWidth ? nDataColWidth2 : nDataColWidth1);
-    maArray.SetColWidth(0, nLabelColWidth);
-    maArray.SetColWidth(4, nLabelColWidth);
+    maArray.SetAllColWidths(_bFitWidth ? mnDataColumnWidth2 : mnDataColumnWidth1);
+    maArray.SetColWidth(0, mnLabelColumnWidth);
+    maArray.SetColWidth(4, mnLabelColumnWidth);
 
-    maArray.SetYOffset(2);
-    maArray.SetAllRowHeights(nRowHeight);
+    maArray.SetAllRowHeights(mnRowHeight);
 
-    aPrvSize.setWidth(maArray.GetWidth() + 4);
-    aPrvSize.setHeight(maArray.GetHeight() + 4);
+    maPreviousSize.setWidth(maArray.GetWidth() + 4);
+    maPreviousSize.setHeight(maArray.GetHeight() + 4);
 }
 
 inline void lclSetStyleFromBorder(svx::frame::Style& rStyle,
@@ -399,7 +387,8 @@ void AutoFormatPreview::CalcLineMap()
         {
             svx::frame::Style aStyle;
 
-            const SvxBoxItem& rItem = aCurData.GetBoxFormat(GetFormatIndex(nCol, nRow)).GetBox();
+            const SvxBoxItem& rItem
+                = maCurrentData.GetBoxFormat(GetFormatIndex(nCol, nRow)).GetBox();
             lclSetStyleFromBorder(aStyle, rItem.GetLeft());
             maArray.SetCellStyleLeft(nCol, nRow, aStyle);
             lclSetStyleFromBorder(aStyle, rItem.GetRight());
@@ -420,63 +409,49 @@ void AutoFormatPreview::CalcLineMap()
 
 void AutoFormatPreview::NotifyChange(const SwTableAutoFormat& rNewData)
 {
-    aCurData = rNewData;
-    bFitWidth = aCurData.IsJustify(); // true;  //???
-    CalcCellArray(bFitWidth);
+    maCurrentData = rNewData;
+    mbFitWidth = maCurrentData.IsJustify(); // true;  //???
+    CalcCellArray(mbFitWidth);
     CalcLineMap();
-    Invalidate(tools::Rectangle(Point(0, 0), GetSizePixel()));
+    mxDrawingArea->queue_draw();
 }
 
-void AutoFormatPreview::DoPaint(vcl::RenderContext& rRenderContext)
+IMPL_LINK(AutoFormatPreview, DoPaint, weld::DrawingArea::draw_args, aPayload, void)
 {
-    DrawModeFlags nOldDrawMode = aVD->GetDrawMode();
+    vcl::RenderContext& rRenderContext = aPayload.first;
+
+    rRenderContext.Push(PushFlags::ALL);
+
+    DrawModeFlags nOldDrawMode = rRenderContext.GetDrawMode();
     if (rRenderContext.GetSettings().GetStyleSettings().GetHighContrastMode())
-        aVD->SetDrawMode(DrawModeFlags::SettingsLine | DrawModeFlags::SettingsFill
-                         | DrawModeFlags::SettingsText | DrawModeFlags::SettingsGradient);
+        rRenderContext.SetDrawMode(DrawModeFlags::SettingsLine | DrawModeFlags::SettingsFill
+                                   | DrawModeFlags::SettingsText | DrawModeFlags::SettingsGradient);
 
-    Bitmap thePreview;
-    Point aCenterPos;
-    Size theWndSize = GetSizePixel();
-    Color oldColor;
-    vcl::Font aFont;
+    Size theWndSize = rRenderContext.GetOutputSizePixel();
 
-    aFont = aVD->GetFont();
+    vcl::Font aFont(rRenderContext.GetFont());
     aFont.SetTransparent(true);
 
-    aVD->SetFont(aFont);
-    aVD->SetLineColor();
+    rRenderContext.SetFont(aFont);
+    rRenderContext.SetLineColor();
     const Color& rWinColor = rRenderContext.GetSettings().GetStyleSettings().GetWindowColor();
-    aVD->SetBackground(Wallpaper(rWinColor));
-    aVD->SetFillColor(rWinColor);
-    aVD->SetOutputSizePixel(aPrvSize);
+    rRenderContext.SetBackground(Wallpaper(rWinColor));
+    rRenderContext.SetFillColor(rWinColor);
 
-    // Draw cells on virtual device
-    // and save the result
-    PaintCells(*aVD.get());
-    thePreview = aVD->GetBitmap(Point(0, 0), aPrvSize);
-
-    // Draw the Frame and center the preview:
-    // (virtual Device for window output)
-    aVD->SetOutputSizePixel(theWndSize);
-    oldColor = aVD->GetLineColor();
-    aVD->SetLineColor();
-    aVD->DrawRect(tools::Rectangle(Point(0, 0), theWndSize));
-
+    // Draw the Frame
+    Color oldColor = rRenderContext.GetLineColor();
+    rRenderContext.SetLineColor();
+    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), theWndSize));
     rRenderContext.SetLineColor(oldColor);
 
-    aCenterPos = Point((theWndSize.Width() - aPrvSize.Width()) / 2,
-                       (theWndSize.Height() - aPrvSize.Height()) / 2);
-    aVD->DrawBitmap(aCenterPos, thePreview);
+    // Center the preview
+    maArray.SetXOffset(2 + (theWndSize.Width() - maPreviousSize.Width()) / 2);
+    maArray.SetYOffset(2 + (theWndSize.Height() - maPreviousSize.Height()) / 2);
+    // Draw cells on virtual device
+    PaintCells(rRenderContext);
 
-    // Output in the preview window:
-    rRenderContext.DrawBitmap(Point(0, 0), aVD->GetBitmap(Point(0, 0), theWndSize));
-
-    aVD->SetDrawMode(nOldDrawMode);
-}
-
-void AutoFormatPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*rRect*/)
-{
-    DoPaint(rRenderContext);
+    rRenderContext.SetDrawMode(nOldDrawMode);
+    rRenderContext.Pop();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

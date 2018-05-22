@@ -23,6 +23,7 @@
 #include <dcontact.hxx>
 #include <proofreadingiterator.hxx>
 #include <com/sun/star/text/XFlatParagraphIteratorProvider.hpp>
+#include <com/sun/star/linguistic2/XProofreadingIterator.hpp>
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
@@ -690,8 +691,12 @@ void SwDoc::ClearDoc()
     // *after* the document nodes are deleted.
     mpOutlineRule = nullptr;
     for( SwNumRule* pNumRule : *mpNumRuleTable )
+    {
+        getIDocumentListsAccess().deleteListForListStyle(pNumRule->GetName());
         delete pNumRule;
+    }
     mpNumRuleTable->clear();
+    maNumRuleMap.clear();
 
     // creation of new outline numbering rule
     mpOutlineRule = new SwNumRule( SwNumRule::GetOutlineRuleName(),

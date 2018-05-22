@@ -125,7 +125,9 @@ SdrObject* SwDoc::CloneSdrObj( const SdrObject& rObj, bool bMoveWithinDoc,
         getIDocumentDrawModelAccess().GetDrawModel()->InsertPage( pPg );
     }
 
-    SdrObject *pObj = rObj.Clone();
+    // TTTT Clone directly to target SdrModel
+    SdrObject *pObj(rObj.CloneSdrObject(*getIDocumentDrawModelAccess().GetDrawModel()));
+
     if( bMoveWithinDoc && SdrInventor::FmForm == pObj->GetObjInventor() )
     {
         // We need to preserve the Name for Controls
@@ -733,7 +735,7 @@ lcl_InsertLabel(SwDoc & rDoc, SwTextFormatColls *const pTextFormatCollTable,
 
                 /* #i6447#: Only the selected items are copied from the old
                    format. */
-                SfxItemSet* pNewSet = pNewFormat->GetAttrSet().Clone();
+                std::unique_ptr<SfxItemSet> pNewSet = pNewFormat->GetAttrSet().Clone();
 
                 // Copy only the set attributes.
                 // The others should apply from the Templates.
@@ -866,7 +868,7 @@ lcl_InsertLabel(SwDoc & rDoc, SwTextFormatColls *const pTextFormatCollTable,
                 else
                     pOldFormat->SetFormatAttr( *pNewSet );
 
-                delete pNewSet;
+                pNewSet.reset();
 
                 // Have only the FlyFrames created.
                 // We leave this to established methods (especially for InCntFlys).
@@ -1052,7 +1054,7 @@ lcl_InsertDrawLabel( SwDoc & rDoc, SwTextFormatColls *const pTextFormatCollTable
     // The TextAttribute needs to be destroyed.
     // Unfortunately, this also destroys the Format next to the Frames.
     // To avoid this, we disconnect the attribute from the Format.
-    SfxItemSet* pNewSet = pOldFormat->GetAttrSet().Clone( false );
+    std::unique_ptr<SfxItemSet> pNewSet = pOldFormat->GetAttrSet().Clone( false );
 
     // Protect the Frame's size and position
     if ( rSdrObj.IsMoveProtect() || rSdrObj.IsResizeProtect() )
@@ -1172,7 +1174,7 @@ lcl_InsertDrawLabel( SwDoc & rDoc, SwTextFormatColls *const pTextFormatCollTable
     else
         pOldFormat->SetFormatAttr( *pNewSet );
 
-    delete pNewSet;
+    pNewSet.reset();
 
     // Have only the FlyFrames created.
     // We leave this to established methods (especially for InCntFlys).

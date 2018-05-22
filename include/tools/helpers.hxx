@@ -22,8 +22,17 @@ typename std::enable_if<
 MinMax(T nVal, long nMin, long nMax)
 {
     assert(nMin <= nMax);
-    return nVal >= nMin
-        ? (nVal <= nMax ? static_cast<long>(nVal) : nMax) : nMin;
+    if (nVal >= nMin)
+    {
+        if (nVal <= nMax)
+            return static_cast<long>(nVal);
+        else
+           return nMax;
+    }
+    else
+    {
+        return nMin;
+    }
 }
 
 template<typename T>
@@ -33,12 +42,24 @@ typename std::enable_if<
 MinMax(T nVal, long nMin, long nMax)
 {
     assert(nMin <= nMax);
-    return nMax < 0
-        ? nMax
-        : ((nMin < 0 || nVal >= static_cast<unsigned long>(nMin))
-           ? (nVal <= static_cast<unsigned long>(nMax)
-              ? static_cast<long>(nVal) : nMax)
-           : nMin);
+    if (nMax < 0)
+    {
+        return nMax;
+    }
+    else
+    {
+        if (nMin < 0 || nVal >= static_cast<unsigned long>(nMin))
+        {
+            if (nVal <= static_cast<unsigned long>(nMax))
+                return static_cast<long>(nVal);
+            else
+                return nMax;
+        }
+        else
+        {
+            return nMin;
+        }
+    }
 }
 
 inline sal_uInt32 AlignedWidth4Bytes(sal_uInt32 nWidthBits)
@@ -55,7 +76,19 @@ inline long FRound( double fVal )
     return fVal > 0.0 ? static_cast<long>( fVal + 0.5 ) : -static_cast<long>( -fVal + 0.5 );
 }
 
-// return (n >= 0)? (n*72+63)/127: (n*72-63)/127;
+/** Convert 100th-mm to twips
+
+    A twip is 1/20 of a point, one inch is equal to 72 points, and
+    one inch is 2,540 100th-mm.
+
+    Thus:
+        twips = n * 72 / 2,540 / 20
+              = n * 72 / 127
+
+    Adding 63 (half of 127) fixes truncation issues in int arithmetic.
+
+    This formula is (n>=0) ? (n*72+63) / 127 : (n*72-63) / 127
+ */
 inline sal_Int64 sanitiseMm100ToTwip(sal_Int64 n)
 {
     if (n >= 0)
@@ -68,7 +101,7 @@ inline sal_Int64 sanitiseMm100ToTwip(sal_Int64 n)
         if (o3tl::checked_multiply<sal_Int64>(n, 72, n) || o3tl::checked_sub<sal_Int64>(n, 63, n))
             n = SAL_MIN_INT64;
     }
-    return n / 127;
+    return n / 127; // 127 is 2,540 100th-mm divided by 20pts
 }
 
 #endif

@@ -29,7 +29,6 @@
 #include <odbc/OResultSet.hxx>
 #include <odbc/OResultSetMetaData.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <connectivity/dbtools.hxx>
@@ -65,10 +64,13 @@ namespace
 OPreparedStatement::OPreparedStatement( OConnection* _pConnection,const OUString& sql)
     :OStatement_BASE2(_pConnection)
     ,numParams(0)
-    ,boundParams(nullptr)
     ,m_bPrepared(false)
 {
     m_sSqlStatement = sql;
+}
+
+OPreparedStatement::~OPreparedStatement()
+{
 }
 
 void SAL_CALL OPreparedStatement::acquire() throw()
@@ -689,10 +691,7 @@ void OPreparedStatement::initBoundParam ()
 
     if (numParams > 0)
     {
-        // Allocate an array of bound parameter objects
-
-        boundParams = new OBoundParam[numParams];
-
+        boundParams.reset(new OBoundParam[numParams]);
     }
 }
 
@@ -854,8 +853,7 @@ void OPreparedStatement::setStream(
 void OPreparedStatement::FreeParams()
 {
     numParams = 0;
-    delete [] boundParams;
-    boundParams = nullptr;
+    boundParams.reset();
 }
 
 void OPreparedStatement::setFastPropertyValue_NoBroadcast(sal_Int32 nHandle,const Any& rValue)

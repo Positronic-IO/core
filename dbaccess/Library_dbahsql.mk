@@ -14,7 +14,10 @@ $(eval $(call gb_Library_set_include,dbahsql,\
     -I$(WORKDIR)/YaccTarget/connectivity/source/parse \
 ))
 
-$(eval $(call gb_Library_use_external,dbahsql,boost_headers))
+$(eval $(call gb_Library_use_externals,dbahsql,\
+	boost_headers \
+	boost_date_time \
+))
 
 $(eval $(call gb_Library_set_precompiled_header,dbahsql,$(SRCDIR)/dbaccess/inc/pch/precompiled_dbahsql))
 
@@ -27,14 +30,22 @@ $(eval $(call gb_Library_use_libraries,dbahsql,\
     sal \
     salhelper \
     dbtools \
+    ucbhelper \
+    utl \
+    tl \
 ))
 
 $(eval $(call gb_Library_add_exception_objects,dbahsql,\
     dbaccess/source/filter/hsqldb/hsqlimport \
     dbaccess/source/filter/hsqldb/parseschema \
+    dbaccess/source/filter/hsqldb/alterparser \
     dbaccess/source/filter/hsqldb/createparser \
     dbaccess/source/filter/hsqldb/columndef \
+    dbaccess/source/filter/hsqldb/fbalterparser \
     dbaccess/source/filter/hsqldb/fbcreateparser \
+    dbaccess/source/filter/hsqldb/rowinputbinary \
+    dbaccess/source/filter/hsqldb/hsqlbinarynode \
+    dbaccess/source/filter/hsqldb/utils \
 ))
 
 # vim: set noet sw=4 ts=4:

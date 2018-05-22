@@ -44,12 +44,13 @@
 #include <com/sun/star/frame/status/UpperLowerMarginScale.hpp>
 #include <com/sun/star/frame/status/LeftRightMarginScale.hpp>
 #include <com/sun/star/drawing/ShadingPattern.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 
 #include <i18nutil/unicode.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <limits.h>
 #include <comphelper/processfactory.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/fileformat.h>
 #include <comphelper/types.hxx>
@@ -84,6 +85,7 @@
 #include <editeng/editerr.hxx>
 #include <libxml/xmlwriter.h>
 #include <o3tl/enumrange.hxx>
+#include <vcl/GraphicLoader.hxx>
 
 using namespace ::editeng;
 using namespace ::com::sun::star;
@@ -1078,7 +1080,7 @@ bool SvxShadowItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
     aShadow.Location = eSet;
     aShadow.ShadowWidth =   bConvert ? convertTwipToMm100(nWidth) : nWidth;
     aShadow.IsTransparent = aShadowColor.GetTransparency() > 0;
-    aShadow.Color = aShadowColor.GetColor();
+    aShadow.Color = sal_Int32(aShadowColor);
 
     sal_Int8 nTransparence = rtl::math::round(float(aShadowColor.GetTransparency() * 100) / 255);
 
@@ -1130,7 +1132,7 @@ bool SvxShadowItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
             {
                 Color aColor(aShadow.Color);
                 aColor.SetTransparency(rtl::math::round(float(nTransparence * 255) / 100));
-                aShadow.Color = aColor.GetColor();
+                aShadow.Color = sal_Int32(aColor);
             }
             break;
         }
@@ -1315,13 +1317,6 @@ sal_uInt16 SvxShadowItem::GetValueCount() const
     return sal_uInt16(SvxShadowLocation::End);  // SvxShadowLocation::BottomRight + 1
 }
 
-OUString SvxShadowItem::GetValueTextByPos( sal_uInt16 nPos ) const
-{
-    static_assert(SAL_N_ELEMENTS(RID_SVXITEMS_SHADOW) == size_t(SvxShadowLocation::End), "unexpected size");
-    assert(nPos < sal_uInt16(SvxShadowLocation::End) && "enum overflow!");
-    return EditResId(RID_SVXITEMS_SHADOW[nPos]);
-}
-
 sal_uInt16 SvxShadowItem::GetEnumValue() const
 {
     return static_cast<sal_uInt16>(GetLocation());
@@ -1427,7 +1422,7 @@ table::BorderLine2 SvxBoxItem::SvxLineToLine(const SvxBorderLine* pLine, bool bC
     table::BorderLine2 aLine;
     if(pLine)
     {
-        aLine.Color          = pLine->GetColor().GetColor() ;
+        aLine.Color          = sal_Int32(pLine->GetColor());
         aLine.InnerLineWidth = sal_uInt16( bConvert ? convertTwipToMm100(pLine->GetInWidth() ): pLine->GetInWidth() );
         aLine.OuterLineWidth = sal_uInt16( bConvert ? convertTwipToMm100(pLine->GetOutWidth()): pLine->GetOutWidth() );
         aLine.LineDistance   = sal_uInt16( bConvert ? convertTwipToMm100(pLine->GetDistance()): pLine->GetDistance() );
@@ -2590,6 +2585,131 @@ bool SvxBoxInfoItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
     return true;
 }
 
+
+namespace editeng
+{
+
+void BorderDistanceFromWord(bool bFromEdge, sal_Int32& nMargin, sal_Int32& nBorderDistance,
+    sal_Int32 nBorderWidth)
+{
+    // See https://wiki.openoffice.org/wiki/Writer/MSInteroperability/PageBorder
+
+    sal_Int32 nNewMargin = nMargin;
+    sal_Int32 nNewBorderDistance = nBorderDistance;
+
+    if (bFromEdge)
+    {
+        nNewMargin = nBorderDistance;
+        nNewBorderDistance = nMargin - nBorderDistance - nBorderWidth;
+    }
+    else
+    {
+        nNewMargin -= nBorderDistance + nBorderWidth;
+    }
+
+    // Ensure correct distance from page edge to text in cases not supported by us:
+    // when border is outside entire page area (!bFromEdge && BorderDistance > Margin),
+    // and when border is inside page body area (bFromEdge && BorderDistance > Margin)
+    if (nNewMargin < 0)
+    {
+        nNewMargin = 0;
+        nNewBorderDistance = std::max<sal_Int32>(nMargin - nBorderWidth, 0);
+    }
+    else if (nNewBorderDistance < 0)
+    {
+        nNewMargin = std::max<sal_Int32>(nMargin - nBorderWidth, 0);
+        nNewBorderDistance = 0;
+    }
+
+    nMargin = nNewMargin;
+    nBorderDistance = nNewBorderDistance;
+}
+
+// Heuristics to decide if we need to use "from edge" offset of borders
+//
+// There are two cases when we can safely use "from text" or "from edge" offset without distorting
+// border position (modulo rounding errors):
+// 1. When distance of all borders from text is no greater than 31 pt, we use "from text"
+// 2. Otherwise, if distance of all borders from edge is no greater than 31 pt, we use "from edge"
+// In all other cases, the position of borders would be distorted on export, because Word doesn't
+// support the offset of >31 pts (https://msdn.microsoft.com/en-us/library/ff533820), and we need
+// to decide which type of offset would provide less wrong result (i.e., the result would look
+// closer to original). Here, we just check sum of distances from text to borders, and if it is
+// less than sum of distances from borders to edges. The alternative would be to compare total areas
+// between text-and-borders and between borders-and-edges (taking into account different lengths of
+// borders, and visual impact of that).
+void BorderDistancesToWord(const SvxBoxItem& rBox, const WordPageMargins& rMargins,
+    WordBorderDistances& rDistances)
+{
+    // Use signed sal_Int32 that can hold sal_uInt16, to prevent overflow at subtraction below
+    const sal_Int32 nT = rBox.GetDistance(SvxBoxItemLine::TOP);
+    const sal_Int32 nL = rBox.GetDistance(SvxBoxItemLine::LEFT);
+    const sal_Int32 nB = rBox.GetDistance(SvxBoxItemLine::BOTTOM);
+    const sal_Int32 nR = rBox.GetDistance(SvxBoxItemLine::RIGHT);
+
+    // Only take into account existing borders
+    const SvxBorderLine* pLnT = rBox.GetLine(SvxBoxItemLine::TOP);
+    const SvxBorderLine* pLnL = rBox.GetLine(SvxBoxItemLine::LEFT);
+    const SvxBorderLine* pLnB = rBox.GetLine(SvxBoxItemLine::BOTTOM);
+    const SvxBorderLine* pLnR = rBox.GetLine(SvxBoxItemLine::RIGHT);
+
+    // We need to take border widths into account
+    const long nWidthT = pLnT ? pLnT->GetScaledWidth() : 0;
+    const long nWidthL = pLnL ? pLnL->GetScaledWidth() : 0;
+    const long nWidthB = pLnB ? pLnB->GetScaledWidth() : 0;
+    const long nWidthR = pLnR ? pLnR->GetScaledWidth() : 0;
+
+    // Resulting distances from text to borders
+    const sal_Int32 nT2BT = pLnT ? nT : 0;
+    const sal_Int32 nT2BL = pLnL ? nL : 0;
+    const sal_Int32 nT2BB = pLnB ? nB : 0;
+    const sal_Int32 nT2BR = pLnR ? nR : 0;
+
+    // Resulting distances from edge to borders
+    const sal_Int32 nE2BT = pLnT ? std::max<sal_Int32>(rMargins.nTop - nT - nWidthT, 0) : 0;
+    const sal_Int32 nE2BL = pLnL ? std::max<sal_Int32>(rMargins.nLeft - nL - nWidthL, 0) : 0;
+    const sal_Int32 nE2BB = pLnB ? std::max<sal_Int32>(rMargins.nBottom - nB - nWidthB, 0) : 0;
+    const sal_Int32 nE2BR = pLnR ? std::max<sal_Int32>(rMargins.nRight - nR - nWidthR, 0) : 0;
+
+    const sal_Int32 n32pt = 32 * 20;
+    // 1. If all borders are in range of 31 pts from text
+    if (nT2BT < n32pt && nT2BL < n32pt && nT2BB < n32pt && nT2BR < n32pt)
+    {
+        rDistances.bFromEdge = false;
+    }
+    else
+    {
+        // 2. If all borders are in range of 31 pts from edge
+        if (nE2BT < n32pt && nE2BL < n32pt && nE2BB < n32pt && nE2BR < n32pt)
+        {
+            rDistances.bFromEdge = true;
+        }
+        else
+        {
+            // Let's try to guess which would be the best approximation
+            rDistances.bFromEdge =
+                (nT2BT + nT2BL + nT2BB + nT2BR) > (nE2BT + nE2BL + nE2BB + nE2BR);
+        }
+    }
+
+    if (rDistances.bFromEdge)
+    {
+        rDistances.nTop = sal::static_int_cast<sal_uInt16>(nE2BT);
+        rDistances.nLeft = sal::static_int_cast<sal_uInt16>(nE2BL);
+        rDistances.nBottom = sal::static_int_cast<sal_uInt16>(nE2BB);
+        rDistances.nRight = sal::static_int_cast<sal_uInt16>(nE2BR);
+    }
+    else
+    {
+        rDistances.nTop = sal::static_int_cast<sal_uInt16>(nT2BT);
+        rDistances.nLeft = sal::static_int_cast<sal_uInt16>(nT2BL);
+        rDistances.nBottom = sal::static_int_cast<sal_uInt16>(nT2BB);
+        rDistances.nRight = sal::static_int_cast<sal_uInt16>(nT2BR);
+    }
+}
+
+}
+
 // class SvxFormatBreakItem -------------------------------------------------
 
 bool SvxFormatBreakItem::operator==( const SfxPoolItem& rAttr ) const
@@ -2813,7 +2933,7 @@ bool SvxLineItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemId ) const
     {
         switch ( nMemId )
         {
-            case MID_FG_COLOR:      rVal <<= sal_Int32(pLine->GetColor().GetColor()); break;
+            case MID_FG_COLOR:      rVal <<= pLine->GetColor(); break;
             case MID_OUTER_WIDTH:   rVal <<= sal_Int32(pLine->GetOutWidth());   break;
             case MID_INNER_WIDTH:   rVal <<= sal_Int32(pLine->GetInWidth( ));   break;
             case MID_DISTANCE:      rVal <<= sal_Int32(pLine->GetDistance());   break;
@@ -3178,10 +3298,10 @@ bool SvxBrushItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
     switch( nMemberId)
     {
         case MID_BACK_COLOR:
-            rVal <<= static_cast<sal_Int32>( aColor.GetColor() );
+            rVal <<= aColor;
         break;
         case MID_BACK_COLOR_R_G_B:
-            rVal <<= static_cast<sal_Int32>( aColor.GetRGBColor() );
+            rVal <<= aColor.GetRGBColor();
         break;
         case MID_BACK_COLOR_TRANSPARENCY:
             rVal <<= SvxBrushItem::TransparencyToPercent(aColor.GetTransparency());
@@ -3190,27 +3310,28 @@ bool SvxBrushItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
             rVal <<= static_cast<style::GraphicLocation>(static_cast<sal_Int16>(eGraphicPos));
         break;
 
-        case MID_GRAPHIC:
-            SAL_WARN( "editeng.items", "not implemented" );
-        break;
-
         case MID_GRAPHIC_TRANSPARENT:
             rVal <<= ( aColor.GetTransparency() == 0xff );
         break;
 
         case MID_GRAPHIC_URL:
         {
-            OUString sLink;
-            if ( !maStrLink.isEmpty() )
-                sLink = maStrLink;
+            throw uno::RuntimeException("Getting from this property is not unsupported");
+        }
+        break;
+        case MID_GRAPHIC:
+        {
+            uno::Reference<graphic::XGraphic> xGraphic;
+            if (!maStrLink.isEmpty())
+            {
+                Graphic aGraphic(vcl::graphic::loadFromURL(maStrLink));
+                xGraphic = aGraphic.GetXGraphic();
+            }
             else if (xGraphicObject)
             {
-                OUString sId(OStringToOUString(
-                    xGraphicObject->GetUniqueID(),
-                    RTL_TEXTENCODING_ASCII_US));
-                sLink = UNO_NAME_GRAPHOBJ_URLPREFIX + sId;
+                xGraphic = xGraphicObject->GetGraphic().GetXGraphic();
             }
-            rVal <<= sLink;
+            rVal <<= xGraphic;
         }
         break;
 
@@ -3276,42 +3397,43 @@ bool SvxBrushItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
         }
         break;
 
-        case MID_GRAPHIC:
-            SAL_WARN( "editeng.items", "not implemented" );
-        break;
-
         case MID_GRAPHIC_TRANSPARENT:
             aColor.SetTransparency( Any2Bool( rVal ) ? 0xff : 0 );
         break;
 
         case MID_GRAPHIC_URL:
+        case MID_GRAPHIC:
         {
-            if ( rVal.getValueType() == ::cppu::UnoType<OUString>::get() )
+            Graphic aGraphic;
+
+            if (rVal.getValueType() == ::cppu::UnoType<OUString>::get())
             {
-                OUString sLink;
-                rVal >>= sLink;
-                if( sLink.startsWith( UNO_NAME_GRAPHOBJ_URLPKGPREFIX ) )
+                OUString aURL = rVal.get<OUString>();
+                aGraphic = vcl::graphic::loadFromURL(aURL);
+            }
+            else if (rVal.getValueType() == cppu::UnoType<graphic::XGraphic>::get())
+            {
+                auto xGraphic = rVal.get<uno::Reference<graphic::XGraphic>>();
+                aGraphic = Graphic(xGraphic);
+            }
+
+            if (aGraphic)
+            {
+                maStrLink.clear();
+
+                std::unique_ptr<GraphicObject> xOldGrfObj(std::move(xGraphicObject));
+                xGraphicObject.reset(new GraphicObject(aGraphic));
+                ApplyGraphicTransparency_Impl();
+                xOldGrfObj.reset();
+
+                if (aGraphic && eGraphicPos == GPOS_NONE)
                 {
-                    OSL_FAIL( "package urls aren't implemented" );
-                }
-                else if( sLink.startsWith( UNO_NAME_GRAPHOBJ_URLPREFIX ) )
-                {
-                    maStrLink.clear();
-                    OString sId(OUStringToOString(sLink.copy( sizeof(UNO_NAME_GRAPHOBJ_URLPREFIX)-1 ),
-                                                  RTL_TEXTENCODING_ASCII_US));
-                    std::unique_ptr<GraphicObject> xOldGrfObj(std::move(xGraphicObject));
-                    xGraphicObject.reset(new GraphicObject(sId));
-                    ApplyGraphicTransparency_Impl();
-                    xOldGrfObj.reset();
-                }
-                else
-                {
-                    SetGraphicLink(sLink);
-                }
-                if ( !sLink.isEmpty() && eGraphicPos == GPOS_NONE )
                     eGraphicPos = GPOS_MM;
-                else if( sLink.isEmpty() )
+                }
+                else if (!aGraphic)
+                {
                     eGraphicPos = GPOS_NONE;
+                }
             }
         }
         break;

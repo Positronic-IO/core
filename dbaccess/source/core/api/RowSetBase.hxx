@@ -39,9 +39,7 @@
 #include <com/sun/star/util/XNumberFormatTypes.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include "RowSetRow.hxx"
-#include <comphelper/broadcasthelper.hxx>
 #include "RowSetCacheIterator.hxx"
-#include <core_resource.hxx>
 
 #include <functional>
 
@@ -88,11 +86,11 @@ namespace dbaccess
 
         ::cppu::OWeakObject*                    m_pMySelf;          // set by derived classes
         ORowSetCache*                           m_pCache;           // the cache is used by the rowset and his clone (shared)
-        ORowSetDataColumns*                     m_pColumns;         // represent the select columns
+        std::unique_ptr<ORowSetDataColumns>     m_pColumns;         // represent the select columns
         ::cppu::OBroadcastHelper&               m_rBHelper;         // must be set from the derived classes
         // is used when the formatkey for database types is set
         css::uno::Reference< css::util::XNumberFormatTypes>   m_xNumberFormatTypes;
-        OEmptyCollection*                                                               m_pEmptyCollection;
+        std::unique_ptr<OEmptyCollection>       m_pEmptyCollection;
 
         css::uno::Reference< css::uno::XComponentContext>   m_aContext;
         ::connectivity::SQLError                m_aErrors;
@@ -126,8 +124,6 @@ namespace dbaccess
         virtual bool notifyAllListenersCursorBeforeMove(::osl::ResettableMutexGuard& _rGuard);
         // notify cursor moved
         virtual void notifyAllListenersCursorMoved(::osl::ResettableMutexGuard& _rGuard);
-        // notify all that rowset changed
-        virtual void notifyAllListeners(::osl::ResettableMutexGuard& _rGuard);
 
         // cancel the insertion, if necessary (means if we're on the insert row)
         virtual void        doCancelModification( ) = 0;

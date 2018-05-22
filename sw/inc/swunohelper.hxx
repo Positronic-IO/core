@@ -19,8 +19,8 @@
 #ifndef INCLUDED_SW_INC_SWUNOHELPER_HXX
 #define INCLUDED_SW_INC_SWUNOHELPER_HXX
 
-#include <tools/solar.h>
 #include <sal/types.h>
+#include <rtl/ustring.hxx>
 #include "swdllapi.h"
 
 #include <vector>
@@ -30,7 +30,6 @@ namespace com { namespace sun { namespace star {
         class Any;
     }
 }}}
-namespace rtl {class OUString;}
 class DateTime;
 class SfxItemSet;
 
@@ -44,9 +43,8 @@ sal_Int32 GetEnumAsInt32( const css::uno::Any& rVal );
     // delete the file under this URL
 SW_DLLPUBLIC bool UCB_DeleteFile( const OUString& rURL );
 
-    // copy/move the file to a new location
-bool UCB_CopyFile( const OUString& rURL, const OUString& rNewURL,
-                    bool bCopyIsMove );
+    // move the file to a new location
+bool UCB_MoveFile( const OUString& rURL, const OUString& rNewURL );
 
     // is the URL on the current system case sensitive?
 SW_DLLPUBLIC bool UCB_IsCaseSensitiveFileName( const OUString& rURL );

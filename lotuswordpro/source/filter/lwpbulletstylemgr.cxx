@@ -127,11 +127,10 @@ OUString LwpBulletStyleMgr::RegisterBulletStyle(LwpPara* pPara, LwpBulletOverrid
     std::shared_ptr<LwpBulletOverride> pBulletOver(pBullOver->clone());
 
     sal_uInt16 nNameIndex = 0;
-    std::vector <OverridePair>::iterator iter;
-    for(iter = m_vIDsPairList.begin(); iter != m_vIDsPairList.end(); ++iter)
+    for (auto const& vIDsPair : m_vIDsPairList)
     {
-        if (iter->first->GetSilverBullet() == aBulletID && iter->second == aIndentID
-            && iter->first->IsRightAligned() == pBullOver->IsRightAligned())
+        if (vIDsPair.first->GetSilverBullet() == aBulletID && vIDsPair.second == aIndentID
+            && vIDsPair.first->IsRightAligned() == pBullOver->IsRightAligned())
         {
             return m_vStyleNameList[nNameIndex];
         }
@@ -153,7 +152,7 @@ OUString LwpBulletStyleMgr::RegisterBulletStyle(LwpPara* pPara, LwpBulletOverrid
         eAlign = enumXFAlignEnd;
     }
 
-    XFListStyle* pListStyle = new XFListStyle();
+    std::unique_ptr<XFListStyle> pListStyle(new XFListStyle());
     XFStyleManager* pXFStyleMgr = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
 
     if (!bIsNumbering)
@@ -175,7 +174,7 @@ OUString LwpBulletStyleMgr::RegisterBulletStyle(LwpPara* pPara, LwpBulletOverrid
             }
         }
 
-        aStyleName = pXFStyleMgr->AddStyle(pListStyle).m_pStyle->GetStyleName();
+        aStyleName = pXFStyleMgr->AddStyle(std::move(pListStyle)).m_pStyle->GetStyleName();
     }
     else
     {
@@ -231,11 +230,8 @@ OUString LwpBulletStyleMgr::RegisterBulletStyle(LwpPara* pPara, LwpBulletOverrid
 
                 pListStyle->SetListPosition(nPos, 0.0, 0.635, 0.0);
             }
-            aStyleName = pXFStyleMgr->AddStyle(pListStyle).m_pStyle->GetStyleName();
+            aStyleName = pXFStyleMgr->AddStyle(std::move(pListStyle)).m_pStyle->GetStyleName();
         }
-        else
-            delete pListStyle;
-
     }
 
     m_vStyleNameList.push_back(aStyleName);

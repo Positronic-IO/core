@@ -56,7 +56,6 @@
 #include <svtools/transfer.hxx>
 #include <svl/whiter.hxx>
 #include <svl/languageoptions.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <svx/svxdlg.hxx>
 #include <svx/dialogs.hrc>
@@ -64,6 +63,7 @@
 
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <scmod.hxx>
 #include <drtxtob.hxx>
 #include <fudraw.hxx>
@@ -71,11 +71,10 @@
 #include <document.hxx>
 #include <drawview.hxx>
 #include <viewutil.hxx>
-#include <scresid.hxx>
 #include <tabvwsh.hxx>
 #include <gridwin.hxx>
 
-#define ScDrawTextObjectBar
+#define ShellClass_ScDrawTextObjectBar
 #include <scslots.hxx>
 
 #include <memory>
@@ -238,7 +237,7 @@ void ScDrawTextObjectBar::Execute( SfxRequest &rReq )
                         aNewItem = rItem;
                 }
                 else
-                    ScViewUtil::ExecuteCharMap( rItem, *pViewData->GetViewShell()->GetViewFrame(), aNewItem, aString );
+                    ScViewUtil::ExecuteCharMap( rItem, *pViewData->GetViewShell()->GetViewFrame() );
 
                 if ( !aString.isEmpty() )
                 {
@@ -627,7 +626,7 @@ static void lcl_RemoveFields( OutlinerView& rOutView )
                         {
                             if (bUpdate)
                                 pOutliner->SetUpdateMode( false );
-                            OUString aName = ScGlobal::GetRscString( STR_UNDO_DELETECONTENTS );
+                            OUString aName = ScResId( STR_UNDO_DELETECONTENTS );
                             ViewShellId nViewShellId(-1);
                             if (ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell())
                                 nViewShellId = pViewSh->GetViewShellId();
@@ -876,7 +875,8 @@ void ScDrawTextObjectBar::ExecuteAttr( SfxRequest &rReq )
             case SID_DRAWTEXT_ATTR_DLG:
                 {
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateTextTabDialog( pViewData->GetDialogParent(), &aEditAttr, pView ));
+                    vcl::Window* pWin = pViewData->GetDialogParent();
+                    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateTextTabDialog( pWin ? pWin->GetFrameWeld() : nullptr, &aEditAttr, pView ));
 
                     bDone = ( RET_OK == pDlg->Execute() );
 

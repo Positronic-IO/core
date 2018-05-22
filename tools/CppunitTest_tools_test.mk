@@ -16,6 +16,7 @@ $(eval $(call gb_CppunitTest_use_external,tools_test,boost_headers))
 $(eval $(call gb_CppunitTest_add_exception_objects,tools_test, \
     tools/qa/cppunit/test_bigint \
     tools/qa/cppunit/test_date \
+    tools/qa/cppunit/test_time \
     tools/qa/cppunit/test_fract \
     tools/qa/cppunit/test_inetmime \
     tools/qa/cppunit/test_pathutils \
@@ -24,6 +25,9 @@ $(eval $(call gb_CppunitTest_add_exception_objects,tools_test, \
     tools/qa/cppunit/test_urlobj \
     tools/qa/cppunit/test_color \
     tools/qa/cppunit/test_rectangle \
+    tools/qa/cppunit/test_minmax \
+    tools/qa/cppunit/test_100mm2twips \
+    tools/qa/cppunit/test_fround \
 ))
 
 $(eval $(call gb_CppunitTest_use_sdk_api,tools_test))

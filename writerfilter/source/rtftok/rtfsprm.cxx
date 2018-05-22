@@ -11,6 +11,7 @@
 #include <ooxml/resourceids.hxx>
 #include <ooxml/QNameToString.hxx>
 #include <rtl/strbuf.hxx>
+#include "rtfdocumentimpl.hxx"
 
 namespace writerfilter
 {
@@ -145,6 +146,7 @@ static RTFValue::Pointer_t getDefaultSPRM(Id const id)
         case NS_ooxml::LN_EG_RPrBase_b:
         case NS_ooxml::LN_CT_Ind_left:
         case NS_ooxml::LN_CT_Ind_right:
+        case NS_ooxml::LN_CT_Ind_firstLine:
             return std::make_shared<RTFValue>(0);
 
         default:
@@ -239,6 +241,86 @@ static void cloneAndDeduplicateSprm(std::pair<Id, RTFValue::Pointer_t> const& rS
     }
 }
 
+/// Extracts the list level matching nLevel from pAbstract.
+static RTFValue::Pointer_t getListLevel(const RTFValue::Pointer_t& pAbstract, int nLevel)
+{
+    for (const auto& rPair : pAbstract->getSprms())
+    {
+        if (rPair.first != NS_ooxml::LN_CT_AbstractNum_lvl)
+            continue;
+
+        RTFValue::Pointer_t pLevel = rPair.second->getAttributes().find(NS_ooxml::LN_CT_Lvl_ilvl);
+        if (!pLevel)
+            continue;
+
+        if (pLevel->getInt() != nLevel)
+            continue;
+
+        return rPair.second;
+    }
+
+    return RTFValue::Pointer_t();
+}
+
+void RTFSprms::deduplicateList(const std::map<int, int>& rInvalidListLevelFirstIndents)
+{
+    int nLevel = 0;
+    RTFValue::Pointer_t pLevelId
+        = getNestedSprm(*this, NS_ooxml::LN_CT_PPrBase_numPr, NS_ooxml::LN_CT_NumPr_ilvl);
+    if (pLevelId)
+        nLevel = pLevelId->getInt();
+
+    auto it = rInvalidListLevelFirstIndents.find(nLevel);
+    if (it == rInvalidListLevelFirstIndents.end())
+        return;
+
+    int nListValue = it->second;
+
+    RTFValue::Pointer_t pParagraphValue
+        = getNestedAttribute(*this, NS_ooxml::LN_CT_PPrBase_ind, NS_ooxml::LN_CT_Ind_firstLine);
+    if (!pParagraphValue)
+        return;
+
+    int nParagraphValue = pParagraphValue->getInt();
+
+    if (nParagraphValue == nListValue)
+        eraseNestedAttribute(*this, NS_ooxml::LN_CT_PPrBase_ind, NS_ooxml::LN_CT_Ind_firstLine);
+}
+
+void RTFSprms::duplicateList(const RTFValue::Pointer_t& pAbstract)
+{
+    int nLevel = 0;
+    RTFValue::Pointer_t pLevelId
+        = getNestedSprm(*this, NS_ooxml::LN_CT_PPrBase_numPr, NS_ooxml::LN_CT_NumPr_ilvl);
+    if (pLevelId)
+        nLevel = pLevelId->getInt();
+
+    RTFValue::Pointer_t pLevel = getListLevel(pAbstract, nLevel);
+    if (!pLevel)
+        return;
+
+    RTFValue::Pointer_t pLevelInd = pLevel->getSprms().find(NS_ooxml::LN_CT_PPrBase_ind);
+    if (!pLevelInd)
+        return;
+
+    for (const auto& rListLevelPair : pLevelInd->getAttributes())
+    {
+        switch (rListLevelPair.first)
+        {
+            case NS_ooxml::LN_CT_Ind_left:
+            case NS_ooxml::LN_CT_Ind_right:
+            case NS_ooxml::LN_CT_Ind_firstLine:
+                RTFValue::Pointer_t pParagraphValue
+                    = getNestedAttribute(*this, NS_ooxml::LN_CT_PPrBase_ind, rListLevelPair.first);
+                if (!pParagraphValue)
+                    putNestedAttribute(*this, NS_ooxml::LN_CT_PPrBase_ind, rListLevelPair.first,
+                                       getDefaultSPRM(rListLevelPair.first));
+
+                break;
+        }
+    }
+}
+
 RTFSprms RTFSprms::cloneAndDeduplicate(RTFSprms& rReference) const
 {
     RTFSprms ret(*this);
@@ -273,9 +355,9 @@ bool RTFSprms::equals(RTFValue& rOther)
 
 void RTFSprms::ensureCopyBeforeWrite()
 {
-    if (m_pSprms->m_nRefCount > 1)
+    if (m_pSprms->GetRefCount() > 1)
     {
-        boost::intrusive_ptr<RTFSprmsImpl> pClone(new RTFSprmsImpl);
+        tools::SvRef<RTFSprmsImpl> pClone(new RTFSprmsImpl);
         for (auto& rSprm : *m_pSprms)
             pClone->push_back(
                 std::make_pair(rSprm.first, RTFValue::Pointer_t(rSprm.second->Clone())));
@@ -294,10 +376,10 @@ RTFSprms::RTFSprms(const RTFSprms& rSprms) { *this = rSprms; }
 
 void RTFSprms::clear()
 {
-    if (m_pSprms->m_nRefCount == 1)
+    if (m_pSprms->GetRefCount() == 1)
         return m_pSprms->clear();
 
-    m_pSprms.reset(new RTFSprmsImpl);
+    m_pSprms = tools::SvRef<RTFSprmsImpl>(new RTFSprmsImpl);
 }
 
 } // namespace rtftok

@@ -26,7 +26,6 @@
 #include "vbarange.hxx"
 #include "vbaglobals.hxx"
 #include <vector>
-#include <vcl/msgbox.hxx>
 #include <tabvwsh.hxx>
 #include <viewdata.hxx>
 #include <compiler.hxx>
@@ -170,7 +169,7 @@ ScVbaNames::Add( const css::uno::Any& Name ,
                     if ( ScVbaRange::getCellRangesForAddress( nFlags, sFormula, pDocSh, aCellRanges, eConv , ',' ) )
                     {
                         if ( aCellRanges.size() == 1 )
-                            xUnoRange =  new ScCellRangeObj( pDocSh, *aCellRanges.front() );
+                            xUnoRange =  new ScCellRangeObj( pDocSh, aCellRanges.front() );
                         else
                         {
                             uno::Reference< sheet::XSheetCellRangeContainer > xRanges( new ScCellRangesObj( pDocSh, aCellRanges ) );

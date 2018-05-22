@@ -29,10 +29,11 @@
 #include <vcl/graphicfilter.hxx>
 #include <svl/stritem.hxx>
 #include <svtools/miscopt.hxx>
-#include <vcl/msgbox.hxx>
 #include <avmedia/mediawindow.hxx>
 #include <vcl/svapp.hxx>
-
+#include <vcl/weld.hxx>
+#include <vcl/GraphicNativeTransform.hxx>
+#include <vcl/GraphicNativeMetadata.hxx>
 #include <fuinsert.hxx>
 #include <tabvwsh.hxx>
 #include <drwlayer.hxx>
@@ -99,8 +100,23 @@ void ScLimitSizeOnDrawPage( Size& rSize, Point& rPos, const Size& rPage )
 static void lcl_InsertGraphic( const Graphic& rGraphic,
                         const OUString& rFileName, const OUString& rFilterName, bool bAsLink, bool bApi,
                         ScTabViewShell* pViewSh, const vcl::Window* pWindow, SdrView* pView,
-                        bool bAnchorToCell=true )
+                        ScAnchorType aAnchorType = SCA_CELL )
 {
+    Graphic& rGraphic1 = const_cast<Graphic &>(rGraphic);
+    GraphicNativeMetadata aMetadata;
+    if ( aMetadata.read(rGraphic1) )
+    {
+        const sal_uInt16 aRotation = aMetadata.getRotation();
+        if (aRotation != 0)
+        {
+            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr, VclMessageType::Question,VclButtonsType::YesNo,ScResId(STR_QUERYROTATION)));
+            if (xQueryBox->run() == RET_YES)
+            {
+                GraphicNativeTransform aTransform( rGraphic1 );
+                aTransform.rotate( aRotation );
+            }
+        }
+    }
     ScDrawView* pDrawView = pViewSh->GetScDrawView();
 
     // #i123922# check if an existing object is selected; if yes, evtl. replace
@@ -114,11 +130,11 @@ static void lcl_InsertGraphic( const Graphic& rGraphic,
         {
             //sal_Int8 nAction(DND_ACTION_MOVE);
             //Point aPos;
-            const OUString aBeginUndo(ScGlobal::GetRscString(STR_UNDO_DRAGDROP));
+            const OUString aBeginUndo(ScResId(STR_UNDO_DRAGDROP));
 
             SdrObject* pResult = pDrawView->ApplyGraphicToObject(
                 *pPickObj,
-                rGraphic,
+                rGraphic1,
                 aBeginUndo,
                 bAsLink ? rFileName : OUString(),
                 bAsLink ? rFilterName : OUString());
@@ -161,18 +177,22 @@ static void lcl_InsertGraphic( const Graphic& rGraphic,
 
     tools::Rectangle aRect ( aInsertPos, aLogicSize );
 
-    SdrGrafObj* pObj = new SdrGrafObj( rGraphic, aRect );
+    SdrGrafObj* pObj = new SdrGrafObj(
+        pView->getSdrModelFromSdrView(), // TTTT pView should be reference
+        rGraphic1,
+        aRect);
 
     // calling SetGraphicLink here doesn't work
-
+    // Yes, due to the SdrObject had no SdrModel
     //  Path is no longer used as name for the graphics object
 
     ScDrawLayer* pLayer = static_cast<ScDrawLayer*>(pView->GetModel());
     OUString aName = pLayer->GetNewGraphicName();                 // "Graphics"
     pObj->SetName(aName);
 
-    if (bAnchorToCell)
-        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *(rData.GetDocument()), rData.GetTabNo());
+    if (aAnchorType == SCA_CELL || aAnchorType == SCA_CELL_RESIZE)
+        ScDrawLayer::SetCellAnchoredFromPosition(*pObj, *(rData.GetDocument()), rData.GetTabNo(),
+                                                 aAnchorType == SCA_CELL_RESIZE);
 
     //  don't select if from (dispatch) API, to allow subsequent cell operations
     SdrInsertFlags nInsOptions = bApi ? SdrInsertFlags::DONTMARK : SdrInsertFlags::NONE;
@@ -227,9 +247,10 @@ static void lcl_InsertMedia( const OUString& rMediaURL, bool bApi,
 #endif
     }
 
-    SdrMediaObj* pObj = new SdrMediaObj( tools::Rectangle( aInsertPos, aSize ) );
+    SdrMediaObj* pObj = new SdrMediaObj(
+        *rData.GetDocument()->GetDrawLayer(),
+        tools::Rectangle(aInsertPos, aSize));
 
-    pObj->SetModel(rData.GetDocument()->GetDrawLayer()); // set before setURL
     pObj->setURL( realURL, ""/*TODO?*/ );
     pView->InsertObjectAtView( pObj, *pPV, bApi ? SdrInsertFlags::DONTMARK : SdrInsertFlags::NONE );
 }
@@ -265,13 +286,14 @@ FuInsertGraphic::FuInsertGraphic( ScTabViewShell*   pViewSh,
     }
     else
     {
-        SvxOpenGraphicDialog aDlg(ScResId(STR_INSERTGRAPHIC), pWin,
+        SvxOpenGraphicDialog aDlg(ScResId(STR_INSERTGRAPHIC), pWin ? pWin->GetFrameWeld() : nullptr,
                                   ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW_IMAGE_ANCHOR);
 
         Reference<ui::dialogs::XFilePickerControlAccess> xCtrlAcc = aDlg.GetFilePickerControlAccess();
         sal_Int16 nSelect = 0;
         Sequence<OUString> aListBoxEntries {
             ScResId(STR_ANCHOR_TO_CELL),
+            ScResId(STR_ANCHOR_TO_CELL_RESIZE),
             ScResId(STR_ANCHOR_TO_PAGE)
         };
         try
@@ -314,9 +336,18 @@ FuInsertGraphic::FuInsertGraphic( ScTabViewShell*   pViewSh,
                     ui::dialogs::ListboxControlActions::GET_SELECTED_ITEM );
                 OUString sAnchor;
                 aAnchorValue >>= sAnchor;
-                bool bAnchorToCell = sAnchor == ScResId(STR_ANCHOR_TO_CELL);
 
-                lcl_InsertGraphic( aGraphic, aFileName, aFilterName, bAsLink, false, pViewSh, pWindow, pView, bAnchorToCell );
+                ScAnchorType aAnchorType;
+                if (sAnchor == ScResId(STR_ANCHOR_TO_CELL))
+                    aAnchorType = SCA_CELL;
+                else if (sAnchor == ScResId(STR_ANCHOR_TO_CELL_RESIZE))
+                    aAnchorType = SCA_CELL_RESIZE;
+                else if (sAnchor == ScResId(STR_ANCHOR_TO_PAGE))
+                    aAnchorType = SCA_PAGE;
+                else
+                    aAnchorType = SCA_DONTKNOW;
+
+                lcl_InsertGraphic( aGraphic, aFileName, aFilterName, bAsLink, false, pViewSh, pWindow, pView, aAnchorType );
 
                 //  append items for recording
                 rReq.AppendItem( SfxStringItem( SID_INSERT_GRAPHIC, aFileName ) );
@@ -361,7 +392,7 @@ FuInsertMedia::FuInsertMedia( ScTabViewShell*   pViewSh,
     bool bLink(true);
     if (bAPI
 #if HAVE_FEATURE_AVMEDIA
-        || ::avmedia::MediaWindow::executeMediaURLDialog(pWin, aURL, &bLink)
+        || ::avmedia::MediaWindow::executeMediaURLDialog(pWin ? pWin->GetFrameWeld() : nullptr, aURL, &bLink)
 #endif
        )
     {

@@ -34,7 +34,6 @@
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
 #include <com/sun/star/frame/DispatchResultState.hpp>
-#include <comphelper/processfactory.hxx>
 #include <itemdel.hxx>
 
 //Includes below due to nInReschedule
@@ -65,9 +64,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::util;
 
-static sal_uInt16 nTimeOut = 300;
-
-#define TIMEOUT_FIRST       nTimeOut
+#define TIMEOUT_FIRST       300
 #define TIMEOUT_UPDATING     20
 
 typedef std::unordered_map< sal_uInt16, bool > InvalidateSlotMap;
@@ -115,7 +112,7 @@ public:
     css::uno::Reference< css::frame::XDispatchProvider >  xProv;
     SfxWorkWindow*          pWorkWin;
     SfxBindings*            pSubBindings;
-    std::vector<SfxStateCache *> pCaches;   // One chache for each binding
+    std::vector<SfxStateCache *> pCaches;   // One cache for each binding
     std::size_t             nCachedFunc1;   // index for the last one called
     std::size_t             nCachedFunc2;   // index for the second last called
     std::size_t             nMsgPos;        // Message-Position relative the one to be updated

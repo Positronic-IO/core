@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.18.3 -->
 <interface domain="sw">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkAdjustment" id="adjustmentFLD_DISTANCE">
     <property name="upper">2</property>
@@ -130,7 +130,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="halign">start</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustmentFLD_DROPCAPS</property>
                       </object>
                       <packing>
@@ -143,7 +142,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="halign">start</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustmentFLD_LINES</property>
                       </object>
                       <packing>
@@ -156,7 +154,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="halign">start</property>
-                        <property name="invisible_char">•</property>
                         <property name="adjustment">adjustmentFLD_DISTANCE</property>
                         <property name="digits">2</property>
                       </object>
@@ -236,7 +233,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="max_length">9</property>
-                        <property name="invisible_char">•</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>

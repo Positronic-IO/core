@@ -23,7 +23,6 @@
 #include <strings.hrc>
 #include <strings.hxx>
 #include <sqlmessage.hxx>
-#include <vcl/msgbox.hxx>
 #include <WCopyTable.hxx>
 #include <dbaccess/genericcontroller.hxx>
 #include <WCPage.hxx>
@@ -42,7 +41,6 @@
 #include <unotools/ucbhelper.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/diagnose_ex.h>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/sdbcx/XTablesSupplier.hpp>
 #include <com/sun/star/sdbcx/XViewsSupplier.hpp>
 #include <com/sun/star/sdb/XQueryDefinitionsSupplier.hpp>
@@ -132,7 +130,7 @@ void OTableCopyHelper::insertTable( const OUString& i_rSourceDataSource, const R
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -215,7 +213,7 @@ void OTableCopyHelper::pasteTable( SotClipboardFormatId _nFormatId
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     else

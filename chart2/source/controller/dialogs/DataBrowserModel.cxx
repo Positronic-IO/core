@@ -44,6 +44,7 @@
 #include <com/sun/star/chart2/data/XNumericalDataSequence.hpp>
 #include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
+#include <tools/diagnose_ex.h>
 
 #include <rtl/math.hxx>
 
@@ -69,9 +70,9 @@ OUString lcl_getRole(
         {
             xProp->getPropertyValue( "Role" ) >>= aResult;
         }
-        catch( const uno::Exception & ex )
+        catch( const uno::Exception & )
         {
-            SAL_WARN("chart2", "Exception caught. " << ex );
+            DBG_UNHANDLED_EXCEPTION("chart2");
         }
     }
     return aResult;
@@ -117,9 +118,9 @@ bool lcl_SequenceOfSeriesIsShared(
                 break;
             }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return bResult;
 }
@@ -556,11 +557,10 @@ void DataBrowserModel::removeDataPointForAllSeries( sal_Int32 nAtIndex )
 DataBrowserModel::tDataHeader DataBrowserModel::getHeaderForSeries(
     const Reference< chart2::XDataSeries > & xSeries ) const
 {
-    for( tDataHeaderVector::const_iterator aIt( m_aHeaders.begin());
-         aIt != m_aHeaders.end(); ++aIt )
+    for (auto const& elemHeader : m_aHeaders)
     {
-        if( aIt->m_xDataSeries == xSeries )
-            return (*aIt);
+        if( elemHeader.m_xDataSeries == xSeries )
+            return elemHeader;
     }
     return tDataHeader();
 }
@@ -712,13 +712,12 @@ sal_Int32 DataBrowserModel::getColumnCount() const
 sal_Int32 DataBrowserModel::getMaxRowCount() const
 {
     sal_Int32 nResult = 0;
-    tDataColumnVector::const_iterator aIt( m_aColumns.begin());
-    for( ; aIt != m_aColumns.end(); ++aIt )
+    for (auto const& column : m_aColumns)
     {
-        if( aIt->m_xLabeledDataSequence.is())
+        if( column.m_xLabeledDataSequence.is())
         {
             Reference< chart2::data::XDataSequence > xSeq(
-                aIt->m_xLabeledDataSequence->getValues());
+                column.m_xLabeledDataSequence->getValues());
             if( !xSeq.is())
                 continue;
             sal_Int32 nLength( xSeq->getData().getLength());
@@ -753,10 +752,9 @@ bool DataBrowserModel::isCategoriesColumn( sal_Int32 nColumnIndex ) const
 sal_Int32 DataBrowserModel::getCategoryColumnCount()
 {
     sal_Int32 nLastTextColumnIndex = -1;
-    tDataColumnVector::const_iterator aIt = m_aColumns.begin();
-    for( ; aIt != m_aColumns.end(); ++aIt )
+    for (auto const& column : m_aColumns)
     {
-        if( !aIt->m_xDataSeries.is() )
+        if( !column.m_xDataSeries.is() )
             nLastTextColumnIndex++;
         else
             break;
@@ -830,12 +828,11 @@ void DataBrowserModel::updateFromModel()
 
                 Sequence< Reference< chart2::XDataSeries > > aSeries( xSeriesCnt->getDataSeries());
                 lcl_tSharedSeqVec aSharedSequences( lcl_getSharedSequences( aSeries ));
-                for( lcl_tSharedSeqVec::const_iterator aIt( aSharedSequences.begin());
-                     aIt != aSharedSequences.end(); ++aIt )
+                for (auto const& sharedSequence : aSharedSequences)
                 {
                     tDataColumn aSharedSequence;
-                    aSharedSequence.m_xLabeledDataSequence = *aIt;
-                    aSharedSequence.m_aUIRoleName = lcl_getUIRoleName( *aIt );
+                    aSharedSequence.m_xLabeledDataSequence = sharedSequence;
+                    aSharedSequence.m_aUIRoleName = lcl_getUIRoleName(sharedSequence);
                     aSharedSequence.m_eCellType = NUMBER;
                     // as the sequences are shared it should be ok to take the first series
                     // @todo: dimension index 0 for x-values used here. This is just a guess.
@@ -958,9 +955,9 @@ void DataBrowserModel::addErrorBarRanges(
             ++rInOutHeaderEnd;
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 

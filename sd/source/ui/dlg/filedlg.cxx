@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/ui/dialogs/CommonFilePickerElementIds.hpp>
@@ -29,7 +28,6 @@
 #include <com/sun/star/ui/dialogs/XFilePickerListener.hpp>
 #include <com/sun/star/ui/dialogs/XFilePickerNotifier.hpp>
 #include <com/sun/star/ui/dialogs/XFilePicker3.hpp>
-#include <vcl/msgbox.hxx>
 #include <vcl/idle.hxx>
 #include <sal/types.h>
 #include <osl/thread.hxx>
@@ -40,6 +38,7 @@
 #include <sdresid.hxx>
 #include <strings.hrc>
 #include <vcl/graphicfilter.hxx>
+#include <officecfg/Office/Impress.hxx>
 
 // -----------      SdFileDialog_Imp        ---------------------------
 
@@ -59,7 +58,7 @@ private:
     DECL_LINK( IsMusicStoppedHdl, Timer *, void );
 
 public:
-    explicit SdFileDialog_Imp(const vcl::Window *pParent);
+    explicit SdFileDialog_Imp(weld::Window *pParent);
     virtual ~SdFileDialog_Imp() override;
 
     // overwritten from FileDialogHelper, to receive user feedback
@@ -174,10 +173,10 @@ IMPL_LINK_NOARG(SdFileDialog_Imp, IsMusicStoppedHdl, Timer *, void)
     }
 }
 
-SdFileDialog_Imp::SdFileDialog_Imp(const vcl::Window* pParent) :
-    FileDialogHelper(css::ui::dialogs::TemplateDescription::FILEOPEN_LINK_PLAY, FileDialogFlags::NONE, pParent),
-    mnPlaySoundEvent( nullptr ),
-    mbLabelPlaying(false)
+SdFileDialog_Imp::SdFileDialog_Imp(weld::Window* pParent)
+    : FileDialogHelper(css::ui::dialogs::TemplateDescription::FILEOPEN_LINK_PLAY, FileDialogFlags::NONE, pParent)
+    , mnPlaySoundEvent(nullptr)
+    , mbLabelPlaying(false)
 {
     maUpdateIdle.SetInvokeHandler(LINK(this, SdFileDialog_Imp, IsMusicStoppedHdl));
     maUpdateIdle.SetDebugName( "SdFileDialog_Imp maUpdateIdle" );
@@ -212,8 +211,8 @@ SdFileDialog_Imp::~SdFileDialog_Imp()
 // -----------      SdOpenSoundFileDialog       -----------------------
 
 // these are simple forwarders
-SdOpenSoundFileDialog::SdOpenSoundFileDialog(const vcl::Window *pParent) :
-    mpImpl( new SdFileDialog_Imp(pParent) )
+SdOpenSoundFileDialog::SdOpenSoundFileDialog(weld::Window *pParent)
+    : mpImpl(new SdFileDialog_Imp(pParent))
 {
     OUString aDescr;
     aDescr = SdResId(STR_ALL_FILES);
@@ -237,6 +236,9 @@ SdOpenSoundFileDialog::SdOpenSoundFileDialog(const vcl::Window *pParent) :
     aDescr = SdResId(STR_MIDI_FILE);
     mpImpl->AddFilter( aDescr, "*.mid" );
 #endif
+
+    // Restore last selected path
+    mpImpl->SetDisplayDirectory(officecfg::Office::Impress::Sound::Path::get());
 }
 
 SdOpenSoundFileDialog::~SdOpenSoundFileDialog()
@@ -250,6 +252,12 @@ ErrCode SdOpenSoundFileDialog::Execute()
 
 OUString SdOpenSoundFileDialog::GetPath() const
 {
+    // Save last selected path
+    std::shared_ptr<comphelper::ConfigurationChanges> batch(
+        comphelper::ConfigurationChanges::create());
+    officecfg::Office::Impress::Sound::Path::set(mpImpl->GetPath(), batch);
+    batch->commit();
+
     return mpImpl->GetPath();
 }
 

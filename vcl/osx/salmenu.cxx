@@ -653,6 +653,9 @@ void AquaSalMenu::SetItemText( unsigned /*i_nPos*/, SalMenuItem* i_pSalMenuItem,
         }
     }
 
+    if (aText.endsWith("...", &aText))
+        aText += u"\u2026";
+
     NSString* pString = CreateNSString( aText );
     if (pString)
     {

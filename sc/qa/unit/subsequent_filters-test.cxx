@@ -243,6 +243,8 @@ public:
     void testEmptyRowsXLSXML();
     void testBorderDirectionsXLSXML();
     void testBorderColorsXLSXML();
+    void testHiddenRowsColumnsXLSXML();
+    void testColumnWidthRowHeightXLSXML();
 
     CPPUNIT_TEST_SUITE(ScFiltersTest);
     CPPUNIT_TEST(testBooleanFormatXLSX);
@@ -371,6 +373,8 @@ public:
     CPPUNIT_TEST(testEmptyRowsXLSXML);
     CPPUNIT_TEST(testBorderDirectionsXLSXML);
     CPPUNIT_TEST(testBorderColorsXLSXML);
+    CPPUNIT_TEST(testHiddenRowsColumnsXLSXML);
+    CPPUNIT_TEST(testColumnWidthRowHeightXLSXML);
     CPPUNIT_TEST(testCondFormatFormulaListenerXLSX);
 
     CPPUNIT_TEST_SUITE_END();
@@ -457,7 +461,8 @@ void ScFiltersTest::testBooleanFormatXLSX()
     ScDocShellRef xDocSh = loadDoc("check-boolean.", FORMAT_XLSX);
     ScDocument& rDoc = xDocSh->GetDocument();
     SvNumberFormatter* pNumFormatter = rDoc.GetFormatTable();
-    const OUString aBooleanTypeStr = "\"TRUE\";\"TRUE\";\"FALSE\"";
+    // Saved as >"TRUE";"TRUE";"FALSE"< but reading converted back to >BOOLEAN<
+    const OUString aBooleanTypeStr = "BOOLEAN";
 
     CPPUNIT_ASSERT_MESSAGE("Failed to load check-boolean.xlsx", xDocSh.is());
     sal_uInt32 nNumberFormat;
@@ -467,7 +472,7 @@ void ScFiltersTest::testBooleanFormatXLSX()
         rDoc.GetNumberFormat(0, i, 0, nNumberFormat);
         const SvNumberformat* pNumberFormat = pNumFormatter->GetEntry(nNumberFormat);
         const OUString& rFormatStr = pNumberFormat->GetFormatstring();
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Number format != boolean", rFormatStr, aBooleanTypeStr);
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Number format != boolean", aBooleanTypeStr, rFormatStr);
     }
 
     xDocSh->DoClose();
@@ -1756,7 +1761,7 @@ void ScFiltersTest::testCellAnchoredShapesODS()
         CPPUNIT_ASSERT_MESSAGE("Failed to get drawing object.", pObj);
         ScDrawObjData* pData = ScDrawLayer::GetObjData(pObj);
         CPPUNIT_ASSERT_MESSAGE("Failed to retrieve user data for this object.", pData);
-        CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->maLastRect.IsEmpty());
+        CPPUNIT_ASSERT_MESSAGE("Bounding rectangle should have been calculated upon import.", !pData->getShapeRect().IsEmpty());
     }
 
     xDocSh->DoClose();
@@ -3828,6 +3833,116 @@ void ScFiltersTest::testBorderColorsXLSXML()
     CPPUNIT_ASSERT(pLine);
     CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pLine->GetBorderLineStyle());
     CPPUNIT_ASSERT_EQUAL(Color(0,176,240), pLine->GetColor()); // light blue
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testHiddenRowsColumnsXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("hidden-rows-columns.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load hidden-rows-columns.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    struct Check
+    {
+        SCCOLROW nPos1;
+        SCCOLROW nPos2;
+        bool bVisible;
+    };
+
+    std::vector<Check> aRowChecks = {
+        { 0, 0, true  },
+        { 1, 2, false },
+        { 3, 3, true  },
+        { 4, 4, false },
+        { 5, 7, true  },
+        { 8, 8, false },
+        { 9, MAXROW, true },
+    };
+
+    for (const Check& c : aRowChecks)
+    {
+        SCROW nRow1 = -1, nRow2 = -1;
+        bool bVisible = !rDoc.RowHidden(c.nPos1, 0, &nRow1, &nRow2);
+        CPPUNIT_ASSERT_EQUAL(bVisible, c.bVisible);
+        CPPUNIT_ASSERT_EQUAL(c.nPos1, nRow1);
+        CPPUNIT_ASSERT_EQUAL(c.nPos2, nRow2);
+    }
+
+    std::vector<Check> aColChecks = {
+        { 0, 1, true  },
+        { 2, 5, false },
+        { 6, 9, true  },
+        { 10, 10, false },
+        { 11, MAXCOL, true },
+    };
+
+    for (const Check& c : aColChecks)
+    {
+        SCCOL nCol1 = -1, nCol2 = -1;
+        bool bVisible = !rDoc.ColHidden(c.nPos1, 1, &nCol1, &nCol2);
+        CPPUNIT_ASSERT_EQUAL(bVisible, c.bVisible);
+        CPPUNIT_ASSERT_EQUAL(c.nPos1, SCCOLROW(nCol1));
+        CPPUNIT_ASSERT_EQUAL(c.nPos2, SCCOLROW(nCol2));
+    }
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testColumnWidthRowHeightXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("column-width-row-height.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load column-width-row-height.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    struct RowHeight
+    {
+        SCROW nRow1;
+        SCROW nRow2;
+        sal_uInt16 nHeight; // in points (1 point == 20 twips)
+    };
+
+    std::vector<RowHeight> aRowChecks = {
+        {  2,  2, 20 },
+        {  3,  3, 30 },
+        {  4,  4, 40 },
+        {  5,  5, 50 },
+        {  7,  9, 25 },
+        { 12, 13, 35 },
+    };
+
+    for (const RowHeight& rh : aRowChecks)
+    {
+        for (SCROW i = rh.nRow1; i <= rh.nRow2; ++i)
+        {
+            sal_uInt16 nHeight = rDoc.GetRowHeight(i, 0);
+            CPPUNIT_ASSERT_EQUAL(sal_uInt16(rh.nHeight*20), nHeight);
+        }
+    }
+
+    struct ColWidth
+    {
+        SCCOL nCol1;
+        SCCOL nCol2;
+        sal_uInt16 nWidth; // in points (1 point == 20 twips
+    };
+
+    std::vector<ColWidth> aColChecks = {
+        {  1,  1,  56 },
+        {  2,  2,  83 },
+        {  3,  3, 109 },
+        {  5,  7,  67 },
+        { 10, 11, 119 },
+    };
+
+    for (const ColWidth& cw : aColChecks)
+    {
+        for (SCCOL i = cw.nCol1; i <= cw.nCol2; ++i)
+        {
+            sal_uInt16 nWidth = rDoc.GetColWidth(i, 0);
+            CPPUNIT_ASSERT_EQUAL(sal_uInt16(cw.nWidth*20), nWidth);
+        }
+    }
 
     xDocSh->DoClose();
 }

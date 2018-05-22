@@ -365,13 +365,7 @@ Region::Region(const basegfx::B2DPolyPolygon& rPolyPoly)
     }
 }
 
-Region::Region(const vcl::Region& rRegion)
-:   mpB2DPolyPolygon(rRegion.mpB2DPolyPolygon),
-    mpPolyPolygon(rRegion.mpPolyPolygon),
-    mpRegionBand(rRegion.mpRegionBand),
-    mbIsNull(rRegion.mbIsNull)
-{
-}
+Region::Region(const vcl::Region&) = default;
 
 Region::Region(vcl::Region&& rRegion)
 :   mpB2DPolyPolygon(std::move(rRegion.mpB2DPolyPolygon)),
@@ -382,9 +376,7 @@ Region::Region(vcl::Region&& rRegion)
     rRegion.mbIsNull = true;
 }
 
-Region::~Region()
-{
-}
+Region::~Region() = default;
 
 void vcl::Region::ImplCreatePolyPolyRegion( const tools::PolyPolygon& rPolyPoly )
 {
@@ -1445,16 +1437,7 @@ void vcl::Region::SetEmpty()
     mbIsNull = false;
 }
 
-Region& vcl::Region::operator=( const vcl::Region& rRegion )
-{
-    // reset all content
-    mpB2DPolyPolygon = rRegion.mpB2DPolyPolygon;
-    mpPolyPolygon = rRegion.mpPolyPolygon;
-    mpRegionBand = rRegion.mpRegionBand;
-    mbIsNull = rRegion.mbIsNull;
-
-    return *this;
-}
+Region& vcl::Region::operator=( const vcl::Region& ) = default;
 
 Region& vcl::Region::operator=( vcl::Region&& rRegion )
 {
@@ -1586,21 +1569,26 @@ SvStream& ReadRegion(SvStream& rIStrm, vcl::Region& rRegion)
         default:
         {
             RegionBand* pNewRegionBand = new RegionBand();
-            pNewRegionBand->load(rIStrm);
+            bool bSuccess = pNewRegionBand->load(rIStrm);
             rRegion.mpRegionBand.reset(pNewRegionBand);
 
-            if(aCompat.GetVersion() >= 2)
+            bool bHasPolyPolygon(false);
+            if (aCompat.GetVersion() >= 2)
             {
-                bool bHasPolyPolygon(false);
-
                 rIStrm.ReadCharAsBool( bHasPolyPolygon );
 
-                if(bHasPolyPolygon)
+                if (bHasPolyPolygon)
                 {
                     tools::PolyPolygon* pNewPoly = new tools::PolyPolygon();
                     ReadPolyPolygon( rIStrm, *pNewPoly );
                     rRegion.mpPolyPolygon.reset(pNewPoly);
                 }
+            }
+
+            if (!bSuccess && !bHasPolyPolygon)
+            {
+                SAL_WARN("vcl.gdi", "bad region band:" << bHasPolyPolygon);
+                rRegion.SetNull();
             }
 
             break;

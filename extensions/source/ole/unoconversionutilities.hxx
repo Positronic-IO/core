@@ -70,7 +70,7 @@ extern std::unordered_map<sal_uIntPtr, sal_uIntPtr> WrapperToAdapterMap;
 extern std::unordered_map<sal_uIntPtr, WeakReference<XInterface> > ComPtrToWrapperMap;
 
 // Maps XInterface pointers to a weak reference of its wrapper class (i.e.
-// InterfaceOleWrapper_Impl). It is the responsibility of the wrapper to remove the entry when
+// InterfaceOleWrapper). It is the responsibility of the wrapper to remove the entry when
 // it is being destroyed. It is used to ensure the identity of objects. That is, an UNO interface
 // is mapped to IDispatch which is kept alive in the COM environment. If the same
 // UNO interface is mapped again to COM then the IDispach of the first mapped instance
@@ -187,10 +187,10 @@ protected:
     Reference<XTypeConverter> getTypeConverter();
 
     // This member determines what class is used to convert a UNO object
-    // or struct to a COM object. It is passed along to the o2u_anyToVariant
+    // or struct to a COM object. It is passed along to the anyToVariant
     // function in the createBridge function implementation
-    sal_uInt8 m_nUnoWrapperClass;
-    sal_uInt8 m_nComWrapperClass;
+    const sal_uInt8 m_nUnoWrapperClass;
+    const sal_uInt8 m_nComWrapperClass;
 
     // The servicemanager is either a local smgr or remote when the service
     // com.sun.star.bridge.OleBridgeSupplierVar1 is used. This service can be
@@ -1624,7 +1624,7 @@ void UnoConversionUtilities<T>::variantToAny( const VARIANT* pVariant, Any& rAny
 // UNO interfaces in which case it has to support the SUPPORTED_INTERFACES_PROP (see
 // #define) property. That property contains all names of interfaces.
 // "pUnknown" is wrapped by a COM wrapper object that implements XInvocation, e.g.
-// IUnknownWrapper_Impl. Additionally an object of type "aType" is created by help
+// IUnknownWrapper. Additionally an object of type "aType" is created by help
 // of the INTERFACE_ADAPTER_FACTORY (see #define) service. The implementation of
 // "aType" calls on the COM wrapper's XInvocation::invoke. If the COM object supports
 // more than one UNO interfaces, as can be determined by the property

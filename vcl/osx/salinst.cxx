@@ -55,7 +55,6 @@
 #include <osx/runinmain.hxx>
 
 #include <print.h>
-#include <impbmp.hxx>
 #include <salimestatus.hxx>
 
 #include <comphelper/processfactory.hxx>
@@ -330,8 +329,10 @@ sal_uInt32 SalYieldMutex::doRelease( const bool bUnlockAll )
     sal_uInt32 nCount;
     {
         std::unique_lock<std::mutex> g(m_runInMainMutex);
+        // read m_nCount before doRelease
+        bool const isReleased(bUnlockAll || m_nCount == 1);
         nCount = comphelper::GenericSolarMutex::doRelease( bUnlockAll );
-        if ( 0 == m_nCount && !pInst->IsMainThread() ) {
+        if (isReleased && !pInst->IsMainThread()) {
             m_wakeUpMain = true;
             m_aInMainCondition.notify_all();
         }
@@ -996,11 +997,11 @@ CGImageRef CreateCGImage( const Image& rImage )
     BitmapEx aBmpEx( rImage.GetBitmapEx() );
     Bitmap aBmp( aBmpEx.GetBitmap() );
 
-    if( ! aBmp || ! aBmp.ImplGetImpBitmap() )
+    if( ! aBmp || ! aBmp.ImplGetSalBitmap() )
         return nullptr;
 
     // simple case, no transparency
-    QuartzSalBitmap* pSalBmp = static_cast<QuartzSalBitmap*>(aBmp.ImplGetImpBitmap()->ImplGetSalBitmap());
+    QuartzSalBitmap* pSalBmp = static_cast<QuartzSalBitmap*>(aBmp.ImplGetSalBitmap().get());
 
     if( ! pSalBmp )
         return nullptr;
@@ -1012,7 +1013,7 @@ CGImageRef CreateCGImage( const Image& rImage )
     {
         AlphaMask aAlphaMask( aBmpEx.GetAlpha() );
         Bitmap aMask( aAlphaMask.GetBitmap() );
-        QuartzSalBitmap* pMaskBmp = static_cast<QuartzSalBitmap*>(aMask.ImplGetImpBitmap()->ImplGetSalBitmap());
+        QuartzSalBitmap* pMaskBmp = static_cast<QuartzSalBitmap*>(aMask.ImplGetSalBitmap().get());
         if( pMaskBmp )
             xImage = pSalBmp->CreateWithMask( *pMaskBmp, 0, 0, pSalBmp->mnWidth, pSalBmp->mnHeight );
         else
@@ -1021,7 +1022,7 @@ CGImageRef CreateCGImage( const Image& rImage )
     else if( aBmpEx.GetTransparentType() == TransparentType::Bitmap )
     {
         Bitmap aMask( aBmpEx.GetMask() );
-        QuartzSalBitmap* pMaskBmp = static_cast<QuartzSalBitmap*>(aMask.ImplGetImpBitmap()->ImplGetSalBitmap());
+        QuartzSalBitmap* pMaskBmp = static_cast<QuartzSalBitmap*>(aMask.ImplGetSalBitmap().get());
         if( pMaskBmp )
             xImage = pSalBmp->CreateWithMask( *pMaskBmp, 0, 0, pSalBmp->mnWidth, pSalBmp->mnHeight );
         else
@@ -1030,7 +1031,7 @@ CGImageRef CreateCGImage( const Image& rImage )
     else if( aBmpEx.GetTransparentType() == TransparentType::Color )
     {
         Color aTransColor( aBmpEx.GetTransparentColor() );
-        SalColor nTransColor = MAKE_SALCOLOR( aTransColor.GetRed(), aTransColor.GetGreen(), aTransColor.GetBlue() );
+        Color nTransColor( aTransColor.GetRed(), aTransColor.GetGreen(), aTransColor.GetBlue() );
         xImage = pSalBmp->CreateColorMask( 0, 0, pSalBmp->mnWidth, pSalBmp->mnHeight, nTransColor );
     }
 

@@ -142,7 +142,6 @@
 #define FN_REDLINE_PREV_CHANGE       (FN_EDIT2 + 42)    /* Go to the previous change */
 #define FN_REDLINE_ACCEPT_ALL        (FN_EDIT2 + 43)    /* Redlining Accept All*/
 #define FN_REDLINE_REJECT_ALL        (FN_EDIT2 + 44)    /* Redlining Reject All*/
-#define FN_EDIT_SIGNATURELINE        (FN_EDIT2 + 45)    /* Edit signature line */
 
 // Region: Edit
 #define FN_REFRESH_VIEW         (FN_VIEW + 1)   /* Refresh/Redraw */
@@ -181,6 +180,7 @@
 #define FN_SCROLL_PREV          (FN_VIEW + 57)  /* uno:ScrollToPrevious */
 #define FN_SCROLL_NEXT          (FN_VIEW + 58)  /* uno:ScrollToNext */
 #define FN_VIEW_HIDE_WHITESPACE (FN_VIEW + 59)  /* Hide header, footer, and pagebreak */
+#define FN_SHOW_INLINETOOLTIPS  (FN_VIEW + 60)  /* Show tooltips for tracked changes */
 
 // Region: Insert
 #define FN_INSERT_BOOKMARK      (FN_INSERT + 2 )  /* Bookmark */
@@ -210,9 +210,7 @@
 
 #define FN_INSERT_IDX_ENTRY_DLG (FN_INSERT + 35)    /* insert index entry */
 #define FN_INSERT_FRAME_INTERACT_NOCOL (FN_INSERT + 36) /*insert interactive non column frame*/
-#define FN_INSERT_SIGNATURELINE (FN_INSERT + 37)    /*insert signature line*/
 
-#define FN_TOOL_ANCHOR          (FN_INSERT + 49)    /* Draw Anchor for object */
 #define FN_TOOL_ANCHOR_PAGE     (FN_INSERT + 50)    /* anchor Draw object to page */
 #define FN_TOOL_ANCHOR_PARAGRAPH (FN_INSERT + 51)   /* anchor Draw object to paragraph */
 #define FN_TOOL_HIERARCHIE      (FN_INSERT + 52)    /* change hierarchy */
@@ -550,7 +548,7 @@
 #define FN_UNO_IS_PIXEL_CONTOUR             (FN_EXTRA2 + 83)
 #define FN_UNO_ALTERNATIVE_TEXT             (FN_EXTRA2 + 84)
 #define FN_UNO_ACTUAL_SIZE                  (FN_EXTRA2 + 85)
-#define FN_UNO_GRAPHIC_U_R_L                (FN_EXTRA2 + 86)
+#define FN_UNO_GRAPHIC_URL                  (FN_EXTRA2 + 86)
 #define FN_UNO_GRAPHIC_FILTER               (FN_EXTRA2 + 87)
 #define FN_UNO_CELL_NAME                    (FN_EXTRA2 + 88)
 #define FN_INSERT_GLOSSARY                  (FN_EXTRA2 + 89)
@@ -568,7 +566,7 @@
 #define FN_UNO_PARA_STYLE_CONDITIONS        (FN_EXTRA2 + 100)
 #define FN_UNO_GRAPHIC                      (FN_EXTRA2 + 101)
 
-// #define free                             (FN_EXTRA2 + 102)
+#define FN_UNO_REPLACEMENT_GRAPHIC_URL      (FN_EXTRA2 + 102)
 #define FN_UNO_CELL_ROW_SPAN                (FN_EXTRA2 + 103)
 #define FN_UNO_TABLE_BORDER_DISTANCES       (FN_EXTRA2 + 104)
 #define FN_SPELL_GRAMMAR_DIALOG             (FN_EXTRA2 + 105)

@@ -86,7 +86,7 @@ namespace connectivity
             OKeySet::Vector::iterator               m_aFileSetIter;
 
 
-            OSortIndex*                             m_pSortIndex;
+            std::unique_ptr<OSortIndex>             m_pSortIndex;
             ::rtl::Reference<connectivity::OSQLColumns> m_xColumns; // this are the select columns
             ::rtl::Reference<connectivity::OSQLColumns> m_xParamColumns;
             rtl::Reference<OFileTable>              m_pTable;
@@ -129,7 +129,7 @@ namespace connectivity
                                 bool bEvaluate = true,
                                 bool bRetrieveData = true);
 
-            OKeyValue* GetOrderbyKeyValue(OValueRefRow const & _rRow);
+            std::unique_ptr<OKeyValue> GetOrderbyKeyValue(OValueRefRow const & _rRow);
             bool IsSorted() const { return !m_aOrderbyColumnNumber.empty() && m_aOrderbyColumnNumber[0] >= 0;}
 
             // return true when the select statement is "select count(*) from table"

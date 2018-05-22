@@ -509,7 +509,7 @@ namespace xmloff
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("xmloff.forms");
             }
         }
     }
@@ -1796,8 +1796,8 @@ namespace xmloff
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("xmloff.forms");
             OSL_FAIL( "OControlExport::exportCellBindingAttributes: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -1838,8 +1838,8 @@ namespace xmloff
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("xmloff.forms");
             OSL_FAIL( "OControlExport::exportCellListSourceRange: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -1886,7 +1886,7 @@ namespace xmloff
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("xmloff.forms");
         }
     }
 
@@ -1911,8 +1911,8 @@ namespace xmloff
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("xmloff.forms");
             OSL_FAIL( "OColumnExport::controlHasActiveDataBinding: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
 
         return false;
@@ -1942,8 +1942,7 @@ namespace xmloff
         }
         catch( const Exception& )
         {
-            OSL_FAIL( "OControlExport::controlHasUserSuppliedListEntries: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("xmloff.forms");
         }
 
         OSL_FAIL( "OControlExport::controlHasUserSuppliedListEntries: unreachable code!" );

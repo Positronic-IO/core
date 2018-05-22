@@ -23,9 +23,7 @@
 #include <algorithm>
 #include <EventMultiplexer.hxx>
 #include <cache/SlsPageCacheManager.hxx>
-#include <sdresid.hxx>
 #include <app.hrc>
-#include <strings.hrc>
 #include <slideshow.hxx>
 #include <unokywds.hxx>
 #include <svx/svxids.hrc>
@@ -70,7 +68,6 @@
 #include <sfx2/viewfrm.hxx>
 #include <svl/whiter.hxx>
 #include <vcl/commandinfoprovider.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/settings.hxx>
 
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
@@ -84,7 +81,7 @@
 #include <drawview.hxx>
 
 using namespace sd;
-#define ViewShellBase
+#define ShellClass_ViewShellBase
 #include <sdslots.hxx>
 
 using ::sd::framework::FrameworkHelper;
@@ -1214,7 +1211,7 @@ void ViewShellBase::Implementation::SetPaneVisibility (
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.view");
     }
 }
 
@@ -1345,7 +1342,7 @@ void ViewShellBase::Implementation::GetSlotState (SfxItemSet& rSet)
     }
     catch (const RuntimeException&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sd.view");
     }
 
 }

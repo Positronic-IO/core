@@ -38,7 +38,6 @@
 #include <bcaslot.hxx>
 #include <postit.hxx>
 #include <sheetevents.hxx>
-#include <globstr.hrc>
 #include <segmenttree.hxx>
 #include <queryparam.hxx>
 #include <queryentry.hxx>
@@ -101,17 +100,15 @@ bool ScTable::SetOutlineTable( const ScOutlineTable* pNewOutline )
     {
         nOldSizeX = pOutlineTable->GetColArray().GetDepth();
         nOldSizeY = pOutlineTable->GetRowArray().GetDepth();
-        delete pOutlineTable;
+        pOutlineTable.reset();
     }
 
     if (pNewOutline)
     {
-        pOutlineTable = new ScOutlineTable( *pNewOutline );
+        pOutlineTable.reset(new ScOutlineTable( *pNewOutline ));
         nNewSizeX = pOutlineTable->GetColArray().GetDepth();
         nNewSizeY = pOutlineTable->GetRowArray().GetDepth();
     }
-    else
-        pOutlineTable = nullptr;
 
     return ( nNewSizeX != nOldSizeX || nNewSizeY != nOldSizeY );        // changed size?
 }
@@ -119,16 +116,12 @@ bool ScTable::SetOutlineTable( const ScOutlineTable* pNewOutline )
 void ScTable::StartOutlineTable()
 {
     if (!pOutlineTable)
-        pOutlineTable = new ScOutlineTable;
+        pOutlineTable.reset(new ScOutlineTable);
 }
 
-void ScTable::SetSheetEvents( const ScSheetEvents* pNew )
+void ScTable::SetSheetEvents( std::unique_ptr<ScSheetEvents> pNew )
 {
-    delete pSheetEvents;
-    if (pNew)
-        pSheetEvents = new ScSheetEvents(*pNew);
-    else
-        pSheetEvents = nullptr;
+    pSheetEvents = std::move(pNew);
 
     SetCalcNotification( false );       // discard notifications before the events were set
 
@@ -284,6 +277,9 @@ void ScTable::InsertCol(
         if (mpColWidth && mpColFlags)
         {
             mpColWidth->InsertPreservingSize(nStartCol, nSize, STD_COL_WIDTH);
+            // The inserted columns have the same widths as the columns, which were selected for insert.
+            for (SCSIZE i=0; i < std::min(MAXCOL-nSize-nStartCol, nSize); ++i)
+                mpColWidth->SetValue(nStartCol + i, mpColWidth->GetValue(nStartCol+i+nSize));
             mpColFlags->InsertPreservingSize(nStartCol, nSize, CRFlags::NONE);
         }
         if (pOutlineTable)
@@ -461,10 +457,10 @@ void ScTable::DeleteSelection( InsertDeleteFlags nDelFlag, const ScMarkData& rMa
 
     for (size_t i = 0; i < aRangeList.size(); ++i)
     {
-        ScRange* pRange = aRangeList[i];
+        const ScRange & rRange = aRangeList[i];
 
-        if((nDelFlag & InsertDeleteFlags::ATTRIB) && pRange && pRange->aStart.Tab() == nTab)
-            mpCondFormatList->DeleteArea( pRange->aStart.Col(), pRange->aStart.Row(), pRange->aEnd.Col(), pRange->aEnd.Row() );
+        if((nDelFlag & InsertDeleteFlags::ATTRIB) && rRange.aStart.Tab() == nTab)
+            mpCondFormatList->DeleteArea( rRange.aStart.Col(), rRange.aStart.Row(), rRange.aEnd.Col(), rRange.aEnd.Row() );
     }
 
         // Do not set protected cell in a protected sheet
@@ -494,7 +490,7 @@ void ScTable::CopyToClip(
     //  copy content
     //local range names need to be copied first for formula cells
     if (!pTable->mpRangeName && mpRangeName)
-        pTable->mpRangeName = new ScRangeName(*mpRangeName);
+        pTable->mpRangeName.reset( new ScRangeName(*mpRangeName) );
 
     SCCOL i;
 
@@ -510,7 +506,7 @@ void ScTable::CopyToClip(
     pTable->CopyColHidden(*this, 0, nCol2);
     pTable->CopyColFiltered(*this, 0, nCol2);
     if (pDBDataNoName)
-        pTable->SetAnonymousDBData(new ScDBData(*pDBDataNoName));
+        pTable->SetAnonymousDBData(std::unique_ptr<ScDBData>(new ScDBData(*pDBDataNoName)));
 
     if (pRowFlags && pTable->pRowFlags && mpRowHeights && pTable->mpRowHeights)
     {
@@ -535,9 +531,8 @@ void ScTable::CopyToClip(
 {
     for ( size_t i = 0, nListSize = rRanges.size(); i < nListSize; ++i )
     {
-        const ScRange* p = rRanges[ i ];
-        if (p)
-            CopyToClip( rCxt, p->aStart.Col(), p->aStart.Row(), p->aEnd.Col(), p->aEnd.Row(), pTable);
+        const ScRange & r = rRanges[ i ];
+        CopyToClip( rCxt, r.aStart.Col(), r.aStart.Row(), r.aEnd.Col(), r.aEnd.Row(), pTable);
     }
 }
 
@@ -567,7 +562,7 @@ void ScTable::CopyCellToDocument(SCCOL nSrcCol, SCROW nSrcRow, SCCOL nDestCol, S
 
 namespace {
 
-bool CheckAndDeduplicateCondFormat(ScDocument* pDocument, ScConditionalFormat* pOldFormat, ScConditionalFormat* pNewFormat, SCTAB nTab)
+bool CheckAndDeduplicateCondFormat(ScDocument* pDocument, ScConditionalFormat* pOldFormat, const ScConditionalFormat* pNewFormat, SCTAB nTab)
 {
     if (!pOldFormat)
         return false;
@@ -579,7 +574,7 @@ bool CheckAndDeduplicateCondFormat(ScDocument* pDocument, ScConditionalFormat* p
         ScRangeList& rDstRangeList = pOldFormat->GetRangeList();
         for (size_t i = 0; i < rNewRangeList.size(); ++i)
         {
-            rDstRangeList.Join(*rNewRangeList[i]);
+            rDstRangeList.Join(rNewRangeList[i]);
         }
         pDocument->AddCondFormatData(pOldFormat->GetRange(), nTab, pOldFormat->GetKey());
         return true;
@@ -1151,13 +1146,13 @@ void ScTable::CopyToTable(
 
     if (pDBDataNoName)
     {
-        ScDBData* pNewDBData = new ScDBData(*pDBDataNoName);
+        std::unique_ptr<ScDBData> pNewDBData(new ScDBData(*pDBDataNoName));
         SCCOL aCol1, aCol2;
         SCROW aRow1, aRow2;
         SCTAB aTab;
         pNewDBData->GetArea(aTab, aCol1, aRow1, aCol2, aRow2);
         pNewDBData->MoveTo(pDestTab->nTab, aCol1, aRow1, aCol2, aRow2);
-        pDestTab->SetAnonymousDBData(pNewDBData);
+        pDestTab->SetAnonymousDBData(std::move(pNewDBData));
     }
     //  Charts have to be adjusted when hide/show
     ScChartListenerCollection* pCharts = pDestTab->pDocument->GetChartListenerCollection();
@@ -1250,7 +1245,7 @@ void ScTable::CopyToTable(
     }
 
     if(nFlags & InsertDeleteFlags::OUTLINE) // also only when bColRowFlags
-        pDestTab->SetOutlineTable( pOutlineTable );
+        pDestTab->SetOutlineTable( pOutlineTable.get() );
 
     if (bCopyCaptions && (nFlags & (InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES)))
     {
@@ -1365,8 +1360,8 @@ bool ScTable::HasScenarioRange( const ScRange& rRange ) const
     {
         for ( size_t j = 0, n = pList->size(); j < n; j++ )
         {
-            const ScRange* pR = (*pList)[j];
-            if ( pR->Intersects( aTabRange ) )
+            const ScRange & rR = (*pList)[j];
+            if ( rR.Intersects( aTabRange ) )
                 return true;
         }
     }
@@ -1376,8 +1371,7 @@ bool ScTable::HasScenarioRange( const ScRange& rRange ) const
 
 void ScTable::InvalidateScenarioRanges()
 {
-    delete pScenarioRanges;
-    pScenarioRanges = nullptr;
+    pScenarioRanges.reset();
 }
 
 const ScRangeList* ScTable::GetScenarioRanges() const
@@ -1386,12 +1380,12 @@ const ScRangeList* ScTable::GetScenarioRanges() const
 
     if (!pScenarioRanges)
     {
-        const_cast<ScTable*>(this)->pScenarioRanges = new ScRangeList;
+        const_cast<ScTable*>(this)->pScenarioRanges.reset(new ScRangeList);
         ScMarkData aMark;
         MarkScenarioIn( aMark, ScScenarioFlags::NONE );     // always
-        aMark.FillRangeListWithMarks( pScenarioRanges, false );
+        aMark.FillRangeListWithMarks( pScenarioRanges.get(), false );
     }
-    return pScenarioRanges;
+    return pScenarioRanges.get();
 }
 
 bool ScTable::TestCopyScenarioTo( const ScTable* pDestTab ) const
@@ -1417,15 +1411,14 @@ bool ScTable::SetString( SCCOL nCol, SCROW nRow, SCTAB nTabP, const OUString& rS
         return false;
 }
 
-bool ScTable::SetEditText( SCCOL nCol, SCROW nRow, EditTextObject* pEditText )
+bool ScTable::SetEditText( SCCOL nCol, SCROW nRow, std::unique_ptr<EditTextObject> pEditText )
 {
     if (!ValidColRow(nCol, nRow))
     {
-        delete pEditText;
         return false;
     }
 
-    aCol[nCol].SetEditText(nRow, pEditText);
+    aCol[nCol].SetEditText(nRow, std::move(pEditText));
     return true;
 }
 
@@ -2225,13 +2218,18 @@ void ScTable::FindMaxRotCol( RowInfo* pRowInfo, SCSIZE nArrCount, SCCOL nX1, SCC
     }
 }
 
-bool ScTable::HasBlockMatrixFragment( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2 ) const
+bool ScTable::HasBlockMatrixFragment( const SCCOL nCol1, SCROW nRow1, const SCCOL nCol2, SCROW nRow2 ) const
 {
     using namespace sc;
 
+    if ( !IsColValid( nCol1 ) )
+        return false;
+
+    const SCCOL nMaxCol2 = std::min<SCCOL>( nCol2, aCol.size() - 1 );
+
     MatrixEdge nEdges = MatrixEdge::Nothing;
 
-    if ( nCol1 == nCol2 )
+    if ( nCol1 == nMaxCol2 )
     {   // left and right column
         const MatrixEdge n = MatrixEdge::Left | MatrixEdge::Right;
         nEdges = aCol[nCol1].GetBlockMatrixEdges( nRow1, nRow2, n );
@@ -2244,7 +2242,7 @@ bool ScTable::HasBlockMatrixFragment( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCR
         if ((nEdges != MatrixEdge::Nothing) && ((!(nEdges & MatrixEdge::Left)) || (nEdges & (MatrixEdge::Inside|MatrixEdge::Open))))
             return true;        // left edge missing or open
         // right column
-        nEdges = aCol[nCol2].GetBlockMatrixEdges(nRow1, nRow2, MatrixEdge::Right);
+        nEdges = aCol[nMaxCol2].GetBlockMatrixEdges(nRow1, nRow2, MatrixEdge::Right);
         if ((nEdges != MatrixEdge::Nothing) && ((!(nEdges & MatrixEdge::Right)) || (nEdges & (MatrixEdge::Inside|MatrixEdge::Open))))
             return true;        // right edge is missing or open
     }
@@ -2253,7 +2251,7 @@ bool ScTable::HasBlockMatrixFragment( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCR
     {   // Row on top and on bottom
         bool bOpen = false;
         const MatrixEdge n = MatrixEdge::Bottom | MatrixEdge::Top;
-        for ( SCCOL i=nCol1; i<=nCol2; i++)
+        for ( SCCOL i=nCol1; i<=nMaxCol2; i++)
         {
             nEdges = aCol[i].GetBlockMatrixEdges( nRow1, nRow1, n );
             if (nEdges != MatrixEdge::Nothing)
@@ -2281,7 +2279,7 @@ bool ScTable::HasBlockMatrixFragment( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCR
               j++, n = MatrixEdge::Bottom, nR=nRow2)
         {
             bool bOpen = false;
-            for ( SCCOL i=nCol1; i<=nCol2; i++)
+            for ( SCCOL i=nCol1; i<=nMaxCol2; i++)
             {
                 nEdges = aCol[i].GetBlockMatrixEdges( nR, nR, n );
                 if ( nEdges != MatrixEdge::Nothing)
@@ -2430,8 +2428,8 @@ bool ScTable::IsSelectionEditable( const ScMarkData& rMark,
                 {
                     for (size_t i=0, nRange = aRanges.size(); (i < nRange) && bIsEditable; i++ )
                     {
-                        ScRange aRange = *aRanges[ i ];
-                        if(pDocument->HasScenarioRange(nScenTab, aRange))
+                        const ScRange & rRange = aRanges[ i ];
+                        if(pDocument->HasScenarioRange(nScenTab, rRange))
                         {
                             ScScenarioFlags nFlags;
                             pDocument->GetScenarioFlags(nScenTab,nFlags);
@@ -2459,8 +2457,8 @@ bool ScTable::IsSelectionEditable( const ScMarkData& rMark,
             rMark.FillRangeListWithMarks( &aRanges, false );
             for (size_t i = 0, nRange = aRanges.size(); (i < nRange) && bIsEditable; i++)
             {
-                ScRange aRange = *aRanges[ i ];
-                if(pDocument->HasScenarioRange(nTab, aRange))
+                const ScRange & rRange = aRanges[ i ];
+                if(pDocument->HasScenarioRange(nTab, rRange))
                 {
                     ScScenarioFlags nFlags;
                     pDocument->GetScenarioFlags(nTab,nFlags);
@@ -2575,16 +2573,16 @@ void ScTable::ApplyPatternIfNumberformatIncompatible( const ScRange& rRange,
     }
 }
 
-void ScTable::AddCondFormatData( const ScRangeList& rRange, sal_uInt32 nIndex )
+void ScTable::AddCondFormatData( const ScRangeList& rRangeList, sal_uInt32 nIndex )
 {
-    size_t n = rRange.size();
+    size_t n = rRangeList.size();
     for(size_t i = 0; i < n; ++i)
     {
-        const ScRange* pRange = rRange[i];
-        SCCOL nColStart = pRange->aStart.Col();
-        SCCOL nColEnd = pRange->aEnd.Col();
-        SCROW nRowStart = pRange->aStart.Row();
-        SCROW nRowEnd = pRange->aEnd.Row();
+        const ScRange & rRange = rRangeList[i];
+        SCCOL nColStart = rRange.aStart.Col();
+        SCCOL nColEnd = rRange.aEnd.Col();
+        SCROW nRowStart = rRange.aStart.Row();
+        SCROW nRowEnd = rRange.aEnd.Row();
         for(SCCOL nCol = nColStart; nCol <= nColEnd; ++nCol)
         {
             aCol[nCol].AddCondFormat(nRowStart, nRowEnd, nIndex);
@@ -2592,16 +2590,16 @@ void ScTable::AddCondFormatData( const ScRangeList& rRange, sal_uInt32 nIndex )
     }
 }
 
-void ScTable::RemoveCondFormatData( const ScRangeList& rRange, sal_uInt32 nIndex )
+void ScTable::RemoveCondFormatData( const ScRangeList& rRangeList, sal_uInt32 nIndex )
 {
-    size_t n = rRange.size();
+    size_t n = rRangeList.size();
     for(size_t i = 0; i < n; ++i)
     {
-        const ScRange* pRange = rRange[i];
-        SCCOL nColStart = pRange->aStart.Col();
-        SCCOL nColEnd = pRange->aEnd.Col();
-        SCROW nRowStart = pRange->aStart.Row();
-        SCROW nRowEnd = pRange->aEnd.Row();
+        const ScRange & rRange = rRangeList[i];
+        SCCOL nColStart = rRange.aStart.Col();
+        SCCOL nColEnd = rRange.aEnd.Col();
+        SCROW nRowStart = rRange.aStart.Row();
+        SCROW nRowEnd = rRange.aEnd.Row();
         for(SCCOL nCol = nColStart; nCol <= nColEnd; ++nCol)
         {
             aCol[nCol].RemoveCondFormat(nRowStart, nRowEnd, nIndex);
@@ -3786,10 +3784,9 @@ void ScTable::SetDrawPageSize(bool bResetStreamValid, bool bUpdateNoteCaptionPos
         SetStreamValid(false);
 }
 
-void ScTable::SetRangeName(ScRangeName* pNew)
+void ScTable::SetRangeName(std::unique_ptr<ScRangeName> pNew)
 {
-    delete mpRangeName;
-    mpRangeName = pNew;
+    mpRangeName = std::move(pNew);
 
     //fdo#39792: mark stream as invalid, otherwise new ScRangeName will not be written to file
     SetStreamValid(false);
@@ -3798,8 +3795,8 @@ void ScTable::SetRangeName(ScRangeName* pNew)
 ScRangeName* ScTable::GetRangeName() const
 {
     if (!mpRangeName)
-        mpRangeName = new ScRangeName;
-    return mpRangeName;
+        mpRangeName.reset(new ScRangeName);
+    return mpRangeName.get();
 }
 
 sal_uLong ScTable::GetRowOffset( SCROW nRow, bool bHiddenAsZero ) const

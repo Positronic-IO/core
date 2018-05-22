@@ -20,9 +20,7 @@
 
 #include <svtools/embedhlp.hxx>
 #include <vcl/graphicfilter.hxx>
-#include <svtools/strings.hrc>
 #include <bitmaps.hlst>
-#include <svtools/svtresid.hxx>
 
 #include <comphelper/fileformat.h>
 #include <comphelper/embeddedobjectcontainer.hxx>
@@ -52,6 +50,7 @@
 #include <com/sun/star/chart2/XDefaultSizeTransmitter.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <vcl/svapp.hxx>
+#include <tools/diagnose_ex.h>
 #include <memory>
 
 using namespace com::sun::star;
@@ -437,9 +436,9 @@ const Graphic* EmbeddedObjectRef::GetGraphic() const
         else if ( !mpImpl->pGraphic )
             const_cast < EmbeddedObjectRef* >(this)->GetReplacement(false);
     }
-    catch( const uno::Exception& ex )
+    catch( const uno::Exception& )
     {
-        SAL_WARN("svtools.misc", "Something went wrong on getting the graphic: " << ex);
+        DBG_UNHANDLED_EXCEPTION("svtools.misc", "Something went wrong on getting the graphic");
     }
 
     return mpImpl->pGraphic.get();
@@ -570,9 +569,9 @@ SvStream* EmbeddedObjectRef::GetGraphicStream( bool bUpdate ) const
                 pStream->Seek(0);
                 return pStream;
             }
-            catch (const uno::Exception& ex)
+            catch (const uno::Exception&)
             {
-                SAL_WARN("svtools.misc", "discarding broken embedded object preview: " << ex);
+                DBG_UNHANDLED_EXCEPTION("svtools.misc", "discarding broken embedded object preview");
                 delete pStream;
                 xStream.clear();
             }

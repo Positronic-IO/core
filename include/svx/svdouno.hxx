@@ -59,27 +59,29 @@ private:
     SVX_DLLPRIVATE void CreateUnoControlModel(const OUString& rModelName,
         const css::uno::Reference< css::lang::XMultiServiceFactory >& rxSFac );
 
-public:
-
-    explicit SdrUnoObj(const OUString& rModelName);
-    SdrUnoObj(const OUString& rModelName,
-        const css::uno::Reference< css::lang::XMultiServiceFactory >& rxSFac);
+protected:
+    // protected destructor
     virtual ~SdrUnoObj() override;
+
+public:
+    explicit SdrUnoObj(
+        SdrModel& rSdrModel,
+        const OUString& rModelName);
+    SdrUnoObj(
+        SdrModel& rSdrModel,
+        const OUString& rModelName,
+        const css::uno::Reference< css::lang::XMultiServiceFactory >& rxSFac);
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
 
-    virtual SdrUnoObj* Clone() const override;
+    virtual SdrUnoObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrUnoObj& operator= (const SdrUnoObj& rObj);
     virtual void NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact) override;
     virtual void NbcSetLayer(SdrLayerID nLayer) override;
 
     // SpecialDrag support
     virtual bool hasSpecialDrag() const override;
-
-    // FullDrag support
-    virtual bool supportsFullDrag() const override;
-    virtual SdrObject* getFullDragClone() const override;
 
     virtual OUString TakeObjNameSingul() const override;
     virtual OUString TakeObjNamePlural() const override;

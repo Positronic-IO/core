@@ -29,36 +29,17 @@ namespace basegfx
     {
     };
 
-    B3DHomMatrix::B3DHomMatrix()
-        : mpImpl() // identity
-    {
-    }
+    B3DHomMatrix::B3DHomMatrix() = default;
 
-    B3DHomMatrix::B3DHomMatrix(const B3DHomMatrix& rMat) :
-        mpImpl(rMat.mpImpl)
-    {
-    }
+    B3DHomMatrix::B3DHomMatrix(const B3DHomMatrix&) = default;
 
-    B3DHomMatrix::B3DHomMatrix(B3DHomMatrix&& rMat) :
-        mpImpl(std::move(rMat.mpImpl))
-    {
-    }
+    B3DHomMatrix::B3DHomMatrix(B3DHomMatrix&&) = default;
 
-    B3DHomMatrix::~B3DHomMatrix()
-    {
-    }
+    B3DHomMatrix::~B3DHomMatrix() = default;
 
-    B3DHomMatrix& B3DHomMatrix::operator=(const B3DHomMatrix& rMat)
-    {
-        mpImpl = rMat.mpImpl;
-        return *this;
-    }
+    B3DHomMatrix& B3DHomMatrix::operator=(const B3DHomMatrix&) = default;
 
-    B3DHomMatrix& B3DHomMatrix::operator=(B3DHomMatrix&& rMat)
-    {
-        mpImpl = std::move(rMat.mpImpl);
-        return *this;
-    }
+    B3DHomMatrix& B3DHomMatrix::operator=(B3DHomMatrix&&) = default;
 
     double B3DHomMatrix::get(sal_uInt16 nRow, sal_uInt16 nColumn) const
     {
@@ -203,6 +184,11 @@ namespace basegfx
         }
     }
 
+    void B3DHomMatrix::rotate(const B3DTuple& rRotation)
+    {
+        rotate(rRotation.getX(), rRotation.getY(), rRotation.getZ());
+    }
+
     void B3DHomMatrix::translate(double fX, double fY, double fZ)
     {
         if(!fTools::equalZero(fX) || !fTools::equalZero(fY) || !fTools::equalZero(fZ))
@@ -215,6 +201,11 @@ namespace basegfx
 
             mpImpl->doMulMatrix(aTransMat);
         }
+    }
+
+    void B3DHomMatrix::translate(const B3DTuple& rRotation)
+    {
+        translate(rRotation.getX(), rRotation.getY(), rRotation.getZ());
     }
 
     void B3DHomMatrix::scale(double fX, double fY, double fZ)
@@ -231,6 +222,11 @@ namespace basegfx
 
             mpImpl->doMulMatrix(aScaleMat);
         }
+    }
+
+    void B3DHomMatrix::scale(const B3DTuple& rRotation)
+    {
+        scale(rRotation.getX(), rRotation.getY(), rRotation.getZ());
     }
 
     void B3DHomMatrix::shearXY(double fSx, double fSy)

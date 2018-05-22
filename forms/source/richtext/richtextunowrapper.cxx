@@ -61,9 +61,6 @@ namespace frm
     ORichTextUnoWrapper::ORichTextUnoWrapper( EditEngine& _rEngine, IEngineTextChangeListener* _pTextChangeListener )
         :SvxUnoText( getTextEnginePropertySet() )
     {
-#if defined __clang__ && defined _MSC_VER // workaround clang-cl ABI bug PR25641
-        css::uno::Sequence<css::beans::PropertyState> dummy; (void) dummy;
-#endif
         SetEditSource( new RichTextEditSource( _rEngine, _pTextChangeListener ) );
     }
 
@@ -85,9 +82,9 @@ namespace frm
     }
 
 
-    SvxEditSource* RichTextEditSource::Clone() const
+    std::unique_ptr<SvxEditSource> RichTextEditSource::Clone() const
     {
-        return new RichTextEditSource( m_rEngine, m_pTextChangeListener );
+        return std::unique_ptr<SvxEditSource>(new RichTextEditSource( m_rEngine, m_pTextChangeListener ));
     }
 
 

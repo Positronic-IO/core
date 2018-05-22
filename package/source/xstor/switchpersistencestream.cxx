@@ -21,7 +21,6 @@
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/io/TempFile.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include "switchpersistencestream.hxx"
 
@@ -113,9 +112,9 @@ void SwitchablePersistenceStream::SwitchPersistenceTo( const uno::Reference< io:
 
     CloseAll_Impl();
 
-    m_pStreamData = new SPStreamData_Impl( false,
+    m_pStreamData.reset( new SPStreamData_Impl( false,
                                             xNewTruncate, xNewSeekable, xNewInStream, xNewOutStream,
-                                            bInOpen, bOutOpen );
+                                            bInOpen, bOutOpen ) );
 }
 
 void SwitchablePersistenceStream::SwitchPersistenceTo( const uno::Reference< io::XInputStream >& xInputStream )
@@ -146,9 +145,9 @@ void SwitchablePersistenceStream::SwitchPersistenceTo( const uno::Reference< io:
 
     CloseAll_Impl();
 
-    m_pStreamData = new SPStreamData_Impl( true,
+    m_pStreamData.reset( new SPStreamData_Impl( true,
                                             xNewTruncate, xNewSeekable, xInputStream, xNewOutStream,
-                                            bInOpen, bOutOpen );
+                                            bInOpen, bOutOpen ) );
 
 }
 
@@ -190,18 +189,14 @@ void SwitchablePersistenceStream::CopyAndSwitchPersistenceTo( const uno::Referen
 
     CloseAll_Impl();
 
-    m_pStreamData = new SPStreamData_Impl( false,
+    m_pStreamData.reset( new SPStreamData_Impl( false,
                                         xTargetTruncate, xTargetSeek, xTargetInStream, xTargetOutStream,
-                                        bInOpen, bOutOpen );
+                                        bInOpen, bOutOpen ) );
 }
 
 void SwitchablePersistenceStream::CloseAll_Impl()
 {
-    if ( m_pStreamData )
-    {
-        delete m_pStreamData;
-        m_pStreamData = nullptr;
-    }
+    m_pStreamData.reset();
 }
 
 // css::io::XStream

@@ -69,7 +69,7 @@ public:
     static sal_uInt32 m_nLastId;
 
     SdPage* GetPage() const { return mpPage; }
-    SdrModel* GetModel() { return (mpPage != nullptr) ? mpPage->GetModel() : nullptr; }
+    SdrModel* GetModel() { return (mpPage != nullptr) ? &mpPage->getSdrModelFromSdrPage() : nullptr; }
     sal_uInt32 GetId() const { return m_nId; }
 
     // XInterface:
@@ -349,7 +349,7 @@ void SAL_CALL Annotation::setDateTime(const util::DateTime & the_value)
 
 void Annotation::createChangeUndo()
 {
-    SdrModel* pModel = GetModel();
+    SdrModel* pModel = GetModel(); // TTTT should use reference
     if( pModel && pModel->IsUndoEnabled() )
         pModel->AddUndo( new UndoAnnotation( *this ) );
 
@@ -357,7 +357,10 @@ void Annotation::createChangeUndo()
     {
         pModel->SetChanged();
         Reference< XInterface > xSource( static_cast<uno::XWeak*>( this ) );
-        NotifyDocumentEvent( static_cast< SdDrawDocument* >( pModel ), "OnAnnotationChanged" , xSource );
+        NotifyDocumentEvent(
+            static_cast< SdDrawDocument& >( *pModel ),
+            "OnAnnotationChanged" ,
+            xSource );
     }
 }
 
@@ -366,7 +369,7 @@ Reference< XText > SAL_CALL Annotation::getTextRange()
     osl::MutexGuard g(m_aMutex);
     if( !m_TextRange.is() && (mpPage != nullptr) )
     {
-        m_TextRange = TextApiObject::create( static_cast< SdDrawDocument* >( mpPage->GetModel() ) );
+        m_TextRange = TextApiObject::create( static_cast< SdDrawDocument* >( &mpPage->getSdrModelFromSdrPage() ) );
     }
     return Reference< XText >( m_TextRange.get() );
 }

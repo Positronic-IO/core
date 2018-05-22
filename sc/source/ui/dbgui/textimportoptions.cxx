@@ -21,7 +21,6 @@
 
 #include <textimportoptions.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/window.hxx>
 #include <vcl/settings.hxx>
 
@@ -57,7 +56,7 @@ LanguageType ScTextImportOptionsDlg::getLanguageType() const
     if (m_pRbAutomatic->IsChecked())
         return LANGUAGE_SYSTEM;
 
-    return m_pLbCustomLang->GetSelectLanguage();
+    return m_pLbCustomLang->GetSelectedLanguage();
 }
 
 bool ScTextImportOptionsDlg::isDateConversionSet() const

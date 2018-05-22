@@ -71,7 +71,6 @@ class SfxAbstractTabDialog : virtual public SfxAbstractDialog
 protected:
     virtual ~SfxAbstractTabDialog() override = default;
 public:
-    virtual void                SetCurPageId( sal_uInt16 nId ) = 0;
     virtual void                SetCurPageId( const OString &rName ) = 0;
     virtual const sal_uInt16*   GetInputRanges( const SfxItemPool& ) = 0;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) = 0;
@@ -127,19 +126,19 @@ class SFX2_DLLPUBLIC SfxAbstractDialogFactory : virtual public VclAbstractDialog
 public:
                                         virtual ~SfxAbstractDialogFactory() override;    // needed for export of vtable
     static SfxAbstractDialogFactory*    Create();
-    virtual VclPtr<VclAbstractDialog>          CreateFrameDialog( const css::uno::Reference< css::frame::XFrame >& rFrame, sal_uInt32 nResId, const rtl::OUString& rParameter ) = 0;
-    virtual VclPtr<SfxAbstractTabDialog>       CreateAutoCorrTabDialog( const SfxItemSet* pAttrSet ) = 0;
+    virtual VclPtr<VclAbstractDialog>          CreateFrameDialog(vcl::Window* pParent, const css::uno::Reference< css::frame::XFrame >& rFrame, sal_uInt32 nResId, const rtl::OUString& rParameter ) = 0;
+    virtual VclPtr<SfxAbstractTabDialog>       CreateAutoCorrTabDialog(vcl::Window* pParent, const SfxItemSet* pAttrSet) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateCustomizeTabDialog(
                                             const SfxItemSet* pAttrSet,
                                             const css::uno::Reference< css::frame::XFrame >& xViewFrame ) = 0;
     virtual CreateTabPage               GetTabPageCreatorFunc( sal_uInt16 nId ) = 0;
     virtual GetTabPageRanges            GetTabPageRangesFunc( sal_uInt16 nId ) = 0;
-    virtual VclPtr<SfxAbstractInsertObjectDialog> CreateInsertObjectDialog( vcl::Window* pParent, const OUString& rCommand,
+    virtual VclPtr<SfxAbstractInsertObjectDialog> CreateInsertObjectDialog(weld::Window* pParent, const OUString& rCommand,
             const css::uno::Reference < css::embed::XStorage >& xStor,
             const SvObjectServerList* pList )=0;
-    virtual VclPtr<VclAbstractDialog>          CreateEditObjectDialog( const OUString& rCommand,
+    virtual VclPtr<VclAbstractDialog>          CreateEditObjectDialog(weld::Window* pParent, const OUString& rCommand,
             const css::uno::Reference < css::embed::XEmbeddedObject >& xObj )=0;
-    virtual VclPtr<SfxAbstractPasteDialog>    CreatePasteDialog( vcl::Window* pParent )=0;
+    virtual VclPtr<SfxAbstractPasteDialog>    CreatePasteDialog(weld::Window* pParent) = 0;
     virtual VclPtr<SfxAbstractLinksDialog>    CreateLinksDialog( vcl::Window* pParent, sfx2::LinkManager* pMgr, bool bHTML=false, sfx2::SvBaseLink* p=nullptr )=0;
     virtual VclPtr<VclAbstractDialog>         CreateSvxScriptOrgDialog( vcl::Window* pParent,  const rtl::OUString& rLanguage ) = 0;
 

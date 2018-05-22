@@ -152,9 +152,9 @@ void SvxGrfCropPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxGrfCropPage::Create(vcl::Window *pParent, const SfxItemSet *rSet)
+VclPtr<SfxTabPage> SvxGrfCropPage::Create(TabPageParent pParent, const SfxItemSet *rSet)
 {
-    return VclPtr<SvxGrfCropPage>::Create( pParent, *rSet );
+    return VclPtr<SvxGrfCropPage>::Create( pParent.pParent, *rSet );
 }
 
 void SvxGrfCropPage::Reset( const SfxItemSet *rSet )
@@ -489,7 +489,7 @@ IMPL_LINK( SvxGrfCropPage, CropHdl, SpinField&, rField, void )
         long nLeft = lcl_GetValue( *m_pLeftMF, eUnit );
         long nRight = lcl_GetValue( *m_pRightMF, eUnit );
         long nWidthZoom = static_cast<long>(m_pWidthZoomMF->GetValue());
-        if(bZoom && ( ( ( aOrigSize.Width() - (nLeft + nRight )) * nWidthZoom )
+        if (bZoom && nWidthZoom != 0 && ( ( ( aOrigSize.Width() - (nLeft + nRight )) * nWidthZoom )
                             / 100 >= aPageSize.Width() ) )
         {
             if(&rField == m_pLeftMF)
@@ -529,6 +529,7 @@ IMPL_LINK( SvxGrfCropPage, CropHdl, SpinField&, rField, void )
         if(bZoom && ( ( ( aOrigSize.Height() - (nTop + nBottom )) * nHeightZoom)
                                             / 100 >= aPageSize.Height()))
         {
+            assert(nHeightZoom && "div-by-zero");
             if(&rField == m_pTopMF)
             {
                 nTop = aOrigSize.Height() -

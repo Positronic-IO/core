@@ -23,7 +23,6 @@
 
 #include <comphelper/streamsection.hxx>
 #include <comphelper/basicio.hxx>
-#include <comphelper/processfactory.hxx>
 
 namespace frm
 {
@@ -218,11 +217,11 @@ namespace frm
             }
             if ( nNonVoids & PERSIST_TEXTCOLOR )
             {
-               _rxOutStream->writeLong( getTextColor() );
+               _rxOutStream->writeLong( sal_Int32(getTextColor()) );
             }
             if ( nNonVoids & PERSIST_TEXTLINECOLOR )
             {
-                _rxOutStream->writeLong( getTextLineColor() );
+                _rxOutStream->writeLong( sal_Int32(getTextLineColor()) );
             }
         }
 
@@ -276,12 +275,12 @@ namespace frm
                 m_aBackgroundColor.clear();
 
             if ( nNonVoids & PERSIST_TEXTCOLOR )
-                setTextColor( _rxInStream->readLong() );
+                setTextColor( ::Color(_rxInStream->readLong()) );
             else
                 clearTextColor();
 
             if ( nNonVoids & PERSIST_TEXTLINECOLOR )
-                setTextLineColor( _rxInStream->readLong() );
+                setTextLineColor( ::Color(_rxInStream->readLong()) );
             else
                 clearTextLineColor();
         }

@@ -62,10 +62,6 @@ bool SdrTextObj::AdjustTextFrameWidthAndHeight( tools::Rectangle& rR, bool bHgt,
         // Not a text frame.  Bail out.
         return false;
 
-    if (!pModel)
-        // Model doesn't exist.  Bail out.
-        return false;
-
     if (rR.IsEmpty())
         // Empty rectangle.
         return false;
@@ -95,7 +91,7 @@ bool SdrTextObj::AdjustTextFrameWidthAndHeight( tools::Rectangle& rR, bool bHgt,
     aNewSize.AdjustWidth( -1 ); aNewSize.AdjustHeight( -1 );
 
     Size aMaxSiz(100000, 100000);
-    Size aTmpSiz = pModel->GetMaxObjSize();
+    Size aTmpSiz(getSdrModelFromSdrObject().GetMaxObjSize());
 
     if (aTmpSiz.Width())
         aMaxSiz.setWidth( aTmpSiz.Width() );
@@ -275,11 +271,11 @@ bool SdrTextObj::NbcAdjustTextFrameWidthAndHeight(bool bHgt, bool bWdt)
 
 bool SdrTextObj::AdjustTextFrameWidthAndHeight()
 {
-    tools::Rectangle aNeuRect(maRect);
-    bool bRet=AdjustTextFrameWidthAndHeight(aNeuRect);
+    tools::Rectangle aNewRect(maRect);
+    bool bRet=AdjustTextFrameWidthAndHeight(aNewRect);
     if (bRet) {
         tools::Rectangle aBoundRect0; if (pUserCall!=nullptr) aBoundRect0=GetLastBoundRect();
-        maRect = aNeuRect;
+        maRect = aNewRect;
         SetRectsDirty();
         if (dynamic_cast<const SdrRectObj *>(this) != nullptr) { // this is a hack
             static_cast<SdrRectObj*>(this)->SetXPolyDirty();
@@ -312,7 +308,7 @@ bool SdrTextObj::AdjustTextFrameWidthAndHeight()
 
 void SdrTextObj::ImpSetTextStyleSheetListeners()
 {
-    SfxStyleSheetBasePool* pStylePool=pModel!=nullptr ? pModel->GetStyleSheetPool() : nullptr;
+    SfxStyleSheetBasePool* pStylePool(getSdrModelFromSdrObject().GetStyleSheetPool());
     if (pStylePool!=nullptr)
     {
         std::vector<OUString> aStyleNames;

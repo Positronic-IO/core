@@ -118,6 +118,9 @@ sal_Char const sXML_1_2[] = "1.2";
 
 #define XML_USEPRETTYPRINTING       "UsePrettyPrinting"
 
+#define XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE "vnd.sun.star.GraphicObject:"
+#define XML_EMBEDDEDOBJECT_URL_BASE     "vnd.sun.star.EmbeddedObject:"
+
 namespace {
 
 struct XMLServiceMapEntry_Impl
@@ -396,9 +399,6 @@ void SvXMLExport::InitCtor_()
             GetXMLToken(XML_NP_CSS3TEXT), GetXMLToken(XML_N_CSS3TEXT), XML_NAMESPACE_CSS3TEXT );
     }
 
-    msGraphicObjectProtocol = "vnd.sun.star.GraphicObject:";
-    msEmbeddedObjectProtocol = "vnd.sun.star.EmbeddedObject:";
-
     if (mxModel.is() && !mxEventListener.is())
     {
         mxEventListener.set( new SvXMLExportEventListener(this));
@@ -674,11 +674,10 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
         if ( xTmpStatus.is() )
             mxStatusIndicator = xTmpStatus;
 
-        // graphic resolver
-        uno::Reference<document::XGraphicObjectResolver> xTmpGraphic(
-            xValue, UNO_QUERY );
-        if ( xTmpGraphic.is() )
-            mxGraphicResolver = xTmpGraphic;
+        // graphic storage handler
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(xValue, UNO_QUERY);
+        if (xGraphicStorageHandler.is())
+            mxGraphicStorageHandler = xGraphicStorageHandler;
 
         // object resolver
         uno::Reference<document::XEmbeddedObjectResolver> xTmpObjectResolver(
@@ -1254,18 +1253,17 @@ ErrCode SvXMLExport::exportDoc( enum ::xmloff::token::XMLTokenEnum eClass )
     bool bOwnGraphicResolver = false;
     bool bOwnEmbeddedResolver = false;
 
-    if( !mxGraphicResolver.is() || !mxEmbeddedResolver.is() )
+    if (!mxGraphicStorageHandler.is() || !mxEmbeddedResolver.is())
     {
         Reference< XMultiServiceFactory > xFactory( mxModel,    UNO_QUERY );
         if( xFactory.is() )
         {
             try
             {
-                if( !mxGraphicResolver.is() )
+                if (!mxGraphicStorageHandler.is())
                 {
-                    mxGraphicResolver.set(
-                        xFactory->createInstance( "com.sun.star.document.ExportGraphicObjectResolver" ), UNO_QUERY);
-                    bOwnGraphicResolver = mxGraphicResolver.is();
+                    mxGraphicStorageHandler.set(xFactory->createInstance( "com.sun.star.document.ExportGraphicStorageHandler"), UNO_QUERY);
+                    bOwnGraphicResolver = mxGraphicStorageHandler.is();
                 }
 
                 if( !mxEmbeddedResolver.is() )
@@ -1441,7 +1439,7 @@ ErrCode SvXMLExport::exportDoc( enum ::xmloff::token::XMLTokenEnum eClass )
 
     if( bOwnGraphicResolver )
     {
-        Reference< XComponent > xComp( mxGraphicResolver, UNO_QUERY );
+        uno::Reference<XComponent> xComp(mxGraphicStorageHandler, UNO_QUERY);
         xComp->dispose();
     }
 
@@ -1867,23 +1865,6 @@ sal_Int32 SvXMLExport::dataStyleForceSystemLanguage(sal_Int32 nFormat) const
                  ? mpNumExport->ForceSystemLanguage( nFormat ) : nFormat;
 }
 
-OUString SvXMLExport::AddEmbeddedGraphicObject( const OUString& rGraphicObjectURL )
-{
-    OUString sRet( rGraphicObjectURL );
-    if( rGraphicObjectURL.startsWith( msGraphicObjectProtocol ) &&
-        mxGraphicResolver.is() )
-    {
-        if( !(getExportFlags() & SvXMLExportFlags::EMBEDDED) )
-            sRet = mxGraphicResolver->resolveGraphicObjectURL( rGraphicObjectURL );
-        else
-            sRet.clear();
-    }
-    else
-        sRet = GetRelativeReference( sRet );
-
-    return sRet;
-}
-
 OUString SvXMLExport::AddEmbeddedXGraphic(uno::Reference<graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType, OUString const & rRequestedName)
 {
     OUString sURL;
@@ -1897,48 +1878,24 @@ OUString SvXMLExport::AddEmbeddedXGraphic(uno::Reference<graphic::XGraphic> cons
     }
     else
     {
-        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
-        if (mxGraphicResolver.is() && xGraphicStorageHandler.is())
+        if (mxGraphicStorageHandler.is())
         {
             if (!(getExportFlags() & SvXMLExportFlags::EMBEDDED))
-                sURL = xGraphicStorageHandler->saveGraphicByName(rxGraphic, rOutMimeType, rRequestedName);
+                sURL = mxGraphicStorageHandler->saveGraphicByName(rxGraphic, rOutMimeType, rRequestedName);
         }
     }
     return sURL;
 }
 
-Reference< XInputStream > SvXMLExport::GetEmbeddedGraphicObjectStream( const OUString& rGraphicObjectURL )
-{
-    if( (getExportFlags() & SvXMLExportFlags::EMBEDDED) &&
-        rGraphicObjectURL.startsWith( msGraphicObjectProtocol ) &&
-        mxGraphicResolver.is() )
-    {
-        Reference< XBinaryStreamResolver > xStmResolver( mxGraphicResolver, UNO_QUERY );
-
-        if( xStmResolver.is() )
-        {
-            Reference< XInputStream > xIn( xStmResolver->getInputStream( rGraphicObjectURL ) );
-            return xIn;
-        }
-    }
-
-    return nullptr;
-}
-
 bool SvXMLExport::GetGraphicMimeTypeFromStream(uno::Reference<graphic::XGraphic> const & rxGraphic, OUString & rOutMimeType)
 {
-    if (mxGraphicResolver.is())
+    if (mxGraphicStorageHandler.is())
     {
-        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
-
-        if (xGraphicStorageHandler.is())
+        Reference<XInputStream> xInputStream(mxGraphicStorageHandler->createInputStream(rxGraphic));
+        if (xInputStream.is())
         {
-            Reference<XInputStream> xInputStream(xGraphicStorageHandler->createInputStream(rxGraphic));
-            if (xInputStream.is())
-            {
-                rOutMimeType = comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageStream(xInputStream);
-                return true;
-            }
+            rOutMimeType = comphelper::GraphicMimeTypeHelper::GetMimeTypeForImageStream(xInputStream);
+            return true;
         }
     }
 
@@ -1948,58 +1905,27 @@ bool SvXMLExport::GetGraphicMimeTypeFromStream(uno::Reference<graphic::XGraphic>
 bool SvXMLExport::AddEmbeddedXGraphicAsBase64(uno::Reference<graphic::XGraphic> const & rxGraphic)
 {
     if ((getExportFlags() & SvXMLExportFlags::EMBEDDED) &&
-        mxGraphicResolver.is())
+        mxGraphicStorageHandler.is())
     {
-        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler(mxGraphicResolver, uno::UNO_QUERY);
-
-        if (xGraphicStorageHandler.is())
+        Reference<XInputStream> xInputStream(mxGraphicStorageHandler->createInputStream(rxGraphic));
+        if (xInputStream.is())
         {
-            Reference<XInputStream> xInputStream(xGraphicStorageHandler->createInputStream(rxGraphic));
-            if (xInputStream.is())
-            {
-                XMLBase64Export aBase64Exp(*this);
-                return aBase64Exp.exportOfficeBinaryDataElement(xInputStream);
-            }
+            XMLBase64Export aBase64Exp(*this);
+            return aBase64Exp.exportOfficeBinaryDataElement(xInputStream);
         }
     }
 
     return false;
 }
 
-bool SvXMLExport::AddEmbeddedGraphicObjectAsBase64( const OUString& rGraphicObjectURL )
-{
-    bool bRet = false;
-
-    if( (getExportFlags() & SvXMLExportFlags::EMBEDDED) &&
-        rGraphicObjectURL.startsWith( msGraphicObjectProtocol ) &&
-        mxGraphicResolver.is() )
-    {
-        Reference< XBinaryStreamResolver > xStmResolver( mxGraphicResolver, UNO_QUERY );
-
-        if( xStmResolver.is() )
-        {
-            Reference< XInputStream > xIn( xStmResolver->getInputStream( rGraphicObjectURL ) );
-
-            if( xIn.is() )
-            {
-                XMLBase64Export aBase64Exp( *this );
-                bRet = aBase64Exp.exportOfficeBinaryDataElement( xIn );
-            }
-        }
-    }
-
-    return bRet;
-}
-
 OUString SvXMLExport::AddEmbeddedObject( const OUString& rEmbeddedObjectURL )
 {
     OUString sRet;
-    if( (rEmbeddedObjectURL.startsWith( msEmbeddedObjectProtocol ) ||
-         rEmbeddedObjectURL.startsWith( msGraphicObjectProtocol ) ) &&
-        mxEmbeddedResolver.is() )
+    bool bSupportedURL = rEmbeddedObjectURL.startsWith(XML_EMBEDDEDOBJECT_URL_BASE) ||
+                         rEmbeddedObjectURL.startsWith(XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE);
+    if (bSupportedURL && mxEmbeddedResolver.is())
     {
-        sRet =
-            mxEmbeddedResolver->resolveEmbeddedObjectURL( rEmbeddedObjectURL );
+        sRet = mxEmbeddedResolver->resolveEmbeddedObjectURL(rEmbeddedObjectURL);
     }
     else
         sRet = GetRelativeReference( rEmbeddedObjectURL );
@@ -2010,9 +1936,9 @@ OUString SvXMLExport::AddEmbeddedObject( const OUString& rEmbeddedObjectURL )
 bool SvXMLExport::AddEmbeddedObjectAsBase64( const OUString& rEmbeddedObjectURL )
 {
     bool bRet = false;
-    if( (rEmbeddedObjectURL.startsWith( msEmbeddedObjectProtocol ) ||
-         rEmbeddedObjectURL.startsWith( msGraphicObjectProtocol ) ) &&
-        mxEmbeddedResolver.is() )
+    bool bSupportedURL = rEmbeddedObjectURL.startsWith(XML_EMBEDDEDOBJECT_URL_BASE) ||
+                         rEmbeddedObjectURL.startsWith(XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE);
+    if (bSupportedURL && mxEmbeddedResolver.is())
     {
         Reference < XNameAccess > xNA( mxEmbeddedResolver, UNO_QUERY );
         if( xNA.is() )

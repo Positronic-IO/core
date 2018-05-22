@@ -42,6 +42,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/sequence.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -1199,8 +1200,8 @@ void StyleSheetTable::ApplyStyleSheets( const FontTablePtr& rFontTable )
                         xPropertySet->setPropertyValue("StyleInteropGrabBag", uno::makeAny(aGrabBag));
                     }
 
-                    // List styles don't support automatic update.
-                    if (pEntry->bAutoRedefine && !bListStyle)
+                    // Only paragraph styles support automatic updates.
+                    if (pEntry->bAutoRedefine && bParaStyle)
                         xPropertySet->setPropertyValue("IsAutoUpdate", uno::makeAny(true));
                 }
                 else if(pEntry->nStyleTypeCode == STYLE_TYPE_TABLE)
@@ -1232,9 +1233,9 @@ void StyleSheetTable::ApplyStyleSheets( const FontTablePtr& rFontTable )
             }
         }
     }
-    catch( const uno::Exception& rException )
+    catch( const uno::Exception& )
     {
-        SAL_WARN("writerfilter", "Styles could not be imported completely: " << rException);
+        DBG_UNHANDLED_EXCEPTION("writerfilter", "Styles could not be imported completely");
     }
 }
 

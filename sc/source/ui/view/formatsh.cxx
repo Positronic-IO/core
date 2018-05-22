@@ -32,7 +32,6 @@
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
 #include <svl/whiter.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <svl/stritem.hxx>
 #include <svl/zformat.hxx>
@@ -62,6 +61,7 @@
 #include <sc.hrc>
 #include <scres.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <docsh.hxx>
 #include <patattr.hxx>
 #include <scmod.hxx>
@@ -69,16 +69,15 @@
 #include <stlsheet.hxx>
 #include <printfun.hxx>
 #include <docpool.hxx>
-#include <scresid.hxx>
 #include <tabvwsh.hxx>
 #include <undostyl.hxx>
 #include <markdata.hxx>
 #include <markarr.hxx>
 #include <attrib.hxx>
 
-#define ScFormatShell
-#define TableFont
-#define FormatForSelection
+#define ShellClass_ScFormatShell
+#define ShellClass_TableFont
+#define ShellClass_FormatForSelection
 #include <scslots.hxx>
 
 #include <scabstdlg.hxx>
@@ -390,7 +389,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
                     }
 
                     pStyleSheet = &(pStylePool->Make( aStyleName, eFamily,
-                                                      SFXSTYLEBIT_USERDEF ) );
+                                                      SfxStyleSearchBits::UserDefined ) );
 
                     if ( pStyleSheet && pStyleSheet->HasParentSupport() )
                         pStyleSheet->SetParent(aRefName);
@@ -573,7 +572,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
                         {
                             if ( bUndo )
                             {
-                                OUString aUndo = ScGlobal::GetRscString( STR_UNDO_EDITCELLSTYLE );
+                                OUString aUndo = ScResId( STR_UNDO_EDITCELLSTYLE );
                                 pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, pTabViewShell->GetViewShellId() );
                                 bListAction = true;
                             }
@@ -600,7 +599,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
 
                             // ...and create new
                             pStyleSheet = &pStylePool->Make( aStyleName, eFamily,
-                                                             SFXSTYLEBIT_USERDEF );
+                                                             SfxStyleSearchBits::UserDefined );
 
                             // when a style is present, then this will become
                             // the parent of the new style:
@@ -631,7 +630,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
 
                                 if ( bUndo )
                                 {
-                                    OUString aUndo = ScGlobal::GetRscString( STR_UNDO_EDITCELLSTYLE );
+                                    OUString aUndo = ScResId( STR_UNDO_EDITCELLSTYLE );
                                     pDocSh->GetUndoManager()->EnterListAction( aUndo, aUndo, 0, pTabViewShell->GetViewShellId() );
                                     bListAction = true;
                                 }
@@ -745,7 +744,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
 
                             // ...and create new
                             pStyleSheet = &pStylePool->Make( aStyleName, eFamily,
-                                                             SFXSTYLEBIT_USERDEF );
+                                                             SfxStyleSearchBits::UserDefined );
 
                             // Adopt attribute
                             pStyleSheet->GetItemSet().Put( aAttrSet );
@@ -872,7 +871,7 @@ void ScFormatShell::ExecuteStyle( SfxRequest& rReq )
 
                     if ( pOutSet )
                     {
-                        nRetMask = pStyleSheet->GetMask();
+                        nRetMask = sal_uInt16(pStyleSheet->GetMask());
 
                         // Attribute comparisons (earlier in ModifyStyleSheet) now here
                         // with the old values (the style is already changed)
@@ -1031,7 +1030,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
     }
 
     SvNumFormatType nType = GetCurrentNumberFormatType();
-    SfxItemSet aSet( GetPool(), {{nSlot, nSlot}} );
     switch ( nSlot )
     {
         case SID_NUMBER_TWODEC:
@@ -1052,7 +1050,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
                 pTabViewShell->SetNumberFormat( SvNumFormatType::NUMBER );
             else
                 pTabViewShell->SetNumberFormat( SvNumFormatType::SCIENTIFIC );
-            aSet.Put( SfxBoolItem(nSlot, !(nType & SvNumFormatType::SCIENTIFIC)) );
             rBindings.Invalidate( nSlot );
             rReq.Done();
             break;
@@ -1061,7 +1058,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
                 pTabViewShell->SetNumberFormat( SvNumFormatType::NUMBER );
             else
                 pTabViewShell->SetNumberFormat( SvNumFormatType::DATE );
-            aSet.Put( SfxBoolItem(nSlot, !(nType & SvNumFormatType::DATE)) );
             rBindings.Invalidate( nSlot );
             rReq.Done();
             break;
@@ -1070,7 +1066,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
                 pTabViewShell->SetNumberFormat( SvNumFormatType::NUMBER );
             else
                 pTabViewShell->SetNumberFormat( SvNumFormatType::TIME );
-            aSet.Put( SfxBoolItem(nSlot, !(nType & SvNumFormatType::TIME)) );
             rBindings.Invalidate( nSlot );
             rReq.Done();
             break;
@@ -1118,7 +1113,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
                 pTabViewShell->SetNumberFormat( SvNumFormatType::NUMBER );
             else
                 pTabViewShell->SetNumberFormat( SvNumFormatType::PERCENT );
-            aSet.Put( SfxBoolItem(nSlot, !(nType & SvNumFormatType::PERCENT)) );
             rBindings.Invalidate( nSlot );
             rReq.Done();
             break;
@@ -1162,7 +1156,6 @@ void ScFormatShell::ExecuteNumFormat( SfxRequest& rReq )
                 nLeadZeroes);
             pTabViewShell->SetNumFmtByStr(aCode);
 
-            aSet.Put(SfxBoolItem(nSlot, bThousand));
             rBindings.Invalidate(nSlot);
             rReq.Done();
         }
@@ -2071,7 +2064,7 @@ void ScFormatShell::GetAttrState( SfxItemSet& rSet )
             case SID_FRAME_LINECOLOR:
             {
                 // handled together because both need the cell border information for decisions
-                Color aCol = 0;
+                Color aCol;
                 editeng::SvxBorderLine aLine(nullptr,0,SvxBorderLineStyle::SOLID);
                 bool bCol = false;
                 bool bColDisable = false, bStyleDisable = false;
@@ -2798,7 +2791,7 @@ void ScFormatShell::ExecFormatPaintbrush( const SfxRequest& rReq )
         bool bLock = false;
         const SfxItemSet *pArgs = rReq.GetArgs();
         if( pArgs && pArgs->Count() >= 1 )
-            bLock = static_cast<const SfxBoolItem&>(pArgs->Get(SID_FORMATPAINTBRUSH)).GetValue();
+            bLock = pArgs->Get(SID_FORMATPAINTBRUSH).GetValue();
 
         // in case of multi selection, deselect all and use the cursor position
         ScRange aDummy;

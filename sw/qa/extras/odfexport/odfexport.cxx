@@ -208,7 +208,7 @@ void testTdf43569_CheckIfFieldParse()
 
 // Input document contains only one IF-field,
 // and it should be imported as com.sun.star.text.TextField.ConditionalText in any case,
-// instead of insertion of the the pair of two field-marks: <field:fieldmark-start> + <field:fieldmark-end>.
+// instead of insertion of the pair of two field-marks: <field:fieldmark-start> + <field:fieldmark-end>.
 DECLARE_ODFEXPORT_TEST(testTdf43569, "tdf43569_conditionalfield.doc")
 {
     // check if our parser is valid
@@ -460,6 +460,26 @@ DECLARE_ODFEXPORT_TEST(testFdo38244, "fdo38244.odt")
     xPropertySet.set(xFields->nextElement(), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("__Fieldmark__4_1833023242"), getProperty<OUString>(xPropertySet, "Name"));
     CPPUNIT_ASSERT_EQUAL(OUString("M"), getProperty<OUString>(xPropertySet, "Initials"));
+}
+
+DECLARE_ODFEXPORT_TEST(testSenderInitials, "sender-initials.fodt")
+{
+    // Test sender-initial properties (both annotation metadata and text field)
+    uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XEnumerationAccess> xFieldsAccess(xTextFieldsSupplier->getTextFields());
+    uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
+    // first 3 are annotations, last 2 are text fields
+    for (unsigned i = 0; i < 3; ++i)
+    {
+        uno::Reference<beans::XPropertySet> xPropertySet(xFields->nextElement(), uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(OUString("I"), getProperty<OUString>(xPropertySet, "Initials"));
+    }
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        uno::Reference<beans::XPropertySet> xPropertySet(xFields->nextElement(), uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xPropertySet, "IsFixed"));
+        CPPUNIT_ASSERT_EQUAL(OUString("I"), getProperty<OUString>(xPropertySet, "Content"));
+    }
 }
 
 DECLARE_ODFEXPORT_TEST(testTdf92379, "tdf92379.fodt")
@@ -1918,21 +1938,70 @@ DECLARE_ODFEXPORT_TEST(testReferenceLanguage, "referencelanguage.odt")
     }
 }
 
-DECLARE_ODFEXPORT_TEST(testBulletAsImage, "BulletAsImage.odt")
+DECLARE_ODFEXPORT_TEST(testRubyPosition, "ruby-position.odt")
 {
-    uno::Reference<text::XTextRange> xPara(getParagraph(1));
-    uno::Reference<beans::XPropertySet> xPropertySet(xPara, uno::UNO_QUERY);
-    uno::Reference<container::XIndexAccess> xLevels;
-    xLevels.set(xPropertySet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
-    uno::Sequence<beans::PropertyValue> aProperties;
-    xLevels->getByIndex(0) >>= aProperties;
-    uno::Reference<awt::XBitmap> xBitmap;
-    for (int i = 0; i < aProperties.getLength(); ++i)
+    if (xmlDocPtr pXmlDoc = parseExport("content.xml"))
     {
-        if (aProperties[i].Name == "GraphicBitmap")
-            xBitmap = aProperties[i].Value.get<uno::Reference<awt::XBitmap>>();
+        assertXPath(pXmlDoc, "//style:style[@style:family='ruby']/style:ruby-properties[@loext:ruby-position='inter-character']", 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='ruby']/style:ruby-properties[@style:ruby-position='below']", 1);
     }
-    CPPUNIT_ASSERT(xBitmap.is());
+}
+
+DECLARE_ODFEXPORT_TEST(testSignatureLineProperties, "signatureline-properties.fodt")
+{
+    uno::Reference<drawing::XShape> xShape = getShape(1);
+    CPPUNIT_ASSERT(xShape.is());
+
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xShape, "IsSignatureLine"));
+    CPPUNIT_ASSERT_EQUAL(OUString("{3C24159B-3B98-4F60-AB52-00E7721758E9}"),
+                         getProperty<OUString>(xShape, "SignatureLineId"));
+    CPPUNIT_ASSERT_EQUAL(OUString("John Doe"),
+                         getProperty<OUString>(xShape, "SignatureLineSuggestedSignerName"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Farmer"),
+                         getProperty<OUString>(xShape, "SignatureLineSuggestedSignerTitle"));
+    CPPUNIT_ASSERT_EQUAL(OUString("john@farmers.org"),
+                         getProperty<OUString>(xShape, "SignatureLineSuggestedSignerEmail"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Please farm here."),
+                         getProperty<OUString>(xShape, "SignatureLineSigningInstructions"));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xShape, "SignatureLineCanAddComment"));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xShape, "SignatureLineShowSignDate"));
+}
+
+DECLARE_ODFEXPORT_TEST(testChapterNumberingNewLine, "chapter-number-new-line.odt")
+{
+    uno::Reference<text::XChapterNumberingSupplier> xNumberingSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xNumberingRules = xNumberingSupplier->getChapterNumberingRules();
+    comphelper::SequenceAsHashMap hashMap(xNumberingRules->getByIndex(0));
+
+    //This failed Actual Value was LISTTAB instead of NEWLINE
+    CPPUNIT_ASSERT_EQUAL(
+        sal_Int16(SvxNumberFormat::NEWLINE), hashMap["LabelFollowedBy"].get<sal_Int16>());
+}
+
+DECLARE_ODFEXPORT_TEST(testSpellOutNumberingTypes, "spellout-numberingtypes.odt")
+{
+    // ordinal indicator, ordinal and cardinal number numbering styles (from LibreOffice 6.1)
+    const char* aFieldTexts[] = { "1st", "Erste", "Eins",  "1.", "Premier", "Un", "1ᵉʳ", "First", "One" };
+    // fallback for old platforms without std::codecvt and std::regex supports
+    const char* aFieldTextFallbacks[] = { "Ordinal-number 1", "Ordinal 1", "1" };
+    uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
+    // update text field content
+    uno::Reference<util::XRefreshable>(xTextFieldsSupplier->getTextFields(), uno::UNO_QUERY)->refresh();
+
+    uno::Reference<container::XEnumerationAccess> xFieldsAccess(xTextFieldsSupplier->getTextFields());
+    uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
+
+    for (sal_uInt32 i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
+    {
+        uno::Any aField = xFields->nextElement();
+        uno::Reference<lang::XServiceInfo> xServiceInfo(aField, uno::UNO_QUERY);
+        if (xServiceInfo->supportsService("com.sun.star.text.textfield.PageNumber"))
+        {
+            uno::Reference<text::XTextContent> xField(aField, uno::UNO_QUERY);
+            CPPUNIT_ASSERT_EQUAL(true, OUString::fromUtf8(aFieldTexts[i]).equals(xField->getAnchor()->getString()) ||
+                           OUString::fromUtf8(aFieldTextFallbacks[i%3]).equals(xField->getAnchor()->getString()));
+        }
+    }
 }
 
 #endif

@@ -52,6 +52,8 @@
 #include "portab.hxx"
 #include <editeng/lrspitem.hxx>
 #include <editeng/tstpitem.hxx>
+#include <redline.hxx>
+#include <comphelper/lok.hxx>
 
 // Tolerance in formatting and text output
 #define SLOPPY_TWIPS    5
@@ -341,6 +343,25 @@ bool SwTextFrame::CalcFollow( const sal_Int32 nTextOfst )
     }
 
     return false;
+}
+
+void SwTextFrame::MakePos()
+{
+    SwFrame::MakePos();
+    // Inform LOK clients about change in position of redlines (if any)
+    if(comphelper::LibreOfficeKit::isActive())
+    {
+        const SwTextNode& rTextNode = *GetTextNode();
+        const SwRedlineTable& rTable = rTextNode.getIDocumentRedlineAccess().GetRedlineTable();
+        for (SwRedlineTable::size_type nRedlnPos = 0; nRedlnPos < rTable.size(); ++nRedlnPos)
+        {
+            SwRangeRedline* pRedln = rTable[nRedlnPos];
+            if (rTextNode.GetIndex() == pRedln->GetPoint()->nNode.GetNode().GetIndex())
+            {
+                pRedln->MaybeNotifyRedlinePositionModification(getFrameArea().Top());
+            }
+        }
+    }
 }
 
 void SwTextFrame::AdjustFrame( const SwTwips nChgHght, bool bHasToFit )
@@ -1813,7 +1834,7 @@ void SwTextFrame::Format( vcl::RenderContext* pRenderContext, const SwBorderAttr
         // We do not want to be interrupted during formatting
         TextFrameLockGuard aLock(this);
         SwTextLineAccess aAccess( this );
-        const bool bNew = !aAccess.SwTextLineAccess::IsAvailable();
+        const bool bNew = !aAccess.IsAvailable();
         const bool bSetOfst =
             (GetOfst() && GetOfst() > GetTextNode()->GetText().getLength());
 

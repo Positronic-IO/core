@@ -35,6 +35,7 @@
 #include <frmatr.hxx>
 #include "docxattributeoutput.hxx"
 #include "docxexportfilter.hxx"
+#include <comphelper/processfactory.hxx>
 #include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
@@ -1331,7 +1332,7 @@ void DocxSdrExport::writeDiagram(const SdrObject* sdrObject, const SwFrameFormat
         uno::Reference<io::XOutputStream> xDrawingOutputStream
             = m_pImpl->m_rExport.GetFilter().openFragmentStream(
                 "word/" + drawingFileName,
-                "application/vnd.openxmlformats-officedocument.drawingml.diagramDrawing+xml");
+                "application/vnd.ms-office.drawingml.diagramDrawing+xml");
         writer->setOutputStream(xDrawingOutputStream);
         serializer->serialize(
             uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),

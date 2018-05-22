@@ -39,7 +39,6 @@
 
 #include <svx/fntctrl.hxx>
 #include <svx/svxids.hrc>
-#include <svx/strings.hrc>
 #include <svx/sdasitm.hxx>
 
 // Item set includes
@@ -839,13 +838,13 @@ void SvxFontPrevWindow::AutoCorrectFontColor()
 {
     Color   aFontColor( GetTextColor() );
 
-    if (COL_AUTO == pImpl->maFont.GetColor().GetColor())
+    if (COL_AUTO == pImpl->maFont.GetColor())
         pImpl->maFont.SetColor(aFontColor);
 
-    if (COL_AUTO == pImpl->maCJKFont.GetColor().GetColor())
+    if (COL_AUTO == pImpl->maCJKFont.GetColor())
         pImpl->maCJKFont.SetColor(aFontColor);
 
-    if (COL_AUTO == pImpl->maCTLFont.GetColor().GetColor())
+    if (COL_AUTO == pImpl->maCTLFont.GetColor())
         pImpl->maCTLFont.SetColor(aFontColor);
 }
 

@@ -19,7 +19,6 @@
 
 #include "dsselect.hxx"
 #include <dbu_dlg.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <com/sun/star/sdbcx/XCreateCatalog.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -27,9 +26,7 @@
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 #include <com/sun/star/awt/XWindow.hpp>
 #include <stringconstants.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/types.hxx>
-#include <comphelper/processfactory.hxx>
 #include <dsitems.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
@@ -143,12 +140,9 @@ void ODatasourceSelectDialog::fillListBox(const StringBag& _rDatasources)
          sSelected = m_pDatasource->GetSelectedEntry();
     m_pDatasource->Clear();
     // fill the list
-    for (   StringBag::const_iterator aDS = _rDatasources.begin();
-            aDS != _rDatasources.end();
-            ++aDS
-        )
+    for (auto const& datasource : _rDatasources)
     {
-        m_pDatasource->InsertEntry( *aDS );
+        m_pDatasource->InsertEntry(datasource);
     }
 
     if (m_pDatasource->GetEntryCount())

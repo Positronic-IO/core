@@ -36,6 +36,7 @@
 #include <dociter.hxx>
 #include <scmatrix.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <cellkeytranslator.hxx>
 #include <formulagroup.hxx>
 
@@ -837,69 +838,6 @@ void ScInterpreter::ScMatDet()
     }
 }
 
-void ScInterpreter::ScModalValue_Multi()
-{
-    sal_uInt8 nParamCount = GetByte();
-    if ( !MustHaveParamCountMin( nParamCount, 1 ) )
-        return;
-    vector<double> aSortArray;
-    GetSortArray( nParamCount, aSortArray, nullptr, false, false );
-    SCSIZE nSize = aSortArray.size();
-    if ( aSortArray.empty() || nSize == 0 || nGlobalError != FormulaError::NONE )
-        PushNoValue();
-    else
-    {
-        SCSIZE nMax = 1, nCount = 1;
-        double nOldVal = aSortArray[0];
-        vector<double> aResultArray;
-        aResultArray.resize( 1 );
-        aResultArray[ 0 ] = aSortArray[ 0 ];
-        SCSIZE i;
-
-        for ( i = 1; i < nSize; i++ )
-        {
-            if ( aSortArray[ i ] == nOldVal )
-            {
-                nCount++;
-                if ( nCount > nMax && aResultArray.size() > 1 )
-                {
-                    aResultArray.clear();
-                    aResultArray.resize( 1 );
-                    aResultArray[ 0 ] = nOldVal;
-                }
-            }
-            else
-            {
-                nOldVal = aSortArray[ i ];
-                if ( nCount >= nMax )
-                {
-                    if ( nCount > nMax )
-                        nMax = nCount;
-                    aResultArray.emplace_back();
-                }
-                aResultArray[ aResultArray.size() -1  ] = nOldVal;
-                nCount = 1;
-            }
-        }
-        if ( nCount > nMax )
-            nMax = nCount;
-        else
-        {
-            if ( nCount < nMax )
-                aResultArray.resize( aResultArray.size() - 1 );
-        }
-
-        if ( nMax == 1 && nCount == 1 )
-            PushNoValue();
-        else
-        {
-            ScMatrixRef pResMatrix = GetNewMat( 1, aResultArray.size(), true );
-            pResMatrix->PutDoubleVector( aResultArray, 0, 0 );
-            PushMatrix( pResMatrix );
-        }
-    }
-}
-
 void ScInterpreter::ScMatInv()
 {
     if ( MustHaveParamCount( GetByte(), 1 ) )
@@ -1134,7 +1072,7 @@ static ScMatrixRef lcl_MatrixCalculation(
                 {
                     xResMat->PutError( nErr, i, j);
                 }
-                else if ((!bVal1 && rMat1.IsString(i,j)) || (!bVal2 && rMat2.IsString(i,j)))
+                else if ((!bVal1 && rMat1.IsStringOrEmpty(i,j)) || (!bVal2 && rMat2.IsStringOrEmpty(i,j)))
                 {
                     FormulaError nError1 = FormulaError::NONE;
                     SvNumFormatType nFmt1 = SvNumFormatType::ALL;
@@ -1772,7 +1710,7 @@ void ScInterpreter::CalculateSumX2MY2SumX2DY2(bool _bSumX2DY2)
     double fVal, fSum = 0.0;
     for (i = 0; i < nC1; i++)
         for (j = 0; j < nR1; j++)
-            if (!pMat1->IsString(i,j) && !pMat2->IsString(i,j))
+            if (!pMat1->IsStringOrEmpty(i,j) && !pMat2->IsStringOrEmpty(i,j))
             {
                 fVal = pMat1->GetDouble(i,j);
                 fSum += fVal * fVal;
@@ -3271,7 +3209,7 @@ void ScInterpreter::ScInfo()
         else if( aStr == "NUMFILE" )
             PushDouble( 1 );
         else if( aStr == "RECALC" )
-            PushString( ScGlobal::GetRscString( pDok->GetAutoCalc() ? STR_RECALC_AUTO : STR_RECALC_MANUAL ) );
+            PushString( ScResId( pDok->GetAutoCalc() ? STR_RECALC_AUTO : STR_RECALC_MANUAL ) );
         else if (aStr == "DIRECTORY" || aStr == "MEMAVAIL" || aStr == "MEMUSED" || aStr == "ORIGIN" || aStr == "TOTMEM")
             PushNA();
         else

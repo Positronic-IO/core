@@ -22,6 +22,7 @@
 #include <com/sun/star/drawing/XControlShape.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/WrapTextMode.hpp>
+#include <com/sun/star/text/TextContentAnchorType.hpp>
 
 #include <ftninfo.hxx>
 #include <pagedesc.hxx>
@@ -205,15 +206,26 @@ DECLARE_WW8EXPORT_TEST(testTdf108448_endNote, "tdf108448_endNote.odt")
     uno::Reference<text::XText> xEndnote;
     xEndnotes->getByIndex(0) >>= xEndnote;
 
-    uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xEndnote->getText(), uno::UNO_QUERY);
-    uno::Reference<container::XEnumeration> xParaEnum = xParaEnumAccess->createEnumeration();
-    int nRet = 0;
-    while (xParaEnum->hasMoreElements())
-    {
-        xParaEnum->nextElement();
-        nRet++;
-    }
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Number of paragraphs in Endnote i", 1, nRet );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Number of paragraphs in Endnote i", 1, getParagraphs(xEndnote) );
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf106062_nonHangingFootnote, "tdf106062_nonHangingFootnote.odt")
+{
+    uno::Reference<text::XFootnotesSupplier> xFootnotesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xFootnotes(xFootnotesSupplier->getFootnotes(), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xTextRange(xFootnotes->getByIndex(0), uno::UNO_QUERY);
+    // This failed, tab between the footnote number and the footnote content was lost on import.
+    CPPUNIT_ASSERT_MESSAGE( "Footnote starts with a tab", xTextRange->getString().startsWith("\t") );
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf116570_exportFootnote, "tdf116570_exportFootnote.odt")
+{
+    uno::Reference<text::XFootnotesSupplier> xFootnotesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xFootnotes(xFootnotesSupplier->getFootnotes(), uno::UNO_QUERY);
+    uno::Reference<text::XText> xFootnoteText;
+    xFootnotes->getByIndex(0) >>= xFootnoteText;
+
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Number of paragraphs in first footnote", 2, getParagraphs(xFootnoteText) );
 }
 
 DECLARE_WW8EXPORT_TEST(testTdf112074_RTLtableJustification, "tdf112074_RTLtableJustification.doc")
@@ -738,6 +750,67 @@ DECLARE_OOXMLEXPORT_TEST( testObjectCrossReference, "object_cross_reference.odt"
         uno::Reference<text::XTextContent> xContent(xBookmarksByName->getByName("Ref_Text1_label_and_number"), uno::UNO_QUERY);
         uno::Reference<text::XTextRange> xRange(xContent->getAnchor(), uno::UNO_QUERY);
         CPPUNIT_ASSERT_EQUAL(OUString("Text 2"), xRange->getString());
+    }
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf112118_DOC, "tdf112118.doc")
+{
+    struct {
+        const char* styleName;
+        struct {
+            const char* sideName;
+            sal_Int32 nMargin;
+            sal_Int32 nBorderDistance;
+            sal_Int32 nBorderWidth;
+        } sideParams[4];
+    } styleParams[] = {                      // Margin (MS-style), border distance, border width
+        {
+            "Standard",
+            {
+                { "Top", 496, 847, 159 },    //  851 twip, 24 pt (from text), 4.5 pt
+                { "Left", 2083, 706, 212 },  // 1701 twip, 20 pt (from text), 6.0 pt
+                { "Bottom", 1401, 564, 35 }, // 1134 twip, 16 pt (from text), 1.0 pt
+                { "Right", 3471, 423, 106 }  // 2268 twip, 12 pt (from text), 3.0 pt
+            }
+        },
+        {
+            "Convert 1",
+            {
+                { "Top", 847, 496, 159 },    //  851 twip, 24 pt (from edge), 4.5 pt
+                { "Left", 706, 2083, 212 },  // 1701 twip, 20 pt (from edge), 6.0 pt
+                { "Bottom", 564, 1401, 35 }, // 1134 twip, 16 pt (from edge), 1.0 pt
+                { "Right", 423, 3471, 106 }  // 2268 twip, 12 pt (from edge), 3.0 pt
+            }
+        }
+    };
+    auto xStyles = getStyles("PageStyles");
+
+    for (const auto& style : styleParams)
+    {
+        const OUString sName = OUString::createFromAscii(style.styleName);
+        uno::Reference<beans::XPropertySet> xStyle(xStyles->getByName(sName), uno::UNO_QUERY_THROW);
+        for (const auto& side : style.sideParams)
+        {
+            const OUString sSide = OUString::createFromAscii(side.sideName);
+            const OString sStage = OString(style.styleName) + " " + side.sideName;
+
+            sal_Int32 nMargin = getProperty<sal_Int32>(xStyle, sSide + "Margin");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " margin width").getStr(),
+                side.nMargin, nMargin);
+
+            sal_Int32 nBorderDistance = getProperty<sal_Int32>(xStyle, sSide + "BorderDistance");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border distance").getStr(),
+                side.nBorderDistance, nBorderDistance);
+
+            table::BorderLine aBorder = getProperty<table::BorderLine>(xStyle, sSide + "Border");
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border width").getStr(),
+                side.nBorderWidth,
+                sal_Int32(aBorder.OuterLineWidth + aBorder.InnerLineWidth + aBorder.LineDistance));
+
+            // Check that AUTO border color is imported as black
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(sStage + " border color").getStr(),
+                sal_Int32(COL_BLACK), aBorder.Color);
+        }
     }
 }
 

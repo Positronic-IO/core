@@ -87,7 +87,7 @@ static void pre_freeStringFn(void *data)
 }
 } // extern "C"
 
-static void mark_static(void *addr, sal_Size /* size */, void *)
+static void mark_static(void *addr, sal_Size /* size */)
 {
     char *inner = static_cast<char*>(addr) + 4;
     rtl_uString *str = reinterpret_cast<rtl_uString *>(inner);
@@ -114,7 +114,7 @@ void SAL_CALL rtl_alloc_preInit (rtl_alloc_preInit_phase_t phase) SAL_THROW_EXTE
         case rtlAllocPreInitEnd:
         // back to normal
         {
-            rtl_arena_foreach(pre_arena, mark_static, nullptr);
+            rtl_arena_foreach(pre_arena, mark_static);
             rtl_allocateString = rtl_allocateMemory;
             rtl_freeString = rtl_freeMemory;
 

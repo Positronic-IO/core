@@ -34,6 +34,7 @@
 #include <unotools/configmgr.hxx>
 #include <unotools/misccfg.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <fmtpdsc.hxx>
 #include <fmthdft.hxx>
 #include <fmtcntnt.hxx>
@@ -1984,7 +1985,7 @@ std::set<Color> SwDoc::GetDocColors()
             if (pItem == nullptr)
                 continue;
             Color aColor( pItem->GetValue() );
-            if (COL_AUTO != aColor.GetColor())
+            if (COL_AUTO != aColor)
                 aDocColors.insert(aColor);
         }
     }

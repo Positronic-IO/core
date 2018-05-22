@@ -153,9 +153,8 @@ public:
                             // If != 0: this Pointer must be used!
                             // If == 0: it needs to be retrieved via the View
                             SvViewDataItem* pViewData = nullptr) = 0;
-    virtual SvLBoxItem* Create() const = 0;
     // View-dependent data is not cloned
-    virtual void        Clone(SvLBoxItem* pSource) = 0;
+    virtual std::unique_ptr<SvLBoxItem> Clone(SvLBoxItem const * pSource) const = 0;
 };
 
 enum class DragDropMode
@@ -292,7 +291,7 @@ protected:
     virtual sal_uLong Insert( SvTreeListEntry* pEntry,sal_uLong nRootPos = TREELIST_APPEND );
 
     // In-place editing
-    SvInplaceEdit2*  pEdCtrl;
+    std::unique_ptr<SvInplaceEdit2>  pEdCtrl;
     void            EditText( const OUString&, const tools::Rectangle&,const Selection&);
     void            CancelTextEditing();
     bool            EditingCanceled() const;
@@ -524,7 +523,6 @@ public:
     virtual bool set_property(const OString &rKey, const OUString &rValue) override;
 
 protected:
-    using SvListView::SelectAll;
 
     SVT_DLLPRIVATE void         SetEntryHeight( SvTreeListEntry const * pEntry );
     SVT_DLLPRIVATE void         AdjustEntryHeight( const Image& rBmp );
@@ -649,7 +647,7 @@ public:
 
     void            SetSublistOpenWithReturn();      // open/close sublist with return/enter
     void            SetSublistOpenWithLeftRight();   // open/close sublist with cursor left/right
-    void            SetSublistDontOpenWithDoubleClick(); // do not open/close sublist with mouse double click on entry
+    void            SetSublistDontOpenWithDoubleClick( bool bDontOpen ); // set mouse double click open/close sublist behavior
 
     void            EnableInplaceEditing( bool bEnable );
     // Edits the Entry's first StringItem, 0 == Cursor
@@ -721,7 +719,7 @@ public:
     virtual bool    Collapse( SvTreeListEntry* pParent );
     virtual bool    Select( SvTreeListEntry* pEntry, bool bSelect=true );
     sal_uLong       SelectChildren( SvTreeListEntry* pParent, bool bSelect );
-    virtual void    SelectAll( bool bSelect, bool bPaint = true ) override;
+    virtual void    SelectAll( bool bSelect, bool bPaint = true );
 
     void SetCurEntry( SvTreeListEntry* _pEntry );
     SvTreeListEntry* GetCurEntry() const;

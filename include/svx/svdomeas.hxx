@@ -24,10 +24,6 @@
 #include <svx/svxdllapi.h>
 #include <editeng/measfld.hxx>
 
-
-//  Initial Declarations
-
-
 class SdrOutliner;
 struct ImpMeasureRec;
 struct ImpMeasurePoly;
@@ -35,10 +31,6 @@ struct ImpMeasurePoly;
 namespace sdr { namespace properties {
     class MeasureProperties;
 }}
-
-
-//   Auxiliary Class SdrMeasureObjGeoData
-
 
 class SdrMeasureObjGeoData : public SdrTextObjGeoData
 {
@@ -50,10 +42,6 @@ public:
     SdrMeasureObjGeoData();
     virtual ~SdrMeasureObjGeoData() override;
 };
-
-
-//   SdrMeasureObj
-
 
 class SVX_DLLPUBLIC SdrMeasureObj : public SdrTextObj
 {
@@ -84,15 +72,23 @@ protected:
     virtual void SaveGeoData(SdrObjGeoData& rGeo) const override;
     virtual void RestGeoData(const SdrObjGeoData& rGeo) override;
 
-public:
-    SdrMeasureObj();
-    SdrMeasureObj(const Point& rPt1, const Point& rPt2);
+    // protected destructor
     virtual ~SdrMeasureObj() override;
+
+public:
+    SdrMeasureObj(SdrModel& rSdrModel);
+    SdrMeasureObj(
+        SdrModel& rSdrModel,
+        const Point& rPt1,
+        const Point& rPt2);
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
     virtual void TakeUnrotatedSnapRect(tools::Rectangle& rRect) const override;
-    virtual SdrMeasureObj* Clone() const override;
+    virtual SdrMeasureObj* CloneSdrObject(SdrModel& rTargetModel) const override;
+
+    // implemented mainly for the purposes of Clone()
+    SdrMeasureObj& operator=(const SdrMeasureObj& rObj);
 
     virtual OUString TakeObjNameSingul() const override;
     virtual OUString TakeObjNamePlural() const override;
@@ -144,7 +140,7 @@ public:
     virtual OutlinerParaObject* GetOutlinerParaObject() const override;
 
     virtual bool CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_uInt16 nPos,
-        bool bEdit, Color*& rpTxtColor, Color*& rpFldColor, OUString& rRet) const override;
+        bool bEdit, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor, OUString& rRet) const override;
 
     // #i97878#
     virtual bool TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B2DPolyPolygon& rPolyPolygon) const override;

@@ -19,6 +19,7 @@
 
 #include "WallFloorWrapper.hxx"
 #include "Chart2ModelContact.hxx"
+#include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
@@ -84,9 +85,6 @@ WallFloorWrapper::WallFloorWrapper( bool bWall,
         m_bWall( bWall )
 
 {
-#if defined __clang__ && defined _MSC_VER // workaround clang-cl ABI bug PR25641
-    css::uno::Sequence<css::beans::PropertyState> dummy; (void) dummy;
-#endif
 }
 
 WallFloorWrapper::~WallFloorWrapper()

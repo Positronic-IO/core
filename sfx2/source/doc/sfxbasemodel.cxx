@@ -86,7 +86,6 @@
 #include <framework/interaction.hxx>
 #include <framework/titlehelper.hxx>
 #include <comphelper/numberedcollection.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <unotools/ucbhelper.hxx>
 
 #include <sfx2/sfxbasecontroller.hxx>
@@ -102,7 +101,6 @@
 #include <sfx2/request.hxx>
 #include <sfx2/printer.hxx>
 #include <basic/basmgr.hxx>
-#include <svtools/strings.hrc>
 #include <sfx2/event.hxx>
 #include <eventsupplier.hxx>
 #include <sfx2/evntconf.hxx>
@@ -2297,7 +2295,7 @@ Reference< document::XEmbeddedScripts > SAL_CALL SfxBaseModel::getScriptContaine
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("sfx.doc");
         xDocumentScripts = nullptr;
     }
 

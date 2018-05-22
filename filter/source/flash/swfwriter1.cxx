@@ -365,15 +365,12 @@ bool compare_fonts_for_me(const vcl::Font& rFont1, const vcl::Font& rFont2)
 
 FlashFont& Writer::Impl_getFont( const vcl::Font& rFont )
 {
-    FontMap::iterator aIter( maFonts.begin() );
-    const FontMap::iterator aEnd( maFonts.end() );
-
-    for(; aIter != aEnd; ++aIter)
+    for (auto const& font : maFonts)
     {
-        const vcl::Font tempFont = (*aIter)->getFont();
+        const vcl::Font tempFont = font->getFont();
         if( compare_fonts_for_me(tempFont, rFont) )
         {
-            return **aIter;
+            return *font;
         }
     }
 
@@ -697,71 +694,6 @@ void Writer::Impl_writeText( const Point& rPos, const OUString& rText, const lon
     }
 }
 
-// AS: Because JPEGs require the alpha channel provided separately (JPEG does not
-//  natively support alpha channel, but SWF lets you provide it separately), we
-//  extract the alpha channel into a separate array here.
-void getBitmapData( const BitmapEx& aBmpEx, sal_uInt8*& tgadata, sal_uInt8*& tgaAlphadata, sal_uInt32& nWidth, sal_uInt32& nHeight )
-{
-    if( !aBmpEx.IsEmpty() )
-    {
-        Bitmap aBmp( aBmpEx.GetBitmap() );
-        Bitmap::ScopedReadAccess pRAcc(aBmp);
-
-        if( pRAcc )
-        {
-            AlphaMask   aAlpha;
-            nWidth = pRAcc->Width();
-            nHeight = pRAcc->Height();
-            tgadata = new sal_uInt8[nWidth*nHeight*4];
-            tgaAlphadata = new sal_uInt8[nWidth*nHeight];
-            sal_uInt8* p = tgadata, *pAlpha = tgaAlphadata;
-
-
-            if( aBmpEx.IsAlpha() )
-                aAlpha = aBmpEx.GetAlpha();
-            else if( aBmpEx.IsTransparent() )
-                aAlpha = aBmpEx.GetMask();
-            else
-            {
-                sal_uInt8 cAlphaVal = 0;
-                aAlpha = AlphaMask( aBmp.GetSizePixel(), &cAlphaVal );
-            }
-
-            AlphaMask::ScopedReadAccess pAAcc(aAlpha);
-
-            if( pAAcc )
-            {
-                for( sal_uInt32 nY = 0; nY < nHeight; nY++ )
-                {
-                    Scanline pScanlineAA = pAAcc->GetScanline( nY );
-                    for( sal_uInt32 nX = 0; nX < nWidth; nX++ )
-                    {
-                        const sal_uInt8     nAlpha = pAAcc->GetIndexFromData( pScanlineAA, nX );
-                        const BitmapColor   aPixelColor( pRAcc->GetColor( nY, nX ) );
-
-                        if( nAlpha == 0xff )
-                        {
-                            *p++ = 0;
-                            *p++ = 0;
-                            *p++ = 0;
-                            *p++ = 0;
-                        }
-                        else
-                        {
-                            *p++ = 0xff-nAlpha;
-                            *p++ = aPixelColor.GetRed();
-                            *p++ = aPixelColor.GetGreen();
-                            *p++ = aPixelColor.GetBlue();
-                        }
-                        *pAlpha++ = 0xff - nAlpha;
-                    }
-                }
-            }
-        }
-    }
-}
-
-
 sal_uInt16 Writer::defineBitmap( const BitmapEx &bmpSource, sal_Int32 nJPEGQualityLevel )
 {
     BitmapChecksum bmpChecksum = bmpSource.GetChecksum();
@@ -779,21 +711,22 @@ sal_uInt16 Writer::defineBitmap( const BitmapEx &bmpSource, sal_Int32 nJPEGQuali
     //  or Lossless compress it.
 
     // Figure out lossless size
-    sal_uInt8 *pImageData, *pAlphaData;
-    sal_uInt32 width(0), height(0);
+    std::vector<sal_uInt8> aImageData, aAlphaData;
 
-    getBitmapData( bmpSource, pImageData, pAlphaData, width, height );
+    sal_uInt32 width = bmpSource.GetPrefSize().Width();
+    sal_uInt32 height = bmpSource.GetPrefSize().Height();
+    bmpSource.GetSplitData(aImageData, aAlphaData );
     sal_uInt32 raw_size = width * height * 4;
     uLongf compressed_size = raw_size + static_cast<sal_uInt32>(raw_size/100) + 12;
     std::unique_ptr<sal_uInt8[]> pCompressed(new sal_uInt8[ compressed_size ]);
 
 #ifdef DBG_UTIL
-    if(compress2(pCompressed.get(), &compressed_size, pImageData, raw_size, Z_BEST_COMPRESSION) != Z_OK)
+    if(compress2(pCompressed.get(), &compressed_size, aImageData.data(), raw_size, Z_BEST_COMPRESSION) != Z_OK)
     {
         SAL_WARN( "filter.flash", "compress2 failed!" ); ((void)0);
     }
 #else
-    compress2(pCompressed.get(), &compressed_size, pImageData, raw_size, Z_BEST_COMPRESSION);
+    compress2(pCompressed.get(), &compressed_size, aImageData.data(), raw_size, Z_BEST_COMPRESSION);
 #endif
 
     // AS: SWF files let you provide an Alpha mask for JPEG images, but we have
@@ -806,14 +739,18 @@ sal_uInt16 Writer::defineBitmap( const BitmapEx &bmpSource, sal_Int32 nJPEGQuali
         pAlphaCompressed.reset(new sal_uInt8[ compressed_size ]);
 
 #ifdef DBG_UTIL
-        if(compress2(pAlphaCompressed.get(), &alpha_compressed_size, pAlphaData, width * height, Z_BEST_COMPRESSION) != Z_OK)
+        if(compress2(pAlphaCompressed.get(), &alpha_compressed_size, aAlphaData.data(), width * height, Z_BEST_COMPRESSION) != Z_OK)
         {
             SAL_WARN( "filter.flash", "compress2 failed!" ); ((void)0);
         }
 #else
-        compress2(pAlphaCompressed.get(), &alpha_compressed_size, pAlphaData, width * height, Z_BEST_COMPRESSION);
+        compress2(pAlphaCompressed.get(), &alpha_compressed_size, aAlphaData.data(), width * height, Z_BEST_COMPRESSION);
 #endif
     }
+
+    // clear these early for less peak memory usage
+    aImageData.resize(0);
+    aAlphaData.resize(0);
 
     // Figure out JPEG size
     const sal_uInt8* pJpgData = nullptr;
@@ -845,9 +782,6 @@ sal_uInt16 Writer::defineBitmap( const BitmapEx &bmpSource, sal_Int32 nJPEGQuali
         Impl_writeJPEG(nBitmapId, pJpgData, nJpgDataLength, pAlphaCompressed.get(), alpha_compressed_size );
     else
         Impl_writeBmp( nBitmapId, width, height, pCompressed.get(), compressed_size );
-
-    delete[] pImageData;
-    delete[] pAlphaData;
 
     return nBitmapId;
 }
@@ -1290,7 +1224,7 @@ bool Writer::Impl_writePageField( Rectangle& rTextBounds )
     aBits.writeUB( 0, 1 );                  // UseOutlines
     mpTag->addBits( aBits );
 
-    Color aColor( COL_BLACK );
+    Color aCOL_BLACK );
     mpTag->addRGB( aColor );
     mpTag->addString( "PageNumber" );
     mpTag->addString( "XXX" );
@@ -1578,7 +1512,7 @@ void Writer::Impl_writeActions( const GDIMetaFile& rMtf )
                     {
                         bFound = true;
                         const MetaBmpScaleAction* pBmpScaleAction = static_cast<const MetaBmpScaleAction*>(pSubstAct);
-                        Impl_writeImage( pBmpScaleAction->GetBitmap(),
+                        Impl_writeImage( BitmapEx(pBmpScaleAction->GetBitmap()),
                                       pA->GetPoint(), pA->GetSize(),
                                       Point(), pBmpScaleAction->GetBitmap().GetSizePixel(), clipRect, 1 == bMap  );
                     }
@@ -1679,7 +1613,7 @@ void Writer::Impl_writeActions( const GDIMetaFile& rMtf )
             {
                 const MetaBmpScaleAction* pA = static_cast<const MetaBmpScaleAction*>(pAction);
 
-                Impl_writeImage( pA->GetBitmap(),
+                Impl_writeImage( BitmapEx(pA->GetBitmap()),
                           pA->GetPoint(), pA->GetSize(),
                           Point(), pA->GetBitmap().GetSizePixel(), clipRect, 1 == bMap );
             }
@@ -1688,7 +1622,7 @@ void Writer::Impl_writeActions( const GDIMetaFile& rMtf )
             case MetaActionType::BMP:
             {
                 const MetaBmpAction* pA = static_cast<const MetaBmpAction*>(pAction);
-                Impl_writeImage( pA->GetBitmap(),
+                Impl_writeImage( BitmapEx(pA->GetBitmap()),
                           pA->GetPoint(), mpVDev->PixelToLogic( pA->GetBitmap().GetSizePixel()),
                           Point(), pA->GetBitmap().GetSizePixel(), clipRect, 1 ==bMap );
             }
@@ -1697,7 +1631,7 @@ void Writer::Impl_writeActions( const GDIMetaFile& rMtf )
             case MetaActionType::BMPSCALEPART:
             {
                 const MetaBmpScalePartAction* pA = static_cast<const MetaBmpScalePartAction*>(pAction);
-                Impl_writeImage( pA->GetBitmap(),
+                Impl_writeImage( BitmapEx(pA->GetBitmap()),
                           pA->GetDestPoint(), pA->GetDestSize(),
                           pA->GetSrcPoint(), pA->GetSrcSize(), clipRect, 1 == bMap );
             }

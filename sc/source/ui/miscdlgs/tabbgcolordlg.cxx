@@ -21,16 +21,12 @@
 
 #include <tabbgcolordlg.hxx>
 #include <sc.hrc>
-#include <scresid.hxx>
-#include <strings.hrc>
 
 #include <tools/color.hxx>
 #include <sfx2/objsh.hxx>
 #include <svx/xtable.hxx>
 #include <svx/drawitem.hxx>
 #include <unotools/pathoptions.hxx>
-#include <editeng/editrids.hrc>
-#include <editeng/eerdll.hxx>
 #include <vcl/builderfactory.hxx>
 
 #define HDL(hdl) LINK(this,ScTabBgColorDlg,hdl)
@@ -114,7 +110,7 @@ void ScTabBgColorDlg::FillColorValueSets_Impl()
 ///    Handler, called when color selection is changed
 IMPL_LINK_NOARG(ScTabBgColorDlg, TabBgColorDblClickHdl_Impl, ValueSet*, void)
 {
-    sal_uInt16 nItemId = m_pTabBgColorSet->GetSelectItemId();
+    sal_uInt16 nItemId = m_pTabBgColorSet->GetSelectedItemId();
     Color aColor = nItemId ? ( m_pTabBgColorSet->GetItemColor( nItemId ) ) : COL_AUTO;
     m_aTabBgColor = aColor;
     EndDialog( RET_OK );
@@ -123,7 +119,7 @@ IMPL_LINK_NOARG(ScTabBgColorDlg, TabBgColorDblClickHdl_Impl, ValueSet*, void)
 //    Handler, called when the OK button is pushed
 IMPL_LINK_NOARG(ScTabBgColorDlg, TabBgColorOKHdl_Impl, Button*, void)
 {
-    sal_uInt16 nItemId = m_pTabBgColorSet->GetSelectItemId();
+    sal_uInt16 nItemId = m_pTabBgColorSet->GetSelectedItemId();
     Color aColor = nItemId ? ( m_pTabBgColorSet->GetItemColor( nItemId ) ) : COL_AUTO;
     m_aTabBgColor = aColor;
     EndDialog( RET_OK );
@@ -164,7 +160,7 @@ void ScTabBgColorDlg::ScTabBgColorValueSet::KeyInput( const KeyEvent& rKEvt )
         case KEY_SPACE:
         case KEY_RETURN:
         {
-            sal_uInt16 nItemId = GetSelectItemId();
+            sal_uInt16 nItemId = GetSelectedItemId();
             const Color& aColor = nItemId ? ( GetItemColor( nItemId ) ) : COL_AUTO;
             m_pTabBgColorDlg->m_aTabBgColor = aColor;
             m_pTabBgColorDlg->EndDialog(RET_OK);

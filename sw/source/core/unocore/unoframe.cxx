@@ -111,6 +111,7 @@
 #include <ndgrf.hxx>
 #include <osl/mutex.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/GraphicLoader.hxx>
 #include <sfx2/printer.hxx>
 #include <SwStyleNameMapper.hxx>
 #include <editeng/xmlcnitm.hxx>
@@ -150,9 +151,6 @@ using namespace ::com::sun::star;
 using ::com::sun::star::frame::XModel;
 using ::com::sun::star::container::XNameAccess;
 using ::com::sun::star::style::XStyleFamiliesSupplier;
-
-const sal_Char sPackageProtocol[] = "vnd.sun.star.Package:";
-const sal_Char sGraphicObjectProtocol[] = "vnd.sun.star.GraphicObject:";
 
 class BaseFrameProperties_Impl
 {
@@ -211,13 +209,15 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
     const ::uno::Any* pColTrans = nullptr; GetProperty(RES_BACKGROUND, MID_BACK_COLOR_TRANSPARENCY, pColTrans);
     const ::uno::Any* pTrans = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_TRANSPARENT, pTrans );
     const ::uno::Any* pGrLoc = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_POSITION, pGrLoc );
-    const ::uno::Any* pGrURL = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_URL, pGrURL     );
+    const ::uno::Any* pGraphic = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC, pGraphic     );
     const ::uno::Any* pGrFilter = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_FILTER, pGrFilter     );
+    const ::uno::Any* pGraphicURL = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_URL, pGraphicURL );
     const ::uno::Any* pGrTranparency = nullptr; GetProperty(RES_BACKGROUND, MID_GRAPHIC_TRANSPARENCY, pGrTranparency     );
     const bool bSvxBrushItemPropertiesUsed(
         pCol ||
         pTrans ||
-        pGrURL ||
+        pGraphic ||
+        pGraphicURL ||
         pGrFilter ||
         pGrLoc ||
         pGrTranparency ||
@@ -239,7 +239,6 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
     // XFillBitmapItem: three possible slots supported in UNO API
     const uno::Any* pXFillBitmapItem = nullptr; GetProperty(XATTR_FILLBITMAP, MID_BITMAP, pXFillBitmapItem);
     const uno::Any* pXFillBitmapNameItem = nullptr; GetProperty(XATTR_FILLBITMAP, MID_NAME, pXFillBitmapNameItem);
-    const uno::Any* pXFillBitmapURLItem = nullptr; GetProperty(XATTR_FILLBITMAP, MID_GRAFURL, pXFillBitmapURLItem);
 
     const uno::Any* pXFillTransparenceItem = nullptr; GetProperty(XATTR_FILLTRANSPARENCE, 0, pXFillTransparenceItem);
     const uno::Any* pXGradientStepCountItem = nullptr; GetProperty(XATTR_GRADIENTSTEPCOUNT, 0, pXGradientStepCountItem);
@@ -261,10 +260,9 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
     const uno::Any* pOwnAttrFillBmpItem = nullptr; GetProperty(OWN_ATTR_FILLBMP_MODE, 0, pOwnAttrFillBmpItem);
 
     // tdf#91140: ignore SOLID fill style for determining if fill style is used
-    // but there is a GraphicURL
+    // but there is a Graphic
     const bool bFillStyleUsed(pXFillStyleItem && pXFillStyleItem->hasValue() &&
-        (pXFillStyleItem->get<drawing::FillStyle>() != drawing::FillStyle_SOLID
-         || !pGrURL));
+        (pXFillStyleItem->get<drawing::FillStyle>() != drawing::FillStyle_SOLID || (!pGraphic || !pGraphicURL) ));
     SAL_INFO_IF(pXFillStyleItem && pXFillStyleItem->hasValue() && !bFillStyleUsed,
             "sw.uno", "FillBaseProperties: ignoring invalid FillStyle");
     const bool bXFillStyleItemUsed(
@@ -272,7 +270,7 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
         pXFillColorItem ||
         pXFillGradientItem || pXFillGradientNameItem ||
         pXFillHatchItem || pXFillHatchNameItem ||
-        pXFillBitmapItem || pXFillBitmapNameItem || pXFillBitmapURLItem ||
+        pXFillBitmapItem || pXFillBitmapNameItem ||
         pXFillTransparenceItem ||
         pXGradientStepCountItem ||
         pXFillBmpPosItem ||
@@ -324,9 +322,14 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
                 bRet &= static_cast<SfxPoolItem&>(aBrush).PutValue(*pTrans, MID_GRAPHIC_TRANSPARENT);
         }
 
-        if(pGrURL)
+        if (pGraphic)
         {
-            bRet &= static_cast<SfxPoolItem&>(aBrush).PutValue(*pGrURL, MID_GRAPHIC_URL);
+            bRet &= static_cast<SfxPoolItem&>(aBrush).PutValue(*pGraphic, MID_GRAPHIC);
+        }
+
+        if (pGraphicURL)
+        {
+            bRet &= static_cast<SfxPoolItem&>(aBrush).PutValue(*pGraphicURL, MID_GRAPHIC_URL);
         }
 
         if(pGrFilter)
@@ -439,7 +442,7 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
             }
         }
 
-        if(pXFillBitmapItem || pXFillBitmapNameItem || pXFillBitmapURLItem)
+        if (pXFillBitmapItem || pXFillBitmapNameItem)
         {
             if(pXFillBitmapItem)
             {
@@ -460,15 +463,6 @@ bool BaseFrameProperties_Impl::FillBaseProperties(SfxItemSet& rToSet, const SfxI
                 }
 
                 bRet &= SvxShape::SetFillAttribute(XATTR_FILLBITMAP, aTempName, rToSet);
-            }
-
-            if(pXFillBitmapURLItem)
-            {
-                const Graphic aNullGraphic;
-                XFillBitmapItem aXFillBitmapItem(aNullGraphic);
-
-                aXFillBitmapItem.PutValue(*pXFillBitmapURLItem, MID_GRAFURL);
-                rToSet.Put(aXFillBitmapItem);
             }
         }
 
@@ -1568,44 +1562,15 @@ void SwXFrame::setPropertyValue(const OUString& rPropertyName, const ::uno::Any&
             delete pSet;
 
         }
-        else if( FN_UNO_GRAPHIC_U_R_L == pEntry->nWID ||
-                FN_UNO_GRAPHIC_FILTER == pEntry->nWID)
+        else if (FN_UNO_GRAPHIC_FILTER == pEntry->nWID)
         {
             OUString sGrfName;
             OUString sFltName;
-            std::unique_ptr<GraphicObject> pGrfObj;
             SwDoc::GetGrfNms( *static_cast<SwFlyFrameFormat*>(pFormat), &sGrfName, &sFltName );
-            OUString sTmp;
-            aValue >>= sTmp;
+            aValue >>= sFltName;
             UnoActionContext aAction(pFormat->GetDoc());
-            if(FN_UNO_GRAPHIC_U_R_L == pEntry->nWID)
-            {
-                if( sTmp.startsWith(sPackageProtocol) )
-                {
-                    pGrfObj = o3tl::make_unique<GraphicObject>();
-                    pGrfObj->SetUserData( sTmp );
-                    sGrfName.clear();
-                }
-                else if( sTmp.startsWith(sGraphicObjectProtocol) )
-                {
-                    const OString sId(OUStringToOString(
-                        sTmp.copy(sizeof(sGraphicObjectProtocol)-1),
-                        RTL_TEXTENCODING_ASCII_US));
-                    pGrfObj = o3tl::make_unique<GraphicObject>( sId );
-                    sGrfName.clear();
-                }
-                else
-                {
-                    sGrfName = sTmp;
-                }
-            }
-            else
-            {
-                sFltName = sTmp;
-            }
-
             const ::SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx();
-            if(pIdx)
+            if (pIdx)
             {
                 SwNodeIndex aIdx(*pIdx, 1);
                 SwGrfNode* pGrfNode = aIdx.GetNode().GetGrfNode();
@@ -1614,38 +1579,69 @@ void SwXFrame::setPropertyValue(const OUString& rPropertyName, const ::uno::Any&
                     throw uno::RuntimeException();
                 }
                 SwPaM aGrfPaM(*pGrfNode);
-                pFormat->GetDoc()->getIDocumentContentOperations().ReRead( aGrfPaM, sGrfName, sFltName, nullptr,
-                                        pGrfObj.get() );
+                pFormat->GetDoc()->getIDocumentContentOperations().ReRead(aGrfPaM, sGrfName, sFltName, nullptr);
             }
         }
-        else if( FN_UNO_GRAPHIC == pEntry->nWID )
+        else if (FN_UNO_GRAPHIC == pEntry->nWID || FN_UNO_GRAPHIC_URL == pEntry->nWID)
         {
-            uno::Reference< graphic::XGraphic > xGraphic;
-            aValue >>= xGraphic;
-            if(xGraphic.is())
+            Graphic aGraphic;
+            if (aValue.has<OUString>())
+            {
+                OUString aURL = aValue.get<OUString>();
+                if (!aURL.isEmpty())
+                {
+                    aGraphic = vcl::graphic::loadFromURL(aURL);
+                }
+            }
+            else if (aValue.has<uno::Reference<graphic::XGraphic>>())
+            {
+                uno::Reference<graphic::XGraphic> xGraphic;
+                xGraphic = aValue.get<uno::Reference<graphic::XGraphic>>();
+                if (xGraphic.is())
+                {
+                    aGraphic = Graphic(xGraphic);
+                }
+            }
+
+            if (aGraphic)
             {
                 const ::SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx();
-                if(pIdx)
+                if (pIdx)
                 {
                     SwNodeIndex aIdx(*pIdx, 1);
                     SwGrfNode* pGrfNode = aIdx.GetNode().GetGrfNode();
-                    if(!pGrfNode)
+                    if (!pGrfNode)
                     {
                         throw uno::RuntimeException();
                     }
                     SwPaM aGrfPaM(*pGrfNode);
-                    Graphic aGraphic( xGraphic );
-                    pFormat->GetDoc()->getIDocumentContentOperations().ReRead( aGrfPaM, OUString(), OUString(), &aGraphic, nullptr );
+                    pFormat->GetDoc()->getIDocumentContentOperations().ReRead(aGrfPaM, OUString(), OUString(), &aGraphic);
                 }
             }
         }
-        else if (FN_UNO_REPLACEMENT_GRAPHIC == pEntry->nWID)
+        else if (FN_UNO_REPLACEMENT_GRAPHIC == pEntry->nWID || FN_UNO_REPLACEMENT_GRAPHIC_URL == pEntry->nWID)
         {
-            uno::Reference<graphic::XGraphic> xGraphic;
-            aValue >>= xGraphic;
-            if (xGraphic.is())
+            Graphic aGraphic;
+            if (aValue.has<OUString>())
             {
-                Graphic aGraphic(xGraphic);
+                OUString aURL = aValue.get<OUString>();
+                if (!aURL.isEmpty())
+                {
+                    aGraphic = vcl::graphic::loadFromURL(aURL);
+                }
+            }
+            else if (aValue.has<uno::Reference<graphic::XGraphic>>())
+            {
+                uno::Reference<graphic::XGraphic> xGraphic;
+                xGraphic = aValue.get<uno::Reference<graphic::XGraphic>>();
+                if (xGraphic.is())
+                {
+                    aGraphic = Graphic(xGraphic);
+                }
+            }
+
+            if (aGraphic)
+            {
                 const ::SwFormatContent* pCnt = &pFormat->GetContent();
                 if ( pCnt->GetContentIdx() && pDoc->GetNodes()[ pCnt->GetContentIdx()->GetIndex() + 1 ] )
                 {
@@ -1653,9 +1649,8 @@ void SwXFrame::setPropertyValue(const OUString& rPropertyName, const ::uno::Any&
 
                     if ( pOleNode )
                     {
-                        svt::EmbeddedObjectRef &rObj = pOleNode->GetOLEObj().GetObject();
-
-                        rObj.SetGraphic( aGraphic, OUString() );
+                        svt::EmbeddedObjectRef &rEmbeddedObject = pOleNode->GetOLEObj().GetObject();
+                        rEmbeddedObject.SetGraphic(aGraphic, OUString() );
                     }
                 }
             }
@@ -1824,9 +1819,8 @@ void SwXFrame::setPropertyValue(const OUString& rPropertyName, const ::uno::Any&
                     }
                     break;
                 }
-                case MID_GRAFURL:
+                case MID_BITMAP:
                 {
-                    // Bitmap also has the MID_GRAFURL mode where a Bitmap URL is used
                     switch(pEntry->nWID)
                     {
                         case XATTR_FILLBITMAP:
@@ -2032,30 +2026,6 @@ uno::Any SwXFrame::getPropertyValue(const OUString& rPropertyName)
                 }
             }
         }
-        else if( FN_UNO_GRAPHIC_U_R_L == pEntry->nWID)
-        {
-            OUString sGrfName;
-            const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx();
-            if(pIdx)
-            {
-                SwNodeIndex aIdx(*pIdx, 1);
-                SwGrfNode* pGrfNode = aIdx.GetNode().GetGrfNode();
-                if(!pGrfNode)
-                    throw uno::RuntimeException();
-                if( pGrfNode->IsGrfLink() )
-                {
-                    SwDoc::GetGrfNms( *static_cast<SwFlyFrameFormat*>(pFormat), &sGrfName, nullptr );
-                }
-                else
-                {
-                    OUString sId(OStringToOUString(
-                        pGrfNode->GetGrfObj().GetUniqueID(),
-                        RTL_TEXTENCODING_ASCII_US));
-                    sGrfName = sGraphicObjectProtocol + sId;
-                }
-            }
-            aAny <<= sGrfName;
-        }
         else if (FN_UNO_REPLACEMENT_GRAPHIC == pEntry->nWID)
         {
             const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx();
@@ -2082,6 +2052,10 @@ uno::Any SwXFrame::getPropertyValue(const OUString& rPropertyName)
             OUString sFltName;
             SwDoc::GetGrfNms( *static_cast<SwFlyFrameFormat*>(pFormat), nullptr, &sFltName );
                 aAny <<= sFltName;
+        }
+        else if( FN_UNO_GRAPHIC_URL == pEntry->nWID )
+        {
+            throw uno::RuntimeException("Getting from this property is not unsupported");
         }
         else if( FN_UNO_GRAPHIC == pEntry->nWID )
         {
@@ -2363,8 +2337,9 @@ uno::Sequence< beans::PropertyState > SwXFrame::getPropertyStates(
             if(pEntry->nWID == FN_UNO_ANCHOR_TYPES||
                 pEntry->nWID == FN_PARAM_LINK_DISPLAY_NAME||
                 FN_UNO_FRAME_STYLE_NAME == pEntry->nWID||
-                FN_UNO_GRAPHIC_U_R_L == pEntry->nWID||
-                FN_UNO_GRAPHIC_FILTER     == pEntry->nWID||
+                FN_UNO_GRAPHIC == pEntry->nWID||
+                FN_UNO_GRAPHIC_URL == pEntry->nWID||
+                FN_UNO_GRAPHIC_FILTER == pEntry->nWID||
                 FN_UNO_ACTUAL_SIZE == pEntry->nWID||
                 FN_UNO_ALTERNATIVE_TEXT == pEntry->nWID)
             {
@@ -2770,53 +2745,27 @@ void SwXFrame::attachToRange(const uno::Reference< text::XTextRange > & xTextRan
     }
     else if( eType == FLYCNTTYPE_GRF)
     {
-        UnoActionContext aCont(pDoc);
-        const ::uno::Any* pGraphicURL;
-        OUString sGraphicURL;
-        std::unique_ptr<GraphicObject> pGrfObj;
-        if (m_pProps->GetProperty(FN_UNO_GRAPHIC_U_R_L, 0, pGraphicURL))
-        {
-            (*pGraphicURL) >>= sGraphicURL;
-            if( sGraphicURL.startsWith(sPackageProtocol) )
-            {
-                pGrfObj = o3tl::make_unique<GraphicObject>();
-                pGrfObj->SetUserData( sGraphicURL );
-                sGraphicURL.clear();
-            }
-            else if( sGraphicURL.startsWith(sGraphicObjectProtocol) )
-            {
-                OString sId(OUStringToOString(
-                    sGraphicURL.copy( sizeof(sGraphicObjectProtocol)-1 ),
-                    RTL_TEXTENCODING_ASCII_US));
-                pGrfObj = o3tl::make_unique<GraphicObject>( sId );
-                sGraphicURL.clear();
-            }
-        }
+        UnoActionContext aActionContext(pDoc);
         Graphic aGraphic;
-        const ::uno::Any* pGraphic;
-        const bool bHasGraphic = m_pProps->GetProperty(FN_UNO_GRAPHIC, 0, pGraphic);
-        if( bHasGraphic )
+        const ::uno::Any* pGraphicAny;
+        const bool bHasGraphic = m_pProps->GetProperty(FN_UNO_GRAPHIC, 0, pGraphicAny);
+        if (bHasGraphic)
         {
-            uno::Reference< graphic::XGraphic > xGraphic;
-            (*pGraphic) >>= xGraphic;
-            aGraphic = Graphic( xGraphic );
+            uno::Reference<graphic::XGraphic> xGraphic;
+            (*pGraphicAny) >>= xGraphic;
+            aGraphic = Graphic(xGraphic);
         }
 
-        OUString sFltName;
-        const ::uno::Any* pFilter;
-        if (m_pProps->GetProperty(FN_UNO_GRAPHIC_FILTER, 0, pFilter))
+        OUString sFilterName;
+        const uno::Any* pFilterAny;
+        if (m_pProps->GetProperty(FN_UNO_GRAPHIC_FILTER, 0, pFilterAny))
         {
-            (*pFilter) >>= sFltName;
+            (*pFilterAny) >>= sFilterName;
         }
 
-        pFormat = pGrfObj
-            ? pDoc->getIDocumentContentOperations().InsertGraphicObject(
-                    aPam, *pGrfObj.get(), &aFrameSet, &aGrSet, pParentFrameFormat)
-            : pDoc->getIDocumentContentOperations().InsertGraphic(
-                    aPam, sGraphicURL, sFltName,
-                    (!bHasGraphic && !sGraphicURL.isEmpty()) ? nullptr : &aGraphic,
-                    &aFrameSet, &aGrSet, pParentFrameFormat);
-        if(pFormat)
+        pFormat = pDoc->getIDocumentContentOperations().InsertGraphic(
+                    aPam, OUString(), sFilterName, &aGraphic, &aFrameSet, &aGrSet, pParentFrameFormat);
+        if (pFormat)
         {
             SwGrfNode *pGrfNd = pDoc->GetNodes()[ pFormat->GetContent().GetContentIdx()
                                         ->GetIndex()+1 ]->GetGrfNode();
@@ -3318,16 +3267,6 @@ uno::Sequence< OUString > SwXTextFrame::getSupportedServiceNames()
     return aRet;
 }
 
-void * SwXTextFrame::operator new( size_t t) throw()
-{
-    return SwXTextFrameBaseClass::operator new( t);
-}
-
-void SwXTextFrame::operator delete( void * p) throw()
-{
-    SwXTextFrameBaseClass::operator delete(p);
-}
-
 uno::Reference<container::XNameReplace > SAL_CALL SwXTextFrame::getEvents()
 {
     return new SwFrameEventDescriptor( *this );
@@ -3397,16 +3336,6 @@ uno::Sequence< OUString > SwXTextGraphicObject::getSupportedServiceNames()
     OUString* pArray = aRet.getArray();
     pArray[aRet.getLength() - 1] = "com.sun.star.text.TextGraphicObject";
     return aRet;
-}
-
-void * SwXTextGraphicObject::operator new( size_t t) throw()
-{
-    return SwXTextGraphicObjectBaseClass::operator new(t);
-}
-
-void SwXTextGraphicObject::operator delete( void * p) throw()
-{
-    SwXTextGraphicObjectBaseClass::operator delete(p);
 }
 
 uno::Reference<container::XNameReplace> SAL_CALL
@@ -3546,16 +3475,6 @@ uno::Sequence< OUString > SwXTextEmbeddedObject::getSupportedServiceNames()
     OUString* pArray = aRet.getArray();
     pArray[aRet.getLength() - 1] = "com.sun.star.text.TextEmbeddedObject";
     return aRet;
-}
-
-void * SwXTextEmbeddedObject::operator new( size_t t) throw()
-{
-    return SwXTextEmbeddedObjectBaseClass::operator new(t);
-}
-
-void SwXTextEmbeddedObject::operator delete( void * p) throw()
-{
-    SwXTextEmbeddedObjectBaseClass::operator delete(p);
 }
 
 uno::Reference<container::XNameReplace> SAL_CALL

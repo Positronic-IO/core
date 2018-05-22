@@ -103,7 +103,6 @@ public:
     virtual double GetColGap(sal_uInt16 nIndex);
     virtual bool IsAutoGrow(){ return false;}
     virtual bool IsAutoGrowUp(){ return false;}
-    virtual bool IsAutoGrowDown(){ return false;}
     virtual bool IsAutoGrowLeft(){ return false;}
     virtual bool IsAutoGrowRight(){ return false;}
     bool IsFitGraphic();
@@ -135,6 +134,15 @@ public:
         m_bGettingIsProtected = true;
         bool bRet = IsProtected();
         m_bGettingIsProtected = false;
+        return bRet;
+    }
+    bool GetIsAutoGrowDown()
+    {
+        if (m_bGettingIsAutoGrowDown)
+            throw std::runtime_error("recursion in layout");
+        m_bGettingIsAutoGrowDown = true;
+        bool bRet = IsAutoGrowDown();
+        m_bGettingIsAutoGrowDown = false;
         return bRet;
     }
     bool GetHasProtection()
@@ -216,6 +224,7 @@ protected:
     bool HasProtection();
     virtual bool HonorProtection();
     virtual bool IsProtected();
+    virtual bool IsAutoGrowDown(){ return false;}
     virtual double MarginsValue(sal_uInt8 /*nWhichSide*/){return 0;}
     virtual double ExtMarginsValue(sal_uInt8 /*nWhichSide*/){return 0;}
     virtual bool MarginsSameAsParent();
@@ -224,10 +233,14 @@ protected:
     bool m_bGettingMarginsSameAsParent;
     bool m_bGettingHasProtection;
     bool m_bGettingIsProtected;
+    bool m_bGettingIsAutoGrowDown;
     bool m_bGettingMarginsValue;
     bool m_bGettingExtMarginsValue;
     bool m_bGettingUsePrinterSettings;
+    bool m_bGettingScaleCenter;
+    bool m_bGettingBorderStuff;
     bool m_bGettingUseWhen;
+    bool m_bGettingStyleLayout;
     sal_uInt32 m_nAttributes;
     sal_uInt32 m_nAttributes2;
     sal_uInt32 m_nAttributes3;
@@ -352,14 +365,13 @@ public:
     LwpColor* GetBackColor();
     virtual bool IsAutoGrow() override;
     virtual bool IsAutoGrowUp() override;
-    virtual bool IsAutoGrowDown() override;
     virtual bool IsAutoGrowLeft() override;
     virtual bool IsAutoGrowRight() override;
     virtual sal_uInt8 GetContentOrientation() override;
     virtual bool HonorProtection() override;
     virtual bool IsProtected() override;
     rtl::Reference<LwpVirtualLayout> GetWaterMarkLayout();
-    XFBGImage* GetXFBGImage();
+    std::unique_ptr<XFBGImage> GetXFBGImage();
     bool GetUsePrinterSettings();
 
     LwpLayoutScale* GetLayoutScale(){return dynamic_cast<LwpLayoutScale*>(m_LayScale.obj().get());}
@@ -377,7 +389,7 @@ public:
     LwpPoint GetOrigin();
 
     bool IsPatternFill();
-    XFBGImage* GetFillPattern();
+    std::unique_ptr<XFBGImage> GetFillPattern();
 
     //Check whether there are contents in the layout
     virtual bool HasContent() override;
@@ -387,6 +399,7 @@ protected:
     virtual bool MarginsSameAsParent() override;
     virtual double MarginsValue(sal_uInt8 nWhichSide) override;
     virtual double ExtMarginsValue(sal_uInt8 nWhichSide) override;
+    virtual bool IsAutoGrowDown() override;
 private:
     LwpObjectID m_BasedOnStyle;
     LwpLayoutGeometry* Geometry();

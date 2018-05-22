@@ -22,7 +22,6 @@
 #include <ids.hxx>
 #include "sslwarndlg.hxx"
 
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/security/DocumentDigitalSignatures.hpp>
 
 using namespace css;
@@ -39,8 +38,7 @@ IMPL_LINK_NOARG(SSLWarnDialog, ViewCertHdl, weld::Button&, void)
 SSLWarnDialog::SSLWarnDialog(weld::Window* pParent,
     const css::uno::Reference< css::security::XCertificate >& rXCert,
     const css::uno::Reference< css::uno::XComponentContext >& xContext)
-    : m_xBuilder(Application::CreateBuilder(pParent, "uui/ui/sslwarndialog.ui"))
-    , m_xDialog(m_xBuilder->weld_message_dialog("SSLWarnDialog"))
+    : MessageDialogController(pParent, "uui/ui/sslwarndialog.ui", "SSLWarnDialog")
     , m_xView(m_xBuilder->weld_button("view"))
     , m_xContext(xContext)
     , m_rXCert(rXCert)

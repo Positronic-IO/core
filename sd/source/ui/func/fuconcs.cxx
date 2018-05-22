@@ -22,7 +22,6 @@
 
 #include <svx/svxids.hrc>
 #include <svx/dialogs.hrc>
-#include <svx/dialmgr.hxx>
 
 #include <app.hrc>
 #include <svl/aeitem.hxx>
@@ -56,14 +55,11 @@
 #include <svx/gallery.hxx>
 #include <svl/itempool.hxx>
 
-#include <sdresid.hxx>
 #include <View.hxx>
 #include <sdpage.hxx>
 #include <Window.hxx>
 #include <stlpool.hxx>
 #include <drawdoc.hxx>
-
-#include <strings.hrc>
 
 namespace sd {
 
@@ -191,7 +187,7 @@ void FuConstructCustomShape::SetAttributes( SdrObject* pObj )
                             {
                                 const SfxItemSet& rSource = pSourceObj->GetMergedItemSet();
                                 SfxItemSet aDest(
-                                    pObj->GetModel()->GetItemPool(),
+                                    pObj->getSdrModelFromSdrObject().GetItemPool(),
                                     svl::Items<
                                         // Ranges from SdrAttrObj:
                                         SDRATTR_START, SDRATTR_SHADOW_LAST,
@@ -239,8 +235,9 @@ const OUString& FuConstructCustomShape::GetShapeType() const
 SdrObject* FuConstructCustomShape::CreateDefaultObject(const sal_uInt16, const ::tools::Rectangle& rRectangle)
 {
     SdrObject* pObj = SdrObjFactory::MakeNewObject(
-        mpView->GetCurrentObjInventor(), mpView->GetCurrentObjIdentifier(),
-        nullptr, mpDoc);
+        mpView->getSdrModelFromSdrView(),
+        mpView->GetCurrentObjInventor(),
+        mpView->GetCurrentObjIdentifier());
 
     if( pObj )
     {

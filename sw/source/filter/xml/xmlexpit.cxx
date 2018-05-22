@@ -507,7 +507,7 @@ bool SvXMLExportItemMapper::QueryXMLValue(
                 nX *= pShadow->GetWidth();
                 nY *= pShadow->GetWidth();
 
-                ::sax::Converter::convertColor(aOut, pShadow->GetColor().GetColor());
+                ::sax::Converter::convertColor(aOut, pShadow->GetColor());
                 aOut.append( ' ' );
                 rUnitConverter.convertMeasureToXML( aOut, nX );
                 aOut.append( ' ' );
@@ -774,7 +774,7 @@ bool SvXMLExportItemMapper::QueryXMLValue(
                                 aOut.append( GetXMLToken( eStyle ) );
                                 aOut.append( ' ' );
                                 ::sax::Converter::convertColor(aOut,
-                                        pLine->GetColor().GetColor());
+                                        pLine->GetColor());
                             }
                         }
                         else
@@ -897,21 +897,9 @@ bool SvXMLExportItemMapper::QueryXMLValue(
                     else
                     {
                         ::sax::Converter::convertColor(aOut,
-                                rBrush.GetColor().GetColor());
+                                rBrush.GetColor());
                     }
                     bOk = true;
-                    break;
-
-                case MID_GRAPHIC_LINK:
-                    if (rBrush.GetGraphicPos() != GPOS_NONE)
-                    {
-                        uno::Any aAny;
-                        rBrush.QueryValue( aAny, MID_GRAPHIC_URL );
-                        OUString sTmp;
-                        aAny >>= sTmp;
-                        aOut.append( sTmp );
-                        bOk = true;
-                    }
                     break;
 
                 case MID_GRAPHIC_POSITION:

@@ -23,7 +23,6 @@
 #include <sfx2/sfxuno.hxx>
 #include <svl/eitem.hxx>
 #include <com/sun/star/frame/XStorable.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <vcl/svapp.hxx>
@@ -45,10 +44,7 @@ using namespace linguistic;
 
 // static ----------------------------------------------------------------
 
-static long nStaticTabs[]=
-{
-    2,10,71,120
-};
+static const long nStaticTabs[] = { 10, 71 };
 
 // static function -------------------------------------------------------
 
@@ -96,43 +92,27 @@ static CDE_RESULT cmpDicEntry_Impl( const OUString &rText1, const OUString &rTex
 
 // class SvxNewDictionaryDialog -------------------------------------------
 
-SvxNewDictionaryDialog::SvxNewDictionaryDialog( vcl::Window* pParent ) :
-    ModalDialog( pParent, "OptNewDictionaryDialog" , "cui/ui/optnewdictionarydialog.ui" )
+SvxNewDictionaryDialog::SvxNewDictionaryDialog(weld::Window* pParent)
+    : GenericDialogController(pParent, "cui/ui/optnewdictionarydialog.ui", "OptNewDictionaryDialog")
+    , m_xNameEdit(m_xBuilder->weld_entry("nameedit"))
+    , m_xLanguageLB(new LanguageBox(m_xBuilder->weld_combo_box_text("language")))
+    , m_xExceptBtn(m_xBuilder->weld_check_button("except"))
+    , m_xOKBtn(m_xBuilder->weld_button("ok"))
 {
-    get(pNameEdit,"nameedit");
-    get(pLanguageLB,"language");
-    get(pExceptBtn,"except");
-    get(pOKBtn,"ok");
     // install handler
-    pNameEdit->SetModifyHdl(
-        LINK( this, SvxNewDictionaryDialog, ModifyHdl_Impl ) );
-    pOKBtn->SetClickHdl( LINK( this, SvxNewDictionaryDialog, OKHdl_Impl ) );
+    m_xNameEdit->connect_changed(LINK(this, SvxNewDictionaryDialog, ModifyHdl_Impl));
+    m_xOKBtn->connect_clicked(LINK(this, SvxNewDictionaryDialog, OKHdl_Impl));
 
     // display languages
-    pLanguageLB->SetLanguageList( SvxLanguageListFlags::ALL, true, true );
-    pLanguageLB->SelectEntryPos(0);
+    m_xLanguageLB->SetLanguageList(SvxLanguageListFlags::ALL, true, true);
+    m_xLanguageLB->SelectEntryPos(0);
 }
 
-SvxNewDictionaryDialog::~SvxNewDictionaryDialog()
-{
-    disposeOnce();
-}
-
-void SvxNewDictionaryDialog::dispose()
-{
-    pNameEdit.clear();
-    pLanguageLB.clear();
-    pExceptBtn.clear();
-    pOKBtn.clear();
-    ModalDialog::dispose();
-}
-
-
-IMPL_LINK_NOARG(SvxNewDictionaryDialog, OKHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SvxNewDictionaryDialog, OKHdl_Impl, weld::Button&, void)
 {
 
   // add extension for personal dictionaries
-    OUString sDict = comphelper::string::stripEnd(pNameEdit->GetText(), ' ') + ".dic";
+    OUString sDict = comphelper::string::stripEnd(m_xNameEdit->get_text(), ' ') + ".dic";
 
     Reference< XSearchableDictionaryList >  xDicList( LinguMgr::GetDictionaryList() );
 
@@ -151,61 +131,56 @@ IMPL_LINK_NOARG(SvxNewDictionaryDialog, OKHdl_Impl, Button*, void)
     if ( bFound )
     {
         // duplicate names?
-        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
+        std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(m_xDialog.get(),
                                                       VclMessageType::Info, VclButtonsType::Ok,
                                                       CuiResId(RID_SVXSTR_OPT_DOUBLE_DICTS)));
         xInfoBox->run();
-        pNameEdit->GrabFocus();
+        m_xNameEdit->grab_focus();
         return;
     }
 
     // create and add
-    LanguageType nLang = pLanguageLB->GetSelectLanguage();
+    LanguageType nLang = m_xLanguageLB->GetSelectedLanguage();
     try
     {
         // create new dictionary
-        DictionaryType eType = pExceptBtn->IsChecked() ?
+        DictionaryType eType = m_xExceptBtn->get_active() ?
                 DictionaryType_NEGATIVE : DictionaryType_POSITIVE;
         if (xDicList.is())
         {
             lang::Locale aLocale( LanguageTag::convertToLocale(nLang) );
             OUString aURL( linguistic::GetWritableDictionaryURL( sDict ) );
-            xNewDic.set( xDicList->createDictionary( sDict, aLocale, eType, aURL ) , UNO_QUERY );
-            xNewDic->setActive( true );
+            m_xNewDic.set(xDicList->createDictionary(sDict, aLocale, eType, aURL) , UNO_QUERY);
+            m_xNewDic->setActive(true);
         }
-        DBG_ASSERT(xNewDic.is(), "NULL pointer");
+        DBG_ASSERT(m_xNewDic.is(), "NULL pointer");
     }
     catch(...)
     {
-        xNewDic = nullptr;
+        m_xNewDic = nullptr;
         // error: couldn't create new dictionary
         SfxErrorContext aContext( ERRCTX_SVX_LINGU_DICTIONARY, OUString(),
-            GetFrameWeld(), RID_SVXERRCTX, SvxResLocale() );
+            m_xDialog.get(), RID_SVXERRCTX, SvxResLocale() );
         ErrorHandler::HandleError( *new StringErrorInfo(
                 ERRCODE_SVX_LINGU_DICT_NOTWRITEABLE, sDict ) );
-        EndDialog();
+        m_xDialog->response(RET_CANCEL);
     }
 
-    if (xDicList.is() && xNewDic.is())
+    if (xDicList.is() && m_xNewDic.is())
     {
-        xDicList->addDictionary( Reference< XDictionary > ( xNewDic, UNO_QUERY ) );
+        xDicList->addDictionary(Reference<XDictionary>(m_xNewDic, UNO_QUERY));
 
         // refresh list of dictionaries
         //! dictionaries may have been added/removed elsewhere too.
         aDics = xDicList->getDictionaries();
     }
 
-
-    EndDialog( RET_OK );
+    m_xDialog->response(RET_OK);
 }
 
-
-IMPL_LINK_NOARG(SvxNewDictionaryDialog, ModifyHdl_Impl, Edit&, void)
+IMPL_LINK_NOARG(SvxNewDictionaryDialog, ModifyHdl_Impl, weld::Entry&, void)
 {
-    if ( !pNameEdit->GetText().isEmpty() )
-        pOKBtn->Enable();
-    else
-        pOKBtn->Disable();
+    m_xOKBtn->set_sensitive(!m_xNameEdit->get_text().isEmpty());
 }
 
 // class SvxEditDictionaryDialog -------------------------------------------
@@ -242,7 +217,7 @@ SvxEditDictionaryDialog::SvxEditDictionaryDialog(
         aDics = LinguMgr::GetDictionaryList()->getDictionaries();
 
     pWordsLB->SetSelectHdl(LINK(this, SvxEditDictionaryDialog, SelectHdl));
-    pWordsLB->SetTabs(nStaticTabs);
+    pWordsLB->SetTabs(SAL_N_ELEMENTS(nStaticTabs), nStaticTabs);
 
     //! we use an algorithm of our own to insert elements sorted
     pWordsLB->SetStyle(pWordsLB->GetStyle()|/*WB_SORT|*/WB_HSCROLL|WB_CLIPCHILDREN);
@@ -447,7 +422,7 @@ IMPL_LINK_NOARG(SvxEditDictionaryDialog, SelectBookHdl_Impl, ListBox&, void)
 IMPL_LINK_NOARG(SvxEditDictionaryDialog, SelectLangHdl_Impl, ListBox&, void)
 {
     sal_Int32 nDicPos = pAllDictsLB->GetSelectedEntryPos();
-    LanguageType nLang = pLangLB->GetSelectLanguage();
+    LanguageType nLang = pLangLB->GetSelectedLanguage();
     Reference< XDictionary >  xDic( aDics.getConstArray()[ nDicPos ], UNO_QUERY );
     LanguageType nOldLang = LanguageTag( xDic->getLocale() ).getLanguageType();
 
@@ -505,9 +480,10 @@ void SvxEditDictionaryDialog::ShowWords_Impl( sal_uInt16 nId )
         pReplaceFT->SetText(CuiResId(RID_SVXSTR_OPT_GRAMMAR_BY));
     }
 
+    sal_uInt16 nTabsCount;
     if(bIsNegative || !bLangNone)
     {
-        nStaticTabs[0]=2;
+        nTabsCount=2;
 
         // make controls for replacement text active
         if(!pReplaceFT->IsVisible())
@@ -521,7 +497,7 @@ void SvxEditDictionaryDialog::ShowWords_Impl( sal_uInt16 nId )
     }
     else
     {
-        nStaticTabs[0]=1;
+        nTabsCount=1;
 
         // deactivate controls for replacement text
         if(pReplaceFT->IsVisible())
@@ -535,7 +511,7 @@ void SvxEditDictionaryDialog::ShowWords_Impl( sal_uInt16 nId )
 
     }
 
-    pWordsLB->SetTabs(nStaticTabs);
+    pWordsLB->SetTabs(nTabsCount, nStaticTabs);
     pWordsLB->Clear();
 
     Sequence< Reference< XDictionaryEntry >  > aEntries( xDic->getEntries() );

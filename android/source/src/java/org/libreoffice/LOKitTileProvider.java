@@ -23,6 +23,7 @@ import org.mozilla.gecko.gfx.BufferedCairoImage;
 import org.mozilla.gecko.gfx.CairoImage;
 import org.mozilla.gecko.gfx.IntSize;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 
 /**
@@ -67,7 +68,12 @@ class LOKitTileProvider implements TileProvider {
         mInputFile = input;
 
         Log.i(LOGTAG, "====> Loading file '" + input + "'");
-        mDocument = mOffice.documentLoad(input);
+        File fileToBeEncoded = new File(input);
+        String encodedFileName = android.net.Uri.encode(fileToBeEncoded.getName());
+
+        mDocument = mOffice.documentLoad(
+                (new File(fileToBeEncoded.getParent(),encodedFileName)).getPath()
+        );
 
         if (mDocument == null && !mContext.isPasswordProtected()) {
             Log.i(LOGTAG, "====> mOffice.documentLoad() returned null, trying to restart 'Office' and loading again");
@@ -80,7 +86,9 @@ class LOKitTileProvider implements TileProvider {
             mOffice.setMessageCallback(messageCallback);
             mOffice.setOptionalFeatures(Document.LOK_FEATURE_DOCUMENT_PASSWORD);
             Log.i(LOGTAG, "====> setup Lokit callback and optional features (password support)");
-            mDocument = mOffice.documentLoad(input);
+            mDocument = mOffice.documentLoad(
+                    (new File(fileToBeEncoded.getParent(),encodedFileName)).getPath()
+            );
         }
 
         Log.i(LOGTAG, "====> mDocument = " + mDocument);
@@ -367,6 +375,12 @@ class LOKitTileProvider implements TileProvider {
         return true;
     }
 
+    @Override
+    public void setDocumentSize(int pageWidth, int pageHeight){
+        mWidthTwip = pageWidth;
+        mHeightTwip = pageHeight;
+    }
+
     /**
      * @see TileProvider#getPageWidth()
      */
@@ -453,8 +467,13 @@ class LOKitTileProvider implements TileProvider {
         if (mDocument != null)
             mDocument.paintTile(buffer, widthPixel, heightPixel, 0, 0, (int) mWidthTwip, (int) mHeightTwip);
 
-        Bitmap bitmap = Bitmap.createBitmap(widthPixel, heightPixel, Bitmap.Config.ARGB_8888);
-        bitmap.copyPixelsFromBuffer(buffer);
+        Bitmap bitmap = null;
+        try {
+            bitmap = Bitmap.createBitmap(widthPixel, heightPixel, Bitmap.Config.ARGB_8888);
+            bitmap.copyPixelsFromBuffer(buffer);
+        } catch (IllegalArgumentException e) {
+            Log.e(LOGTAG, "width (" + widthPixel + ") and height (" + heightPixel + ") must not be 0! (ToDo: likely timing issue)");
+        }
         if (bitmap == null) {
             Log.w(LOGTAG, "Thumbnail not created!");
         }
@@ -521,16 +540,20 @@ class LOKitTileProvider implements TileProvider {
      */
     @Override
     public void sendKeyEvent(KeyEvent keyEvent) {
-        if (keyEvent.getAction() == KeyEvent.ACTION_MULTIPLE) {
-            String keyString = keyEvent.getCharacters();
-            for (int i = 0; i < keyString.length(); i++) {
-                int codePoint = keyString.codePointAt(i);
-                mDocument.postKeyEvent(Document.KEY_EVENT_PRESS, codePoint, getKeyCode(keyEvent));
-            }
-        } else if (keyEvent.getAction() == KeyEvent.ACTION_DOWN) {
-            mDocument.postKeyEvent(Document.KEY_EVENT_PRESS, getCharCode(keyEvent), getKeyCode(keyEvent));
-        } else if (keyEvent.getAction() == KeyEvent.ACTION_UP) {
-            mDocument.postKeyEvent(Document.KEY_EVENT_RELEASE, getCharCode(keyEvent), getKeyCode(keyEvent));
+        switch (keyEvent.getAction()) {
+            case KeyEvent.ACTION_MULTIPLE:
+                String keyString = keyEvent.getCharacters();
+                for (int i = 0; i < keyString.length(); i++) {
+                    int codePoint = keyString.codePointAt(i);
+                    mDocument.postKeyEvent(Document.KEY_EVENT_PRESS, codePoint, getKeyCode(keyEvent));
+                }
+                break;
+            case KeyEvent.ACTION_DOWN:
+                mDocument.postKeyEvent(Document.KEY_EVENT_PRESS, getCharCode(keyEvent), getKeyCode(keyEvent));
+                break;
+            case KeyEvent.ACTION_UP:
+                mDocument.postKeyEvent(Document.KEY_EVENT_RELEASE, getCharCode(keyEvent), getKeyCode(keyEvent));
+                break;
         }
     }
 
@@ -564,7 +587,17 @@ class LOKitTileProvider implements TileProvider {
      */
     @Override
     public void postUnoCommand(String command, String arguments) {
-        mDocument.postUnoCommand(command, arguments);
+        postUnoCommand(command, arguments, false);
+    }
+
+    /**
+     * @param command
+     * @param arguments
+     * @param notifyWhenFinished
+     */
+    @Override
+    public void postUnoCommand(String command, String arguments, boolean notifyWhenFinished) {
+        mDocument.postUnoCommand(command, arguments, notifyWhenFinished);
     }
 
     private void setTextSelection(int type, PointF documentCoordinate) {
@@ -596,6 +629,27 @@ class LOKitTileProvider implements TileProvider {
     public void setTextSelectionReset(PointF documentCoordinate) {
         setTextSelection(Document.SET_TEXT_SELECTION_RESET, documentCoordinate);
     }
+
+    /**
+     * @param mimeType
+     * @return
+     */
+    @Override
+    public String getTextSelection(String mimeType) {
+        return mDocument.getTextSelection(mimeType);
+    }
+
+    /**
+     * paste
+     * @param mimeType
+     * @param data
+     * @return
+     */
+    @Override
+    public boolean paste(String mimeType, String data) {
+        return mDocument.paste(mimeType, data);
+    }
+
 
     /**
      * @see org.libreoffice.TileProvider#setGraphicSelectionStart(android.graphics.PointF)

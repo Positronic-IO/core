@@ -23,7 +23,6 @@
 #include <sfx2/docfilt.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/docfac.hxx>
-#include <vcl/msgbox.hxx>
 #include <view.hxx>
 #include <docsh.hxx>
 #include "mmdocselectpage.hxx"
@@ -123,12 +122,12 @@ IMPL_LINK(SwMailMergeDocSelectPage, FileSelectHdl, Button*, pButton, void)
     if(bTemplate)
     {
         m_pLoadTemplateRB->Check();
-        VclPtrInstance< SfxNewFileDialog > pNewFileDlg(this, SfxNewFileDialogMode::NONE);
-        sal_uInt16 nRet = pNewFileDlg->Execute();
+        SfxNewFileDialog aNewFileDlg(GetFrameWeld(), SfxNewFileDialogMode::NONE);
+        sal_uInt16 nRet = aNewFileDlg.run();
         if(RET_TEMPLATE_LOAD == nRet)
             bTemplate = false;
         else if(RET_CANCEL != nRet)
-            m_sLoadTemplateName = pNewFileDlg->GetTemplateFileName();
+            m_sLoadTemplateName = aNewFileDlg.GetTemplateFileName();
     }
     else
         m_pLoadDocRB->Check();
@@ -136,7 +135,7 @@ IMPL_LINK(SwMailMergeDocSelectPage, FileSelectHdl, Button*, pButton, void)
     if(!bTemplate)
     {
         sfx2::FileDialogHelper aDlgHelper(TemplateDescription::FILEOPEN_SIMPLE,
-                                          FileDialogFlags::NONE, this);
+                                          FileDialogFlags::NONE, GetFrameWeld());
         Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
 
         xFP->setDisplayDirectory( SvtPathOptions().GetWorkPath() );

@@ -196,8 +196,7 @@ public:
     virtual bool    DoSaveCompleted( SfxMedium * pNewStor=nullptr, bool bRegisterRecent=true ) override;     // SfxObjectShell
     virtual bool    QuerySlotExecutable( sal_uInt16 nSlotId ) override;
 
-    virtual void    Draw( OutputDevice *, const JobSetup & rSetup,
-                                sal_uInt16 nAspect = ASPECT_CONTENT ) override;
+    virtual void    Draw( OutputDevice *, const JobSetup & rSetup, sal_uInt16 nAspect ) override;
 
     virtual void    SetVisArea( const tools::Rectangle & rVisArea ) override;
 
@@ -237,7 +236,7 @@ public:
 
     ScChangeAction* GetChangeAction( const ScAddress& rPos );
     void            SetChangeComment( ScChangeAction* pAction, const OUString& rComment );
-    void            ExecuteChangeCommentDialog( ScChangeAction* pAction, vcl::Window* pParent, bool bPrevNext = true );
+    void            ExecuteChangeCommentDialog( ScChangeAction* pAction, weld::Window* pParent, bool bPrevNext = true );
                     /// Protect/unprotect ChangeTrack and return <TRUE/> if
                     /// protection was successfully changed.
                     /// If bJustQueryIfProtected==sal_True protection is not
@@ -295,7 +294,11 @@ public:
     void            ReloadTabLinks();
 
     void            SetFormulaOptions( const ScFormulaOptions& rOpt, bool bForLoading = false );
-    virtual void    CheckConfigOptions() override;
+    /**
+     * Called when the Options dialog is dismissed with the OK button, to
+     * handle potentially conflicting option settings.
+     */
+    void            CheckConfigOptions();
 
     void            PostEditView( ScEditEngineDefaulter* pEditEngine, const ScAddress& rCursorPos );
 
@@ -475,14 +478,13 @@ namespace HelperNotifyChanges
     {
         if (ScModelObj* pModelObj = getMustPropagateChangesModel(rDocShell))
         {
-            ScRangeList aChangeRanges;
-            aChangeRanges.Append(rRange);
+            ScRangeList aChangeRanges(rRange);
             Notify(*pModelObj, aChangeRanges, rType);
         }
     }
 };
 
-void VBA_InsertModule( ScDocument& rDoc, SCTAB nTab, const OUString& sModuleName, const OUString& sModuleSource );
+void VBA_InsertModule( ScDocument& rDoc, SCTAB nTab, const OUString& sModuleSource );
 
 #endif
 

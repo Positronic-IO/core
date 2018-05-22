@@ -66,8 +66,6 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/docfile.hxx>
 #include <svx/svxids.hrc>
-#include <svx/strings.hrc>
-#include <vcl/msgbox.hxx>
 #include <tools/urlobj.hxx>
 #include <rtl/ustring.hxx>
 #include <vcl/svapp.hxx>
@@ -283,11 +281,12 @@ sal_Int32 Clipboard::GetInsertionPosition ()
     else if (mrController.GetFocusManager().IsFocusShowing())
     {
         // Use the focus to determine the insertion position.
-        ScopedVclPtrInstance< SdInsertPasteDlg > aDialog(nullptr);
-        if (aDialog->Execute() == RET_OK)
+        vcl::Window* pWin = mrSlideSorter.GetContentWindow();
+        SdInsertPasteDlg aDialog(pWin ? pWin->GetFrameWeld() : nullptr);
+        if (aDialog.run() == RET_OK)
         {
             nInsertPosition = mrController.GetFocusManager().GetFocusedPageIndex();
-            if ( ! aDialog->IsInsertBefore())
+            if (!aDialog.IsInsertBefore())
                 nInsertPosition ++;
         }
     }
@@ -384,7 +383,7 @@ void Clipboard::CreateSlideTransferable (
         (model::PageEnumerationProvider::CreateSelectedPagesEnumeration(
             mrSlideSorter.GetModel()));
     SdDrawDocument* const pDocument = mrSlideSorter.GetModel().GetDocument();
-    DrawDocShell* const pDataDocSh = pDocument ? pDocument->GetDocSh() : nullptr;
+    DrawDocShell* const pDataDocSh = pDocument->GetDocSh();
 
     sal_Int32 nUniqueID = 0;
     while (aSelectedPages.HasMoreElements())
@@ -446,12 +445,12 @@ void Clipboard::CreateSlideTransferable (
 
         pDocument->CreatingDataObj (pTransferable);
         pTransferable->SetWorkDocument(pDocument->AllocSdDrawDocument());
-        TransferableObjectDescriptor aObjDesc;
+        std::unique_ptr<TransferableObjectDescriptor> pObjDesc(new TransferableObjectDescriptor);
         pTransferable->GetWorkDocument()->GetDocSh()
-            ->FillTransferableObjectDescriptor (aObjDesc);
+            ->FillTransferableObjectDescriptor (*pObjDesc);
 
         if (pDataDocSh != nullptr)
-            aObjDesc.maDisplayName = pDataDocSh->GetMedium()->GetURLObject().GetURLNoPass();
+            pObjDesc->maDisplayName = pDataDocSh->GetMedium()->GetURLObject().GetURLNoPass();
 
         vcl::Window* pActionWindow = pWindow;
         if (pActionWindow == nullptr)
@@ -461,9 +460,11 @@ void Clipboard::CreateSlideTransferable (
                 pActionWindow = pViewShell->GetActiveWindow();
         }
 
+        assert(pActionWindow);
+
         pTransferable->SetStartPos (pActionWindow->PixelToLogic(
             pActionWindow->GetPointerPosPixel()));
-        pTransferable->SetObjectDescriptor (aObjDesc);
+        pTransferable->SetObjectDescriptor (std::move(pObjDesc));
 
         {
             TemporarySlideTrackingDeactivator aDeactivator (mrController);

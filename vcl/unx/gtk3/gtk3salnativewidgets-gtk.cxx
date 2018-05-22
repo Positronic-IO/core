@@ -2775,6 +2775,11 @@ static inline ::Color getColor( const GdkRGBA& rCol )
 static vcl::Font getFont(GtkStyleContext* pStyle, const css::lang::Locale& rLocale)
 {
     const PangoFontDescription* font = gtk_style_context_get_font(pStyle, gtk_style_context_get_state(pStyle));
+    return pango_to_vcl(font, rLocale);
+}
+
+vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale& rLocale)
+{
     OString    aFamily        = pango_font_description_get_family( font );
     int nPangoHeight    = pango_font_description_get_size( font );
     PangoStyle    eStyle    = pango_font_description_get_style( font );
@@ -2884,8 +2889,21 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
     style_context_set_state(pStyle, GTK_STATE_FLAG_PRELIGHT);
     gtk_style_context_get_color(pStyle, gtk_style_context_get_state(pStyle), &text_color);
     aTextColor = getColor( text_color );
-    aStyleSet.SetButtonRolloverTextColor( aTextColor );
     aStyleSet.SetFieldRolloverTextColor( aTextColor );
+
+    // button mouse over colors
+    {
+        GdkRGBA normal_button_rollover_text_color, pressed_button_rollover_text_color;
+        style_context_set_state(mpButtonStyle, GTK_STATE_FLAG_PRELIGHT);
+        gtk_style_context_get_color(mpButtonStyle, gtk_style_context_get_state(mpButtonStyle), &normal_button_rollover_text_color);
+        aTextColor = getColor(normal_button_rollover_text_color);
+        aStyleSet.SetButtonRolloverTextColor( aTextColor );
+        style_context_set_state(mpButtonStyle, static_cast<GtkStateFlags>(GTK_STATE_FLAG_PRELIGHT | GTK_STATE_FLAG_ACTIVE));
+        gtk_style_context_get_color(mpButtonStyle, gtk_style_context_get_state(mpButtonStyle), &pressed_button_rollover_text_color);
+        aTextColor = getColor(pressed_button_rollover_text_color);
+        style_context_set_state(mpButtonStyle, GTK_STATE_FLAG_NORMAL);
+        aStyleSet.SetButtonPressedRolloverTextColor( aTextColor );
+    }
 
     // tooltip colors
     {

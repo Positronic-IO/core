@@ -41,7 +41,6 @@
 #include <osl/conditn.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <rtl/strbuf.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/file.hxx>
 #include <rtl/process.h>
@@ -974,20 +973,18 @@ bool IpcThread::process(OString const & arguments, bool * waitProcessed) {
 
         // handle request for acceptor
         std::vector< OUString > const & accept = aCmdLineArgs->GetAccept();
-        for (std::vector< OUString >::const_iterator i(accept.begin());
-             i != accept.end(); ++i)
+        for (auto const& elem : accept)
         {
             ApplicationEvent* pAppEvent = new ApplicationEvent(
-                ApplicationEvent::Type::Accept, *i);
+                ApplicationEvent::Type::Accept, elem);
             ImplPostForeignAppEvent( pAppEvent );
         }
         // handle acceptor removal
         std::vector< OUString > const & unaccept = aCmdLineArgs->GetUnaccept();
-        for (std::vector< OUString >::const_iterator i(unaccept.begin());
-             i != unaccept.end(); ++i)
+        for (auto const& elem : unaccept)
         {
             ApplicationEvent* pAppEvent = new ApplicationEvent(
-                ApplicationEvent::Type::Unaccept, *i);
+                ApplicationEvent::Type::Unaccept, elem);
             ImplPostForeignAppEvent( pAppEvent );
         }
 
@@ -1233,10 +1230,9 @@ static void AddToDispatchList(
     const OUString& aParam,
     const OUString& aFactory )
 {
-    for (std::vector< OUString >::const_iterator i(aRequestList.begin());
-         i != aRequestList.end(); ++i)
+    for (auto const& request : aRequestList)
     {
-        rDispatchList.push_back({nType, *i, cwdUrl, aParam, aFactory});
+        rDispatchList.push_back({nType, request, cwdUrl, aParam, aFactory});
     }
 }
 
@@ -1303,10 +1299,9 @@ static void AddConversionsToDispatchList(
     if( !rImgOut.trim().isEmpty() )
         aParam += "|" + aImgOut;
 
-    for (std::vector< OUString >::const_iterator i(rRequestList.begin());
-         i != rRequestList.end(); ++i)
+    for (auto const& request : rRequestList)
     {
-        rDispatchList.push_back({nType, *i, cwdUrl, aParam, rFactory});
+        rDispatchList.push_back({nType, request, cwdUrl, aParam, rFactory});
     }
 }
 

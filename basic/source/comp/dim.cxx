@@ -23,7 +23,6 @@
 #include <svtools/miscopt.hxx>
 #include <osl/diagnose.h>
 #include <com/sun/star/reflection/theCoreReflection.hpp>
-#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/reflection/XInterfaceMemberTypeDescription.hpp>
 #include <com/sun/star/reflection/XIdlMethod.hpp>
@@ -192,7 +191,7 @@ void SbiParser::TypeDecl( SbiSymDef& rDef, bool bAsNewAlreadyParsed )
     }
 }
 
-// Here variables, arrays and structures were definied.
+// Here variables, arrays and structures were defined.
 // DIM/PRIVATE/PUBLIC/GLOBAL
 
 void SbiParser::Dim()

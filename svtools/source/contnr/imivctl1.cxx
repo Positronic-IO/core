@@ -593,7 +593,7 @@ void SvxIconChoiceCtrl_Impl::Paint(vcl::RenderContext& rRenderContext, const too
 
 #if defined(OV_DRAWGRID)
     Color aOldColor (rRenderContext.GetLineColor());
-    Color aColor(COL_BLACK);
+    Color aCOL_BLACK);
     rRenderContext.SetLineColor( aColor );
     Point aOffs(rRenderContext.GetMapMode().GetOrigin());
     Size aXSize(GetOutputSizePixel());
@@ -3294,17 +3294,13 @@ bool SvxIconChoiceCtrl_Impl::RequestHelp( const HelpEvent& rHEvt )
 
 void SvxIconChoiceCtrl_Impl::ClearColumnList()
 {
-    if (!m_pColumns)
-        return;
-
-    m_pColumns->clear();
-    DELETEZ(m_pColumns);
+    m_pColumns.reset();
 }
 
 void SvxIconChoiceCtrl_Impl::SetColumn( sal_uInt16 nIndex, const SvxIconChoiceCtrlColumnInfo& rInfo)
 {
     if (!m_pColumns)
-        m_pColumns = new SvxIconChoiceCtrlColumnInfoMap;
+        m_pColumns.reset(new SvxIconChoiceCtrlColumnInfoMap);
 
     SvxIconChoiceCtrlColumnInfo* pInfo = new SvxIconChoiceCtrlColumnInfo( rInfo );
     m_pColumns->insert(std::make_pair(nIndex, std::unique_ptr<SvxIconChoiceCtrlColumnInfo>(pInfo)));

@@ -18,6 +18,7 @@
  */
 
 #include <scitems.hxx>
+#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <editeng/eeitem.hxx>
 
@@ -131,7 +132,7 @@ OUString ScEditUtil::GetString( const EditTextObject& rEditText, const ScDocumen
     }
 }
 
-EditTextObject* ScEditUtil::CreateURLObjectFromURL( ScDocument& rDoc, const OUString& rURL, const OUString& rText )
+std::unique_ptr<EditTextObject> ScEditUtil::CreateURLObjectFromURL( ScDocument& rDoc, const OUString& rURL, const OUString& rText )
 {
     SvxURLField aUrlField( rURL, rText, SvxURLFormat::AppDefault);
     EditEngine& rEE = rDoc.GetEditEngine();
@@ -163,9 +164,9 @@ void ScEditUtil::RemoveCharAttribs( EditTextObject& rEditText, const ScPatternAt
     }
 }
 
-EditTextObject* ScEditUtil::Clone( const EditTextObject& rObj, ScDocument& rDestDoc )
+std::unique_ptr<EditTextObject> ScEditUtil::Clone( const EditTextObject& rObj, ScDocument& rDestDoc )
 {
-    EditTextObject* pNew = nullptr;
+    std::unique_ptr<EditTextObject> pNew;
 
     EditEngine& rEngine = rDestDoc.GetEditEngine();
     if (rObj.HasOnlineSpellErrors())
@@ -190,7 +191,7 @@ EditTextObject* ScEditUtil::Clone( const EditTextObject& rObj, ScDocument& rDest
 }
 
 OUString ScEditUtil::GetCellFieldValue(
-    const SvxFieldData& rFieldData, const ScDocument* pDoc, Color** ppTextColor )
+    const SvxFieldData& rFieldData, const ScDocument* pDoc, boost::optional<Color>* ppTextColor )
 {
     OUString aRet;
     switch (rFieldData.GetClassId())
@@ -217,7 +218,7 @@ OUString ScEditUtil::GetCellFieldValue(
                 INetURLHistory::GetOrCreate()->QueryUrl(aURL) ? svtools::LINKSVISITED : svtools::LINKS;
 
             if (ppTextColor)
-                *ppTextColor = new Color( SC_MOD()->GetColorConfig().GetColorValue(eEntry).nColor );
+                *ppTextColor = SC_MOD()->GetColorConfig().GetColorValue(eEntry).nColor;
         }
         break;
         case text::textfield::Type::EXTENDED_TIME:
@@ -795,7 +796,7 @@ ScHeaderEditEngine::ScHeaderEditEngine( SfxItemPool* pEnginePoolP )
 
 OUString ScHeaderEditEngine::CalcFieldValue( const SvxFieldItem& rField,
                                     sal_Int32 /* nPara */, sal_Int32 /* nPos */,
-                                    Color*& /* rTxtColor */, Color*& /* rFldColor */ )
+                                    boost::optional<Color>& /* rTxtColor */, boost::optional<Color>& /* rFldColor */ )
 {
     const SvxFieldData* pFieldData = rField.GetField();
     if (!pFieldData)
@@ -859,7 +860,7 @@ ScFieldEditEngine::ScFieldEditEngine(
 
 OUString ScFieldEditEngine::CalcFieldValue( const SvxFieldItem& rField,
                                     sal_Int32 /* nPara */, sal_Int32 /* nPos */,
-                                    Color*& rTxtColor, Color*& /* rFldColor */ )
+                                    boost::optional<Color>& rTxtColor, boost::optional<Color>& /* rFldColor */ )
 {
     const SvxFieldData* pFieldData = rField.GetField();
 

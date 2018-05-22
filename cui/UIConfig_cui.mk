@@ -98,7 +98,6 @@ $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/macroassignpage \
 	cui/uiconfig/ui/macroselectordialog \
 	cui/uiconfig/ui/menuassignpage \
-	cui/uiconfig/ui/messbox \
 	cui/uiconfig/ui/mosaicdialog \
 	cui/uiconfig/ui/movemenu \
 	cui/uiconfig/ui/multipathdialog \
@@ -181,6 +180,8 @@ $(eval $(call gb_UIConfig_add_uifiles,cui,\
 	cui/uiconfig/ui/shadowtabpage \
 	cui/uiconfig/ui/showcoldialog \
 	cui/uiconfig/ui/similaritysearchdialog \
+	cui/uiconfig/ui/signatureline \
+	cui/uiconfig/ui/signsignatureline \
 	cui/uiconfig/ui/slantcornertabpage \
 	cui/uiconfig/ui/smarttagoptionspage \
 	cui/uiconfig/ui/smoothdialog \

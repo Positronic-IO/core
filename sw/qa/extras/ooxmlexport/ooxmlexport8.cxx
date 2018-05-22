@@ -65,7 +65,6 @@
 #include <drawdoc.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
 #include <unotools/streamwrap.hxx>
-#include <comphelper/propertysequence.hxx>
 #include <svx/svdpage.hxx>
 
 #include <bordertest.hxx>
@@ -491,9 +490,17 @@ DECLARE_OOXMLEXPORT_TEST(testTDF91122, "tdf91122.docx")
     /*
      * OLE object shape: default vertical position is top in MSO, not bottom
      */
-    for (int i = 1; i <= 2; ++i)
-    {
-        uno::Reference<beans::XPropertySet> xShapeProperties( getShape(i), uno::UNO_QUERY );
+    {   // Check first shape
+        uno::Reference<beans::XPropertySet> xShapeProperties( getShape(1), uno::UNO_QUERY );
+        uno::Reference<drawing::XShapeDescriptor> xShapeDescriptor(xShapeProperties, uno::UNO_QUERY);
+        CPPUNIT_ASSERT_EQUAL(OUString("FrameShape"), xShapeDescriptor->getShapeType());
+        sal_Int16 nValue;
+        xShapeProperties->getPropertyValue("VertOrient") >>= nValue;
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong vertical orientation", text::VertOrientation::TOP, nValue);
+    }
+
+    {   // Check second shape
+        uno::Reference<beans::XPropertySet> xShapeProperties( getShape(2), uno::UNO_QUERY );
         uno::Reference<drawing::XShapeDescriptor> xShapeDescriptor(xShapeProperties, uno::UNO_QUERY);
         CPPUNIT_ASSERT_EQUAL(OUString("FrameShape"), xShapeDescriptor->getShapeType());
         sal_Int16 nValue;

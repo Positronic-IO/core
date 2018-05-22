@@ -23,6 +23,8 @@
 
 #include <svtools/PlaceEditDialog.hxx>
 #include <svtools/ServerDetailsControls.hxx>
+#include <vcl/lstbox.hxx>
+
 #include <config_oauth2.h>
 
 using namespace std;
@@ -32,17 +34,16 @@ using namespace com::sun::star::task;
 using namespace com::sun::star::ucb;
 using namespace com::sun::star::uno;
 
-DetailsContainer::DetailsContainer( VclBuilderContainer* pBuilder )
+DetailsContainer::DetailsContainer(PlaceEditDialog* pDialog)
+    : m_pDialog(pDialog)
 {
-    pBuilder->get( m_pDetailsGrid, "Details" );
-    pBuilder->get( m_pHostBox, "HostDetails" );
-    pBuilder->get( m_pEDHost, "host" );
-    pBuilder->get( m_pFTHost, "hostLabel" );
-    pBuilder->get( m_pEDPort, "port-nospin" );
-    pBuilder->get( m_pFTPort, "portLabel" );
-    pBuilder->get( m_pEDRoot, "path" );
-    pBuilder->get( m_pFTRoot, "pathLabel" );
-    m_pEDPort->SetUseThousandSep( false );
+    m_pDialog->m_xEDPort->connect_output(LINK(this, DetailsContainer, FormatPortHdl));
+}
+
+//format without thousand separator
+IMPL_LINK(DetailsContainer, FormatPortHdl, weld::SpinButton&, rSpinButton, void)
+{
+    rSpinButton.set_text(OUString::number(rSpinButton.get_value()));
 }
 
 DetailsContainer::~DetailsContainer( )
@@ -51,11 +52,11 @@ DetailsContainer::~DetailsContainer( )
 
 void DetailsContainer::show( bool )
 {
-    m_pDetailsGrid->Enable();
+    m_pDialog->m_xDetailsGrid->set_sensitive(true);
 
-    m_pEDHost->SetModifyHdl( LINK( this, DetailsContainer, ValueChangeHdl ) );
-    m_pEDPort->SetModifyHdl( LINK( this, DetailsContainer, ValueChangeHdl ) );
-    m_pEDRoot->SetModifyHdl( LINK( this, DetailsContainer, ValueChangeHdl ) );
+    m_pDialog->m_xEDHost->connect_changed( LINK( this, DetailsContainer, ValueChangeHdl ) );
+    m_pDialog->m_xEDPort->connect_changed( LINK( this, DetailsContainer, ValueChangeHdl ) );
+    m_pDialog->m_xEDRoot->connect_changed( LINK( this, DetailsContainer, ValueChangeHdl ) );
 }
 
 INetURLObject DetailsContainer::getUrl( )
@@ -76,13 +77,13 @@ void DetailsContainer::notifyChange( )
     m_aChangeHdl.Call( this );
 }
 
-IMPL_LINK_NOARG( DetailsContainer, ValueChangeHdl, Edit&, void )
+IMPL_LINK_NOARG( DetailsContainer, ValueChangeHdl, weld::Entry&, void )
 {
     notifyChange( );
 }
 
-HostDetailsContainer::HostDetailsContainer( VclBuilderContainer* pBuilder, sal_uInt16 nPort, const OUString& sScheme ) :
-    DetailsContainer( pBuilder ),
+HostDetailsContainer::HostDetailsContainer(PlaceEditDialog* pDialog, sal_uInt16 nPort, const OUString& sScheme) :
+    DetailsContainer( pDialog ),
     m_nDefaultPort( nPort ),
     m_sScheme( sScheme )
 {
@@ -91,28 +92,28 @@ HostDetailsContainer::HostDetailsContainer( VclBuilderContainer* pBuilder, sal_u
 
 void HostDetailsContainer::show( bool bShow )
 {
-    m_pFTHost->Show( bShow );
-    m_pHostBox->Show( bShow );
-    m_pEDRoot->Show( bShow );
-    m_pFTRoot->Show( bShow );
+    m_pDialog->m_xFTHost->show( bShow );
+    m_pDialog->m_xHostBox->show( bShow );
+    m_pDialog->m_xEDRoot->show( bShow );
+    m_pDialog->m_xFTRoot->show( bShow );
 
     DetailsContainer::show( bShow );
 
     if ( bShow )
     {
-        if ( m_pEDPort->GetValue( ) == 0 )
-            m_pEDPort->SetValue( m_nDefaultPort );
-        m_pEDHost->SetText( m_sHost );
+        if (m_pDialog->m_xEDPort->get_value() == 0)
+            m_pDialog->m_xEDPort->set_value( m_nDefaultPort );
+        m_pDialog->m_xEDHost->set_text( m_sHost );
     }
     else
-        m_pEDPort->SetValue( 0 );
+        m_pDialog->m_xEDPort->set_value( 0 );
 }
 
 INetURLObject HostDetailsContainer::getUrl( )
 {
-    OUString sHost = m_pEDHost->GetText().trim( );
-    sal_Int64 nPort = m_pEDPort->GetValue();
-    OUString sPath = m_pEDRoot->GetText().trim( );
+    OUString sHost = m_pDialog->m_xEDHost->get_text().trim();
+    sal_Int64 nPort = m_pDialog->m_xEDPort->get_value();
+    OUString sPath = m_pDialog->m_xEDRoot->get_text().trim();
 
     OUString sUrl;
     if ( !sHost.isEmpty( ) )
@@ -136,9 +137,9 @@ bool HostDetailsContainer::setUrl( const INetURLObject& rUrl )
     if ( bSuccess )
     {
         m_sHost = rUrl.GetHost( );
-        m_pEDHost->SetText( rUrl.GetHost( ) );
-        m_pEDPort->SetValue( rUrl.GetPort( ) );
-        m_pEDRoot->SetText( rUrl.GetURLPath() );
+        m_pDialog->m_xEDHost->set_text( rUrl.GetHost( ) );
+        m_pDialog->m_xEDPort->set_value( rUrl.GetPort( ) );
+        m_pDialog->m_xEDRoot->set_text( rUrl.GetURLPath() );
     }
 
     return bSuccess;
@@ -149,11 +150,10 @@ bool HostDetailsContainer::verifyScheme( const OUString& sScheme )
     return sScheme == ( m_sScheme + "://" );
 }
 
-DavDetailsContainer::DavDetailsContainer( VclBuilderContainer* pBuilder ) :
-    HostDetailsContainer( pBuilder, 80, "http" )
+DavDetailsContainer::DavDetailsContainer(PlaceEditDialog* pBuilder)
+    : HostDetailsContainer(pBuilder, 80, "http")
 {
-    pBuilder->get( m_pCBDavs, "webdavs" );
-    m_pCBDavs->SetToggleHdl( LINK( this, DavDetailsContainer, ToggledDavsHdl ) );
+    m_pDialog->m_xCBDavs->connect_toggled(LINK(this, DavDetailsContainer, ToggledDavsHdl));
 
     show( false );
 }
@@ -163,9 +163,9 @@ void DavDetailsContainer::show( bool bShow )
     HostDetailsContainer::show( bShow );
 
     if ( !bShow )
-        m_pCBDavs->Check( false );
+        m_pDialog->m_xCBDavs->set_active(false);
 
-    m_pCBDavs->Show( bShow );
+    m_pDialog->m_xCBDavs->show(bShow);
 }
 
 bool DavDetailsContainer::verifyScheme( const OUString& rScheme )
@@ -174,24 +174,24 @@ bool DavDetailsContainer::verifyScheme( const OUString& rScheme )
     if ( rScheme == "http://" )
     {
         bValid = true;
-        m_pCBDavs->Check( false );
+        m_pDialog->m_xCBDavs->set_active(false);
     }
     else if ( rScheme == "https://" )
     {
         bValid = true;
-        m_pCBDavs->Check();
+        m_pDialog->m_xCBDavs->set_active(true);
     }
     return bValid;
 }
 
-IMPL_LINK( DavDetailsContainer, ToggledDavsHdl, CheckBox&, rCheckBox, void )
+IMPL_LINK( DavDetailsContainer, ToggledDavsHdl, weld::ToggleButton&, rCheckBox, void )
 {
     // Change default port if needed
-    bool bCheckedDavs = rCheckBox.IsChecked();
-    if ( m_pEDPort->GetValue() == 80 && bCheckedDavs )
-        m_pEDPort->SetValue( 443 );
-    else if ( m_pEDPort->GetValue() == 443 && !bCheckedDavs )
-        m_pEDPort->SetValue( 80 );
+    bool bCheckedDavs = rCheckBox.get_active();
+    if ( m_pDialog->m_xEDPort->get_value() == 80 && bCheckedDavs )
+        m_pDialog->m_xEDPort->set_value( 443 );
+    else if ( m_pDialog->m_xEDPort->get_value() == 443 && !bCheckedDavs )
+        m_pDialog->m_xEDPort->set_value( 80 );
 
     OUString sScheme( "http" );
     if ( bCheckedDavs )
@@ -201,22 +201,19 @@ IMPL_LINK( DavDetailsContainer, ToggledDavsHdl, CheckBox&, rCheckBox, void )
     notifyChange( );
 }
 
-SmbDetailsContainer::SmbDetailsContainer( VclBuilderContainer* pBuilder ) :
-    DetailsContainer( pBuilder )
+SmbDetailsContainer::SmbDetailsContainer(PlaceEditDialog* pDialog)
+    : DetailsContainer(pDialog)
 {
-    pBuilder->get( m_pEDShare, "share" );
-    pBuilder->get( m_pFTShare, "shareLabel" );
-
-    m_pEDShare->SetModifyHdl( LINK( this, DetailsContainer, ValueChangeHdl ) );
+    m_pDialog->m_xEDShare->connect_changed( LINK( this, DetailsContainer, ValueChangeHdl ) );
 
     show( false );
 }
 
 INetURLObject SmbDetailsContainer::getUrl( )
 {
-    OUString sHost = m_pEDHost->GetText().trim( );
-    OUString sShare = m_pEDShare->GetText().trim( );
-    OUString sPath = m_pEDRoot->GetText().trim( );
+    OUString sHost = m_pDialog->m_xEDHost->get_text().trim( );
+    OUString sShare = m_pDialog->m_xEDShare->get_text().trim( );
+    OUString sPath = m_pDialog->m_xEDRoot->get_text().trim( );
 
     OUString sUrl;
     if ( !sHost.isEmpty( ) )
@@ -250,9 +247,9 @@ bool SmbDetailsContainer::setUrl( const INetURLObject& rUrl )
             sPath = sFullPath.copy( nPos );
         }
 
-        m_pEDHost->SetText( rUrl.GetHost( ) );
-        m_pEDShare->SetText( sShare );
-        m_pEDRoot->SetText( sPath );
+        m_pDialog->m_xEDHost->set_text( rUrl.GetHost( ) );
+        m_pDialog->m_xEDShare->set_text( sShare );
+        m_pDialog->m_xEDRoot->set_text( sPath );
     }
 
     return bSuccess;
@@ -260,76 +257,71 @@ bool SmbDetailsContainer::setUrl( const INetURLObject& rUrl )
 
 void SmbDetailsContainer::show( bool bShow )
 {
-    m_pEDShare->Show( bShow );
-    m_pFTShare->Show( bShow );
-    m_pEDRoot->Show( bShow );
-    m_pFTRoot->Show( bShow );
+    m_pDialog->m_xEDShare->show( bShow );
+    m_pDialog->m_xFTShare->show( bShow );
+    m_pDialog->m_xEDRoot->show( bShow );
+    m_pDialog->m_xFTRoot->show( bShow );
 
-    m_pFTHost->Show( bShow );
-    m_pHostBox->Show( bShow );
-    m_pEDPort->Enable( !bShow );
-    m_pFTPort->Enable( !bShow );
+    m_pDialog->m_xFTHost->show( bShow );
+    m_pDialog->m_xHostBox->show( bShow );
+    m_pDialog->m_xEDPort->set_sensitive( !bShow );
+    m_pDialog->m_xFTPort->set_sensitive( !bShow );
 }
 
-CmisDetailsContainer::CmisDetailsContainer(VclBuilderContainer* pBuilder, Dialog* pParentDialog, OUString const & sBinding) :
-    DetailsContainer( pBuilder ),
+CmisDetailsContainer::CmisDetailsContainer(PlaceEditDialog* pParentDialog, OUString const & sBinding) :
+    DetailsContainer( pParentDialog ),
     m_sUsername( ),
     m_xCmdEnv( ),
     m_aRepoIds( ),
     m_sRepoId( ),
     m_sBinding( sBinding ),
-    m_xParentDialog( VCLUnoHelper::GetInterface(pParentDialog) )
+    m_xParentDialog(pParentDialog->getDialog()->GetXWindow())
 {
     Reference< XComponentContext > xContext = ::comphelper::getProcessComponentContext();
     Reference< XInteractionHandler > xGlobalInteractionHandler(
         InteractionHandler::createWithParent(xContext, m_xParentDialog), UNO_QUERY);
     m_xCmdEnv = new ucbhelper::CommandEnvironment( xGlobalInteractionHandler, Reference< XProgressHandler >() );
 
-    pBuilder->get( m_pFTRepository, "repositoryLabel" );
-    pBuilder->get( m_pLBRepository, "repositories" );
-    pBuilder->get( m_pBTRepoRefresh, "repositoriesRefresh" );
-    pBuilder->get( m_pRepositoryBox, "RepositoryDetails" );
-
     show( false );
 }
 
 void CmisDetailsContainer::show( bool bShow )
 {
-    m_pLBRepository->SetSelectHdl( LINK( this, CmisDetailsContainer, SelectRepoHdl ) );
-    m_pBTRepoRefresh->SetClickHdl( LINK( this, CmisDetailsContainer, RefreshReposHdl ) );
+    m_pDialog->m_xLBRepository->connect_changed( LINK( this, CmisDetailsContainer, SelectRepoHdl ) );
+    m_pDialog->m_xBTRepoRefresh->connect_clicked( LINK( this, CmisDetailsContainer, RefreshReposHdl ) );
 
-    m_pEDHost->SetText( m_sBinding );
+    m_pDialog->m_xEDHost->set_text( m_sBinding );
 
     if( ( m_sBinding == GDRIVE_BASE_URL )
             || m_sBinding.startsWith( ALFRESCO_CLOUD_BASE_URL )
             || ( m_sBinding == ONEDRIVE_BASE_URL ) )
     {
-        m_pFTHost->Show( false );
-        m_pHostBox->Show( false );
-        m_pFTRepository->Show( false );
-        m_pRepositoryBox->Show( false );
-        m_pEDRoot->Show( false );
-        m_pFTRoot->Show( false );
+        m_pDialog->m_xFTHost->show( false );
+        m_pDialog->m_xHostBox->show( false );
+        m_pDialog->m_xFTRepository->show( false );
+        m_pDialog->m_xRepositoryBox->show( false );
+        m_pDialog->m_xEDRoot->show( false );
+        m_pDialog->m_xFTRoot->show( false );
     }
     else
     {
-        m_pFTHost->Show( bShow );
-        m_pHostBox->Show( bShow );
-        m_pFTRepository->Show( bShow );
-        m_pRepositoryBox->Show( bShow );
-        m_pEDRoot->Show( bShow );
-        m_pFTRoot->Show( bShow );
+        m_pDialog->m_xFTHost->show( bShow );
+        m_pDialog->m_xHostBox->show( bShow );
+        m_pDialog->m_xFTRepository->show( bShow );
+        m_pDialog->m_xRepositoryBox->show( bShow );
+        m_pDialog->m_xEDRoot->show( bShow );
+        m_pDialog->m_xFTRoot->show( bShow );
     }
 
     DetailsContainer::show( bShow );
-    m_pEDPort->Enable( !bShow );
-    m_pFTPort->Enable( !bShow );
+    m_pDialog->m_xEDPort->set_sensitive( !bShow );
+    m_pDialog->m_xFTPort->set_sensitive( !bShow );
 }
 
 INetURLObject CmisDetailsContainer::getUrl( )
 {
-    OUString sBindingUrl = m_pEDHost->GetText().trim( );
-    OUString sPath = m_pEDRoot->GetText().trim( );
+    OUString sBindingUrl = m_pDialog->m_xEDHost->get_text().trim();
+    OUString sPath = m_pDialog->m_xEDRoot->get_text().trim();
 
     bool bSkip = true;
     if( ( m_sBinding == GDRIVE_BASE_URL )
@@ -369,8 +361,8 @@ bool CmisDetailsContainer::setUrl( const INetURLObject& rUrl )
         m_sBinding = aHostUrl.GetURLNoMark( );
         m_sRepoId = aHostUrl.GetMark( );
 
-        m_pEDHost->SetText( m_sBinding );
-        m_pEDRoot->SetText( rUrl.GetURLPath() );
+        m_pDialog->m_xEDHost->set_text( m_sBinding );
+        m_pDialog->m_xEDRoot->set_text( rUrl.GetURLPath() );
     }
     return bSuccess;
 }
@@ -388,7 +380,7 @@ void CmisDetailsContainer::setPassword( const OUString& rPass )
 void CmisDetailsContainer::selectRepository( )
 {
     // Get the repo ID and call the Change listener
-    const sal_Int32 nPos = m_pLBRepository->GetSelectedEntryPos( );
+    const int nPos = m_pDialog->m_xLBRepository->get_active();
     if( static_cast<size_t>(nPos) < m_aRepoIds.size() )
     {
         m_sRepoId = m_aRepoIds[nPos];
@@ -396,13 +388,13 @@ void CmisDetailsContainer::selectRepository( )
     }
 }
 
-IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, Button*, void  )
+IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, weld::Button&, void  )
 {
     Reference< XComponentContext > xContext = ::comphelper::getProcessComponentContext();
     Reference< XPasswordContainer2 > xMasterPasswd = PasswordContainer::create( xContext );
 
 
-    OUString sBindingUrl = m_pEDHost->GetText().trim( );
+    OUString sBindingUrl = m_pDialog->m_xEDHost->get_text().trim( );
 
     OUString sEncodedUsername = "";
 
@@ -416,8 +408,8 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, Button*, void  )
     }
 
     // Clean the listbox
-    m_pLBRepository->Clear( );
-    m_aRepoIds.clear( );
+    m_pDialog->m_xLBRepository->clear();
+    m_aRepoIds.clear();
 
     // Compute the URL
     OUString sUrl;
@@ -467,7 +459,7 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, Button*, void  )
 
             Reference< XRow > xRow( xResultSet, UNO_QUERY );
             OUString sName = xRow->getString( 1 );
-            m_pLBRepository->InsertEntry( sName );
+            m_pDialog->m_xLBRepository->append_text(sName);
         }
     }
     catch ( const Exception& )
@@ -475,9 +467,9 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, Button*, void  )
     }
 
     // Auto-select the first one
-    if ( m_pLBRepository->GetEntryCount( ) > 0 )
+    if (m_pDialog->m_xLBRepository->get_count() > 0)
     {
-        m_pLBRepository->SelectEntryPos( 0 );
+        m_pDialog->m_xLBRepository->set_active(0);
         selectRepository( );
     }
 
@@ -490,7 +482,7 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, Button*, void  )
     {}
 }
 
-IMPL_LINK_NOARG( CmisDetailsContainer, SelectRepoHdl, ListBox&, void )
+IMPL_LINK_NOARG( CmisDetailsContainer, SelectRepoHdl, weld::ComboBoxText&, void )
 {
     selectRepository( );
 }

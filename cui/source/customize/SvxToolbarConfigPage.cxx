@@ -61,7 +61,6 @@
 #include "eventdlg.hxx"
 #include <dialmgr.hxx>
 
-#include <comphelper/documentinfo.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <unotools/configmgr.hxx>
@@ -126,10 +125,8 @@ SvxToolbarConfigPage::SvxToolbarConfigPage(vcl::Window *pParent, const SfxItemSe
     m_pCommandCategoryListBox->SetSelectHdl(
         LINK( this, SvxToolbarConfigPage, SelectCategory ) );
 
-    m_pPlusBtn->SetClickHdl(
-        LINK( this, SvxToolbarConfigPage, AddToolbarHdl ) );
-    m_pMinusBtn->SetClickHdl(
-        LINK( this, SvxToolbarConfigPage, RemoveToolbarHdl ) );
+    m_pGearBtn->SetSelectHdl(
+        LINK( this, SvxToolbarConfigPage, GearHdl ) );
 
     m_pMoveUpButton->SetClickHdl ( LINK( this, SvxToolbarConfigPage, MoveHdl) );
     m_pMoveDownButton->SetClickHdl ( LINK( this, SvxToolbarConfigPage, MoveHdl) );
@@ -152,6 +149,10 @@ SvxToolbarConfigPage::SvxToolbarConfigPage(vcl::Window *pParent, const SfxItemSe
     PopupMenu* pPopup = m_pInsertBtn->GetPopupMenu();
     pPopup->EnableItem(OString( "insertsubmenu"), false );
     pPopup->RemoveDisabledEntries();
+
+    // Gear menu's "Move" action is irrelevant to the toolbars
+    pPopup = m_pGearBtn->GetPopupMenu();
+    pPopup->EnableItem("gear_move", false);
 
     // default toolbar to select is standardbar unless a different one
     // has been passed in
@@ -334,77 +335,132 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectToolbarEntry, SvTreeListBox *, void
     UpdateButtonStates();
 }
 
-IMPL_LINK_NOARG( SvxToolbarConfigPage, AddToolbarHdl, Button *, void )
+IMPL_LINK( SvxToolbarConfigPage, GearHdl, MenuButton *, pButton, void )
 {
-    OUString prefix = CuiResId( RID_SVXSTR_NEW_TOOLBAR );
+    OString sIdent = pButton->GetCurItemIdent();
+    SvxConfigEntry* pCurrentToolbar = GetTopLevelSelection();
 
-    OUString aNewName =
-        SvxConfigPageHelper::generateCustomName( prefix, GetSaveInData()->GetEntries() );
-
-    OUString aNewURL =
-        SvxConfigPageHelper::generateCustomURL( GetSaveInData()->GetEntries() );
-
-    VclPtrInstance< SvxNewToolbarDialog > pNameDialog( nullptr, aNewName );
-
-    // Reflect the actual m_pSaveInListBox into the new toolbar dialog
-    for ( sal_Int32 i = 0; i < m_pSaveInListBox->GetEntryCount(); ++i )
+    if (sIdent == "gear_add")
     {
-        SaveInData* pData =
-            static_cast<SaveInData*>(m_pSaveInListBox->GetEntryData( i ));
+        OUString prefix = CuiResId( RID_SVXSTR_NEW_TOOLBAR );
 
-        const sal_Int32 nInsertPos =
-            pNameDialog->m_pSaveInListBox->InsertEntry( m_pSaveInListBox->GetEntry( i ) );
+        OUString aNewName =
+            SvxConfigPageHelper::generateCustomName( prefix, GetSaveInData()->GetEntries() );
 
-        pNameDialog->m_pSaveInListBox->SetEntryData( nInsertPos, pData );
-    }
+        OUString aNewURL =
+            SvxConfigPageHelper::generateCustomURL( GetSaveInData()->GetEntries() );
 
-    pNameDialog->m_pSaveInListBox->SelectEntryPos(
-        m_pSaveInListBox->GetSelectedEntryPos() );
+        SvxNewToolbarDialog aNameDialog(GetFrameWeld(), aNewName);
 
-    if ( pNameDialog->Execute() == RET_OK )
-    {
-        aNewName = pNameDialog->GetName();
+        // Reflect the actual m_pSaveInListBox into the new toolbar dialog
+        for (sal_Int32 i = 0; i < m_pSaveInListBox->GetEntryCount(); ++i)
+            aNameDialog.m_xSaveInListBox->append_text(m_pSaveInListBox->GetEntry(i));
 
-        // Where to save the new toolbar? (i.e. Modulewise or documentwise)
-        sal_Int32 nInsertPos = pNameDialog->m_pSaveInListBox->GetSelectedEntryPos();
+        aNameDialog.m_xSaveInListBox->set_active(m_pSaveInListBox->GetSelectedEntryPos());
 
-        ToolbarSaveInData* pData =
-            static_cast<ToolbarSaveInData*>(
-                pNameDialog->m_pSaveInListBox->GetEntryData( nInsertPos ) );
-
-        if ( GetSaveInData() != pData )
+        if (aNameDialog.run() == RET_OK)
         {
-            m_pSaveInListBox->SelectEntryPos( nInsertPos );
-            m_pSaveInListBox->GetSelectHdl().Call(*m_pSaveInListBox);
+            aNewName = aNameDialog.GetName();
+
+            // Where to save the new toolbar? (i.e. Modulewise or documentwise)
+            int nInsertPos = aNameDialog.m_xSaveInListBox->get_active();
+
+            ToolbarSaveInData* pData =
+                static_cast<ToolbarSaveInData*>(
+                    m_pSaveInListBox->GetEntryData( nInsertPos ) );
+
+            if ( GetSaveInData() != pData )
+            {
+                m_pSaveInListBox->SelectEntryPos( nInsertPos );
+                m_pSaveInListBox->GetSelectHdl().Call(*m_pSaveInListBox);
+            }
+
+            SvxConfigEntry* pToolbar =
+                new SvxConfigEntry( aNewName, aNewURL, true, false );
+
+            pToolbar->SetUserDefined();
+            pToolbar->SetMain();
+
+            pData->CreateToolbar( pToolbar );
+
+            nInsertPos = m_pTopLevelListBox->InsertEntry( pToolbar->GetName() );
+            m_pTopLevelListBox->SetEntryData( nInsertPos, pToolbar );
+            m_pTopLevelListBox->SelectEntryPos( nInsertPos );
+            m_pTopLevelListBox->GetSelectHdl().Call(*m_pTopLevelListBox);
+
+            pData->SetModified();
+        }
+    }
+    else if (sIdent == "gear_delete")
+    {
+        if ( pCurrentToolbar && pCurrentToolbar->IsDeletable() )
+        {
+            DeleteSelectedTopLevel();
+            UpdateButtonStates();
+        }
+    }
+    else if (sIdent == "gear_rename")
+    {
+        sal_Int32 nSelectionPos = m_pTopLevelListBox->GetSelectedEntryPos();
+        SvxConfigEntry* pToolbar =
+            static_cast<SvxConfigEntry*>(m_pTopLevelListBox->GetEntryData( nSelectionPos ));
+        ToolbarSaveInData* pSaveInData = static_cast<ToolbarSaveInData*>( GetSaveInData() );
+
+        //Rename the toolbar
+        OUString sCurrentName( SvxConfigPageHelper::stripHotKey( pToolbar->GetName() ) );
+        OUString sDesc = CuiResId( RID_SVXSTR_LABEL_NEW_NAME );
+
+        SvxNameDialog aNameDialog( GetFrameWeld(), sCurrentName, sDesc );
+        aNameDialog.set_help_id( HID_SVX_CONFIG_RENAME_TOOLBAR );
+        aNameDialog.set_title( CuiResId( RID_SVXSTR_RENAME_TOOLBAR ) );
+
+        if ( aNameDialog.run() == RET_OK )
+        {
+            OUString sNewName = aNameDialog.GetName();
+
+            if (sCurrentName == sNewName)
+                return;
+
+            pToolbar->SetName( sNewName );
+            pSaveInData->ApplyToolbar( pToolbar );
+
+            // have to use remove and insert to change the name
+            m_pTopLevelListBox->RemoveEntry( nSelectionPos );
+            nSelectionPos =
+                    m_pTopLevelListBox->InsertEntry( sNewName, nSelectionPos );
+            m_pTopLevelListBox->SetEntryData( nSelectionPos, pToolbar );
+            m_pTopLevelListBox->SelectEntryPos( nSelectionPos );
+        }
+    }
+    else if (sIdent == "gear_iconOnly" || sIdent == "gear_textOnly" || sIdent == "gear_iconAndText")
+    {
+        ToolbarSaveInData* pSaveInData = static_cast<ToolbarSaveInData*>( GetSaveInData() );
+
+        if (pCurrentToolbar == nullptr || pSaveInData == nullptr)
+        {
+            SAL_WARN("cui.customize", "NULL toolbar or savein data");
+            return;
         }
 
-        SvxConfigEntry* pToolbar =
-            new SvxConfigEntry( aNewName, aNewURL, true, /*bParentData*/false );
+        sal_Int32 nStyle = 0;
+        if (sIdent == "gear_iconOnly")
+            nStyle = 0;
+        else if (sIdent == "gear_textOnly")
+            nStyle = 1;
+        else if (sIdent == "gear_iconAndText")
+            nStyle = 2;
 
-        pToolbar->SetUserDefined();
-        pToolbar->SetMain();
+        pCurrentToolbar->SetStyle( nStyle );
+        pSaveInData->SetSystemStyle( m_xFrame, pCurrentToolbar->GetCommand(), nStyle );
 
-        pData->CreateToolbar( pToolbar );
-
-        nInsertPos = m_pTopLevelListBox->InsertEntry( pToolbar->GetName() );
-        m_pTopLevelListBox->SetEntryData( nInsertPos, pToolbar );
-        m_pTopLevelListBox->SelectEntryPos( nInsertPos );
-        m_pTopLevelListBox->GetSelectHdl().Call(*m_pTopLevelListBox);
-
-        pData->SetModified();
+        m_pTopLevelListBox->GetSelectHdl().Call( *m_pTopLevelListBox );
     }
-}
-
-IMPL_LINK_NOARG( SvxToolbarConfigPage, RemoveToolbarHdl, Button *, void )
-{
-    SvxConfigEntry* pToolbar = GetTopLevelSelection();
-
-    if ( pToolbar && pToolbar->IsDeletable() )
+    else
     {
-        DeleteSelectedTopLevel();
-        UpdateButtonStates();
+        //This block should never be reached
+        SAL_WARN("cui.customize", "Unknown gear menu option: " << sIdent);
+        return;
     }
-
 }
 
 IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectCategory, ListBox&, void )
@@ -472,13 +528,13 @@ IMPL_LINK( SvxToolbarConfigPage, ModifyItemHdl, MenuButton *, pButton, void )
         OUString aNewName( SvxConfigPageHelper::stripHotKey( pEntry->GetName() ) );
         OUString aDesc = CuiResId( RID_SVXSTR_LABEL_NEW_NAME );
 
-        VclPtrInstance< SvxNameDialog > pNameDialog( this, aNewName, aDesc );
-        pNameDialog->SetHelpId( HID_SVX_CONFIG_RENAME_TOOLBAR_ITEM );
-        pNameDialog->SetText( CuiResId( RID_SVXSTR_RENAME_TOOLBAR ) );
+        SvxNameDialog aNameDialog(GetFrameWeld(), aNewName, aDesc);
+        aNameDialog.set_help_id(HID_SVX_CONFIG_RENAME_TOOLBAR_ITEM);
+        aNameDialog.set_title(CuiResId(RID_SVXSTR_RENAME_TOOLBAR));
 
-        if ( pNameDialog->Execute() == RET_OK )
+        if (aNameDialog.run() == RET_OK)
         {
-            pNameDialog->GetName(aNewName);
+            aNewName = aNameDialog.GetName();
 
             if( aNewName.isEmpty() )    // tdf#80758 - Accelerator character ("~") is passed as
                 pEntry->SetName( "~" ); // the button name in case of empty values.
@@ -697,6 +753,7 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, ResetToolbarHdl, Button *, void )
 
 void SvxToolbarConfigPage::UpdateButtonStates()
 {
+    SvxConfigEntry* pToolbar = GetTopLevelSelection();
     SvTreeListEntry* selection = m_pContentsListBox->GetCurEntry();
 
     bool  bIsSeparator =
@@ -710,6 +767,12 @@ void SvxToolbarConfigPage::UpdateButtonStates()
     m_pRemoveCommandButton->Enable( bIsValidSelection );
 
     m_pModifyBtn->Enable( bIsValidSelection && !bIsSeparator );
+
+    // Handle the gear button
+    PopupMenu* pPopup = m_pGearBtn->GetPopupMenu();
+    // "gear_add" option is always enabled
+    pPopup->EnableItem( "gear_delete", pToolbar && pToolbar->IsDeletable() );
+    pPopup->EnableItem( "gear_rename", pToolbar && pToolbar->IsRenamable() );
 }
 
 short SvxToolbarConfigPage::QueryReset()
@@ -735,19 +798,37 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectToolbar, ListBox&, void )
     if ( pToolbar == nullptr )
     {
         //TODO: Disable related buttons
-        m_pPlusBtn->Enable( false );
-        m_pMinusBtn->Enable( false );
         m_pInsertBtn->Enable( false );
         m_pResetBtn->Enable( false );
+        m_pGearBtn->Enable( false );
 
         return;
     }
     else
     {
-        m_pPlusBtn->Enable();
-        m_pMinusBtn->Enable( pToolbar->IsDeletable() );
         m_pInsertBtn->Enable();
         m_pResetBtn->Enable();
+        m_pGearBtn->Enable();
+    }
+
+    PopupMenu* pGearMenu = m_pGearBtn->GetPopupMenu();
+    switch( pToolbar->GetStyle() )
+    {
+        case 0:
+        {
+            pGearMenu->CheckItem( "gear_iconOnly" );
+            break;
+        }
+        case 1:
+        {
+            pGearMenu->CheckItem( "gear_textOnly" );
+            break;
+        }
+        case 2:
+        {
+            pGearMenu->CheckItem( "gear_iconAndText" );
+            break;
+        }
     }
 
     SvxEntries* pEntries = pToolbar->GetEntries();

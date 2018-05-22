@@ -38,10 +38,8 @@
 #include <eventsupplier.hxx>
 
 #include <sfx2/app.hxx>
-#include <sfx2/sfxresid.hxx>
 
 #include <sfx2/sfxsids.hrc>
-#include <sfx2/strings.hrc>
 #include <sfx2/docfile.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/frame.hxx>
@@ -330,15 +328,12 @@ SfxEvents_Impl::~SfxEvents_Impl()
 }
 
 
-SvxMacro* SfxEvents_Impl::ConvertToMacro( const uno::Any& rElement, SfxObjectShell* pObjShell, bool bNormalizeMacro )
+SvxMacro* SfxEvents_Impl::ConvertToMacro( const uno::Any& rElement, SfxObjectShell* pObjShell )
 {
     SvxMacro* pMacro = nullptr;
     uno::Sequence < beans::PropertyValue > aProperties;
     uno::Any aAny;
-    if ( bNormalizeMacro )
-        NormalizeMacro( rElement, aAny, pObjShell );
-    else
-        aAny = rElement;
+    NormalizeMacro( rElement, aAny, pObjShell );
 
     if ( aAny >>= aProperties )
     {

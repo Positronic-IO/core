@@ -72,6 +72,7 @@
 
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 
 #include <vector>
 #include <utility>
@@ -328,7 +329,7 @@ static bool lcl_HaveCommonAttributes( IStyleAccess& rStyleAccess,
 {
     bool bRet = false;
 
-    SfxItemSet* pNewSet = nullptr;
+    std::unique_ptr<SfxItemSet> pNewSet;
 
     if ( !pSet1 )
     {
@@ -363,7 +364,6 @@ static bool lcl_HaveCommonAttributes( IStyleAccess& rStyleAccess,
     {
         if ( pNewSet->Count() )
             pStyleHandle = rStyleAccess.getAutomaticStyle( *pNewSet, IStyleAccess::AUTO_STYLE_CHAR );
-        delete pNewSet;
         bRet = true;
     }
 
@@ -714,7 +714,7 @@ OUString SwTextNode::GetCurWord( sal_Int32 nPos ) const
 
     // check if word was found and if it uses a symbol font, if so
     // enforce returning an empty string
-    if (aBndry.endPos != aBndry.startPos && IsSymbol( aBndry.startPos ))
+    if (aBndry.endPos != aBndry.startPos && IsSymbolAt(aBndry.startPos))
         aBndry.endPos = aBndry.startPos;
 
     // can have -1 as start/end of bounds not found
@@ -1044,7 +1044,7 @@ bool SwTextNode::Spell(SwSpellArgs* pArgs)
                 }
                 if( pArgs->xSpellAlt.is() )
                 {
-                    if( IsSymbol( aScanner.GetBegin() ) )
+                    if (IsSymbolAt(aScanner.GetBegin()))
                     {
                         pArgs->xSpellAlt = nullptr;
                     }

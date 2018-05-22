@@ -24,7 +24,6 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svx/svxids.hrc>
-#include <vcl/msgbox.hxx>
 #include <svx/svddef.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/request.hxx>
@@ -33,9 +32,7 @@
 #include <svx/svdpagv.hxx>
 
 #include <app.hrc>
-#include <strings.hrc>
 
-#include <sdresid.hxx>
 #include <Window.hxx>
 #include <drawview.hxx>
 #include <zoomlist.hxx>
@@ -123,7 +120,10 @@ void DrawViewShell::ScannerEvent()
 
                     if( bInsertNewObject )
                     {
-                        auto pGrafObj = new SdrGrafObj( Graphic( aScanBmp ), aRect );
+                        auto pGrafObj = new SdrGrafObj(
+                            GetView()->getSdrModelFromSdrView(),
+                            Graphic(aScanBmp),
+                            aRect);
                         SdrPageView* pPV = GetView()->GetSdrPageView();
                         GetView()->InsertObjectAtView( pGrafObj, *pPV, SdrInsertFlags::SETDEFLAYER );
                     }

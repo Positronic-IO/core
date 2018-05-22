@@ -38,6 +38,7 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
+#include <comphelper/sequence.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <sfx2/printer.hxx>
 #include <editeng/editstat.hxx>
@@ -1282,8 +1283,7 @@ public:
                 // Show warning that the orientation could not be set.
                 if (pViewShell)
                 {
-                    vcl::Window* pWin = pViewShell->GetActiveWindow();
-                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pViewShell->GetFrameWeld(),
                                                                VclMessageType::Warning, VclButtonsType::OkCancel,
                                                                SdResId(STR_WARN_PRINTFORMAT_FAILURE)));
                     xWarn->set_default_response(RET_CANCEL);
@@ -1527,7 +1527,10 @@ private:
         std::vector< ::tools::Rectangle >::iterator iter( aAreas.begin() );
         while( iter != aAreas.end() )
         {
-            pHandout->NbcInsertObject( new SdrPageObj((*iter++)) );
+            pHandout->NbcInsertObject(
+                new SdrPageObj(
+                    rModel,
+                    (*iter++)));
 
             if( bDrawLines && (iter != aAreas.end())  )
             {
@@ -1547,7 +1550,10 @@ private:
                     aPathPoly.append( aPoly );
                 }
 
-                SdrPathObj* pPathObj = new SdrPathObj(OBJ_PATHLINE, aPathPoly );
+                SdrPathObj* pPathObj = new SdrPathObj(
+                    rModel,
+                    OBJ_PATHLINE,
+                    aPathPoly);
                 pPathObj->SetMergedItem(XLineStyleItem(drawing::LineStyle_SOLID));
                 pPathObj->SetMergedItem(XLineColorItem(OUString(), COL_BLACK));
 

@@ -28,6 +28,7 @@
 
 #include <sal/config.h>
 #include <comphelper/servicehelper.hxx>
+#include <cppuhelper/supportsservice.hxx>
 #include <rtl/ref.hxx>
 #include "x509certificate_nssimpl.hxx"
 
@@ -35,6 +36,7 @@
 
 #include "sanextension_nssimpl.hxx"
 #include <tools/time.hxx>
+#include <svl/sigstruct.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno ;
@@ -440,6 +442,20 @@ OUString SAL_CALL X509Certificate_NssImpl::getSignatureAlgorithm()
     }
 }
 
+svl::crypto::SignatureMethodAlgorithm X509Certificate_NssImpl::getSignatureMethodAlgorithm()
+{
+    svl::crypto::SignatureMethodAlgorithm nRet = svl::crypto::SignatureMethodAlgorithm::RSA;
+
+    if (!m_pCert)
+        return nRet;
+
+    SECOidTag eTag = SECOID_GetAlgorithmTag(&m_pCert->subjectPublicKeyInfo.algorithm);
+    if (eTag == SEC_OID_ANSIX962_EC_PUBLIC_KEY)
+        nRet = svl::crypto::SignatureMethodAlgorithm::ECDSA;
+
+    return nRet;
+}
+
 css::uno::Sequence< sal_Int8 > SAL_CALL X509Certificate_NssImpl::getSHA1Thumbprint()
 {
     return getThumbprint(m_pCert, SEC_OID_SHA1);
@@ -491,5 +507,20 @@ sal_Int32 SAL_CALL X509Certificate_NssImpl::getCertificateUsage(  )
 
     return usage;
 }
+
+/* XServiceInfo */
+OUString SAL_CALL X509Certificate_NssImpl::getImplementationName()
+{
+    return OUString("com.sun.star.xml.security.gpg.XCertificate_NssImpl");
+}
+
+/* XServiceInfo */
+sal_Bool SAL_CALL X509Certificate_NssImpl::supportsService(const OUString& serviceName)
+{
+    return cppu::supportsService(this, serviceName);
+}
+
+/* XServiceInfo */
+Sequence<OUString> SAL_CALL X509Certificate_NssImpl::getSupportedServiceNames() { return { OUString() }; }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -165,7 +165,7 @@ namespace
 
         aVDev->SetOutputSizePixel(aSizePixel);
         aVDev->EnableMapMode(false);
-        aVDev->SetFillColor(COL_WHITE);
+        aVDev->SetFillColor( COL_WHITE);
         aVDev->SetLineColor();
 
         if(rBitmapEx.IsTransparent())
@@ -1042,7 +1042,6 @@ void clipMetafileContentAgainstOwnRegions(GDIMetaFile& rSource)
         }
         else
         {
-            const_cast< MetaAction* >(pAction)->Duplicate();
             aTarget.AddAction(const_cast< MetaAction* >(pAction));
         }
     }

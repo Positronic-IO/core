@@ -37,7 +37,6 @@
 
 #include <svtools/embedhlp.hxx>
 #include <unotools/ucbstreamhelper.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/embeddedobjectcontainer.hxx>
 
@@ -61,7 +60,7 @@ using namespace ::com::sun::star::lang;
 #define XML_CONTAINERSTORAGE_NAME_60        "Pictures"
 #define XML_CONTAINERSTORAGE_NAME       "ObjectReplacements"
 #define XML_EMBEDDEDOBJECT_URL_BASE     "vnd.sun.star.EmbeddedObject:"
-#define XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE      "vnd.sun.star.GraphicObject:"
+#define XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE "vnd.sun.star.GraphicObject:"
 
 
 class OutputStorageWrapper_Impl : public ::cppu::WeakImplHelper<XOutputStream>
@@ -552,7 +551,6 @@ rtl::Reference<SvXMLEmbeddedObjectHelper> SvXMLEmbeddedObjectHelper::Create(
     return pThis;
 }
 
-// XGraphicObjectResolver: alien objects!
 OUString SAL_CALL SvXMLEmbeddedObjectHelper::resolveEmbeddedObjectURL(const OUString& rURL)
 {
     MutexGuard          aGuard( maMutex );

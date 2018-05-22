@@ -109,8 +109,7 @@ SfxItemSet SvxOutlinerForwarder::GetAttribs( const ESelection& rSel, EditEngineA
         else
         {
             // no, we need delete the old cache
-            delete mpAttribsCache;
-            mpAttribsCache = nullptr;
+            mpAttribsCache.reset();
         }
     }
 
@@ -122,7 +121,7 @@ SfxItemSet SvxOutlinerForwarder::GetAttribs( const ESelection& rSel, EditEngineA
 
     if( EditEngineAttribs::All == nOnlyHardAttrib )
     {
-        mpAttribsCache = new SfxItemSet( aSet );
+        mpAttribsCache.reset(new SfxItemSet( aSet ));
         maAttribCacheSelection = rSel;
     }
 
@@ -146,12 +145,11 @@ SfxItemSet SvxOutlinerForwarder::GetParaAttribs( sal_Int32 nPara ) const
         else
         {
             // no, we need delete the old cache
-            delete mpParaAttribsCache;
-            mpParaAttribsCache = nullptr;
+            mpParaAttribsCache.reset();
         }
     }
 
-    mpParaAttribsCache = new SfxItemSet( rOutliner.GetParaAttribs( nPara ) );
+    mpParaAttribsCache.reset(new SfxItemSet( rOutliner.GetParaAttribs( nPara ) ));
     mnParaAttribsCache = nPara;
 
     EditEngine& rEditEngine = const_cast<EditEngine&>(rOutliner.GetEditEngine());
@@ -223,7 +221,7 @@ void SvxOutlinerForwarder::QuickSetAttribs( const SfxItemSet& rSet, const ESelec
     rOutliner.QuickSetAttribs( rSet, rSel );
 }
 
-OUString SvxOutlinerForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rpTxtColor, Color*& rpFldColor )
+OUString SvxOutlinerForwarder::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor )
 {
     return rOutliner.CalcFieldValue( rField, nPara, nPos, rpTxtColor, rpFldColor );
 }
@@ -253,17 +251,8 @@ SfxItemState SvxOutlinerForwarder::GetItemState( sal_Int32 nPara, sal_uInt16 nWh
 
 void SvxOutlinerForwarder::flushCache()
 {
-    if( mpAttribsCache )
-    {
-        delete mpAttribsCache;
-        mpAttribsCache = nullptr;
-    }
-
-    if( mpParaAttribsCache )
-    {
-        delete mpParaAttribsCache;
-        mpParaAttribsCache = nullptr;
-    }
+    mpAttribsCache.reset();
+    mpParaAttribsCache.reset();
 }
 
 LanguageType SvxOutlinerForwarder::GetLanguage( sal_Int32 nPara, sal_Int32 nIndex ) const
@@ -338,24 +327,7 @@ tools::Rectangle SvxOutlinerForwarder::GetCharBounds( sal_Int32 nPara, sal_Int32
 
 tools::Rectangle SvxOutlinerForwarder::GetParaBounds( sal_Int32 nPara ) const
 {
-    Point aPnt = rOutliner.GetDocPosTopLeft( nPara );
-    Size aSize = rOutliner.CalcTextSize();
-
-    if( rOutliner.IsVertical() )
-    {
-        // Hargl. Outliner's 'external' methods return the rotated
-        // dimensions, 'internal' methods like GetTextHeight( n )
-        // don't rotate.
-        sal_uLong nWidth = rOutliner.GetTextHeight( nPara );
-
-        return tools::Rectangle( aSize.Width() - aPnt.Y() - nWidth, 0, aSize.Width() - aPnt.Y(), aSize.Height() );
-    }
-    else
-    {
-        sal_uLong nHeight = rOutliner.GetTextHeight( nPara );
-
-        return tools::Rectangle( 0, aPnt.Y(), aSize.Width(), aPnt.Y() + nHeight );
-    }
+    return rOutliner.GetParaBounds( nPara );
 }
 
 MapMode SvxOutlinerForwarder::GetMapMode() const

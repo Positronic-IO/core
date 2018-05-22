@@ -57,14 +57,15 @@
 #define INCLUDED_LOTUSWORDPRO_SOURCE_FILTER_EXPLODE_HXX
 
 #include <sal/types.h>
+#include <memory>
 
 class SvStream;
 
 class HuffmanTreeNode
 {
 public:
-    HuffmanTreeNode * left;
-    HuffmanTreeNode * right;
+    std::unique_ptr<HuffmanTreeNode> left;
+    std::unique_ptr<HuffmanTreeNode> right;
     sal_uInt32 value;
 
     explicit HuffmanTreeNode(sal_uInt32 value = 0xffffffff) ;
@@ -84,11 +85,6 @@ class Decompression
 {
 public:
     Decompression(SvStream * pInStream, SvStream * pOutStream);
-    ~Decompression()
-    {
-        delete m_Tree1;
-        delete m_Tree2;
-    };
     /**
      * @brief
      * decompress from instream to outstream
@@ -116,7 +112,7 @@ public:
 
     sal_uInt32 m_iArrayOfM[16];
 
-    HuffmanTreeNode *m_Tree1, *m_Tree2;
+    std::unique_ptr<HuffmanTreeNode> m_Tree1, m_Tree2;
 
     void ConstructTree1();
     void ConstructTree2();

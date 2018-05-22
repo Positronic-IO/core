@@ -26,13 +26,14 @@
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/beans/PropertyState.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Reference.hxx>
 #include <filter/msfilter/msfilterdllapi.h>
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <svx/svdtypes.hxx>
 #include <svx/msdffdef.hxx>
 #include <tools/gen.hxx>
@@ -684,7 +685,7 @@ class MSFILTER_DLLPUBLIC EscherPropertyContainer
                     sal_uInt32 nBlibId,
                     bool bCreateCroppingAttributes
                 );
-    bool        ImplCreateEmbeddedBmp( const OString& rUniqueId );
+    bool        ImplCreateEmbeddedBmp(GraphicObject const & rGraphicObject);
 
     SAL_DLLPRIVATE explicit EscherPropertyContainer(
         EscherGraphicProvider * pGraphProv, SvStream * pPiOutStrm,
@@ -742,7 +743,7 @@ public:
 
     /** Creates a complex ESCHER_Prop_fillBlip containing the BLIP directly (for Excel charts). */
     void        CreateEmbeddedBitmapProperties(
-                    const OUString& rBitmapUrl,
+                    css::uno::Reference<css::awt::XBitmap> const & rxBitmap,
                     css::drawing::BitmapMode eBitmapMode
                 );
     /** Creates a complex ESCHER_Prop_fillBlip containing a hatch style (for Excel charts). */
@@ -847,7 +848,11 @@ public:
                             sal_Int32& rnArrowLength,
                             sal_Int32& rnArrowWidth
                         );
-    static bool         IsDefaultObject( SdrObjCustomShape const * pCustoShape, const MSO_SPT eShapeType );
+
+    static bool IsDefaultObject(
+        const SdrObjCustomShape& rSdrObjCustomShape,
+        const MSO_SPT eShapeType);
+
     static void         LookForPolarHandles(
                             const MSO_SPT eShapeType,
                             sal_Int32& nAdjustmentsWhichNeedsToBeConverted

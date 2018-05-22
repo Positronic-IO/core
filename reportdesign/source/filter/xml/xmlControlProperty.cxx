@@ -19,10 +19,12 @@
 
 #include <sal/config.h>
 
+#include <cmath>
 #include <map>
 
 #include "xmlControlProperty.hxx"
 
+#include <o3tl/temporary.hxx>
 #include <rtl/strbuf.hxx>
 #include <sax/tools/converter.hxx>
 #include "xmlfilter.hxx"
@@ -271,7 +273,7 @@ Any OXMLControlProperty::convertString(const css::uno::Type& _rExpectedType, con
                     {
                         case TYPE_DATE:
                         {
-                            OSL_ENSURE((static_cast<sal_uInt32>(nValue)) - nValue == 0,
+                            OSL_ENSURE(std::modf(nValue, &o3tl::temporary(double())) == 0,
                                 "OPropertyImport::convertString: a Date value with a fractional part?");
                             aReturn <<= implGetDate(nValue);
                         }

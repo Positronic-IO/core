@@ -33,10 +33,10 @@
 #include <shellio.hxx>
 #include <docsh.hxx>
 
-#include <comphelper/processfactory.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/string.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sfx2/docfile.hxx>
 
 namespace sw { namespace sidebar {
 
@@ -49,8 +49,8 @@ void renderPreview(sfx2::StyleManager* pStyleManager, OutputDevice& aOutputDevic
 
     if (pStyleSheet)
     {
-        sfx2::StylePreviewRenderer* pStylePreviewRenderer;
-        pStylePreviewRenderer = pStyleManager->CreateStylePreviewRenderer(aOutputDevice, pStyleSheet, nHeight);
+        std::unique_ptr<sfx2::StylePreviewRenderer> pStylePreviewRenderer
+            = pStyleManager->CreateStylePreviewRenderer(aOutputDevice, pStyleSheet, nHeight);
         pStylePreviewRenderer->recalculate();
         pStylePreviewRenderer->render(aRect, sfx2::StylePreviewRenderer::RenderAlign::TOP);
     }
@@ -200,7 +200,7 @@ void StylePresetsPanel::dispose()
 
 IMPL_LINK_NOARG(StylePresetsPanel, DoubleClickHdl, ValueSet*, void)
 {
-    sal_Int32 nItemId = mpValueSet->GetSelectItemId();
+    sal_Int32 nItemId = mpValueSet->GetSelectedItemId();
     TemplateEntry* pEntry = static_cast<TemplateEntry*>(mpValueSet->GetItemData(nItemId));
 
     SwDocShell* pDocSh = static_cast<SwDocShell*>(SfxObjectShell::Current());

@@ -50,9 +50,9 @@
 #include <callform.hxx>
 #include <addincol.hxx>
 #include <refupdat.hxx>
-#include <scresid.hxx>
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <formulacell.hxx>
 #include <dociter.hxx>
 #include <docoptio.hxx>
@@ -676,14 +676,14 @@ static bool lcl_getLastTabName( OUString& rTabName2, const OUString& rTabName1,
         vector<OUString>::const_iterator itr = ::std::find(itrBeg, itrEnd, rTabName1);
         if (itr == rTabNames.end())
         {
-            rTabName2 = ScGlobal::GetRscString(STR_NO_REF_TABLE);
+            rTabName2 = ScResId(STR_NO_REF_TABLE);
             return false;
         }
 
         size_t nDist = ::std::distance(itrBeg, itr);
         if (nDist + static_cast<size_t>(nTabSpan) >= nCount)
         {
-            rTabName2 = ScGlobal::GetRscString(STR_NO_REF_TABLE);
+            rTabName2 = ScResId(STR_NO_REF_TABLE);
             return false;
         }
 
@@ -727,7 +727,7 @@ struct Convention_A1 : public ScCompiler::Convention
 void Convention_A1::MakeColStr( OUStringBuffer& rBuffer, SCCOL nCol )
 {
     if ( !ValidCol( nCol) )
-        rBuffer.append(ScGlobal::GetRscString(STR_NO_REF_TABLE));
+        rBuffer.append(ScResId(STR_NO_REF_TABLE));
     else
         ::ScColToAlpha( rBuffer, nCol);
 }
@@ -735,7 +735,7 @@ void Convention_A1::MakeColStr( OUStringBuffer& rBuffer, SCCOL nCol )
 void Convention_A1::MakeRowStr( OUStringBuffer& rBuffer, SCROW nRow )
 {
     if ( !ValidRow(nRow) )
-        rBuffer.append(ScGlobal::GetRscString(STR_NO_REF_TABLE));
+        rBuffer.append(ScResId(STR_NO_REF_TABLE));
     else
         rBuffer.append(sal_Int32(nRow + 1));
 }
@@ -748,7 +748,7 @@ struct ConventionOOO_A1 : public Convention_A1
     static void MakeTabStr( OUStringBuffer &rBuf, const std::vector<OUString>& rTabNames, SCTAB nTab )
     {
         if (static_cast<size_t>(nTab) >= rTabNames.size())
-            rBuf.append(ScGlobal::GetRscString(STR_NO_REF_TABLE));
+            rBuf.append(ScResId(STR_NO_REF_TABLE));
         else
             rBuf.append(rTabNames[nTab]);
         rBuf.append('.');
@@ -1073,7 +1073,7 @@ struct ConventionXL
         ScAddress aAbs = rRef.toAbs(rPos);
         if (rRef.IsTabDeleted() || static_cast<size_t>(aAbs.Tab()) >= rTabNames.size())
         {
-            rTabName = ScGlobal::GetRscString( STR_NO_REF_TABLE );
+            rTabName = ScResId( STR_NO_REF_TABLE );
             return;
         }
         rTabName = rTabNames[aAbs.Tab()];
@@ -1689,7 +1689,7 @@ struct ConventionXL_R1C1 : public ScCompiler::Convention, public ConventionXL
 
         if (!ValidCol(aAbsRef.aEnd.Col()) || !ValidRow(aAbsRef.aEnd.Row()))
         {
-            rBuffer.append(ScGlobal::GetRscString(STR_NO_REF_TABLE));
+            rBuffer.append(ScResId(STR_NO_REF_TABLE));
             return;
         }
 
@@ -1732,11 +1732,12 @@ struct ConventionXL_R1C1 : public ScCompiler::Convention, public ConventionXL
     }
 };
 
-ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, ScTokenArray& rArr ) :
-    FormulaCompiler(rArr),
+ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, ScTokenArray& rArr,
+        const ScInterpreterContext* pContext )
+    : FormulaCompiler(rArr),
     pDoc(rCxt.getDoc()),
     aPos(rPos),
-    mpFormatter(pDoc->GetFormatTable()),
+    mpFormatter(pContext? pContext->GetFormatTable() : pDoc->GetFormatTable()),
     mnCurrentSheetTab(-1),
     mnCurrentSheetEndPos(0),
     pCharClass(ScGlobal::pCharClass),
@@ -1752,11 +1753,11 @@ ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, 
 }
 
 ScCompiler::ScCompiler( ScDocument* pDocument, const ScAddress& rPos, ScTokenArray& rArr,
-            formula::FormulaGrammar::Grammar eGrammar )
+            formula::FormulaGrammar::Grammar eGrammar, const ScInterpreterContext* pContext )
         : FormulaCompiler(rArr),
         pDoc( pDocument ),
         aPos( rPos ),
-        mpFormatter(pDoc->GetFormatTable()),
+        mpFormatter(pContext ? pContext->GetFormatTable() : pDoc->GetFormatTable()),
         mnCurrentSheetTab(-1),
         mnCurrentSheetEndPos(0),
         nSrcPos(0),
@@ -1773,10 +1774,10 @@ ScCompiler::ScCompiler( ScDocument* pDocument, const ScAddress& rPos, ScTokenArr
                 eGrammar );
 }
 
-ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos ) :
-    pDoc(rCxt.getDoc()),
+ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos, const ScInterpreterContext* pContext )
+    : pDoc(rCxt.getDoc()),
     aPos(rPos),
-    mpFormatter(pDoc ? pDoc->GetFormatTable() : nullptr),
+    mpFormatter(pContext ? pContext->GetFormatTable() : pDoc ? pDoc->GetFormatTable() : nullptr),
     mnCurrentSheetTab(-1),
     mnCurrentSheetEndPos(0),
     pCharClass(ScGlobal::pCharClass),
@@ -1792,11 +1793,11 @@ ScCompiler::ScCompiler( sc::CompileFormulaContext& rCxt, const ScAddress& rPos )
 }
 
 ScCompiler::ScCompiler( ScDocument* pDocument, const ScAddress& rPos,
-            formula::FormulaGrammar::Grammar eGrammar )
+            formula::FormulaGrammar::Grammar eGrammar, const ScInterpreterContext* pContext )
         :
         pDoc( pDocument ),
         aPos( rPos ),
-        mpFormatter(pDoc ? pDoc->GetFormatTable() : nullptr),
+        mpFormatter(pContext ? pContext->GetFormatTable() : pDoc ? pDoc->GetFormatTable() : nullptr),
         mnCurrentSheetTab(-1),
         mnCurrentSheetEndPos(0),
         nSrcPos(0),
@@ -3482,8 +3483,8 @@ bool ScCompiler::IsColRowName( const OUString& rName )
                 pRL = pDoc->GetRowNameRanges();
             for ( size_t iPair = 0, nPairs = pRL->size(); iPair < nPairs && !bInList; ++iPair )
             {
-                ScRangePair* pR = (*pRL)[iPair];
-                const ScRange& rNameRange = pR->GetRange(0);
+                const ScRangePair & rR = (*pRL)[iPair];
+                const ScRange& rNameRange = rR.GetRange(0);
                 if ( jThisTab && !(rNameRange.aStart.Tab() <= nThisTab &&
                         nThisTab <= rNameRange.aEnd.Tab()) )
                     continue;   // for
@@ -4984,7 +4985,7 @@ void ScCompiler::CreateStringFromMatrix( OUStringBuffer& rBuffer, const FormulaT
             }
             else if( pMatrix->IsEmpty( nC, nR ) )
                 ;
-            else if( pMatrix->IsString( nC, nR ) )
+            else if( pMatrix->IsStringOrEmpty( nC, nR ) )
                 AppendString( rBuffer, pMatrix->GetString(nC, nR).getString() );
         }
     }
@@ -5252,11 +5253,11 @@ bool ScCompiler::HandleColRowName()
     ScRange aRange;
     for ( size_t i = 0, nPairs = pRL->size(); i < nPairs; ++i )
     {
-        ScRangePair* pR = (*pRL)[i];
-        if ( pR->GetRange(0).In( aAbs ) )
+        const ScRangePair & rR = (*pRL)[i];
+        if ( rR.GetRange(0).In( aAbs ) )
         {
             bInList = bValidName = true;
-            aRange = pR->GetRange(1);
+            aRange = rR.GetRange(1);
             if ( bColName )
             {
                 aRange.aStart.SetCol( nCol );
@@ -5300,8 +5301,8 @@ bool ScCompiler::HandleColRowName()
                 }
                 for ( size_t i = 0, nPairs = pRL->size(); i < nPairs; ++i )
                 {   // next defined ColNameRange below limits row
-                    ScRangePair* pR = (*pRL)[i];
-                    const ScRange& rRange = pR->GetRange(1);
+                    const ScRangePair & rR = (*pRL)[i];
+                    const ScRange& rRange = rR.GetRange(1);
                     if ( rRange.aStart.Col() <= nCol && nCol <= rRange.aEnd.Col() )
                     {   // identical column range
                         SCROW nTmp = rRange.aStart.Row();
@@ -5333,8 +5334,8 @@ bool ScCompiler::HandleColRowName()
                 }
                 for ( size_t i = 0, nPairs = pRL->size(); i < nPairs; ++i )
                 {   // next defined RowNameRange to the right limits column
-                    ScRangePair* pR = (*pRL)[i];
-                    const ScRange& rRange = pR->GetRange(1);
+                    const ScRangePair & rR = (*pRL)[i];
+                    const ScRange& rRange = rR.GetRange(1);
                     if ( rRange.aStart.Row() <= nRow && nRow <= rRange.aEnd.Row() )
                     {   // identical row range
                         SCCOL nTmp = rRange.aStart.Col();
@@ -5779,6 +5780,126 @@ bool ScCompiler::HandleTableRef()
 formula::ParamClass ScCompiler::GetForceArrayParameter( const formula::FormulaToken* pToken, sal_uInt16 nParam ) const
 {
     return ScParameterClassification::GetParameterType( pToken, nParam);
+}
+
+bool ScCompiler::IsIIOpCode(OpCode nOpCode) const
+{
+    if (nOpCode == ocSumIf || nOpCode == ocAverageIf)
+        return true;
+
+    return false;
+}
+
+void ScCompiler::HandleIIOpCode(OpCode nOpCode, FormulaToken*** pppToken, sal_uInt8 nNumParams)
+{
+    switch (nOpCode)
+    {
+        case ocSumIf:
+        case ocAverageIf:
+        {
+            if (nNumParams != 3)
+                return;
+
+            if (!(pppToken[0] && pppToken[2] && *pppToken[0] && *pppToken[2]))
+                return;
+
+            if ((*pppToken[0])->GetType() != svDoubleRef)
+                return;
+
+            const StackVar eSumRangeType = (*pppToken[2])->GetType();
+
+            if ( eSumRangeType != svSingleRef && eSumRangeType != svDoubleRef )
+                return;
+
+            const ScComplexRefData& rBaseRange = *(*pppToken[0])->GetDoubleRef();
+
+            ScComplexRefData aSumRange;
+            if (eSumRangeType == svSingleRef)
+            {
+                aSumRange.Ref1 = *(*pppToken[2])->GetSingleRef();
+                aSumRange.Ref2 = aSumRange.Ref1;
+            }
+            else
+                aSumRange = *(*pppToken[2])->GetDoubleRef();
+
+            CorrectSumRange(rBaseRange, aSumRange, pppToken[2]);
+        }
+        break;
+        default:
+            ;
+    }
+}
+
+static void lcl_GetColRowDeltas(const ScRange& rRange, SCCOL& rXDelta, SCROW& rYDelta)
+{
+    rXDelta = rRange.aEnd.Col() - rRange.aStart.Col();
+    rYDelta = rRange.aEnd.Row() - rRange.aStart.Row();
+}
+
+bool ScCompiler::AdjustSumRangeShape(const ScComplexRefData& rBaseRange, ScComplexRefData& rSumRange)
+{
+    ScRange aAbs = rSumRange.toAbs(aPos);
+
+    // Current sum-range end col/row
+    SCCOL nEndCol = aAbs.aEnd.Col();
+    SCROW nEndRow = aAbs.aEnd.Row();
+
+    // Current behaviour is, we will get a #NAME? for the below case, so bail out.
+    // Note that sum-range's End[Col,Row] are same as Start[Col,Row] if the original formula
+    // has a single-ref as the sum-range.
+    if (!ValidCol(nEndCol) || !ValidRow(nEndRow))
+        return false;
+
+    SCCOL nXDeltaSum = 0;
+    SCROW nYDeltaSum = 0;
+
+    lcl_GetColRowDeltas(aAbs, nXDeltaSum, nYDeltaSum);
+
+    aAbs = rBaseRange.toAbs(aPos);
+    SCCOL nXDelta = 0;
+    SCROW nYDelta = 0;
+
+    lcl_GetColRowDeltas(aAbs, nXDelta, nYDelta);
+
+    if (nXDelta == nXDeltaSum &&
+        nYDelta == nYDeltaSum)
+        return false;  // shapes of base-range match current sum-range
+
+    // Try to make the sum-range to take the same shape as base-range,
+    // by adjusting Ref2 member of rSumRange if the resultant sum-range don't
+    // go out-of-bounds.
+
+    SCCOL nXInc = nXDelta - nXDeltaSum;
+    SCROW nYInc = nYDelta - nYDeltaSum;
+
+    // Don't let a valid End[Col,Row] go beyond (MAXCOL,MAXROW) to match
+    // what happens in ScInterpreter::IterateParametersIf(), but there it also shrinks
+    // the base-range by the (out-of-bound)amount clipped off the sum-range.
+    // TODO: Probably we can optimize (from threading perspective) rBaseRange
+    //       by shrinking it here correspondingly (?)
+    if (nEndCol + nXInc > MAXCOL)
+        nXInc = MAXCOL - nEndCol;
+    if (nEndRow + nYInc > MAXROW)
+        nYInc = MAXROW - nEndRow;
+
+    rSumRange.Ref2.IncCol(nXInc);
+    rSumRange.Ref2.IncRow(nYInc);
+
+    return true;
+}
+
+void ScCompiler::CorrectSumRange(const ScComplexRefData& rBaseRange,
+                                 ScComplexRefData& rSumRange,
+                                 FormulaToken** ppSumRangeToken)
+{
+    if (!AdjustSumRangeShape(rBaseRange, rSumRange))
+        return;
+
+    // Replace sum-range token
+    FormulaToken* pNewSumRangeTok = new ScDoubleRefToken(rSumRange);
+    (*ppSumRangeToken)->DecRef();
+    *ppSumRangeToken = pNewSumRangeTok;
+    pNewSumRangeTok->IncRef();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

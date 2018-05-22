@@ -24,13 +24,11 @@
 #include <math.h>
 #include <frmselimpl.hxx>
 #include <AccessibleFrameSelector.hxx>
-#include <svx/dialmgr.hxx>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <vcl/settings.hxx>
 #include <drawinglayer/processor2d/processor2dtools.hxx>
 
-#include <svx/strings.hrc>
 #include <bitmaps.hlst>
 
 using namespace ::com::sun::star;
@@ -468,7 +466,7 @@ void FrameSelectorImpl::InitBorderGeometry()
         {
             for( nRow = 0, nRows = maArray.GetRowCount(); nRow < nRows; ++nRow )
             {
-                // the usable area between horizonal/vertical frame borders of current quadrant
+                // the usable area between horizontal/vertical frame borders of current quadrant
                 const basegfx::B2DRange aCellRange(maArray.GetCellRange( nCol, nRow, true ));
                 const tools::Rectangle aRect(
                     basegfx::fround(aCellRange.getMinX()) + nClV + 1, basegfx::fround(aCellRange.getMinY()) + nClH + 1,

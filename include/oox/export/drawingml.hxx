@@ -141,10 +141,6 @@ protected:
                   const OUString& aName, css::beans::PropertyState& eState );
     OUString GetFieldValue( const css::uno::Reference< css::text::XTextRange >& rRun, bool& bIsURLField );
 
-
-    /// If bRelPathToMedia is true add "../" to image folder path while adding the image relationship
-    OUString WriteImage( const OUString& rURL, bool bRelPathToMedia = false);
-
     /// Output the media (including copying a video from vnd.sun.star.Package: to the output if necessary).
     void WriteMediaNonVisualProperties(const css::uno::Reference<css::drawing::XShape>& xShape);
 
@@ -169,14 +165,14 @@ public:
     /// If bRelPathToMedia is true add "../" to image folder path while adding the image relationship
     OUString WriteImage( const Graphic &rGraphic , bool bRelPathToMedia = false);
 
-    void WriteColor( sal_uInt32 nColor, sal_Int32 nAlpha = MAX_PERCENT );
+    void WriteColor( ::Color nColor, sal_Int32 nAlpha = MAX_PERCENT );
     void WriteColor( const OUString& sColorSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
     void WriteColorTransformations( const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
-    void WriteGradientStop( sal_uInt16 nStop, sal_uInt32 nColor );
+    void WriteGradientStop( sal_uInt16 nStop, ::Color nColor );
     void WriteLineArrow( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, bool bLineStart );
     void WriteConnectorConnections( EscherConnectorListEntry& rConnectorEntry, sal_Int32 nStartID, sal_Int32 nEndID );
 
-    void WriteSolidFill( sal_uInt32 nColor, sal_Int32 nAlpha = MAX_PERCENT );
+    void WriteSolidFill( ::Color nColor, sal_Int32 nAlpha = MAX_PERCENT );
     void WriteSolidFill( const OUString& sSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
     void WriteSolidFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WriteGradientFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
@@ -185,9 +181,6 @@ public:
 
     void WriteBlipOrNormalFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
             const OUString& rURLPropName );
-    void WriteBlipFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
-                         const OUString& sBitmapURL, sal_Int32 nXmlNamespace,
-                         bool bWriteMode, bool bRelPathToMedia = false );
     void WriteBlipFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
             const OUString& sURLPropName );
     void WriteBlipFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
@@ -204,28 +197,21 @@ public:
     void WriteGraphicCropProperties(css::uno::Reference<css::beans::XPropertySet> const & rxPropertySet,
                                     Size const & rOriginalSize, MapMode const & rMapMode);
 
-    void WriteSrcRect( const css::uno::Reference< css::beans::XPropertySet >&, const OUString& );
     void WriteSrcRectXGraphic(css::uno::Reference<css::beans::XPropertySet> const & rxPropertySet,
                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
 
     void WriteOutline( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
-    void WriteStretch( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, const OUString& rURL );
 
     void WriteXGraphicStretch(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
 
     void WriteLinespacing( const css::style::LineSpacing& rLineSpacing );
 
-    OUString WriteBlip( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
-            const OUString& rURL, bool bRelPathToMedia, const Graphic *pGraphic=nullptr );
-
     OUString WriteXGraphicBlip(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
                                css::uno::Reference<css::graphic::XGraphic> const & rxGraphic,
                                bool bRelPathToMedia);
 
     void WriteImageBrightnessContrastTransparence(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet);
-
-    void WriteBlipMode( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, const OUString& rURL );
 
     void WriteXGraphicBlipMode(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
                                css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
@@ -249,9 +235,15 @@ public:
     void WritePresetShape( const char* pShape , std::vector< std::pair<sal_Int32,sal_Int32>> & rAvList );
     void WritePresetShape( const char* pShape );
     void WritePresetShape( const char* pShape, MSO_SPT eShapeType, bool bPredefinedHandlesUsed, sal_Int32 nAdjustmentsWhichNeedsToBeConverted, const css::beans::PropertyValue& rProp );
-    bool WriteCustomGeometry( const css::uno::Reference<css::drawing::XShape>& rXShape, const SdrObjCustomShape* pShape );
-    void WriteCustomGeometryPoint(const css::drawing::EnhancedCustomShapeParameterPair& rParamPair, const SdrObjCustomShape* pShape);
-    static sal_Int32 GetCustomGeometryPointValue(const css::drawing::EnhancedCustomShapeParameter& rParam, const SdrObjCustomShape* pShape);
+    bool WriteCustomGeometry(
+        const css::uno::Reference<css::drawing::XShape>& rXShape,
+        const SdrObjCustomShape& rSdrObjCustomShape);
+    void WriteCustomGeometryPoint(
+        const css::drawing::EnhancedCustomShapeParameterPair& rParamPair,
+        const SdrObjCustomShape& rSdrObjCustomShape);
+    static sal_Int32 GetCustomGeometryPointValue(
+        const css::drawing::EnhancedCustomShapeParameter& rParam,
+        const SdrObjCustomShape& rSdrObjCustomShape);
     void WritePolyPolygon( const tools::PolyPolygon& rPolyPolygon );
     void WriteFill( const css::uno::Reference< css::beans::XPropertySet >& xPropSet );
     void WriteShapeStyle( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
@@ -266,7 +258,7 @@ public:
 
     static sal_Unicode SubstituteBullet( sal_Unicode cBulletId, css::awt::FontDescriptor& rFontDesc );
 
-    static sal_uInt32 ColorWithIntensity( sal_uInt32 nColor, sal_uInt32 nIntensity );
+    static ::Color ColorWithIntensity( sal_uInt32 nColor, sal_uInt32 nIntensity );
 
     static const char* GetAlignment( css::style::ParagraphAdjust nAlignment );
 

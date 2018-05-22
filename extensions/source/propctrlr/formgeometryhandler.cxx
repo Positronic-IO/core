@@ -301,7 +301,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
 
         if ( m_xAssociatedShape.is() )
@@ -365,7 +365,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return aReturn;
     }
@@ -432,7 +432,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -459,7 +459,7 @@ namespace pcr
                 Optional< double > aZero( true, 0 );
                 Optional< double > aValueNotPresent( false, 0 );
                 aLineDesc.Control = PropertyHandlerHelper::createNumericControl(
-                    _rxControlFactory, 2, bIsSize ? aZero : aValueNotPresent, aValueNotPresent, false );
+                    _rxControlFactory, 2, bIsSize ? aZero : aValueNotPresent, aValueNotPresent );
 
                 Reference< XNumericControl > xNumericControl( aLineDesc.Control, UNO_QUERY_THROW );
                 xNumericControl->setValueUnit( MeasureUnit::MM_100TH );
@@ -479,7 +479,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return aLineDesc;
     }
@@ -582,7 +582,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return false;
     }
@@ -602,7 +602,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return false;
     }
@@ -695,7 +695,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
     }
 
@@ -750,13 +750,10 @@ namespace pcr
         aTranslatedEvent.Source = m_rParent;
 
         aGuard.clear();
-        for ( std::vector< EventTranslation >::const_iterator t = aEventTranslations.begin();
-              t != aEventTranslations.end();
-              ++t
-            )
+        for (auto const& eventTranslation : aEventTranslations)
         {
-            aTranslatedEvent.PropertyName = t->sPropertyName;
-            aTranslatedEvent.NewValue = t->aNewPropertyValue;
+            aTranslatedEvent.PropertyName = eventTranslation.sPropertyName;
+            aTranslatedEvent.NewValue = eventTranslation.aNewPropertyValue;
             m_aPropertyChangeListeners.notifyEach( &XPropertyChangeListener::propertyChange, aTranslatedEvent );
         }
     }
@@ -779,7 +776,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         osl_atomic_decrement( &m_refCount );
     }
@@ -794,7 +791,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
 
         getBroadcastHelper().bDisposed = true;

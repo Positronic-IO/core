@@ -18,7 +18,6 @@
  */
 
 #include "TEditControl.hxx"
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/sdbc/XDatabaseMetaData.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
 #include <com/sun/star/sdbcx/XAlterTable.hpp>
@@ -26,6 +25,7 @@
 #include <com/sun/star/sdbcx/XAppend.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/util/XNumberFormatTypes.hpp>
+#include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
 #include <stringconstants.hxx>
@@ -34,7 +34,6 @@
 #include <comphelper/types.hxx>
 #include <FieldDescControl.hxx>
 #include <FieldDescriptions.hxx>
-#include <vcl/msgbox.hxx>
 #include "TableUndo.hxx"
 #include <TableController.hxx>
 #include <connectivity/dbmetadata.hxx>
@@ -716,7 +715,7 @@ void OTableEditorCtrl::CopyRows()
     std::vector< std::shared_ptr<OTableRow> > vClipboardList;
     vClipboardList.reserve(GetSelectRowCount());
 
-    for( long nIndex=FirstSelectedRow(); nIndex >= 0 && nIndex < static_cast<long>(m_pRowList->size()); nIndex=NextSelectedRow() )
+    for( long nIndex=FirstSelectedRow(); nIndex != SFX_ENDOFSELECTION; nIndex=NextSelectedRow() )
     {
         pRow = (*m_pRowList)[nIndex];
         OSL_ENSURE(pRow,"OTableEditorCtrl::CopyRows: Row is NULL!");
@@ -815,7 +814,7 @@ void OTableEditorCtrl::DeleteRows()
     long nIndex = FirstSelectedRow();
     nOldDataPos = nIndex;
 
-    while( nIndex >= 0 && nIndex < static_cast<long>(m_pRowList->size()) )
+    while( nIndex != SFX_ENDOFSELECTION )
     {
         // Remove rows
         m_pRowList->erase( m_pRowList->begin()+nIndex );
@@ -1121,7 +1120,7 @@ bool OTableEditorCtrl::IsCopyAllowed()
         // If one of the selected rows is empty, Copy is not possible
          std::shared_ptr<OTableRow>  pRow;
         long nIndex = FirstSelectedRow();
-        while( nIndex >= 0 && nIndex < static_cast<long>(m_pRowList->size()) )
+        while( nIndex != SFX_ENDOFSELECTION )
         {
             pRow = (*m_pRowList)[nIndex];
             if( !pRow->GetActFieldDescr() )
@@ -1279,7 +1278,7 @@ bool OTableEditorCtrl::IsPrimaryKeyAllowed( long /*nRow*/ )
     // - DROP is not permitted (see above) and the column is not Required (not null flag is not set).
     long nIndex = FirstSelectedRow();
      std::shared_ptr<OTableRow>  pRow;
-    while( nIndex >= 0 && nIndex < static_cast<long>(m_pRowList->size()) )
+    while( nIndex != SFX_ENDOFSELECTION )
     {
         pRow = (*m_pRowList)[nIndex];
         OFieldDescription* pFieldDescr = pRow->GetActFieldDescr();
@@ -1369,7 +1368,7 @@ void OTableEditorCtrl::Command(const CommandEvent& rEvt)
                     aContextMenu->EnableItem(aContextMenu->GetItemId("delete"), IsDeleteAllowed(nRow));
                     aContextMenu->EnableItem(aContextMenu->GetItemId("primarykey"), IsPrimaryKeyAllowed(nRow));
                     aContextMenu->EnableItem(aContextMenu->GetItemId("insert"), IsInsertNewAllowed(nRow));
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("primarykey"), IsRowSelected(GetCurRow()) && IsPrimaryKey());
+                    aContextMenu->CheckItem("primarykey", IsRowSelected(GetCurRow()) && IsPrimaryKey());
 
                     // remove all the disable entries
                     aContextMenu->RemoveDisabledEntries(true, true);
@@ -1514,7 +1513,7 @@ void OTableEditorCtrl::SetPrimaryKey( bool bSet )
     if( bSet )
     {
         long nIndex = FirstSelectedRow();
-        while( nIndex >= 0 && nIndex < static_cast<long>(m_pRowList->size()) )
+        while( nIndex != SFX_ENDOFSELECTION )
         {
             // Set the key
              std::shared_ptr<OTableRow>  pRow = (*m_pRowList)[nIndex];

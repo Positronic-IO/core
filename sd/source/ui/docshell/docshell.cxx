@@ -20,11 +20,10 @@
 #include <DrawDocShell.hxx>
 
 #include <officecfg/Office/Common.hxx>
-
+#include <unotools/moduleoptions.hxx>
 #include <unotools/configmgr.hxx>
 
 #include <vcl/svapp.hxx>
-
 #include <sfx2/docfac.hxx>
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
@@ -59,7 +58,6 @@
 #include <sdmod.hxx>
 #include <strmname.h>
 #include <stlpool.hxx>
-#include <strings.hrc>
 #include <View.hxx>
 #include <drawdoc.hxx>
 #include <sdpage.hxx>
@@ -67,7 +65,6 @@
 #include <fupoor.hxx>
 #include <fusearch.hxx>
 #include <ViewShell.hxx>
-#include <sdresid.hxx>
 #include <slideshow.hxx>
 #include <drawview.hxx>
 #include <FrameView.hxx>
@@ -79,7 +76,7 @@
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
 
 using namespace sd;
-#define DrawDocShell
+#define ShellClass_DrawDocShell
 #include <sdslots.hxx>
 
 SFX_IMPL_SUPERCLASS_INTERFACE(DrawDocShell, SfxObjectShell);
@@ -116,16 +113,16 @@ void DrawDocShell::Construct( bool bClipboard )
 
     SetBaseModel( new SdXImpressDocument( this, bClipboard ) );
     SetPool( &mpDoc->GetItemPool() );
-    sd::UndoManager* pUndoManager = new sd::UndoManager;
+    std::unique_ptr<sd::UndoManager> pUndoManager(new sd::UndoManager);
     pUndoManager->SetDocShell(this);
-    mpUndoManager = pUndoManager;
+    mpUndoManager = std::move(pUndoManager);
 
     if (!utl::ConfigManager::IsFuzzing()
         && officecfg::Office::Common::Undo::Steps::get() < 1)
     {
         mpUndoManager->EnableUndo(false); // tdf#108863 disable if 0 steps
     }
-    mpDoc->SetSdrUndoManager( mpUndoManager );
+    mpDoc->SetSdrUndoManager( mpUndoManager.get() );
     mpDoc->SetSdrUndoFactory( new sd::UndoFactory );
     UpdateTablePointers();
     SetStyleFamily(SfxStyleFamily::Pseudo);
@@ -189,11 +186,11 @@ DrawDocShell::~DrawDocShell()
 
     SetDocShellFunction(nullptr);
 
-    delete mpFontList;
+    mpFontList.reset();
 
     if( mpDoc )
         mpDoc->SetSdrUndoManager( nullptr );
-    delete mpUndoManager;
+    mpUndoManager.reset();
 
     if (mbOwnPrinter)
         mpPrinter.disposeAndClear();
@@ -231,7 +228,7 @@ void DrawDocShell::GetState(SfxItemSet &rSet)
         switch ( nSlotId )
         {
             case SID_ATTR_CHAR_FONTLIST:
-                rSet.Put( SvxFontListItem( mpFontList, nSlotId ) );
+                rSet.Put( SvxFontListItem( mpFontList.get(), nSlotId ) );
             break;
 
             case SID_SEARCH_ITEM:
@@ -316,8 +313,18 @@ void DrawDocShell::GetState(SfxItemSet &rSet)
             {
                 if (mpViewShell)
                 {
-                    bool bVisible = sfx2::SfxNotebookBar::StateMethod(mpViewShell->GetFrame()->GetBindings(),
+                    bool bImpress = mpDoc->GetDocumentType() == DocumentType::Impress;
+                    bool bVisible = false;
+                    if(bImpress)
+                    {
+                        bVisible = sfx2::SfxNotebookBar::StateMethod(mpViewShell->GetFrame()->GetBindings(),
                                                                       "modules/simpress/ui/");
+                    }
+                    else
+                    {
+                        bVisible = sfx2::SfxNotebookBar::StateMethod(mpViewShell->GetFrame()->GetBindings(),
+                                                                      "modules/sdraw/ui/");
+                    }
                     rSet.Put( SfxBoolItem( SID_NOTEBOOKBAR, bVisible ) );
                 }
             }
@@ -401,7 +408,7 @@ void DrawDocShell::Deactivate( bool )
 
 ::svl::IUndoManager* DrawDocShell::GetUndoManager()
 {
-    return mpUndoManager;
+    return mpUndoManager.get();
 }
 
 void DrawDocShell::UpdateTablePointers()

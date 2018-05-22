@@ -77,6 +77,7 @@ struct SpellCallbackInfo;
 class SdDrawDocument;
 class SdCustomShow;
 class SdCustomShowList;
+class SdUndoGroup;
 
 namespace sd
 {
@@ -142,14 +143,14 @@ private:
                         mpOutliner;          ///< local outliner for outline mode
     std::unique_ptr<SdOutliner>
                         mpInternalOutliner;  ///< internal outliner for creation of text objects
-    Timer*              mpWorkStartupTimer;
+    std::unique_ptr<Timer> mpWorkStartupTimer;
     Idle*               mpOnlineSpellingIdle;
     sd::ShapeList*      mpOnlineSpellingList;
     std::unique_ptr<SvxSearchItem>
                         mpOnlineSearchItem;
     std::vector<std::unique_ptr<sd::FrameView>>
                         maFrameViewList;
-    SdCustomShowList*   mpCustomShowList;
+    std::unique_ptr<SdCustomShowList>   mpCustomShowList;
     ::sd::DrawDocShell* mpDocSh;
     SdTransferable *    mpCreatingTransferable;
     bool                mbHasOnlineSpellErrors;
@@ -202,8 +203,34 @@ protected:
 public:
 
 
-                        SAL_DLLPRIVATE SdDrawDocument(DocumentType eType, SfxObjectShell* pDocSh);
-                        SAL_DLLPRIVATE virtual ~SdDrawDocument() override;
+    SAL_DLLPRIVATE SdDrawDocument(DocumentType eType, SfxObjectShell* pDocSh);
+    SAL_DLLPRIVATE virtual ~SdDrawDocument() override;
+
+    // Adapt to given Size and Borders scaling all contained data, maybe
+    // including PresObj's in higher derivations
+    virtual void adaptSizeAndBorderForAllPages(
+        const Size& rNewSize,
+        long nLeft = 0,
+        long nRight = 0,
+        long nUpper = 0,
+        long nLower = 0) override;
+
+    // Adapt PageSize for all Pages of PageKind ePageKind. Also
+    // set Borders to left/right/upper/lower, ScaleAll, Orientation,
+    // PaperBin and BackgroundFullSize. Create Undo-Actions when
+    // a SdUndoGroup is given (then used from the View probably)
+    void AdaptPageSizeForAllPages(
+        const Size& rNewSize,
+        PageKind ePageKind,
+        SdUndoGroup* pUndoGroup = nullptr,
+        long nLeft = 0,
+        long nRight = 0,
+        long nUpper = 0,
+        long nLower = 0,
+        bool bScaleAll = false,
+        Orientation eOrientation = Orientation::Landscape,
+        sal_uInt16 nPaperBin = 0,
+        bool bBackgroundFullSize = false);
 
     SAL_DLLPRIVATE SdDrawDocument*     AllocSdDrawDocument() const;
     SAL_DLLPRIVATE virtual SdrModel*   AllocModel() const override; //forwards to AllocSdDrawDocument
@@ -459,7 +486,7 @@ public:
     SAL_DLLPRIVATE void                Merge(SdrModel& rSourceModel,
                                 sal_uInt16 nFirstPageNum, sal_uInt16 nLastPageNum,
                                 sal_uInt16 nDestPos,
-                                bool bMergeMasterPages, bool bAllMasterPages = false,
+                                bool bMergeMasterPages, bool bAllMasterPages,
                                 bool bUndo = true, bool bTreadSourceAsConst = false) override;
 
     css::text::WritingMode GetDefaultWritingMode() const;

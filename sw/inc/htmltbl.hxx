@@ -174,8 +174,6 @@ class SwHTMLTableLayout
     std::vector<std::unique_ptr<SwHTMLTableLayoutCell>>   m_aCells;
 
     const SwTable *m_pSwTable;            ///< SwTable (Top-Table only).
-    SwTableBox *m_pLeftFillerBox;         ///< Left filler-box (table in table only).
-    SwTableBox *m_pRightFillerBox;        ///< Right filler-box (table in Table only).
 
     sal_uLong m_nMin;                     ///< Minimal width of table (Twips).
     sal_uLong m_nMax;                     ///< Maximal width of table (Twips).
@@ -279,13 +277,8 @@ public:
     inline SwHTMLTableLayoutCell *GetCell( sal_uInt16 nRow, sal_uInt16 nCol ) const;
     inline void SetCell( std::unique_ptr<SwHTMLTableLayoutCell> pCell, sal_uInt16 nRow, sal_uInt16 nCol );
 
-    void SetLeftFillerBox( SwTableBox *pBox ) { m_pLeftFillerBox = pBox; }
-    void SetRightFillerBox( SwTableBox *pBox ) { m_pRightFillerBox = pBox; }
-
     sal_uLong GetMin() const { return m_nMin; }
     sal_uLong GetMax() const { return m_nMax; }
-    sal_uInt16 GetRelLeftFill() const { return m_nRelLeftFill; }
-    sal_uInt16 GetRelRightFill() const { return m_nRelRightFill; }
 
     inline long GetBrowseWidthMin() const;
 

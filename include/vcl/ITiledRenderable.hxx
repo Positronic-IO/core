@@ -101,6 +101,9 @@ public:
     static void LOKPostAsyncEvent(void* pEv, void*)
     {
         LOKAsyncEventData* pLOKEv = static_cast<LOKAsyncEventData*>(pEv);
+        if (pLOKEv->mpWindow->IsDisposed())
+            return;
+
         switch (pLOKEv->mnEvent)
         {
         case VclEventId::WindowKeyInput:
@@ -120,6 +123,12 @@ public:
             break;
         case VclEventId::WindowMouseButtonUp:
             pLOKEv->mpWindow->LogicMouseButtonUp(pLOKEv->maMouseEvent);
+
+            // sometimes MouseButtonDown captures mouse and starts tracking, and VCL
+            // will not take care of releasing that with tiled rendering
+            if (pLOKEv->mpWindow->IsTracking())
+                pLOKEv->mpWindow->EndTracking();
+
             break;
         case VclEventId::WindowMouseMove:
             pLOKEv->mpWindow->LogicMouseMove(pLOKEv->maMouseEvent);
@@ -351,6 +360,15 @@ public:
     {
         return OUString();
     }
+
+    /*
+     * Used for sheets in spreadsheet documents.
+     */
+    virtual OUString getPartInfo(int /*nPart*/)
+    {
+        return OUString();
+    }
+
 };
 } // namespace vcl
 

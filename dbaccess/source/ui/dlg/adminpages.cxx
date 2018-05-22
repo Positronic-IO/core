@@ -32,6 +32,7 @@
 #include "optionalboolitem.hxx"
 #include <sqlmessage.hxx>
 
+#include <comphelper/types.hxx>
 #include <osl/file.hxx>
 #include <vcl/accel.hxx>
 #include <vcl/button.hxx>
@@ -253,7 +254,7 @@ namespace dbaui
             }
             if ( bShowMessage )
             {
-                OSQLMessageBox::MessageType eImage = OSQLMessageBox::Info;
+                MessageType eImage = MessageType::Info;
                 OUString aMessage,sTitle;
                 sTitle = DBA_RES(STR_CONNECTION_TEST);
                 if ( bSuccess )
@@ -262,11 +263,11 @@ namespace dbaui
                 }
                 else
                 {
-                    eImage = OSQLMessageBox::Error;
+                    eImage = MessageType::Error;
                     aMessage = DBA_RES(STR_CONNECTION_NO_SUCCESS);
                 }
-                ScopedVclPtrInstance< OSQLMessageBox > aMsg( this, sTitle, aMessage, MessBoxStyle::Ok, eImage );
-                aMsg->Execute();
+                OSQLMessageBox aMsg(GetFrameWeld(), sTitle, aMessage, MessBoxStyle::Ok, eImage);
+                aMsg.run();
             }
             if ( !bSuccess )
                 m_pAdminDialog->clearPassword();

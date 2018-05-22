@@ -464,7 +464,7 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
                     {
                         pMouseDownWin->ImplGetFrameData()->mbStartDragCalled  = true;
 
-                        // Check if drag source provides it's own recognizer
+                        // Check if drag source provides its own recognizer
                         if( pMouseDownWin->ImplGetFrameData()->mbInternalDragGestureRecognizer )
                         {
                             // query DropTarget from child window
@@ -1141,7 +1141,7 @@ static bool ImplHandleExtTextInput( vcl::Window* pWindow,
     if ( !pChild->ImplGetWindowImpl()->mbExtTextInput )
     {
         pChild->ImplGetWindowImpl()->mbExtTextInput = true;
-        pWinData->mpExtOldText.reset( new OUString );
+        pWinData->mpExtOldText = OUString();
         pWinData->mpExtOldAttrAry.reset();
         pSVData->maWinData.mpExtTextInputWin = pChild;
         ImplCallCommand( pChild, CommandEventId::StartExtTextInput );
@@ -1262,10 +1262,10 @@ static void ImplHandleExtTextInputPos( vcl::Window* pWindow,
             = pChild != nullptr && pChild->GetInputContext().GetFont().IsVertical();
 }
 
-static bool ImplHandleInputContextChange( vcl::Window* pWindow, LanguageType eNewLang )
+static bool ImplHandleInputContextChange( vcl::Window* pWindow )
 {
     vcl::Window* pChild = ImplGetKeyInputWindow( pWindow );
-    CommandInputContextData aData( eNewLang );
+    CommandInputContextData aData;
     return !ImplCallCommand( pChild, CommandEventId::InputContextChange, &aData );
 }
 
@@ -2125,6 +2125,7 @@ static void ImplHandleSalSettings( SalEvent nEvent )
         if ( nType != DataChangedEventType::NONE )
         {
             DataChangedEvent aDCEvt( nType );
+            Application::ImplCallEventListenersApplicationDataChanged(&aDCEvt);
             Application::NotifyAllWindows( aDCEvt );
         }
     }
@@ -2493,7 +2494,7 @@ bool ImplWindowFrameProc( vcl::Window* _pWindow, SalEvent nEvent, const void* pE
             ImplHandleSalExtTextInputPos( pWindow, const_cast<SalExtTextInputPosEvent *>(static_cast<SalExtTextInputPosEvent const *>(pEvent)) );
             break;
         case SalEvent::InputContextChange:
-            bRet = ImplHandleInputContextChange( pWindow, static_cast<SalInputContextChangeEvent const *>(pEvent)->meLanguage );
+            bRet = ImplHandleInputContextChange( pWindow );
             break;
         case SalEvent::ShowDialog:
             {

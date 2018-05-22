@@ -32,7 +32,6 @@
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
-#include <vcl/msgbox.hxx>
 
 #include <global.hxx>
 #include <attrib.hxx>
@@ -41,6 +40,7 @@
 #include <document.hxx>
 #include <formulacell.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <scmod.hxx>
 #include <inputhdl.hxx>
 #include <inputwin.hxx>
@@ -113,7 +113,7 @@ bool ScTabViewShell::GetFunction( OUString& rFuncStr, FormulaError nErrCode )
             SCROW       nPosY       = rViewData.GetCurY();
             SCTAB       nTab        = rViewData.GetTabNo();
 
-            aStr = ScGlobal::GetRscString(pGlobStrId);
+            aStr = ScResId(pGlobStrId);
             aStr += ": ";
 
             ScAddress aCursor( nPosX, nPosY, nTab );

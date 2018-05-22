@@ -333,10 +333,10 @@ private:
     mutable LogicalFontInstance*    mpFontInstance;
     mutable ImplFontCache*          mpFontCache;
     mutable PhysicalFontCollection* mpFontCollection;
-    mutable ImplDeviceFontList*     mpDeviceFontList;
-    mutable ImplDeviceFontSizeList* mpDeviceFontSizeList;
-    OutDevStateStack*               mpOutDevStateStack;
-    ImplOutDevData*                 mpOutDevData;
+    mutable std::unique_ptr<ImplDeviceFontList>     mpDeviceFontList;
+    mutable std::unique_ptr<ImplDeviceFontSizeList> mpDeviceFontSizeList;
+    std::unique_ptr<OutDevStateStack>               mpOutDevStateStack;
+    std::unique_ptr<ImplOutDevData>                 mpOutDevData;
     std::vector< VCLXGraphics* >*   mpUnoGraphicsList;
     vcl::PDFWriterImpl*             mpPDFWriter;
     vcl::ExtOutDevData*             mpExtOutDevData;
@@ -463,9 +463,6 @@ public:
 
     Size                        GetOutputSize() const
                                     { return PixelToLogic( GetOutputSizePixel() ); }
-
-    sal_uLong                   GetColorCount() const;
-
 
     css::uno::Reference< css::awt::XGraphics >
                                 CreateUnoGraphics();
@@ -1141,6 +1138,7 @@ public:
     */
     long                        GetTextHeight() const;
     float                       approximate_char_width() const;
+    float                       approximate_digit_width() const;
 
     void                        DrawTextArray( const Point& rStartPt, const OUString& rStr,
                                                const long* pDXAry,
@@ -1509,7 +1507,7 @@ private:
     SAL_DLLPRIVATE void DrawDeviceAlphaBitmapSlowPath(
                                 const Bitmap& rBitmap, const AlphaMask& rAlpha,
                                 tools::Rectangle aDstRect, tools::Rectangle aBmpRect,
-                                Size& aOutSz, Point& aOutPt);
+                                Size const & aOutSz, Point const & aOutPt);
 
 
     SAL_DLLPRIVATE void         BlendBitmap(
@@ -1787,14 +1785,6 @@ public:
     SAL_DLLPRIVATE long         ImplLogicWidthToDevicePixel( long nWidth ) const;
 
     SAL_DLLPRIVATE DeviceCoordinate LogicWidthToDeviceCoordinate( long nWidth ) const;
-
-protected:
-    /**
-     * Notification about some rectangle of the output device got invalidated.
-     *
-     * @param pRectangle If 0, that means the whole area, otherwise the area in logic coordinates.
-     */
-    virtual void LogicInvalidate(const tools::Rectangle* /*pRectangle*/) {}
 
 private:
 

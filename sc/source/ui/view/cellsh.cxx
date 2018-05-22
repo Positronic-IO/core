@@ -43,12 +43,12 @@
 #include <sc.hrc>
 #include <docsh.hxx>
 #include <attrib.hxx>
-#include <scresid.hxx>
 #include <tabvwsh.hxx>
 #include <impex.hxx>
 #include <formulacell.hxx>
 #include <scmod.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <transobj.hxx>
 #include <drwtrans.hxx>
 #include <scabstdlg.hxx>
@@ -59,8 +59,8 @@
 #include <markdata.hxx>
 #include <gridwin.hxx>
 
-#define ScCellShell
-#define CellMovement
+#define ShellClass_ScCellShell
+#define ShellClass_CellMovement
 #include <scslots.hxx>
 
 
@@ -246,7 +246,6 @@ void ScCellShell::GetBlockState( SfxItemSet& rSet )
                 break;
             }
             case FID_INS_CELLSDOWN:
-            case SID_ROW_OPERATIONS:
                 bDisable = (!bSimpleArea) || GetViewData()->SimpleColMarked();
                 break;
 
@@ -267,7 +266,6 @@ void ScCellShell::GetBlockState( SfxItemSet& rSet )
                 break;
             }
             case FID_INS_CELLSRIGHT:
-            case SID_COLUMN_OPERATIONS:
                 bDisable = (!bSimpleArea) || GetViewData()->SimpleRowMarked();
                 break;
 
@@ -758,7 +756,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
 
             case SID_STATUS_DOCPOS:
                 {
-                    OUString aStr = ScGlobal::GetRscString( STR_TABLE_COUNT );
+                    OUString aStr = ScResId( STR_TABLE_COUNT );
 
                     aStr = aStr.replaceFirst("%1", OUString::number( nTab + 1  ) );
                     aStr = aStr.replaceFirst("%2", OUString::number( nTabCount ) );
@@ -778,7 +776,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                     nRow2 = aMarkRange.aEnd.Row();
                     if( nCol2 != nCol1 || nRow1 != nRow2 )
                     {
-                        OUString aStr = ScGlobal::GetRscString( STR_ROWCOL_SELCOUNT );
+                        OUString aStr = ScResId( STR_ROWCOL_SELCOUNT );
                         aStr = aStr.replaceAll( "$1", OUString::number( nRow2 - nRow1 + 1 ));
                         aStr = aStr.replaceAll( "$2", OUString::number( nCol2 - nCol1 + 1 ));
                         rSet.Put( SfxStringItem( nWhich, aStr ) );
@@ -789,7 +787,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                         pDoc->GetFilterSelCount( nPosX, nPosY, nTab, nSelected, nTotal );
                         if( nTotal )
                         {
-                            OUString aStr = ScGlobal::GetRscString( STR_FILTER_SELCOUNT );
+                            OUString aStr = ScResId( STR_FILTER_SELCOUNT );
                             aStr = aStr.replaceAll( "$1", OUString::number( nSelected ) );
                             aStr = aStr.replaceAll( "$2", OUString::number( nTotal ) );
                             rSet.Put( SfxStringItem( nWhich, aStr ) );
@@ -1109,7 +1107,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                         if (pDoc->HasTabNotes( rTab ))
                         {
                             bHasNotes = true;
-                            aRanges.Append(ScRange(0,0,rTab,MAXCOL,MAXROW,rTab));
+                            aRanges.push_back(ScRange(0,0,rTab,MAXCOL,MAXROW,rTab));
                         }
                     }
 

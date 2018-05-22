@@ -33,6 +33,8 @@
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/text/PositionAndSpaceMode.hpp>
 #include <com/sun/star/text/XChapterNumberingSupplier.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 
 #include <osl/diagnose.h>
 #include <rtl/ustring.hxx>
@@ -217,7 +219,7 @@ uno::Sequence< beans::PropertyValue > ListLevel::GetCharStyleProperties( )
     {
         if (IgnoreForCharStyle(aValIter->Name))
             continue;
-        else
+        else if ( aValIter->Name != "CharInteropGrabBag" && aValIter->Name != "ParaInteropGrabBag" )
             rProperties.emplace_back(aValIter->Name, 0, aValIter->Value, beans::PropertyState_DIRECT_VALUE);
     }
 
@@ -241,7 +243,7 @@ uno::Sequence<beans::PropertyValue> ListLevel::GetLevelProperties(bool bDefaults
     sal_Int16 nNumberFormat = ConversionHelper::ConvertNumberingType(m_nNFC);
     if( m_nNFC >= 0)
     {
-        if (!m_sGraphicURL.isEmpty() || m_sGraphicBitmap.is())
+        if (m_xGraphicBitmap.is())
             nNumberFormat = style::NumberingType::BITMAP;
         else if (m_sBulletChar.isEmpty() && nNumberFormat != style::NumberingType::CHAR_SPECIAL)
             // w:lvlText is empty, that means no numbering in Word.
@@ -268,11 +270,9 @@ uno::Sequence<beans::PropertyValue> ListLevel::GetLevelProperties(bool bDefaults
                 aNumberingProperties.push_back(lcl_makePropVal<sal_Unicode>(PROP_BULLET_CHAR, 0));
             }
         }
-        if (!m_sGraphicURL.isEmpty())
-            aNumberingProperties.push_back(lcl_makePropVal(PROP_GRAPHIC_URL, m_sGraphicURL));
-        if (m_sGraphicBitmap.is())
+        if (m_xGraphicBitmap.is())
         {
-            aNumberingProperties.push_back(lcl_makePropVal(PROP_GRAPHIC_BITMAP, m_sGraphicBitmap));
+            aNumberingProperties.push_back(lcl_makePropVal(PROP_GRAPHIC_BITMAP, m_xGraphicBitmap));
             aNumberingProperties.push_back(lcl_makePropVal(PROP_GRAPHIC_SIZE, m_aGraphicSize));
         }
     }
@@ -306,6 +306,11 @@ uno::Sequence<beans::PropertyValue> ListLevel::GetLevelProperties(bool bDefaults
         else if (rReadId == PROP_FIRST_LINE_INDENT && bDefaults)
             // Writer default is -360 twips, Word default seems to be 0.
             aNumberingProperties.emplace_back("FirstLineIndent", 0, uno::makeAny(static_cast<sal_Int32>(0)), beans::PropertyState_DIRECT_VALUE);
+        else if (rReadId == PROP_INDENT_AT && bDefaults)
+            // Writer default is 720 twips, Word default seems to be 0.
+            aNumberingProperties.emplace_back("IndentAt", 0,
+                                              uno::makeAny(static_cast<sal_Int32>(0)),
+                                              beans::PropertyState_DIRECT_VALUE);
     }
 
     boost::optional<PropertyMap::Property> aPropFont = getProperty(PROP_CHAR_FONT_NAME);
@@ -879,17 +884,18 @@ void ListsManager::lcl_sprm( Sprm& rSprm )
                     uno::Reference<beans::XPropertySet> xPropertySet(xShape, uno::UNO_QUERY);
                     try
                     {
-                        uno::Any aAny = xPropertySet->getPropertyValue("GraphicURL");
-                        if (aAny.has<OUString>() && pCurrentLevel)
-                            pCurrentLevel->SetGraphicURL(aAny.get<OUString>());
-                    } catch(const beans::UnknownPropertyException&)
-                    {}
-                    try
-                    {
-                        uno::Reference< graphic::XGraphic > gr;
-                        xPropertySet->getPropertyValue("Bitmap") >>= gr;
-                        pCurrentLevel->SetGraphicBitmap( gr );
-                    } catch(const beans::UnknownPropertyException&)
+                        uno::Any aAny = xPropertySet->getPropertyValue("Graphic");
+                        if (aAny.has<uno::Reference<graphic::XGraphic>>() && pCurrentLevel)
+                        {
+                            auto xGraphic = aAny.get<uno::Reference<graphic::XGraphic>>();
+                            if (xGraphic.is())
+                            {
+                                uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
+                                pCurrentLevel->SetGraphicBitmap(xBitmap);
+                            }
+                        }
+                    }
+                    catch (const beans::UnknownPropertyException&)
                     {}
 
                     // Respect only the aspect ratio of the picture, not its size.

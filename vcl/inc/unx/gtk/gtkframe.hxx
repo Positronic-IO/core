@@ -173,6 +173,7 @@ class GtkSalFrame : public SalFrame
     SalX11Screen                    m_nXScreen;
     GtkWidget*                      m_pWindow;
 #if GTK_CHECK_VERSION(3,0,0)
+    GtkHeaderBar*                   m_pHeaderBar;
     GtkGrid*                        m_pTopLevelGrid;
 #endif
     GtkEventBox*                    m_pEventBox;
@@ -340,7 +341,7 @@ class GtkSalFrame : public SalFrame
 
     enum class SetType { RetainSize, Fullscreen, UnFullscreen };
 
-    void SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle *pSize = nullptr );
+    void SetScreen( unsigned int nNewScreen, SetType eType, tools::Rectangle const *pSize = nullptr );
 
 public:
 #if GTK_CHECK_VERSION(3,0,0)
@@ -556,6 +557,10 @@ public:
 
     static guint32              GetLastInputEventTime();
     static void                 UpdateLastInputEventTime(guint32 nUserInputTime);
+    static sal_uInt16           GetMouseModCode(guint nState);
+    static sal_uInt16           GetKeyCode(guint nKeyVal);
+    static guint                GetKeyValFor(GdkKeymap* pKeyMap, guint16 hardware_keycode, guint8 group);
+    static sal_uInt16           GetKeyModCode(guint nState);
 };
 
 #define OOO_TYPE_FIXED ooo_fixed_get_type()

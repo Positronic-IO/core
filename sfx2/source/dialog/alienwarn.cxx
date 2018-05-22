@@ -19,7 +19,6 @@
 
 
 #include <sal/macros.h>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/sfxuno.hxx>
 #include <unotools/saveopt.hxx>
 #include <vcl/svapp.hxx>
@@ -27,19 +26,11 @@
 
 SfxAlienWarningDialog::SfxAlienWarningDialog(weld::Window* pParent, const OUString& _rFormatName,
                                              const OUString& _rDefaultExtension, bool rDefaultIsAlien)
-    : m_xBuilder(Application::CreateBuilder(pParent, "sfx/ui/alienwarndialog.ui"))
-    , m_xDialog(m_xBuilder->weld_message_dialog("AlienWarnDialog"))
+    : MessageDialogController(pParent, "sfx/ui/alienwarndialog.ui", "AlienWarnDialog", "ask")
     , m_xKeepCurrentBtn(m_xBuilder->weld_button("save"))
     , m_xUseDefaultFormatBtn(m_xBuilder->weld_button("cancel"))
     , m_xWarningOnBox(m_xBuilder->weld_check_button("ask"))
-    , m_xOrigParent(m_xWarningOnBox->weld_parent())
-    , m_xContentArea(m_xDialog->weld_message_area())
 {
-    //fdo#75121, a bit tricky because the widgets we want to align with
-    //don't actually exist in the ui description, they're implied
-    m_xOrigParent->remove(m_xWarningOnBox.get());
-    m_xContentArea->add(m_xWarningOnBox.get());
-
     OUString aExtension = "ODF";
 
     // replace formatname (text)
@@ -71,13 +62,17 @@ SfxAlienWarningDialog::SfxAlienWarningDialog(weld::Window* pParent, const OUStri
 
 SfxAlienWarningDialog::~SfxAlienWarningDialog()
 {
-    m_xContentArea->remove(m_xWarningOnBox.get());
-    m_xOrigParent->add(m_xWarningOnBox.get());
-    // save value of "warning off" checkbox, if necessary
-    SvtSaveOptions aSaveOpt;
-    bool bChecked = m_xWarningOnBox->get_active();
-    if (aSaveOpt.IsWarnAlienFormat() != bChecked)
-        aSaveOpt.SetWarnAlienFormat(bChecked);
+    try
+    {
+        // save value of "warning off" checkbox, if necessary
+        SvtSaveOptions aSaveOpt;
+        bool bChecked = m_xWarningOnBox->get_active();
+        if (aSaveOpt.IsWarnAlienFormat() != bChecked)
+            aSaveOpt.SetWarnAlienFormat(bChecked);
+    }
+    catch (...)
+    {
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

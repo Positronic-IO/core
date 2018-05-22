@@ -137,6 +137,10 @@ const vEntryInfo[] =
     { Group_Calc,    IDS(deterror) },
     { Group_Calc,    IDS(ref) },
     { Group_Calc,    IDS(notes) },
+    { Group_Calc,    IDS(values) },
+    { Group_Calc,    IDS(formulas) },
+    { Group_Calc,    IDS(text) },
+    { Group_Calc,    IDS(protectedcells) },
 
     { Group_Draw,    IDS(drawgrid) },
 
@@ -422,7 +426,7 @@ void ColorConfigWindow_Impl::Entry::ColorChanged (
     ColorConfigValue& rValue
 ) {
     Color aColor = m_pColorList->GetSelectEntryColor();
-    rValue.nColor = aColor.GetColor();
+    rValue.nColor = aColor;
 }
 
 // color of an extended entry has changed
@@ -430,7 +434,7 @@ void ColorConfigWindow_Impl::Entry::ColorChanged (
     ExtendedColorConfigValue& rValue
 ) {
     Color aColor = m_pColorList->GetSelectEntryColor();
-    rValue.setColor(aColor.GetColor());
+    rValue.setColor(aColor);
     if (aColor == COL_AUTO)
     {
         rValue.setColor(rValue.getDefaultColor());
@@ -1027,9 +1031,9 @@ void SvxColorOptionsTabPage::dispose()
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxColorOptionsTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SvxColorOptionsTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxColorOptionsTabPage>::Create( pParent, *rAttrSet );
+    return VclPtr<SvxColorOptionsTabPage>::Create( pParent.pParent, *rAttrSet );
 }
 
 bool SvxColorOptionsTabPage::FillItemSet( SfxItemSet*  )
@@ -1109,7 +1113,7 @@ IMPL_LINK(SvxColorOptionsTabPage, SaveDeleteHdl_Impl, Button*, pButton, void )
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
         DBG_ASSERT(pFact, "Dialog creation failed!");
-        ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog( pButton,
+        ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(pButton->GetFrameWeld(),
                             sName, CuiResId(RID_SVXSTR_COLOR_CONFIG_SAVE2) ));
         DBG_ASSERT(aNameDlg, "Dialog creation failed!");
         aNameDlg->SetCheckNameHdl( LINK(this, SvxColorOptionsTabPage, CheckNameHdl_Impl));

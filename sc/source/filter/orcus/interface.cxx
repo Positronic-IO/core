@@ -17,6 +17,7 @@
 #include <globalnames.hxx>
 #include <docoptio.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <compiler.hxx>
 #include <dbdata.hxx>
 #include <stlpool.hxx>
@@ -48,10 +49,8 @@
 #include <svl/zforlist.hxx>
 #include <svl/intitem.hxx>
 #include <com/sun/star/task/XStatusIndicator.hpp>
-#include <comphelper/processfactory.hxx>
 #include <i18nlangtag/lang.h>
 #include <vcl/outdev.hxx>
-#include <tools/colordata.hxx>
 #include <tools/fontenum.hxx>
 
 #include <stylesbuffer.hxx>
@@ -566,7 +565,7 @@ void ScOrcusFactory::incrementProgress()
     // in all cases.
 
     if (!mnProgress)
-        mxStatusIndicator->start(ScGlobal::GetRscString(STR_LOAD_DOC), 100);
+        mxStatusIndicator->start(ScResId(STR_LOAD_DOC), 100);
 
     if (mnProgress == 99)
         return;

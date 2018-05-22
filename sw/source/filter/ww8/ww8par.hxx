@@ -505,7 +505,7 @@ public:
     SwMacroInfo();
     virtual ~SwMacroInfo() override;
 
-    virtual SdrObjUserData* Clone( SdrObject* pObj ) const override;
+    virtual std::unique_ptr<SdrObjUserData> Clone( SdrObject* pObj ) const override;
 
     void SetHlink( const OUString& rHlink ) { maHlink = rHlink; }
     const OUString& GetHlink() const { return maHlink; }
@@ -743,7 +743,7 @@ class SwMSDffManager : public SvxMSDffManager
 private:
     SwWW8ImplReader& rReader;
     SvStream *pFallbackStream;
-    std::map<sal_uInt32,OString> aOldEscherBlipCache;
+    std::unordered_map<sal_uInt32, Graphic> aOldEscherBlipCache;
 
     virtual bool GetOLEStorageName( sal_uInt32 nOLEId, OUString& rStorageName,
         tools::SvRef<SotStorage>& rSrcStorage, css::uno::Reference < css::embed::XStorage >& rDestStorage ) const override;
@@ -1021,7 +1021,7 @@ struct WW8TabBandDesc
     sal_uInt8 nOverrideSpacing[MAX_COL + 1];
     short nOverrideValues[MAX_COL + 1][4];
     WW8_SHD* pSHDs;
-    sal_uInt32* pNewSHDs;
+    Color* pNewSHDs;
     WW8_BRCVer9 aDefBrcs[6];
 
     bool bExist[MAX_COL];           // does this cell exist ?
@@ -1090,7 +1090,8 @@ private:
     This stack is for redlines, because their sequence of discovery can
     be out of order of their order of insertion into the document.
     */
-    std::unique_ptr<sw::util::RedlineStack> m_xRedlineStack;
+    std::stack<std::unique_ptr<sw::util::RedlineStack>> m_aFrameRedlines; //inside frames, tables, etc
+    std::unique_ptr<sw::util::RedlineStack> m_xRedlineStack;    //main document
 
     /*
     This stack is for fields that get referenced later, e.g. BookMarks and TOX.
@@ -1239,7 +1240,7 @@ private:
 
     SdrModel* m_pDrawModel;
     SdrPage* m_pDrawPg;
-    EditEngine* m_pDrawEditEngine;
+    std::unique_ptr<EditEngine> m_pDrawEditEngine;
     std::unique_ptr<wwZOrderer> m_xWWZOrder;
 
     SwFieldType* m_pNumFieldType;   // for number circle
@@ -1354,6 +1355,8 @@ private:
     bool m_bLoadingTOXHyperlink;
     // a document position recorded the after-position of TOC section, managed by Read_F_TOX() and End_Field()
     SwPaM* m_pPosAfterTOC;
+    // used for some dropcap tweaking
+    SwTextNode* m_pPreviousNode;
 
     std::unique_ptr< SwPosition > m_pLastAnchorPos;
 
@@ -1411,7 +1414,7 @@ private:
 
     void SetDocumentGrid(SwFrameFormat &rFormat, const wwSection &rSection);
 
-    void ProcessAktCollChange(WW8PLCFManResult& rRes, bool* pStartAttr,
+    void ProcessCurrentCollChange(WW8PLCFManResult& rRes, bool* pStartAttr,
         bool bCallProcessSpecial);
     long ReadTextAttr(WW8_CP& rTextPos, long nTextEnd, bool& rbStartLine);
     void ReadAttrs(WW8_CP& rTextPos, WW8_CP& rNext, long nTextEnd, bool& rbStartLine);
@@ -1494,7 +1497,7 @@ private:
     bool ProcessSpecial(bool &rbReSync, WW8_CP nStartCp);
     sal_uInt16 TabRowSprm(int nLevel) const;
 
-    bool ReadGrafFile(OUString& rFileName, Graphic*& rpGraphic,
+    bool ReadGrafFile(OUString& rFileName, std::unique_ptr<Graphic>& rpGraphic,
        const WW8_PIC& rPic, SvStream* pSt, sal_uLong nFilePos, bool* pDelIt);
 
     static void ReplaceObj(const SdrObject &rReplaceTextObj,
@@ -1604,8 +1607,8 @@ private:
     SwFlyFrameFormat *ConvertDrawTextToFly( SdrObject* &rpObject,
         SdrObject* &rpOurNewObject, SvxMSDffImportRec const * pRecord,
         RndStdIds eAnchor, WW8_FSPA const *pF, SfxItemSet &rFlySet );
-    SwFrameFormat* MungeTextIntoDrawBox(SdrObject* pTrueObject,
-        SvxMSDffImportRec *pRecord, long nGrafAnchorCp, SwFrameFormat *pRetFrameFormat);
+    SwFrameFormat* MungeTextIntoDrawBox(SvxMSDffImportRec *pRecord,
+        long nGrafAnchorCp, SwFrameFormat *pRetFrameFormat);
 
     void GrafikCtor();
     void GrafikDtor();
@@ -1615,7 +1618,7 @@ private:
     void MakeTagString( OUString& rStr, const OUString& rOrg );
     void UpdateFields();
     OUString ConvertFFileName(const OUString& rRaw);
-    long Read_F_Tag( WW8FieldDesc* pF );
+    WW8_CP Read_F_Tag(WW8FieldDesc* pF);
     void InsertTagField( const sal_uInt16 nId, const OUString& rTagText );
     long ImportExtSprm(WW8PLCFManResult* pRes);
     void EndExtSprm(sal_uInt16 nSprmId);
@@ -1681,6 +1684,7 @@ private:
     SwWW8ImplReader(const SwWW8ImplReader &) = delete;
     SwWW8ImplReader& operator=(const SwWW8ImplReader&) = delete;
 public:     // really private, but can only be done public
+    ~SwWW8ImplReader();
     sal_uInt16 GetToggleAttrFlags() const;
     sal_uInt16 GetToggleBiDiAttrFlags() const;
     void SetToggleAttrFlags(sal_uInt16 nFlags);
@@ -1805,7 +1809,7 @@ public:     // really private, but can only be done public
     void Read_TextBackColor(sal_uInt16, const sal_uInt8* pData, short nLen);
     void Read_ParaBackColor(sal_uInt16, const sal_uInt8* pData, short nLen);
     void Read_ParaBiDi(sal_uInt16, const sal_uInt8* pData, short nLen);
-    static sal_uInt32 ExtractColour(const sal_uInt8* &rpData, bool bVer67);
+    static Color ExtractColour(const sal_uInt8* &rpData, bool bVer67);
 
     void Read_TextVerticalAdjustment(sal_uInt16, const sal_uInt8* pData, short nLen);
     void Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, short nLen);
@@ -1868,9 +1872,9 @@ public:     // really private, but can only be done public
 
     const WW8Fib& GetFib() const    { return *m_xWwFib; }
     SwDoc& GetDoc() const           { return m_rDoc; }
-    sal_uInt16 GetNAktColl()  const     { return m_nCurrentColl; }
-    void SetNAktColl( sal_uInt16 nColl ) { m_nCurrentColl = nColl;    }
-    std::unique_ptr<SfxItemSet> SetAktItemSet(SfxItemSet* pItemSet);
+    sal_uInt16 GetCurrentColl()  const     { return m_nCurrentColl; }
+    void SetNCurrentColl( sal_uInt16 nColl ) { m_nCurrentColl = nColl;    }
+    std::unique_ptr<SfxItemSet> SetCurrentItemSet(SfxItemSet* pItemSet);
     sal_uInt16 StyleUsingLFO( sal_uInt16 nLFOIndex ) const ;
     const SwFormat* GetStyleWithOrgWWName( OUString const & rName ) const ;
 
@@ -1911,9 +1915,6 @@ bool RTLGraphicsHack(SwTwips &rLeft, SwTwips nWidth,
     SwTwips nPageRight, SwTwips nPageSize);
 void MatchEscherMirrorIntoFlySet(const SvxMSDffImportRec &rRecord,
     SfxItemSet &rFlySet);
-bool RTLDrawingsHack(long &rLeft,
-    sal_Int16 eHoriOri, sal_Int16 eHoriRel, SwTwips nPageLeft,
-    SwTwips nPageRight, SwTwips nPageSize);
 #endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

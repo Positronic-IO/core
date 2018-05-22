@@ -108,7 +108,7 @@ namespace toolkit
             INetURLObject aURL( i_imageURL );
             if ( aURL.GetProtocol() != INetProtocol::PrivSoffice )
             {
-                OSL_VERIFY( aURL.insertName( "hicontrast", false, 0 ) );
+                OSL_VERIFY( aURL.insertName( "sifr", false, 0 ) );
                 return aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE );
             }
             // the private: scheme is not considered to be hierarchical by INetURLObject, so manually insert the
@@ -118,7 +118,7 @@ namespace toolkit
 
             OUStringBuffer composer;
             composer.append( i_imageURL.copy( 0, separatorPos ) );
-            composer.append( "/hicontrast" );
+            composer.append( "/sifr" );
             composer.append( i_imageURL.copy( separatorPos ) );
             return composer.makeStringAndClear();
         }
@@ -158,7 +158,7 @@ namespace toolkit
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("toolkit");
             }
             return aSizePixel;
         }
@@ -260,7 +260,7 @@ namespace toolkit
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("toolkit");
             }
         }
 
@@ -283,7 +283,7 @@ namespace toolkit
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("toolkit");
             }
         }
     }

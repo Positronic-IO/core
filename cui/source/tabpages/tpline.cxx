@@ -349,7 +349,7 @@ void SvxLineTabPage::InitSymbols(MenuButton const * pButton)
         pModel->InsertPage( pPage, 0 );
         {
         // 3D View
-        std::unique_ptr<SdrView> pView(new SdrView( pModel.get(), pVDev ));
+        std::unique_ptr<SdrView> pView(new SdrView( *pModel, pVDev ));
         pView->hideMarkHandles();
         pView->ShowSdrPage(pPage);
 
@@ -358,7 +358,10 @@ void SvxLineTabPage::InitSymbols(MenuButton const * pButton)
         // Generate invisible square to give all symbols a
         // bitmap size, which is independent from specific glyph
         SdrObject *pInvisibleSquare=m_pSymbolList->GetObj(0);
-        pInvisibleSquare=pInvisibleSquare->Clone();
+
+        // directly clone to target SdrModel
+        pInvisibleSquare = pInvisibleSquare->CloneSdrObject(*pModel);
+
         pPage->NbcInsertObject(pInvisibleSquare);
         pInvisibleSquare->SetMergedItem(XFillTransparenceItem(100));
         pInvisibleSquare->SetMergedItem(XLineTransparenceItem(100));
@@ -368,7 +371,10 @@ void SvxLineTabPage::InitSymbols(MenuButton const * pButton)
             SdrObject *pObj=m_pSymbolList->GetObj(i);
             if(pObj==nullptr)
                 break;
-            pObj=pObj->Clone();
+
+            // directly clone to target SdrModel
+            pObj = pObj->CloneSdrObject(*pModel);
+
             m_aGrfNames.emplace_back("");
             pPage->NbcInsertObject(pObj);
             if(m_pSymbolAttr)
@@ -463,7 +469,7 @@ void SvxLineTabPage::SymbolSelected(MenuButton const * pButton)
         break;
         default:
         {
-            SvxOpenGraphicDialog aGrfDlg(CuiResId(RID_SVXSTR_EDIT_GRAPHIC), this);
+            SvxOpenGraphicDialog aGrfDlg(CuiResId(RID_SVXSTR_EDIT_GRAPHIC), GetFrameWeld());
             aGrfDlg.EnableLink(false);
             aGrfDlg.AsLink(false);
             if( !aGrfDlg.Execute() )
@@ -1119,7 +1125,7 @@ void SvxLineTabPage::Reset( const SfxItemSet* rAttrs )
         pPage->SetSize(Size(1000,1000));
         pModel->InsertPage( pPage, 0 );
         {
-        std::unique_ptr<SdrView> pView(new SdrView( pModel.get(), pVDev ));
+        std::unique_ptr<SdrView> pView(new SdrView( *pModel, pVDev ));
         pView->hideMarkHandles();
         pView->ShowSdrPage(pPage);
         SdrObject *pObj=nullptr;
@@ -1132,7 +1138,9 @@ void SvxLineTabPage::Reset( const SfxItemSet* rAttrs )
                 pObj=m_pSymbolList->GetObj(nSymTmp);
                 if(pObj)
                 {
-                    pObj=pObj->Clone();
+                    // directly clone to target SdrModel
+                    pObj = pObj->CloneSdrObject(*pModel);
+
                     if(m_pSymbolAttr)
                     {
                         pObj->SetMergedItemSet(*m_pSymbolAttr);
@@ -1146,8 +1154,11 @@ void SvxLineTabPage::Reset( const SfxItemSet* rAttrs )
 
                     // Generate invisible square to give all symbol types a
                     // bitmap size, which is independent from specific glyph
-                    SdrObject *pInvisibleSquare=m_pSymbolList->GetObj(0);
-                    pInvisibleSquare=pInvisibleSquare->Clone();
+                    SdrObject* pInvisibleSquare(m_pSymbolList->GetObj(0));
+
+                    // directly clone to target SdrModel
+                    pInvisibleSquare = pInvisibleSquare->CloneSdrObject(*pModel);
+
                     pPage->NbcInsertObject(pInvisibleSquare);
                     pInvisibleSquare->SetMergedItem(XFillTransparenceItem(100));
                     pInvisibleSquare->SetMergedItem(XLineTransparenceItem(100));
@@ -1476,10 +1487,10 @@ void SvxLineTabPage::Reset( const SfxItemSet* rAttrs )
 }
 
 
-VclPtr<SfxTabPage> SvxLineTabPage::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SvxLineTabPage::Create( TabPageParent pWindow,
                                            const SfxItemSet* rAttrs )
 {
-    return VclPtr<SvxLineTabPage>::Create( pWindow, *rAttrs );
+    return VclPtr<SvxLineTabPage>::Create( pWindow.pParent, *rAttrs );
 }
 
 IMPL_LINK( SvxLineTabPage, ChangePreviewListBoxHdl_Impl, SvxColorListBox&, rListBox, void )
@@ -1665,11 +1676,13 @@ IMPL_LINK_NOARG(SvxLineTabPage, ChangeTransparentHdl_Impl, Edit&, void)
     m_pCtlPreview->Invalidate();
 }
 
-
 void SvxLineTabPage::PointChanged( vcl::Window*, RectPoint )
 {
 }
 
+void SvxLineTabPage::PointChanged( weld::DrawingArea*, RectPoint )
+{
+}
 
 void SvxLineTabPage::FillUserData()
 {

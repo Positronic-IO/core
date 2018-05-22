@@ -21,7 +21,6 @@
 #define INCLUDED_SVX_FMVIEW_HXX
 
 #include <svx/view3d.hxx>
-#include <comphelper/uno3.hxx>
 #include <svx/svxdllapi.h>
 
 namespace com { namespace sun { namespace star {
@@ -61,8 +60,10 @@ class SVX_DLLPUBLIC FmFormView : public E3dView
     void Init();
 
 public:
+    FmFormView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
 
-    FmFormView(FmFormModel* pModel, OutputDevice* pOut);
     virtual ~FmFormView() override;
 
     /** create a control pair (label/bound control) for the database field description given.
@@ -92,7 +93,6 @@ public:
         const css::uno::Reference< css::beans::XPropertySet >& _rxField,
         const css::uno::Reference< css::util::XNumberFormats >& _rxNumberFormats,
         sal_uInt16 _nControlObjectID,
-        const OUString& _rFieldPostfix,
         SdrInventor _nInventor,
         sal_uInt16 _nLabelObjectID,
         SdrPage* _pLabelPage,

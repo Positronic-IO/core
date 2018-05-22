@@ -23,7 +23,6 @@
 #include <apitools.hxx>
 #include "bookmarkcontainer.hxx"
 #include "ContentHelper.hxx"
-#include <core_resource.hxx>
 #include "documentevents.hxx"
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -56,7 +55,6 @@
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <com/sun/star/sdb/XDocumentDataSource.hpp>
 
-#include <comphelper/broadcasthelper.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/proparrhlp.hxx>
 #include <comphelper/sharedmutex.hxx>

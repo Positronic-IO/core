@@ -27,8 +27,6 @@
 #include <memory>
 #include "swdllapi.h"
 
-struct SwPosition;
-
 namespace sw { namespace mark
 {
     enum class InsertMode
@@ -40,6 +38,7 @@ namespace sw { namespace mark
     class SW_DLLPUBLIC IMark
         : virtual public SwModify // inherited as interface
         , public ::boost::totally_ordered<IMark>
+        , virtual public sw::BroadcasterMixin
     {
         protected:
             IMark() = default;

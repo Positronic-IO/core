@@ -3924,6 +3924,24 @@ SfxVoidItem OriginalSize SID_ORIGINALSIZE
 ]
 
 
+SfxVoidItem FitCellSize SID_FITCELLSIZE
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Format;
+]
+
+
 SfxBoolItem NormalViewMode FID_NORMALVIEWMODE
 
 [
@@ -4645,6 +4663,24 @@ SfxVoidItem SelectScenario SID_SELECT_SCENARIO
 
 
 SfxVoidItem SetAnchorToCell SID_ANCHOR_CELL
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Format;
+]
+
+
+SfxVoidItem SetAnchorToCellResize SID_ANCHOR_CELL_RESIZE
 ()
 [
     AutoUpdate = FALSE,

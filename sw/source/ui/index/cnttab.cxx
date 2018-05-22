@@ -91,7 +91,7 @@ using namespace ::sfx2;
 static const sal_Unicode aDeliStart = '['; // for the form
 static const sal_Unicode aDeliEnd    = ']'; // for the form
 
-static OUString lcl_CreateAutoMarkFileDlg(const vcl::Window* pParent, const OUString& rURL,
+static OUString lcl_CreateAutoMarkFileDlg(weld::Window* pParent, const OUString& rURL,
                                 const OUString& rFileString, bool bOpen)
 {
     OUString sRet;
@@ -611,14 +611,11 @@ void SwIndexTreeLB::setColSizes()
     nWidth /= 14;
     nWidth--;
 
-    long nTabs_Impl[MAXLEVEL+2];
-
-    nTabs_Impl[0] = MAXLEVEL+1;
-    nTabs_Impl[1] = 3 * nWidth;
-
+    long nTabs[MAXLEVEL+1];
+    nTabs[0] = 3 * nWidth;
     for(sal_uInt16 i = 1; i <= MAXLEVEL; ++i)
-        nTabs_Impl[i+1] = nTabs_Impl[i] + nWidth;
-    SvSimpleTable::SetTabs(&nTabs_Impl[0], MapUnit::MapPixel);
+        nTabs[i] = nTabs[i-1] + nWidth;
+    SvSimpleTable::SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
 }
 
 class SwAddStylesDlg_Impl : public SfxModalDialog
@@ -673,15 +670,14 @@ SwAddStylesDlg_Impl::SwAddStylesDlg_Impl(vcl::Window* pParent,
     m_pHeaderTree->GetModel()->SetSortMode(SortAscending);
     for (sal_uInt16 i = 0; i < MAXLEVEL; ++i)
     {
-        OUString sStyles(rStringArr[i]);
-        for(sal_Int32 nToken = 0;
-            nToken < comphelper::string::getTokenCount(sStyles, TOX_STYLE_DELIMITER);
-            ++nToken)
-        {
-            const OUString sTmp(sStyles.getToken(nToken, TOX_STYLE_DELIMITER));
-            SvTreeListEntry* pEntry = m_pHeaderTree->InsertEntry(sTmp);
+        const OUString &rStyles{rStringArr[i]};
+        if (rStyles.isEmpty())
+            continue;
+        sal_Int32 nPos {0};
+        do {
+            SvTreeListEntry* pEntry = m_pHeaderTree->InsertEntry(rStyles.getToken(0, TOX_STYLE_DELIMITER, nPos));
             pEntry->SetUserData(reinterpret_cast<void*>(i));
-        }
+        } while (nPos>=0);
     }
     // now the other styles
 
@@ -1242,7 +1238,7 @@ void SwTOXSelectTabPage::FillTOXDescription()
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
         rDesc.SetStyleNames(aStyleArr[i], i);
 
-    rDesc.SetLanguage(m_pLanguageLB->GetSelectLanguage());
+    rDesc.SetLanguage(m_pLanguageLB->GetSelectedLanguage());
     const OUString* pEntryData = static_cast<const OUString*>(m_pSortAlgorithmLB->GetSelectedEntryData());
     OSL_ENSURE(pEntryData, "no entry data available");
     if(pEntryData)
@@ -1302,9 +1298,9 @@ DeactivateRC SwTOXSelectTabPage::DeactivatePage( SfxItemSet* _pSet )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SwTOXSelectTabPage::Create( vcl::Window* pParent, const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SwTOXSelectTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTOXSelectTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwTOXSelectTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 IMPL_LINK(SwTOXSelectTabPage, TOXTypeHdl, ListBox&, rBox, void)
@@ -1432,7 +1428,7 @@ IMPL_LINK(SwTOXSelectTabPage, LanguageListBoxHdl, ListBox&, rBox, void)
 }
 void SwTOXSelectTabPage::LanguageHdl( ListBox const * pBox )
 {
-    lang::Locale aLcl( LanguageTag( m_pLanguageLB->GetSelectLanguage() ).getLocale() );
+    lang::Locale aLcl( LanguageTag( m_pLanguageLB->GetSelectedLanguage() ).getLocale() );
     Sequence< OUString > aSeq = pIndexEntryWrapper->GetAlgorithmList( aLcl );
 
     if( !pIndexRes )
@@ -1492,7 +1488,7 @@ IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, Menu*, pMenu, bool)
 
     if (sIdent == "open")
     {
-        sAutoMarkURL = lcl_CreateAutoMarkFileDlg(this,
+        sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetFrameWeld(),
                                 sAutoMarkURL, sAutoMarkType, true);
     }
     else if ((sIdent == "new") || (sIdent == "edit"))
@@ -1500,7 +1496,7 @@ IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, Menu*, pMenu, bool)
         bool bNew = (sIdent == "new");
         if (bNew)
         {
-            sAutoMarkURL = lcl_CreateAutoMarkFileDlg(this,
+            sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetFrameWeld(),
                                     sAutoMarkURL, sAutoMarkType, false);
             if( sAutoMarkURL.isEmpty() )
                 return false;
@@ -2247,9 +2243,9 @@ DeactivateRC SwTOXEntryTabPage::DeactivatePage( SfxItemSet* /*pSet*/)
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SwTOXEntryTabPage::Create( vcl::Window* pParent,     const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SwTOXEntryTabPage::Create( TabPageParent pParent,     const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTOXEntryTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwTOXEntryTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 IMPL_LINK_NOARG(SwTOXEntryTabPage, EditStyleHdl, Button*, void)
@@ -3469,7 +3465,7 @@ bool SwTokenWindow::CreateQuickHelp(Control const * pCtrl,
                                 static_cast<ToxAuthorityField>(rToken.nAuthorityField));
         }
 
-        Point aPos = OutputToScreenPixel(pCtrl->GetPosPixel());
+        Point aPos = m_pCtrlParentWin->OutputToScreenPixel(pCtrl->GetPosPixel());
         tools::Rectangle aItemRect( aPos, pCtrl->GetSizePixel() );
         if ( rToken.eTokenType != TOKEN_TAB_STOP )
         {
@@ -3760,10 +3756,10 @@ DeactivateRC SwTOXStylesTabPage::DeactivatePage( SfxItemSet* /*pSet*/  )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SwTOXStylesTabPage::Create( vcl::Window* pParent,
+VclPtr<SfxTabPage> SwTOXStylesTabPage::Create( TabPageParent pParent,
                                                const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTOXStylesTabPage>::Create(pParent, *rAttrSet);
+    return VclPtr<SwTOXStylesTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
 IMPL_LINK_NOARG(SwTOXStylesTabPage, EditStyleHdl, Button *, void)

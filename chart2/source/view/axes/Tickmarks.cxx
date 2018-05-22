@@ -132,10 +132,6 @@ void TickFactory::getAllTicksShifted( TickInfoArraysType& rAllTickInfos ) const
         EquidistantTickFactory( m_rScale, m_rIncrement ).getAllTicksShifted( rAllTickInfos );
 }
 
-void TickFactory::updateScreenValues( TickInfoArraysType& /*rAllTickInfos*/ ) const
-{
-}
-
 // ___TickFactory_2D___
 TickFactory2D::TickFactory2D(
           const ExplicitScaleData& rScale, const ExplicitIncrementData& rIncrement
@@ -310,17 +306,12 @@ void TickFactory2D::createPointSequenceForAxisMainLine( drawing::PointSequenceSe
 void TickFactory2D::updateScreenValues( TickInfoArraysType& rAllTickInfos ) const
 {
     //get the transformed screen values for all tickmarks in rAllTickInfos
-    TickInfoArraysType::iterator aDepthIter = rAllTickInfos.begin();
-    const TickInfoArraysType::const_iterator aDepthEnd = rAllTickInfos.end();
-    for( ; aDepthIter != aDepthEnd; ++aDepthIter )
+    for (auto & tickInfos : rAllTickInfos)
     {
-        TickInfoArrayType::iterator aTickIter = (*aDepthIter).begin();
-        const TickInfoArrayType::const_iterator aTickEnd  = (*aDepthIter).end();
-        for( ; aTickIter != aTickEnd; ++aTickIter )
+        for (auto & tickInfo : tickInfos)
         {
-            TickInfo& rTickInfo = (*aTickIter);
-            rTickInfo.aTickScreenPosition =
-                getTickScreenPosition2D( rTickInfo.fScaledTickValue );
+            tickInfo.aTickScreenPosition =
+                getTickScreenPosition2D(tickInfo.fScaledTickValue);
         }
     }
 }

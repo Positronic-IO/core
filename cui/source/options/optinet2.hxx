@@ -81,7 +81,7 @@ private:
 
     css::uno::Reference< css::uno::XInterface > m_xConfigurationUpdateAccess;
 
-    void EnableControls_Impl(bool bEnable);
+    void EnableControls_Impl();
     void ReadConfigData_Impl();
     void ReadConfigDefaults_Impl();
     void RestoreConfigDefaults_Impl();
@@ -93,7 +93,7 @@ public:
     SvxProxyTabPage( vcl::Window* pParent, const SfxItemSet& rSet );
     virtual ~SvxProxyTabPage() override;
     virtual void dispose() override;
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 };
@@ -127,7 +127,7 @@ private:
     VclPtr<PushButton>         m_pTSAURLsPB;
 
     SvtSecurityOptions*         mpSecOptions;
-    VclPtr<svx::SecurityOptionsDialog> mpSecOptDlg;
+    std::unique_ptr<svx::SecurityOptionsDialog> m_xSecOptDlg;
 
     VclPtr<CertPathDialog> mpCertPathDlg;
 
@@ -135,7 +135,7 @@ private:
 
     DECL_LINK(SecurityOptionsHdl, Button*, void);
     DECL_LINK(SavePasswordHdl, Button*, void);
-    DECL_STATIC_LINK(SvxSecurityTabPage, MasterPasswordHdl, Button*, void);
+    DECL_LINK(MasterPasswordHdl, Button*, void);
     DECL_LINK(MasterPasswordCBHdl, Button*, void);
     DECL_LINK(ShowPasswordsHdl, Button*, void);
     DECL_STATIC_LINK(SvxSecurityTabPage, MacroSecPBHdl, Button*, void );
@@ -153,7 +153,7 @@ protected:
     virtual DeactivateRC   DeactivatePage( SfxItemSet* pSet ) override;
 
 public:
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 };
@@ -180,7 +180,7 @@ public:
     virtual ~SvxEMailTabPage() override;
     virtual void        dispose() override;
 
-    static VclPtr<SfxTabPage>  Create( vcl::Window* pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

@@ -25,6 +25,7 @@
 #include <vcl/edit.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/timer.hxx>
+#include <memory>
 
 class ImpVclMEdit;
 class Timer;
@@ -35,8 +36,8 @@ class TextWindow : public vcl::Window
 {
 private:
     VclPtr<Edit>    mxParent;
-    ExtTextEngine*  mpExtTextEngine;
-    TextView*       mpExtTextView;
+    std::unique_ptr<ExtTextEngine> mpExtTextEngine;
+    std::unique_ptr<TextView> mpExtTextView;
 
     bool            mbInMBDown;
     bool            mbFocusSelectionHide;
@@ -49,8 +50,8 @@ public:
     virtual         ~TextWindow() override;
     virtual void    dispose() override;
 
-    ExtTextEngine*  GetTextEngine() const { return mpExtTextEngine; }
-    TextView*       GetTextView() const { return mpExtTextView; }
+    ExtTextEngine*  GetTextEngine() const { return mpExtTextEngine.get(); }
+    TextView*       GetTextView() const { return mpExtTextView.get(); }
 
     virtual void    MouseMove( const MouseEvent& rMEvt ) override;
     virtual void    MouseButtonDown( const MouseEvent& rMEvt ) override;
@@ -77,12 +78,12 @@ class VCL_DLLPUBLIC VclMultiLineEdit : public Edit
     friend class VCLXAccessibleEdit;
 
 private:
-    ImpVclMEdit*      pImpVclMEdit;
+    std::unique_ptr<ImpVclMEdit> pImpVclMEdit;
 
     OUString          aSaveValue;
     Link<Edit&,void>  aModifyHdlLink;
 
-    Timer*            pUpdateDataTimer;
+    std::unique_ptr<Timer> pUpdateDataTimer;
     Link<Edit&,void>  aUpdateDataHdlLink;
 
 protected:
@@ -117,7 +118,7 @@ public:
     virtual bool    IsModified() const override;
 
     virtual void    EnableUpdateData( sal_uLong nTimeout = EDIT_UPDATEDATA_TIMEOUT ) override;
-    virtual void    DisableUpdateData() override { delete pUpdateDataTimer; pUpdateDataTimer = nullptr; }
+    virtual void    DisableUpdateData() override { pUpdateDataTimer.reset(); }
 
     virtual void    SetReadOnly( bool bReadOnly = true ) override;
     virtual bool    IsReadOnly() const override;

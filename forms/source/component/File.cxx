@@ -24,10 +24,8 @@
 #include <services.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <tools/debug.hxx>
-#include <comphelper/container.hxx>
 #include <comphelper/basicio.hxx>
 #include <comphelper/guarding.hxx>
-#include <comphelper/processfactory.hxx>
 
 
 namespace frm

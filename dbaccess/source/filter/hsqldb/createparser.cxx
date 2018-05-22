@@ -19,6 +19,7 @@
 
 #include <comphelper/string.hxx>
 #include "createparser.hxx"
+#include "utils.hxx"
 #include <com/sun/star/sdbc/DataType.hpp>
 
 using namespace ::comphelper;
@@ -26,28 +27,6 @@ using namespace css::sdbc;
 
 namespace
 {
-OUString lcl_getTableName(const OUString& sSql)
-{
-    auto stmtComponents = string::split(sSql, sal_Unicode(u' '));
-    assert(stmtComponents.size() > 2);
-    auto wordIter = stmtComponents.begin();
-
-    if (*wordIter == "CREATE")
-        ++wordIter;
-    if (*wordIter == "CACHED")
-        ++wordIter;
-    if (*wordIter == "TABLE")
-        ++wordIter;
-
-    // next word is the table's name
-    // it might stuck together with the column definitions.
-    sal_Int32 nParenPos = wordIter->indexOf("(");
-    if (nParenPos > 0)
-        return wordIter->copy(0, nParenPos);
-    else
-        return *wordIter;
-}
-
 /// Returns substring of sSql from the first occurrence of '(' until the
 /// last occurrence of ')' (excluding the parenthesis)
 OUString lcl_getColumnPart(const OUString& sSql)
@@ -73,9 +52,9 @@ std::vector<OUString> lcl_splitColumnPart(const OUString& sColumnPart)
     std::vector<OUString> sReturn;
 
     OUStringBuffer current;
-    for (auto it = sParts.begin(); it != sParts.end(); ++it)
+    for (auto const& part : sParts)
     {
-        current.append(*it);
+        current.append(part);
         if (current.lastIndexOf("(") > current.lastIndexOf(")"))
             current.append(","); // it was false split
         else
@@ -117,7 +96,7 @@ sal_Int32 lcl_getDataTypeFromHsql(const OUString& sTypeName)
 {
     if (sTypeName == "CHAR")
         return DataType::CHAR;
-    else if (sTypeName == "VARCHAR")
+    else if (sTypeName == "VARCHAR" || sTypeName == "VARCHAR_IGNORECASE")
         return DataType::VARCHAR;
     else if (sTypeName == "TINYINT")
         return DataType::TINYINT;
@@ -153,27 +132,58 @@ sal_Int32 lcl_getDataTypeFromHsql(const OUString& sTypeName)
         return DataType::TIMESTAMP;
     else if (sTypeName == "DOUBLE")
         return DataType::DOUBLE;
+    else if (sTypeName == "REAL")
+        return DataType::REAL;
+    else if (sTypeName == "FLOAT")
+        return DataType::FLOAT;
 
     assert(false);
     return -1;
 }
+
+void lcl_addDefaultParameters(std::vector<sal_Int32>& aParams, sal_Int32 eType)
+{
+    if (eType == DataType::CHAR || eType == DataType::BINARY || eType == DataType::VARBINARY
+        || eType == DataType::VARCHAR)
+        aParams.push_back(8000); // from SQL standard
 }
+
+} // unnamed namespace
 
 namespace dbahsql
 {
 CreateStmtParser::CreateStmtParser() {}
+
+void CreateStmtParser::parsePrimaryKeys(const OUString& sPrimaryPart)
+{
+    sal_Int32 nParenPos = sPrimaryPart.indexOf("(");
+    if (nParenPos > 0)
+    {
+        OUString sParamStr
+            = sPrimaryPart.copy(nParenPos + 1, sPrimaryPart.lastIndexOf(")") - nParenPos - 1);
+        auto sParams = string::split(sParamStr, sal_Unicode(u','));
+        for (auto& sParam : sParams)
+        {
+            m_PrimaryKeys.push_back(sParam);
+        }
+    }
+}
 
 void CreateStmtParser::parseColumnPart(const OUString& sColumnPart)
 {
     auto sColumns = lcl_splitColumnPart(sColumnPart);
     for (OUString& sColumn : sColumns)
     {
+        if (sColumn.startsWithIgnoreAsciiCase("PRIMARY KEY"))
+        {
+            parsePrimaryKeys(sColumn);
+            continue;
+        }
+
         std::vector<OUString> words = string::split(sColumn, sal_Unicode(u' '));
 
         if (words[0] == "CONSTRAINT")
         {
-            // TODO parse foreign key part instead of just saving the string
-            // part
             m_aForeignParts.push_back(sColumn);
             continue;
         }
@@ -195,10 +205,21 @@ void CreateStmtParser::parseColumnPart(const OUString& sColumnPart)
                 aParams.push_back(sParam.toInt32());
             }
         }
+        else
+        {
+            lcl_addDefaultParameters(aParams, lcl_getDataTypeFromHsql(sTypeName));
+        }
 
-        ColumnDefinition aColDef(words[0], lcl_getDataTypeFromHsql(sTypeName), aParams,
-                                 lcl_isPrimaryKey(sColumn), lcl_getAutoIncrementDefault(sColumn),
-                                 lcl_isNullable(sColumn));
+        bool bCaseInsensitive = sTypeName.indexOf("IGNORECASE") >= 0;
+        const OUString& rTableName = words[0];
+        bool isPrimaryKey = lcl_isPrimaryKey(sColumn);
+
+        if (isPrimaryKey)
+            m_PrimaryKeys.push_back(rTableName);
+
+        ColumnDefinition aColDef(rTableName, lcl_getDataTypeFromHsql(sTypeName), aParams,
+                                 isPrimaryKey, lcl_getAutoIncrementDefault(sColumn),
+                                 lcl_isNullable(sColumn), bCaseInsensitive);
 
         m_aColumns.push_back(aColDef);
     }
@@ -213,7 +234,7 @@ void CreateStmtParser::parse(const OUString& sSql)
         return;
     }
 
-    m_sTableName = lcl_getTableName(sSql);
+    m_sTableName = utils::getTableNameFromStmt(sSql);
     OUString sColumnPart = lcl_getColumnPart(sSql);
     parseColumnPart(sColumnPart);
 }

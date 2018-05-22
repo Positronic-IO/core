@@ -28,6 +28,7 @@
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/chart2/XDiagram.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
+#include <tools/diagnose_ex.h>
 
 namespace chart
 {
@@ -408,8 +409,8 @@ void ThreeDHelper::convertElevationRotationDegToXYZAngleRad(
     double& rfXAngleRad, double& rfYAngleRad, double& rfZAngleRad)
 {
     // for a description of the algorithm see issue 72994
-    //http://www.openoffice.org/issues/show_bug.cgi?id=72994
-    //http://www.openoffice.org/nonav/issues/showattachment.cgi/50608/DescriptionCorrected.odt
+    //https://bz.apache.org/ooo/show_bug.cgi?id=72994
+    //https://bz.apache.org/ooo/attachment.cgi?id=50608
 
     lcl_shiftAngleToIntervalZeroTo360( nElevationDeg );
     lcl_shiftAngleToIntervalZeroTo360( nRotationDeg );
@@ -590,8 +591,8 @@ void ThreeDHelper::convertXYZAngleRadToElevationRotationDeg(
     double fXRad, double fYRad, double fZRad)
 {
     // for a description of the algorithm see issue 72994
-    //http://www.openoffice.org/issues/show_bug.cgi?id=72994
-    //http://www.openoffice.org/nonav/issues/showattachment.cgi/50608/DescriptionCorrected.odt
+    //https://bz.apache.org/ooo/show_bug.cgi?id=72994
+    //https://bz.apache.org/ooo/attachment.cgi?id=50608
 
     double R = 0.0; //Rotation in Rad
     double E = 0.0; //Elevation in Rad
@@ -970,9 +971,9 @@ void ThreeDHelper::switchRightAngledAxes( const Reference< beans::XPropertySet >
             }
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -1025,9 +1026,9 @@ void ThreeDHelper::setRotationAngleToDiagram(
             lcl_rotateLights( aNewRotation*aInverseOldRotation, xSceneProperties );
         }
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -1102,9 +1103,9 @@ double ThreeDHelper::getCameraDistance(
 
         ensureCameraDistanceRange( fCameraDistance );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
     return fCameraDistance;
 }
@@ -1130,9 +1131,9 @@ void ThreeDHelper::setCameraDistance(
 
         xSceneProperties->setPropertyValue( "D3DCameraGeometry", uno::Any( aCG ));
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -1180,9 +1181,9 @@ ThreeDLookScheme ThreeDHelper::detectScheme( const uno::Reference< XDiagram >& x
         if( xDiagramProps.is() )
             xDiagramProps->getPropertyValue( "D3DSceneShadeMode" )>>= aShadeMode;
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     if( lcl_isSimpleScheme( aShadeMode, nRoundedEdges, nObjectLines, xDiagram ) )
@@ -1230,9 +1231,9 @@ void ThreeDHelper::setScheme( const uno::Reference< XDiagram >& xDiagram, ThreeD
 
         lcl_setLightsForScheme( xProp, aScheme );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
 }
@@ -1287,9 +1288,9 @@ void ThreeDHelper::setDefaultIllumination( const uno::Reference< beans::XPropert
         xSceneProperties->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_7, uno::Any( false ) );
         xSceneProperties->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_8, uno::Any( false ) );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
     ThreeDLookScheme aScheme = (aShadeMode==drawing::ShadeMode_FLAT) ? ThreeDLookScheme_Simple : ThreeDLookScheme_Realistic;

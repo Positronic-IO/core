@@ -58,7 +58,7 @@
 #include <drwbassh.hxx>
 #include <drawsh.hxx>
 
-#define SwDrawShell
+#define ShellClass_SwDrawShell
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
 #include <swabstdlg.hxx>
@@ -122,7 +122,7 @@ void SwDrawShell::InsertPictureFromFile(SdrObject& rObject)
 
     if(pSdrView)
     {
-        SvxOpenGraphicDialog aDlg(SwResId(STR_INSERT_GRAPHIC), &GetView().GetViewFrame()->GetWindow());
+        SvxOpenGraphicDialog aDlg(SwResId(STR_INSERT_GRAPHIC), GetView().GetViewFrame()->GetWindow().GetFrameWeld());
 
         if (ERRCODE_NONE == aDlg.Execute())
         {
@@ -138,7 +138,7 @@ void SwDrawShell::InsertPictureFromFile(SdrObject& rObject)
 
                 if (SdrGrafObj* pSdrGrafObj = dynamic_cast<SdrGrafObj*>(&rObject))
                 {
-                    SdrGrafObj* pNewGrafObj = pSdrGrafObj->Clone();
+                    SdrGrafObj* pNewGrafObj(pSdrGrafObj->CloneSdrObject(pSdrGrafObj->getSdrModelFromSdrObject()));
 
                     pNewGrafObj->SetGraphic(aGraphic);
 

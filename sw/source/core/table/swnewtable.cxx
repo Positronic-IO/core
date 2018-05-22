@@ -41,6 +41,7 @@
 #include <editeng/protitem.hxx>
 #include <swtblfmt.hxx>
 #include <calbck.hxx>
+#include <o3tl/make_unique.hxx>
 
 #ifdef DBG_UTIL
 #define CHECK_TABLE(t) (t).CheckConsistency();
@@ -322,7 +323,7 @@ static void lcl_ChangeRowSpan( const SwTable& rTable, const long nDiff,
     and prepares the selected cells for merging
 */
 
-SwBoxSelection* SwTable::CollectBoxSelection( const SwPaM& rPam ) const
+std::unique_ptr<SwBoxSelection> SwTable::CollectBoxSelection( const SwPaM& rPam ) const
 {
     OSL_ENSURE( m_bNewModel, "Don't call me for old tables" );
     if( m_aLines.empty() )
@@ -370,7 +371,7 @@ SwBoxSelection* SwTable::CollectBoxSelection( const SwPaM& rPam ) const
     bool bOkay = true;
     long nMid = ( nMin + nMax ) / 2;
 
-    SwBoxSelection* pRet = new SwBoxSelection();
+    auto pRet(o3tl::make_unique<SwBoxSelection>());
     std::vector< std::pair< SwTableBox*, long > > aNewWidthVector;
     size_t nCheckBottom = nBottom;
     long nLeftSpan = 0;
@@ -560,11 +561,11 @@ SwBoxSelection* SwTable::CollectBoxSelection( const SwPaM& rPam ) const
             --nRightSpanCnt;
         pRet->push_back(aBoxes);
     }
-    pRet->mnMergeWidth = nMax - nMin;
     if( nCheckBottom > nBottom )
         bOkay = false;
     if( bOkay )
     {
+        pRet->mnMergeWidth = nMax - nMin;
         for (auto const& newWidth : aNewWidthVector)
         {
             SwFrameFormat* pFormat = newWidth.first->ClaimFrameFormat();
@@ -573,10 +574,8 @@ SwBoxSelection* SwTable::CollectBoxSelection( const SwPaM& rPam ) const
         }
     }
     else
-    {
-        delete pRet;
-        pRet = nullptr;
-    }
+        pRet.reset();
+
     return pRet;
 }
 
@@ -822,7 +821,10 @@ bool SwTable::PrepareMerge( const SwPaM& rPam, SwSelBoxes& rBoxes,
     // i.e. contiguous cells in contiguous rows
     bool bMerge = false; // will be set if any content is transferred from
     // a "not already overlapped" cell into the new master cell.
-    SwTableBox *pMergeBox = pSel->maBoxes[0][0]; // the master cell box
+    const SwSelBoxes& rFirstBoxes = pSel->maBoxes[0];
+    if (rFirstBoxes.empty())
+        return false;
+    SwTableBox *pMergeBox = rFirstBoxes[0]; // the master cell box
     if( !pMergeBox )
         return false;
     (*ppMergeBox) = pMergeBox;
@@ -1018,7 +1020,7 @@ void SwTable::FindSuperfluousRows_( SwSelBoxes& rBoxes,
     }
 }
 
-/** SwTableBox::FindStartOfRowSpan(..) retruns the "master" cell, the cell which
+/** SwTableBox::FindStartOfRowSpan(..) returns the "master" cell, the cell which
     overlaps the given cell, it maybe the cell itself.
 */
 
@@ -1299,7 +1301,7 @@ static void lcl_SophisticatedFillLineIndices( SwLineOffsetArray &rArr,
 typedef std::set< SwTwips > SwSplitLines;
 
 /** lcl_CalculateSplitLineHeights(..) delivers all y-positions where table rows have
-    to be splitted to fulfill the requested "split same height"
+    to be split to fulfill the requested "split same height"
 */
 
 static sal_uInt16 lcl_CalculateSplitLineHeights( SwSplitLines &rCurr, SwSplitLines &rNew,

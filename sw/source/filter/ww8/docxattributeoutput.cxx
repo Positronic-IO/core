@@ -40,6 +40,7 @@
 #include <rdfhelper.hxx>
 #include "wrtww8.hxx"
 
+#include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/flagguard.hxx>
@@ -74,7 +75,6 @@
 #include <editeng/colritem.hxx>
 #include <editeng/hyphenzoneitem.hxx>
 #include <editeng/ulspitem.hxx>
-#include <editeng/boxitem.hxx>
 #include <editeng/contouritem.hxx>
 #include <editeng/shdditem.hxx>
 #include <editeng/emphasismarkitem.hxx>
@@ -128,6 +128,7 @@
 #include <IDocumentRedlineAccess.hxx>
 #include <grfatr.hxx>
 #include <frmatr.hxx>
+#include <txtatr.hxx>
 
 #include <osl/file.hxx>
 #include <vcl/embeddedfontshelper.hxx>
@@ -2514,7 +2515,6 @@ void DocxAttributeOutput::RunText( const OUString& rText, rtl_TextEncoding /*eCh
 
 void DocxAttributeOutput::RawText(const OUString& rText, rtl_TextEncoding /*eCharSet*/)
 {
-    assert ( (m_pHyperlinkAttrList.is() || m_rExport.SdrExporter().IsDMLAndVMLDrawingOpen() /* || m_rExport.SdrExporter().IsDrawingOpen() */) && "jluth is at mail dot com-and wants example documents that use RawText/EEField");
     m_sRawText = rText;
 }
 
@@ -2984,7 +2984,7 @@ static void impl_borderLine( FSHelperPtr const & pSerializer, sal_Int32 elementT
     // no need to write them.
     if( rStyleProps != nullptr && pBorderLine && !pBorderLine->isEmpty() &&
             pBorderLine->GetBorderLineStyle() == static_cast<SvxBorderLineStyle>(rStyleProps->LineStyle) &&
-            pBorderLine->GetColor() == rStyleProps->Color &&
+            pBorderLine->GetColor() == Color(rStyleProps->Color) &&
             pBorderLine->GetWidth() == convertMm100ToTwip( rStyleProps->LineWidth ) )
         return;
 
@@ -3036,8 +3036,6 @@ static OutputBorderOptions lcl_getTableDefaultBorderOptions(bool bEcma)
     rOptions.bWriteTag = true;
     rOptions.bWriteInsideHV = true;
     rOptions.bWriteDistance = false;
-    rOptions.aShadowLocation = SvxShadowLocation::NONE;
-    rOptions.bCheckDistanceSize = false;
 
     return rOptions;
 }
@@ -3051,8 +3049,6 @@ static OutputBorderOptions lcl_getTableCellBorderOptions(bool bEcma)
     rOptions.bWriteTag = true;
     rOptions.bWriteInsideHV = true;
     rOptions.bWriteDistance = false;
-    rOptions.aShadowLocation = SvxShadowLocation::NONE;
-    rOptions.bCheckDistanceSize = false;
 
     return rOptions;
 }
@@ -3066,23 +3062,11 @@ static OutputBorderOptions lcl_getBoxBorderOptions()
     rOptions.bWriteTag = false;
     rOptions.bWriteInsideHV = false;
     rOptions.bWriteDistance = true;
-    rOptions.aShadowLocation = SvxShadowLocation::NONE;
-    rOptions.bCheckDistanceSize = false;
 
     return rOptions;
 }
 
-static bool boxHasLineLargerThan31(const SvxBoxItem& rBox)
-{
-    return  (
-                ( rBox.GetDistance( SvxBoxItemLine::TOP ) / 20 ) > 31 ||
-                ( rBox.GetDistance( SvxBoxItemLine::LEFT ) / 20 ) > 31 ||
-                ( rBox.GetDistance( SvxBoxItemLine::BOTTOM ) / 20 ) > 31 ||
-                ( rBox.GetDistance( SvxBoxItemLine::RIGHT ) / 20 ) > 31
-            );
-}
-
-static void impl_borders( FSHelperPtr const & pSerializer, const SvxBoxItem& rBox, const OutputBorderOptions& rOptions, PageMargins const * pageMargins,
+static void impl_borders( FSHelperPtr const & pSerializer, const SvxBoxItem& rBox, const OutputBorderOptions& rOptions,
                           std::map<SvxBoxItemLine, css::table::BorderLine2> &rTableStyleConf )
 {
     static const SvxBoxItemLine aBorders[] =
@@ -3099,16 +3083,6 @@ static void impl_borders( FSHelperPtr const & pSerializer, const SvxBoxItem& rBo
     };
     bool tagWritten = false;
     const SvxBoxItemLine* pBrd = aBorders;
-
-    bool bExportDistanceFromPageEdge = false;
-    if ( rOptions.bCheckDistanceSize && boxHasLineLargerThan31(rBox) )
-    {
-        // The distance is larger than '31'. This cannot be exported as 'distance from text'.
-        // Instead - it should be exported as 'distance from page edge'.
-        // This is based on http://wiki.openoffice.org/wiki/Writer/MSInteroperability/PageBorder
-        // Specifically 'export case #2'
-        bExportDistanceFromPageEdge = true;
-    }
 
     bool bWriteInsideH = false;
     bool bWriteInsideV = false;
@@ -3158,22 +3132,20 @@ static void impl_borders( FSHelperPtr const & pSerializer, const SvxBoxItem& rBo
         sal_uInt16 nDist = 0;
         if (rOptions.bWriteDistance)
         {
-            if (bExportDistanceFromPageEdge)
+            if (rOptions.pDistances)
             {
-                // Export 'Distance from Page Edge'
                 if ( *pBrd == SvxBoxItemLine::TOP)
-                    nDist = pageMargins->nPageMarginTop - rBox.GetDistance( *pBrd );
+                    nDist = rOptions.pDistances->nTop;
                 else if ( *pBrd == SvxBoxItemLine::LEFT)
-                    nDist = pageMargins->nPageMarginLeft - rBox.GetDistance( *pBrd );
+                    nDist = rOptions.pDistances->nLeft;
                 else if ( *pBrd == SvxBoxItemLine::BOTTOM)
-                    nDist = pageMargins->nPageMarginBottom - rBox.GetDistance( *pBrd );
+                    nDist = rOptions.pDistances->nBottom;
                 else if ( *pBrd == SvxBoxItemLine::RIGHT)
-                    nDist = pageMargins->nPageMarginRight - rBox.GetDistance( *pBrd );
+                    nDist = rOptions.pDistances->nRight;
             }
             else
             {
-                // Export 'Distance from text'
-                nDist = rBox.GetDistance( *pBrd );
+                nDist = rBox.GetDistance(*pBrd);
             }
         }
 
@@ -3322,7 +3294,7 @@ void DocxAttributeOutput::TableCellProperties( ww8::WW8TableNodeInfoInner::Point
     const SvxBoxItem& rDefaultBox = (*tableFirstCells.rbegin())->getTableBox( )->GetFrameFormat( )->GetBox( );
     {
         // The cell borders
-        impl_borders( m_pSerializer, rBox, lcl_getTableCellBorderOptions(bEcma), nullptr, m_aTableStyleConf );
+        impl_borders( m_pSerializer, rBox, lcl_getTableCellBorderOptions(bEcma), m_aTableStyleConf );
     }
 
     TableBackgrounds( pTableTextNodeInfoInner );
@@ -3826,7 +3798,7 @@ void DocxAttributeOutput::TableDefaultBorders( ww8::WW8TableNodeInfoInner::Point
     if (m_aTableStyleConf.empty())
     {
         // the defaults of the table are taken from the top-left cell
-        impl_borders(m_pSerializer, pFrameFormat->GetBox(), lcl_getTableDefaultBorderOptions(bEcma), nullptr, m_aTableStyleConf);
+        impl_borders(m_pSerializer, pFrameFormat->GetBox(), lcl_getTableDefaultBorderOptions(bEcma), m_aTableStyleConf);
     }
 }
 
@@ -4482,14 +4454,14 @@ void DocxAttributeOutput::WriteSrcRect(const SdrObject* pSdrObj, const SwFrameFo
     uno::Reference< drawing::XShape > xShape( const_cast<SdrObject*>(pSdrObj)->getUnoShape(), uno::UNO_QUERY );
     uno::Reference< beans::XPropertySet > xPropSet( xShape, uno::UNO_QUERY );
 
-    OUString sUrl;
-    xPropSet->getPropertyValue("GraphicURL") >>= sUrl;
-    const GraphicObject aGrafObj(GraphicObject::CreateGraphicObjectFromURL(sUrl));
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xPropSet->getPropertyValue("Graphic") >>= xGraphic;
+    const Graphic aGraphic(xGraphic);
 
-    Size aOriginalSize(aGrafObj.GetPrefSize());
+    Size aOriginalSize(aGraphic.GetPrefSize());
 
     const MapMode aMap100mm( MapUnit::Map100thMM );
-    const MapMode& rMapMode = aGrafObj.GetPrefMapMode();
+    const MapMode& rMapMode = aGraphic.GetPrefMapMode();
     if (rMapMode.GetMapUnit() == MapUnit::MapPixel)
     {
         aOriginalSize = Application::GetDefaultDevice()->PixelToLogic(aOriginalSize, aMap100mm);
@@ -5547,7 +5519,7 @@ void DocxAttributeOutput::WriteOutliner(const OutlinerParaObject& rParaObj)
             aAttrIter.NextPara( n );
 
         OUString aStr( rEditObj.GetText( n ));
-        sal_Int32 nAktPos = 0;
+        sal_Int32 nCurrentPos = 0;
         sal_Int32 nEnd = aStr.getLength();
 
         StartParagraph(ww8::WW8TableNodeInfo::Pointer_t());
@@ -5565,30 +5537,29 @@ void DocxAttributeOutput::WriteOutliner(const OutlinerParaObject& rParaObj)
 
             // Write run properties.
             m_pSerializer->startElementNS(XML_w, XML_rPr, FSEND);
-            aAttrIter.OutAttr(nAktPos);
+            aAttrIter.OutAttr(nCurrentPos);
             WriteCollectedRunProperties();
             m_pSerializer->endElementNS(XML_w, XML_rPr);
 
-            bool bTextAtr = aAttrIter.IsTextAttr( nAktPos );
+            bool bTextAtr = aAttrIter.IsTextAttr( nCurrentPos );
             if( !bTextAtr )
             {
-                OUString aOut( aStr.copy( nAktPos, nNextAttr - nAktPos ) );
+                OUString aOut( aStr.copy( nCurrentPos, nNextAttr - nCurrentPos ) );
                 RunText(aOut);
             }
 
             if ( !m_sRawText.isEmpty() )
             {
-                assert (bTextAtr && "jluth is at mail dot com-and is looking for sample documents");
                 RunText( m_sRawText );
                 m_sRawText.clear();
             }
 
             m_pSerializer->endElementNS( XML_w, XML_r );
 
-            nAktPos = nNextAttr;
+            nCurrentPos = nNextAttr;
             aAttrIter.NextPos();
         }
-        while( nAktPos < nEnd );
+        while( nCurrentPos < nEnd );
         // Word can't handle nested text boxes, so write them on the same level.
         ++m_nTextFrameLevel;
         EndParagraph(ww8::WW8TableNodeInfoInner::Pointer_t());
@@ -6068,26 +6039,7 @@ void DocxAttributeOutput::SectionPageBorders( const SwFrameFormat* pFormat, cons
     if ( !(pBottom || pTop || pLeft || pRight) )
         return;
 
-    bool bExportDistanceFromPageEdge = false;
-    if ( boxHasLineLargerThan31(rBox) )
-    {
-        // The distance is larger than '31'. This cannot be exported as 'distance from text'.
-        // Instead - it should be exported as 'distance from page edge'.
-        // This is based on http://wiki.openoffice.org/wiki/Writer/MSInteroperability/PageBorder
-        // Specifically 'export case #2'
-        bExportDistanceFromPageEdge = true;
-    }
-
-    // All distances are relative to the text margins
-    m_pSerializer->startElementNS( XML_w, XML_pgBorders,
-           FSNS( XML_w, XML_display ), "allPages",
-           FSNS( XML_w, XML_offsetFrom ), bExportDistanceFromPageEdge ? "page" : "text",
-           FSEND );
-
     OutputBorderOptions aOutputBorderOptions = lcl_getBoxBorderOptions();
-
-    // Check if the distance is larger than 31 points
-    aOutputBorderOptions.bCheckDistanceSize = true;
 
     // Check if there is a shadow item
     const SfxPoolItem* pItem = GetExport().HasItem( RES_SHADOW );
@@ -6098,17 +6050,25 @@ void DocxAttributeOutput::SectionPageBorders( const SwFrameFormat* pFormat, cons
     }
 
     // By top margin, impl_borders() means the distance between the top of the page and the header frame.
-    PageMargins aMargins = m_pageMargins;
+    editeng::WordPageMargins aMargins = m_pageMargins;
     HdFtDistanceGlue aGlue(pFormat->GetAttrSet());
     if (aGlue.HasHeader())
-        aMargins.nPageMarginTop = aGlue.dyaHdrTop;
+        aMargins.nTop = aGlue.dyaHdrTop;
     // Ditto for bottom margin.
     if (aGlue.HasFooter())
-        aMargins.nPageMarginBottom = aGlue.dyaHdrBottom;
+        aMargins.nBottom = aGlue.dyaHdrBottom;
+
+    aOutputBorderOptions.pDistances = std::make_shared<editeng::WordBorderDistances>();
+    editeng::BorderDistancesToWord(rBox, aMargins, *aOutputBorderOptions.pDistances);
+
+    // All distances are relative to the text margins
+    m_pSerializer->startElementNS(XML_w, XML_pgBorders,
+        FSNS(XML_w, XML_display), "allPages",
+        FSNS(XML_w, XML_offsetFrom), aOutputBorderOptions.pDistances->bFromEdge ? "page" : "text",
+        FSEND);
 
     std::map<SvxBoxItemLine, css::table::BorderLine2> aEmptyMap; // empty styles map
-    impl_borders( m_pSerializer, rBox, aOutputBorderOptions, &aMargins,
-                  aEmptyMap );
+    impl_borders( m_pSerializer, rBox, aOutputBorderOptions, aEmptyMap );
 
     m_pSerializer->endElementNS( XML_w, XML_pgBorders );
 
@@ -6196,6 +6156,9 @@ static OString impl_LevelNFC( sal_uInt16 nNumberingType , const SfxItemSet *pOut
         case style::NumberingType::CHARS_ARABIC: aType="arabicAlpha"; break;
         case style::NumberingType::CHARS_THAI: aType="thaiLetters"; break;
         case style::NumberingType::CHARS_PERSIAN: aType="hindiVowels"; break;
+        case style::NumberingType::TEXT_NUMBER: aType="ordinal"; break;
+        case style::NumberingType::TEXT_CARDINAL: aType="cardinalText"; break;
+        case style::NumberingType::TEXT_ORDINAL: aType="ordinalText"; break;
 /*
         Fallback the rest to decimal.
         case style::NumberingType::NATIVE_NUMBERING:
@@ -7903,7 +7866,7 @@ void DocxAttributeOutput::FormatFrameSize( const SwFormatFrameSize& rSize )
     else if ( m_rExport.m_bOutPageDescs )
     {
         FastAttributeList *attrList = FastSerializerHelper::createAttrList( );
-        if ( m_rExport.m_pAktPageDesc->GetLandscape( ) )
+        if ( m_rExport.m_pCurrentPageDesc->GetLandscape( ) )
             attrList->add( FSNS( XML_w, XML_orient ), "landscape" );
 
         attrList->add( FSNS( XML_w, XML_w ), OString::number( rSize.GetWidth( ) ) );
@@ -7941,24 +7904,21 @@ void DocxAttributeOutput::FormatLRSpace( const SvxLRSpaceItem& rLRSpace )
     }
     else if ( m_rExport.m_bOutPageDescs )
     {
-        m_pageMargins.nPageMarginLeft = 0;
-        m_pageMargins.nPageMarginRight = 0;
+        m_pageMargins.nLeft = 0;
+        m_pageMargins.nRight = 0;
 
-        const SfxPoolItem* pItem = m_rExport.HasItem( RES_BOX );
-        if ( pItem )
+        if ( auto pBoxItem = static_cast<const SvxBoxItem*>(m_rExport.HasItem( RES_BOX )) )
         {
-            m_pageMargins.nPageMarginRight = static_cast<const SvxBoxItem*>(pItem)->CalcLineSpace( SvxBoxItemLine::LEFT, /*bEvenIfNoLine*/true );
-            m_pageMargins.nPageMarginLeft = static_cast<const SvxBoxItem*>(pItem)->CalcLineSpace( SvxBoxItemLine::RIGHT, /*bEvenIfNoLine*/true );
+            m_pageMargins.nLeft = pBoxItem->CalcLineSpace( SvxBoxItemLine::LEFT, /*bEvenIfNoLine*/true );
+            m_pageMargins.nRight = pBoxItem->CalcLineSpace( SvxBoxItemLine::RIGHT, /*bEvenIfNoLine*/true );
         }
-        else
-            m_pageMargins.nPageMarginLeft = m_pageMargins.nPageMarginRight = 0;
 
-        m_pageMargins.nPageMarginLeft = m_pageMargins.nPageMarginLeft + static_cast<sal_uInt16>(rLRSpace.GetLeft());
-        m_pageMargins.nPageMarginRight = m_pageMargins.nPageMarginRight + static_cast<sal_uInt16>(rLRSpace.GetRight());
+        m_pageMargins.nLeft += sal::static_int_cast<sal_uInt16>(rLRSpace.GetLeft());
+        m_pageMargins.nRight += sal::static_int_cast<sal_uInt16>(rLRSpace.GetRight());
 
         AddToAttrList( m_pSectionSpacingAttrList, 2,
-                FSNS( XML_w, XML_left ), OString::number( m_pageMargins.nPageMarginLeft ).getStr(),
-                FSNS( XML_w, XML_right ), OString::number( m_pageMargins.nPageMarginRight ).getStr() );
+                FSNS( XML_w, XML_left ), OString::number( m_pageMargins.nLeft ).getStr(),
+                FSNS( XML_w, XML_right ), OString::number( m_pageMargins.nRight ).getStr() );
     }
     else
     {
@@ -8010,20 +7970,20 @@ void DocxAttributeOutput::FormatULSpace( const SvxULSpaceItem& rULSpace )
             nHeader = sal_Int32( aDistances.dyaHdrTop );
 
         // Page top
-        m_pageMargins.nPageMarginTop = aDistances.dyaTop;
+        m_pageMargins.nTop = aDistances.dyaTop;
 
         sal_Int32 nFooter = 0;
         if ( aDistances.HasFooter() )
             nFooter = sal_Int32( aDistances.dyaHdrBottom );
 
         // Page Bottom
-        m_pageMargins.nPageMarginBottom = aDistances.dyaBottom;
+        m_pageMargins.nBottom = aDistances.dyaBottom;
 
         AddToAttrList( m_pSectionSpacingAttrList, 5,
                 FSNS( XML_w, XML_header ), OString::number( nHeader ).getStr(),
-                FSNS( XML_w, XML_top ), OString::number( m_pageMargins.nPageMarginTop ).getStr(),
+                FSNS( XML_w, XML_top ), OString::number( m_pageMargins.nTop ).getStr(),
                 FSNS( XML_w, XML_footer ), OString::number( nFooter ).getStr(),
-                FSNS( XML_w, XML_bottom ), OString::number( m_pageMargins.nPageMarginBottom ).getStr(),
+                FSNS( XML_w, XML_bottom ), OString::number( m_pageMargins.nBottom ).getStr(),
                 // FIXME Page Gutter is not handled ATM, setting to 0 as it's mandatory for OOXML
                 FSNS( XML_w, XML_gutter ), "0" );
     }
@@ -8454,7 +8414,7 @@ void DocxAttributeOutput::FormatBox( const SvxBoxItem& rBox )
                     uno::Reference< drawing::XShape > xShape( const_cast<SdrObject*>(pSdrObj)->getUnoShape(), uno::UNO_QUERY );
                     uno::Reference< beans::XPropertySet > xPropertySet( xShape, uno::UNO_QUERY );
                     m_rDrawingML.SetFS(m_pSerializer);
-                    m_rDrawingML.WriteBlipFill( xPropertySet, "BackGraphicURL" );
+                    m_rDrawingML.WriteBlipFill(xPropertySet, "BackGraphic");
                 }
             }
         }
@@ -8570,8 +8530,7 @@ void DocxAttributeOutput::FormatBox( const SvxBoxItem& rBox )
         m_pSerializer->startElementNS( XML_w, XML_pBdr, FSEND );
 
         std::map<SvxBoxItemLine, css::table::BorderLine2> aEmptyMap; // empty styles map
-        impl_borders( m_pSerializer, rBox, aOutputBorderOptions, &m_pageMargins,
-                      aEmptyMap );
+        impl_borders( m_pSerializer, rBox, aOutputBorderOptions, aEmptyMap );
 
         // Close the paragraph's borders tag
         m_pSerializer->endElementNS( XML_w, XML_pBdr );

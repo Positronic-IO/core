@@ -11,8 +11,6 @@
 #include <swmodeltestbase.hxx>
 
 #include <com/sun/star/awt/FontWeight.hpp>
-#include <com/sun/star/document/XFilter.hpp>
-#include <com/sun/star/document/XImporter.hpp>
 #include <com/sun/star/graphic/GraphicType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -46,9 +44,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <unotools/ucbstreamhelper.hxx>
-#include <unotools/streamwrap.hxx>
 #include <comphelper/sequenceashashmap.hxx>
-#include <comphelper/configuration.hxx>
 
 #include <bordertest.hxx>
 
@@ -85,31 +81,6 @@ public:
     }
 
 protected:
-    /// Copy&paste helper.
-    void paste(const OUString& aFilename, uno::Reference<text::XTextRange> const& xTextRange
-                                          = uno::Reference<text::XTextRange>())
-    {
-        uno::Reference<document::XFilter> xFilter(
-            m_xSFactory->createInstance("com.sun.star.comp.Writer.RtfFilter"),
-            uno::UNO_QUERY_THROW);
-        uno::Reference<document::XImporter> xImporter(xFilter, uno::UNO_QUERY_THROW);
-        xImporter->setTargetDocument(mxComponent);
-        uno::Sequence<beans::PropertyValue> aDescriptor(xTextRange.is() ? 3 : 2);
-        aDescriptor[0].Name = "InputStream";
-        SvStream* pStream = utl::UcbStreamHelper::CreateStream(
-            m_directories.getURLFromSrc("/sw/qa/extras/rtfexport/data/") + aFilename,
-            StreamMode::WRITE);
-        uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
-        aDescriptor[0].Value <<= xStream;
-        aDescriptor[1].Name = "InsertMode";
-        aDescriptor[1].Value <<= true;
-        if (xTextRange.is())
-        {
-            aDescriptor[2].Name = "TextInsertModeRange";
-            aDescriptor[2].Value <<= xTextRange;
-        }
-        xFilter->filter(aDescriptor);
-    }
     AllSettings m_aSavedSettings;
 };
 
@@ -640,7 +611,10 @@ DECLARE_RTFEXPORT_TEST(testCopyPastePageStyle, "copypaste-pagestyle.rtf")
 {
     // The problem was that RTF import during copy&paste did not ignore page styles.
     // Once we have more copy&paste tests, makes sense to refactor this to some helper method.
-    paste("copypaste-pagestyle-paste.rtf");
+    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xEnd = xText->getEnd();
+    paste("rtfexport/data/copypaste-pagestyle-paste.rtf", xEnd);
 
     uno::Reference<beans::XPropertySet> xPropertySet(getStyles("PageStyles")->getByName("Standard"),
                                                      uno::UNO_QUERY);
@@ -657,7 +631,7 @@ DECLARE_RTFEXPORT_TEST(testCopyPasteFootnote, "copypaste-footnote.rtf")
     uno::Reference<container::XIndexAccess> xFootnotes(xFootnotesSupplier->getFootnotes(),
                                                        uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xTextRange(xFootnotes->getByIndex(0), uno::UNO_QUERY);
-    paste("copypaste-footnote-paste.rtf", xTextRange);
+    paste("rtfexport/data/copypaste-footnote-paste.rtf", xTextRange);
 
     CPPUNIT_ASSERT_EQUAL(OUString("bbb"), xTextRange->getString());
 }
@@ -668,7 +642,7 @@ DECLARE_RTFEXPORT_TEST(testFdo63428, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("fdo63428.rtf", xEnd);
+    paste("rtfexport/data/fdo63428.rtf", xEnd);
 
     // Additionally, commented range was imported as a normal comment.
     CPPUNIT_ASSERT_EQUAL(OUString("Annotation"),
@@ -690,7 +664,7 @@ DECLARE_RTFEXPORT_TEST(testFdo69384Inserted, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("fdo69384-paste.rtf", xEnd);
+    paste("rtfexport/data/fdo69384-paste.rtf", xEnd);
 
     // During insert of the RTF document we do not insert new styles
     CPPUNIT_ASSERT(!getStyles("ParagraphStyles")->hasByName("Text body justified"));
@@ -702,7 +676,7 @@ DECLARE_RTFEXPORT_TEST(testFdo61193, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("fdo61193.rtf", xEnd);
+    paste("rtfexport/data/fdo61193.rtf", xEnd);
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf108123, "hello.rtf")
@@ -712,7 +686,7 @@ DECLARE_RTFEXPORT_TEST(testTdf108123, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("tdf108123.rtf", xEnd);
+    paste("rtfexport/data/tdf108123.rtf", xEnd);
 }
 
 DECLARE_RTFEXPORT_TEST(testShptxtPard, "shptxt-pard.rtf")
@@ -1061,7 +1035,7 @@ DECLARE_RTFEXPORT_TEST(testFdo62044, "fdo62044.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("fdo62044-paste.rtf", xEnd);
+    paste("rtfexport/data/fdo62044-paste.rtf", xEnd);
 
     uno::Reference<beans::XPropertySet> xPropertySet(
         getStyles("ParagraphStyles")->getByName("Heading 1"), uno::UNO_QUERY);
@@ -1094,10 +1068,11 @@ DECLARE_RTFEXPORT_TEST(testN825305, "n825305.rtf")
 
 DECLARE_RTFEXPORT_TEST(testTdf106953, "tdf106953.rtf")
 {
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1270),
+                         getProperty<sal_Int32>(getParagraph(1), "ParaLeftMargin"));
     auto xRules = getProperty<uno::Reference<container::XIndexAccess>>(
         getStyles("NumberingStyles")->getByName("WWNum1"), "NumberingRules");
     comphelper::SequenceAsHashMap aRule(xRules->getByIndex(0));
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1270), aRule["IndentAt"].get<sal_Int32>());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), aRule["FirstLineIndent"].get<sal_Int32>());
 }
 
@@ -1298,7 +1273,8 @@ DECLARE_RTFEXPORT_TEST(testNestedTable, "rhbz1065629.rtf")
     xTable.set(xTables->getByIndex(2), uno::UNO_QUERY);
     xCell.set(xTable->getCellByName("A1"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 fullPtSolid(1, 0, 35, 0, table::BorderLineStyle::SOLID, 35);
+    table::BorderLine2 fullPtSolid(sal_Int32(COL_BLACK), 0, 35, 0, table::BorderLineStyle::SOLID,
+                                   35);
     CPPUNIT_ASSERT_BORDER_EQUAL(fullPtSolid, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(fullPtSolid, getProperty<table::BorderLine2>(xCell, "RightBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(fullPtSolid, getProperty<table::BorderLine2>(xCell, "TopBorder"));
@@ -1307,7 +1283,8 @@ DECLARE_RTFEXPORT_TEST(testNestedTable, "rhbz1065629.rtf")
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0xCC0000), getProperty<sal_Int32>(xCell, "BackColor"));
     xCell.set(xTable->getCellByName("A2"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 halfPtSolid(/*0*/ 1, 0, 18, 0, table::BorderLineStyle::SOLID, 18);
+    table::BorderLine2 halfPtSolid(sal_Int32(COL_BLACK), 0, 18, 0, table::BorderLineStyle::SOLID,
+                                   18);
     CPPUNIT_ASSERT_BORDER_EQUAL(halfPtSolid, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0xffffffff),
                          getProperty<sal_Int32>(xCell, "BackColor"));
@@ -1372,7 +1349,7 @@ DECLARE_RTFEXPORT_TEST(testTableBorderDefaults, "fdo68779.rtf")
     uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 solid(1, 0, 26, 0, table::BorderLineStyle::SOLID, 26);
+    table::BorderLine2 solid(sal_Int32(COL_BLACK), 0, 26, 0, table::BorderLineStyle::SOLID, 26);
     CPPUNIT_ASSERT_BORDER_EQUAL(solid, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(solid, getProperty<table::BorderLine2>(xCell, "RightBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(solid, getProperty<table::BorderLine2>(xCell, "TopBorder"));
@@ -1381,7 +1358,7 @@ DECLARE_RTFEXPORT_TEST(testTableBorderDefaults, "fdo68779.rtf")
     xTable.set(xTables->getByIndex(1), uno::UNO_QUERY);
     xCell.set(xTable->getCellByName("A1"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 dotted(1, 0, 26, 0, table::BorderLineStyle::DOTTED, 26);
+    table::BorderLine2 dotted(sal_Int32(COL_BLACK), 0, 26, 0, table::BorderLineStyle::DOTTED, 26);
     CPPUNIT_ASSERT_BORDER_EQUAL(dotted, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(dotted, getProperty<table::BorderLine2>(xCell, "RightBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(dotted, getProperty<table::BorderLine2>(xCell, "TopBorder"));
@@ -1390,7 +1367,8 @@ DECLARE_RTFEXPORT_TEST(testTableBorderDefaults, "fdo68779.rtf")
     xTable.set(xTables->getByIndex(2), uno::UNO_QUERY);
     xCell.set(xTable->getCellByName("A1"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 doubled(1, 26, 26, 26, table::BorderLineStyle::DOUBLE, 79);
+    table::BorderLine2 doubled(sal_Int32(COL_BLACK), 26, 26, 26, table::BorderLineStyle::DOUBLE,
+                               79);
     CPPUNIT_ASSERT_BORDER_EQUAL(doubled, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(doubled, getProperty<table::BorderLine2>(xCell, "RightBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(doubled, getProperty<table::BorderLine2>(xCell, "TopBorder"));
@@ -1399,7 +1377,8 @@ DECLARE_RTFEXPORT_TEST(testTableBorderDefaults, "fdo68779.rtf")
     xTable.set(xTables->getByIndex(3), uno::UNO_QUERY);
     xCell.set(xTable->getCellByName("A1"), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xCell.is());
-    table::BorderLine2 thinThickMG(1, 14, 26, 14, table::BorderLineStyle::THINTHICK_MEDIUMGAP, 53);
+    table::BorderLine2 thinThickMG(sal_Int32(COL_BLACK), 14, 26, 14,
+                                   table::BorderLineStyle::THINTHICK_MEDIUMGAP, 53);
     CPPUNIT_ASSERT_BORDER_EQUAL(thinThickMG, getProperty<table::BorderLine2>(xCell, "LeftBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(thinThickMG, getProperty<table::BorderLine2>(xCell, "RightBorder"));
     CPPUNIT_ASSERT_BORDER_EQUAL(thinThickMG, getProperty<table::BorderLine2>(xCell, "TopBorder"));
@@ -1721,7 +1700,7 @@ DECLARE_RTFEXPORT_TEST(testTdf90260Nopar, "hello.rtf")
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xText(xTextDocument->getText(), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
-    paste("tdf90260-nopar.rtf", xEnd);
+    paste("rtfexport/data/tdf90260-nopar.rtf", xEnd);
     CPPUNIT_ASSERT_EQUAL(1, getParagraphs());
 }
 
@@ -1866,15 +1845,17 @@ DECLARE_RTFEXPORT_TEST(testClassificatonPasteLevels, "classification-confidentia
     // Classified source and classified destination, but internal only has a
     // higher level than confidential: nothing should happen.
     OUString aOld = xText->getString();
-    paste("classification-yes.rtf", xEnd);
+    paste("rtfexport/data/classification-yes.rtf", xEnd);
     CPPUNIT_ASSERT_EQUAL(aOld, xText->getString());
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf95707, "tdf95707.rtf")
 {
     // Graphic was replaced with a "Read-Error" placeholder.
-    CPPUNIT_ASSERT(getProperty<OUString>(getShape(1), "GraphicURL")
-                   != "vnd.sun.star.GraphicObject:0000000000000000000000000000000000000000");
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xGraphic = getProperty<uno::Reference<graphic::XGraphic>>(getShape(1), "Graphic");
+    CPPUNIT_ASSERT(xGraphic.is());
+    CPPUNIT_ASSERT(xGraphic->getType() != graphic::GraphicType::EMPTY);
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf96275, "tdf96275.rtf")

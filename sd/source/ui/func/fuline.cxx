@@ -22,7 +22,6 @@
 #include <svx/svxids.hrc>
 #include <svx/tabline.hxx>
 #include <svx/xenum.hxx>
-#include <vcl/msgbox.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
 #include <sfx2/request.hxx>
@@ -64,10 +63,7 @@ void FuLine::DoExecute( SfxRequest& rReq )
 
     const SfxItemSet* pArgs = rReq.GetArgs();
     if (pArgs)
-    {
-        mpViewShell->Cancel();
         return;
-    }
 
     const SdrObject* pObj = nullptr;
     const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
@@ -81,10 +77,7 @@ void FuLine::DoExecute( SfxRequest& rReq )
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     VclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSvxLineTabDialog(mpViewShell->GetActiveWindow(), pNewAttr.get(), mpDoc, pObj, bHasMarked) : nullptr);
     if (!pDlg)
-    {
-        mpViewShell->Cancel();
         return;
-    }
 
     pDlg->StartExecuteAsync([=](sal_Int32 nResult){
         if (nResult == RET_OK)
@@ -106,6 +99,8 @@ void FuLine::DoExecute( SfxRequest& rReq )
 
             mpViewShell->GetViewFrame()->GetBindings().Invalidate( SidArray );
         }
+
+        // deferred until the dialog ends
         mpViewShell->Cancel();
     });
 }

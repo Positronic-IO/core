@@ -193,7 +193,7 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, RenameHdl, Button*, void)
     uno::Reference<container::XNamed> xNamed(xTmp, uno::UNO_QUERY);
     SwAbstractDialogFactory* pFact = swui::GetFactory();
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-    ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(pFact->CreateSwRenameXNamedDlg(this, xNamed, xNameAccess));
+    ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(pFact->CreateSwRenameXNamedDlg(GetFrameWeld(), xNamed, xNameAccess));
     OSL_ENSURE(pDlg, "Dialog creation failed!");
     pDlg->SetForbiddenChars(BookmarkTable::aForbiddenChars + OUStringLiteral1(BookmarkTable::cSeparator));
 
@@ -349,9 +349,9 @@ void SwInsertBookmarkDlg::dispose()
 BookmarkTable::BookmarkTable(SvSimpleTableContainer& rParent) :
     SvSimpleTable(rParent, 0)
 {
-    static long nTabs[] = {3, 0, 40, 150};
+    static long nTabs[] = {0, 40, 150};
 
-    SetTabs(nTabs, MapUnit::MapPixel);
+    SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
     SetSelectionMode(SelectionMode::Multiple);
     InsertHeaderEntry(SwResId(STR_PAGE));
     InsertHeaderEntry(SwResId(STR_BOOKMARK_NAME));

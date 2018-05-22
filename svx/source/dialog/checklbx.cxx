@@ -20,8 +20,6 @@
 #include <svtools/svlbitm.hxx>
 #include <svtools/treelistentry.hxx>
 #include <svx/checklbx.hxx>
-#include <svx/dialmgr.hxx>
-#include <svx/strings.hrc>
 #include <vcl/builderfactory.hxx>
 
 SvxCheckListBox::SvxCheckListBox( vcl::Window* pParent, WinBits nWinStyle ) :
@@ -46,14 +44,14 @@ SvxCheckListBox::~SvxCheckListBox()
 
 void SvxCheckListBox::dispose()
 {
-    delete pCheckButton;
+    pCheckButton.reset();
     SvTreeListBox::dispose();
 }
 
 void SvxCheckListBox::Init_Impl()
 {
-    pCheckButton = new SvLBoxButtonData( this );
-    EnableCheckButton( pCheckButton );
+    pCheckButton.reset(new SvLBoxButtonData( this ));
+    EnableCheckButton( pCheckButton.get() );
 }
 
 void SvxCheckListBox::InsertEntry( const OUString& rStr, sal_uLong nPos,

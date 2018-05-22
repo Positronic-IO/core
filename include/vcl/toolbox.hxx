@@ -28,6 +28,7 @@
 #include <o3tl/typed_flags_set.hxx>
 
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include <com/sun/star/frame/XFrame.hpp>
@@ -98,9 +99,9 @@ private:
         ImplToolItems::size_type mnLines;
     };
 
-    ImplToolBoxPrivateData*   mpData;
+    std::unique_ptr<ImplToolBoxPrivateData>   mpData;
     std::vector<ImplToolSize> maFloatSizes;
-    Idle               *mpIdle;
+    std::unique_ptr<Idle>      mpIdle;
     tools::Rectangle           maUpperRect;
     tools::Rectangle           maLowerRect;
     tools::Rectangle           maPaintRect;
@@ -146,7 +147,8 @@ private:
                         mbDragging:1,
                         mbIsKeyEvent:1,
                         mbChangingHighlight:1,
-                        mbImagesMirrored:1;
+                        mbImagesMirrored:1,
+                        mbLineSpacing:1;
     WindowAlign         meAlign;
     WindowAlign         meDockAlign;
     ButtonType          meButtonType;
@@ -254,7 +256,7 @@ public:
     SAL_DLLPRIVATE void ImplDrawMenuButton(vcl::RenderContext& rRenderContext, bool bHighlight);
     SAL_DLLPRIVATE void ImplDrawButton(vcl::RenderContext& rRenderContext, const tools::Rectangle &rRect, sal_uInt16 highlight, bool bChecked, bool bEnabled, bool bIsWindow);
     SAL_DLLPRIVATE ImplToolItems::size_type ImplCountLineBreaks() const;
-    SAL_DLLPRIVATE ImplToolBoxPrivateData* ImplGetToolBoxPrivateData() const { return mpData; }
+    SAL_DLLPRIVATE ImplToolBoxPrivateData* ImplGetToolBoxPrivateData() const { return mpData.get(); }
 
 protected:
     virtual void ApplySettings(vcl::RenderContext& rRenderContext) override;
@@ -510,11 +512,15 @@ public:
     static Size         GetDefaultImageSize(ToolBoxButtonSize eToolBoxButtonSize);
     Size                GetDefaultImageSize() const;
     void                ChangeHighlight( ImplToolItems::size_type nPos );
+    bool                ChangeHighlightUpDn( bool bUp );
+
 
     void SetToolbarLayoutMode( ToolBoxLayoutMode eLayout );
     void statusChanged(const css::frame::FeatureStateEvent& rEvent);
 
     void SetToolBoxTextPosition( ToolBoxTextPosition ePosition );
+
+    void SetLineSpacing(bool b) { mbLineSpacing = b; }
 };
 
 inline void ToolBox::CheckItem( sal_uInt16 nItemId, bool bCheck )

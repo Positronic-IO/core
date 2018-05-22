@@ -92,11 +92,12 @@ void XMLTableShapeImportHelper::finishShape(
             aAnchor.maStart = aStartCell;
             awt::Point aStartPoint(rShape->getPosition());
             aAnchor.maStartOffset = Point(aStartPoint.X, aStartPoint.Y);
+            aAnchor.mbResizeWithCell = false;
 
             sal_Int32 nEndX(-1);
             sal_Int32 nEndY(-1);
             sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
-            std::unique_ptr<OUString> xRangeList;
+            boost::optional<OUString> xRangeList;
             SdrLayerID nLayerID = SDRLAYER_NOTFOUND;
             for( sal_Int16 i=0; i < nAttrCount; ++i )
             {
@@ -113,6 +114,8 @@ void XMLTableShapeImportHelper::finishShape(
                     {
                         sal_Int32 nOffset(0);
                         ScRangeStringConverter::GetAddressFromString(aAnchor.maEnd, rValue, static_cast<ScXMLImport&>(mrImporter).GetDocument(), ::formula::FormulaGrammar::CONV_OOO, nOffset);
+                        // When the cell end address is set, we let the shape resize with the cell
+                        aAnchor.mbResizeWithCell = true;
                     }
                     else if (IsXMLToken(aLocalName, XML_END_X))
                     {
@@ -135,7 +138,7 @@ void XMLTableShapeImportHelper::finishShape(
                 else if(nPrefix == XML_NAMESPACE_DRAW)
                 {
                     if (IsXMLToken(aLocalName, XML_NOTIFY_ON_UPDATE_OF_RANGES))
-                        xRangeList.reset(new OUString(rValue));
+                        xRangeList = rValue;
                 }
             }
             SetLayer(rShape, nLayerID, rShape->getShapeType());

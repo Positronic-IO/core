@@ -47,8 +47,6 @@
 #include <com/sun/star/util/NumberFormatter.hpp>
 #include <com/sun/star/awt/XItemList.hpp>
 
-#include <comphelper/numbers.hxx>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/property.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <connectivity/dbconversion.hxx>
@@ -238,7 +236,7 @@ namespace frm
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
 
         if (m_bFilterList)
@@ -340,7 +338,7 @@ namespace frm
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("forms.component");
                 }
             }
             break;
@@ -472,7 +470,7 @@ namespace frm
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
 #endif
     }
@@ -741,7 +739,7 @@ namespace frm
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("forms.component");
         }
     }
 

@@ -32,7 +32,8 @@
 #include <com/sun/star/document/XExporter.hpp>
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/document/XImporter.hpp>
-#include <com/sun/star/document/GraphicObjectResolver.hpp>
+#include <com/sun/star/document/XGraphicStorageHandler.hpp>
+#include <com/sun/star/document/GraphicStorageHandler.hpp>
 #include <com/sun/star/embed/EntryInitModes.hpp>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
@@ -60,7 +61,6 @@
 #include <com/sun/star/script/XStorageBasedLibraryContainer.hpp>
 #include <com/sun/star/awt/XControl.hpp>
 #include <com/sun/star/awt/DialogProvider.hpp>
-#include <com/sun/star/document/XGraphicObjectResolver.hpp>
 
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/enumhelper.hxx>
@@ -84,7 +84,7 @@
 
 #include <list>
 
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <tools/urlobj.hxx>
 
 using namespace ::com::sun::star::uno;
@@ -274,7 +274,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         _rGuard.reset();
             // note that |reset| can throw a DisposedException
@@ -308,7 +308,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -355,7 +355,7 @@ void lcl_uglyHackToStoreDialogeEmbedImages( const Reference< XStorageBasedLibrar
     Sequence< OUString > sLibraries = xDlgCont->getElementNames();
     Reference< XStorage > xTmpPic = xStorage->openStorageElement( "tempPictures", ElementModes::READWRITE  );
 
-    std::vector< OUString > vEmbedImgUrls;
+    std::vector<uno::Reference<graphic::XGraphic>> vxGraphicList;
     for ( sal_Int32 i=0; i < sLibraries.getLength(); ++i )
     {
         OUString sLibrary( sLibraries[ i ] );
@@ -374,21 +374,23 @@ void lcl_uglyHackToStoreDialogeEmbedImages( const Reference< XStorageBasedLibrar
 
                 Reference< css::awt::XControl > xDialog( xDlgPrv->createDialog( sDialogUrl ), UNO_QUERY );
                 Reference< XInterface > xModel( xDialog->getModel() );
-                GraphicObject::InspectForGraphicObjectImageURL( xModel, vEmbedImgUrls );
+                vcl::graphic::SearchForGraphics(xModel, vxGraphicList);
             }
         }
     }
     // if we have any image urls, make sure we copy the associated images into tempPictures
-    if ( !vEmbedImgUrls.empty() )
+    if (!vxGraphicList.empty())
     {
         // Export the images to the storage
-        Reference< XGraphicObjectResolver > xGraphicResolver = GraphicObjectResolver::createWithStorage(rxContext, xTmpPic);
-        if ( xGraphicResolver.is() )
+        uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
+        xGraphicStorageHandler.set(GraphicStorageHandler::createWithStorage(rxContext, xTmpPic));
+        if (xGraphicStorageHandler.is())
         {
-            for ( const OUString& rURL : vEmbedImgUrls )
-                xGraphicResolver->resolveGraphicObjectURL( rURL );
+            for (uno::Reference<graphic::XGraphic> const & rxGraphic : vxGraphicList)
+            {
+                xGraphicStorageHandler->saveGraphic(rxGraphic);
+            }
         }
-
         // delete old 'Pictures' storage and copy the contents of tempPictures into xStorage
         xStorage->removeElement( sPictures );
         xTmpPic->copyElementTo( sPictures, xStorage, sPictures );
@@ -428,7 +430,7 @@ void ODatabaseDocument::impl_reset_nothrow()
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     m_pImpl->m_bDocumentReadOnly = false;
 }
@@ -610,18 +612,15 @@ sal_Bool SAL_CALL ODatabaseDocument::wasModifiedSinceLastSave()
 
     try
     {
-        for (   Controllers::const_iterator ctrl = m_aControllers.begin();
-                ctrl != m_aControllers.end();
-                ++ctrl
-            )
+        for (auto const& controller : m_aControllers)
         {
-            if ( lcl_hasAnyModifiedSubComponent_throw( *ctrl ) )
+            if ( lcl_hasAnyModifiedSubComponent_throw(controller) )
                 return true;
         }
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return false;
@@ -800,12 +799,9 @@ void SAL_CALL ODatabaseDocument::connectController( const Reference< XController
     DocumentGuard aGuard(*this, DocumentGuard::DefaultMethod);
 
 #if OSL_DEBUG_LEVEL > 0
-    for (   Controllers::const_iterator controller = m_aControllers.begin();
-            controller != m_aControllers.end();
-            ++controller
-        )
+    for (auto const& controller : m_aControllers)
     {
-        OSL_ENSURE( *controller != _xController, "ODatabaseDocument::connectController: this controller is already connected!" );
+        OSL_ENSURE( controller != _xController, "ODatabaseDocument::connectController: this controller is already connected!" );
     }
 #endif
 
@@ -918,7 +914,7 @@ void SAL_CALL ODatabaseDocument::setCurrentController( const Reference< XControl
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -1429,22 +1425,21 @@ void ODatabaseDocument::impl_closeControllerFrames_nolck_throw( bool _bDeliverOw
 {
     Controllers aCopy = m_aControllers;
 
-    Controllers::const_iterator aEnd = aCopy.end();
-    for ( Controllers::const_iterator aIter = aCopy.begin(); aIter != aEnd ; ++aIter )
+    for (auto const& elem : aCopy)
     {
-        if ( !aIter->is() )
+        if ( !elem.is() )
             continue;
 
         try
         {
-            Reference< XCloseable> xFrame( (*aIter)->getFrame(), UNO_QUERY );
+            Reference< XCloseable> xFrame( elem->getFrame(), UNO_QUERY );
             if ( xFrame.is() )
                 xFrame->close( _bDeliverOwnership );
         }
         catch( const CloseVetoException& ) { throw; }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1465,7 +1460,7 @@ void ODatabaseDocument::impl_disposeControllerFrames_nothrow()
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1689,7 +1684,7 @@ void ODatabaseDocument::impl_writeStorage_throw( const Reference< XStorage >& _r
        }
        catch ( const Exception& )
        {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
        }
     }
     m_pImpl->storeLibraryContainersTo( _rxTargetStorage );

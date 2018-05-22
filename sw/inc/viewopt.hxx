@@ -26,14 +26,11 @@
 #include <tools/color.hxx>
 
 #include <sfx2/zoomitem.hxx>
-#include <svx/svxids.hrc>
 #include "swdllapi.h"
-#include "authratr.hxx"
 
 class SwRect;
 namespace vcl { class Window; }
 class OutputDevice;
-class SwViewShell;
 class SwDocShell;
 namespace svtools{ class ColorConfig;}
 
@@ -60,11 +57,12 @@ enum class ViewOptFlags1 {
     Synchronize   = 0x01000000,
     GridVisible   = 0x02000000,
     OnlineSpell   = 0x04000000,
+    ShowInlineTooltips = 0x10000000, //tooltips on tracked changes
     ViewMetachars = 0x20000000,
     Pageback      = 0x40000000
 };
 namespace o3tl {
-    template<> struct typed_flags<ViewOptFlags1> : is_typed_flags<ViewOptFlags1, 0x67dfcdfe> {};
+    template<> struct typed_flags<ViewOptFlags1> : is_typed_flags<ViewOptFlags1, 0x77dfcdfe> {};
 }
 
 enum class ViewOptCoreFlags2 {
@@ -122,29 +120,29 @@ namespace o3tl {
 
 class SW_DLLPUBLIC SwViewOption
 {
-    static Color    m_aDocColor;  // color of document boundaries
-    static Color    m_aDocBoundColor;  // color of document boundaries
-    static Color    m_aObjectBoundColor; // color of object boundaries
-    static Color    m_aAppBackgroundColor; // application background
-    static Color    m_aTableBoundColor; // color of table boundaries
-    static Color    m_aFontColor;
-    static Color    m_aIndexShadingsColor; // background color of indexes
-    static Color    m_aLinksColor;
-    static Color    m_aVisitedLinksColor;
-    static Color    m_aDirectCursorColor;
-    static Color    m_aTextGridColor;
-    static Color    m_aSpellColor;     // mark color of online spell checking
-    static Color    m_aSmarttagColor;
-    static Color    m_aFieldShadingsColor;
-    static Color    m_aSectionBoundColor;
-    static Color    m_aPageBreakColor;
-    static Color    m_aScriptIndicatorColor;
-    static Color    m_aShadowColor;
-    static Color    m_aHeaderFooterMarkColor;
+    static Color    s_aDocColor;  // color of document boundaries
+    static Color    s_aDocBoundColor;  // color of document boundaries
+    static Color    s_aObjectBoundColor; // color of object boundaries
+    static Color    s_aAppBackgroundColor; // application background
+    static Color    s_aTableBoundColor; // color of table boundaries
+    static Color    s_aFontColor;
+    static Color    s_aIndexShadingsColor; // background color of indexes
+    static Color    s_aLinksColor;
+    static Color    s_aVisitedLinksColor;
+    static Color    s_aDirectCursorColor;
+    static Color    s_aTextGridColor;
+    static Color    s_aSpellColor;     // mark color of online spell checking
+    static Color    s_aSmarttagColor;
+    static Color    s_aFieldShadingsColor;
+    static Color    s_aSectionBoundColor;
+    static Color    s_aPageBreakColor;
+    static Color    s_aScriptIndicatorColor;
+    static Color    s_aShadowColor;
+    static Color    s_aHeaderFooterMarkColor;
 
-    static ViewOptFlags m_nAppearanceFlags;
+    static ViewOptFlags s_nAppearanceFlags;
 protected:
-    static sal_uInt16   m_nPixelTwips;// 1 Pixel == ? Twips
+    static sal_uInt16   s_nPixelTwips;// 1 Pixel == ? Twips
 
     OUString        m_sSymbolFont;        // Symbolfont.
     ViewOptFlags1   m_nCoreOptions;       // Bits for SwViewShell.
@@ -186,7 +184,7 @@ protected:
     bool  m_bTest6        :1;     // Test-flag  "No screen adj"
     bool  m_bTest7        :1;     // Test-flag  "win format"
     bool  m_bTest8        :1;     // Test-flag  ""
-    static bool  m_bTest9;    // Test-Flag  "DrawingLayerNotLoading"
+    static bool  s_bTest9;    // Test-Flag  "DrawingLayerNotLoading"
     bool  m_bTest10       :1;     // Test-Flag  "Format by Input"
 #endif
 
@@ -262,6 +260,12 @@ public:
     static void PaintPostIts( OutputDevice *pOut, const SwRect &rRect,
                               bool bIsScript );
     static sal_uInt16 GetPostItsWidth( const OutputDevice *pOut );
+
+    //show/hide tooltips on tracked changes
+    bool IsShowInlineTooltips() const
+        { return bool(m_nCoreOptions & ViewOptFlags1::ShowInlineTooltips); }
+    void SetShowInlineTooltips( bool b )
+        { b ? (m_nCoreOptions |= ViewOptFlags1::ShowInlineTooltips ) : ( m_nCoreOptions &= ~ViewOptFlags1::ShowInlineTooltips); }
 
     bool IsShowHiddenChar(bool bHard = false) const
         { return !m_bReadonly && (m_nCoreOptions & ViewOptFlags1::CharHidden) &&

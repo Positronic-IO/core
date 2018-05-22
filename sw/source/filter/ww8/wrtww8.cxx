@@ -90,7 +90,6 @@
 #include <strings.hrc>
 #include <fmtline.hxx>
 #include <fmtfsize.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/string.hxx>
 #include "sprmids.hxx"
 
@@ -111,13 +110,16 @@
 #include <filter/msfilter/svxmsbas.hxx>
 #include <rtl/random.h>
 #include <vcl/svapp.hxx>
+#include <sfx2/docfilt.hxx>
 #include "WW8Sttbf.hxx"
 #include <editeng/charrotateitem.hxx>
+#include <svx/swframetypes.hxx>
 #include "WW8FibData.hxx"
 #include <numrule.hxx>
 #include <fmtclds.hxx>
 #include <rdfhelper.hxx>
 #include <fmtclbl.hxx>
+#include <iodetect.hxx>
 
 using namespace css;
 using namespace sw::util;
@@ -1434,12 +1436,12 @@ WW8_CP WW8_WrPct::Fc2Cp( sal_uLong nFc ) const
     return nFc + m_Pcts.back()->GetStartCp();
 }
 
-void WW8Export::AppendBookmarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_Int32 nLen )
+void WW8Export::AppendBookmarks( const SwTextNode& rNd, sal_Int32 nCurrentPos, sal_Int32 nLen )
 {
     std::vector< const ::sw::mark::IMark* > aArr;
     sal_uInt16 nContent;
-    const sal_Int32 nAktEnd = nAktPos + nLen;
-    if( GetWriter().GetBookmarks( rNd, nAktPos, nAktEnd, aArr ))
+    const sal_Int32 nCurrentEnd = nCurrentPos + nLen;
+    if( GetWriter().GetBookmarks( rNd, nCurrentPos, nCurrentEnd, aArr ))
     {
         sal_uLong nNd = rNd.GetIndex(), nSttCP = Fc2Cp( Strm().Tell() );
         for(const ::sw::mark::IMark* p : aArr)
@@ -1460,33 +1462,33 @@ void WW8Export::AppendBookmarks( const SwTextNode& rNd, sal_Int32 nAktPos, sal_I
             }
 
             if( !pOPos || ( nNd == pPos->nNode.GetIndex() &&
-                ( nContent = pPos->nContent.GetIndex() ) >= nAktPos &&
-                nContent < nAktEnd ) )
+                ( nContent = pPos->nContent.GetIndex() ) >= nCurrentPos &&
+                nContent < nCurrentEnd ) )
             {
-                sal_uLong nCp = nSttCP + pPos->nContent.GetIndex() - nAktPos;
+                sal_uLong nCp = nSttCP + pPos->nContent.GetIndex() - nCurrentPos;
                 m_pBkmks->Append(nCp, BookmarkToWord(rBkmk.GetName()));
             }
             if( pOPos && nNd == pOPos->nNode.GetIndex() &&
-                ( nContent = pOPos->nContent.GetIndex() ) >= nAktPos &&
-                nContent < nAktEnd )
+                ( nContent = pOPos->nContent.GetIndex() ) >= nCurrentPos &&
+                nContent < nCurrentEnd )
             {
-                sal_uLong nCp = nSttCP + pOPos->nContent.GetIndex() - nAktPos;
+                sal_uLong nCp = nSttCP + pOPos->nContent.GetIndex() - nCurrentPos;
                 m_pBkmks->Append(nCp, BookmarkToWord(rBkmk.GetName()));
             }
         }
     }
 }
 
-void WW8Export::AppendAnnotationMarks(const SwTextNode& rNode, sal_Int32 nAktPos, sal_Int32 nLen)
+void WW8Export::AppendAnnotationMarks(const SwTextNode& rNode, sal_Int32 nCurrentPos, sal_Int32 nLen)
 {
     IMarkVector aMarks;
-    if (GetAnnotationMarks(rNode, nAktPos, nAktPos + nLen, aMarks))
+    if (GetAnnotationMarks(rNode, nCurrentPos, nCurrentPos + nLen, aMarks))
     {
         for (IMarkVector::const_iterator it = aMarks.begin(), end = aMarks.end(); it != end; ++it)
         {
             sw::mark::IMark* pMark = (*it);
             const sal_Int32 nStart = pMark->GetMarkStart().nContent.GetIndex();
-            if (nStart == nAktPos)
+            if (nStart == nCurrentPos)
             {
                 m_pAtn->AddRangeStartPosition(pMark->GetName(), Fc2Cp(Strm().Tell()));
             }
@@ -1828,7 +1830,9 @@ void MSWordExportBase::WriteSpecialText( sal_uLong nStart, sal_uLong nEnd, sal_u
     SwPaM* pOldEnd = m_pOrigPam;
     bool bOldPageDescs = m_bOutPageDescs;
     m_bOutPageDescs = false;
-                                    // bOutKF was set / stored in WriteKF1
+    if ( nTTyp == TXT_FTN || nTTyp == TXT_EDN )
+        m_bAddFootnoteTab = true;   // enable one aesthetic tab for this footnote
+
     SetCurPam(nStart, nEnd);
 
     // clear linked textboxes since old ones can't be linked to frames in this section
@@ -1923,7 +1927,7 @@ void MSWordExportBase::SaveData( sal_uLong nStt, sal_uLong nEnd )
     aData.pOldPam = m_pCurPam;
     aData.pOldEnd = m_pOrigPam;
     aData.pOldFlyFormat = m_pParentFrame;
-    aData.pOldPageDesc = m_pAktPageDesc;
+    aData.pOldPageDesc = m_pCurrentPageDesc;
 
     aData.pOldFlyOffset = m_pFlyOffset;
     aData.eOldAnchorType = m_eNewAnchorType;
@@ -1960,7 +1964,7 @@ void MSWordExportBase::RestoreData()
     m_bInWriteTOX = rData.bOldInWriteTOX;
 
     m_pParentFrame = rData.pOldFlyFormat;
-    m_pAktPageDesc = rData.pOldPageDesc;
+    m_pCurrentPageDesc = rData.pOldPageDesc;
 
     m_eNewAnchorType = rData.eOldAnchorType;
     m_pFlyOffset = rData.pOldFlyOffset;
@@ -1982,15 +1986,15 @@ void WW8Export::SaveData( sal_uLong nStt, sal_uLong nEnd )
     else
         rData.pOOld = nullptr; // reuse pO
 
-    rData.bOldWriteAll = GetWriter().bWriteAll;
-    GetWriter().bWriteAll = true;
+    rData.bOldWriteAll = GetWriter().m_bWriteAll;
+    GetWriter().m_bWriteAll = true;
 }
 
 void WW8Export::RestoreData()
 {
     MSWordSaveData &rData = m_aSaveData.top();
 
-    GetWriter().bWriteAll = rData.bOldWriteAll;
+    GetWriter().m_bWriteAll = rData.bOldWriteAll;
 
     OSL_ENSURE( pO->empty(), "pO is not empty in WW8Export::RestoreData()" );
     if ( rData.pOOld )
@@ -2638,7 +2642,7 @@ void WW8AttributeOutput::TableBackgrounds( ww8::WW8TableNodeInfoInner::Pointer_t
             if ( aColor == COL_AUTO )
                 aSHD.setCvBack( 0xFF000000 );
             else
-                aSHD.setCvBack( wwUtility::RGBToBGR( aColor.GetColor() ) );
+                aSHD.setCvBack( wwUtility::RGBToBGR( aColor ) );
 
             aSHD.Write( m_rWW8Export );
         }
@@ -2701,7 +2705,7 @@ void MSWordExportBase::WriteText()
         SwNode& rNd = m_pCurPam->GetNode();
 
         // no section breaks exported for Endnotes
-        if ( rNd.IsTextNode() && m_nTextTyp != TXT_EDN )
+        if ( rNd.IsTextNode() && m_nTextTyp != TXT_EDN && m_nTextTyp != TXT_FTN )
         {
             SwSoftPageBreakList breakList;
             // if paragraph need to be split than handle section break somewhere
@@ -2718,7 +2722,7 @@ void MSWordExportBase::WriteText()
 
             const SwPageDesc* pTemp = rNd.FindPageDesc();
             if ( pTemp )
-                m_pAktPageDesc = pTemp;
+                m_pCurrentPageDesc = pTemp;
 
             m_pCurPam->GetPoint()->nContent.Assign( pCNd, 0 );
             OutputContentNode( *pCNd );
@@ -2792,7 +2796,7 @@ void MSWordExportBase::WriteText()
                     else
                         nRstLnNum = 0;
 
-                    AppendSection( m_pAktPageDesc, pParentFormat, nRstLnNum );
+                    AppendSection( m_pCurrentPageDesc, pParentFormat, nRstLnNum );
                 }
                 else
                 {
@@ -3502,31 +3506,31 @@ void WW8Export::PrepareStorage()
 ErrCode SwWW8Writer::WriteStorage()
 {
     // #i34818# - update layout (if present), for SwWriteTable
-    SwViewShell* pViewShell = pDoc->getIDocumentLayoutAccess().GetCurrentViewShell();
+    SwViewShell* pViewShell = m_pDoc->getIDocumentLayoutAccess().GetCurrentViewShell();
     if( pViewShell != nullptr )
         pViewShell->CalcLayout();
 
-    long nMaxNode = pDoc->GetNodes().Count();
-    ::StartProgress( STR_STATSTR_W4WWRITE, 0, nMaxNode, pDoc->GetDocShell() );
+    long nMaxNode = m_pDoc->GetNodes().Count();
+    ::StartProgress( STR_STATSTR_W4WWRITE, 0, nMaxNode, m_pDoc->GetDocShell() );
 
     // Respect table at the beginning of the document
     {
-        SwTableNode* pTNd = pCurPam->GetNode().FindTableNode();
-        if( pTNd && bWriteAll )
+        SwTableNode* pTNd = m_pCurrentPam->GetNode().FindTableNode();
+        if( pTNd && m_bWriteAll )
             // start with the table node !!
-            pCurPam->GetPoint()->nNode = *pTNd;
+            m_pCurrentPam->GetPoint()->nNode = *pTNd;
     }
 
     // Do the actual export
     {
         bool bDot = mpMedium->GetFilter()->GetName().endsWith("Vorlage");
-        WW8Export aExport(this, pDoc, pCurPam, pOrigPam, bDot);
+        WW8Export aExport(this, m_pDoc, m_pCurrentPam, m_pOrigPam, bDot);
         m_pExport = &aExport;
-        aExport.ExportDocument( bWriteAll );
+        aExport.ExportDocument( m_bWriteAll );
         m_pExport = nullptr;
     }
 
-    ::EndProgress( pDoc->GetDocShell() );
+    ::EndProgress( m_pDoc->GetDocShell() );
     return ERRCODE_NONE;
 }
 
@@ -3562,7 +3566,7 @@ MSWordExportBase::MSWordExportBase( SwDoc *pDocument, SwPaM *pCurrentPam, SwPaM 
     , m_nUniqueList(0)
     , m_nHdFtIndex(0)
     , m_nOrigRedlineFlags(RedlineFlags::NONE)
-    , m_pAktPageDesc(nullptr)
+    , m_pCurrentPageDesc(nullptr)
     , m_bPrevTextNodeIsEmpty(false)
     , m_pPapPlc(nullptr)
     , m_pChpPlc(nullptr)
@@ -3611,6 +3615,7 @@ MSWordExportBase::MSWordExportBase( SwDoc *pDocument, SwPaM *pCurrentPam, SwPaM 
     , m_bHideTabLeaderAndPageNumbers(false)
     , m_bExportModeRTF(false)
     , m_bFontSizeWritten(false)
+    , m_bAddFootnoteTab(false)
     , m_pDoc(pDocument)
     , m_nCurStart(pCurrentPam->GetPoint()->nNode.GetIndex())
     , m_nCurEnd(pCurrentPam->GetMark()->nNode.GetIndex())

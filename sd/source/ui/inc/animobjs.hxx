@@ -33,7 +33,6 @@
 
 #include <vcl/lstbox.hxx>
 
-#include <sdresid.hxx>
 #include <misc/scopelock.hxx>
 
 class SdDrawDocument;
@@ -125,7 +124,6 @@ private:
     bool            bMovie;
     bool            bAllObjects;
 
-    SfxBindings*                pBindings;
     AnimationControllerItem*    pControllerItem;
 
     ScopeLock       maPlayLock;

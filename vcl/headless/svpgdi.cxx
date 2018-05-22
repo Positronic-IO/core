@@ -134,7 +134,7 @@ namespace
         }
     }
 
-    BitmapBuffer* FastConvert24BitRgbTo32BitCairo(const BitmapBuffer* pSrc)
+    std::unique_ptr<BitmapBuffer> FastConvert24BitRgbTo32BitCairo(const BitmapBuffer* pSrc)
     {
         if (pSrc == nullptr)
             return nullptr;
@@ -142,7 +142,7 @@ namespace
         assert(pSrc->mnFormat == SVP_24BIT_FORMAT);
         const long nWidth = pSrc->mnWidth;
         const long nHeight = pSrc->mnHeight;
-        BitmapBuffer* pDst = new BitmapBuffer;
+        std::unique_ptr<BitmapBuffer> pDst(new BitmapBuffer);
         pDst->mnFormat = (ScanlineFormat::N32BitTcArgb | ScanlineFormat::TopDown);
         pDst->mnWidth = nWidth;
         pDst->mnHeight = nHeight;
@@ -156,7 +156,6 @@ namespace
         {
             SAL_WARN("vcl.gdi", "checked multiply failed");
             pDst->mpBits = nullptr;
-            delete pDst;
             return nullptr;
         }
 
@@ -165,7 +164,6 @@ namespace
         {
             SAL_WARN("vcl.gdi", "scanline calculation wraparound");
             pDst->mpBits = nullptr;
-            delete pDst;
             return nullptr;
         }
 
@@ -177,7 +175,6 @@ namespace
         {
             // memory exception, clean up
             pDst->mpBits = nullptr;
-            delete pDst;
             return nullptr;
         }
 
@@ -242,10 +239,10 @@ namespace
                 const BitmapBuffer* pSrc = rSrcBmp.GetBuffer();
                 const SalTwoRect aTwoRect = { 0, 0, pSrc->mnWidth, pSrc->mnHeight,
                                               0, 0, pSrc->mnWidth, pSrc->mnHeight };
-                BitmapBuffer* pTmp = (pSrc->mnFormat == SVP_24BIT_FORMAT
+                std::unique_ptr<BitmapBuffer> pTmp = (pSrc->mnFormat == SVP_24BIT_FORMAT
                                    ? FastConvert24BitRgbTo32BitCairo(pSrc)
                                    : StretchAndConvert(*pSrc, aTwoRect, SVP_CAIRO_FORMAT));
-                aTmpBmp.Create(pTmp);
+                aTmpBmp.Create(std::move(pTmp));
 
                 assert(aTmpBmp.GetBitCount() == 32);
                 source = SvpSalGraphics::createCairoSurface(aTmpBmp.GetBuffer());
@@ -522,9 +519,9 @@ bool SvpSalGraphics::drawAlphaRect(long nX, long nY, long nWidth, long nHeight, 
 
     if (m_aFillColor != SALCOLOR_NONE)
     {
-        cairo_set_source_rgba(cr, SALCOLOR_RED(m_aFillColor)/255.0,
-                                  SALCOLOR_GREEN(m_aFillColor)/255.0,
-                                  SALCOLOR_BLUE(m_aFillColor)/255.0,
+        cairo_set_source_rgba(cr, m_aFillColor.GetRed()/255.0,
+                                  m_aFillColor.GetGreen()/255.0,
+                                  m_aFillColor.GetBlue()/255.0,
                                   fTransparency);
 
         if (m_aLineColor == SALCOLOR_NONE)
@@ -535,9 +532,9 @@ bool SvpSalGraphics::drawAlphaRect(long nX, long nY, long nWidth, long nHeight, 
 
     if (m_aLineColor != SALCOLOR_NONE)
     {
-        cairo_set_source_rgba(cr, SALCOLOR_RED(m_aLineColor)/255.0,
-                                  SALCOLOR_GREEN(m_aLineColor)/255.0,
-                                  SALCOLOR_BLUE(m_aLineColor)/255.0,
+        cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
+                                  m_aLineColor.GetGreen()/255.0,
+                                  m_aLineColor.GetBlue()/255.0,
                                   fTransparency);
 
         extents = getClippedStrokeDamage(cr);
@@ -553,8 +550,8 @@ bool SvpSalGraphics::drawAlphaRect(long nX, long nY, long nWidth, long nHeight, 
 SvpSalGraphics::SvpSalGraphics()
     : m_pSurface(nullptr)
     , m_fScale(1.0)
-    , m_aLineColor(MAKE_SALCOLOR(0x00, 0x00, 0x00))
-    , m_aFillColor(MAKE_SALCOLOR(0xFF, 0xFF, 0XFF))
+    , m_aLineColor(Color(0x00, 0x00, 0x00))
+    , m_aFillColor(Color(0xFF, 0xFF, 0XFF))
     , m_ePaintMode(PaintMode::Over)
     , m_aTextRenderImpl(*this)
 {
@@ -607,9 +604,9 @@ void SvpSalGraphics::SetLineColor()
     m_aLineColor = SALCOLOR_NONE;
 }
 
-void SvpSalGraphics::SetLineColor( SalColor nSalColor )
+void SvpSalGraphics::SetLineColor( Color nColor )
 {
-    m_aLineColor = nSalColor;
+    m_aLineColor = nColor;
 }
 
 void SvpSalGraphics::SetFillColor()
@@ -617,9 +614,9 @@ void SvpSalGraphics::SetFillColor()
     m_aFillColor = SALCOLOR_NONE;
 }
 
-void SvpSalGraphics::SetFillColor( SalColor nSalColor )
+void SvpSalGraphics::SetFillColor( Color nColor )
 {
-    m_aFillColor = nSalColor;
+    m_aFillColor = nColor;
 }
 
 void SvpSalGraphics::SetXORMode(bool bSet )
@@ -632,13 +629,13 @@ void SvpSalGraphics::SetROPLineColor( SalROPColor nROPColor )
     switch( nROPColor )
     {
         case SalROPColor::N0:
-            m_aLineColor = MAKE_SALCOLOR(0, 0, 0);
+            m_aLineColor = Color(0, 0, 0);
             break;
         case SalROPColor::N1:
-            m_aLineColor = MAKE_SALCOLOR(0xff, 0xff, 0xff);
+            m_aLineColor = Color(0xff, 0xff, 0xff);
             break;
         case SalROPColor::Invert:
-            m_aLineColor = MAKE_SALCOLOR(0xff, 0xff, 0xff);
+            m_aLineColor = Color(0xff, 0xff, 0xff);
             break;
     }
 }
@@ -648,13 +645,13 @@ void SvpSalGraphics::SetROPFillColor( SalROPColor nROPColor )
     switch( nROPColor )
     {
         case SalROPColor::N0:
-            m_aFillColor = MAKE_SALCOLOR(0, 0, 0);
+            m_aFillColor = Color(0, 0, 0);
             break;
         case SalROPColor::N1:
-            m_aFillColor = MAKE_SALCOLOR(0xff, 0xff, 0xff);
+            m_aFillColor = Color(0xff, 0xff, 0xff);
             break;
         case SalROPColor::Invert:
-            m_aFillColor = MAKE_SALCOLOR(0xff, 0xff, 0xff);
+            m_aFillColor = Color(0xff, 0xff, 0xff);
             break;
     }
 }
@@ -667,14 +664,14 @@ void SvpSalGraphics::drawPixel( long nX, long nY )
     }
 }
 
-void SvpSalGraphics::drawPixel( long nX, long nY, SalColor nSalColor )
+void SvpSalGraphics::drawPixel( long nX, long nY, Color nColor )
 {
-    SalColor aOrigFillColor = m_aFillColor;
-    SalColor aOrigLineColor = m_aLineColor;
+    Color aOrigFillColor = m_aFillColor;
+    Color aOrigLineColor = m_aLineColor;
 
     basegfx::B2DPolygon aRect = basegfx::utils::createPolygonFromRect(basegfx::B2DRectangle(nX, nY, nX+1, nY+1));
     m_aLineColor = SALCOLOR_NONE;
-    m_aFillColor = nSalColor;
+    m_aFillColor = nColor;
 
     drawPolyPolygon(basegfx::B2DPolyPolygon(aRect));
 
@@ -685,8 +682,8 @@ void SvpSalGraphics::drawPixel( long nX, long nY, SalColor nSalColor )
 void SvpSalGraphics::drawRect( long nX, long nY, long nWidth, long nHeight )
 {
     // because of the -1 hack we have to do fill and draw separately
-    SalColor aOrigFillColor = m_aFillColor;
-    SalColor aOrigLineColor = m_aLineColor;
+    Color aOrigFillColor = m_aFillColor;
+    Color aOrigLineColor = m_aLineColor;
     m_aFillColor = SALCOLOR_NONE;
     m_aLineColor = SALCOLOR_NONE;
 
@@ -939,9 +936,9 @@ bool SvpSalGraphics::drawPolyLine(
         }
     }
 
-    cairo_set_source_rgba(cr, SALCOLOR_RED(m_aLineColor)/255.0,
-                              SALCOLOR_GREEN(m_aLineColor)/255.0,
-                              SALCOLOR_BLUE(m_aLineColor)/255.0,
+    cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
+                              m_aLineColor.GetGreen()/255.0,
+                              m_aLineColor.GetBlue()/255.0,
                               1.0-fTransparency);
 
     cairo_set_line_join(cr, eCairoLineJoin);
@@ -1034,9 +1031,9 @@ bool SvpSalGraphics::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly, d
 
     if (m_aFillColor != SALCOLOR_NONE)
     {
-        cairo_set_source_rgba(cr, SALCOLOR_RED(m_aFillColor)/255.0,
-                                  SALCOLOR_GREEN(m_aFillColor)/255.0,
-                                  SALCOLOR_BLUE(m_aFillColor)/255.0,
+        cairo_set_source_rgba(cr, m_aFillColor.GetRed()/255.0,
+                                  m_aFillColor.GetGreen()/255.0,
+                                  m_aFillColor.GetBlue()/255.0,
                                   1.0-fTransparency);
 
         if (m_aLineColor == SALCOLOR_NONE)
@@ -1047,9 +1044,9 @@ bool SvpSalGraphics::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly, d
 
     if (m_aLineColor != SALCOLOR_NONE)
     {
-        cairo_set_source_rgba(cr, SALCOLOR_RED(m_aLineColor)/255.0,
-                                  SALCOLOR_GREEN(m_aLineColor)/255.0,
-                                  SALCOLOR_BLUE(m_aLineColor)/255.0,
+        cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
+                                  m_aLineColor.GetGreen()/255.0,
+                                  m_aLineColor.GetBlue()/255.0,
                                   1.0-fTransparency);
 
         extents = getClippedStrokeDamage(cr);
@@ -1062,18 +1059,18 @@ bool SvpSalGraphics::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly, d
     return true;
 }
 
-void SvpSalGraphics::applyColor(cairo_t *cr, SalColor aColor)
+void SvpSalGraphics::applyColor(cairo_t *cr, Color aColor)
 {
     if (cairo_surface_get_content(m_pSurface) == CAIRO_CONTENT_COLOR_ALPHA)
     {
-        cairo_set_source_rgba(cr, SALCOLOR_RED(aColor)/255.0,
-                                  SALCOLOR_GREEN(aColor)/255.0,
-                                  SALCOLOR_BLUE(aColor)/255.0,
+        cairo_set_source_rgba(cr, aColor.GetRed()/255.0,
+                                  aColor.GetGreen()/255.0,
+                                  aColor.GetBlue()/255.0,
                                   1.0);
     }
     else
     {
-        double fSet = aColor == sal_uInt32(COL_BLACK) ? 1.0 : 0.0;
+        double fSet = aColor == COL_BLACK ? 1.0 : 0.0;
         cairo_set_source_rgba(cr, 1, 1, 1, fSet);
         cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
     }
@@ -1200,39 +1197,8 @@ void SvpSalGraphics::copyBits( const SalTwoRect& rTR,
         cairo_surface_destroy(pCopy);
 }
 
-namespace
-{
-    bool isBlackWhite(const SalBitmap& rBitmap)
-    {
-        const SvpSalBitmap& rSrcBmp = static_cast<const SvpSalBitmap&>(rBitmap);
-        const BitmapBuffer * pSourceBuffer = rSrcBmp.GetBuffer();
-        const BitmapPalette & rPalette = pSourceBuffer->maPalette;
-
-        return (
-            rPalette.GetEntryCount() < 2 ||
-
-            (rPalette.GetEntryCount() == 2 &&
-            rPalette[0] == COL_BLACK &&
-            rPalette[1] == COL_WHITE ) ||
-
-            (rPalette.GetEntryCount() == 2 &&
-            rPalette[1] == COL_BLACK &&
-            rPalette[0] == COL_WHITE )
-            );
-    }
-}
-
 void SvpSalGraphics::drawBitmap(const SalTwoRect& rTR, const SalBitmap& rSourceBitmap)
 {
-    if (rSourceBitmap.GetBitCount() == 1 && isBlackWhite(rSourceBitmap))
-    {
-        // This way we draw only monochrome b/w bitmaps
-        MaskHelper aMask(rSourceBitmap);
-        cairo_surface_t* source = aMask.getMask();
-        copySource(rTR, source);
-        return;
-    }
-
     SourceHelper aSurface(rSourceBitmap);
     cairo_surface_t* source = aSurface.getSurface();
     copySource(rTR, source);
@@ -1257,7 +1223,7 @@ static sal_uInt8 premultiply(sal_uInt8 c, sal_uInt8 a)
 
 void SvpSalGraphics::drawMask( const SalTwoRect& rTR,
                                const SalBitmap& rSalBitmap,
-                               SalColor nMaskColor )
+                               Color nMaskColor )
 {
     /** creates an image from the given rectangle, replacing all black pixels
      *  with nMaskColor and make all other full transparent */
@@ -1275,9 +1241,9 @@ void SvpSalGraphics::drawMask( const SalTwoRect& rTR,
             sal_uInt8 r = unpremultiply(data[SVP_CAIRO_RED], data[SVP_CAIRO_ALPHA]);
             if (r == 0 && g == 0 && b == 0)
             {
-                data[0] = SALCOLOR_BLUE(nMaskColor);
-                data[1] = SALCOLOR_GREEN(nMaskColor);
-                data[2] = SALCOLOR_RED(nMaskColor);
+                data[0] = nMaskColor.GetBlue();
+                data[1] = nMaskColor.GetGreen();
+                data[2] = nMaskColor.GetRed();
                 data[3] = 0xff;
             }
             else
@@ -1349,9 +1315,15 @@ SalBitmap* SvpSalGraphics::getBitmap( long nX, long nY, long nWidth, long nHeigh
     return pBitmap;
 }
 
-SalColor SvpSalGraphics::getPixel( long nX, long nY )
+Color SvpSalGraphics::getPixel( long nX, long nY )
 {
-    cairo_surface_t *target = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 12, 0)
+    cairo_surface_t *target = cairo_surface_create_similar_image(m_pSurface,
+#else
+    cairo_surface_t *target = cairo_image_surface_create(
+#endif
+            CAIRO_FORMAT_ARGB32, 1, 1);
+
     cairo_t* cr = cairo_create(target);
 
     cairo_rectangle(cr, 0, 0, 1, 1);
@@ -1364,7 +1336,7 @@ SalColor SvpSalGraphics::getPixel( long nX, long nY )
     sal_uInt8 b = unpremultiply(data[SVP_CAIRO_BLUE], data[SVP_CAIRO_ALPHA]);
     sal_uInt8 g = unpremultiply(data[SVP_CAIRO_GREEN], data[SVP_CAIRO_ALPHA]);
     sal_uInt8 r = unpremultiply(data[SVP_CAIRO_RED], data[SVP_CAIRO_ALPHA]);
-    SalColor nRet = MAKE_SALCOLOR(r, g, b);
+    Color nRet = Color(r, g, b);
 
     cairo_surface_destroy(target);
 
@@ -1515,9 +1487,15 @@ cairo_surface_t* SvpSalGraphics::createCairoSurface(const BitmapBuffer *pBuffer)
 
 cairo_t* SvpSalGraphics::createTmpCompatibleCairoContext() const
 {
-    cairo_surface_t *target = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                                         m_aFrameSize.getX() * m_fScale,
-                                                         m_aFrameSize.getY() * m_fScale);
+#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 12, 0)
+    cairo_surface_t *target = cairo_surface_create_similar_image(m_pSurface,
+#else
+    cairo_surface_t *target = cairo_image_surface_create(
+#endif
+            CAIRO_FORMAT_ARGB32,
+            m_aFrameSize.getX() * m_fScale,
+            m_aFrameSize.getY() * m_fScale);
+
 #if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
     cairo_surface_set_device_scale(target, m_fScale, m_fScale);
 #endif

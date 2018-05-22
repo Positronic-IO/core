@@ -205,7 +205,7 @@ sal_Int32 ConversionHelper::decodeMeasureToHmm( const GraphicHelper& rGraphicHel
 
 Color ConversionHelper::decodeColor( const GraphicHelper& rGraphicHelper,
         const OptValue< OUString >& roVmlColor, const OptValue< double >& roVmlOpacity,
-        sal_Int32 nDefaultRgb, sal_Int32 nPrimaryRgb )
+        ::Color nDefaultRgb, ::Color nPrimaryRgb )
 {
     Color aDmlColor;
 
@@ -247,7 +247,7 @@ Color ConversionHelper::decodeColor( const GraphicHelper& rGraphicHelper,
     /*  Predefined color names or system color names (resolve to RGB to detect
         valid color name). */
     sal_Int32 nColorToken = AttributeConversion::decodeToken( aColorName );
-    sal_Int32 nRgbValue = Color::getVmlPresetColor( nColorToken, API_RGB_TRANSPARENT );
+    ::Color nRgbValue = Color::getVmlPresetColor( nColorToken, API_RGB_TRANSPARENT );
     if( nRgbValue == API_RGB_TRANSPARENT )
         nRgbValue = rGraphicHelper.getSystemColor( nColorToken );
     if( nRgbValue != API_RGB_TRANSPARENT )
@@ -819,8 +819,8 @@ void FillModel::pushToPropMap( ShapePropertyMap& rPropMap, const GraphicHelper& 
             {
                 if( moBitmapPath.has() && !moBitmapPath.get().isEmpty() )
                 {
-                    aFillProps.maBlipProps.mxGraphic = rGraphicHelper.importEmbeddedGraphic( moBitmapPath.get() );
-                    if( aFillProps.maBlipProps.mxGraphic.is() )
+                    aFillProps.maBlipProps.mxFillGraphic = rGraphicHelper.importEmbeddedGraphic(moBitmapPath.get());
+                    if (aFillProps.maBlipProps.mxFillGraphic.is())
                     {
                         aFillProps.moFillType = XML_blipFill;
                         aFillProps.maBlipProps.moBitmapMode = (nFillType == XML_frame) ? XML_stretch : XML_tile;
@@ -871,7 +871,7 @@ void ShadowModel::pushToPropMap(ShapePropertyMap& rPropMap, const GraphicHelper&
     }
 
     table::ShadowFormat aFormat;
-    aFormat.Color = aColor.getColor(rGraphicHelper);
+    aFormat.Color = sal_Int32(aColor.getColor(rGraphicHelper));
     aFormat.Location = table::ShadowLocation_BOTTOM_RIGHT;
     // The width of the shadow is the average of the x and y values, see SwWW8ImplReader::MatchSdrItemsIntoFlySet().
     aFormat.ShadowWidth = ((nOffsetX + nOffsetY) / 2);
@@ -960,7 +960,6 @@ void TextpathModel::pushToPropMap(ShapePropertyMap& rPropMap, const uno::Referen
     if (!moTrim.has() || !moTrim.get())
     {
         OUString sText = moString.get();
-        double fRatio = 0;
         VclPtr<VirtualDevice> pDevice = VclPtr<VirtualDevice>::Create();
         vcl::Font aFont = pDevice->GetFont();
         aFont.SetFamilyName(sFont);
@@ -970,10 +969,7 @@ void TextpathModel::pushToPropMap(ShapePropertyMap& rPropMap, const uno::Referen
         auto nTextWidth = pDevice->GetTextWidth(sText);
         if (nTextWidth)
         {
-            fRatio = pDevice->GetTextHeight();
-            fRatio /= nTextWidth;
-
-            sal_Int32 nNewHeight = fRatio * xShape->getSize().Width;
+            sal_Int32 nNewHeight = (static_cast<double>(pDevice->GetTextHeight()) / nTextWidth) * xShape->getSize().Width;
             xShape->setSize(awt::Size(xShape->getSize().Width, nNewHeight));
         }
     }

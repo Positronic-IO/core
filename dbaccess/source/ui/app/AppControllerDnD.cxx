@@ -21,7 +21,6 @@
 #include "AppController.hxx"
 #include <comphelper/sequence.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/processfactory.hxx>
 #include <core_resource.hxx>
 #include <stringconstants.hxx>
 #include <com/sun/star/sdbcx/XDataDescriptorFactory.hpp>
@@ -58,7 +57,6 @@
 #include <dbu_reghelper.hxx>
 #include <strings.hrc>
 #include <vcl/menu.hxx>
-#include <comphelper/uno3.hxx>
 #include <vcl/svapp.hxx>
 #include <svtools/svlbitm.hxx>
 #include <listviewitems.hxx>
@@ -120,7 +118,7 @@ void OApplicationController::deleteTables(const std::vector< OUString>& _rList)
 
                 sal_Int32 nResult = RET_YES;
                 if ( bConfirm )
-                    nResult = ::dbaui::askForUserAction(getView(),STR_TITLE_CONFIRM_DELETION ,STR_QUERY_DELETE_TABLE,_rList.size() > 1 && (aIter+1) != _rList.end(),sTableName);
+                    nResult = ::dbaui::askForUserAction(getFrameWeld(), STR_TITLE_CONFIRM_DELETION, STR_QUERY_DELETE_TABLE, _rList.size() > 1 && (aIter+1) != _rList.end(), sTableName);
 
                 bool bUserConfirmedDelete =
                             ( RET_YES == nResult )
@@ -162,7 +160,7 @@ void OApplicationController::deleteTables(const std::vector< OUString>& _rList)
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
 
                     if ( aErrorInfo.isValid() )
@@ -273,7 +271,7 @@ void OApplicationController::deleteObjects( ElementType _eType, const std::vecto
                 }
                 catch( const Exception& )
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
             }
 
@@ -386,7 +384,7 @@ const SharedConnection& OApplicationController::ensureConnection( ::dbtools::SQL
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
             if ( aError.isValid() )
             {
@@ -423,7 +421,7 @@ bool OApplicationController::isConnectionReadOnly() const
         }
         catch(const SQLException&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     // TODO check configuration
@@ -473,7 +471,7 @@ Reference< XNameAccess > OApplicationController::getElements( ElementType _eType
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     return xElements;
@@ -570,7 +568,7 @@ TransferableHelper* OApplicationController::copyObject()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return nullptr;
 }
@@ -627,7 +625,7 @@ bool OApplicationController::paste( ElementType _eType, const svx::ODataAccessDe
                 }
                 catch(const Exception&)
                 {
-                    DBG_UNHANDLED_EXCEPTION();
+                    DBG_UNHANDLED_EXCEPTION("dbaccess");
                 }
 
                 Reference< XPropertySet > xQuery;
@@ -651,7 +649,7 @@ bool OApplicationController::paste( ElementType _eType, const svx::ODataAccessDe
                     catch(SQLException&) { throw; } // caught and handled by the outer catch
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
 
                     if (!bSuccess)
@@ -755,7 +753,7 @@ bool OApplicationController::paste( ElementType _eType, const svx::ODataAccessDe
     catch(const SQLException&) { showError( SQLExceptionInfo( ::cppu::getCaughtException() ) ); }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return false;
 }

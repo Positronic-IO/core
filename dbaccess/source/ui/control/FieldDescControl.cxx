@@ -26,7 +26,6 @@
 #include <vcl/button.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/msgbox.hxx>
 #include <vector>
 #include <FieldDescriptions.hxx>
 #include <dlgattr.hxx>
@@ -783,10 +782,8 @@ void OFieldDescControl::ActivateAggregate( EControlType eType )
         m_pType->SetDropDownLineCount(20);
         {
             const OTypeInfoMap* pTypeInfo = getTypeInfo();
-            OTypeInfoMap::const_iterator aIter = pTypeInfo->begin();
-            OTypeInfoMap::const_iterator aEnd = pTypeInfo->end();
-            for(;aIter != aEnd;++aIter)
-                m_pType->InsertEntry( aIter->second->aUIName );
+            for (auto const& elem : *pTypeInfo)
+                m_pType->InsertEntry( elem.second->aUIName );
         }
         m_pType->SelectEntryPos(0);
         InitializeControl(m_pType,HID_TAB_ENT_TYPE,true);
@@ -809,7 +806,7 @@ void OFieldDescControl::ActivateAggregate( EControlType eType )
             }
             catch (const Exception&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
             m_pColumnNameText = CreateText(STR_TAB_FIELD_NAME);
             m_pColumnName = VclPtr<OPropColumnEditCtrl>::Create( this,
@@ -909,7 +906,7 @@ void OFieldDescControl::InitializeControl(Control* _pControl,const OString& _sHe
 
 VclPtr<FixedText> OFieldDescControl::CreateText(const char* pTextRes)
 {
-    VclPtrInstance<FixedText> pFixedText( this );
+    auto pFixedText = VclPtr<FixedText>::Create( this );
     pFixedText->SetText(DBA_RES(pTextRes));
     pFixedText->EnableClipSiblings();
     return pFixedText;
@@ -917,7 +914,7 @@ VclPtr<FixedText> OFieldDescControl::CreateText(const char* pTextRes)
 
 VclPtr<OPropNumericEditCtrl> OFieldDescControl::CreateNumericControl(const char* pHelpId, short _nProperty, const OString& _sHelpId)
 {
-    VclPtrInstance<OPropNumericEditCtrl> pControl(this, pHelpId, _nProperty, WB_BORDER);
+    auto pControl = VclPtr<OPropNumericEditCtrl>::Create(this, pHelpId, _nProperty, WB_BORDER);
     pControl->SetDecimalDigits(0);
     pControl->SetMin(0);
     pControl->SetMax(0x7FFFFFFF);   // Should be changed outside, if needed

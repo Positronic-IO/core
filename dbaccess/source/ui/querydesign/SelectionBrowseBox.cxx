@@ -25,11 +25,11 @@
 #include <sqlbison.hxx>
 #include <QueryTableView.hxx>
 #include <browserids.hxx>
-#include <comphelper/extract.hxx>
 #include <comphelper/stl_types.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/types.hxx>
 #include "TableFieldInfo.hxx"
+#include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
 #include <helpids.h>
@@ -295,13 +295,19 @@ void OSelectionBrowseBox::ColumnMoved( sal_uInt16 nColId, bool _bCreateUndo )
     if ( rFields.size() > sal_uInt16(nNewPos-1) )
     {
         sal_uInt16 nOldPos = 0;
-        OTableFields::const_iterator aEnd = rFields.end();
-        OTableFields::const_iterator aIter = rFields.begin();
-        for (; aIter != aEnd && ( (*aIter)->GetColumnId() != nColId ); ++aIter,++nOldPos)
-            ;
+        bool bFoundElem = false;
+        for (auto const& field : rFields)
+        {
+            if (field->GetColumnId() == nColId)
+            {
+                bFoundElem = true;
+                break;
+            }
+            ++nOldPos;
+        }
 
         OSL_ENSURE( (nNewPos-1) != nOldPos && nOldPos < rFields.size(),"Old and new position are equal!");
-        if ( aIter != aEnd )
+        if (bFoundElem)
         {
             OTableFieldDescRef pOldEntry = rFields[nOldPos];
             rFields.erase(rFields.begin() + nOldPos);
@@ -492,12 +498,8 @@ void OSelectionBrowseBox::InitController(CellControllerRef& /*rController*/, lon
             enableControl(pEntry,m_pTableCell);
             if ( !pEntry->isCondition() )
             {
-                OJoinTableView::OTableWindowMap& rTabWinList = getDesignView()->getTableView()->GetTabWinMap();
-                OJoinTableView::OTableWindowMap::const_iterator aIter = rTabWinList.begin();
-                OJoinTableView::OTableWindowMap::const_iterator aEnd = rTabWinList.end();
-
-                for(;aIter != aEnd;++aIter)
-                    m_pTableCell->InsertEntry(static_cast<OQueryTableWindow*>(aIter->second.get())->GetAliasName());
+                for (auto const& tabWin : getDesignView()->getTableView()->GetTabWinMap())
+                    m_pTableCell->InsertEntry(static_cast<OQueryTableWindow*>(tabWin.second.get())->GetAliasName());
 
                 m_pTableCell->InsertEntry(DBA_RES(STR_QUERY_NOTABLE), 0);
                 if (!pEntry->GetAlias().isEmpty())
@@ -616,7 +618,8 @@ bool OSelectionBrowseBox::fillColumnRef(const OUString& _sColumnName, const OUSt
         {
             OUString sErrorMsg(DBA_RES(RID_STR_FIELD_DOESNT_EXIST));
             sErrorMsg = sErrorMsg.replaceFirst("$name$",_sColumnName);
-            ScopedVclPtrInstance<OSQLErrorBox>(this, sErrorMsg)->Execute();
+            OSQLErrorBox aWarning(GetFrameWeld(), sErrorMsg);
+            aWarning.run();
             bError = true;
         }
         else
@@ -720,7 +723,8 @@ bool OSelectionBrowseBox::saveField(OUString& _sFieldName ,OTableFieldDescRef co
         // something different which we have to check
         OUString sErrorMessage( DBA_RES( STR_QRY_COLUMN_NOT_FOUND ) );
         sErrorMessage = sErrorMessage.replaceFirst("$name$",_sFieldName);
-        ScopedVclPtrInstance<OSQLErrorBox>(this, sErrorMessage)->Execute();
+        OSQLErrorBox aWarning(GetFrameWeld(), sErrorMessage);
+        aWarning.run();
 
         return true;
     }
@@ -876,7 +880,8 @@ bool OSelectionBrowseBox::saveField(OUString& _sFieldName ,OTableFieldDescRef co
             { // the field could not be inserted
                 OUString sErrorMessage( DBA_RES( RID_STR_FIELD_DOESNT_EXIST ) );
                 sErrorMessage = sErrorMessage.replaceFirst("$name$",aSelEntry->GetField());
-                ScopedVclPtrInstance<OSQLErrorBox>(this, sErrorMessage)->Execute();
+                OSQLErrorBox aWarning(GetFrameWeld(), sErrorMessage);
+                aWarning.run();
                 bError = true;
             }
         }
@@ -1143,7 +1148,8 @@ bool OSelectionBrowseBox::SaveModified()
                             {
                                 if ( !m_bDisableErrorBox )
                                 {
-                                    ScopedVclPtrInstance<OSQLWarningBox>(this, aErrorMsg)->Execute();
+                                    OSQLWarningBox aWarning(GetFrameWeld(), aErrorMsg);
+                                    aWarning.run();
                                 }
                                 bError = true;
                             }
@@ -1152,7 +1158,8 @@ bool OSelectionBrowseBox::SaveModified()
                         {
                             if ( !m_bDisableErrorBox )
                             {
-                                ScopedVclPtrInstance<OSQLWarningBox>(this, aErrorMsg)->Execute();
+                                OSQLWarningBox aWarning(GetFrameWeld(), aErrorMsg);
+                                aWarning.run();
                             }
                             bError = true;
                         }
@@ -1589,15 +1596,11 @@ OTableFieldDescRef OSelectionBrowseBox::InsertField(const OTableFieldDescRef& _r
 
 sal_uInt16 OSelectionBrowseBox::FieldsCount()
 {
-    OTableFields::const_iterator aIter = getFields().begin();
-    OTableFields::const_iterator aEnd = getFields().end();
     sal_uInt16 nCount = 0;
-
-    while (aIter != aEnd)
+    for (auto const& field : getFields())
     {
-        if ((*aIter).is() && !(*aIter)->IsEmpty())
+        if (field.is() && !field->IsEmpty())
             ++nCount;
-        ++aIter;
     }
 
     return nCount;
@@ -1605,18 +1608,15 @@ sal_uInt16 OSelectionBrowseBox::FieldsCount()
 
 OTableFieldDescRef OSelectionBrowseBox::FindFirstFreeCol(sal_uInt16& _rColumnPosition )
 {
-    OTableFields::const_iterator aIter = getFields().begin();
-    OTableFields::const_iterator aEnd  = getFields().end();
 
     _rColumnPosition = BROWSER_INVALIDID;
 
-    while ( aIter != aEnd )
+    for (auto const& field : getFields())
     {
         ++_rColumnPosition;
-        OTableFieldDescRef pEntry = (*aIter);
+        OTableFieldDescRef pEntry = field;
         if ( pEntry.is() && pEntry->IsEmpty() )
             return pEntry;
-        ++aIter;
     }
 
     return nullptr;
@@ -1643,12 +1643,10 @@ void OSelectionBrowseBox::AddGroupBy( const OTableFieldDescRef& rInfo )
     const ::comphelper::UStringMixEqual bCase(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers());
     //sal_Bool bAppend = sal_False;
 
-    OTableFields& rFields = getFields();
-    OTableFields::const_iterator aIter = rFields.begin();
-    OTableFields::const_iterator aEnd = rFields.end();
-    for(;aIter != aEnd;++aIter)
+    bool bAllFieldsSearched = true;
+    for (auto const& field : getFields())
     {
-        pEntry = *aIter;
+        pEntry = field;
         OSL_ENSURE(pEntry.is(),"OTableFieldDescRef was null!");
 
         const OUString   aField = pEntry->GetField();
@@ -1662,7 +1660,8 @@ void OSelectionBrowseBox::AddGroupBy( const OTableFieldDescRef& rInfo )
             if ( pEntry->isNumericOrAggreateFunction() && rInfo->IsGroupBy() )
             {
                 pEntry->SetGroupBy(false);
-                aIter = rFields.end();
+                // we do want to consider that bAllFieldsSearched still true here
+                // bAllFieldsSearched = false;
                 break;
             }
             else
@@ -1672,6 +1671,7 @@ void OSelectionBrowseBox::AddGroupBy( const OTableFieldDescRef& rInfo )
                     pEntry->SetGroupBy(rInfo->IsGroupBy());
                     if(!m_bGroupByUnRelated && pEntry->IsGroupBy())
                         pEntry->SetVisible();
+                    bAllFieldsSearched = false;
                     break;
                 }
             }
@@ -1679,7 +1679,7 @@ void OSelectionBrowseBox::AddGroupBy( const OTableFieldDescRef& rInfo )
         }
     }
 
-    if (aIter == rFields.end())
+    if (bAllFieldsSearched)
     {
         OTableFieldDescRef pTmp = InsertField(rInfo, BROWSER_INVALIDID, false, false );
         if ( pTmp->isNumericOrAggreateFunction() && rInfo->IsGroupBy() ) // the GroupBy is inherited from rInfo
@@ -1690,13 +1690,9 @@ void OSelectionBrowseBox::AddGroupBy( const OTableFieldDescRef& rInfo )
 void OSelectionBrowseBox::DuplicateConditionLevel( const sal_uInt16 nLevel)
 {
     const sal_uInt16 nNewLevel = nLevel +1;
-    OTableFields& rFields = getFields();
-    OTableFields::const_iterator aIter = rFields.begin();
-    OTableFields::const_iterator aEnd = rFields.end();
-    for(;aIter != aEnd;++aIter)
+    for (auto const& field : getFields())
     {
-        OTableFieldDescRef pEntry = *aIter;
-
+        OTableFieldDescRef pEntry = field;
         OUString sValue = pEntry->GetCriteria(nLevel);
         if ( !sValue.isEmpty() )
         {
@@ -1723,12 +1719,10 @@ void OSelectionBrowseBox::AddCondition( const OTableFieldDescRef& rInfo, const O
     Reference<XDatabaseMetaData> xMeta = xConnection->getMetaData();
     ::comphelper::UStringMixEqual bCase(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers());
 
-    OTableFields& rFields = getFields();
-    OTableFields::const_iterator aIter = rFields.begin();
-    OTableFields::const_iterator aEnd = rFields.end();
-    for(;aIter != aEnd;++aIter)
+    bool bAllFieldsSearched = true;
+    for (auto const& field : getFields())
     {
-        OTableFieldDescRef pEntry = *aIter;
+        OTableFieldDescRef pEntry = field;
         const OUString   aField = pEntry->GetField();
         const OUString   aAlias = pEntry->GetAlias();
 
@@ -1755,6 +1749,7 @@ void OSelectionBrowseBox::AddCondition( const OTableFieldDescRef& rInfo, const O
                     ++m_nVisibleCount;
                 }
                 m_bVisibleRow[BROW_CRIT1_ROW + nLevel] = true;
+                bAllFieldsSearched = false;
                 break;
             }
             if ( _bAddOrOnOneLine )
@@ -1780,7 +1775,7 @@ void OSelectionBrowseBox::AddCondition( const OTableFieldDescRef& rInfo, const O
         }
         m_bVisibleRow[BROW_CRIT1_ROW + nLevel] = true;
     }
-    else if (aIter == rFields.end())
+    else if (bAllFieldsSearched)
     {
         OTableFieldDescRef pTmp = InsertField(rInfo, BROWSER_INVALIDID, false, false );
         if ( pTmp->isNumericOrAggreateFunction() && rInfo->IsGroupBy() ) // the GroupBy was inherited from rInfo
@@ -1812,22 +1807,24 @@ void OSelectionBrowseBox::AddOrder( const OTableFieldDescRef& rInfo, const EOrde
     ::comphelper::UStringMixEqual bCase(xMeta.is() && xMeta->supportsMixedCaseQuotedIdentifiers());
 
     bool bAppend = false;
-    OTableFields& rFields = getFields();
-    OTableFields::const_iterator aIter = rFields.begin();
-    OTableFields::const_iterator aEnd = rFields.end();
-    for(;aIter != aEnd;++aIter)
+    sal_uInt32 nPos = 0;
+    bool bAllFieldsSearched = true;
+    for (auto const& field : getFields())
     {
-        pEntry = *aIter;
+        pEntry = field;
         OUString aField = pEntry->GetField();
         OUString aAlias = pEntry->GetAlias();
 
         if (bCase(aField,rInfo->GetField()) &&
             bCase(aAlias,rInfo->GetAlias()))
         {
-            sal_uInt32 nPos = aIter - rFields.begin();
             bAppend = (m_nLastSortColumn != SORT_COLUMN_NONE) && (nPos <= m_nLastSortColumn);
             if ( bAppend )
-                aIter = rFields.end();
+            {
+                // we do want to consider that bAllFieldsSearched still true here
+                // bAllFieldsSearched = false;
+                break;
+            }
             else
             {
                 if ( !m_bOrderByUnRelated )
@@ -1835,11 +1832,13 @@ void OSelectionBrowseBox::AddOrder( const OTableFieldDescRef& rInfo, const EOrde
                 pEntry->SetOrderDir( eDir );
                 m_nLastSortColumn = nPos;
             }
+            bAllFieldsSearched = false;
             break;
         }
+        ++nPos;
     }
 
-    if (aIter == rFields.end())
+    if (bAllFieldsSearched)
     {
         OTableFieldDescRef pTmp = InsertField(rInfo, BROWSER_INVALIDID, false, false );
         if(pTmp.is())
@@ -1959,10 +1958,10 @@ void OSelectionBrowseBox::Command(const CommandEvent& rEvt)
                 {
                     VclBuilder aBuilder(nullptr, VclBuilderContainer::getUIRootDir(), "dbaccess/ui/queryfuncmenu.ui", "");
                     VclPtr<PopupMenu> aContextMenu(aBuilder.get_menu("menu"));
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("functions"), m_bVisibleRow[BROW_FUNCTION_ROW]);
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("tablename"), m_bVisibleRow[BROW_TABLE_ROW]);
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("alias"), m_bVisibleRow[BROW_COLUMNALIAS_ROW]);
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("distinct"), static_cast<OQueryController&>(getDesignView()->getController()).isDistinct());
+                    aContextMenu->CheckItem("functions", m_bVisibleRow[BROW_FUNCTION_ROW]);
+                    aContextMenu->CheckItem("tablename", m_bVisibleRow[BROW_TABLE_ROW]);
+                    aContextMenu->CheckItem("alias", m_bVisibleRow[BROW_COLUMNALIAS_ROW]);
+                    aContextMenu->CheckItem("distinct", static_cast<OQueryController&>(getDesignView()->getController()).isDistinct());
 
                     aContextMenu->Execute(this, aMenuPos);
 
@@ -2670,19 +2669,15 @@ Reference< XAccessible > OSelectionBrowseBox::CreateAccessibleCell( sal_Int32 _n
 
 bool OSelectionBrowseBox::HasFieldByAliasName(const OUString& rFieldName, OTableFieldDescRef const & rInfo) const
 {
-    OTableFields& aFields = getFields();
-    OTableFields::const_iterator aIter = aFields.begin();
-    OTableFields::const_iterator aEnd  = aFields.end();
-
-    for(;aIter != aEnd;++aIter)
+    for (auto const& field : getFields())
     {
-        if ( (*aIter)->GetFieldAlias() == rFieldName )
+        if ( field->GetFieldAlias() == rFieldName )
         {
-            *rInfo = *(*aIter);
-            break;
+            *rInfo = *field;
+            return true;
         }
     }
-    return aIter != aEnd;
+    return false;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

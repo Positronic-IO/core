@@ -22,7 +22,6 @@
 #include <com/sun/star/i18n/CollatorOptions.hpp>
 #include <com/sun/star/i18n/LocaleData2.hpp>
 #include <rtl/ustrbuf.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 using namespace com::sun::star;
@@ -182,9 +181,9 @@ CollatorImpl::loadCachedCollator(const lang::Locale& rLocale, const OUString& rS
         if (!bLoaded)
         {
             ::std::vector< OUString > aFallbacks( LocaleDataImpl::getFallbackLocaleServiceNames( rLocale));
-            for (::std::vector< OUString >::const_iterator it( aFallbacks.begin()); it != aFallbacks.end(); ++it)
+            for (auto const& fallback : aFallbacks)
             {
-                bLoaded = createCollator( rLocale, *it + "_" + rSortAlgorithm, rSortAlgorithm);
+                bLoaded = createCollator( rLocale, fallback + "_" + rSortAlgorithm, rSortAlgorithm);
                 if (bLoaded)
                     break;
             }

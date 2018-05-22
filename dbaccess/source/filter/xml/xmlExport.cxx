@@ -480,7 +480,7 @@ void ODBExport::exportDataSource()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -622,7 +622,7 @@ void ODBExport::exportConnectionData()
                     }
                     catch( const Exception& )
                     {
-                        DBG_UNHANDLED_EXCEPTION();
+                        DBG_UNHANDLED_EXCEPTION("dbaccess");
                     }
 
                     SvXMLElementExport aServerDB(*this,XML_NAMESPACE_DB, XML_SERVER_DATABASE, true, true);
@@ -1022,7 +1022,7 @@ void ODBExport::exportColumns(const Reference<XColumnsSupplier>& _xColSup)
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -1161,7 +1161,7 @@ void ODBExport::exportAutoStyle(XPropertySet* _xProp)
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         m_aCurrentPropertyStates.clear();
     }
@@ -1176,29 +1176,26 @@ void ODBExport::exportAutoStyle(XPropertySet* _xProp)
             std::vector< XMLPropertyState > aPropStates = i.first->Filter( _xProp );
             if ( !aPropStates.empty() )
             {
-                std::vector< XMLPropertyState >::iterator aItr = aPropStates.begin();
-                std::vector< XMLPropertyState >::const_iterator aEnd = aPropStates.end();
                 const rtl::Reference < XMLPropertySetMapper >& pStyle = i.first->getPropertySetMapper();
-                while ( aItr != aEnd )
+                for (auto & propState : aPropStates)
                 {
-                    if ( aItr->mnIndex != -1 )
+                    if ( propState.mnIndex != -1 )
                     {
-                        switch ( pStyle->GetEntryContextId(aItr->mnIndex) )
+                        switch ( pStyle->GetEntryContextId(propState.mnIndex) )
                         {
                             case CTF_DB_NUMBERFORMAT:
                                 {
                                     sal_Int32 nNumberFormat = -1;
-                                    if ( aItr->maValue >>= nNumberFormat )
+                                    if ( propState.maValue >>= nNumberFormat )
                                         addDataStyle(nNumberFormat);
                                 }
                                 break;
                             case CTF_DB_COLUMN_TEXT_ALIGN:
-                                if ( !aItr->maValue.hasValue() )
-                                    aItr->maValue <<= css::awt::TextAlign::LEFT;
+                                if ( !propState.maValue.hasValue() )
+                                    propState.maValue <<= css::awt::TextAlign::LEFT;
                                 break;
                         }
                     }
-                    ++aItr;
                 }
 
             }

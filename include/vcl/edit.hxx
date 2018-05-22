@@ -25,6 +25,7 @@
 #include <functional>
 #include <memory>
 
+#include <o3tl/deleter.hxx>
 #include <tools/solar.h>
 #include <vcl/dllapi.h>
 #include <vcl/menu.hxx>
@@ -71,10 +72,10 @@ class VCL_DLLPUBLIC Edit : public Control, public vcl::unohelper::DragAndDropCli
 {
 private:
     VclPtr<Edit>        mpSubEdit;
-    Timer*              mpUpdateDataTimer;
+    std::unique_ptr<Timer> mpUpdateDataTimer;
     TextFilter*         mpFilterText;
-    DDInfo*             mpDDInfo;
-    Impl_IMEInfos*      mpIMEInfos;
+    std::unique_ptr<DDInfo, o3tl::default_delete<DDInfo>> mpDDInfo;
+    std::unique_ptr<Impl_IMEInfos> mpIMEInfos;
     OUStringBuffer      maText;
     OUString            maPlaceholderText;
     OUString            maSaveValue;
@@ -93,10 +94,12 @@ private:
                         mbClickedInSelection:1,
                         mbIsSubEdit:1,
                         mbActivePopup:1,
-                        mbForceControlBackground:1;
+                        mbForceControlBackground:1,
+                        mbPassword;
     Link<Edit&,void>    maModifyHdl;
     Link<Edit&,void>    maUpdateDataHdl;
     Link<Edit&,void>    maAutocompleteHdl;
+    Link<Edit&,void>    maActivateHdl;
     std::unique_ptr<VclBuilder> mpUIBuilder;
 
     css::uno::Reference<css::i18n::XExtendedInputSequenceChecker> mxISC;
@@ -114,7 +117,7 @@ private:
     SAL_DLLPRIVATE void        ImplInsertText( const OUString& rStr, const Selection* pNewSelection = nullptr, bool bIsUserInput = false );
     SAL_DLLPRIVATE static OUString ImplGetValidString( const OUString& rString );
     SAL_DLLPRIVATE void        ImplClearBackground(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRectangle, long nXStart, long nXEnd);
-    SAL_DLLPRIVATE void        ImplPaintBorder(vcl::RenderContext const & rRenderContext, long nXStart, long nXEnd);
+    SAL_DLLPRIVATE void        ImplPaintBorder(vcl::RenderContext const & rRenderContext);
     SAL_DLLPRIVATE void        ImplShowCursor( bool bOnlyIfVisible = true );
     SAL_DLLPRIVATE void        ImplAlign();
     SAL_DLLPRIVATE void        ImplAlignAndPaint();
@@ -237,6 +240,8 @@ public:
     virtual const Link<Edit&,void>& GetModifyHdl() const { return maModifyHdl; }
     virtual void        SetUpdateDataHdl( const Link<Edit&,void>& rLink ) { maUpdateDataHdl = rLink; }
 
+    void                SetActivateHdl(const Link<Edit&,void>& rLink) { maActivateHdl = rLink; }
+
     void                SetSubEdit( Edit* pEdit );
     Edit*               GetSubEdit() const { return mpSubEdit; }
 
@@ -272,6 +277,8 @@ public:
     static Size GetMinimumEditSize();
 
     void SetForceControlBackground(bool b) { mbForceControlBackground = b; }
+
+    bool IsPassword() const { return mbPassword; }
 };
 
 #endif // INCLUDED_VCL_EDIT_HXX

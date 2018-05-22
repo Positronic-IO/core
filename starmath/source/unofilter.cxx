@@ -15,6 +15,7 @@
 #include <document.hxx>
 #include "mathtype.hxx"
 #include <unomodel.hxx>
+#include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
 
@@ -67,12 +68,12 @@ sal_Bool MathTypeFilter::filter(const uno::Sequence<beans::PropertyValue>& rDesc
                     if (auto pModel = dynamic_cast<SmModel*>(m_xDstDoc.get()))
                     {
                         auto pDocShell = static_cast<SmDocShell*>(pModel->GetObjectShell());
-                        OUString aText = pDocShell->GetText();
+                        OUStringBuffer aText(pDocShell->GetText());
                         MathType aEquation(aText);
                         bSuccess = aEquation.Parse(aStorage.get());
                         if (bSuccess)
                         {
-                            pDocShell->SetText(aText);
+                            pDocShell->SetText(aText.makeStringAndClear());
                             pDocShell->Parse();
                         }
                     }
@@ -80,9 +81,9 @@ sal_Bool MathTypeFilter::filter(const uno::Sequence<beans::PropertyValue>& rDesc
             }
         }
     }
-    catch (const uno::Exception& rException)
+    catch (const uno::Exception&)
     {
-        SAL_WARN("starmath", "Exception caught: " << rException);
+        DBG_UNHANDLED_EXCEPTION("starmath");
     }
     return bSuccess;
 }

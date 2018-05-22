@@ -41,6 +41,7 @@
 #define FORMULA_MAXJUMPCOUNT    32  /* maximum number of jumps (ocChoose) */
 #define FORMULA_MAXTOKENS     8192  /* maximum number of tokens in formula */
 #define FORMULA_MAXPARAMS      255  /* maximum number of parameters per function (byte) */
+#define FORMULA_MAXPARAMSII      8  /* maximum number of parameters for functions that have implicit intersection ranges */
 
 
 namespace com { namespace sun { namespace star {
@@ -65,7 +66,6 @@ struct FormulaArrayStack
     FormulaTokenRef     mpLastToken;
     bool bTemp;
 };
-
 
 typedef std::unordered_map< OUString, OpCode > OpCodeHashMap;
 typedef std::unordered_map< OUString, OUString > ExternalHashMap;
@@ -323,6 +323,12 @@ protected:
 
     bool MergeRangeReference( FormulaToken * * const pCode1, FormulaToken * const * const pCode2 );
 
+    // Returns whether the opcode has implicit intersection ranges as parameters.
+    // This is no-op for this class.
+    virtual bool IsIIOpCode(OpCode /*nOpCode*/) const { return false; }
+    // Handles II opcode and passes the parameter array and number of parameters.
+    virtual void HandleIIOpCode(OpCode /*nOpCode*/, FormulaToken*** /*pppToken*/, sal_uInt8 /*nNumParams*/) {}
+
     OUString            aCorrectedFormula;      // autocorrected Formula
     OUString            aCorrectedSymbol;       // autocorrected Symbol
 
@@ -348,6 +354,7 @@ protected:
     bool                bAutoCorrect;           // whether to apply AutoCorrection
     bool                bCorrected;             // AutoCorrection was applied
     bool                glSubTotal;             // if code contains one or more subtotal functions
+    bool                needsRPNTokenCheck;     // whether to make FormulaTokenArray check all tokens at the end
 
     bool mbJumpCommandReorder; /// Whether or not to reorder RPN for jump commands.
     bool mbStopOnError;        /// Whether to stop compilation on first encountered error.

@@ -144,7 +144,6 @@
 #define SC_UNO_PAGE_HDRBACKTRAN     "HeaderBackTransparent"
 #define SC_UNO_PAGE_HDRGRFFILT      "HeaderBackGraphicFilter"
 #define SC_UNO_PAGE_HDRGRFLOC       "HeaderBackGraphicLocation"
-#define SC_UNO_PAGE_HDRGRFURL       "HeaderBackGraphicURL"
 #define SC_UNO_PAGE_HDRGRF          "HeaderBackGraphic"
 #define SC_UNO_PAGE_HDRLEFTBOR      "HeaderLeftBorder"
 #define SC_UNO_PAGE_HDRRIGHTBOR     "HeaderRightBorder"
@@ -167,7 +166,6 @@
 #define SC_UNO_PAGE_FTRBACKTRAN     "FooterBackTransparent"
 #define SC_UNO_PAGE_FTRGRFFILT      "FooterBackGraphicFilter"
 #define SC_UNO_PAGE_FTRGRFLOC       "FooterBackGraphicLocation"
-#define SC_UNO_PAGE_FTRGRFURL       "FooterBackGraphicURL"
 #define SC_UNO_PAGE_FTRGRF          "FooterBackGraphic"
 #define SC_UNO_PAGE_FTRLEFTBOR      "FooterLeftBorder"
 #define SC_UNO_PAGE_FTRRIGHTBOR     "FooterRightBorder"
@@ -305,7 +303,6 @@ OStyle::OStyle()
     registerPropertyNoMember(SC_UNO_PAGE_FTRBACKCOL,  ++i,nBound, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny(COL_TRANSPARENT));
     registerPropertyNoMember(SC_UNO_PAGE_FTRGRFFILT,  ++i,nBound, cppu::UnoType<OUString>::get(), css::uno::Any(OUString()));
     registerPropertyNoMember(SC_UNO_PAGE_FTRGRFLOC,   ++i,nBound, cppu::UnoType<style::GraphicLocation>::get(), css::uno::Any(style::GraphicLocation_NONE));
-    registerPropertyNoMember(SC_UNO_PAGE_FTRGRFURL,   ++i,nBound, cppu::UnoType<OUString>::get(), css::uno::Any(OUString()));
     registerPropertyNoMember(SC_UNO_PAGE_FTRGRF,      ++i,nBound, cppu::UnoType<graphic::XGraphic>::get(), css::uno::Any(uno::Reference<graphic::XGraphic>()));
     registerPropertyNoMember(SC_UNO_PAGE_FTRBACKTRAN, ++i,nBound,cppu::UnoType<bool>::get(), css::uno::Any(true));
     registerPropertyNoMember(SC_UNO_PAGE_FTRBODYDIST, ++i,nBound, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny<sal_Int32>(0));
@@ -329,7 +326,6 @@ OStyle::OStyle()
     registerPropertyNoMember(SC_UNO_PAGE_HDRBACKCOL,  ++i,nBound|nMayBeVoid, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny(COL_TRANSPARENT));
     registerPropertyNoMember(SC_UNO_PAGE_HDRGRFFILT,  ++i,nBound|nMayBeVoid, cppu::UnoType<OUString>::get(), css::uno::Any(OUString()));
     registerPropertyNoMember(SC_UNO_PAGE_HDRGRFLOC,   ++i,nBound|nMayBeVoid, cppu::UnoType<style::GraphicLocation>::get(), css::uno::Any(style::GraphicLocation_NONE));
-    registerPropertyNoMember(SC_UNO_PAGE_HDRGRFURL,   ++i,nBound|nMayBeVoid, cppu::UnoType<OUString>::get(), css::uno::Any(OUString()));
     registerPropertyNoMember(SC_UNO_PAGE_HDRGRF,      ++i,nBound|nMayBeVoid, cppu::UnoType<graphic::XGraphic>::get(), css::uno::Any(uno::Reference<graphic::XGraphic>()));
     registerPropertyNoMember(SC_UNO_PAGE_HDRBACKTRAN, ++i,nBound|nMayBeVoid,cppu::UnoType<bool>::get(), css::uno::Any(true));
     registerPropertyNoMember(SC_UNO_PAGE_HDRBODYDIST, ++i,nBound|nMayBeVoid, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny<sal_Int32>(0));
@@ -536,10 +532,12 @@ struct OReportDefinitionImpl
 };
 
 OReportDefinition::OReportDefinition(uno::Reference< uno::XComponentContext > const & _xContext)
-: ReportDefinitionBase(m_aMutex)
-,ReportDefinitionPropertySet(_xContext,IMPLEMENTS_PROPERTY_SET,uno::Sequence< OUString >())
-,m_aProps(new OReportComponentProperties(_xContext))
-,m_pImpl(new OReportDefinitionImpl(m_aMutex))
+:   ::cppu::BaseMutex(),
+    ReportDefinitionBase(m_aMutex),
+    ReportDefinitionPropertySet(_xContext,IMPLEMENTS_PROPERTY_SET,uno::Sequence< OUString >()),
+    ::comphelper::IEmbeddedHelper(),
+    m_aProps(new OReportComponentProperties(_xContext)),
+    m_pImpl(new OReportDefinitionImpl(m_aMutex))
 {
     m_aProps->m_sName  = RptResId(RID_STR_REPORT);
     osl_atomic_increment(&m_refCount);
@@ -552,13 +550,16 @@ OReportDefinition::OReportDefinition(uno::Reference< uno::XComponentContext > co
     osl_atomic_decrement( &m_refCount );
 }
 
-OReportDefinition::OReportDefinition(uno::Reference< uno::XComponentContext > const & _xContext
-                                     ,const uno::Reference< lang::XMultiServiceFactory>& _xFactory
-                                     ,uno::Reference< drawing::XShape >& _xShape)
-: ReportDefinitionBase(m_aMutex)
-,ReportDefinitionPropertySet(_xContext,IMPLEMENTS_PROPERTY_SET,uno::Sequence< OUString >())
-,m_aProps(new OReportComponentProperties(_xContext))
-,m_pImpl(new OReportDefinitionImpl(m_aMutex))
+OReportDefinition::OReportDefinition(
+    uno::Reference< uno::XComponentContext > const & _xContext,
+    const uno::Reference< lang::XMultiServiceFactory>& _xFactory,
+    uno::Reference< drawing::XShape >& _xShape)
+:   ::cppu::BaseMutex(),
+    ReportDefinitionBase(m_aMutex),
+    ReportDefinitionPropertySet(_xContext,IMPLEMENTS_PROPERTY_SET,uno::Sequence< OUString >()),
+    ::comphelper::IEmbeddedHelper(),
+    m_aProps(new OReportComponentProperties(_xContext)),
+    m_pImpl(new OReportDefinitionImpl(m_aMutex))
 {
     m_aProps->m_sName  = RptResId(RID_STR_REPORT);
     m_aProps->m_xFactory = _xFactory;
@@ -614,7 +615,7 @@ void OReportDefinition::init()
     }
     catch (const uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -1301,7 +1302,6 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
 
     // export sub streams for package, else full stream into a file
     bool bErr = false;
-    OUString sErrFile;
 
     uno::Reference< beans::XPropertySet> xProp(_xStorageToSaveTo,uno::UNO_QUERY);
     if ( xProp.is() )
@@ -1340,14 +1340,14 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
     aDelegatorArguments[nArgsLen++] <<= xInfoSet;
 
     uno::Reference< document::XEmbeddedObjectResolver > xObjectResolver;
-    uno::Reference< document::XGraphicObjectResolver >  xGrfResolver;
+    uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
     rtl::Reference<SvXMLGraphicHelper> xGraphicHelper = SvXMLGraphicHelper::Create(_xStorageToSaveTo,SvXMLGraphicHelperMode::Write);
-    xGrfResolver = xGraphicHelper.get();
+    xGraphicStorageHandler = xGraphicHelper.get();
     xGraphicHelper.clear();
     xObjectResolver = SvXMLEmbeddedObjectHelper::Create( _xStorageToSaveTo,*this, SvXMLEmbeddedObjectHelperMode::Write ).get();
 
     aDelegatorArguments.realloc(nArgsLen+2);
-    aDelegatorArguments[nArgsLen++] <<= xGrfResolver;
+    aDelegatorArguments[nArgsLen++] <<= xGraphicStorageHandler;
     aDelegatorArguments[nArgsLen++] <<= xObjectResolver;
 
     uno::Reference<XComponent> xCom(static_cast<OWeakObject*>(this),uno::UNO_QUERY);
@@ -1387,7 +1387,6 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
                 aDelegatorArguments, aProps, _xStorageToSaveTo ) )
         {
             bErr = true;
-            sErrFile = "content.xml";
         }
     }
 
@@ -1608,7 +1607,7 @@ void SAL_CALL OReportDefinition::load( const uno::Sequence< beans::PropertyValue
 
     uno::Any aStorageSource;
     if ( xStream.is() )
-        aStorageSource = aStorageSource;
+        aStorageSource <<= xStream;
     else if ( !sURL.isEmpty() )
         aStorageSource <<= sURL;
     else
@@ -2019,6 +2018,12 @@ std::shared_ptr<rptui::OReportModel> OReportDefinition::getSdrModel(const uno::R
     return pReportModel;
 }
 
+SdrModel& OReportDefinition::getSdrModelFromUnoModel() const
+{
+    OSL_ENSURE(m_pImpl->m_pReportModel.get(), "No SdrModel in ReportDesign, should not happen");
+    return *m_pImpl->m_pReportModel.get();
+}
+
 uno::Reference< uno::XInterface > SAL_CALL OReportDefinition::createInstanceWithArguments( const OUString& aServiceSpecifier, const uno::Sequence< uno::Any >& _aArgs)
 {
     ::osl::MutexGuard aGuard(m_aMutex);
@@ -2128,13 +2133,13 @@ uno::Reference< uno::XInterface > SAL_CALL OReportDefinition::createInstance( co
         return static_cast< ::cppu::OWeakObject* >(SvXMLEmbeddedObjectHelper::Create( m_pImpl->m_xStorage,*this, SvXMLEmbeddedObjectHelperMode::Read ).get());
     else if ( aServiceSpecifier == "com.sun.star.document.ExportEmbeddedObjectResolver" )
         return static_cast< ::cppu::OWeakObject* >(SvXMLEmbeddedObjectHelper::Create( m_pImpl->m_xStorage,*this, SvXMLEmbeddedObjectHelperMode::Write ).get());
-    else if ( aServiceSpecifier == "com.sun.star.document.ImportGraphicObjectResolver" )
+    else if (aServiceSpecifier == "com.sun.star.document.ImportGraphicStorageHandler")
     {
         rtl::Reference<SvXMLGraphicHelper> xGraphicHelper = SvXMLGraphicHelper::Create(m_pImpl->m_xStorage,SvXMLGraphicHelperMode::Write);
         uno::Reference< uno::XInterface> xRet(static_cast< ::cppu::OWeakObject* >(xGraphicHelper.get()));
         return xRet;
     }
-    else if ( aServiceSpecifier == "com.sun.star.document.ExportGraphicObjectResolver" )
+    else if (aServiceSpecifier == "com.sun.star.document.ExportGraphicStorageHandler")
     {
         rtl::Reference<SvXMLGraphicHelper> xGraphicHelper = SvXMLGraphicHelper::Create(m_pImpl->m_xStorage,SvXMLGraphicHelperMode::Write);
         uno::Reference< uno::XInterface> xRet(static_cast< ::cppu::OWeakObject* >(xGraphicHelper.get()));
@@ -2173,8 +2178,8 @@ uno::Sequence< OUString > SAL_CALL OReportDefinition::getAvailableServiceNames()
         "com.sun.star.drawing.Defaults",
         "com.sun.star.document.ImportEmbeddedObjectResolver",
         "com.sun.star.document.ExportEmbeddedObjectResolver",
-        "com.sun.star.document.ImportGraphicObjectResolver",
-        "com.sun.star.document.ExportGraphicObjectResolver",
+        "com.sun.star.document.ImportGraphicStorageHandler",
+        "com.sun.star.document.ExportGraphicStorageHandler",
         "com.sun.star.chart2.data.DataProvider",
         "com.sun.star.xml.NamespaceMap",
         "com.sun.star.document.Settings",
@@ -2669,7 +2674,7 @@ uno::Any SAL_CALL OReportDefinition::getTransferData( const datatransfer::DataFl
     }
     catch (const uno::Exception &)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 
 

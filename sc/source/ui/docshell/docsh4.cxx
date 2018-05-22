@@ -112,6 +112,7 @@ using namespace ::com::sun::star;
 #include <documentlinkmgr.hxx>
 #include <memory>
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
+#include <helpids.h>
 
 void ScDocShell::ReloadAllLinks()
 {
@@ -237,7 +238,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                             bMakeArea = true;
                             if (bUndo)
                             {
-                                OUString aStrImport = ScGlobal::GetRscString( STR_UNDO_IMPORTDATA );
+                                OUString aStrImport = ScResId( STR_UNDO_IMPORTDATA );
                                 ViewShellId nViewShellId(-1);
                                 if (ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell())
                                     nViewShellId = pViewSh->GetViewShellId();
@@ -255,7 +256,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                 bool bDo = true;
                 if (!bIsNewArea)
                 {
-                    OUString aTemplate = ScGlobal::GetRscString( STR_IMPORT_REPLACE );
+                    OUString aTemplate = ScResId( STR_IMPORT_REPLACE );
                     OUString aMessage = aTemplate.getToken( 0, '#' );
                     aMessage += sTarget;
                     aMessage += aTemplate.getToken( 1, '#' );
@@ -331,7 +332,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     if ( !aRangeListRef->empty() )
                     {
                         bMultiRange = true;
-                        aSingleRange = *aRangeListRef->front(); // for header
+                        aSingleRange = aRangeListRef->front(); // for header
                         bValid = true;
                     }
                     else
@@ -341,7 +342,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                 ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell();
                 if (pViewSh && bValid && !aChartName.isEmpty() )
                 {
-                    vcl::Window* pParent = pViewSh->GetDialogParent();
+                    weld::Window* pParent = pViewSh->GetFrameWeld();
 
                     SCCOL nCol1 = aSingleRange.aStart.Col();
                     SCROW nRow1 = aSingleRange.aStart.Row();
@@ -493,7 +494,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     if (pViewFrame)
                     {
                         pViewFrame->RemoveInfoBar("enablecontent");
-                        auto pInfoBar = pViewFrame->AppendInfoBar("enablecontent", ScGlobal::GetRscString(STR_RELOAD_TABLES), InfoBarType::Warning);
+                        auto pInfoBar = pViewFrame->AppendInfoBar("enablecontent", ScResId(STR_RELOAD_TABLES), InfoBarType::Warning);
                         if (pInfoBar)
                         {
                             VclPtrInstance<PushButton> xBtn(&pViewFrame->GetWindow());
@@ -526,7 +527,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                         vcl::Window* pWin = GetActiveDialogParent();
                         std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                        VclMessageType::Question, VclButtonsType::YesNo,
-                                                                       ScGlobal::GetRscString(STR_REIMPORT_AFTER_LOAD)));
+                                                                       ScResId(STR_REIMPORT_AFTER_LOAD)));
                         xQueryBox->set_default_response(RET_YES);
                         if (xQueryBox->run() == RET_YES)
                         {
@@ -621,7 +622,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                         vcl::Window* pWin = GetActiveDialogParent();
                         std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                    VclMessageType::Warning, VclButtonsType::YesNo,
-                                                                   ScGlobal::GetRscString(STR_END_REDLINING)));
+                                                                   ScResId(STR_END_REDLINING)));
                         xWarn->set_default_response(RET_NO);
                         bDo = (xWarn->run() == RET_YES );
                     }
@@ -688,7 +689,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                         vcl::Window* pWin = GetActiveDialogParent();
                         std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                    VclMessageType::Warning, VclButtonsType::YesNo,
-                                                                   ScGlobal::GetRscString(STR_END_REDLINING)));
+                                                                   ScResId(STR_END_REDLINING)));
                         xWarn->set_default_response(RET_NO);
                         if (xWarn->run() == RET_YES)
                             bDo = ExecuteChangeProtectionDialog( true );
@@ -763,15 +764,14 @@ void ScDocShell::Execute( SfxRequest& rReq )
                         : sfx2::DocumentInserter::Mode::Merge};
                     // start file dialog asynchronous
                     pImpl->bIgnoreLostRedliningWarning = true;
-                    delete pImpl->pRequest;
-                    pImpl->pRequest = new SfxRequest( rReq );
-                    delete pImpl->pDocInserter;
+                    pImpl->pRequest.reset(new SfxRequest( rReq ));
+                    pImpl->pDocInserter.reset();
 
                     ScTabViewShell* pViewSh = ScTabViewShell::GetActiveViewShell();
                     vcl::Window* pParent = pViewSh ? pViewSh->GetDialogParent() : nullptr;
 
-                    pImpl->pDocInserter = new ::sfx2::DocumentInserter(pParent,
-                        ScDocShell::Factory().GetFactoryName(), mode );
+                    pImpl->pDocInserter.reset( new ::sfx2::DocumentInserter(pParent ? pParent->GetFrameWeld() : nullptr,
+                        ScDocShell::Factory().GetFactoryName(), mode ) );
                     pImpl->pDocInserter->StartExecuteModal( LINK( this, ScDocShell, DialogClosedHdl ) );
                     return ;
                 }
@@ -985,7 +985,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                 vcl::Window* pWin = GetActiveDialogParent();
                                 std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                                VclMessageType::Question, VclButtonsType::YesNo,
-                                                                               ScGlobal::GetRscString(STR_REIMPORT_AFTER_LOAD)));
+                                                                               ScResId(STR_REIMPORT_AFTER_LOAD)));
                                 xQueryBox->set_default_response(RET_YES);
                                 if (xQueryBox->run() == RET_NO)
                                 {
@@ -1054,7 +1054,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                     {
                                         xCloseable->close( true );
 
-                                        OUString aUserName( ScGlobal::GetRscString( STR_UNKNOWN_USER ) );
+                                        OUString aUserName( ScResId( STR_UNKNOWN_USER ) );
                                         try
                                         {
                                             ::svt::DocumentLockFile aLockFile( GetSharedFileURL() );
@@ -1071,7 +1071,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                         catch ( uno::Exception& )
                                         {
                                         }
-                                        OUString aMessage( ScGlobal::GetRscString( STR_FILE_LOCKED_TRY_LATER ) );
+                                        OUString aMessage( ScResId( STR_FILE_LOCKED_TRY_LATER ) );
                                         aMessage = aMessage.replaceFirst( "%1", aUserName );
 
                                         vcl::Window* pWin = GetActiveDialogParent();
@@ -1085,7 +1085,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                         vcl::Window* pWin = GetActiveDialogParent();
                                         std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                                    VclMessageType::Warning, VclButtonsType::YesNo,
-                                                                                   ScGlobal::GetRscString(STR_DOC_DISABLESHARED)));
+                                                                                   ScResId(STR_DOC_DISABLESHARED)));
                                         xWarn->set_default_response(RET_YES);
 
                                         if (xWarn->run() == RET_YES)
@@ -1123,7 +1123,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                     vcl::Window* pWin = GetActiveDialogParent();
                                     std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                                VclMessageType::Warning, VclButtonsType::Ok,
-                                                                               ScGlobal::GetRscString(STR_DOC_NOLONGERSHARED)));
+                                                                               ScResId(STR_DOC_NOLONGERSHARED)));
                                     xWarn->run();
                                 }
                             }
@@ -1285,17 +1285,16 @@ bool ScDocShell::ExecuteChangeProtectionDialog( bool bJustQueryIfProtected )
         OUString aText( ScResId( SCSTR_PASSWORD ) );
         OUString aPassword;
 
-        ScopedVclPtrInstance<SfxPasswordDialog> pDlg(
-            GetActiveDialogParent(), &aText );
-        pDlg->SetText( aTitle );
-        pDlg->SetMinLen( 1 );
-        pDlg->SetHelpId( GetStaticInterface()->GetSlot(SID_CHG_PROTECT)->GetCommand() );
-        pDlg->SetEditHelpId( HID_CHG_PROTECT );
+        vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
+        SfxPasswordDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr, &aText);
+        aDlg.set_title(aTitle);
+        aDlg.SetMinLen(1);
+        aDlg.set_help_id(GetStaticInterface()->GetSlot(SID_CHG_PROTECT)->GetCommand());
+        aDlg.SetEditHelpId( HID_CHG_PROTECT );
         if ( !bProtected )
-            pDlg->ShowExtras( SfxShowExtras::CONFIRM );
-        if ( pDlg->Execute() == RET_OK )
-            aPassword = pDlg->GetPassword();
-        pDlg.disposeAndClear();
+            aDlg.ShowExtras(SfxShowExtras::CONFIRM);
+        if (aDlg.execute() == RET_OK)
+            aPassword = aDlg.GetPassword();
 
         if (!aPassword.isEmpty())
         {
@@ -1311,7 +1310,6 @@ bool ScDocShell::ExecuteChangeProtectionDialog( bool bJustQueryIfProtected )
                 }
                 else
                 {
-                    vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
                     std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                                   VclMessageType::Info, VclButtonsType::Ok,
                                                                   ScResId(SCSTR_WRONGPASSWORD)));
@@ -1425,7 +1423,7 @@ void ScDocShell::DoAutoStyle( const ScRange& rRange, const OUString& rStyle )
         pStylePool->FindCaseIns( rStyle, SfxStyleFamily::Para );
     if (!pStyleSheet)
         pStyleSheet = static_cast<ScStyleSheet*>(
-            pStylePool->Find( ScGlobal::GetRscString(STR_STYLENAME_STANDARD), SfxStyleFamily::Para ));
+            pStylePool->Find( ScResId(STR_STYLENAME_STANDARD), SfxStyleFamily::Para ));
     if (pStyleSheet)
     {
         OSL_ENSURE(rRange.aStart.Tab() == rRange.aEnd.Tab(),
@@ -1653,7 +1651,7 @@ void ScDocShell::PageStyleModified( const OUString& rStyleName, bool bApi )
             ScWaitCursorOff aWaitOff(pWin);
             std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                           VclMessageType::Info, VclButtonsType::Ok,
-                                                          ScGlobal::GetRscString(STR_PRINT_INVALID_AREA)));
+                                                          ScResId(STR_PRINT_INVALID_AREA)));
             xInfoBox->run();
         }
     }
@@ -1992,7 +1990,7 @@ void ScDocShell::GetState( SfxItemSet &rSet )
                 break;
 
             case SID_ATTR_CHAR_FONTLIST:
-                rSet.Put( SvxFontListItem( pImpl->pFontList, nWhich ) );
+                rSet.Put( SvxFontListItem( pImpl->pFontList.get(), nWhich ) );
                 break;
 
             case SID_NOTEBOOKBAR:

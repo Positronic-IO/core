@@ -28,6 +28,7 @@
 #include <vcl/tabctrl.hxx>
 #include <vcl/tabdlg.hxx>
 #include <vcl/tabpage.hxx>
+#include <vcl/weld.hxx>
 #include <svl/itempool.hxx>
 #include <svl/itemset.hxx>
 #include <com/sun/star/frame/XFrame.hpp>
@@ -39,7 +40,23 @@ class SfxViewFrame;
 class SfxTabPage;
 class SfxBindings;
 
-typedef VclPtr<SfxTabPage> (*CreateTabPage)(vcl::Window *pParent, const SfxItemSet *rAttrSet);
+struct TabPageParent
+{
+    TabPageParent(vcl::Window* _pParent)
+        : pParent(_pParent)
+        , pPage(nullptr)
+    {
+    }
+    TabPageParent(weld::Container* _pPage)
+        : pParent(nullptr)
+        , pPage(_pPage)
+    {
+    }
+    VclPtr<vcl::Window> pParent;
+    weld::Container* pPage;
+};
+
+typedef VclPtr<SfxTabPage> (*CreateTabPage)(TabPageParent pParent, const SfxItemSet *rAttrSet);
 typedef const sal_uInt16*     (*GetTabPageRanges)(); // provides international Which-value
 struct TabPageImpl;
 
@@ -61,7 +78,6 @@ class SFX2_DLLPUBLIC SfxTabDialog : public TabDialog
 {
 private:
 friend class SfxTabPage;
-friend class SfxTabDialogController;
 friend class SfxTabDialogUIObject;
 
     VclPtr<VclBox>     m_pBox;
@@ -81,10 +97,10 @@ friend class SfxTabDialogUIObject;
     bool m_bOwnsResetBtn;
     bool m_bOwnsBaseFmtBtn;
 
-    SfxItemSet*         m_pSet;
-    SfxItemSet*         m_pOutSet;
+    std::unique_ptr<SfxItemSet>           m_pSet;
+    std::unique_ptr<SfxItemSet>           m_pOutSet;
     std::unique_ptr< TabDlg_Impl >        m_pImpl;
-    sal_uInt16*         m_pRanges;
+    std::unique_ptr<sal_uInt16[]>         m_pRanges;
     sal_uInt16          m_nAppPageId;
     bool                m_bStandardPushed;
 
@@ -176,7 +192,7 @@ public:
     // may provide local slots converted by Map
     const sal_uInt16*       GetInputRanges( const SfxItemPool& );
     void                SetInputSet( const SfxItemSet* pInSet );
-    const SfxItemSet*   GetOutputItemSet() const { return m_pOutSet; }
+    const SfxItemSet*   GetOutputItemSet() const { return m_pOutSet.get(); }
 
     const PushButton&   GetOKButton() const { return *m_pOKBtn; }
     PushButton&         GetOKButton() { return *m_pOKBtn; }
@@ -194,7 +210,6 @@ public:
     void                Start();
 
     const SfxItemSet*   GetExampleSet() const { return m_pExampleSet; }
-    SfxItemSet*         GetExampleSet() { return m_pExampleSet; }
 
     void                SetApplyHandler(const Link<Button*,void>& _rHdl);
 
@@ -207,6 +222,86 @@ public:
     // Screenshot interface
     virtual std::vector<OString> getAllPageUIXMLDescriptions() const override;
     virtual bool selectPageByUIXMLDescription(const OString& rUIXMLDescription) override;
+};
+
+class SFX2_DLLPUBLIC SfxTabDialogController : public weld::GenericDialogController
+{
+protected:
+    std::unique_ptr<weld::Notebook> m_xTabCtrl;
+
+    DECL_LINK(OkHdl, weld::Button&, void);
+    DECL_LINK(ResetHdl, weld::Button&, void);
+    DECL_LINK(UserHdl, weld::Button&, void);
+    DECL_LINK(CancelHdl, weld::Button&, void);
+private:
+    std::unique_ptr<weld::Button> m_xOKBtn;
+    std::unique_ptr<weld::Button> m_xApplyBtn;
+    std::unique_ptr<weld::Button> m_xUserBtn;
+    std::unique_ptr<weld::Button> m_xCancelBtn;
+    std::unique_ptr<weld::Button> m_xResetBtn;
+
+    SfxItemSet*         m_pSet;
+    std::unique_ptr<SfxItemSet>           m_pOutSet;
+    std::unique_ptr< TabDlg_Impl >        m_pImpl;
+    sal_uInt16*         m_pRanges;
+    OString             m_sAppPageId;
+
+    DECL_DLLPRIVATE_LINK(ActivatePageHdl, const OString&, void);
+    DECL_DLLPRIVATE_LINK(DeactivatePageHdl, const OString&, bool);
+    SAL_DLLPRIVATE void Init_Impl(bool bFmtFlag);
+
+protected:
+    virtual short               Ok();
+    void                        RefreshInputSet();
+    virtual void                PageCreated(const OString &rName, SfxTabPage &rPage);
+
+    std::unique_ptr<SfxItemSet> m_xExampleSet;
+    SfxItemSet*     GetInputSetImpl();
+    SfxTabPage*     GetTabPage(const OString& rPageId) const;
+
+    /** prepare to leave the current page. Calls the DeactivatePage method of the current page, (if necessary),
+        handles the item sets to copy.
+        @return sal_True if it is allowed to leave the current page, sal_False otherwise
+    */
+    bool PrepareLeaveCurrentPage();
+
+    /** save the position of the TabDialog and which tab page is the currently active one
+     */
+    void SavePosAndId();
+
+public:
+    SfxTabDialogController(weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID,
+                           const SfxItemSet * = nullptr, bool bEditFmt = false);
+    virtual ~SfxTabDialogController() override;
+
+    void                AddTabPage( const OString& rName,           // Name of the label for the page in the notebook .ui
+                                    CreateTabPage pCreateFunc,      // != 0
+                                    GetTabPageRanges pRangesFunc);  // can be 0
+    void                RemoveTabPage( const OString& rName ); // Name of the label for the page in the notebook .ui
+
+    void                SetCurPageId(const OString& rName);
+    OString             GetCurPageId() const;
+    SfxTabPage*         GetCurTabPage() const { return GetTabPage(GetCurPageId()); }
+
+    // may provide local slots converted by Map
+    const sal_uInt16*   GetInputRanges( const SfxItemPool& );
+    void                SetInputSet( const SfxItemSet* pInSet );
+    const SfxItemSet*   GetOutputItemSet() const { return m_pOutSet.get(); }
+
+    const weld::Button& GetOKButton() const { return *m_xOKBtn; }
+    weld::Button&       GetOKButton() { return *m_xOKBtn; }
+    const weld::Button& GetCancelButton() const { return *m_xCancelBtn; }
+    weld::Button&       GetCancelButton() { return *m_xCancelBtn; }
+
+    const weld::Button* GetUserButton() const { return m_xUserBtn.get(); }
+    weld::Button*       GetUserButton() { return m_xUserBtn.get(); }
+    void                RemoveResetButton();
+
+    short               execute();
+
+    const SfxItemSet*   GetExampleSet() const { return m_xExampleSet.get(); }
+
+    SAL_DLLPRIVATE void Start_Impl();
 };
 
 namespace sfx { class ItemConnectionBase; }
@@ -226,6 +321,7 @@ namespace o3tl {
 class SFX2_DLLPUBLIC SfxTabPage: public TabPage
 {
 friend class SfxTabDialog;
+friend class SfxTabDialogController;
 
 private:
     const SfxItemSet*   pSet;
@@ -234,7 +330,12 @@ private:
     std::unique_ptr< TabPageImpl >        pImpl;
 
 protected:
-    SfxTabPage(vcl::Window *pParent, const OString& rID, const OUString& rUIXMLDescription, const SfxItemSet *rAttrSet);
+    std::unique_ptr<weld::Builder> m_xBuilder;
+    std::unique_ptr<weld::Container> m_xContainer;
+
+protected:
+    SfxTabPage(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription, const SfxItemSet *rAttrSet);
+    SfxTabPage(TabPageParent pParent, const OUString& rUIXMLDescription, const OString& rID, const SfxItemSet *rAttrSet);
 
     sal_uInt16          GetWhich( sal_uInt16 nSlot, bool bDeep = true ) const
                             { return pSet->GetPool()->GetWhich( nSlot, bDeep ); }
@@ -243,7 +344,12 @@ protected:
     {
         return static_cast<const T*>(GetOldItem(rSet, sal_uInt16(nSlot), bDeep));
     }
+
     SfxTabDialog*       GetTabDialog() const;
+    void                SetTabDialog(SfxTabDialog* pDialog);
+
+    SfxTabDialogController* GetDialogController() const;
+    void                SetDialogController(SfxTabDialogController* pDialog);
 
     void                AddItemConnection( sfx::ItemConnectionBase* pConnection );
 
@@ -280,6 +386,8 @@ public:
 
     void SetFrame(const css::uno::Reference< css::frame::XFrame >& xFrame);
     css::uno::Reference< css::frame::XFrame > GetFrame();
+
+    OString         GetConfigId() const;
 };
 
 #endif

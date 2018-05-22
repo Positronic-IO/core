@@ -59,12 +59,9 @@ StorageHolder::~StorageHolder()
 void StorageHolder::forgetCachedStorages()
 {
     osl::MutexGuard g(m_mutex);
-    TPath2StorageInfo::iterator pIt;
-    for (  pIt  = m_lStorages.begin();
-           pIt != m_lStorages.end();
-         ++pIt                       )
+    for (auto & lStorage : m_lStorages)
     {
-        TStorageInfo& rInfo = pIt->second;
+        TStorageInfo& rInfo = lStorage.second;
         // TODO think about listener !
         rInfo.Storage.clear();
     }
@@ -97,14 +94,10 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openPath(const OUStri
 
     css::uno::Reference< css::embed::XStorage > xChild;
     OUString                             sRelPath;
-    std::vector<OUString>::const_iterator                pIt;
 
-    for (  pIt  = lFolders.begin();
-           pIt != lFolders.end();
-         ++pIt                    )
+    for (auto const& lFolder : lFolders)
     {
-        const OUString& sChild     = *pIt;
-              OUString  sCheckPath (sRelPath + sChild + PATH_SEPARATOR);
+        OUString  sCheckPath (sRelPath + lFolder + PATH_SEPARATOR);
 
         // SAFE -> ------------------------------
         aReadLock.reset();
@@ -129,7 +122,7 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openPath(const OUStri
 
             try
             {
-                xChild = StorageHolder::openSubStorageWithFallback(xParent, sChild, nOpenMode, true); // TODO think about delegating fallback decision to our own caller!
+                xChild = StorageHolder::openSubStorageWithFallback(xParent, lFolder, nOpenMode); // TODO think about delegating fallback decision to our own caller!
             }
             catch(const css::uno::RuntimeException&)
                 { throw; }
@@ -155,7 +148,7 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openPath(const OUStri
         }
 
         xParent   = xChild;
-        sRelPath += sChild + PATH_SEPARATOR;
+        sRelPath += lFolder + PATH_SEPARATOR;
     }
 
     // TODO think about return last storage as working storage ... but don't caching it inside this holder!
@@ -171,16 +164,12 @@ StorageHolder::TStorageList StorageHolder::getAllPathStorages(const OUString& sP
 
     StorageHolder::TStorageList  lStoragesOfPath;
     OUString              sRelPath;
-    std::vector<OUString>::const_iterator pIt;
 
     osl::MutexGuard g(m_mutex);
 
-    for (  pIt  = lFolders.begin();
-           pIt != lFolders.end();
-         ++pIt                    )
+    for (auto const& lFolder : lFolders)
     {
-        const OUString& sChild     = *pIt;
-              OUString  sCheckPath (sRelPath + sChild + PATH_SEPARATOR);
+        OUString  sCheckPath (sRelPath + lFolder + PATH_SEPARATOR);
 
         TPath2StorageInfo::iterator pCheck = m_lStorages.find(sCheckPath);
         if (pCheck == m_lStorages.end())
@@ -194,7 +183,7 @@ StorageHolder::TStorageList StorageHolder::getAllPathStorages(const OUString& sP
         TStorageInfo& rInfo = pCheck->second;
         lStoragesOfPath.push_back(rInfo.Storage);
 
-        sRelPath += sChild + PATH_SEPARATOR;
+        sRelPath += lFolder + PATH_SEPARATOR;
     }
 
     return lStoragesOfPath;
@@ -236,14 +225,11 @@ void StorageHolder::closePath(const OUString& rPath)
         [1] = "path_2" => "path_1/path_2"
         [2] = "path_3" => "path_1/path_2/path_3"
     */
-    std::vector<OUString>::iterator pIt1;
     OUString        sParentPath;
-    for (  pIt1  = lFolders.begin();
-           pIt1 != lFolders.end();
-         ++pIt1                    )
+    for (auto & lFolder : lFolders)
     {
-        OUString sCurrentRelPath(sParentPath + *pIt1 + PATH_SEPARATOR);
-        *pIt1       = sCurrentRelPath;
+        OUString sCurrentRelPath(sParentPath + lFolder + PATH_SEPARATOR);
+        lFolder = sCurrentRelPath;
         sParentPath = sCurrentRelPath;
     }
 
@@ -280,14 +266,10 @@ void StorageHolder::notifyPath(const OUString& sPath)
         return;
 
     TStorageInfo& rInfo = pIt1->second;
-    TStorageListenerList::iterator pIt2;
-    for (  pIt2  = rInfo.Listener.begin();
-           pIt2 != rInfo.Listener.end();
-         ++pIt2                          )
+    for (auto const& listener : rInfo.Listener)
     {
-        XMLBasedAcceleratorConfiguration* pListener = *pIt2;
-        if (pListener)
-            pListener->changesOccurred();
+        if (listener)
+            listener->changesOccurred();
     }
 }
 
@@ -329,20 +311,14 @@ OUString StorageHolder::getPathOfStorage(const css::uno::Reference< css::embed::
 {
     osl::MutexGuard g(m_mutex);
 
-    TPath2StorageInfo::const_iterator pIt;
-    for (  pIt  = m_lStorages.begin();
-           pIt != m_lStorages.end();
-         ++pIt                       )
+    for (auto const& lStorage : m_lStorages)
     {
-        const TStorageInfo& rInfo = pIt->second;
+        const TStorageInfo& rInfo = lStorage.second;
         if (rInfo.Storage == xStorage)
-            break;
+            return lStorage.first;
     }
 
-    if (pIt == m_lStorages.end())
-        return OUString();
-
-    return pIt->first;
+    return OUString();
 }
 
 css::uno::Reference< css::embed::XStorage > StorageHolder::getParentStorage(const css::uno::Reference< css::embed::XStorage >& xChild)
@@ -403,8 +379,7 @@ StorageHolder& StorageHolder::operator=(const StorageHolder& rCopy)
 
 css::uno::Reference< css::embed::XStorage > StorageHolder::openSubStorageWithFallback(const css::uno::Reference< css::embed::XStorage >& xBaseStorage  ,
                                                                                       const OUString&                             sSubStorage   ,
-                                                                                            sal_Int32                                    eOpenMode     ,
-                                                                                            bool                                     bAllowFallback)
+                                                                                            sal_Int32                                    eOpenMode)
 {
     // a) try it first with user specified open mode
     //    ignore errors ... but save it for later use!
@@ -421,10 +396,7 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openSubStorageWithFal
         { exResult = ex; }
 
     // b) readonly already tried? => forward last error!
-    if (
-        (!bAllowFallback                                                                 ) ||   // fallback allowed  ?
-        ((eOpenMode & css::embed::ElementModes::WRITE) != css::embed::ElementModes::WRITE)      // fallback possible ?
-       )
+    if ((eOpenMode & css::embed::ElementModes::WRITE) != css::embed::ElementModes::WRITE) // fallback possible ?
         throw exResult;
 
     // c) try it readonly
@@ -438,45 +410,6 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openSubStorageWithFal
     // d) no chance!
     SAL_INFO("fwk", "openSubStorageWithFallback(): Unexpected situation! Got no exception for missing storage ...");
     return css::uno::Reference< css::embed::XStorage >();
-}
-
-css::uno::Reference< css::io::XStream > StorageHolder::openSubStreamWithFallback(const css::uno::Reference< css::embed::XStorage >& xBaseStorage  ,
-                                                                                 const OUString&                             sSubStream    ,
-                                                                                       sal_Int32                                    eOpenMode     ,
-                                                                                       bool                                     bAllowFallback)
-{
-    // a) try it first with user specified open mode
-    //    ignore errors ... but save it for later use!
-    css::uno::Exception exResult;
-    try
-    {
-        css::uno::Reference< css::io::XStream > xSubStream = xBaseStorage->openStreamElement(sSubStream, eOpenMode);
-        if (xSubStream.is())
-            return xSubStream;
-    }
-    catch(const css::uno::RuntimeException&)
-        { throw; }
-    catch(const css::uno::Exception& ex)
-        { exResult = ex; }
-
-    // b) readonly already tried? => forward last error!
-    if (
-        (!bAllowFallback                                                                 ) ||   // fallback allowed  ?
-        ((eOpenMode & css::embed::ElementModes::WRITE) != css::embed::ElementModes::WRITE)      // fallback possible ?
-       )
-        throw exResult;
-
-    // c) try it readonly
-    //    don't catch exception here! Outside code wish to know, if operation failed or not.
-    //    Otherwise they work on NULL references ...
-    sal_Int32 eNewMode = (eOpenMode & ~css::embed::ElementModes::WRITE);
-    css::uno::Reference< css::io::XStream > xSubStream = xBaseStorage->openStreamElement(sSubStream, eNewMode);
-    if (xSubStream.is())
-        return xSubStream;
-
-    // d) no chance!
-    SAL_INFO("fwk", "openSubStreamWithFallbacks(): Unexpected situation! Got no exception for missing stream ...");
-    return css::uno::Reference< css::io::XStream >();
 }
 
 OUString StorageHolder::impl_st_normPath(const OUString& sPath)

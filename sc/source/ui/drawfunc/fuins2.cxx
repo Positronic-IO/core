@@ -29,7 +29,6 @@
 #include <svl/stritem.hxx>
 #include <svx/svdoole2.hxx>
 #include <tools/urlobj.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/syschild.hxx>
 #include <svl/urihelper.hxx>
 #include <unotools/moduleoptions.hxx>
@@ -73,7 +72,6 @@
 #include <undotab.hxx>
 #include <chartlis.hxx>
 #include <uiitems.hxx>
-#include <globstr.hrc>
 #include <drawview.hxx>
 #include <markdata.hxx>
 #include <gridwin.hxx>
@@ -268,7 +266,7 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
-                        pFact->CreateInsertObjectDialog( pViewShell->GetWindow(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommandString(),
+                        pFact->CreateInsertObjectDialog( pViewShell->GetFrameWeld(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommandString(),
                         xStorage, &aServerLst ));
                 if ( pDlg )
                 {
@@ -351,7 +349,11 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
             if ( rData.GetDocument()->IsNegativePage( rData.GetTabNo() ) )
                 aPnt.AdjustX( -(aSize.Width()) );      // move position to left edge
             tools::Rectangle aRect (aPnt, aSize);
-            SdrOle2Obj* pObj = new SdrOle2Obj( aObjRef, aName, aRect);
+            SdrOle2Obj* pObj = new SdrOle2Obj(
+                *pDoc, // TTTT should be reference
+                aObjRef,
+                aName,
+                aRect);
             SdrPageView* pPV = pView->GetSdrPageView();
             pView->InsertObjectAtView(pObj, *pPV);
 
@@ -462,10 +464,10 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
             // get "total" range for positioning
             if ( !aRanges.empty() )
             {
-                aPositionRange = *aRanges[ 0 ];
+                aPositionRange = aRanges[ 0 ];
                 for ( size_t i = 1, nCount = aRanges.size(); i < nCount; ++i )
                 {
-                    aPositionRange.ExtendTo( *aRanges[ i ] );
+                    aPositionRange.ExtendTo( aRanges[ i ] );
                 }
             }
 
@@ -589,7 +591,11 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
     Point aStart = pViewSh->GetChartInsertPos( aSize, aPositionRange );
 
     tools::Rectangle aRect (aStart, aSize);
-    SdrOle2Obj* pObj = new SdrOle2Obj( svt::EmbeddedObjectRef( xObj, nAspect ), aName, aRect);
+    SdrOle2Obj* pObj = new SdrOle2Obj(
+        *pDoc, // TTTT should be reference
+        svt::EmbeddedObjectRef(xObj, nAspect),
+        aName,
+        aRect);
     SdrPageView* pPV = pView->GetSdrPageView();
 
     // #i121334# This call will change the chart's default background fill from white to transparent.
@@ -748,7 +754,11 @@ FuInsertChartFromFile::FuInsertChartFromFile( ScTabViewShell* pViewSh, vcl::Wind
     ScRange aPositionRange = pViewSh->GetViewData().GetCurPos();
     Point aStart = pViewSh->GetChartInsertPos( aSize, aPositionRange );
     tools::Rectangle aRect (aStart, aSize);
-    SdrOle2Obj* pObj = new SdrOle2Obj( svt::EmbeddedObjectRef( xObj, nAspect ), aName, aRect);
+    SdrOle2Obj* pObj = new SdrOle2Obj(
+        *pDoc, // TTTT should be reference
+        svt::EmbeddedObjectRef(xObj, nAspect),
+        aName,
+        aRect);
 
     SdrPageView* pPV = pView->GetSdrPageView();
 

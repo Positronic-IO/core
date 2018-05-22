@@ -20,19 +20,16 @@
 #define INCLUDED_SW_INC_UNOSETT_HXX
 
 #include "swtypes.hxx"
-#include "calbck.hxx"
 #include <com/sun/star/text/XTextColumns.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/container/XIndexReplace.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/style/VerticalAlignment.hpp>
 #include <cppuhelper/implbase2.hxx>
 #include <cppuhelper/implbase4.hxx>
 #include <cppuhelper/implbase5.hxx>
-#include <svl/itemprop.hxx>
 #include "unobaseclass.hxx"
 
 class SwDoc;
@@ -40,6 +37,8 @@ class SwFormatCol;
 class SwDocShell;
 class SwNumRule;
 class SwNumFormat;
+class SfxItemPropertySet;
+namespace com { namespace sun { namespace star { namespace beans { struct PropertyValue; } } } }
 
 class SwXFootnoteProperties : public cppu::WeakAggImplHelper2
 <
@@ -256,7 +255,7 @@ class SwXTextColumns : public cppu::WeakAggImplHelper4
 
     //separator line
     sal_Int32                   nSepLineWidth;
-    sal_Int32                   nSepLineColor;
+    Color                       nSepLineColor;
     sal_Int8                    nSepLineHeightRelative;
     css::style::VerticalAlignment nSepLineVertAlign;
     bool                        bSepLineIsOn;
@@ -295,7 +294,7 @@ public:
     virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
 
     sal_Int32   GetSepLineWidth() const {return nSepLineWidth;}
-    sal_Int32   GetSepLineColor() const {return     nSepLineColor;}
+    Color       GetSepLineColor() const {return nSepLineColor;}
     sal_Int8    GetSepLineHeightRelative() const {return    nSepLineHeightRelative;}
     css::style::VerticalAlignment GetSepLineVertAlign() const {return nSepLineVertAlign;}
     bool        GetSepLineIsOn() const {return  bSepLineIsOn;}

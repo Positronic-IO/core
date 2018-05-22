@@ -27,9 +27,9 @@
 #include "RowSetCache.hxx"
 #include "StaticSet.hxx"
 #include "WrappedResultSet.hxx"
+#include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
-#include <core_resource.hxx>
 #include <stringconstants.hxx>
 
 #include <com/sun/star/sdbc/ColumnValue.hpp>
@@ -44,7 +44,6 @@
 #include <comphelper/extract.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/seqstream.hxx>
-#include <comphelper/uno3.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/sqliterator.hxx>
@@ -127,9 +126,9 @@ ORowSetCache::ORowSetCache(const Reference< XResultSet >& _xRs,
             return;
         }
     }
-    catch(const Exception& ex)
+    catch(const Exception&)
     {
-        SAL_WARN("dbaccess.core", "ORowSetCache: " << ex);
+        DBG_UNHANDLED_EXCEPTION("dbaccess.core");
     }
     try
     {
@@ -353,18 +352,17 @@ ORowSetCache::~ORowSetCache()
     if(m_pMatrix)
     {
         m_pMatrix->clear();
-        delete m_pMatrix;
+        m_pMatrix.reset();
     }
 
     if(m_pInsertMatrix)
     {
         m_pInsertMatrix->clear();
-        delete m_pInsertMatrix;
+        m_pInsertMatrix.reset();
     }
     m_xSet          = WeakReference< XResultSet>();
     m_xMetaData     = nullptr;
     m_aUpdateTable  = nullptr;
-
 }
 
 void ORowSetCache::setFetchSize(sal_Int32 _nSize)
@@ -375,11 +373,11 @@ void ORowSetCache::setFetchSize(sal_Int32 _nSize)
     m_nFetchSize = _nSize;
     if(!m_pMatrix)
     {
-        m_pMatrix = new ORowSetMatrix(_nSize);
+        m_pMatrix.reset( new ORowSetMatrix(_nSize) );
         m_aMatrixIter = m_pMatrix->end();
         m_aMatrixEnd = m_pMatrix->end();
 
-        m_pInsertMatrix = new ORowSetMatrix(1); // a little bit overkill but ??? :-)
+        m_pInsertMatrix.reset( new ORowSetMatrix(1) ); // a little bit overkill but ??? :-)
         m_aInsertRow    = m_pInsertMatrix->end();
     }
     else

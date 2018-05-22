@@ -141,8 +141,14 @@ namespace oox { namespace ppt {
                 sShapeName = maShapeTarget.msSubShapeId;
 
             Any rTarget;
-            ::oox::drawingml::ShapePtr pShape = pSlide->getShape(sShapeName);
-            SAL_WARN_IF( !pShape, "oox.ppt", "failed to locate Shape");
+            ::oox::drawingml::ShapePtr pShape = pSlide->getShape( sShapeName );
+            SAL_WARN_IF( !pShape, "oox.ppt", "failed to locate Shape" );
+
+            if( !pShape && maShapeTarget.mnType == XML_dgm )
+            {
+                pShape = pSlide->getShape( msValue );
+            }
+
             if( pShape )
             {
                 Reference< XShape > xShape( pShape->getXShape() );
@@ -180,10 +186,9 @@ namespace oox { namespace ppt {
     Any AnimationCondition::convertList(const SlidePersistPtr & pSlide, const AnimationConditionList & l)
     {
         Any aAny;
-        for( AnimationConditionList::const_iterator iter = l.begin();
-             iter != l.end(); ++iter)
+        for (auto const& elem : l)
         {
-            aAny = addToSequence( aAny, iter->convert(pSlide) );
+            aAny = addToSequence( aAny, elem.convert(pSlide) );
         }
         return aAny;
     }

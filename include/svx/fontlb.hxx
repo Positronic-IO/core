@@ -42,8 +42,7 @@ public:
 
     virtual                     ~SvLBoxFontString() override;
 
-    /** Creates a new empty list box item. */
-    virtual SvLBoxItem*         Create() const override;
+    virtual std::unique_ptr<SvLBoxItem> Clone(SvLBoxItem const * pSource) const override;
 
     void            InitViewData( SvTreeListBox*, SvTreeListEntry*, SvViewDataItem* = nullptr ) override;
 
@@ -57,8 +56,6 @@ public:
 class SAL_WARN_UNUSED SVX_DLLPUBLIC SvxFontListBox : public SvTabListBox
 {
 private:
-    vcl::Font                   maStdFont;      /// Used for entries without specific font.
-
     // The following members are used to store additional parameters for InitEntry().
     vcl::Font                   maEntryFont;    /// Current entry font used in InitEntry().
     const Color*                mpEntryColor;   /// Current entry color used in InitEntry().

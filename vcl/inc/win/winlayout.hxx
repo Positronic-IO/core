@@ -150,14 +150,20 @@ class WinFontInstance : public LogicalFontInstance
 public:
     virtual                 ~WinFontInstance() override;
 
-public:
-    bool CacheGlyphToAtlas(HDC hDC, HFONT hFont, int nGlyphIndex, SalGraphics& rGraphics);
+    bool CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& rGraphics);
     GlyphCache& GetGlyphCache() { return maGlyphCache; }
+    bool hasHScale() const;
+
+    void SetHDC(const HDC);
+    HFONT GetHFONT() const { return m_hFont; }
 
 private:
-    explicit WinFontInstance(const FontSelectPattern&);
+    explicit WinFontInstance(const PhysicalFontFace&, const FontSelectPattern&);
 
-    // TODO: also add HFONT??? Watch out for issues with too many active fonts...
+    virtual hb_font_t* ImplInitHbFont() override;
+
+    HDC m_hDC;
+    HFONT m_hFont;
     GlyphCache maGlyphCache;
 };
 
@@ -173,7 +179,7 @@ public:
 
     virtual ~TextOutRenderer() = default;
 
-    virtual bool operator ()(CommonSalLayout const &rLayout,
+    virtual bool operator ()(GenericSalLayout const &rLayout,
         SalGraphics &rGraphics,
         HDC hDC) = 0;
 };
@@ -186,7 +192,7 @@ class ExTextOutRenderer : public TextOutRenderer
 public:
     explicit ExTextOutRenderer() = default;
 
-    bool operator ()(CommonSalLayout const &rLayout,
+    bool operator ()(GenericSalLayout const &rLayout,
         SalGraphics &rGraphics,
         HDC hDC) override;
 };

@@ -12,6 +12,7 @@
 
 #include <array>
 #include <memory>
+#include <tools/link.hxx>
 #include <xmloff/xmlictxt.hxx>
 #include "xmlimprt.hxx"
 #include "importcontext.hxx"
@@ -40,6 +41,8 @@ private:
         ScConditionalFormat* mpFormat;
         SCTAB mnTab;
     };
+
+    DECL_LINK(FormatDeletedHdl, ScConditionalFormat*, void);
 
 public:
     ScXMLConditionalFormatsContext( ScXMLImport& rImport );
@@ -70,7 +73,6 @@ public:
 private:
 
     std::unique_ptr<ScConditionalFormat> mxFormat;
-    ScRangeList maRange;
 
     ScXMLConditionalFormatsContext& mrParent;
 };
@@ -124,9 +126,6 @@ public:
     ScXMLColorScaleFormatEntryContext( ScXMLImport& rImport,
                         const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList,
                         ScColorScaleFormat* pFormat);
-
-private:
-    ScColorScaleEntry* mpFormatEntry;
 };
 
 class ScXMLFormattingEntryContext : public ScXMLImportContext

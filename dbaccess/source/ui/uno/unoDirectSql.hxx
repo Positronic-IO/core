@@ -25,7 +25,6 @@
 #include <com/sun/star/sdb/XSQLQueryComposer.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/sdbc/XRowSet.hpp>
-#include <core_resource.hxx>
 #include <com/sun/star/sdbc/XConnection.hpp>
 
 namespace dbaui
@@ -61,7 +60,7 @@ namespace dbaui
 
     protected:
         // OGenericUnoDialog overridables
-        virtual VclPtr<Dialog> createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
         virtual void implInitialize(const css::uno::Any& _rValue) override;
     };
 

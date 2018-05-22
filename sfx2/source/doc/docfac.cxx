@@ -28,7 +28,6 @@
 #include <comphelper/processfactory.hxx>
 #include <unotools/pathoptions.hxx>
 #include <unotools/moduleoptions.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/configurationhelper.hxx>
 
@@ -39,12 +38,10 @@
 #include <arrdecl.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/module.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/sfxuno.hxx>
 #include "syspath.hxx"
 #include <osl/file.hxx>
 #include <osl/security.hxx>
-#include <sfx2/strings.hrc>
 
 #include <rtl/strbuf.hxx>
 #include <tools/globname.hxx>

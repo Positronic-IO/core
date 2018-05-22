@@ -72,27 +72,14 @@ XFStyleContainer::XFStyleContainer(const OUString& strStyleNamePrefix)
 
 XFStyleContainer::~XFStyleContainer()
 {
-    std::vector<IXFStyle*>::iterator it;
-    for( it = m_aStyles.begin(); it != m_aStyles.end(); ++it )
-    {
-        IXFStyle *pStyle = *it;
-        delete pStyle;
-    }
 }
 
-void    XFStyleContainer::Reset()
+void XFStyleContainer::Reset()
 {
-    std::vector<IXFStyle*>::iterator it;
-
-    for( it = m_aStyles.begin(); it != m_aStyles.end(); ++it )
-    {
-        IXFStyle *pStyle = *it;
-        delete pStyle;
-    }
     m_aStyles.clear();
 }
 
-IXFStyleRet XFStyleContainer::AddStyle(IXFStyle *pStyle)
+IXFStyleRet XFStyleContainer::AddStyle(std::unique_ptr<IXFStyle> pStyle)
 {
     IXFStyleRet aRet;
 
@@ -102,14 +89,13 @@ IXFStyleRet XFStyleContainer::AddStyle(IXFStyle *pStyle)
     if( !pStyle )
         return aRet;
     //no matter we want to delete the style or not,XFFont object should be saved first.
-    ManageStyleFont(pStyle);
+    ManageStyleFont(pStyle.get());
 
     if( pStyle->GetStyleName().isEmpty() )
-        pConStyle = FindSameStyle(pStyle);
+        pConStyle = FindSameStyle(pStyle.get());
 
     if( pConStyle )//such a style has exist:
     {
-        delete pStyle;
         aRet.m_pStyle = pConStyle;
         aRet.m_bOrigDeleted = true;
         return aRet;
@@ -132,22 +118,20 @@ IXFStyleRet XFStyleContainer::AddStyle(IXFStyle *pStyle)
             }
         }
 
-        m_aStyles.push_back(pStyle);
         //transform the font object to XFFontFactory
-        aRet.m_pStyle = pStyle;
+        aRet.m_pStyle = pStyle.get();
+        m_aStyles.push_back(std::move(pStyle));
         return aRet;
     }
 }
 
 IXFStyle*   XFStyleContainer::FindSameStyle(IXFStyle *pStyle)
 {
-    std::vector<IXFStyle*>::iterator it;
-    for( it = m_aStyles.begin(); it != m_aStyles.end(); ++it )
+    for (auto const& style : m_aStyles)
     {
-        IXFStyle *pConStyle = *it;
-        assert(pConStyle);
-        if( pConStyle->Equal(pStyle) )
-            return pConStyle;
+        assert(style);
+        if( style->Equal(pStyle) )
+            return style.get();
     }
 
     return nullptr;
@@ -155,13 +139,11 @@ IXFStyle*   XFStyleContainer::FindSameStyle(IXFStyle *pStyle)
 
 IXFStyle*   XFStyleContainer::FindStyle(const OUString& name)
 {
-    std::vector<IXFStyle*>::iterator it;
-    for( it = m_aStyles.begin(); it != m_aStyles.end(); ++it )
+    for (auto const& style : m_aStyles)
     {
-        IXFStyle *pConStyle = *it;
-        assert(pConStyle);
-        if( pConStyle->GetStyleName() == name )
-            return pConStyle;
+        assert(style);
+        if( style->GetStyleName() == name )
+            return style.get();
     }
 
     return nullptr;
@@ -172,20 +154,17 @@ const IXFStyle* XFStyleContainer::Item(size_t index) const
     assert(index<m_aStyles.size());
     if (index < m_aStyles.size())
     {
-        return m_aStyles[index];
+        return m_aStyles[index].get();
     }
     return nullptr;
 }
 
 void    XFStyleContainer::ToXml(IXFStream *pStrm)
 {
-    std::vector<IXFStyle*>::iterator it;
-
-    for( it = m_aStyles.begin(); it != m_aStyles.end(); ++it )
+    for (auto const& style : m_aStyles)
     {
-        IXFStyle *pStyle = *it;
-        assert(pStyle);
-        pStyle->ToXml(pStrm);
+        assert(style);
+        style->ToXml(pStrm);
     }
 }
 
@@ -245,8 +224,8 @@ bool operator==(XFStyleContainer& b1, XFStyleContainer& b2)
         return false;
     for( size_t i=0; i<b1.m_aStyles.size(); ++i )
     {
-        IXFStyle *pS1 = b1.m_aStyles[i];
-        IXFStyle *pS2 = b2.m_aStyles[i];
+        IXFStyle *pS1 = b1.m_aStyles[i].get();
+        IXFStyle *pS2 = b2.m_aStyles[i].get();
 
         if( pS1 )
         {

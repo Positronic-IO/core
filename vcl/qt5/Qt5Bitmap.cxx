@@ -215,7 +215,7 @@ BitmapBuffer* Qt5Bitmap::AcquireBuffer(BitmapAccessMode /*nMode*/)
     return pBuffer;
 }
 
-void Qt5Bitmap::ReleaseBuffer(BitmapBuffer* pBuffer, BitmapAccessMode /*nMode*/)
+void Qt5Bitmap::ReleaseBuffer(BitmapBuffer* pBuffer, BitmapAccessMode nMode)
 {
     m_aPalette = pBuffer->maPalette;
     auto count = m_aPalette.GetEntryCount();
@@ -228,6 +228,8 @@ void Qt5Bitmap::ReleaseBuffer(BitmapBuffer* pBuffer, BitmapAccessMode /*nMode*/)
         m_pImage->setColorTable(aColorTable);
     }
     delete pBuffer;
+    if (nMode == BitmapAccessMode::Write)
+        InvalidateChecksum();
 }
 
 bool Qt5Bitmap::GetSystemData(BitmapSystemData& /*rData*/) { return false; }

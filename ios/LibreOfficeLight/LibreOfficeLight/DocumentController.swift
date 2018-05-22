@@ -66,7 +66,7 @@ class DocumentController: UIViewController, MenuDelegate, UIDocumentBrowserViewC
         super.viewDidAppear(animated)
 
         // Always load the 'welcome' file, as per the android app
-        let res = Bundle.main.url(forResource: "example", withExtension: "odt")
+        let res = Bundle.main.url(forResource: "welcome", withExtension: "odt")
 
         // uncomment for test data in resources until the doc picker works properly
         //let res = Bundle.main.url(forResource: "testdata/2", withExtension: "xlsx")
@@ -223,13 +223,13 @@ class DocumentController: UIViewController, MenuDelegate, UIDocumentBrowserViewC
         case 4: // Close...
                 doClose()
 
-        case 4: // Save as...
+        case 5: // Save as...
                 doSaveAs()
 
-        case 5: // Save as PDF...
+        case 6: // Save as PDF...
                 doSaveAsPDF()
 
-        case 6: // Print...
+        case 7: // Print...
                 startPrint()
 
         default: // should not happen

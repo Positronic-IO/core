@@ -83,7 +83,6 @@
 
 #include <toolkit/helper/vclunohelper.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
-#include <comphelper/processfactory.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/menu.hxx>
@@ -1981,13 +1980,10 @@ css::uno::Sequence< css::beans::Property > SAL_CALL Frame::getProperties()
 
     sal_Int32 c = static_cast<sal_Int32>(m_lProps.size());
     css::uno::Sequence< css::beans::Property > lProps(c);
-    TPropInfoHash::const_iterator pIt;
 
-    for (  pIt  = m_lProps.begin();
-           pIt != m_lProps.end();
-         ++pIt                    )
+    for (auto const& elem : m_lProps)
     {
-        lProps[--c] = pIt->second;
+        lProps[--c] = elem.second;
     }
 
     return lProps;
@@ -3021,7 +3017,7 @@ void Frame::implts_setIconOnWindow()
             }
             catch( css::uno::Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("fwk");
             }
         }
 

@@ -78,9 +78,9 @@ public:
     explicit            ExcelGraphicHelper( const WorkbookHelper& rHelper );
 
     /** Derived classes may implement to resolve a scheme color from the passed XML token identifier. */
-    virtual sal_Int32   getSchemeColor( sal_Int32 nToken ) const override;
+    virtual ::Color     getSchemeColor( sal_Int32 nToken ) const override;
     /** Derived classes may implement to resolve a palette index to an RGB color. */
-    virtual sal_Int32   getPaletteColor( sal_Int32 nPaletteIdx ) const override;
+    virtual ::Color     getPaletteColor( sal_Int32 nPaletteIdx ) const override;
 };
 
 class Color : public ::oox::drawingml::Color
@@ -89,7 +89,7 @@ public:
     /** Sets the color to automatic. */
     void                setAuto();
     /** Sets the color to the passed RGB value. */
-    void                setRgb( sal_Int32 nRgbValue, double fTint = 0.0 );
+    void                setRgb( ::Color nRgbValue, double fTint = 0.0 );
     /** Sets the color to the passed theme index. */
     void                setTheme( sal_Int32 nThemeIdx, double fTint = 0.0 );
     /** Sets the color to the passed palette index. */
@@ -122,14 +122,14 @@ public:
     void                importPaletteColor( SequenceInputStream& rStrm );
 
     /** Returns the RGB value of the color with the passed index. */
-    sal_Int32           getColor( sal_Int32 nPaletteIdx ) const;
+    ::Color             getColor( sal_Int32 nPaletteIdx ) const;
 
 private:
     /** Appends the passed color. */
-    void                appendColor( sal_Int32 nRGBValue );
+    void                appendColor( ::Color nRGBValue );
 
 private:
-    ::std::vector< sal_Int32 > maColors;    /// List of RGB values.
+    ::std::vector< ::Color > maColors;    /// List of RGB values.
     size_t              mnAppendIndex;      /// Index to append a new color.
 };
 
@@ -194,7 +194,7 @@ struct ApiFontData
     ApiScriptFontName        maAsianFont;        /// Font name for east-asian scripts.
     ApiScriptFontName        maCmplxFont;        /// Font name for complex scripts.
     css::awt::FontDescriptor maDesc;             /// Font descriptor (height in twips, weight in %).
-    sal_Int32                mnColor;            /// Font color.
+    ::Color                  mnColor;            /// Font color.
     sal_Int16                mnEscapement;       /// Escapement style.
     sal_Int8                 mnEscapeHeight;     /// Escapement font height.
     bool                     mbOutline;          /// True = outlined characters.
@@ -503,7 +503,7 @@ struct GradientFillModel
 /** Contains API fill attributes. */
 struct ApiSolidFillData
 {
-    sal_Int32           mnColor;            /// Fill color.
+    ::Color             mnColor;            /// Fill color.
     bool                mbTransparent;      /// True = transparent area.
     bool                mbUsed;             /// True = fill data is valid.
 
@@ -821,7 +821,7 @@ public:
     void                finalizeImport();
 
     /** Returns the palette color with the specified index. */
-    sal_Int32           getPaletteColor( sal_Int32 nIndex ) const;
+    ::Color             getPaletteColor( sal_Int32 nIndex ) const;
     /** Returns the specified font object. */
     FontRef             getFont( sal_Int32 nFontId ) const;
     /** Returns the specified border object. */

@@ -18,6 +18,8 @@
  */
 
 #include <memory>
+#include <utility>
+
 #include <comphelper/lok.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/dialog.hxx>
@@ -609,14 +611,37 @@ sal_uInt32 EditEngine::GetLineHeight( sal_Int32 nParagraph )
     return pImpEditEngine->GetLineHeight( nParagraph, 0 );
 }
 
+tools::Rectangle EditEngine::GetParaBounds( sal_Int32 nPara )
+{
+    if ( !pImpEditEngine->IsFormatted() )
+        pImpEditEngine->FormatDoc();
+
+    Point aPnt = GetDocPosTopLeft( nPara );
+
+    if( IsVertical() )
+    {
+        sal_Int32 nTextHeight = pImpEditEngine->GetTextHeight();
+        sal_Int32 nParaWidth = pImpEditEngine->CalcParaWidth( nPara, true );
+        sal_uLong nParaHeight = pImpEditEngine->GetParaHeight( nPara );
+
+        return tools::Rectangle( nTextHeight - aPnt.Y() - nParaHeight, 0, nTextHeight - aPnt.Y(), nParaWidth );
+    }
+    else
+    {
+        sal_Int32 nParaWidth = pImpEditEngine->CalcParaWidth( nPara, true );
+        sal_uLong nParaHeight = pImpEditEngine->GetParaHeight( nPara );
+
+        return tools::Rectangle( 0, aPnt.Y(), nParaWidth, aPnt.Y() + nParaHeight );
+    }
+}
+
 sal_uInt32 EditEngine::GetTextHeight( sal_Int32 nParagraph ) const
 {
-
     if ( !pImpEditEngine->IsFormatted() )
         pImpEditEngine->FormatDoc();
 
     sal_uInt32 nHeight = pImpEditEngine->GetParaHeight( nParagraph );
-     return nHeight;
+    return nHeight;
 }
 
 OUString EditEngine::GetWord( sal_Int32 nPara, sal_Int32 nIndex )
@@ -1489,18 +1514,18 @@ void EditEngine::Write( SvStream& rOutput, EETextFormat eFormat )
     pImpEditEngine->Write( rOutput, eFormat, EditSelection( aStartPaM, aEndPaM ) );
 }
 
-EditTextObject* EditEngine::CreateTextObject()
+std::unique_ptr<EditTextObject> EditEngine::CreateTextObject()
 {
     return pImpEditEngine->CreateTextObject();
 }
 
-EditTextObject* EditEngine::CreateTextObject( const ESelection& rESelection )
+std::unique_ptr<EditTextObject> EditEngine::CreateTextObject( const ESelection& rESelection )
 {
     EditSelection aSel( pImpEditEngine->CreateSel( rESelection ) );
     return pImpEditEngine->CreateTextObject( aSel );
 }
 
-EditTextObject* EditEngine::GetEmptyTextObject() const
+std::unique_ptr<EditTextObject> EditEngine::GetEmptyTextObject() const
 {
     return pImpEditEngine->GetEmptyTextObject();
 }
@@ -1580,7 +1605,7 @@ void EditEngine::SetEndPasteOrDropHdl( const Link<PasteOrDropInfos&,void>& rLink
     pImpEditEngine->aEndPasteOrDropHdl = rLink;
 }
 
-EditTextObject* EditEngine::CreateTextObject( sal_Int32 nPara, sal_Int32 nParas )
+std::unique_ptr<EditTextObject> EditEngine::CreateTextObject( sal_Int32 nPara, sal_Int32 nParas )
 {
     DBG_ASSERT( 0 <= nPara && nPara < pImpEditEngine->GetEditDoc().Count(), "CreateTextObject: Startpara out of Range" );
     DBG_ASSERT( nParas <= pImpEditEngine->GetEditDoc().Count() - nPara, "CreateTextObject: Endpara out of Range" );
@@ -2277,11 +2302,9 @@ sal_uInt16 EditEngine::GetFieldCount( sal_Int32 nPara ) const
     ContentNode* pNode = pImpEditEngine->GetEditDoc().GetObject( nPara );
     if ( pNode )
     {
-        const CharAttribList::AttribsType& rAttrs = pNode->GetCharAttribs().GetAttribs();
-        CharAttribList::AttribsType::const_iterator it = rAttrs.begin(), itEnd = rAttrs.end();
-        for (; it != itEnd; ++it)
+        for (auto const& attrib : pNode->GetCharAttribs().GetAttribs())
         {
-            if ((*it)->Which() == EE_FEATURE_FIELD)
+            if (attrib->Which() == EE_FEATURE_FIELD)
                 ++nFields;
         }
     }
@@ -2295,11 +2318,9 @@ EFieldInfo EditEngine::GetFieldInfo( sal_Int32 nPara, sal_uInt16 nField ) const
     if ( pNode )
     {
         sal_uInt16 nCurrentField = 0;
-        const CharAttribList::AttribsType& rAttrs = pNode->GetCharAttribs().GetAttribs();
-        CharAttribList::AttribsType::const_iterator it = rAttrs.begin(), itEnd = rAttrs.end();
-        for (; it != itEnd; ++it)
+        for (auto const& attrib : pNode->GetCharAttribs().GetAttribs())
         {
-            const EditCharAttrib& rAttr = *it->get();
+            const EditCharAttrib& rAttr = *attrib.get();
             if (rAttr.Which() == EE_FEATURE_FIELD)
             {
                 if ( nCurrentField == nField )
@@ -2569,7 +2590,7 @@ tools::Rectangle EditEngine::GetBulletArea( sal_Int32 )
     return tools::Rectangle( Point(), Point() );
 }
 
-OUString EditEngine::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, Color*&, Color*& )
+OUString EditEngine::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, boost::optional<Color>&, boost::optional<Color>& )
 {
     return OUString(' ');
 }
@@ -2629,7 +2650,7 @@ vcl::Font EditEngine::CreateFontFromItemSet( const SfxItemSet& rItemSet, SvtScri
 {
     SvxFont aFont;
     CreateFont( aFont, rItemSet, true, nScriptType );
-    return aFont;
+    return std::move(aFont);
 }
 
 SvxFont EditEngine::CreateSvxFontFromItemSet( const SfxItemSet& rItemSet )
@@ -2812,11 +2833,6 @@ bool EditEngine::IsPageOverflow() {
 void EditEngine::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
 {
     pImpEditEngine->SetHoriAlignIgnoreTrailingWhitespace(bEnabled);
-}
-
-bool EditEngine::IsHoriAlignIgnoreTrailingWhitespace() const
-{
-    return pImpEditEngine->IsHoriAlignIgnoreTrailingWhitespace();
 }
 
 EFieldInfo::EFieldInfo()

@@ -28,6 +28,7 @@
 #include <tgrditem.hxx>
 #include <com/sun/star/i18n/BreakType.hpp>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <unotools/charclass.hxx>
 #include "porfld.hxx"
 #include <paratr.hxx>
@@ -69,7 +70,7 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
                         10000 :
                             0 ;
 
-    SwTwips nLineWidth = rInf.Width() - rInf.X();
+    SwTwips nLineWidth = rInf.GetLineWidth();
     sal_Int32 nMaxLen = rInf.GetText().getLength() - rInf.GetIdx();
 
     const SvxAdjust& rAdjust = rInf.GetTextFrame()->GetTextNode()->GetSwAttrSet().GetAdjust().GetAdjust();

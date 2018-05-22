@@ -143,6 +143,7 @@ public:
     void testFormulaRefData();
     void testFormulaCompiler();
     void testFormulaCompilerJumpReordering();
+    void testFormulaCompilerImplicitIntersection();
     void testFormulaRefUpdate();
     void testFormulaRefUpdateRange();
     void testFormulaRefUpdateSheets();
@@ -186,6 +187,7 @@ public:
     void testFuncNUMBERVALUE();
     void testFuncLEN();
     void testFuncLOOKUP();
+    void testFuncLOOKUParrayWithError();
     void testFuncVLOOKUP();
     void testFuncMATCH();
     void testFuncCELL();
@@ -566,6 +568,7 @@ public:
     CPPUNIT_TEST(testFormulaRefData);
     CPPUNIT_TEST(testFormulaCompiler);
     CPPUNIT_TEST(testFormulaCompilerJumpReordering);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection);
     CPPUNIT_TEST(testFormulaRefUpdate);
     CPPUNIT_TEST(testFormulaRefUpdateRange);
     CPPUNIT_TEST(testFormulaRefUpdateSheets);
@@ -607,6 +610,7 @@ public:
     CPPUNIT_TEST(testFuncNUMBERVALUE);
     CPPUNIT_TEST(testFuncLEN);
     CPPUNIT_TEST(testFuncLOOKUP);
+    CPPUNIT_TEST(testFuncLOOKUParrayWithError);
     CPPUNIT_TEST(testFuncVLOOKUP);
     CPPUNIT_TEST(testFuncMATCH);
     CPPUNIT_TEST(testFuncCELL);

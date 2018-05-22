@@ -34,7 +34,7 @@ class TextRenderImpl
 public:
     virtual ~TextRenderImpl() {}
 
-    virtual void                    SetTextColor( SalColor nSalColor ) = 0;
+    virtual void                    SetTextColor( Color nColor ) = 0;
     virtual void                    SetFont( const FontSelectPattern*, int nFallbackLevel ) = 0;
     virtual void                    GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) = 0;
     virtual const FontCharMapRef    GetFontCharMap() const = 0;
@@ -63,7 +63,7 @@ public:
     virtual bool                    GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) = 0;
     virtual std::unique_ptr<SalLayout>
                                     GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) = 0;
-    virtual void                    DrawTextLayout(const CommonSalLayout&) = 0;
+    virtual void                    DrawTextLayout(const GenericSalLayout&) = 0;
 #if ENABLE_CAIRO_CANVAS
     virtual SystemFontData          GetSysFontData( int nFallbackLevel ) const = 0;
 #endif // ENABLE_CAIRO_CANVAS

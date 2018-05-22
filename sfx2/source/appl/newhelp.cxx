@@ -82,7 +82,6 @@
 #include <svtools/menuoptions.hxx>
 #include <unotools/pathoptions.hxx>
 #include <unotools/viewoptions.hxx>
-#include <svtools/svtresid.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/streamhelper.hxx>
 #include <svtools/imagemgr.hxx>
@@ -96,7 +95,6 @@
 #include <vcl/weld.hxx>
 
 #include <ucbhelper/content.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/waitobj.hxx>
 #include <unotools/ucbhelper.hxx>
 
@@ -1186,15 +1184,15 @@ void BookmarksBox_Impl::DoAction( sal_uInt16 nAction )
             sal_Int32 nPos = GetSelectedEntryPos();
             if ( nPos != LISTBOX_ENTRY_NOTFOUND )
             {
-                ScopedVclPtrInstance< SfxAddHelpBookmarkDialog_Impl > aDlg(this, true);
-                aDlg->SetTitle( GetEntry( nPos ) );
-                if ( aDlg->Execute() == RET_OK )
+                SfxAddHelpBookmarkDialog_Impl aDlg(GetFrameWeld(), true);
+                aDlg.SetTitle(GetEntry(nPos));
+                if (aDlg.run() == RET_OK)
                 {
                     OUString* pURL = static_cast<OUString*>(GetEntryData( nPos ));
                     RemoveEntry( nPos );
                     OUString aImageURL = IMAGE_URL;
                     aImageURL += INetURLObject( *pURL ).GetHost();
-                    nPos = InsertEntry( aDlg->GetTitle(), SvFileInformationManager::GetImage( INetURLObject(aImageURL) ) );
+                    nPos = InsertEntry( aDlg.GetTitle(), SvFileInformationManager::GetImage( INetURLObject(aImageURL) ) );
                     SetEntryData( nPos, new OUString( *pURL ) );
                     SelectEntryPos( nPos );
                     delete pURL;
@@ -1429,11 +1427,11 @@ SfxHelpIndexWindow_Impl::SfxHelpIndexWindow_Impl(SfxHelpWindow_Impl* _pParent)
 
     m_pTabCtrl->SetActivatePageHdl( LINK( this, SfxHelpIndexWindow_Impl, ActivatePageHdl ) );
 
-    sal_Int32 nPageId = m_pTabCtrl->GetPageId("index");
+    OString sPageId("index");
     SvtViewOptions aViewOpt( EViewType::TabDialog, CONFIGNAME_INDEXWIN );
     if ( aViewOpt.Exists() )
-        nPageId = aViewOpt.GetPageID();
-    m_pTabCtrl->SetCurPageId( static_cast<sal_uInt16>(nPageId) );
+        sPageId = aViewOpt.GetPageID();
+    m_pTabCtrl->SetCurPageId(m_pTabCtrl->GetPageId(sPageId));
     ActivatePageHdl( m_pTabCtrl );
     m_pActiveLB->SetSelectHdl( LINK( this, SfxHelpIndexWindow_Impl, SelectHdl ) );
 
@@ -1462,7 +1460,7 @@ void SfxHelpIndexWindow_Impl::dispose()
         delete static_cast<OUString*>(m_pActiveLB->GetEntryData(i));
 
     SvtViewOptions aViewOpt( EViewType::TabDialog, CONFIGNAME_INDEXWIN );
-    aViewOpt.SetPageID( static_cast<sal_Int32>(m_pTabCtrl->GetCurPageId()) );
+    aViewOpt.SetPageID(m_pTabCtrl->GetPageName(m_pTabCtrl->GetCurPageId()));
 
     disposeBuilder();
     m_pActiveLB.clear();
@@ -1695,7 +1693,8 @@ void SfxHelpIndexWindow_Impl::SetDoubleClickHdl( const Link<Control*,bool>& rLin
 
 IMPL_LINK(SfxHelpIndexWindow_Impl, ContentTabPageDoubleClickHdl, SvTreeListBox*, p, bool)
 {
-    return aPageDoubleClickLink.Call(p);
+    aPageDoubleClickLink.Call(p);
+    return true;
 }
 
 IMPL_LINK(SfxHelpIndexWindow_Impl, TabPageDoubleClickHdl, ListBox&, r, void)
@@ -3099,12 +3098,12 @@ void SfxHelpWindow_Impl::DoAction( sal_uInt16 nActionId )
                         OUString aValue;
                         if ( aAny >>= aValue )
                         {
-                            OUString aTitle( aValue );
-                            ScopedVclPtrInstance< SfxAddHelpBookmarkDialog_Impl > aDlg(this, false);
-                            aDlg->SetTitle( aTitle );
-                            if ( aDlg->Execute() == RET_OK )
+                            OUString aTitle(aValue);
+                            SfxAddHelpBookmarkDialog_Impl aDlg(GetFrameWeld(), false);
+                            aDlg.SetTitle(aTitle);
+                            if (aDlg.run() == RET_OK )
                             {
-                                aTitle = aDlg->GetTitle();
+                                aTitle = aDlg.GetTitle();
                                 pIndexWin->AddBookmarks( aTitle, aURL );
                             }
                         }
@@ -3167,29 +3166,19 @@ bool SfxHelpWindow_Impl::HasHistorySuccessor() const
 
 // class SfxAddHelpBookmarkDialog_Impl -----------------------------------
 
-SfxAddHelpBookmarkDialog_Impl::SfxAddHelpBookmarkDialog_Impl(vcl::Window* pParent, bool bRename)
-    : ModalDialog( pParent, "BookmarkDialog", "sfx/ui/bookmarkdialog.ui")
+SfxAddHelpBookmarkDialog_Impl::SfxAddHelpBookmarkDialog_Impl(weld::Window* pParent, bool bRename)
+    : GenericDialogController(pParent, "sfx/ui/bookmarkdialog.ui", "BookmarkDialog")
+    , m_xTitleED(m_xBuilder->weld_entry("entry"))
+    , m_xAltTitle(m_xBuilder->weld_label("alttitle"))
 {
-    get(m_pTitleED, "entry");
     if (bRename)
-        SetText(get<FixedText>("alttitle")->GetText());
+        m_xDialog->set_title(m_xAltTitle->get_label());
 }
 
-SfxAddHelpBookmarkDialog_Impl::~SfxAddHelpBookmarkDialog_Impl()
+void SfxAddHelpBookmarkDialog_Impl::SetTitle(const OUString& rTitle)
 {
-    disposeOnce();
-}
-
-void SfxAddHelpBookmarkDialog_Impl::dispose()
-{
-    m_pTitleED.clear();
-    ModalDialog::dispose();
-}
-
-void SfxAddHelpBookmarkDialog_Impl::SetTitle( const OUString& rTitle )
-{
-    m_pTitleED->SetText( rTitle );
-    m_pTitleED->SetSelection( Selection( 0, rTitle.getLength() ) );
+    m_xTitleED->set_text(rTitle);
+    m_xTitleED->select_region(0, -1);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

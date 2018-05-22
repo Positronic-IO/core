@@ -88,7 +88,7 @@ public:
 private:
     void cacheLocalizedFontNames(const FcChar8 *origfontname, const FcChar8 *bestfontname, const std::vector< lang_and_element > &lang_and_elements);
 
-    LanguageTag* m_pLanguageTag;
+    std::unique_ptr<LanguageTag> m_pLanguageTag;
 };
 
 FontCfgWrapper::FontCfgWrapper()
@@ -263,7 +263,7 @@ namespace
         FcChar8* candidate = elements.begin()->second;
         /* FIXME-BCP47: once fontconfig supports language tags this
          * language-territory stuff needs to be changed! */
-        SAL_INFO_IF( !rLangTag.isIsoLocale(), "i18n", "localizedsorter::bestname - not an ISO locale");
+        SAL_INFO_IF( !rLangTag.isIsoLocale(), "vcl.fonts", "localizedsorter::bestname - not an ISO locale");
         OString sLangMatch(OUStringToOString(rLangTag.getLanguage().toAsciiLowerCase(), RTL_TEXTENCODING_UTF8));
         OString sFullMatch = sLangMatch;
         sFullMatch += OString('-');
@@ -354,7 +354,7 @@ FcResult FontCfgWrapper::LocalizedElementFromPattern(FcPattern const * pPattern,
             {
                 rtl_Locale* pLoc = nullptr;
                 osl_getProcessLocale(&pLoc);
-                m_pLanguageTag = new LanguageTag(*pLoc);
+                m_pLanguageTag.reset( new LanguageTag(*pLoc) );
             }
             *element = bestname(lang_and_elements, *m_pLanguageTag);
 
@@ -376,8 +376,7 @@ void FontCfgWrapper::clear()
         FcFontSetDestroy( m_pOutlineSet );
         m_pOutlineSet = nullptr;
     }
-    delete m_pLanguageTag;
-    m_pLanguageTag = nullptr;
+    m_pLanguageTag.reset();
 }
 
 /*
@@ -471,18 +470,14 @@ static void lcl_FcFontSetRemove(FcFontSet* pFSet, int i)
 
 void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o_rVisitedPaths )
 {
-#if OSL_DEBUG_LEVEL > 1
     int nFonts = 0;
-#endif
     FontCfgWrapper& rWrapper = FontCfgWrapper::get();
 
     FcFontSet* pFSet = rWrapper.getFontSet();
     const bool bMinimalFontset = utl::ConfigManager::IsFuzzing();
     if( pFSet )
     {
-#if OSL_DEBUG_LEVEL > 1
-        fprintf( stderr, "found %d entries in fontconfig fontset\n", pFSet->nfont );
-#endif
+        SAL_INFO("vcl.fonts", "found " << pFSet->nfont << " entries in fontconfig fontset");
         for( int i = 0; i < pFSet->nfont; i++ )
         {
             FcChar8* file = nullptr;
@@ -512,20 +507,17 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
             if( eFileRes != FcResultMatch || eFamilyRes != FcResultMatch || eOutRes != FcResultMatch )
                 continue;
 
-#if (OSL_DEBUG_LEVEL > 2)
-            fprintf( stderr, "found font \"%s\" in file %s\n"
-                     "   weight = %d, slant = %d, style = \"%s\"\n"
-                     "   width = %d, spacing = %d, outline = %d, format %s\n"
-                     , family, file
-                     , eWeightRes == FcResultMatch ? weight : -1
-                     , eSpacRes == FcResultMatch ? slant : -1
-                     , eStyleRes == FcResultMatch ? (const char*) style : "<nil>"
-                     , eWeightRes == FcResultMatch ? width : -1
-                     , eSpacRes == FcResultMatch ? spacing : -1
-                     , eOutRes == FcResultMatch ? outline : -1
-                     , eFormatRes == FcResultMatch ? (const char*)format : "<unknown>"
-                     );
-#endif
+            SAL_INFO(
+                "vcl.fonts.detail",
+                "found font \"" << family << "\" in file " << file << ", weight = "
+                << (eWeightRes == FcResultMatch ? weight : -1) << ", slant = "
+                << (eSpacRes == FcResultMatch ? slant : -1) << ", style = \""
+                << (eStyleRes == FcResultMatch ? reinterpret_cast<const char*>(style) : "<nil>")
+                << "\",  width = " << (eWeightRes == FcResultMatch ? width : -1) << ", spacing = "
+                << (eSpacRes == FcResultMatch ? spacing : -1) << ", outline = "
+                << (eOutRes == FcResultMatch ? outline : -1) << ", format "
+                << (eFormatRes == FcResultMatch
+                    ? reinterpret_cast<const char*>(format) : "<unknown>"));
 
 //            OSL_ASSERT(eOutRes != FcResultMatch || outline);
 
@@ -535,9 +527,7 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
 
             if (isPreviouslyDuplicateOrObsoleted(pFSet, i))
             {
-#if OSL_DEBUG_LEVEL > 2
-                fprintf(stderr, "Ditching %s as duplicate/obsolete\n", file);
-#endif
+                SAL_INFO("vcl.fonts.detail", "Ditching " << file << " as duplicate/obsolete");
                 continue;
             }
 
@@ -549,9 +539,7 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
             o_rVisitedPaths[aDir] = 1;
 
             int nDirID = getDirectoryAtom( aDir );
-#if OSL_DEBUG_LEVEL > 2
-            fprintf( stderr, "file %s not cached\n", aBase.getStr() );
-#endif
+            SAL_INFO("vcl.fonts.detail", "file " << aBase << " not cached");
             // not known, analyze font file to get attributes
             // not described by fontconfig (e.g. alias names, PSName)
             if (eFormatRes != FcResultMatch)
@@ -559,9 +547,8 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
             std::vector<std::unique_ptr<PrintFont>> aFonts = analyzeFontFile( nDirID, aBase, reinterpret_cast<char*>(format) );
             if(aFonts.empty())
             {
-#if OSL_DEBUG_LEVEL > 1
-                fprintf( stderr, "Warning: file \"%s\" is unusable to psprint\n", aOrgPath.getStr() );
-#endif
+                SAL_INFO(
+                    "vcl.fonts", "Warning: file \"" << aOrgPath << "\" is unusable to psprint");
                 //remove font, reuse index
                 //we want to remove unusable fonts here, in case there is a usable font
                 //which duplicates the properties of the unusable one
@@ -601,15 +588,17 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
                     // ran to the end of the list)
                     xUpdate->m_nCollectionEntry = nCollectionEntry;
                 }
-#if OSL_DEBUG_LEVEL > 1
                 else
                 {
-                    fprintf( stderr, "multiple fonts for file, but no index in fontconfig pattern ! (index res = %d collection entry = %d\nfile will not be used\n", eIndexRes, nCollectionEntry );
+                    SAL_INFO(
+                        "vcl.fonts",
+                        "multiple fonts for file, but no index in fontconfig pattern ! (index res ="
+                        << eIndexRes << " collection entry = " << nCollectionEntry
+                        << "; file will not be used");
                     // we have found more than one font in this file
                     // but fontconfig will not tell us which index is meant
                     // -> something is in disorder, do not use this font
                 }
-#endif
             }
 
             if (xUpdate)
@@ -632,20 +621,14 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
                 fontID aFont = m_nNextFontID++;
                 m_aFonts[ aFont ] = xUpdate.release();
                 m_aFontFileToFontID[ aBase ].insert( aFont );
-#if OSL_DEBUG_LEVEL > 1
                 nFonts++;
-#endif
-#if OSL_DEBUG_LEVEL > 2
-                fprintf( stderr, "inserted font %s as fontID %d\n", family, aFont );
-#endif
+                SAL_INFO("vcl.fonts.detail", "inserted font " << family << " as fontID " << aFont);
             }
         }
     }
 
     // how does one get rid of the config ?
-#if OSL_DEBUG_LEVEL > 1
-    fprintf( stderr, "inserted %d fonts from fontconfig\n", nFonts );
-#endif
+    SAL_INFO("vcl.fonts", "inserted " << nFonts << " fonts from fontconfig");
 }
 
 void PrintFontManager::deinitFontconfig()
@@ -658,9 +641,7 @@ void PrintFontManager::addFontconfigDir( const OString& rDirName )
     const char* pDirName = rDirName.getStr();
     bool bDirOk = (FcConfigAppFontAddDir(FcConfigGetCurrent(), reinterpret_cast<FcChar8 const *>(pDirName) ) == FcTrue);
 
-#if OSL_DEBUG_LEVEL > 1
-    fprintf( stderr, "FcConfigAppFontAddDir( \"%s\") => %d\n", pDirName, bDirOk );
-#endif
+    SAL_INFO("vcl.fonts", "FcConfigAppFontAddDir( \"" << pDirName << "\") => " << bDirOk);
 
     if( !bDirOk )
         return;
@@ -676,7 +657,7 @@ void PrintFontManager::addFontconfigDir( const OString& rDirName )
         if( !bCfgOk )
             fprintf( stderr, "FcConfigParseAndLoad( \"%s\") => %d\n", aConfFileName.getStr(), bCfgOk );
     } else {
-        SAL_INFO("vcl", "cannot open " << aConfFileName);
+        SAL_INFO("vcl.fonts", "cannot open " << aConfFileName);
     }
 }
 
@@ -840,7 +821,7 @@ namespace
             default:
                 break;
         }
-        SAL_WARN_IF(bIsImpossible, "vcl", "In glyph fallback throwing away the language property of "
+        SAL_WARN_IF(bIsImpossible, "vcl.fonts", "In glyph fallback throwing away the language property of "
             << sLang << " because the detected script for '0x"
             << OUString::number(currentChar, 16)
             << "' is " << uscript_getName(eScript)
@@ -869,7 +850,7 @@ IMPL_LINK_NOARG(PrintFontManager, autoInstallFontLangSupport, Timer *, void)
     }
     catch (const css::uno::Exception& e)
     {
-        SAL_INFO("vcl", "InstallFontconfigResources problem, caught " << e);
+        SAL_INFO("vcl.fonts", "InstallFontconfigResources problem, caught " << e);
         // Disable this method from now on. It's simply not available on some systems
         // and leads to an error dialog being shown each time this is called tdf#104883
         std::shared_ptr<comphelper::ConfigurationChanges> batch( comphelper::ConfigurationChanges::create() );
@@ -973,7 +954,7 @@ void PrintFontManager::Substitute( FontSelectPattern &rPattern, OUString& rMissi
                 }
             }
 
-            SAL_WARN_IF(!bRet, "vcl", "no FC_FILE found, falling back to name search");
+            SAL_WARN_IF(!bRet, "vcl.fonts", "no FC_FILE found, falling back to name search");
 
             if (!bRet)
             {

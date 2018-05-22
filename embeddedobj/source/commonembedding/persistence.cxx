@@ -50,7 +50,6 @@
 #include <com/sun/star/chart2/XChartDocument.hpp>
 
 #include <comphelper/fileformat.h>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/mimeconfighelper.hxx>
 #include <comphelper/namedvaluecollection.hxx>
@@ -184,7 +183,7 @@ static void TransferMediaType( const uno::Reference< embed::XStorage >& i_rSourc
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("embeddedobj.common");
     }
 }
 
@@ -557,7 +556,7 @@ uno::Reference< util::XCloseable > OCommonEmbeddedObject::LoadDocumentFromStorag
             }
             catch( const uno::Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("embeddedobj.common");
             }
         }
 

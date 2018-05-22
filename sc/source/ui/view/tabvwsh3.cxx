@@ -30,7 +30,6 @@
 #include <svl/stritem.hxx>
 #include <tools/urlobj.hxx>
 #include <sfx2/objface.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/vclenum.hxx>
 
 #include <globstr.hrc>
@@ -40,6 +39,7 @@
 #include <tabvwsh.hxx>
 #include <document.hxx>
 #include <sc.hrc>
+#include <helpids.h>
 #include <inputwin.hxx>
 #include <scresid.hxx>
 #include <printfun.hxx>
@@ -698,8 +698,7 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
 
                 if ( pReqArgs )
                 {
-                    const SvxZoomItem& rZoomItem = static_cast<const SvxZoomItem&>(
-                                                   pReqArgs->Get(SID_ATTR_ZOOM));
+                    const SvxZoomItem& rZoomItem = pReqArgs->Get(SID_ATTR_ZOOM);
 
                     eNewZoomType = rZoomItem.GetType();
                     nZoom     = rZoomItem.GetValue();
@@ -726,7 +725,8 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     if(pFact)
                     {
-                        pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(GetDialogParent(), aSet));
+                        vcl::Window* pWin = GetDialogParent();
+                        pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(pWin ? pWin->GetFrameWeld() : nullptr, aSet));
                         OSL_ENSURE(pDlg, "Dialog creation failed!");
                     }
                     if (pDlg)
@@ -739,9 +739,8 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                         // so no need to check again pDlg
                         if ( !bCancel )
                         {
-                            const SvxZoomItem&  rZoomItem = static_cast<const SvxZoomItem&>(
-                                                    pDlg->GetOutputItemSet()->
-                                                        Get( SID_ATTR_ZOOM ));
+                            const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->
+                                                        Get( SID_ATTR_ZOOM );
 
                             eNewZoomType = rZoomItem.GetType();
                             nZoom     = rZoomItem.GetValue();
@@ -851,7 +850,7 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
                 OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
-                ScopedVclPtr<AbstractScShowTabDlg> pDlg(pFact->CreateScShowTabDlg(GetDialogParent()));
+                ScopedVclPtr<AbstractScShowTabDlg> pDlg(pFact->CreateScShowTabDlg(GetFrameWeld()));
                 OSL_ENSURE(pDlg, "Dialog create fail!");
                 pDlg->SetDescription(
                     ScResId( STR_DLG_SELECTTABLES_TITLE ),
@@ -868,9 +867,7 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
 
                 if( pDlg->Execute() == RET_OK )
                 {
-                    const sal_Int32 nSelCount = pDlg->GetSelectedEntryCount();
-                    for( sal_Int32 nSelIx = 0; nSelIx < nSelCount; ++nSelIx )
-                        aIndexList.insert( aIndexList.begin()+nSelIx, pDlg->GetSelectedEntryPos( nSelIx ) );
+                    aIndexList = pDlg->GetSelectedRows();
                     pDlg.disposeAndClear();
                     rReq.AppendItem( SfxIntegerListItem( SID_SELECT_TABLES, aIndexList ) );
                 }
@@ -1018,7 +1015,7 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                     }
                     else
                     {
-                        pDocSh->ExecuteChangeCommentDialog( pAction, GetDialogParent() );
+                        pDocSh->ExecuteChangeCommentDialog(pAction, GetFrameWeld());
                         rReq.Done();
                     }
                 }
@@ -1050,6 +1047,7 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                     }
                 }
 
+                vcl::Window* pWin = GetDialogParent();
                 ScDocProtection* pProtect = pDoc->GetDocProtection();
                 if (pProtect && pProtect->isProtected())
                 {
@@ -1060,14 +1058,14 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                     {
                         OUString aText(ScResId(SCSTR_PASSWORD));
 
-                        VclPtrInstance< SfxPasswordDialog > pDlg(GetDialogParent(), &aText);
-                        pDlg->SetText( ScResId(SCSTR_UNPROTECTDOC) );
-                        pDlg->SetMinLen( 0 );
-                        pDlg->SetHelpId( GetStaticInterface()->GetSlot(FID_PROTECT_DOC)->GetCommand() );
-                        pDlg->SetEditHelpId( HID_PASSWD_DOC );
+                        SfxPasswordDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr, &aText);
+                        aDlg.set_title(ScResId(SCSTR_UNPROTECTDOC));
+                        aDlg.SetMinLen(0);
+                        aDlg.set_help_id(GetStaticInterface()->GetSlot(FID_PROTECT_DOC)->GetCommand());
+                        aDlg.SetEditHelpId(HID_PASSWD_DOC);
 
-                        if (pDlg->Execute() == RET_OK)
-                            aPassword = pDlg->GetPassword();
+                        if (aDlg.execute() == RET_OK)
+                            aPassword = aDlg.GetPassword();
                         else
                             bCancel = true;
                     }
@@ -1082,17 +1080,17 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                 {
                     OUString aText(ScResId(SCSTR_PASSWORDOPT));
 
-                    VclPtrInstance< SfxPasswordDialog > pDlg(GetDialogParent(), &aText);
-                    pDlg->SetText( ScResId(SCSTR_PROTECTDOC) );
-                    pDlg->SetMinLen( 0 );
-                    pDlg->SetHelpId( GetStaticInterface()->GetSlot(FID_PROTECT_DOC)->GetCommand() );
-                    pDlg->SetEditHelpId( HID_PASSWD_DOC );
-                    pDlg->ShowExtras( SfxShowExtras::CONFIRM );
-                    pDlg->SetConfirmHelpId( HID_PASSWD_DOC_CONFIRM );
+                    SfxPasswordDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr, &aText);
+                    aDlg.set_title(ScResId(SCSTR_PROTECTDOC));
+                    aDlg.SetMinLen( 0 );
+                    aDlg.set_help_id(GetStaticInterface()->GetSlot(FID_PROTECT_DOC)->GetCommand());
+                    aDlg.SetEditHelpId(HID_PASSWD_DOC);
+                    aDlg.ShowExtras(SfxShowExtras::CONFIRM);
+                    aDlg.SetConfirmHelpId(HID_PASSWD_DOC_CONFIRM);
 
-                    if (pDlg->Execute() == RET_OK)
+                    if (aDlg.execute() == RET_OK)
                     {
-                        OUString aPassword = pDlg->GetPassword();
+                        OUString aPassword = aDlg.GetPassword();
                         Protect( TABLEID_DOC, aPassword );
                         rReq.AppendItem( SfxBoolItem( FID_PROTECT_DOC, true ) );
                         rReq.Done();
@@ -1129,15 +1127,16 @@ void ScTabViewShell::Execute( SfxRequest& rReq )
                 if (pProtect && pProtect->isProtectedWithPass())
                 {
                     OUString aText( ScResId(SCSTR_PASSWORDOPT) );
-                    VclPtrInstance< SfxPasswordDialog > pDlg(GetDialogParent(), &aText);
-                    pDlg->SetText( ScResId(SCSTR_UNPROTECTTAB) );
-                    pDlg->SetMinLen( 0 );
-                    pDlg->SetHelpId( GetStaticInterface()->GetSlot(FID_PROTECT_TABLE)->GetCommand() );
-                    pDlg->SetEditHelpId( HID_PASSWD_TABLE );
+                    vcl::Window* pWin = GetDialogParent();
+                    SfxPasswordDialog aDlg(pWin ? pWin->GetFrameWeld() : nullptr, &aText);
+                    aDlg.set_title(ScResId(SCSTR_UNPROTECTTAB));
+                    aDlg.SetMinLen(0);
+                    aDlg.set_help_id(GetStaticInterface()->GetSlot(FID_PROTECT_TABLE)->GetCommand());
+                    aDlg.SetEditHelpId(HID_PASSWD_TABLE);
 
-                    if (pDlg->Execute() == RET_OK)
+                    if (aDlg.execute() == RET_OK)
                     {
-                        OUString aPassword = pDlg->GetPassword();
+                        OUString aPassword = aDlg.GetPassword();
                         Unprotect(nTab, aPassword);
                     }
                 }

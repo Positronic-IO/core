@@ -18,7 +18,6 @@
  */
 
 #include <futxtatt.hxx>
-#include <vcl/msgbox.hxx>
 #include <sfx2/request.hxx>
 
 #include <svx/svxdlg.hxx>
@@ -58,7 +57,7 @@ void FuTextAttrDlg::DoExecute( SfxRequest& rReq )
     if( !pArgs )
     {
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateTextTabDialog( nullptr, &aNewAttr, mpView ));
+        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateTextTabDialog(rReq.GetFrameWeld(), &aNewAttr, mpView));
 
         sal_uInt16 nResult = pDlg->Execute();
 

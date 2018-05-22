@@ -21,7 +21,7 @@
 #include <editeng/outlobj.hxx>
 
 #include <svx/strings.hrc>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdmrkv.hxx>
 #include <svx/svdedxv.hxx>
@@ -146,15 +146,15 @@ SdrDropMarkerOverlay::~SdrDropMarkerOverlay()
     // OverlayManager and deletes them.
 }
 
-
-SdrView::SdrView(SdrModel* pModel1, OutputDevice* pOut)
-:   SdrCreateView(pModel1,pOut),
+SdrView::SdrView(
+    SdrModel& rSdrModel,
+    OutputDevice* pOut)
+:   SdrCreateView(rSdrModel, pOut),
     bNoExtendedMouseDispatcher(false),
     bNoExtendedKeyDispatcher(false),
     mbMasterPagePaintCaching(false)
 {
     maAccessibilityOptions.AddListener(this);
-
     onAccessibilityOptionsChanged();
 }
 
@@ -380,7 +380,12 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
                     eHit = SdrHitKind::Cell;
                     break;
                 case sdr::table::TableHitKind::CellTextArea:
-                    eHit = SdrHitKind::TextEditObj;
+                    // Keep state on UnmarkedObject to allow the below
+                    // 'check for URL field' to be executed, else popups
+                    // for e.g. URL links when hoovering and clicking
+                    // them will not work. Tried several other changes,
+                    // but this one safely keeps existing behaviour as-is.
+                    eHit = SdrHitKind::UnmarkedObject;
                     break;
                 default:
                     break;
@@ -738,8 +743,8 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
     rVEvt.eEvent=eEvent;
 #ifdef DGB_UTIL
     if (rVEvt.pRootObj!=NULL) {
-        if (rVEvt.pRootObj->GetObjList()!=rVEvt.pPV->GetObjList()) {
-            OSL_FAIL("SdrView::PickAnything(): pRootObj->GetObjList()!=pPV->GetObjList() !");
+        if (rVEvt.pRootObj->getParentOfSdrObject()!=rVEvt.pPV->GetObjList()) {
+            OSL_FAIL("SdrView::PickAnything(): pRootObj->getParentOfSdrObject()!=pPV->GetObjList() !");
         }
     }
 #endif
@@ -894,7 +899,7 @@ bool SdrView::DoMouseEvent(const SdrViewEvent& rVEvt)
         case SdrEventKind::BeginDragHelpline: bRet=BegDragHelpLine(rVEvt.nHlplIdx,rVEvt.pPV); break;
         case SdrEventKind::BeginDragObj: bRet=BegDragObj(aLogicPos,nullptr,rVEvt.pHdl,mnMinMovLog); break;
         case SdrEventKind::BeginCreateObj: {
-            if (nAktInvent==SdrInventor::Default && nAktIdent==OBJ_CAPTION) {
+            if (nCurrentInvent==SdrInventor::Default && nCurrentIdent==OBJ_CAPTION) {
                 long nHgt=SdrEngineDefaults::GetFontHeight();
                 bRet=BegCreateCaptionObj(aLogicPos,Size(5*nHgt,2*nHgt));
             } else bRet=BegCreateObj(aLogicPos);
@@ -945,7 +950,7 @@ Pointer SdrView::GetPreferredPointer(const Point& rMousePos, const OutputDevice*
     // Actions
     if (IsCreateObj())
     {
-        return pAktCreate->GetCreatePointer();
+        return pCurrentCreate->GetCreatePointer();
     }
     if (mpCurrentSdrDragMethod)
     {
@@ -998,7 +1003,7 @@ Pointer SdrView::GetPreferredPointer(const Point& rMousePos, const OutputDevice*
     switch (eEvent)
     {
         case SdrEventKind::BeginCreateObj:
-            return aAktCreatePointer;
+            return aCurrentCreatePointer;
         case SdrEventKind::MarkObj:
             return Pointer(PointerStyle::Move);
         case SdrEventKind::BeginMark:
@@ -1153,7 +1158,7 @@ Pointer SdrView::GetPreferredPointer(const Point& rMousePos, const OutputDevice*
             return Pointer(PointerStyle::Move);
         }
     }
-    if (meEditMode==SdrViewEditMode::Create) return aAktCreatePointer;
+    if (meEditMode==SdrViewEditMode::Create) return aCurrentCreatePointer;
     return Pointer(PointerStyle::Arrow);
 }
 
@@ -1165,14 +1170,14 @@ OUString SdrView::GetStatusText()
 
     aStr += STR_NOTHING;
 
-    if (pAktCreate!=nullptr)
+    if (pCurrentCreate!=nullptr)
     {
-        aStr=pAktCreate->getSpecialDragComment(maDragStat);
+        aStr=pCurrentCreate->getSpecialDragComment(maDragStat);
 
         if(aStr.isEmpty())
         {
-            aName = pAktCreate->TakeObjNameSingul();
-            aStr = ImpGetResStr(STR_ViewCreateObj);
+            aName = pCurrentCreate->TakeObjNameSingul();
+            aStr = SvxResId(STR_ViewCreateObj);
         }
     }
     else if (mpCurrentSdrDragMethod)
@@ -1187,7 +1192,7 @@ OUString SdrView::GetStatusText()
             {
                 SAL_INFO(
                     "svx.svdraw",
-                    "(" << this << ") " << mpCurrentSdrDragMethod);
+                    "(" << this << ") " << mpCurrentSdrDragMethod.get());
                 mpCurrentSdrDragMethod->TakeSdrDragComment(aStr);
             }
         }
@@ -1196,36 +1201,36 @@ OUString SdrView::GetStatusText()
     {
         if(AreObjectsMarked())
         {
-            aStr = ImpGetResStr(STR_ViewMarkMoreObjs);
+            aStr = SvxResId(STR_ViewMarkMoreObjs);
         }
         else
         {
-            aStr = ImpGetResStr(STR_ViewMarkObjs);
+            aStr = SvxResId(STR_ViewMarkObjs);
         }
     }
     else if(IsMarkPoints())
     {
         if(HasMarkedPoints())
         {
-            aStr = ImpGetResStr(STR_ViewMarkMorePoints);
+            aStr = SvxResId(STR_ViewMarkMorePoints);
         }
         else
         {
-            aStr = ImpGetResStr(STR_ViewMarkPoints);
+            aStr = SvxResId(STR_ViewMarkPoints);
         }
     } else if (IsMarkGluePoints())
     {
         if(HasMarkedGluePoints())
         {
-            aStr = ImpGetResStr(STR_ViewMarkMoreGluePoints);
+            aStr = SvxResId(STR_ViewMarkMoreGluePoints);
         }
         else
         {
-            aStr = ImpGetResStr(STR_ViewMarkGluePoints);
+            aStr = SvxResId(STR_ViewMarkGluePoints);
         }
     }
     else if (IsTextEdit() && pTextEditOutlinerView!=nullptr) {
-        aStr=ImpGetResStr(STR_ViewTextEdit); // "TextEdit - Row y, Column x";
+        aStr=SvxResId(STR_ViewTextEdit); // "TextEdit - Row y, Column x";
         ESelection aSel(pTextEditOutlinerView->GetSelection());
         long nPar=aSel.nEndPara,nLin=0,nCol=aSel.nEndPos;
         if (aSel.nEndPara>0) {

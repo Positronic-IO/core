@@ -22,18 +22,17 @@
 #include <comphelper/string.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svl/stritem.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <unotools/charclass.hxx>
 #include <stdlib.h>
 
 #include <areasdlg.hxx>
-#include <scresid.hxx>
 #include <rangenam.hxx>
 #include <reffact.hxx>
 #include <tabvwsh.hxx>
 #include <docsh.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <compiler.hxx>
 #include <markdata.hxx>
 
@@ -58,7 +57,7 @@ namespace
     {
         std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pParent,
                                                   VclMessageType::Warning, VclButtonsType::Ok,
-                                                  ScGlobal::GetRscString(rId)));
+                                                  ScResId(rId)));
         xBox->run();
     }
 }

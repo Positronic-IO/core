@@ -38,8 +38,10 @@
 #include <drawutil.hxx>
 #include <scmod.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <chartarr.hxx>
 #include <gridwin.hxx>
+#include <userdat.hxx>
 
 #include <com/sun/star/embed/NoVisualAreaSizeException.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
@@ -257,7 +259,7 @@ void getOleSourceRanges(const SdrMarkList& rMarkList, bool& rAnyOle, bool& rOneO
         if (aRange.Parse(*it, pDoc, pDoc->GetAddressConvention()) & ScRefFlags::VALID)
         {
             for(size_t i = 0; i < aRange.size(); ++i)
-                pRanges->push_back(*aRange[i]);
+                pRanges->push_back(aRange[i]);
         }
         else if (aAddr.Parse(*it, pDoc, pDoc->GetAddressConvention()) & ScRefFlags::VALID)
             pRanges->push_back(aAddr);
@@ -521,13 +523,68 @@ void ScDrawView::SetMarkedOriginalSize()
 
     if (nDone && pViewData)
     {
-        pUndoGroup->SetComment(ScGlobal::GetRscString( STR_UNDO_ORIGINALSIZE ));
+        pUndoGroup->SetComment(ScResId( STR_UNDO_ORIGINALSIZE ));
         ScDocShell* pDocSh = pViewData->GetDocShell();
         pDocSh->GetUndoManager()->AddUndoAction(pUndoGroup);
         pDocSh->SetDrawModified();
     }
     else
         delete pUndoGroup;
+}
+
+void ScDrawView::FitToCellSize()
+{
+    const SdrMarkList& rMarkList = GetMarkedObjectList();
+
+    if (rMarkList.GetMarkCount() != 1)
+    {
+        SAL_WARN("sc.ui", "Fit to cell only works with one graphic!");
+        return;
+    }
+
+    SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
+
+    ScAnchorType aAnchorType = ScDrawLayer::GetAnchorType(*pObj);
+    if (aAnchorType != SCA_CELL && aAnchorType != SCA_CELL_RESIZE)
+    {
+        SAL_WARN("sc.ui", "Fit to cell only works with cell anchored graphics!");
+        return;
+    }
+
+    ScDrawObjData* pObjData = ScDrawLayer::GetObjData(pObj);
+    if (!pObjData)
+    {
+        SAL_WARN("sc.ui", "Missing ScDrawObjData!");
+        return;
+    }
+
+    SdrUndoGroup* pUndoGroup = new SdrUndoGroup(*GetModel());
+    tools::Rectangle aGraphicRect = pObj->GetSnapRect();
+    tools::Rectangle aCellRect = ScDrawLayer::GetCellRect( *pDoc, pObjData->maStart, true);
+
+    // For graphic objects, we want to keep the aspect ratio
+    if (pObj->shouldKeepAspectRatio())
+    {
+        long nWidth = aGraphicRect.GetWidth();
+        assert(nWidth && "div-by-zero");
+        double fScaleX = static_cast<double>(aCellRect.GetWidth()) / static_cast<double>(nWidth);
+        long nHeight = aGraphicRect.GetHeight();
+        assert(nHeight && "div-by-zero");
+        double fScaleY = static_cast<double>(aCellRect.GetHeight()) / static_cast<double>(nHeight);
+        double fScaleMin = std::min(fScaleX, fScaleY);
+
+        aCellRect.setWidth(static_cast<double>(aGraphicRect.GetWidth()) * fScaleMin);
+        aCellRect.setHeight(static_cast<double>(aGraphicRect.GetHeight()) * fScaleMin);
+    }
+
+    pUndoGroup->AddAction( new SdrUndoGeoObj( *pObj ) );
+
+    pObj->SetSnapRect(aCellRect);
+
+    pUndoGroup->SetComment(ScResId( STR_UNDO_FITCELLSIZE ));
+    ScDocShell* pDocSh = pViewData->GetDocShell();
+    pDocSh->GetUndoManager()->AddUndoAction(pUndoGroup);
+
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

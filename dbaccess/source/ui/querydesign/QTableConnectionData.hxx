@@ -32,9 +32,6 @@ namespace dbaui
         EJoinType       m_eJoinType;
         bool            m_bNatural;
 
-        // for creation and duplication of lines of own type
-        virtual OConnectionLineDataRef CreateLineDataObj() override;
-
         OQueryTableConnectionData& operator=( const OQueryTableConnectionData& rConnData );
     public:
         OQueryTableConnectionData();

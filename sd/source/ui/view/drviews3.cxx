@@ -315,7 +315,8 @@ void  DrawViewShell::ExecCtrl(SfxRequest& rReq)
             SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
             if (pFact)
             {
-                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateMasterLayoutDialog( GetActiveWindow(), GetDoc(), pPage ));
+                vcl::Window* pWin = GetActiveWindow();
+                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateMasterLayoutDialog(pWin ? pWin->GetFrameWeld() : nullptr, GetDoc(), pPage));
                 pDlg->Execute();
                 Invalidate();
             }
@@ -331,7 +332,7 @@ void  DrawViewShell::ExecCtrl(SfxRequest& rReq)
             if ( pIPClient && pIPClient->IsObjectInPlaceActive() )
             {
                 const SfxRectangleItem& rRect =
-                    static_cast<const SfxRectangleItem&>(rReq.GetArgs()->Get(SID_OBJECTRESIZE));
+                    rReq.GetArgs()->Get(SID_OBJECTRESIZE);
                 ::tools::Rectangle aRect( GetActiveWindow()->PixelToLogic( rRect.GetValue() ) );
 
                 if ( mpDrawView->AreObjectsMarked() )
@@ -399,7 +400,7 @@ void  DrawViewShell::ExecCtrl(SfxRequest& rReq)
             }
             catch (RuntimeException&)
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("sd.view");
             }
 
             // We have to return immediately to avoid accessing this object.

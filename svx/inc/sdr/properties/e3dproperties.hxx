@@ -47,10 +47,7 @@ namespace sdr
             virtual ~E3dProperties() override;
 
             // Clone() operator, normally just calls the local copy constructor
-            virtual BaseProperties& Clone(SdrObject& rObj) const override;
-
-            // set a new StyleSheet and broadcast
-            virtual void SetStyleSheet(SfxStyleSheet* pNewStyleSheet, bool bDontRemoveHardAttr) override;
+            virtual std::unique_ptr<BaseProperties> Clone(SdrObject& rObj) const override;
         };
     } // end of namespace properties
 } // end of namespace sdr

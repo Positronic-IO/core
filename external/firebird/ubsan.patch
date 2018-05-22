@@ -74,6 +74,29 @@
  				memcpy(newdata, data, sizeof(T) * count);
  			freeData();
  			data = newdata;
+--- src/common/classes/fb_string.h
++++ src/common/classes/fb_string.h
+@@ -674,7 +674,8 @@
+ 		}
+ 		StringType& assign(const void* s, size_type n)
+ 		{
+-			memcpy(baseAssign(n), s, n);
++			auto const p = baseAssign(n);
++			if (n != 0) memcpy(p, s, n);
+ 			return *this;
+ 		}
+ 		StringType& assign(const_pointer s)
+--- src/common/unicode_util.cpp
++++ src/common/unicode_util.cpp
+@@ -187,7 +187,7 @@
+ 	Mutex ciAiTransCacheMutex;
+ 	Array<UTransliterator*> ciAiTransCache;
+ 
+-	void (U_EXPORT2 *uVersionToString)(UVersionInfo versionArray, char* versionString);
++	void (U_EXPORT2 *uVersionToString)(UVersionInfo const versionArray, char* versionString);
+ 
+ 	int32_t (U_EXPORT2 *ulocCountAvailable)();
+ 	const char* (U_EXPORT2 *ulocGetAvailable)(int32_t n);
 --- src/dsql/StmtNodes.cpp
 +++ src/dsql/StmtNodes.cpp
 @@ -6643,7 +6643,7 @@
@@ -160,6 +183,15 @@
  			jumpLength = jumpNode.length + jumpNode.prefix;
  
  			// Check if this could be our split point (if we need to split)
+@@ -5391,7 +5391,7 @@
+ 	// First, store needed data for beforeInsertNode into tempData.
+ 	HalfStaticArray<UCHAR, MAX_KEY> tempBuf;
+ 	UCHAR* tempData = tempBuf.getBuffer(newLength);
+-	memcpy(tempData, beforeInsertNode.data + newPrefix - beforeInsertNode.prefix, newLength);
++	if (newLength != 0) memcpy(tempData, beforeInsertNode.data + newPrefix - beforeInsertNode.prefix, newLength);
+ 
+ 	beforeInsertNode.prefix = newPrefix;
+ 	beforeInsertNode.length = newLength;
 @@ -5611,7 +5611,7 @@
  			for (size_t i = 0; i < jumpNodes->getCount(); i++, index++)
  			{

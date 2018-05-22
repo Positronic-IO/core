@@ -49,13 +49,20 @@ css::uno::Reference< css::xml::sax::XFastContextHandler > SAL_CALL ScXMLConditio
     return pContext;
 }
 
+IMPL_LINK(ScXMLConditionalFormatsContext, FormatDeletedHdl, ScConditionalFormat*, pFormat, void)
+{
+    mvCondFormatData.erase(std::remove_if(mvCondFormatData.begin(), mvCondFormatData.end(),
+                                          [pFormat](CondFormatData& r){ return r.mpFormat == pFormat; }),
+                           mvCondFormatData.end());
+}
+
 void SAL_CALL ScXMLConditionalFormatsContext::endFastElement( sal_Int32 /*nElement*/ )
 {
     ScDocument* pDoc = GetScImport().GetDocument();
 
     SCTAB nTab = GetScImport().GetTables().GetCurrentSheet();
     ScConditionalFormatList* pCondFormatList = pDoc->GetCondFormList(nTab);
-    bool bDeleted = !pCondFormatList->CheckAllEntries();
+    bool bDeleted = !pCondFormatList->CheckAllEntries(LINK(this, ScXMLConditionalFormatsContext, FormatDeletedHdl));
 
     SAL_WARN_IF(bDeleted, "sc", "conditional formats have been deleted because they contained empty range info");
 
@@ -88,11 +95,12 @@ ScXMLConditionalFormatContext::ScXMLConditionalFormatContext( ScXMLImport& rImpo
         }
     }
 
-    ScRangeStringConverter::GetRangeListFromString(maRange, sRange, GetScImport().GetDocument(),
+    ScRangeList aRangeList;
+    ScRangeStringConverter::GetRangeListFromString(aRangeList, sRange, GetScImport().GetDocument(),
             formula::FormulaGrammar::CONV_ODF);
 
     mxFormat.reset(new ScConditionalFormat(0, GetScImport().GetDocument()));
-    mxFormat->SetRange(maRange);
+    mxFormat->SetRange(aRangeList);
 }
 
 css::uno::Reference< css::xml::sax::XFastContextHandler > SAL_CALL ScXMLConditionalFormatContext::createFastChildContext(
@@ -257,7 +265,7 @@ void SAL_CALL ScXMLConditionalFormatContext::endFastElement( sal_Int32 /*nElemen
             // conditions could be loosened, but I am too tired to think on that right now.)
             if (pFormat->size() == 1 &&
                 pFormat->GetRange().size() == 1 &&
-                pFormat->GetRange()[0]->aStart == aSrcPos &&
+                pFormat->GetRange()[0].aStart == aSrcPos &&
                 HasOneSingleFullyRelativeReference( pTokens, aOffsetForSingleRelRef ))
             {
                 bSingleRelativeReference = true;
@@ -320,7 +328,7 @@ void SAL_CALL ScXMLConditionalFormatContext::endFastElement( sal_Int32 /*nElemen
                     // Mark cache entry as fresh, do necessary mangling of it and just return
                     aCacheEntry.mnAge = 0;
                     for (size_t k = 0; k < pFormat->GetRange().size(); ++k)
-                        aCacheEntry.mpFormat->GetRangeList().Join(*(pFormat->GetRange()[k]));
+                        aCacheEntry.mpFormat->GetRangeList().Join(pFormat->GetRange()[k]);
                     return;
                 }
             }
@@ -450,15 +458,13 @@ ScXMLDataBarFormatContext::ScXMLDataBarFormatContext( ScXMLImport& rImport,
 
     if(!sPositiveColor.isEmpty())
     {
-        sal_Int32 nColor = 0;
-        sax::Converter::convertColor( nColor, sPositiveColor );
-        mpFormatData->maPositiveColor = Color(nColor);
+        sax::Converter::convertColor( mpFormatData->maPositiveColor, sPositiveColor );
     }
 
     if(!sNegativeColor.isEmpty())
     {
         // we might check here for 0xff0000 and don't write it
-        sal_Int32 nColor = 0;
+        Color nColor;
         sax::Converter::convertColor( nColor, sNegativeColor );
         mpFormatData->mpNegativeColor.reset(new Color(nColor));
     }
@@ -475,9 +481,7 @@ ScXMLDataBarFormatContext::ScXMLDataBarFormatContext( ScXMLImport& rImport,
 
     if(!sAxisColor.isEmpty())
     {
-        sal_Int32 nColor = 0;
-        sax::Converter::convertColor( nColor, sAxisColor );
-        mpFormatData->maAxisColor = Color(nColor);
+        sax::Converter::convertColor( mpFormatData->maAxisColor, sAxisColor );
     }
 
     if(!sShowValue.isEmpty())
@@ -851,8 +855,7 @@ void setColorEntryType(const OUString& rType, ScColorScaleEntry* pEntry, const O
 ScXMLColorScaleFormatEntryContext::ScXMLColorScaleFormatEntryContext( ScXMLImport& rImport,
                         const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList,
                         ScColorScaleFormat* pFormat):
-    ScXMLImportContext( rImport ),
-    mpFormatEntry( nullptr )
+    ScXMLImportContext( rImport )
 {
     double nVal = 0;
     Color aColor;
@@ -882,16 +885,14 @@ ScXMLColorScaleFormatEntryContext::ScXMLColorScaleFormatEntryContext( ScXMLImpor
         }
     }
 
-    sal_Int32 nColor;
-    sax::Converter::convertColor(nColor, sColor);
-    aColor = Color(nColor);
+    sax::Converter::convertColor(aColor, sColor);
 
     if(!sVal.isEmpty())
         sax::Converter::convertDouble(nVal, sVal);
 
-    mpFormatEntry = new ScColorScaleEntry(nVal, aColor);
-    setColorEntryType(sType, mpFormatEntry, sVal, GetScImport());
-    pFormat->AddEntry(mpFormatEntry);
+    auto pFormatEntry = new ScColorScaleEntry(nVal, aColor);
+    setColorEntryType(sType, pFormatEntry, sVal, GetScImport());
+    pFormat->AddEntry(pFormatEntry);
 }
 
 ScXMLFormattingEntryContext::ScXMLFormattingEntryContext( ScXMLImport& rImport,

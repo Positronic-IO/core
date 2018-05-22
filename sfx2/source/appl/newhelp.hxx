@@ -33,6 +33,7 @@
 #include <vcl/button.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/dialog.hxx>
+#include <vcl/weld.hxx>
 #include <svtools/treelistbox.hxx>
 #include <unotools/moduleoptions.hxx>
 
@@ -502,7 +503,7 @@ friend class SfxHelpIndexWindow_Impl;
     VclPtr<SfxHelpIndexWindow_Impl>    pIndexWin;
     VclPtr<SfxHelpTextWindow_Impl>     pTextWin;
     HelpInterceptor_Impl*       pHelpInterceptor;
-    HelpListener_Impl*          pHelpListener;
+    std::unique_ptr<HelpListener_Impl> pHelpListener;
 
     sal_Int32           nExpandWidth;
     sal_Int32           nCollapseWidth;
@@ -563,21 +564,20 @@ public:
                                               bool         bAddToHistory = true);
 };
 
-class SfxAddHelpBookmarkDialog_Impl : public ModalDialog
+class SfxAddHelpBookmarkDialog_Impl : public weld::GenericDialogController
 {
 private:
-    VclPtr<Edit> m_pTitleED;
+    std::unique_ptr<weld::Entry> m_xTitleED;
+    std::unique_ptr<weld::Label> m_xAltTitle;
 public:
-    SfxAddHelpBookmarkDialog_Impl( vcl::Window* pParent, bool bRename );
-    virtual ~SfxAddHelpBookmarkDialog_Impl() override;
-    virtual void dispose() override;
+    SfxAddHelpBookmarkDialog_Impl(weld::Window* pParent, bool bRename);
 
     void SetTitle( const OUString& rTitle );
-    OUString GetTitle() const { return m_pTitleED->GetText(); }
+    OUString GetTitle() const { return m_xTitleED->get_text(); }
 };
 
 /// Appends ?Language=xy&System=abc to the help URL in rURL
-void AppendConfigToken(OUStringBuffer& rURL, bool bQuestionMark, const OUString &rLang = OUString());
+void AppendConfigToken(OUStringBuffer& rURL, bool bQuestionMark);
 
 #endif // INCLUDED_SFX2_SOURCE_APPL_NEWHELP_HXX
 

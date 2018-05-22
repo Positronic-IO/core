@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <i18nlangtag/languagetag.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <sal/macros.h>
@@ -24,8 +25,12 @@
 #include <localedata.hxx>
 #include "data/numberchar.h"
 #include <comphelper/string.hxx>
+#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <map>
 #include <memory>
+#include <unordered_map>
+#include <com/sun/star/linguistic2/NumberText.hpp>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::i18n;
@@ -58,15 +63,17 @@ typedef struct {
 
 namespace i18npool {
 
+struct theNatNumMutex : public rtl::Static<osl::Mutex, theNatNumMutex> {};
+
 OUString getHebrewNativeNumberString(const OUString& aNumberString, bool useGeresh);
 
 OUString getCyrillicNativeNumberString(const OUString& aNumberString);
 
 /// @throws RuntimeException
-OUString AsciiToNativeChar( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount,
+OUString AsciiToNativeChar( const OUString& inStr, sal_Int32 nCount,
         Sequence< sal_Int32 >& offset, bool useOffset, sal_Int16 number )
 {
-    const sal_Unicode *src = inStr.getStr() + startPos;
+    const sal_Unicode *src = inStr.getStr();
     rtl_uString *newStr = rtl_uString_alloc(nCount);
     if (useOffset)
         offset.realloc(nCount);
@@ -86,7 +93,7 @@ OUString AsciiToNativeChar( const OUString& inStr, sal_Int32 startPos, sal_Int32
         else
             newStr->buffer[i] = ch;
         if (useOffset)
-            offset[i] = startPos + i;
+            offset[i] = i;
     }
     return OUString(newStr, SAL_NO_ACQUIRE); // take ownership
 }
@@ -163,12 +170,12 @@ bool AsciiToNative_numberMaker(const sal_Unicode *str, sal_Int32 begin, sal_Int3
 }
 
 /// @throws RuntimeException
-OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount,
+OUString AsciiToNative( const OUString& inStr, sal_Int32 nCount,
         Sequence< sal_Int32 >& offset, bool useOffset, const Number* number )
 {
     OUString aRet;
 
-    sal_Int32 strLen = inStr.getLength() - startPos;
+    sal_Int32 strLen = inStr.getLength();
     const sal_Unicode *numberChar = NumberChar[number->number];
 
     if (nCount > strLen)
@@ -176,7 +183,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
 
     if (nCount > 0)
     {
-        const sal_Unicode *str = inStr.getStr() + startPos;
+        const sal_Unicode *str = inStr.getStr();
         std::unique_ptr<sal_Unicode[]> newStr(new sal_Unicode[nCount * 2 + 1]);
         std::unique_ptr<sal_Unicode[]> srcStr(new sal_Unicode[nCount + 1]); // for keeping number without comma
         sal_Int32 i, len = 0, count = 0;
@@ -191,7 +198,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
                 if (bDoDecimal) {
                     newStr[count] = numberChar[str[i] - NUMBER_ZERO];
                     if (useOffset)
-                        offset[count] = i + startPos;
+                        offset[count] = i;
                     count++;
                 }
                 else
@@ -206,7 +213,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
                         if (end == 0) continue;
                         sal_Int32 _count = count;
                         bNotZero |= AsciiToNative_numberMaker(srcStr.get(), begin, end - begin, newStr.get(), count,
-                                end == len ? -1 : 0, offset, useOffset, i - len + startPos, number, numberChar);
+                                end == len ? -1 : 0, offset, useOffset, i - len, number, numberChar);
                         if (count > 0 && number->multiplierExponent[number->exponentCount-1] == 1 &&
                                 newStr[count-1] == numberChar[0])
                             count--;
@@ -214,7 +221,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
                             if (end != len) {
                                 newStr[count] = number->multiplierChar[0];
                                 if (useOffset)
-                                    offset[count] = i - len + startPos;
+                                    offset[count] = i - len;
                                 count++;
                             }
                         }
@@ -222,7 +229,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
                     if (! bNotZero && ! (number->numberFlag & NUMBER_OMIT_ONLY_ZERO)) {
                         newStr[count] = numberChar[0];
                         if (useOffset)
-                            offset[count] = i - len + startPos;
+                            offset[count] = i - len;
                         count++;
                     }
                     len = 0;
@@ -238,7 +245,7 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
                     else
                         newStr[count] = str[i];
                     if (useOffset)
-                        offset[count] = i + startPos;
+                        offset[count] = i;
                     count++;
                 }
             }
@@ -250,7 +257,10 @@ OUString AsciiToNative( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCo
     }
     return aRet;
 }
-static void NativeToAscii_numberMaker(sal_Int16 max, sal_Int16 prev, const sal_Unicode *str,
+
+namespace
+{
+void NativeToAscii_numberMaker(sal_Int16 max, sal_Int16 prev, const sal_Unicode *str,
         sal_Int32& i, sal_Int32 nCount, sal_Unicode *dst, sal_Int32& count, Sequence< sal_Int32 >& offset, bool useOffset,
         OUString& numberChar, OUString& multiplierChar)
 {
@@ -300,18 +310,18 @@ static void NativeToAscii_numberMaker(sal_Int16 max, sal_Int16 prev, const sal_U
 }
 
 /// @throws RuntimeException
-static OUString NativeToAscii(const OUString& inStr,
-        sal_Int32 startPos, sal_Int32 nCount, Sequence< sal_Int32 >& offset, bool useOffset )
+OUString NativeToAscii(const OUString& inStr,
+        sal_Int32 nCount, Sequence< sal_Int32 >& offset, bool useOffset )
 {
     OUString aRet;
 
-    sal_Int32 strLen = inStr.getLength() - startPos;
+    sal_Int32 strLen = inStr.getLength();
 
     if (nCount > strLen)
         nCount = strLen;
 
     if (nCount > 0) {
-        const sal_Unicode *str = inStr.getStr() + startPos;
+        const sal_Unicode *str = inStr.getStr();
         std::unique_ptr<sal_Unicode[]> newStr(new sal_Unicode[nCount * MultiplierExponent_7_CJK[0] + 2]);
         if (useOffset)
             offset.realloc( nCount * MultiplierExponent_7_CJK[0] + 1 );
@@ -368,15 +378,13 @@ static OUString NativeToAscii(const OUString& inStr,
 
         if (useOffset) {
             offset.realloc(count);
-            for (i = 0; i < count; i++)
-                offset[i] += startPos;
         }
         aRet = OUString(newStr.get(), count);
     }
     return aRet;
 }
 
-static const Number natnum4[4] = {
+const Number natnum4[4] = {
         { NumberChar_Lower_zh, MultiplierChar_6_CJK[Multiplier_Lower_zh], 0,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
         { NumberChar_Lower_zh, MultiplierChar_6_CJK[Multiplier_Lower_zh_TW], 0,
@@ -387,7 +395,7 @@ static const Number natnum4[4] = {
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
 };
 
-static const Number natnum5[4] = {
+const Number natnum5[4] = {
         { NumberChar_Upper_zh, MultiplierChar_6_CJK[Multiplier_Upper_zh], 0,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
         { NumberChar_Upper_zh_TW, MultiplierChar_6_CJK[Multiplier_Upper_zh_TW], 0,
@@ -398,7 +406,7 @@ static const Number natnum5[4] = {
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
 };
 
-static const Number natnum6[4] = {
+const Number natnum6[4] = {
         { NumberChar_FullWidth, MultiplierChar_6_CJK[Multiplier_Lower_zh], 0,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
         { NumberChar_FullWidth, MultiplierChar_6_CJK[Multiplier_Lower_zh_TW], 0,
@@ -409,7 +417,7 @@ static const Number natnum6[4] = {
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
 };
 
-static const Number natnum7[4] = {
+const Number natnum7[4] = {
         { NumberChar_Lower_zh, MultiplierChar_6_CJK[Multiplier_Lower_zh], NUMBER_OMIT_ALL,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
         { NumberChar_Lower_zh, MultiplierChar_6_CJK[Multiplier_Lower_zh_TW], NUMBER_OMIT_ALL,
@@ -420,7 +428,7 @@ static const Number natnum7[4] = {
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
 };
 
-static const Number natnum8[4] = {
+const Number natnum8[4] = {
         { NumberChar_Upper_zh, MultiplierChar_6_CJK[Multiplier_Upper_zh], NUMBER_OMIT_ALL,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
         { NumberChar_Upper_zh_TW, MultiplierChar_6_CJK[Multiplier_Upper_zh_TW], NUMBER_OMIT_ALL,
@@ -431,14 +439,14 @@ static const Number natnum8[4] = {
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK },
 };
 
-static const Number natnum10 = { NumberChar_Hangul_ko, MultiplierChar_6_CJK[Multiplier_Hangul_ko], NUMBER_OMIT_ZERO,
+const Number natnum10 = { NumberChar_Hangul_ko, MultiplierChar_6_CJK[Multiplier_Hangul_ko], NUMBER_OMIT_ZERO,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK };
-static const Number natnum11 = { NumberChar_Hangul_ko, MultiplierChar_6_CJK[Multiplier_Hangul_ko], NUMBER_OMIT_ALL,
+const Number natnum11 = { NumberChar_Hangul_ko, MultiplierChar_6_CJK[Multiplier_Hangul_ko], NUMBER_OMIT_ALL,
                 ExponentCount_6_CJK, MultiplierExponent_6_CJK };
 
 //! ATTENTION: Do not change order of elements!
 //! Append new languages to the end of the list!
-static const sal_Char *natnum1Locales[] = {
+const sal_Char *natnum1Locales[] = {
     "zh_CN",
     "zh_TW",
     "ja",
@@ -466,11 +474,11 @@ static const sal_Char *natnum1Locales[] = {
     "fa",
     "cu"
 };
-static sal_Int16 nbOfLocale = SAL_N_ELEMENTS(natnum1Locales);
+sal_Int16 nbOfLocale = SAL_N_ELEMENTS(natnum1Locales);
 
 //! ATTENTION: Do not change order of elements!
 //! Number and order must match elements of natnum1Locales!
-static const sal_Int16 natnum1[] = {
+const sal_Int16 natnum1[] = {
     NumberChar_Lower_zh,
     NumberChar_Lower_zh,
     NumberChar_Modern_ja,
@@ -498,20 +506,20 @@ static const sal_Int16 natnum1[] = {
     NumberChar_EastIndic_ar,
     NumberChar_cu
 };
-static const sal_Int16 sizeof_natnum1 = SAL_N_ELEMENTS(natnum1);
+const sal_Int16 sizeof_natnum1 = SAL_N_ELEMENTS(natnum1);
 
 //! ATTENTION: Do not change order of elements!
 //! Order must match first elements of natnum1Locales!
-static const sal_Int16 natnum2[] = {
+const sal_Int16 natnum2[] = {
     NumberChar_Upper_zh,
     NumberChar_Upper_zh_TW,
     NumberChar_Traditional_ja,
     NumberChar_Upper_ko,
     NumberChar_he
 };
-static const sal_Int16 sizeof_natnum2 = SAL_N_ELEMENTS(natnum2);
+const sal_Int16 sizeof_natnum2 = SAL_N_ELEMENTS(natnum2);
 
-static sal_Int16 getLanguageNumber( const Locale& rLocale)
+sal_Int16 getLanguageNumber( const Locale& rLocale)
 {
     // return zh_TW for TW, HK and MO, return zh_CN for other zh locales.
     if (rLocale.Language == "zh") return MsLangId::isTraditionalChinese(rLocale) ? 1 : 0;
@@ -523,11 +531,78 @@ static sal_Int16 getLanguageNumber( const Locale& rLocale)
     return -1;
 }
 
+OUString getNumberText(const Locale& aLocale, sal_Int16 numType, const OUString& rNumberString)
+{
+    assert(numType == NativeNumberMode::NATNUM12 || numType == NativeNumberMode::NATNUM13
+           || numType == NativeNumberMode::NATNUM14);
+
+    sal_Int32 i, count = 0;
+    const sal_Int32 len = rNumberString.getLength();
+    const sal_Unicode* src = rNumberString.getStr();
+
+    OUStringBuffer sBuf(len);
+    for (i = 0; i < len; i++)
+    {
+        sal_Unicode ch = src[i];
+        if (isNumber(ch))
+        {
+            ++count;
+            sBuf.append(ch);
+        }
+        else if (isSeparator(ch) && count > 0)
+            continue;
+        else if (isMinus(ch) && count == 0)
+            sBuf.append(ch);
+        else
+            break;
+    }
+
+    if (count == 0)
+        return rNumberString;
+
+    OUString aNumberStr = sBuf.makeStringAndClear();
+
+    // Guard the static variables below.
+    osl::MutexGuard aGuard( theNatNumMutex::get());
+
+    static auto xNumberText
+        = css::linguistic2::NumberText::create(comphelper::getProcessComponentContext());
+    OUString aLoc = LanguageTag::convertToBcp47(aLocale);
+    OUString numbertext_prefix;
+    if (numType == NativeNumberMode::NATNUM14)
+        numbertext_prefix = "ordinal-number ";
+    else if (numType == NativeNumberMode::NATNUM13)
+        numbertext_prefix = "ordinal ";
+    // Several hundreds of headings could result typing lags because
+    // of the continuous update of the multiple number names during typing.
+    // We fix this by buffering the result of the conversion.
+    static std::unordered_map<OUString, std::map<OUString, OUString>> aBuff;
+    auto& rItems = aBuff[aNumberStr];
+    auto& rItem = rItems[numbertext_prefix + aLoc];
+    if (rItem.isEmpty())
+    {
+        rItem = xNumberText->getNumberText(numbertext_prefix + aNumberStr, aLocale);
+        // use number at missing number to text conversion
+        if (rItem.isEmpty())
+            rItem = aNumberStr;
+    }
+    OUString sResult = rItem;
+    if (i < len)
+        sResult += rNumberString.copy(i);
+    return sResult;
+}
+}
+
 OUString NativeNumberSupplierService::getNativeNumberString(const OUString& aNumberString, const Locale& rLocale,
                 sal_Int16 nNativeNumberMode, Sequence< sal_Int32 >& offset)
 {
     if (!isValidNatNum(rLocale, nNativeNumberMode))
         return aNumberString;
+
+    if (nNativeNumberMode == NativeNumberMode::NATNUM12
+        || nNativeNumberMode == NativeNumberMode::NATNUM13
+        || nNativeNumberMode == NativeNumberMode::NATNUM14)
+        return getNumberText(rLocale, nNativeNumberMode, aNumberString);
 
     sal_Int16 langnum = getLanguageNumber(rLocale);
     if (langnum == -1)
@@ -539,7 +614,7 @@ OUString NativeNumberSupplierService::getNativeNumberString(const OUString& aNum
     switch (nNativeNumberMode)
     {
         case NativeNumberMode::NATNUM0: // Ascii
-            return NativeToAscii(aNumberString,  0, aNumberString.getLength(), offset, useOffset);
+            return NativeToAscii(aNumberString, aNumberString.getLength(), offset, useOffset);
         case NativeNumberMode::NATNUM1: // Char, Lower
             num = natnum1[langnum];
             break;
@@ -595,14 +670,14 @@ OUString NativeNumberSupplierService::getNativeNumberString(const OUString& aNum
                 SeparatorChar[NumberChar_FullWidth]=SeparatorChar[NumberChar_HalfWidth]+0xFEE0;
         }
         if (number)
-            return AsciiToNative( aNumberString, 0, aNumberString.getLength(), offset, useOffset, number );
+            return AsciiToNative( aNumberString, aNumberString.getLength(), offset, useOffset, number );
         else if (num == NumberChar_he)
             return getHebrewNativeNumberString(aNumberString,
                     nNativeNumberMode == NativeNumberMode::NATNUM2);
         else if (num == NumberChar_cu)
             return getCyrillicNativeNumberString(aNumberString);
         else
-            return AsciiToNativeChar(aNumberString, 0, aNumberString.getLength(), offset, useOffset, num);
+            return AsciiToNativeChar(aNumberString, aNumberString.getLength(), offset, useOffset, num);
     }
     else
         return aNumberString;
@@ -666,6 +741,9 @@ sal_Bool SAL_CALL NativeNumberSupplierService::isValidNatNum( const Locale& rLoc
     switch (nNativeNumberMode) {
         case NativeNumberMode::NATNUM0:     // Ascii
         case NativeNumberMode::NATNUM3:     // Char, FullWidth
+        case NativeNumberMode::NATNUM12:    // Cardinal number names (one, two, three, ...)
+        case NativeNumberMode::NATNUM13:    // Ordinal number names (first, second, third, ...)
+        case NativeNumberMode::NATNUM14:    // Ordinal indicators (1st, 2nd, 3rd, ...)
             return true;
         case NativeNumberMode::NATNUM1:     // Char, Lower
             return (langnum >= 0);

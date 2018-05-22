@@ -498,6 +498,31 @@ static void impl_drawAeroToolbar( HDC hDC, RECT rc, bool bHorizontal )
     }
 }
 
+/**
+ * Gives the actual rectangle used for rendering by ControlType::MenuPopup's
+ * ControlPart::MenuItemCheckMark or ControlPart::MenuItemRadioMark.
+ */
+static tools::Rectangle GetMenuPopupMarkRegion(const ImplControlValue& rValue)
+{
+    tools::Rectangle aRet;
+
+    const MenupopupValue& rMVal(static_cast<const MenupopupValue&>(rValue));
+    aRet.SetTop(rMVal.maItemRect.Top());
+    aRet.SetBottom(rMVal.maItemRect.Bottom() + 1); // see below in drawNativeControl
+    if (AllSettings::GetLayoutRTL())
+    {
+        aRet.SetRight(rMVal.maItemRect.Right() + 1);
+        aRet.SetLeft(aRet.Right() - (rMVal.getNumericVal() - rMVal.maItemRect.Left()));
+    }
+    else
+    {
+        aRet.SetRight(rMVal.getNumericVal());
+        aRet.SetLeft(rMVal.maItemRect.Left());
+    }
+
+    return aRet;
+}
+
 bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
                             ControlType nType,
                             ControlPart nPart,
@@ -1088,19 +1113,11 @@ bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
                     RECT aBGRect = rc;
                     if( aValue.getType() == ControlType::MenuPopup )
                     {
-                        const MenupopupValue& rMVal( static_cast<const MenupopupValue&>(aValue) );
-                        aBGRect.top    = rMVal.maItemRect.Top();
-                        aBGRect.bottom = rMVal.maItemRect.Bottom()+1; // see below in drawNativeControl
-                        if( AllSettings::GetLayoutRTL() )
-                        {
-                            aBGRect.right = rMVal.maItemRect.Right()+1;
-                            aBGRect.left = aBGRect.right - (rMVal.getNumericVal()-rMVal.maItemRect.Left());
-                        }
-                        else
-                        {
-                            aBGRect.right = rMVal.getNumericVal();
-                            aBGRect.left  = rMVal.maItemRect.Left();
-                        }
+                        tools::Rectangle aRectangle = GetMenuPopupMarkRegion(aValue);
+                        aBGRect.top = aRectangle.Top();
+                        aBGRect.left = aRectangle.Left();
+                        aBGRect.bottom = aRectangle.Bottom();
+                        aBGRect.right = aRectangle.Right();
                         rc = aBGRect;
                     }
                     iState = (nState & ControlState::ENABLED) ? MCB_NORMAL : MCB_DISABLED;
@@ -1163,6 +1180,14 @@ bool WinSalGraphics::drawNativeControl( ControlType nType,
             keySize = rNativeBoundingRegion.GetSize();
         }
     }
+
+    if (pImpl && nType == ControlType::MenuPopup && (nPart == ControlPart::MenuItemCheckMark || nPart == ControlPart::MenuItemRadioMark))
+    {
+        cacheRect = GetMenuPopupMarkRegion(aValue);
+        buttonRect = cacheRect;
+        keySize = cacheRect.GetSize();
+    }
+
 
     ControlCacheKey aControlCacheKey(nType, nPart, nState, keySize);
     if (pImpl != nullptr && pImpl->TryRenderCachedNativeControl(aControlCacheKey, buttonRect.Left(), buttonRect.Top()))
@@ -1279,11 +1304,11 @@ bool WinSalGraphics::drawNativeControl( ControlType nType,
         // We can do OpenGL
         OpenGLCompatibleDC aBlackDC(*this, cacheRect.Left(), cacheRect.Top(), cacheRect.GetWidth()+1, cacheRect.GetHeight()+1);
         SetTextAlign(aBlackDC.getCompatibleHDC(), TA_LEFT|TA_TOP|TA_NOUPDATECP);
-        aBlackDC.fill(MAKE_SALCOLOR(0, 0, 0));
+        aBlackDC.fill(RGB(0, 0, 0));
 
         OpenGLCompatibleDC aWhiteDC(*this, cacheRect.Left(), cacheRect.Top(), cacheRect.GetWidth()+1, cacheRect.GetHeight()+1);
         SetTextAlign(aWhiteDC.getCompatibleHDC(), TA_LEFT|TA_TOP|TA_NOUPDATECP);
-        aWhiteDC.fill(MAKE_SALCOLOR(0xff, 0xff, 0xff));
+        aWhiteDC.fill(RGB(0xff, 0xff, 0xff));
 
         if (ImplDrawNativeControl(aBlackDC.getCompatibleHDC(), hTheme, rc, nType, nPart, nState, aValue, aCaptionStr) &&
             ImplDrawNativeControl(aWhiteDC.getCompatibleHDC(), hTheme, rc, nType, nPart, nState, aValue, aCaptionStr))
@@ -1372,9 +1397,9 @@ bool WinSalGraphics::getNativeControlRegion(  ControlType nType,
             tools::Rectangle aRect( ImplGetThemeRect( hTheme, hDC, CP_DROPDOWNBUTTON,
                                                CBXS_NORMAL, aBoxRect ) );
             if( aRect.GetHeight() > aBoxRect.GetHeight() )
-                aBoxRect.Bottom() = aBoxRect.Top() + aRect.GetHeight();
+                aBoxRect.SetBottom( aBoxRect.Top() + aRect.GetHeight() );
             if( aRect.GetWidth() > aBoxRect.GetWidth() )
-                aBoxRect.Right() = aBoxRect.Left() + aRect.GetWidth();
+                aBoxRect.SetRight( aBoxRect.Left() + aRect.GetWidth() );
             rNativeContentRegion = aBoxRect;
             rNativeBoundingRegion = rNativeContentRegion;
             if( !aRect.IsEmpty() )
@@ -1402,12 +1427,12 @@ bool WinSalGraphics::getNativeControlRegion(  ControlType nType,
 
                 if( aRect.GetHeight() && nFontHeight )
                 {
-                    aRect.Bottom() += aRect.GetHeight();
-                    aRect.Bottom() += nFontHeight;
+                    aRect.AdjustBottom(aRect.GetHeight());
+                    aRect.AdjustBottom(nFontHeight);
                     if( aRect.GetHeight() > aBoxRect.GetHeight() )
-                        aBoxRect.Bottom() = aBoxRect.Top() + aRect.GetHeight();
+                        aBoxRect.SetBottom( aBoxRect.Top() + aRect.GetHeight() );
                     if( aRect.GetWidth() > aBoxRect.GetWidth() )
-                        aBoxRect.Right() = aBoxRect.Left() + aRect.GetWidth();
+                        aBoxRect.SetRight( aBoxRect.Left() + aRect.GetWidth() );
                     rNativeContentRegion = aBoxRect;
                     rNativeBoundingRegion = rNativeContentRegion;
                         bRet = TRUE;
@@ -1451,7 +1476,7 @@ bool WinSalGraphics::getNativeControlRegion(  ControlType nType,
             {
                 long nW = aThumbRect.GetWidth();
                 tools::Rectangle aRect( rControlRegion );
-                aRect.Right() = aRect.Left() + nW - 1;
+                aRect.SetRight( aRect.Left() + nW - 1 );
                 rNativeContentRegion = aRect;
                 rNativeBoundingRegion = rNativeContentRegion;
             }
@@ -1459,7 +1484,7 @@ bool WinSalGraphics::getNativeControlRegion(  ControlType nType,
             {
                 long nH = aThumbRect.GetHeight();
                 tools::Rectangle aRect( rControlRegion );
-                aRect.Bottom() = aRect.Top() + nH - 1;
+                aRect.SetBottom( aRect.Top() + nH - 1 );
                 rNativeContentRegion = aRect;
                 rNativeBoundingRegion = rNativeContentRegion;
             }
@@ -1472,26 +1497,26 @@ bool WinSalGraphics::getNativeControlRegion(  ControlType nType,
         tools::Rectangle aControlRect( rControlRegion );
         rNativeContentRegion = aControlRect;
 
-        --aControlRect.Bottom();
+        aControlRect.AdjustBottom(-1);
 
         if( rControlValue.getType() == ControlType::TabItem )
         {
             const TabitemValue *pValue = static_cast<const TabitemValue*>(&rControlValue);
             if ( pValue->isBothAligned() )
-                --aControlRect.Right();
+                aControlRect.AdjustRight(-1);
 
             if ( nState & ControlState::SELECTED )
             {
-                aControlRect.Left() -= 2;
+                aControlRect.AdjustLeft(-2);
                 if ( pValue && !pValue->isBothAligned() )
                 {
                     if ( pValue->isLeftAligned() || pValue->isNotAligned() )
-                        aControlRect.Right() += 2;
+                        aControlRect.AdjustRight(2);
                     if ( pValue->isRightAligned() )
-                        aControlRect.Right() += 1;
+                        aControlRect.AdjustRight(1);
                 }
-                aControlRect.Top() -= 2;
-                aControlRect.Bottom() += 2;
+                aControlRect.AdjustTop(-2);
+                aControlRect.AdjustBottom(2);
             }
         }
         rNativeBoundingRegion = aControlRect;

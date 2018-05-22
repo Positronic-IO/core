@@ -176,15 +176,6 @@ OApplicationView::OApplicationView( vcl::Window* pParent
     ,m_rAppController( _rAppController )
     ,m_eChildFocus(NONE)
 {
-
-    try
-    {
-        m_aLocale = SvtSysLocale().GetLanguageTag().getLocale();
-    }
-    catch(Exception&)
-    {
-    }
-
     m_pWin = VclPtr<OAppBorderWindow>::Create(this,_ePreviewMode);
     m_pWin->Show();
 
@@ -513,7 +504,7 @@ void OApplicationView::showPreview( const OUString& _sDataSourceName,
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
         if ( m_xObject.is() )
             startComponentListening(m_xObject);

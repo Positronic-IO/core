@@ -111,7 +111,6 @@
 #include <salframe.hxx>
 #include <salgdi.hxx>
 #include <salgdiimpl.hxx>
-#include <salglyphid.hxx>
 #include <salhelper/linkhelper.hxx>
 #include <salhelper/thread.hxx>
 #include <salimestatus.hxx>
@@ -266,7 +265,6 @@
 #include <i18nlangtag/lang.h>
 #include <i18nlangtag/languagetag.hxx>
 #include <i18nlangtag/mslangid.hxx>
-#include <impbmp.hxx>
 #include <o3tl/cow_wrapper.hxx>
 #include <o3tl/make_unique.hxx>
 #include <o3tl/strong_int.hxx>
@@ -278,7 +276,6 @@
 #include <svl/svldllapi.h>
 #include <test/outputdevice.hxx>
 #include <tools/color.hxx>
-#include <tools/colordata.hxx>
 #include <tools/date.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>

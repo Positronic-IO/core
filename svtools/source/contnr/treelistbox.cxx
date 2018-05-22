@@ -352,7 +352,6 @@ SvTreeListBox::SvTreeListBox(vcl::Window* pParent, WinBits nWinStyle) :
     pModel->SetCloneLink( LINK(this, SvTreeListBox, CloneHdl_Impl ));
     pModel->InsertView( this );
     pHdlEntry = nullptr;
-    pEdCtrl = nullptr;
     eSelMode = SelectionMode::Single;
     nDragDropMode = DragDropMode::NONE;
     SetType(WindowType::TREELISTBOX);
@@ -428,7 +427,7 @@ void SvTreeListBox::DeselectHdl()
 bool SvTreeListBox::DoubleClickHdl()
 {
     aDoubleClickHdl.Call( this );
-    return false;
+    return true;
 }
 
 
@@ -885,14 +884,14 @@ void SvTreeListBox::EnableSelectionAsDropTarget( bool bEnable )
 void SvTreeListBox::EditText( const OUString& rStr, const tools::Rectangle& rRect,
     const Selection& rSel )
 {
-    delete pEdCtrl;
+    pEdCtrl.reset();
     nImpFlags |= SvTreeListBoxFlags::IN_EDT;
     nImpFlags &= ~SvTreeListBoxFlags::EDTEND_CALLED;
     HideFocus();
-    pEdCtrl = new SvInplaceEdit2(
+    pEdCtrl.reset( new SvInplaceEdit2(
         this, rRect.TopLeft(), rRect.GetSize(), rStr,
         LINK( this, SvTreeListBox, TextEditEndedHdl_Impl ),
-        rSel );
+        rSel ) );
 }
 
 IMPL_LINK_NOARG(SvTreeListBox, TextEditEndedHdl_Impl, SvInplaceEdit2&, void)
@@ -1363,8 +1362,7 @@ void SvTreeListBox::dispose()
     {
         ClearTabList();
 
-        delete pEdCtrl;
-        pEdCtrl = nullptr;
+        pEdCtrl.reset();
 
         if( pModel )
         {
@@ -1434,9 +1432,9 @@ void SvTreeListBox::SetSublistOpenWithLeftRight()
     pImpl->bSubLstOpLR = true;
 }
 
-void SvTreeListBox::SetSublistDontOpenWithDoubleClick()
+void SvTreeListBox::SetSublistDontOpenWithDoubleClick(bool bDontOpen)
 {
-    pImpl->bSubLstOpDblClick = false;
+    pImpl->bSubLstOpDblClick = !bDontOpen;
 }
 
 void SvTreeListBox::Resize()
@@ -2033,8 +2031,7 @@ void SvTreeListBox::LoseFocus()
 void SvTreeListBox::ModelHasCleared()
 {
     pImpl->pCursor = nullptr; // else we crash in GetFocus when editing in-place
-    delete pEdCtrl;
-    pEdCtrl = nullptr;
+    pEdCtrl.reset();
     pImpl->Clear();
     nFocusWidth = -1;
 

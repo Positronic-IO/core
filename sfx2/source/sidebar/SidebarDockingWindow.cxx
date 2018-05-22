@@ -23,6 +23,7 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <tools/link.hxx>
+#include <tools/gen.hxx>
 
 using namespace css;
 using namespace css::uno;
@@ -33,6 +34,7 @@ SidebarDockingWindow::SidebarDockingWindow(SfxBindings* pSfxBindings, SidebarChi
                                            vcl::Window* pParentWindow, WinBits nBits)
     : SfxDockingWindow(pSfxBindings, &rChildWindow, pParentWindow, nBits)
     , mpSidebarController()
+    , mbIsReadyToDrag(false)
 {
     // Get the XFrame from the bindings.
     if (pSfxBindings==nullptr || pSfxBindings->GetDispatcher()==nullptr)
@@ -77,6 +79,12 @@ void SidebarDockingWindow::GetFocus()
         SfxDockingWindow::GetFocus();
 }
 
+bool SidebarDockingWindow::Close()
+{
+    mpSidebarController->SetFloatingDeckClosed( true );
+    return SfxDockingWindow::Close();
+}
+
 SfxChildAlignment SidebarDockingWindow::CheckAlignment (
     SfxChildAlignment eCurrentAlignment,
     SfxChildAlignment eRequestedAlignment)
@@ -110,7 +118,34 @@ bool SidebarDockingWindow::EventNotify(NotifyEvent& rEvent)
     if (MouseNotifyEvent::KEYINPUT == nType)
         return true;
 
-    return Window::EventNotify(rEvent);
+    if (MouseNotifyEvent::MOUSEBUTTONDOWN == nType)
+    {
+        const MouseEvent *mEvt = rEvent.GetMouseEvent();
+        if (mEvt->IsLeft())
+        {
+            tools::Rectangle aGrip = mpSidebarController->GetDeckDragArea();
+            if ( aGrip.IsInside( mEvt->GetPosPixel() ) )
+                SetReadyToDrag( true );
+        }
+    }
+    else if (MouseNotifyEvent::MOUSEMOVE == nType)
+    {
+        const MouseEvent *mEvt = rEvent.GetMouseEvent();
+        tools::Rectangle aGrip = mpSidebarController->GetDeckDragArea();
+        if (mEvt->IsLeft() && aGrip.IsInside( mEvt->GetPosPixel() ) && IsReadyToDrag() )
+        {
+            Point aPos = mEvt->GetPosPixel();
+            vcl::Window* pWindow = rEvent.GetWindow();
+            if ( pWindow != this )
+            {
+                aPos = pWindow->OutputToScreenPixel( aPos );
+                aPos = ScreenToOutputPixel( aPos );
+            }
+            ImplStartDocking( aPos );
+        }
+    }
+
+    return SfxDockingWindow::EventNotify(rEvent);
 }
 
 } } // end of namespace sfx2::sidebar

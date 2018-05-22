@@ -272,13 +272,6 @@ namespace o3tl
     template<> struct typed_flags<ScCloneFlags> : is_typed_flags<ScCloneFlags, 0x0007> {};
 }
 
-#ifndef DELETEZ
-#define DELETEZ(pPtr) { delete pPtr; pPtr = 0; }
-#endif
-
-                                    // is bit set in set?
-#define IS_SET(bit,set)(((set)&(bit))==(bit))
-
 enum CellType
     {
         CELLTYPE_NONE,
@@ -288,13 +281,13 @@ enum CellType
         CELLTYPE_EDIT,
     };
 
-enum DelCellCmd
+enum class DelCellCmd
     {
-        DEL_CELLSUP,
-        DEL_CELLSLEFT,
-        DEL_DELROWS,
-        DEL_DELCOLS,
-        DEL_NONE
+        CellsUp,
+        CellsLeft,
+        Rows,
+        Cols,
+        NONE
     };
 
 enum InsCellCmd
@@ -382,8 +375,9 @@ enum ScVObjMode                     // output modes of objects on a page
 
 enum ScAnchorType                   // anchor of a character object
 {
-    SCA_CELL,
-    SCA_PAGE,
+    SCA_CELL,                       // anchor to cell, move with cell
+    SCA_CELL_RESIZE,                // anchor to cell, move and resize with cell
+    SCA_PAGE,                       // anchor to page, independent of any cells
     SCA_DONTKNOW                    // for multi selection
 };
 
@@ -517,7 +511,6 @@ class ScGlobal
     static SvxBrushItem*    pEmptyBrushItem;
     static SvxBrushItem*    pButtonBrushItem;
     static SvxBrushItem*    pEmbeddedBrushItem;
-    static SvxBrushItem*    pProtectedBrushItem;
 
     static ScFunctionList*  pStarCalcFunctionList;
     static ScFunctionMgr*   pStarCalcFunctionMgr;
@@ -569,7 +562,6 @@ public:
     SC_DLLPUBLIC static ScUnoAddInCollection* GetAddInCollection();
     SC_DLLPUBLIC static ScUserList*         GetUserList();
     static void                 SetUserList( const ScUserList* pNewList );
-    SC_DLLPUBLIC static const OUString&       GetRscString(const char* pResId);
     /// Open the specified URL.
     static void                 OpenURL(const OUString& rURL, const OUString& rTarget);
     SC_DLLPUBLIC static OUString            GetAbsDocName( const OUString& rFileName,
@@ -597,7 +589,6 @@ public:
     static void             InitTextHeight(const SfxItemPool* pPool);
     static SvxBrushItem*    GetEmptyBrushItem() { return pEmptyBrushItem; }
     static SvxBrushItem*    GetButtonBrushItem();
-    static SvxBrushItem*    GetProtectedBrushItem() { return pProtectedBrushItem; }
     SC_DLLPUBLIC    static const OUString&    GetEmptyOUString();
 
     static bool             HasStarCalcFunctionList();

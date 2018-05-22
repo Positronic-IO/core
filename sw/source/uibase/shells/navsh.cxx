@@ -21,8 +21,7 @@
 #include <edtwin.hxx>
 #include <globals.hrc>
 #include <navsh.hxx>
-#include <strings.hrc>
-#define SwNavigationShell
+#define ShellClass_SwNavigationShell
 #include <swslots.hxx>
 #include <unomid.h>
 #include <navmgr.hxx>

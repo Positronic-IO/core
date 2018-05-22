@@ -22,12 +22,12 @@
 #include <formulacell.hxx>
 #include <tokenarray.hxx>
 #include <formula/token.hxx>
+#include <token.hxx>
 
 using namespace formula;
 
 ScDetectiveRefIter::ScDetectiveRefIter( ScFormulaCell* pCell ) :
-    pCode(pCell->GetCode()),
-    maIter(*pCode),
+    maIter(*pCell->GetCode()),
     aPos(pCell->aPos)
 {
 }

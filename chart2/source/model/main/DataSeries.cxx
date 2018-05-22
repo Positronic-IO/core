@@ -31,6 +31,7 @@
 #include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <cppuhelper/supportsservice.hxx>
+#include <tools/diagnose_ex.h>
 
 #include <algorithm>
 
@@ -99,10 +100,9 @@ void lcl_CloneAttributedDataPoints(
     const lcl_tDataPointMap & rSource, lcl_tDataPointMap & rDestination,
     const uno::Reference< uno::XInterface > & xSeries )
 {
-    for( lcl_tDataPointMap::const_iterator aIt( rSource.begin());
-         aIt != rSource.end(); ++aIt )
+    for (auto const& elem : rSource)
     {
-        Reference< beans::XPropertySet > xPoint( (*aIt).second );
+        Reference< beans::XPropertySet > xPoint( elem.second );
         if( xPoint.is())
         {
             Reference< util::XCloneable > xCloneable( xPoint, uno::UNO_QUERY );
@@ -112,7 +112,7 @@ void lcl_CloneAttributedDataPoints(
                 if( xPoint.is())
                 {
                     lcl_SetParent( xPoint, xSeries );
-                    rDestination.emplace( (*aIt).first, xPoint );
+                    rDestination.emplace( elem.first, xPoint );
                 }
             }
         }
@@ -212,9 +212,9 @@ DataSeries::~DataSeries()
             && xPropertySet.is())
             ModifyListenerHelper::removeListener( xPropertySet, m_xModifyEventForwarder );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -307,7 +307,7 @@ Reference< beans::XPropertySet >
     }
 
     std::vector< Reference< chart2::data::XLabeledDataSequence > > aValuesSeries(
-        DataSeriesHelper::getAllDataSequencesByRole( aSequences , "values", true ) );
+        DataSeriesHelper::getAllDataSequencesByRole( aSequences , "values" ) );
 
     if (aValuesSeries.empty())
         throw lang::IndexOutOfBoundsException();
@@ -482,9 +482,9 @@ void SAL_CALL DataSeries::addModifyListener( const Reference< util::XModifyListe
         Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->addModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 
@@ -495,9 +495,9 @@ void SAL_CALL DataSeries::removeModifyListener( const Reference< util::XModifyLi
         Reference< util::XModifyBroadcaster > xBroadcaster( m_xModifyEventForwarder, uno::UNO_QUERY_THROW );
         xBroadcaster->removeModifyListener( aListener );
     }
-    catch( const uno::Exception & ex )
+    catch( const uno::Exception & )
     {
-        SAL_WARN("chart2", "Exception caught. " << ex );
+        DBG_UNHANDLED_EXCEPTION("chart2");
     }
 }
 

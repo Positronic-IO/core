@@ -912,21 +912,21 @@ namespace cppcanvas
                 ::Color aTextColor = vcl::unotools::doubleSequenceToColor(
                     rState.textColor, xColorSpace );
 
-                aReliefColor = ::COL_LIGHTGRAY;
+                aReliefColor = COL_LIGHTGRAY;
 
                 // we don't have a automatic color, so black is always
                 // drawn on white (literally copied from
                 // vcl/source/gdi/outdev3.cxx)
                 if( aTextColor == COL_BLACK )
                 {
-                    aTextColor = ::COL_WHITE;
+                    aTextColor = COL_WHITE;
                     rParms.mrStates.getState().textColor =
                         vcl::unotools::colorToDoubleSequence(
                             aTextColor, xColorSpace );
                 }
 
                 if( aTextColor == COL_WHITE )
-                    aReliefColor = ::COL_BLACK;
+                    aReliefColor = COL_BLACK;
                 aReliefColor.SetTransparency( aTextColor.GetTransparency() );
             }
 
@@ -2108,7 +2108,7 @@ namespace cppcanvas
 
                         std::shared_ptr<Action> pBmpAction(
                                 internal::BitmapActionFactory::createBitmapAction(
-                                    pAct->GetBitmap(),
+                                    BitmapEx(pAct->GetBitmap()),
                                     rStates.getState().mapModeTransform *
                                     vcl::unotools::b2DPointFromPoint( pAct->GetPoint() ),
                                     rCanvas,
@@ -2131,7 +2131,7 @@ namespace cppcanvas
 
                         std::shared_ptr<Action> pBmpAction(
                                 internal::BitmapActionFactory::createBitmapAction(
-                                    pAct->GetBitmap(),
+                                    BitmapEx(pAct->GetBitmap()),
                                     rStates.getState().mapModeTransform *
                                     vcl::unotools::b2DPointFromPoint( pAct->GetPoint() ),
                                     rStates.getState().mapModeTransform *
@@ -2163,7 +2163,7 @@ namespace cppcanvas
 
                         std::shared_ptr<Action> pBmpAction(
                                 internal::BitmapActionFactory::createBitmapAction(
-                                    aBmp,
+                                    BitmapEx(aBmp),
                                     rStates.getState().mapModeTransform *
                                     vcl::unotools::b2DPointFromPoint( pAct->GetDestPoint() ),
                                     rStates.getState().mapModeTransform *
@@ -3000,7 +3000,7 @@ namespace cppcanvas
             }
             catch( uno::Exception& )
             {
-                SAL_WARN("cppcanvas.emf", "" << comphelper::anyToString( cppu::getCaughtException() ) );
+                DBG_UNHANDLED_EXCEPTION("cppcanvas.emf");
                 // convert error to return value
                 return false;
             }
@@ -3058,7 +3058,7 @@ namespace cppcanvas
             }
             catch( uno::Exception& )
             {
-                SAL_WARN( "cppcanvas.emf", "" << comphelper::anyToString( cppu::getCaughtException() ) );
+                DBG_UNHANDLED_EXCEPTION( "cppcanvas.emf");
                 return false;
             }
         }

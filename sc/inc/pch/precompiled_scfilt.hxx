@@ -100,6 +100,7 @@
 #include <vcl/gdimtf.hxx>
 #include <vcl/gfxlink.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <vcl/image.hxx>
 #include <vcl/mapmod.hxx>
 #include <vcl/outdev.hxx>
@@ -272,7 +273,6 @@
 #include <svl/svldllapi.h>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
-#include <svtools/grfmgr.hxx>
 #include <svtools/svtdllapi.h>
 #include <svtools/transfer.hxx>
 #include <svx/algitem.hxx>
@@ -302,7 +302,6 @@
 #include <tokenarray.hxx>
 #include <tokenuno.hxx>
 #include <tools/color.hxx>
-#include <tools/colordata.hxx>
 #include <tools/date.hxx>
 #include <tools/datetime.hxx>
 #include <tools/debug.hxx>

@@ -129,13 +129,6 @@ OUString ModelObjectHelper::insertTransGrandient( const awt::Gradient& rGradient
     return maTransGradContainer.insertObject( maTransGradNameBase, Any( rGradient ), true );
 }
 
-OUString ModelObjectHelper::insertFillBitmapUrl( const OUString& rGraphicUrl )
-{
-    if( !rGraphicUrl.isEmpty() )
-        return maBitmapUrlContainer.insertObject( maBitmapUrlNameBase, Any( rGraphicUrl ), true );
-    return OUString();
-}
-
 OUString ModelObjectHelper::insertFillBitmapXGraphic(uno::Reference<graphic::XGraphic> const & rxGraphic)
 {
     uno::Reference<awt::XBitmap> xBitmap(rxGraphic, uno::UNO_QUERY);
@@ -144,12 +137,13 @@ OUString ModelObjectHelper::insertFillBitmapXGraphic(uno::Reference<graphic::XGr
     return OUString();
 }
 
-OUString ModelObjectHelper::getFillBitmapUrl( const OUString &rGraphicName )
+uno::Reference<awt::XBitmap> ModelObjectHelper::getFillBitmap(OUString const & rGraphicName)
 {
-    Any aAny = maBitmapUrlContainer.getObject( rGraphicName );
-    if( aAny.hasValue() )
-        return aAny.get<OUString>();
-    return OUString();
+    uno::Reference<awt::XBitmap> xBitmap;
+    uno::Any aAny = maBitmapUrlContainer.getObject(rGraphicName);
+    if (aAny.has<uno::Reference<awt::XBitmap>>())
+        xBitmap = aAny.get<uno::Reference<awt::XBitmap>>();
+    return xBitmap;
 }
 
 } // namespace oox

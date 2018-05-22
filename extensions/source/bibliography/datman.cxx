@@ -48,7 +48,6 @@
 #include <com/sun/star/io/XDataInputStream.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
-#include <comphelper/container.hxx>
 #include <svl/urihelper.hxx>
 #include <svtools/svtabbx.hxx>
 #include <svtools/headbar.hxx>
@@ -58,7 +57,6 @@
 #include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/edit.hxx>
-#include <vcl/msgbox.hxx>
 #include <tools/debug.hxx>
 #include "datman.hxx"
 #include "bibresid.hxx"
@@ -863,7 +861,7 @@ void BibDataManager::setFilter(const OUString& rQuery)
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("extensions.biblio");
     }
 
 
@@ -880,7 +878,7 @@ OUString BibDataManager::getFilter()
     }
     catch (const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("extensions.biblio");
     }
 
 

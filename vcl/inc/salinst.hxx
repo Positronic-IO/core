@@ -33,13 +33,22 @@
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/ui/dialogs/XFilePicker2.hpp>
 #include <com/sun/star/ui/dialogs/XFolderPicker2.hpp>
+#include <memory>
 
+namespace com {
+namespace sun {
+namespace star {
+namespace awt {
+    class XWindow;
+}
+} } }
 namespace comphelper { class SolarMutex; }
 namespace vcl { class Window; }
 namespace weld {
     class Builder;
     class MessageDialog;
     class Widget;
+    class Window;
 }
 struct SystemParentData;
 struct SalPrinterQueueInfo;
@@ -96,7 +105,7 @@ public:
     // pData allows for using a system dependent graphics or device context,
     // if a system context is passed in nDX and nDY are updated to reflect
     // its size; otherwise these remain unchanged.
-    virtual SalVirtualDevice*
+    virtual std::unique_ptr<SalVirtualDevice>
                             CreateVirtualDevice( SalGraphics* pGraphics,
                                                  long &rDX, long &rDY,
                                                  DeviceFormat eFormat, const SystemGraphicsData *pData = nullptr ) = 0;
@@ -155,8 +164,10 @@ public:
     virtual OpenGLContext*  CreateOpenGLContext() = 0;
 
     virtual weld::Builder* CreateBuilder(weld::Widget* pParent, const OUString& rUIRoot, const OUString& rUIFile);
+            weld::Builder* CreateInterimBuilder(vcl::Window* pParent, const OUString& rUIRoot, const OUString& rUIFile);
     virtual weld::MessageDialog* CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType,
                                                      VclButtonsType eButtonType, const OUString& rPrimaryMessage);
+    virtual weld::Window* GetFrameWeld(const css::uno::Reference<css::awt::XWindow>& rWindow);
 
     // methods for XDisplayConnection
 

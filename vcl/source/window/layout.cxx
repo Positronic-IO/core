@@ -10,12 +10,13 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <o3tl/enumarray.hxx>
 #include <o3tl/enumrange.hxx>
+#include <vcl/decoview.hxx>
 #include <vcl/dialog.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
-#include <vcl/messagedialog.hxx>
+#include <messagedialog.hxx>
 #include <window.h>
 #include <boost/multi_array.hpp>
 #include <officecfg/Office/Common.hxx>
@@ -833,11 +834,11 @@ static int getButtonPriority(const OString &rType)
     static const ButtonOrder aDiscardCancelSave[N_TYPES] =
     {
         { "/discard", 0 },
-        { "/no", 0 },
         { "/cancel", 1 },
-        { "/save", 2 },
-        { "/yes", 2 },
-        { "/ok", 2 }
+        { "/no", 2 },
+        { "/save", 3 },
+        { "/yes", 3 },
+        { "/ok", 3 }
     };
 
     static const ButtonOrder aSaveDiscardCancel[N_TYPES] =
@@ -1881,6 +1882,9 @@ Size VclScrolledWindow::calculateRequisition() const
     if (GetStyle() & WB_HSCROLL)
         aRet.AdjustHeight(getLayoutRequisition(*m_pHScroll).Height() );
 
+    aRet.AdjustHeight(2);
+    aRet.AdjustWidth(2);
+
     return aRet;
 }
 
@@ -1909,15 +1913,14 @@ void VclScrolledWindow::InitScrollBars(const Size &rRequest)
 
 void VclScrolledWindow::setAllocation(const Size &rAllocation)
 {
-    Size aChildAllocation(rAllocation);
     Size aChildReq;
 
     vcl::Window *pChild = get_child();
     if (pChild && pChild->IsVisible())
         aChildReq = getLayoutRequisition(*pChild);
 
-    long nAvailHeight = rAllocation.Height();
-    long nAvailWidth = rAllocation.Width();
+    long nAvailHeight = rAllocation.Height() - 2;
+    long nAvailWidth = rAllocation.Width() - 2;
     // vert. ScrollBar
     if (GetStyle() & WB_AUTOVSCROLL)
     {
@@ -1940,34 +1943,32 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
             m_pVScroll->Show(nAvailHeight < aChildReq.Height());
     }
 
-    Size aInnerSize(aChildAllocation);
+    Size aInnerSize(rAllocation);
+    aInnerSize.AdjustWidth(-2);
+    aInnerSize.AdjustHeight(-2);
     long nScrollBarWidth = 0, nScrollBarHeight = 0;
 
     if (m_pVScroll->IsVisible())
     {
         nScrollBarWidth = getLayoutRequisition(*m_pVScroll).Width();
-        Point aScrollPos(rAllocation.Width() - nScrollBarWidth, 0);
-        Size aScrollSize(nScrollBarWidth, rAllocation.Height());
+        Point aScrollPos(rAllocation.Width() - nScrollBarWidth - 2, 1);
+        Size aScrollSize(nScrollBarWidth, rAllocation.Height() - 2);
         setLayoutAllocation(*m_pVScroll, aScrollPos, aScrollSize);
-        aChildAllocation.AdjustWidth( -nScrollBarWidth );
         aInnerSize.AdjustWidth( -nScrollBarWidth );
-        aChildAllocation.setHeight( aChildReq.Height() );
     }
 
     if (m_pHScroll->IsVisible())
     {
         nScrollBarHeight = getLayoutRequisition(*m_pHScroll).Height();
-        Point aScrollPos(0, rAllocation.Height() - nScrollBarHeight);
-        Size aScrollSize(rAllocation.Width(), nScrollBarHeight);
+        Point aScrollPos(1, rAllocation.Height() - nScrollBarHeight);
+        Size aScrollSize(rAllocation.Width() - 2, nScrollBarHeight);
         setLayoutAllocation(*m_pHScroll, aScrollPos, aScrollSize);
-        aChildAllocation.AdjustHeight( -nScrollBarHeight );
         aInnerSize.AdjustHeight( -nScrollBarHeight );
-        aChildAllocation.setWidth( aChildReq.Width() );
     }
 
     if (m_pVScroll->IsVisible() && m_pHScroll->IsVisible())
     {
-        Point aBoxPos(aInnerSize.Width(), aInnerSize.Height());
+        Point aBoxPos(aInnerSize.Width() + 1, aInnerSize.Height() + 1);
         m_aScrollBarBox->SetPosSizePixel(aBoxPos, Size(nScrollBarWidth, nScrollBarHeight));
         m_aScrollBarBox->Show();
     }
@@ -1979,7 +1980,7 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
     if (pChild && pChild->IsVisible())
     {
         assert(dynamic_cast<VclViewport*>(pChild) && "scrolledwindow child should be a Viewport");
-        setLayoutAllocation(*pChild, Point(0, 0), aInnerSize);
+        setLayoutAllocation(*pChild, Point(1, 1), aInnerSize);
     }
 
     if (!m_bUserManagedScrolling)
@@ -1993,6 +1994,8 @@ Size VclScrolledWindow::getVisibleChildSize() const
         aRet.AdjustWidth( -(m_pVScroll->GetSizePixel().Width()) );
     if (m_pHScroll->IsVisible())
         aRet.AdjustHeight( -(m_pHScroll->GetSizePixel().Height()) );
+    aRet.AdjustHeight(-2);
+    aRet.AdjustWidth(-2);
     return aRet;
 }
 
@@ -2023,6 +2026,13 @@ bool VclScrolledWindow::EventNotify(NotifyEvent& rNEvt)
     return bDone || VclBin::EventNotify( rNEvt );
 }
 
+void VclScrolledWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
+{
+    VclBin::Paint(rRenderContext, rRect);
+    DecorationView aDecoView(&rRenderContext);
+    aDecoView.DrawFrame(tools::Rectangle(Point(0,0), GetSizePixel()));
+}
+
 void VclViewport::setAllocation(const Size &rAllocation)
 {
     vcl::Window *pChild = get_child();
@@ -2031,7 +2041,13 @@ void VclViewport::setAllocation(const Size &rAllocation)
         Size aReq(getLayoutRequisition(*pChild));
         aReq.setWidth( std::max(aReq.Width(), rAllocation.Width()) );
         aReq.setHeight( std::max(aReq.Height(), rAllocation.Height()) );
-        setLayoutAllocation(*pChild, Point(0, 0), aReq);
+        Point aKeepPos(pChild->GetPosPixel());
+        if (m_bInitialAllocation)
+        {
+            aKeepPos = Point(0, 0);
+            m_bInitialAllocation = false;
+        }
+        setLayoutAllocation(*pChild, aKeepPos, aReq);
     }
 }
 
@@ -2235,6 +2251,7 @@ void MessageDialog::create_message_area()
             case VclButtonsType::Cancel:
                 pBtn.set( VclPtr<CancelButton>::Create(pButtonBox) );
                 pBtn->SetStyle(pBtn->GetStyle() & WB_DEFBUTTON);
+                pBtn->Show();
                 pBtn->set_id("cancel");
                 add_button(pBtn, RET_CANCEL, true);
                 nDefaultResponse = RET_CANCEL;
@@ -2275,7 +2292,11 @@ void MessageDialog::create_message_area()
 
 void MessageDialog::create_owned_areas()
 {
+#if defined WNT
+    set_border_width(3);
+#else
     set_border_width(12);
+#endif
     m_pOwnedContentArea.set(VclPtr<VclVBox>::Create(this, false, 24));
     set_content_area(m_pOwnedContentArea);
     m_pOwnedContentArea->Show();
@@ -2329,6 +2350,22 @@ MessageDialog::MessageDialog(vcl::Window* pParent,
     SetType(WindowType::MESSBOX);
     create_owned_areas();
     create_message_area();
+
+    switch (m_eMessageType)
+    {
+        case VclMessageType::Info:
+            SetText(GetStandardInfoBoxText());
+            break;
+        case VclMessageType::Warning:
+            SetText(GetStandardWarningBoxText());
+            break;
+        case VclMessageType::Question:
+            SetText(GetStandardQueryBoxText());
+            break;
+        case VclMessageType::Error:
+            SetText(GetStandardErrorBoxText());
+            break;
+    }
 }
 
 void MessageDialog::dispose()
@@ -2436,6 +2473,7 @@ void MessageDialog::set_primary_text(const OUString &rPrimaryString)
     {
         m_pPrimaryMessage->SetText(m_sPrimaryString);
         m_pPrimaryMessage->Show(!m_sPrimaryString.isEmpty());
+        MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, !m_sSecondaryString.isEmpty() ? m_pSecondaryMessage.get() : nullptr);
     }
 }
 
@@ -2446,6 +2484,7 @@ void MessageDialog::set_secondary_text(const OUString &rSecondaryString)
     {
         m_pSecondaryMessage->SetText("\n" + m_sSecondaryString);
         m_pSecondaryMessage->Show(!m_sSecondaryString.isEmpty());
+        MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, !m_sSecondaryString.isEmpty() ? m_pSecondaryMessage.get() : nullptr);
     }
 }
 

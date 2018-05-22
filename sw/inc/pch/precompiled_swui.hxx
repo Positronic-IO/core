@@ -150,6 +150,7 @@
 #include <vcl/gfxlink.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <vcl/group.hxx>
 #include <vcl/hatch.hxx>
 #include <vcl/help.hxx>
@@ -168,7 +169,6 @@
 #include <vcl/metaactiontypes.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/mnemonicengine.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/notebookbar.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/outdevmap.hxx>
@@ -594,7 +594,6 @@
 #include <svtools/ehdl.hxx>
 #include <svtools/embedhlp.hxx>
 #include <svtools/framestatuslistener.hxx>
-#include <svtools/grfmgr.hxx>
 #include <svtools/headbar.hxx>
 #include <svtools/htmlcfg.hxx>
 #include <svtools/miscopt.hxx>
@@ -638,7 +637,6 @@
 #include <tblenum.hxx>
 #include <tblsel.hxx>
 #include <tools/color.hxx>
-#include <tools/colordata.hxx>
 #include <tools/contnr.hxx>
 #include <tools/date.hxx>
 #include <tools/datetime.hxx>

@@ -45,22 +45,23 @@ private:
     class SwAttrStack
     {
     private:
-        SwTextAttr* pInitialArray[ INITIAL_NUM_ATTR ];
-        SwTextAttr** pArray;
-        sal_uInt16 nCount; // number of elements on stack
-        sal_uInt16 nSize;  // number of positions in Array
+        SwTextAttr* m_pInitialArray[ INITIAL_NUM_ATTR ];
+        SwTextAttr** m_pArray;
+        sal_uInt16 m_nCount; // number of elements on stack
+        sal_uInt16 m_nSize;  // number of positions in Array
 
     public:
         // Ctor, Dtor
         inline SwAttrStack();
         ~SwAttrStack() {
-            if ( nSize > INITIAL_NUM_ATTR ) delete [] pArray; }
+            if (m_nSize > INITIAL_NUM_ATTR) delete [] m_pArray;
+        }
 
         // reset stack
-        void Reset() { nCount = 0; };
+        void Reset() { m_nCount = 0; };
 
         // insert on top
-        void Push( const SwTextAttr& rAttr ) { Insert( rAttr, nCount ); };
+        void Push( const SwTextAttr& rAttr ) { Insert(rAttr, m_nCount); };
         // insert at specified position, take care for not inserting behind
         // the value returned by Count()
         void Insert( const SwTextAttr& rAttr, const sal_uInt16 nPos );
@@ -72,23 +73,23 @@ private:
         const SwTextAttr* Top() const;
 
         // number of elements on stack
-        sal_uInt16 Count() const { return nCount; };
+        sal_uInt16 Count() const { return m_nCount; };
 
         // returns position of rAttr on Stack if found, otherwise USHRT_MAX
         // can be used for Remove of an attribute
         sal_uInt16 Pos( const SwTextAttr& rAttr ) const;
     };
 
-    SwAttrStack aAttrStack[ NUM_ATTRIBUTE_STACKS ]; // stack collection
-    const SfxPoolItem* pDefaultArray[ NUM_DEFAULT_VALUES ];
-    const IDocumentSettingAccess* mpIDocumentSettingAccess;
-    const SwViewShell* mpShell;
+    SwAttrStack m_aAttrStack[ NUM_ATTRIBUTE_STACKS ]; // stack collection
+    const SfxPoolItem* m_pDefaultArray[ NUM_DEFAULT_VALUES ];
+    const IDocumentSettingAccess* m_pIDocumentSettingAccess;
+    const SwViewShell* m_pShell;
 
     // This is the base font for the paragraph. It is stored in order to have
     // a template, if we have to restart the attribute evaluation
-    std::unique_ptr<SwFont> pFnt;
+    std::unique_ptr<SwFont> m_pFnt;
 
-    bool bVertLayout;
+    bool m_bVertLayout;
 
     // change font according to pool item
     void FontChg(const SfxPoolItem& rItem, SwFont& rFnt, bool bPush );
@@ -139,14 +140,14 @@ public:
 
 inline void SwAttrHandler::ResetFont( SwFont& rFnt ) const
 {
-    OSL_ENSURE( pFnt, "ResetFont without a font" );
-    if ( pFnt )
-        rFnt = *pFnt;
+    OSL_ENSURE(m_pFnt, "ResetFont without a font");
+    if (m_pFnt)
+        rFnt = *m_pFnt;
 };
 
 inline const SwFont* SwAttrHandler::GetFont() const
 {
-    return pFnt.get();
+    return m_pFnt.get();
 };
 
 #endif

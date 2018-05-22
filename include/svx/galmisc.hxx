@@ -31,6 +31,7 @@
 #include <svx/svxdllapi.h>
 #include <tools/date.hxx>
 #include <tools/time.hxx>
+#include <memory>
 
 class GalleryTheme;
 class SotStorageStream;
@@ -81,7 +82,7 @@ class FmFormModel;
 class ImageMap;
 class Gallery;
 
-GalleryGraphicImportRet  GalleryGraphicImport( const INetURLObject& rURL, Graphic& rGraphic, OUString& rFilterName, bool bShowProgress = false );
+GalleryGraphicImportRet  GalleryGraphicImport( const INetURLObject& rURL, Graphic& rGraphic, OUString& rFilterName );
 bool                GallerySvDrawImport( SvStream& rIStm, SdrModel& rModel );
 bool                CreateIMapGraphic( const FmFormModel& rModel, Graphic& rGraphic, ImageMap& rImageMap );
 SVX_DLLPUBLIC OUString
@@ -105,11 +106,11 @@ public:
                                 SdrObjUserData( SdrInventor::SgaImap, ID_IMAPINFO ),
                                 aImageMap( rImageMap ) {};
 
-    virtual SdrObjUserData* Clone( SdrObject* ) const override
+    virtual std::unique_ptr<SdrObjUserData> Clone( SdrObject* ) const override
                             {
                                 SgaIMapInfo* pInfo = new SgaIMapInfo;
                                 pInfo->aImageMap = aImageMap;
-                                return pInfo;
+                                return std::unique_ptr<SdrObjUserData>(pInfo);
                             }
 
     const ImageMap&         GetImageMap() const { return aImageMap; }
@@ -120,7 +121,6 @@ class GraphicFilter;
 class SVX_DLLPUBLIC GalleryProgress
 {
     css::uno::Reference< css::awt::XProgressBar > mxProgressBar;
-    GraphicFilter*                                                          mpFilter;
 
     public:
 
@@ -142,10 +142,9 @@ using TransferableHelper::CopyToClipboard;
     GalleryTheme*                   mpTheme;
     SgaObjKind                      meObjectKind;
     sal_uInt32                      mnObjectPos;
-    tools::SvRef<SotStorageStream>             mxModelStream;
-    GraphicObject*                  mpGraphicObject;
-    ImageMap*                       mpImageMap;
-    INetURLObject*                  mpURL;
+    tools::SvRef<SotStorageStream>  mxModelStream;
+    std::unique_ptr<GraphicObject>  mpGraphicObject;
+    std::unique_ptr<INetURLObject>  mpURL;
 
                                     GalleryTransferable( GalleryTheme* pTheme, sal_uInt32 nObjectPos, bool bLazy );
                                     virtual ~GalleryTransferable() override;
@@ -187,8 +186,8 @@ public:
                      GalleryHint( GalleryHintType nType, const OUString& rThemeName, void* nData1 = nullptr ) :
                         mnType( nType ), maThemeName( rThemeName ), mnData1( nData1 ) {}
 
-                     GalleryHint( GalleryHintType nType, const OUString& rThemeName, const OUString& rStringData, void* nData1 = nullptr ) :
-                        mnType( nType ), maThemeName( rThemeName ), maStringData( rStringData ), mnData1( nData1 ) {}
+                     GalleryHint( GalleryHintType nType, const OUString& rThemeName, const OUString& rStringData ) :
+                        mnType( nType ), maThemeName( rThemeName ), maStringData( rStringData ), mnData1( nullptr ) {}
 
     GalleryHintType  GetType() const { return mnType; }
     const OUString&  GetThemeName() const { return maThemeName; }

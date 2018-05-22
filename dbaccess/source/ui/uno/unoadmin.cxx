@@ -22,11 +22,8 @@
 #include <dbu_reghelper.hxx>
 #include <unoadmin.hxx>
 #include <dbadmin.hxx>
-#include <comphelper/extract.hxx>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <comphelper/property.hxx>
-#include <vcl/msgbox.hxx>
 
 // --- needed because of the solar mutex
 #include <osl/mutex.hxx>
@@ -52,10 +49,10 @@ ODatabaseAdministrationDialog::ODatabaseAdministrationDialog(const Reference< XC
 
 ODatabaseAdministrationDialog::~ODatabaseAdministrationDialog()
 {
-    if (m_pDialog)
+    if (m_aDialog)
     {
         ::osl::MutexGuard aGuard(m_aMutex);
-        if (m_pDialog)
+        if (m_aDialog)
         {
             destroyDialog();
             ODbAdminDialog::destroyItemSet(m_pDatasourceItems, m_pItemPool, m_pItemPoolDefaults);

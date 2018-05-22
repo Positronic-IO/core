@@ -25,28 +25,20 @@
 
 
 //   Forward Declarations
-
-
 class ImpCaptParams;
 
 namespace sdr { namespace properties {
     class CaptionProperties;
 }}
 
-
 //   Helper Class SdrCaptObjGeoData
-
-
 class SdrCaptObjGeoData : public SdrTextObjGeoData
 {
 public:
     tools::Polygon aTailPoly;
 };
 
-
 //   SdrCaptionObj
-
-
 class SVX_DLLPUBLIC SdrCaptionObj : public SdrRectObj
 {
 private:
@@ -64,7 +56,6 @@ private:
     bool                        mbFixedTail; // for calc note box fixed tail, default FALSE
     Point                       maFixedTailPos; // for calc note box fixed tail position.
 
-private:
     SVX_DLLPRIVATE void ImpGetCaptParams(ImpCaptParams& rPara) const;
     SVX_DLLPRIVATE static void ImpCalcTail1(const ImpCaptParams& rPara, tools::Polygon& rPoly, tools::Rectangle const & rRect);
     SVX_DLLPRIVATE static void ImpCalcTail2(const ImpCaptParams& rPara, tools::Polygon& rPoly, tools::Rectangle const & rRect);
@@ -72,14 +63,23 @@ private:
     SVX_DLLPRIVATE static void ImpCalcTail (const ImpCaptParams& rPara, tools::Polygon& rPoly, tools::Rectangle const & rRect);
     SVX_DLLPRIVATE void ImpRecalcTail();
 
-public:
-    SdrCaptionObj();
-    SdrCaptionObj(const tools::Rectangle& rRect, const Point& rTail);
+protected:
+    // protected destructor
     virtual ~SdrCaptionObj() override;
+
+public:
+    SdrCaptionObj(SdrModel& rSdrModel);
+    SdrCaptionObj(
+        SdrModel& rSdrModel,
+        const tools::Rectangle& rRect,
+        const Point& rTail);
 
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
-    virtual SdrCaptionObj* Clone() const override;
+    virtual SdrCaptionObj* CloneSdrObject(SdrModel& rTargetModel) const override;
+
+    // implemented mainly for the purposes of Clone()
+    SdrCaptionObj& operator=(const SdrCaptionObj& rObj);
 
     // for calc: special shadow only for text box
     void SetSpecialTextBoxShadow() { mbSpecialTextBoxShadow = true; }
@@ -92,7 +92,6 @@ public:
     virtual OUString TakeObjNamePlural() const override;
 
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
-    virtual void SetModel(SdrModel* pNewModel) override;
     virtual void Notify(SfxBroadcaster& rBC, const SfxHint& rHint) override;
 
     virtual sal_uInt32 GetHdlCount() const override;

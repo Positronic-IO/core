@@ -32,6 +32,7 @@
 #include <vcl/lazydelete.hxx>
 #include <com/sun/star/i18n/CharacterIteratorMode.hpp>
 #include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <breakit.hxx>
 #include <paintfrm.hxx>
 #include <viewsh.hxx>
@@ -152,7 +153,7 @@ void SwFntObj::CreatePrtFont( const OutputDevice& rPrt )
     const_cast<OutputDevice&>(rPrt).SetFont( m_aFont );
     const FontMetric aWinMet( rPrt.GetFontMetric() );
     const_cast<OutputDevice&>(rPrt).SetFont( aOldFnt );
-    long nWidth = ( aWinMet.GetFontSize().Width() * m_nPropWidth ) / 100;
+    auto nWidth = ( aWinMet.GetFontSize().Width() * m_nPropWidth ) / 100;
 
     if( !nWidth )
         ++nWidth;
@@ -542,7 +543,7 @@ void SwFntObj::GuessLeading( const SwViewShell&
                 // (above original comment preserved for cultural reasons)
                 // Those who lie about their Leading, may lie about their
                 // Ascent/Descent as well, hence the Font will be lowered a
-                // litte without changing its height.
+                // little without changing its height.
                 long nDiff = std::min( rMet.GetDescent() - aWinMet.GetDescent(),
                     aWinMet.GetAscent() - rMet.GetAscent() - nTmpLeading );
                 if( nDiff > 0 )
@@ -2347,9 +2348,8 @@ sal_Int32 SwFont::GetTextBreak( SwDrawTextInfo const & rInf, long nTextWidth )
             rInf.GetOut().GetTextArray( rInf.GetText(), pKernArray.get(),
                                             rInf.GetIdx(), rInf.GetLen() );
             long nCurrPos = pKernArray[nTextBreak] + nGridWidthAdd;
-            while( nTextBreak < rInf.GetLen() && nTextWidth >= nCurrPos)
+            while (++nTextBreak < rInf.GetLen() && nTextWidth >= nCurrPos)
             {
-                nTextBreak++;
                 nCurrPos = pKernArray[nTextBreak] + nGridWidthAdd * ( nTextBreak + 1 );
             }
             return nTextBreak + rInf.GetIdx();
@@ -2475,11 +2475,11 @@ bool SwDrawTextInfo::ApplyAutoColor( vcl::Font* pFont )
 
     if( bPrt && GetShell() && GetShell()->GetViewOptions()->IsBlackFont() )
     {
-        if ( COL_BLACK != rFnt.GetColor().GetColor() )
+        if ( COL_BLACK != rFnt.GetColor() )
             bChgFntColor = true;
 
-        if ( (COL_BLACK != GetOut().GetLineColor().GetColor()) ||
-             (COL_BLACK != GetOut().GetOverlineColor().GetColor()) )
+        if ( (COL_BLACK != GetOut().GetLineColor()) ||
+             (COL_BLACK != GetOut().GetOverlineColor()) )
             bChgLineColor = true;
     }
     else
@@ -2492,14 +2492,14 @@ bool SwDrawTextInfo::ApplyAutoColor( vcl::Font* pFont )
         bChgLineColor = ! bPrt && GetShell() &&
                 GetShell()->GetAccessibilityOptions()->IsAlwaysAutoColor();
 
-        bChgFntColor = COL_AUTO == rFnt.GetColor().GetColor() || bChgLineColor;
+        bChgFntColor = COL_AUTO == rFnt.GetColor() || bChgLineColor;
 
         if ( bChgFntColor )
         {
             // check if current background has a user defined setting
             const Color* pCol = GetFont() ? GetFont()->GetBackColor() : nullptr;
             Color aColor;
-            if( ! pCol || COL_TRANSPARENT == pCol->GetColor() )
+            if( ! pCol || COL_TRANSPARENT == *pCol )
             {
                 const SvxBrushItem* pItem;
                 SwRect aOrigBackRect;
@@ -2511,7 +2511,7 @@ bool SwDrawTextInfo::ApplyAutoColor( vcl::Font* pFont )
                 /// OD 21.08.2002 #99657#
                 ///     There is a user defined setting for the background, if there
                 ///     is a background brush and its color is *not* "no fill"/"auto fill".
-                if( GetFrame()->GetBackgroundBrush( aFillAttributes, pItem, pCol, aOrigBackRect, false ) )
+                if( GetFrame()->GetBackgroundBrush( aFillAttributes, pItem, pCol, aOrigBackRect, false, /*bConsiderTextBox=*/true ) )
                 {
                     if (aFillAttributes.get() && aFillAttributes->isUsed())
                     {
@@ -2548,7 +2548,7 @@ bool SwDrawTextInfo::ApplyAutoColor( vcl::Font* pFont )
                     nNewColor = COL_BLACK;
                 else
                     // we take the font color from the appearance page
-                    nNewColor = SwViewOption::GetFontColor().GetColor();
+                    nNewColor = SwViewOption::GetFontColor();
             }
 
             // change painting color depending of dark/bright background

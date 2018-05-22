@@ -62,7 +62,6 @@
 #include <basic/sbuno.hxx>
 #include <basic/sbstar.hxx>
 #include <basic/basmgr.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/weld.hxx>
 #include <basic/sbx.hxx>
 #include <svtools/sfxecode.hxx>
@@ -1341,7 +1340,7 @@ namespace
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("sfx.doc");
         }
         return false;
     }

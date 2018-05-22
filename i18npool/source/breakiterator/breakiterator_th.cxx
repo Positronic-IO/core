@@ -17,28 +17,108 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+
+#include <com/sun/star/i18n/CharacterIteratorMode.hpp>
 #include <breakiterator_th.hxx>
 #include <wtt.h>
 
 #include <string.h>
 #include <algorithm>
 
+using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
+using namespace ::com::sun::star::i18n;
 using namespace ::com::sun::star::lang;
 
 namespace i18npool {
 
-
-//  class Breakiterator_th
-//  ----------------------------------------------------;
-BreakIterator_th::BreakIterator_th()
+/**
+ * Constructor.
+ */
+BreakIterator_th::BreakIterator_th() :
+    cachedText()
 {
     cBreakIterator = "com.sun.star.i18n.BreakIterator_th";
+    // to improve performance, alloc big enough memory in construct.
+    m_aNextCellIndex.assign(512, 0);
+    m_aPreviousCellIndex.assign(512, 0);
     lineRule=nullptr;
 }
 
+/**
+ * Deconstructor.
+ */
 BreakIterator_th::~BreakIterator_th()
 {
+}
+
+sal_Int32 SAL_CALL BreakIterator_th::previousCharacters( const OUString& Text,
+    sal_Int32 nStartPos, const lang::Locale& rLocale,
+    sal_Int16 nCharacterIteratorMode, sal_Int32 nCount, sal_Int32& nDone )
+{
+    if (nCharacterIteratorMode == CharacterIteratorMode::SKIPCELL ) {
+        nDone = 0;
+        if (nStartPos > 0) {    // for others to skip cell.
+            makeIndex(Text, nStartPos);
+
+            if (m_aNextCellIndex[nStartPos-1] == 0) // not a CTL character
+                return BreakIterator_Unicode::previousCharacters(Text, nStartPos, rLocale,
+                    nCharacterIteratorMode, nCount, nDone);
+            else while (nCount > 0 && m_aNextCellIndex[nStartPos - 1] > 0) {
+                nCount--; nDone++;
+                nStartPos = m_aPreviousCellIndex[nStartPos - 1];
+            }
+        } else
+            nStartPos = 0;
+    } else { // for BS to delete one char.
+        for (nDone = 0; nDone < nCount && nStartPos > 0; nDone++)
+            Text.iterateCodePoints(&nStartPos, -1);
+    }
+
+    return nStartPos;
+}
+
+sal_Int32 SAL_CALL BreakIterator_th::nextCharacters(const OUString& Text,
+    sal_Int32 nStartPos, const lang::Locale& rLocale,
+    sal_Int16 nCharacterIteratorMode, sal_Int32 nCount, sal_Int32& nDone)
+{
+    sal_Int32 len = Text.getLength();
+    if (nCharacterIteratorMode == CharacterIteratorMode::SKIPCELL ) {
+        nDone = 0;
+        if (nStartPos < len) {
+            makeIndex(Text, nStartPos);
+
+            if (m_aNextCellIndex[nStartPos] == 0) // not a CTL character
+                return BreakIterator_Unicode::nextCharacters(Text, nStartPos, rLocale,
+                    nCharacterIteratorMode, nCount, nDone);
+            else while (nCount > 0 && m_aNextCellIndex[nStartPos] > 0) {
+                nCount--; nDone++;
+                nStartPos = m_aNextCellIndex[nStartPos];
+            }
+        } else
+            nStartPos = len;
+    } else {
+        for (nDone = 0; nDone < nCount && nStartPos < Text.getLength(); nDone++)
+            Text.iterateCodePoints(&nStartPos);
+    }
+
+    return nStartPos;
+}
+
+// Make sure line is broken on cell boundary if we implement cell iterator.
+LineBreakResults SAL_CALL BreakIterator_th::getLineBreak(
+    const OUString& Text, sal_Int32 nStartPos,
+    const lang::Locale& rLocale, sal_Int32 nMinBreakPos,
+    const LineBreakHyphenationOptions& hOptions,
+    const LineBreakUserOptions& bOptions )
+{
+    LineBreakResults lbr = BreakIterator_Unicode::getLineBreak(Text, nStartPos,
+                    rLocale, nMinBreakPos, hOptions, bOptions );
+    if (lbr.breakIndex < Text.getLength()) {
+        makeIndex(Text, lbr.breakIndex);
+        lbr.breakIndex = m_aPreviousCellIndex[ lbr.breakIndex ];
+    }
+    return lbr;
 }
 
 #define SARA_AM 0x0E33
@@ -108,17 +188,14 @@ void BreakIterator_th::makeIndex(const OUString& Text, sal_Int32 const nStartPos
 {
     if (Text != cachedText) {
         cachedText = Text;
-        if (cellIndexSize < cachedText.getLength()) {
-            cellIndexSize = cachedText.getLength();
-            free(nextCellIndex);
-            free(previousCellIndex);
-            nextCellIndex = static_cast<sal_Int32*>(calloc(cellIndexSize, sizeof(sal_Int32)));
-            previousCellIndex = static_cast<sal_Int32*>(calloc(cellIndexSize, sizeof(sal_Int32)));
+        if (m_aNextCellIndex.size() < size_t(cachedText.getLength())) {
+            m_aNextCellIndex.resize(cachedText.getLength());
+            m_aPreviousCellIndex.resize(cachedText.getLength());
         }
         // reset nextCell for new Text
-        memset(nextCellIndex, 0, cellIndexSize * sizeof(sal_Int32));
+        m_aNextCellIndex.assign(cachedText.getLength(), 0);
     }
-    else if (nStartPos >= Text.getLength() || nextCellIndex[nStartPos] > 0
+    else if (nStartPos >= Text.getLength() || m_aNextCellIndex[nStartPos] > 0
              || !is_Thai(Text[nStartPos]))
         return;
 
@@ -127,19 +204,19 @@ void BreakIterator_th::makeIndex(const OUString& Text, sal_Int32 const nStartPos
 
     sal_Int32 startPos = nStartPos;
     while (startPos > 0 && is_Thai(str[startPos-1])) startPos--;
-    sal_Int32 endPos = std::min(len, nStartPos+1);
+    sal_Int32 endPos = nStartPos;
     while (endPos < len && is_Thai(str[endPos])) endPos++;
 
     sal_Int32 start, end, pos;
     pos = start = end = startPos;
 
-    assert(endPos <= cellIndexSize);
+    assert(size_t(endPos) <= m_aNextCellIndex.size());
     while (pos < endPos) {
         end += getACell(str, start, endPos);
-        assert(end <= cellIndexSize);
+        assert(size_t(end) <= m_aNextCellIndex.size());
         while (pos < end) {
-            nextCellIndex[pos] = end;
-            previousCellIndex[pos] = start;
+            m_aNextCellIndex[pos] = end;
+            m_aPreviousCellIndex[pos] = start;
             pos++;
         }
         start = end;

@@ -22,7 +22,6 @@
 #include <com/sun/star/embed/NeedsRunningStateException.hpp>
 #include <com/sun/star/embed/VerbDescriptor.hpp>
 #include <com/sun/star/embed/EmbedStates.hpp>
-#include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <com/sun/star/embed/VerbAttributes.hpp>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
@@ -373,10 +372,10 @@ DeactivateRC SdTPAction::DeactivatePage( SfxItemSet* pPageSet )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SdTPAction::Create( vcl::Window* pWindow,
+VclPtr<SfxTabPage> SdTPAction::Create( TabPageParent pWindow,
                                        const SfxItemSet& rAttrs )
 {
-    return VclPtr<SdTPAction>::Create( pWindow, rAttrs );
+    return VclPtr<SdTPAction>::Create( pWindow.pParent, rAttrs );
 }
 
 void SdTPAction::UpdateTree()
@@ -410,12 +409,10 @@ void SdTPAction::OpenFileDialog()
 
         if (bSound)
         {
-            SdOpenSoundFileDialog aFileDialog(this);
+            SdOpenSoundFileDialog aFileDialog(GetFrameWeld());
 
-            if( aFile.isEmpty() )
-                aFile = SvtPathOptions().GetWorkPath();
-
-            aFileDialog.SetPath( aFile );
+            if( !aFile.isEmpty() )
+                aFileDialog.SetPath( aFile );
 
             if( aFileDialog.Execute() == ERRCODE_NONE )
             {
@@ -437,7 +434,7 @@ void SdTPAction::OpenFileDialog()
         {
             sfx2::FileDialogHelper aFileDialog(
                 ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION,
-                FileDialogFlags::NONE, this);
+                FileDialogFlags::NONE, GetFrameWeld());
 
             if (bDocument && aFile.isEmpty())
                 aFile = SvtPathOptions().GetWorkPath();

@@ -29,7 +29,7 @@ class Point;
 class ImpXPolygon
 {
 public:
-    Point*              pPointAry;
+    std::unique_ptr<Point[]> pPointAry;
     std::unique_ptr<PolyFlags[]>
                         pFlagAry;
     Point*              pOldPointAry;
@@ -55,10 +55,6 @@ class ImpXPolyPolygon
 {
 public:
     ::std::vector< XPolygon > aXPolyList;
-
-                ImpXPolyPolygon() {}
-                ImpXPolyPolygon( const ImpXPolyPolygon& rImpXPolyPoly );
-                ~ImpXPolyPolygon();
 };
 
 

@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <unistd.h>
 #if defined(MACOSX) || defined(FREEBSD) || defined(NETBSD) || \
-    defined(AIX) || defined(OPENBSD) || defined(DRAGONFLY)
+    defined(AIX) || defined(OPENBSD) || defined(DRAGONFLY) || defined(HAIKU)
 #include <sys/wait.h>
 #else
 #include <wait.h>
@@ -202,9 +202,8 @@ bool copyFile(const OString* source, const OString& target)
     if (source != nullptr) {
         fclose(pSource);
     }
-    if ( fflush(pTarget) )
+    if ( fclose(pTarget) )
         bRet = false;
-    fclose(pTarget);
 
     return bRet;
 }
@@ -317,12 +316,10 @@ sal_Int32 compileFile(const OString * pathname)
     rtl_uString** pCmdArgs = nullptr;
     pCmdArgs = static_cast<rtl_uString**>(rtl_allocateZeroMemory(nCmdArgs * sizeof(rtl_uString*)));
 
-    ::std::vector< OUString >::iterator iter = lCppArgs.begin();
-    ::std::vector< OUString >::iterator end = lCppArgs.end();
     int i = 0;
-    while ( iter != end ) {
-        pCmdArgs[i++] = (*iter).pData;
-        ++iter;
+    for (auto const& elem : lCppArgs)
+    {
+        pCmdArgs[i++] = elem.pData;
     }
 
     procError = osl_executeProcess( cpp.pData, pCmdArgs, nCmdArgs, osl_Process_WAIT,

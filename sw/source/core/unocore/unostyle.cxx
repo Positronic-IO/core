@@ -24,6 +24,7 @@
 #include <svtools/ctrltool.hxx>
 #include <svl/style.hxx>
 #include <svl/itemiter.hxx>
+#include <svl/listener.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
 #include <svx/pageitem.hxx>
@@ -46,7 +47,6 @@
 #include <unostyle.hxx>
 #include <unosett.hxx>
 #include <docsh.hxx>
-#include <swstyle.h>
 #include <paratr.hxx>
 #include <unoprnms.hxx>
 #include <shellio.hxx>
@@ -145,14 +145,13 @@ namespace
     #define nPoolCollDocStackedStart      ( nPoolCollRegisterStackedStart + nPoolCollRegisterRange)
     #define nPoolCollHtmlStackedStart     ( nPoolCollDocStackedStart      + nPoolCollDocRange)
     using paragraphstyle_t = std::remove_const<decltype(style::ParagraphStyleCategory::TEXT)>::type;
-    using swstylebits_t = sal_uInt16;
     using collectionbits_t = sal_uInt16;
     struct ParagraphStyleCategoryEntry
     {
         paragraphstyle_t m_eCategory;
-        swstylebits_t m_nSwStyleBits;
+        SfxStyleSearchBits m_nSwStyleBits;
         collectionbits_t m_nCollectionBits;
-        ParagraphStyleCategoryEntry(paragraphstyle_t eCategory, swstylebits_t nSwStyleBits, collectionbits_t nCollectionBits)
+        ParagraphStyleCategoryEntry(paragraphstyle_t eCategory, SfxStyleSearchBits nSwStyleBits, collectionbits_t nCollectionBits)
                 : m_eCategory(eCategory)
                 , m_nSwStyleBits(nSwStyleBits)
                 , m_nCollectionBits(nCollectionBits)
@@ -276,7 +275,7 @@ class SwXStyle : public cppu::WeakImplHelper
         css::beans::XMultiPropertyStates
     >
     , public SfxListener
-    , public SwClient
+    , public SvtListener
 {
     SwDoc* m_pDoc;
     OUString m_sStyleName;
@@ -301,7 +300,6 @@ protected:
     uno::Any GetStyleProperty_Impl(const SfxItemPropertySimpleEntry& rEntry, const SfxItemPropertySet& rPropSet, SwStyleBase_Impl& rBase);
     uno::Any GetPropertyValue_Impl(const SfxItemPropertySet* pPropSet, SwStyleBase_Impl& rBase, const OUString& rPropertyName);
 
-   virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew) override;
 public:
     SwXStyle(SwDoc* pDoc, SfxStyleFamily eFam, bool bConditional = false);
     SwXStyle(SfxStyleSheetBasePool* pPool, SfxStyleFamily eFamily, SwDoc* pDoc, const OUString& rStyleName);
@@ -366,6 +364,8 @@ public:
 
     //SfxListener
     virtual void        Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
+    //SvtListener
+    virtual void Notify(const SfxHint&) override;
     const OUString&     GetStyleName() const { return m_sStyleName;}
     SfxStyleFamily      GetFamily() const {return m_rEntry.m_eFamily;}
 
@@ -376,7 +376,7 @@ public:
                             {
                                 m_bIsDescriptor = false; m_pDoc = pDc;
                                 m_pBasePool = pPool;
-                                StartListening(*m_pBasePool);
+                                SfxListener::StartListening(*m_pBasePool);
                             }
     SwDoc*                GetDoc() const { return m_pDoc; }
     void Invalidate();
@@ -861,7 +861,7 @@ uno::Sequence<OUString> XStyleFamily::getElementNames()
     if(!m_pBasePool)
         throw uno::RuntimeException();
     std::vector<OUString> vRet;
-    std::shared_ptr<SfxStyleSheetIterator> pIt = m_pBasePool->CreateIterator(m_rEntry.m_eFamily, SFXSTYLEBIT_ALL);
+    std::shared_ptr<SfxStyleSheetIterator> pIt = m_pBasePool->CreateIterator(m_rEntry.m_eFamily, SfxStyleSearchBits::All);
     for (SfxStyleSheetBase* pStyle = pIt->First(); pStyle; pStyle = pIt->Next())
     {
         OUString sName;
@@ -935,9 +935,9 @@ void XStyleFamily::insertByName(const OUString& rName, const uno::Any& rElement)
         if (!pNewStyle || !pNewStyle->IsDescriptor() || pNewStyle->GetFamily() != m_rEntry.m_eFamily)
             throw lang::IllegalArgumentException();
 
-        sal_uInt16 nMask = SFXSTYLEBIT_ALL;
+        SfxStyleSearchBits nMask = SfxStyleSearchBits::All;
         if(m_rEntry.m_eFamily == SfxStyleFamily::Para && !pNewStyle->IsConditional())
-            nMask &= ~SWSTYLEBIT_CONDCOLL;
+            nMask &= ~SfxStyleSearchBits::SwCondColl;
         m_pBasePool->Make(sStyleName, m_rEntry.m_eFamily, nMask);
         pNewStyle->SetDoc(m_pDocShell->GetDoc(), m_pBasePool);
         pNewStyle->SetStyleName(sStyleName);
@@ -947,7 +947,7 @@ void XStyleFamily::insertByName(const OUString& rName, const uno::Any& rElement)
             m_pBasePool->SetSearchMask(m_rEntry.m_eFamily);
             SfxStyleSheetBase* pParentBase = m_pBasePool->Find(sParentStyleName);
             if(pParentBase && pParentBase->GetFamily() == m_rEntry.m_eFamily &&
-                &pParentBase->GetPool() == m_pBasePool)
+                pParentBase->GetPool() == m_pBasePool)
                 m_pBasePool->SetParent(m_rEntry.m_eFamily, sStyleName, sParentStyleName);
         }
         // after all, we still need to apply the properties of the descriptor
@@ -1088,12 +1088,12 @@ static const std::vector<ParagraphStyleCategoryEntry>* lcl_GetParagraphStyleCate
     if(!our_pParagraphStyleCategoryEntries)
     {
         our_pParagraphStyleCategoryEntries = new std::vector<ParagraphStyleCategoryEntry>{
-            { style::ParagraphStyleCategory::TEXT,    SWSTYLEBIT_TEXT,    COLL_TEXT_BITS     },
-            { style::ParagraphStyleCategory::CHAPTER, SWSTYLEBIT_CHAPTER, COLL_DOC_BITS      },
-            { style::ParagraphStyleCategory::LIST,    SWSTYLEBIT_LIST,    COLL_LISTS_BITS    },
-            { style::ParagraphStyleCategory::INDEX,   SWSTYLEBIT_IDX,     COLL_REGISTER_BITS },
-            { style::ParagraphStyleCategory::EXTRA,   SWSTYLEBIT_EXTRA,   COLL_EXTRA_BITS    },
-            { style::ParagraphStyleCategory::HTML,    SWSTYLEBIT_HTML,    COLL_HTML_BITS     }
+            { style::ParagraphStyleCategory::TEXT,    SfxStyleSearchBits::SwText,    COLL_TEXT_BITS     },
+            { style::ParagraphStyleCategory::CHAPTER, SfxStyleSearchBits::SwChapter, COLL_DOC_BITS      },
+            { style::ParagraphStyleCategory::LIST,    SfxStyleSearchBits::SwList,    COLL_LISTS_BITS    },
+            { style::ParagraphStyleCategory::INDEX,   SfxStyleSearchBits::SwIndex,     COLL_REGISTER_BITS },
+            { style::ParagraphStyleCategory::EXTRA,   SfxStyleSearchBits::SwExtra,   COLL_EXTRA_BITS    },
+            { style::ParagraphStyleCategory::HTML,    SfxStyleSearchBits::SwHtml,    COLL_HTML_BITS     }
         };
     }
     return our_pParagraphStyleCategoryEntries;
@@ -1291,7 +1291,7 @@ SwXStyle::SwXStyle(SwDoc* pDoc, SfxStyleFamily eFamily, bool bConditional)
 {
     assert(!m_bIsConditional || m_rEntry.m_eFamily == SfxStyleFamily::Para); // only paragraph styles are conditional
     // Register ourselves as a listener to the document (via the page descriptor)
-    pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->Add(this);
+    SvtListener::StartListening(pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->GetNotifier());
     m_pPropertiesImpl = o3tl::make_unique<SwStyleProperties_Impl>(
             aSwMapProvider.GetPropertySet(m_bIsConditional ? PROPERTY_MAP_CONDITIONAL_PARA_STYLE :  m_rEntry.m_nPropMapType)->getPropertyMap());
 }
@@ -1310,15 +1310,14 @@ SwXStyle::~SwXStyle()
 {
     SolarMutexGuard aGuard;
     if(m_pBasePool)
-        EndListening(*m_pBasePool);
+        SfxListener::EndListening(*m_pBasePool);
     m_pPropertiesImpl.reset();
-    SwClient::EndListeningAll();
+    SvtListener::EndListeningAll();
 }
 
-void SwXStyle::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew)
+void SwXStyle::Notify(const SfxHint& rHint)
 {
-    ClientModify(this, pOld, pNew);
-    if(!GetRegisteredIn())
+    if(rHint.GetId() == SfxHintId::Dying)
     {
         m_pDoc = nullptr;
         m_xStyleData.clear();
@@ -1376,7 +1375,7 @@ sal_Bool SwXStyle::isInUse()
     SolarMutexGuard aGuard;
     if(!m_pBasePool)
         throw uno::RuntimeException();
-    m_pBasePool->SetSearchMask(m_rEntry.m_eFamily, SFXSTYLEBIT_USED);
+    m_pBasePool->SetSearchMask(m_rEntry.m_eFamily, SfxStyleSearchBits::Used);
     SfxStyleSheetBase* pBase = m_pBasePool->Find(m_sStyleName);
     return pBase && pBase->IsUsed();
 }
@@ -1623,11 +1622,10 @@ void SwXStyle::SetPropertyValue<sal_uInt16(XATTR_FILLGRADIENT)>(const SfxItemPro
             throw lang::IllegalArgumentException();
         SvxShape::SetFillAttribute(rEntry.nWID, aValue.get<OUString>(), rStyleSet);
     }
-    else if(MID_GRAFURL == nMemberId)
+    else if(MID_BITMAP == nMemberId)
     {
         if(sal_uInt16(XATTR_FILLBITMAP) == rEntry.nWID)
         {
-            // Bitmap also has the MID_GRAFURL mode where a Bitmap URL is used
             const Graphic aNullGraphic;
             SfxItemSet& rStyleSet = o_rStyleBase.GetItemSet();
             XFillBitmapItem aXFillBitmapItem(aNullGraphic);
@@ -1874,18 +1872,18 @@ void SwXStyle::SetPropertyValue<FN_UNO_CATEGORY>(const SfxItemPropertySimpleEntr
 {
     if(!o_rStyleBase.getNewBase()->IsUserDefined() || !rValue.has<paragraphstyle_t>())
         throw lang::IllegalArgumentException();
-    static std::unique_ptr<std::map<paragraphstyle_t, swstylebits_t>> pUnoToCore;
+    static std::unique_ptr<std::map<paragraphstyle_t, SfxStyleSearchBits>> pUnoToCore;
     if(!pUnoToCore)
     {
-        pUnoToCore.reset(new std::map<paragraphstyle_t, swstylebits_t>);
+        pUnoToCore.reset(new std::map<paragraphstyle_t, SfxStyleSearchBits>);
         auto pEntries = lcl_GetParagraphStyleCategoryEntries();
         std::transform(pEntries->begin(), pEntries->end(), std::inserter(*pUnoToCore, pUnoToCore->end()),
-            [] (const ParagraphStyleCategoryEntry& rEntry) { return std::pair<paragraphstyle_t, swstylebits_t>(rEntry.m_eCategory, rEntry.m_nSwStyleBits); });
+            [] (const ParagraphStyleCategoryEntry& rEntry) { return std::pair<paragraphstyle_t, SfxStyleSearchBits>(rEntry.m_eCategory, rEntry.m_nSwStyleBits); });
     }
     const auto pUnoToCoreIt(pUnoToCore->find(rValue.get<paragraphstyle_t>()));
     if(pUnoToCoreIt == pUnoToCore->end())
         throw lang::IllegalArgumentException();
-    o_rStyleBase.getNewBase()->SetMask( pUnoToCoreIt->second|SFXSTYLEBIT_USERDEF );
+    o_rStyleBase.getNewBase()->SetMask( pUnoToCoreIt->second|SfxStyleSearchBits::UserDefined );
 }
 template<>
 void SwXStyle::SetPropertyValue<SID_SWREGISTER_COLLECTION>(const SfxItemPropertySimpleEntry&, const SfxItemPropertySet&, const uno::Any& rValue, SwStyleBase_Impl& o_rStyleBase)
@@ -2032,7 +2030,7 @@ void SwXStyle::SetPropertyValues_Impl(const uno::Sequence<OUString>& rPropertyNa
     SwStyleBase_Impl aBaseImpl(*m_pDoc, m_sStyleName, &GetDoc()->GetDfltTextFormatColl()->GetAttrSet()); // add pDfltTextFormatColl as parent
     if(m_pBasePool)
     {
-        const sal_uInt16 nSaveMask = m_pBasePool->GetSearchMask();
+        const SfxStyleSearchBits nSaveMask = m_pBasePool->GetSearchMask();
         m_pBasePool->SetSearchMask(m_rEntry.m_eFamily);
         SfxStyleSheetBase* pBase = m_pBasePool->Find(m_sStyleName);
         m_pBasePool->SetSearchMask(m_rEntry.m_eFamily, nSaveMask);
@@ -2085,7 +2083,7 @@ SfxStyleSheetBase* SwXStyle::GetStyleSheetBase()
 {
     if(!m_pBasePool)
         return nullptr;
-    const sal_uInt16 nSaveMask = m_pBasePool->GetSearchMask();
+    const SfxStyleSearchBits nSaveMask = m_pBasePool->GetSearchMask();
     m_pBasePool->SetSearchMask(m_rEntry.m_eFamily);
     SfxStyleSheetBase* pBase = m_pBasePool->Find(m_sStyleName);
     m_pBasePool->SetSearchMask(m_rEntry.m_eFamily, nSaveMask );
@@ -2769,7 +2767,7 @@ void SwXStyle::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
     if((rHint.GetId() == SfxHintId::Dying) || (rHint.GetId() == SfxHintId::StyleSheetErased))
     {
         m_pBasePool = nullptr;
-        EndListening(rBC);
+        SfxListener::EndListening(rBC);
     }
     else if(rHint.GetId() == SfxHintId::StyleSheetChanged)
     {
@@ -2777,7 +2775,7 @@ void SwXStyle::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
         SfxStyleSheetBase* pOwnBase = static_cast<SfxStyleSheetBasePool&>(rBC).Find(m_sStyleName);
         if(!pOwnBase)
         {
-            EndListening(rBC);
+            SfxListener::EndListening(rBC);
             Invalidate();
         }
     }
@@ -3615,11 +3613,10 @@ uno::Reference< style::XAutoStyle > SwXAutoStyleFamily::insertStyle(
                         SvxShape::SetFillAttribute(pEntry->nWID, aTempName, aSet);
                         bDone = true;
                     }
-                    else if(MID_GRAFURL == nMemberId)
+                    else if (MID_BITMAP == nMemberId)
                     {
                         if(XATTR_FILLBITMAP == pEntry->nWID)
                         {
-                            // Bitmap also has the MID_GRAFURL mode where a Bitmap URL is used
                             const Graphic aNullGraphic;
                             XFillBitmapItem aXFillBitmapItem(aNullGraphic);
 

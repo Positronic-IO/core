@@ -34,7 +34,6 @@
  *************************************************************************/
 
 #include <memory>
-#include <comphelper/processfactory.hxx>
 #include <osl/diagnose.h>
 #include <rtl/uri.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -1787,7 +1786,6 @@ uno::Sequence< uno::Any > Content::setPropertyValues(
     // aEvent.NewValue   =
 
     std::vector< ProppatchValue > aProppatchValues;
-    std::vector< sal_Int32 > aProppatchPropsPositions;
 
     uno::Reference< ucb::XPersistentPropertySet > xAdditionalPropSet;
     bool bTriedToGetAdditionalPropSet = false;
@@ -1962,10 +1960,6 @@ uno::Sequence< uno::Any > Content::setPropertyValues(
                     // Property value will be set on server.
                     ProppatchValue aValue( PROPSET, rName, rValue.Value );
                     aProppatchValues.push_back( aValue );
-
-                    // remember position within sequence of values (for
-                    // error handling).
-                    aProppatchPropsPositions.push_back( n );
                 }
                 else
                 {

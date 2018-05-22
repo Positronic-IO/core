@@ -54,6 +54,9 @@ namespace sdr
             // react on ItemSet changes
             virtual void ItemSetChanged(const SfxItemSet& rSet) override;
 
+            // check if SfxItemSet exists
+            bool HasSfxItemSet() const { return bool(mpItemSet); }
+
         public:
             // basic constructor
             explicit DefaultProperties(SdrObject& rObj);
@@ -67,7 +70,7 @@ namespace sdr
             void dumpAsXml(struct _xmlTextWriter * pWriter) const;
 
             // Clone() operator, normally just calls the local copy constructor
-            virtual BaseProperties& Clone(SdrObject& rObj) const override;
+            virtual std::unique_ptr<BaseProperties> Clone(SdrObject& rObj) const override;
 
             // get itemset
             virtual const SfxItemSet& GetObjectItemSet() const override;
@@ -100,7 +103,7 @@ namespace sdr
             virtual void ForceDefaultAttributes();
 
             // Scale the included ItemSet.
-            virtual void Scale(const Fraction& rScale) override;
+            void Scale(const Fraction& rScale);
         };
     } // end of namespace properties
 } // end of namespace sdr

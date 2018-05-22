@@ -89,7 +89,7 @@
 #include <unotools/fontcvt.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/outdev.hxx>
-#include <svtools/grfmgr.hxx>
+#include <vcl/GraphicObject.hxx>
 #include <rtl/strbuf.hxx>
 #include <sfx2/app.hxx>
 #include <svl/languageoptions.hxx>
@@ -729,8 +729,12 @@ ShapeExport& ShapeExport::WriteCustomShape( const Reference< XShape >& xShape )
     OUString sShapeType;
     ShapeFlag nMirrorFlags = ShapeFlag::NONE;
     MSO_SPT eShapeType = EscherPropertyContainer::GetCustomShapeType( xShape, nMirrorFlags, sShapeType );
-    SdrObjCustomShape* pShape = static_cast<SdrObjCustomShape*>( GetSdrObjectFromXShape( xShape ) );
-    bool bIsDefaultObject = EscherPropertyContainer::IsDefaultObject( pShape, eShapeType );
+    OSL_ENSURE(nullptr != dynamic_cast< SdrObjCustomShape* >(GetSdrObjectFromXShape(xShape)), "Not a SdrObjCustomShape (!)");
+    SdrObjCustomShape& rSdrObjCustomShape(static_cast< SdrObjCustomShape& >(*GetSdrObjectFromXShape(xShape)));
+    const bool bIsDefaultObject(
+        EscherPropertyContainer::IsDefaultObject(
+            rSdrObjCustomShape,
+            eShapeType));
     const char* sPresetShape = msfilter::util::GetOOXMLPresetGeometry( USS( sShapeType ) );
     SAL_INFO("oox.shape", "custom shape type: " << sShapeType << " ==> " << sPresetShape);
     Sequence< PropertyValue > aGeometrySeq;
@@ -845,10 +849,10 @@ ShapeExport& ShapeExport::WriteCustomShape( const Reference< XShape >& xShape )
     else if( bHasHandles )
         bCustGeom = true;
 
-    if (bHasHandles && bCustGeom && pShape)
+    if (bHasHandles && bCustGeom)
     {
         WriteShapeTransformation( xShape, XML_a, bFlipH, bFlipV, false, true );// do not flip, polypolygon coordinates are flipped already
-        tools::PolyPolygon aPolyPolygon( pShape->GetLineGeometry(true) );
+        tools::PolyPolygon aPolyPolygon( rSdrObjCustomShape.GetLineGeometry(true) );
         sal_Int32 nRotation = 0;
         // The RotateAngle property's value is independent from any flipping, and that's exactly what we need here.
         uno::Reference<beans::XPropertySet> xPropertySet(xShape, uno::UNO_QUERY);
@@ -864,7 +868,7 @@ ShapeExport& ShapeExport::WriteCustomShape( const Reference< XShape >& xShape )
     else if (bCustGeom)
     {
         WriteShapeTransformation( xShape, XML_a, bFlipH, bFlipV );
-        bool bSuccess = WriteCustomGeometry( xShape, pShape );
+        bool bSuccess = WriteCustomGeometry(xShape, rSdrObjCustomShape);
         if (!bSuccess)
             WritePresetShape( sPresetShape );
     }
@@ -1097,21 +1101,23 @@ void ShapeExport::WriteGraphicObjectShapePart( const Reference< XShape >& xShape
 
     SAL_INFO("oox.shape", "graphicObject without text");
 
-    OUString sGraphicURL;
     uno::Reference<graphic::XGraphic> xGraphic;
     OUString sMediaURL;
 
     Reference< XPropertySet > xShapeProps( xShape, UNO_QUERY );
 
-    bool bHasGraphicURL = xShapeProps.is() && xShapeProps->getPropertySetInfo()->hasPropertyByName("GraphicURL") && (xShapeProps->getPropertyValue("GraphicURL") >>= sGraphicURL);
-
-    if (xShapeProps.is() && xShapeProps->getPropertySetInfo()->hasPropertyByName("Graphic"))
+    if (pGraphic)
+    {
+        xGraphic.set(pGraphic->GetXGraphic());
+    }
+    else if (xShapeProps.is() && xShapeProps->getPropertySetInfo()->hasPropertyByName("Graphic"))
+    {
         xShapeProps->getPropertyValue("Graphic") >>= xGraphic;
+    }
 
-    bool bHasAnyGraphic = bHasGraphicURL || xGraphic.is();
     bool bHasMediaURL = xShapeProps.is() && xShapeProps->getPropertySetInfo()->hasPropertyByName("MediaURL") && (xShapeProps->getPropertyValue("MediaURL") >>= sMediaURL);
 
-    if (!pGraphic && !bHasAnyGraphic && !bHasMediaURL)
+    if (!xGraphic.is() && !bHasMediaURL)
     {
         SAL_INFO("oox.shape", "no graphic or media URL found");
         return;
@@ -1169,24 +1175,19 @@ void ShapeExport::WriteGraphicObjectShapePart( const Reference< XShape >& xShape
     {
         WriteXGraphicBlip(xShapeProps, xGraphic, false);
     }
-    else if (pGraphic || bHasGraphicURL)
-    {
-        WriteBlip(xShapeProps, sGraphicURL, false, pGraphic);
-    }
     else if (bHasMediaURL)
     {
-        Reference<graphic::XGraphic> rGraphic;
+        Reference<graphic::XGraphic> xFallbackGraphic;
         if (xShapeProps->getPropertySetInfo()->hasPropertyByName("FallbackGraphic"))
-            xShapeProps->getPropertyValue("FallbackGraphic") >>= rGraphic;
+            xShapeProps->getPropertyValue("FallbackGraphic") >>= xFallbackGraphic;
 
-        Graphic aGraphic(rGraphic);
-        WriteBlip(xShapeProps, sMediaURL, false, &aGraphic);
+        WriteXGraphicBlip(xShapeProps, xFallbackGraphic, false);
     }
 
-    if (bHasGraphicURL)
-        WriteSrcRect(xShapeProps, sGraphicURL);
-    else if (xGraphic.is())
+    if (xGraphic.is())
+    {
         WriteSrcRectXGraphic(xShapeProps, xGraphic);
+    }
 
     // now we stretch always when we get pGraphic (when changing that
     // behavior, test n#780830 for regression, where the OLE sheet might get tiled
@@ -1764,7 +1765,7 @@ void ShapeExport::WriteTableCellBorders(const Reference< XPropertySet>& xCellPro
     if(nLeftBorder > 0)
     {
         mpFS->startElementNS( XML_a, XML_lnL, XML_w, I32S(nLeftBorder), FSEND );
-        DrawingML::WriteSolidFill(aLeftBorderColor);
+        DrawingML::WriteSolidFill(::Color(aLeftBorderColor));
         mpFS->endElementNS( XML_a, XML_lnL );
     }
 
@@ -1778,7 +1779,7 @@ void ShapeExport::WriteTableCellBorders(const Reference< XPropertySet>& xCellPro
     if(nRightBorder > 0)
     {
         mpFS->startElementNS( XML_a, XML_lnR, XML_w, I32S(nRightBorder), FSEND);
-        DrawingML::WriteSolidFill(aRightBorderColor);
+        DrawingML::WriteSolidFill(::Color(aRightBorderColor));
         mpFS->endElementNS( XML_a, XML_lnR);
     }
 
@@ -1792,7 +1793,7 @@ void ShapeExport::WriteTableCellBorders(const Reference< XPropertySet>& xCellPro
     if(nTopBorder > 0)
     {
         mpFS->startElementNS( XML_a, XML_lnT, XML_w, I32S(nTopBorder), FSEND);
-        DrawingML::WriteSolidFill(aTopBorderColor);
+        DrawingML::WriteSolidFill(::Color(aTopBorderColor));
         mpFS->endElementNS( XML_a, XML_lnT);
     }
 
@@ -1806,7 +1807,7 @@ void ShapeExport::WriteTableCellBorders(const Reference< XPropertySet>& xCellPro
     if(nBottomBorder > 0)
     {
         mpFS->startElementNS( XML_a, XML_lnB, XML_w, I32S(nBottomBorder), FSEND);
-        DrawingML::WriteSolidFill(aBottomBorderColor);
+        DrawingML::WriteSolidFill(::Color(aBottomBorderColor));
         mpFS->endElementNS( XML_a, XML_lnB);
     }
 }

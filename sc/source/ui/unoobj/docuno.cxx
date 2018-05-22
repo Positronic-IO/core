@@ -373,6 +373,18 @@ void ScModelObj::CreateAndSet(ScDocShell* pDocSh)
         pDocSh->SetBaseModel( new ScModelObj(pDocSh) );
 }
 
+SdrModel& ScModelObj::getSdrModelFromUnoModel() const
+{
+    ScDocument& rDoc(pDocShell->GetDocument());
+
+    if(!rDoc.GetDrawLayer())
+    {
+        rDoc.InitDrawLayer();
+    }
+
+    return *rDoc.GetDrawLayer(); // TTTT should be reference
+}
+
 ScModelObj::ScModelObj( ScDocShell* pDocSh ) :
     SfxBaseModel( pDocSh ),
     aPropSet( lcl_GetDocOptPropertyMap() ),
@@ -533,6 +545,18 @@ int ScModelObj::getPart()
     return pViewData->GetViewShell()->getPart();
 }
 
+OUString ScModelObj::getPartInfo( int nPart )
+{
+    OUString aPartInfo;
+    ScViewData* pViewData = ScDocShell::GetViewData();
+    bool bIsVisible = pViewData->GetDocument()->IsVisible(nPart);
+
+    aPartInfo += "{ \"visible\": \"";
+    aPartInfo += OUString::number(static_cast<unsigned int>(bIsVisible));
+    aPartInfo += "\" }";
+    return aPartInfo;
+}
+
 OUString ScModelObj::getPartName( int nPart )
 {
     OUString sTabName;
@@ -557,12 +581,14 @@ VclPtr<vcl::Window> ScModelObj::getDocWindow()
     ScViewData* pViewData = ScDocShell::GetViewData();
     VclPtr<vcl::Window> pWindow;
     if (pViewData)
+    {
         pWindow = pViewData->GetActiveWin();
 
-    LokChartHelper aChartHelper(pViewData->GetViewShell());
-    vcl::Window* pChartWindow = aChartHelper.GetWindow();
-    if (pChartWindow)
-        pWindow = pChartWindow;
+        LokChartHelper aChartHelper(pViewData->GetViewShell());
+        vcl::Window* pChartWindow = aChartHelper.GetWindow();
+        if (pChartWindow)
+            pWindow = pChartWindow;
+    }
 
     return pWindow;
 }
@@ -1933,7 +1959,9 @@ void SAL_CALL ScModelObj::render( sal_Int32 nSelRenderer, const uno::Any& aSelec
 
     if( pModel )
     {
-        aDrawViewKeeper.mpDrawView = new FmFormView( pModel, pDev );
+        aDrawViewKeeper.mpDrawView = new FmFormView(
+            *pModel,
+            pDev);
         aDrawViewKeeper.mpDrawView->ShowSdrPage(aDrawViewKeeper.mpDrawView->GetModel()->GetPage(nTab));
         aDrawViewKeeper.mpDrawView->SetPrintPreview();
     }
@@ -2326,7 +2354,7 @@ void SAL_CALL ScModelObj::consolidate(
     {
         const ScConsolidateParam& rParam = xImpl->GetParam();
         pDocShell->DoConsolidate( rParam );
-        pDocShell->GetDocument().SetConsolidateDlgData( &rParam );
+        pDocShell->GetDocument().SetConsolidateDlgData( std::unique_ptr<ScConsolidateParam>(new ScConsolidateParam(rParam)) );
     }
 }
 
@@ -2952,14 +2980,14 @@ void ScModelObj::NotifyChanges( const OUString& rOperation, const ScRangeList& r
         {
             uno::Reference< table::XCellRange > xRangeObj;
 
-            ScRange aRange( *rRanges[ nIndex ] );
-            if ( aRange.aStart == aRange.aEnd )
+            ScRange const & rRange = rRanges[ nIndex ];
+            if ( rRange.aStart == rRange.aEnd )
             {
-                xRangeObj.set( new ScCellObj( pDocShell, aRange.aStart ) );
+                xRangeObj.set( new ScCellObj( pDocShell, rRange.aStart ) );
             }
             else
             {
-                xRangeObj.set( new ScCellRangeObj( pDocShell, aRange ) );
+                xRangeObj.set( new ScCellRangeObj( pDocShell, rRange ) );
             }
 
             util::ElementChange& rChange = aEvent.Changes[ static_cast< sal_Int32 >( nIndex ) ];
@@ -3003,9 +3031,9 @@ void ScModelObj::NotifyChanges( const OUString& rOperation, const ScRangeList& r
                     size_t nRangeCount = rRanges.size();
                     for ( size_t nIndex = 0; nIndex < nRangeCount; ++nIndex )
                     {
-                        ScRange aRange( *rRanges[ nIndex ] );
-                        if ( aRange.aStart.Tab() == nTab )
-                            aTabRanges.Append( aRange );
+                        ScRange const & rRange = rRanges[ nIndex ];
+                        if ( rRange.aStart.Tab() == nTab )
+                            aTabRanges.push_back( rRange );
                     }
                     size_t nTabRangeCount = aTabRanges.size();
                     if ( nTabRangeCount > 0 )
@@ -3013,11 +3041,11 @@ void ScModelObj::NotifyChanges( const OUString& rOperation, const ScRangeList& r
                         uno::Reference<uno::XInterface> xTarget;
                         if ( nTabRangeCount == 1 )
                         {
-                            ScRange aRange( *aTabRanges[ 0 ] );
-                            if ( aRange.aStart == aRange.aEnd )
-                                xTarget.set( static_cast<cppu::OWeakObject*>( new ScCellObj( pDocShell, aRange.aStart ) ) );
+                            ScRange const & rRange = aTabRanges[ 0 ];
+                            if ( rRange.aStart == rRange.aEnd )
+                                xTarget.set( static_cast<cppu::OWeakObject*>( new ScCellObj( pDocShell, rRange.aStart ) ) );
                             else
-                                xTarget.set( static_cast<cppu::OWeakObject*>( new ScCellRangeObj( pDocShell, aRange ) ) );
+                                xTarget.set( static_cast<cppu::OWeakObject*>( new ScCellRangeObj( pDocShell, rRange ) ) );
                         }
                         else
                             xTarget.set( static_cast<cppu::OWeakObject*>( new ScCellRangesObj( pDocShell, aTabRanges ) ) );
@@ -3633,9 +3661,8 @@ uno::Sequence < uno::Reference< table::XCellRange > > SAL_CALL ScTableSheetsObj:
     xRet.realloc(nCount);
     for( size_t nIndex = 0; nIndex < nCount; nIndex++ )
     {
-        const ScRange* pRange = aRangeList[ nIndex ];
-        if( pRange )
-            xRet[nIndex] = new ScCellRangeObj(pDocShell, *pRange);
+        const ScRange & rRange = aRangeList[ nIndex ];
+        xRet[nIndex] = new ScCellRangeObj(pDocShell, rRange);
     }
 
     return xRet;
@@ -3801,7 +3828,7 @@ void SAL_CALL ScTableColumnsObj::removeByIndex( sal_Int32 nIndex, sal_Int32 nCou
     {
         ScRange aRange( static_cast<SCCOL>(nStartCol+nIndex), 0, nTab,
                         static_cast<SCCOL>(nStartCol+nIndex+nCount-1), MAXROW, nTab );
-        bDone = pDocShell->GetDocFunc().DeleteCells( aRange, nullptr, DEL_DELCOLS, true );
+        bDone = pDocShell->GetDocFunc().DeleteCells( aRange, nullptr, DelCellCmd::Cols, true );
     }
     if (!bDone)
         throw uno::RuntimeException();      // no other exceptions specified
@@ -4040,7 +4067,7 @@ void SAL_CALL ScTableRowsObj::removeByIndex( sal_Int32 nIndex, sal_Int32 nCount 
     {
         ScRange aRange( 0, static_cast<SCROW>(nStartRow+nIndex), nTab,
                         MAXCOL, static_cast<SCROW>(nStartRow+nIndex+nCount-1), nTab );
-        bDone = pDocShell->GetDocFunc().DeleteCells( aRange, nullptr, DEL_DELROWS, true );
+        bDone = pDocShell->GetDocFunc().DeleteCells( aRange, nullptr, DelCellCmd::Rows, true );
     }
     if (!bDone)
         throw uno::RuntimeException();      // no other exceptions specified

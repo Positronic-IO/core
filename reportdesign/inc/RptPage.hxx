@@ -35,13 +35,12 @@ class OReportModel;
 class REPORTDESIGN_DLLPUBLIC OReportPage : public SdrPage
 {
     OReportPage& operator=(const OReportPage&) = delete;
+    OReportPage(const OReportPage&) = delete;
 
     OReportModel&           rModel;
     css::uno::Reference< css::report::XSection > m_xSection;
     bool                    m_bSpecialInsertMode;
     std::vector<SdrObject*> m_aTemporaryObjectList;
-
-    OReportPage(const OReportPage&);
 
     // method to remove temporary objects, created by 'special mode'
     // (BegDragObj)
@@ -56,9 +55,7 @@ public:
     OReportPage( OReportModel& rModel
                 ,const css::uno::Reference< css::report::XSection >& _xSection );
 
-
-    virtual SdrPage* Clone() const override;
-    virtual SdrPage* Clone( SdrModel* pNewModel ) const override;
+    virtual SdrPage* CloneSdrPage(SdrModel& rTargetModel) const override;
 
     virtual void NbcInsertObject(SdrObject* pObj, size_t nPos=SAL_MAX_SIZE) override;
     virtual SdrObject* RemoveObject(size_t nObjNum) override;

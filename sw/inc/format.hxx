@@ -32,6 +32,7 @@ class IDocumentFieldsAccess;
 class IDocumentChartDataProviderAccess;
 class SwDoc;
 class SfxGrabBagItem;
+class SwTextGridItem;
 
 namespace drawinglayer { namespace attribute {
     class SdrAllFillAttributesHelper;
@@ -241,8 +242,6 @@ public:
         Virtual method to determine, if background of format is transparent.
         Default implementation returns false. Thus, subclasses have to override
         method, if the specific subclass can have a transparent background.
-
-        @author OD
 
         @return false, default implementation
     */

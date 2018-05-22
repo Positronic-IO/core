@@ -26,9 +26,11 @@
 #include <vcl/edit.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/builderfactory.hxx>
+#include <vcl/weld.hxx>
 #include <sot/exchange.hxx>
 #include <sax/tools/converter.hxx>
 #include <svx/svxdllapi.h>
+#include <tools/color.hxx>
 
 class SVX_DLLPUBLIC HexColorControl : public Edit
 {
@@ -38,12 +40,31 @@ public:
     virtual bool PreNotify( NotifyEvent& rNEvt ) override;
     virtual void Paste() override;
 
-    void SetColor( sal_Int32 nColor );
-    sal_Int32 GetColor();
+    void SetColor( ::Color nColor );
+    ::Color GetColor();
 
 private:
     static bool ImplProcessKeyInput( const KeyEvent& rKEv );
 };
+
+namespace weld {
+
+class SVX_DLLPUBLIC HexColorControl
+{
+private:
+    std::unique_ptr<weld::Entry> m_xEntry;
+
+    DECL_LINK(ImplProcessInputHdl, OUString&, bool);
+public:
+    HexColorControl(weld::Entry* pEdit);
+
+    void connect_changed(const Link<Entry&, void>& rLink) { m_xEntry->connect_changed(rLink); }
+
+    void SetColor( ::Color nColor );
+    ::Color GetColor();
+};
+
+}
 
 #endif  // INCLUDED_SVX_HEXCOLOR_HXX
 

@@ -19,9 +19,8 @@
 #ifndef INCLUDED_SW_INC_RING_HXX
 #define INCLUDED_SW_INC_RING_HXX
 
-#include "swdllapi.h"
-#include "swtypes.hxx"
 #include <utility>
+#include <sal/types.h>
 #include <iterator>
 #include <type_traits>
 #include <boost/iterator/iterator_facade.hpp>
@@ -186,8 +185,8 @@ namespace sw
                 // actually un-merge in this case!
                 assert(m_pStart->m_pPrev != aDestRing.m_pStart);
                 assert(m_pStart != aDestRing.m_pStart->m_pPrev);
-                std::swap(*(&m_pStart->m_pPrev->m_pNext), *(&aDestRing.m_pStart->m_pPrev->m_pNext));
-                std::swap(*(&m_pStart->m_pPrev), *(&aDestRing.m_pStart->m_pPrev));
+                std::swap(m_pStart->m_pPrev->m_pNext, aDestRing.m_pStart->m_pPrev->m_pNext);
+                std::swap(m_pStart->m_pPrev, aDestRing.m_pStart->m_pPrev);
             }
     };
 

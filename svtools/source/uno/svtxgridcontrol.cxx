@@ -27,7 +27,6 @@
 #include <rtl/ref.hxx>
 #include <tools/diagnose_ex.h>
 #include <toolkit/helper/property.hxx>
-#include <comphelper/processfactory.hxx>
 #include <com/sun/star/awt/grid/XGridColumn.hpp>
 #include <com/sun/star/awt/XControl.hpp>
 #include <com/sun/star/awt/grid/GridInvalidDataException.hpp>
@@ -461,7 +460,7 @@ namespace
         if ( !i_color )
             o_colorValue.clear();
         else
-            o_colorValue <<= i_color->GetColor();
+            o_colorValue <<= sal_Int32(*i_color);
     }
 }
 
@@ -547,7 +546,7 @@ Any SVTXGridControl::getProperty( const OUString& PropertyName )
             Sequence< css::util::Color > aAPIColors( aColors->size() );
             for ( size_t i=0; i<aColors->size(); ++i )
             {
-                aAPIColors[i] = aColors->at(i).GetColor();
+                aAPIColors[i] = sal_Int32(aColors->at(i));
             }
             aPropertyValue <<= aAPIColors;
         }
@@ -906,7 +905,7 @@ void SVTXGridControl::impl_updateColumnsFromModel_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("svtools.uno");
     }
 }
 

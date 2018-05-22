@@ -65,6 +65,8 @@ using namespace ::xmloff::token;
 // ruby properties
 #define MR_E( a, p, l, t, c ) \
     M_E_( a, p, l, (t|XML_TYPE_PROP_RUBY), c )
+#define MR_EV( a, p, l, t, c, v ) \
+    M_EV_( a, p, l, (t|XML_TYPE_PROP_RUBY), c, v )
 
 // cell properties
 #define MC_E( a, p, l, t, c ) \
@@ -384,7 +386,7 @@ XMLPropertyMapEntry const aXMLParaPropMap[] =
     MP_E( "ParaBackTransparent",    FO, BACKGROUND_COLOR,       XML_TYPE_ISTRANSPARENT|MID_FLAG_MERGE_ATTRIBUTE, 0 ),
     MP_E( "ParaBackGraphicLocation",    STYLE,  POSITION,   MID_FLAG_SPECIAL_ITEM|XML_TYPE_BUILDIN_CMP_ONLY, CTF_BACKGROUND_POS  ),
     MP_E( "ParaBackGraphicFilter",STYLE,    FILTER_NAME,    MID_FLAG_SPECIAL_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_FILTER ),
-    MP_E( "ParaBackGraphicURL", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_URL ),
+    MP_E( "ParaBackGraphic", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_GRAPHIC, CTF_BACKGROUND_URL ),
 
     // RES_BOX
     MP_E( "LeftBorder",         STYLE,  BORDER_LINE_WIDTH,        XML_TYPE_BORDER_WIDTH, CTF_ALLBORDERWIDTH ),
@@ -748,7 +750,7 @@ XMLPropertyMapEntry const aXMLFramePropMap[] =
     MG_E( "BackGraphicTransparency", STYLE, BACKGROUND_IMAGE_TRANSPARENCY, MID_FLAG_SPECIAL_ITEM|XML_TYPE_PERCENT8, CTF_BACKGROUND_TRANSPARENCY ),
     MG_E( "BackGraphicLocation",    STYLE,  POSITION,   MID_FLAG_SPECIAL_ITEM|XML_TYPE_BUILDIN_CMP_ONLY, CTF_BACKGROUND_POS  ),
     MG_E( "BackGraphicFilter",STYLE,    FILTER_NAME,    MID_FLAG_SPECIAL_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_FILTER ),
-    MG_E( "BackGraphicURL", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_URL ),
+    MG_E( "BackGraphic", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_GRAPHIC, CTF_BACKGROUND_URL ),
 
     // fill attributes
     GMAP( "FillStyle",                      XML_NAMESPACE_DRAW, XML_FILL,                   XML_SW_TYPE_FILLSTYLE, 0 ),
@@ -926,7 +928,7 @@ XMLPropertyMapEntry const aXMLSectionPropMap[] =
     MS_E( "BackTransparent",    FO, BACKGROUND_COLOR,       XML_TYPE_ISTRANSPARENT|MID_FLAG_MERGE_ATTRIBUTE, 0 ),
     MS_E( "BackGraphicLocation",    STYLE,  POSITION,   MID_FLAG_SPECIAL_ITEM|XML_TYPE_BUILDIN_CMP_ONLY, CTF_BACKGROUND_POS  ),
     MS_E( "BackGraphicFilter",STYLE,    FILTER_NAME,    MID_FLAG_SPECIAL_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_FILTER ),
-    MS_E( "BackGraphicURL", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_STRING, CTF_BACKGROUND_URL ),
+    MS_E( "BackGraphic", STYLE,  BACKGROUND_IMAGE,   MID_FLAG_ELEMENT_ITEM|XML_TYPE_GRAPHIC, CTF_BACKGROUND_URL ),
 
     // move protect-flag into section element
 //  M_E( "IsProtected",         STYLE,  PROTECT,    XML_TYPE_BOOL, 0 ),
@@ -964,7 +966,8 @@ XMLPropertyMapEntry const aXMLSectionPropMap[] =
 XMLPropertyMapEntry const aXMLRubyPropMap[] =
 {
     MR_E( "RubyAdjust", STYLE, RUBY_ALIGN, XML_TYPE_TEXT_RUBY_ADJUST, 0 ),
-    MR_E( "RubyIsAbove",    STYLE, RUBY_POSITION, XML_TYPE_TEXT_RUBY_POSITION, 0 ),
+    MR_E( "RubyIsAbove",    STYLE, RUBY_POSITION, XML_TYPE_TEXT_RUBY_IS_ABOVE, 0 ),
+    MR_EV( "RubyPosition",   LO_EXT, RUBY_POSITION, XML_TYPE_TEXT_RUBY_POSITION, 0, SvtSaveOptions::ODFVER_012_EXT_COMPAT),
     M_END()
 };
 

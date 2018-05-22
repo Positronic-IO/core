@@ -35,8 +35,6 @@ namespace svx
     SVX_DLLPUBLIC bool ShowBorderBackgroundDlg( vcl::Window* pParent, SfxItemSet* pBBSet );
 }
 
-// class  SvxHFPage ------------------------------------------------------
-
 class SVX_DLLPUBLIC SvxHFPage : public SfxTabPage
 {
     using TabPage::ActivatePage;
@@ -100,53 +98,41 @@ private:
     SVX_DLLPRIVATE void         ResetBackground_Impl( const SfxItemSet& rSet );
 };
 
-// class SvxHeaderPage ---------------------------------------------------
-
 class SVX_DLLPUBLIC SvxHeaderPage : public SvxHFPage
 {
 public:
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* rSet );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* rSet );
     // returns the Which values to the range
     static const sal_uInt16*  GetRanges() { return pRanges; }
     SVX_DLLPRIVATE SvxHeaderPage( vcl::Window* pParent, const SfxItemSet& rSet );
 };
 
-// class SvxFooterPage ---------------------------------------------------
-
 class SVX_DLLPUBLIC SvxFooterPage : public SvxHFPage
 {
 public:
-    static VclPtr<SfxTabPage> Create( vcl::Window* pParent, const SfxItemSet* rSet );
+    static VclPtr<SfxTabPage> Create( TabPageParent pParent, const SfxItemSet* rSet );
     static const sal_uInt16*  GetRanges() { return pRanges; }
     SVX_DLLPRIVATE SvxFooterPage(   vcl::Window* pParent, const SfxItemSet& rSet );
 };
 
-class SVX_DLLPUBLIC DeleteHeaderDialog
+class SVX_DLLPUBLIC DeleteHeaderDialog : public weld::MessageDialogController
 {
-private:
-    std::unique_ptr<weld::Builder> m_xBuilder;
-    std::unique_ptr<weld::MessageDialog> m_xDialog;
 public:
     DeleteHeaderDialog(weld::Widget* pParent)
-        : m_xBuilder(Application::CreateBuilder(pParent, "svx/ui/deleteheaderdialog.ui"))
-        , m_xDialog(m_xBuilder->weld_message_dialog("DeleteHeaderDialog"))
+        : MessageDialogController(pParent, "svx/ui/deleteheaderdialog.ui",
+                "DeleteHeaderDialog")
     {
     }
-    short run() { return m_xDialog->run(); }
 };
 
-class SVX_DLLPUBLIC DeleteFooterDialog
+class SVX_DLLPUBLIC DeleteFooterDialog : public weld::MessageDialogController
 {
-private:
-    std::unique_ptr<weld::Builder> m_xBuilder;
-    std::unique_ptr<weld::MessageDialog> m_xDialog;
 public:
     DeleteFooterDialog(weld::Widget* pParent)
-        : m_xBuilder(Application::CreateBuilder(pParent, "svx/ui/deletefooterdialog.ui"))
-        , m_xDialog(m_xBuilder->weld_message_dialog("DeleteFooterDialog"))
+        : MessageDialogController(pParent, "svx/ui/deletefooterdialog.ui",
+                "DeleteFooterDialog")
     {
     }
-    short run() { return m_xDialog->run(); }
 };
 
 #endif

@@ -14,7 +14,6 @@
 #include <i18nlangtag/mslangid.hxx>
 #include <svtools/popupwindowcontroller.hxx>
 #include <svtools/toolbarmenu.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
 #include <svx/numvset.hxx>
@@ -162,7 +161,7 @@ void NumberingPopup::VSSelectHdl(void const * pControl)
 
     if ( pControl == mpValueSet )
     {
-        sal_uInt16 nSelItem = mpValueSet->GetSelectItemId();
+        sal_uInt16 nSelItem = mpValueSet->GetSelectedItemId();
         if ( mePageType == NumberingPageType::BULLET )
         {
             auto aArgs( comphelper::InitPropertySequence( { { "SetBullet", css::uno::makeAny( nSelItem ) } } ) );
@@ -181,8 +180,7 @@ void NumberingPopup::VSSelectHdl(void const * pControl)
     }
     else if ( getSelectedEntryId() == 1 )
     {
-        auto aArgs( comphelper::InitPropertySequence( { { "Page", css::uno::makeAny( OUString("customize") ) },
-                                                        { "DialogParent", css::uno::makeAny(VCLUnoHelper::GetInterface(GetParent())) } } ) );
+        auto aArgs( comphelper::InitPropertySequence( { { "Page", css::uno::makeAny( OUString("customize") ) } } ) );
         mrController.dispatchCommand( ".uno:OutlineBullet", aArgs );
     }
 }

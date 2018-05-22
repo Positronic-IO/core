@@ -19,7 +19,6 @@
 
 #include <scitems.hxx>
 
-#include <comphelper/processfactory.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svditer.hxx>
 #include <svx/svdpage.hxx>
@@ -36,7 +35,6 @@
 #include <document.hxx>
 #include <dbdata.hxx>
 #include <global.hxx>
-#include <globstr.hrc>
 #include <progress.hxx>
 #include <conditio.hxx>
 #include <dpobject.hxx>
@@ -830,7 +828,8 @@ void ExcDocument::WriteXml( XclExpXmlStream& rStrm )
     uno::Reference<document::XDocumentPropertiesSupplier> xDPS( pDocShell->GetModel(), uno::UNO_QUERY_THROW );
     uno::Reference<document::XDocumentProperties> xDocProps = xDPS->getDocumentProperties();
 
-    rStrm.exportDocumentProperties( xDocProps );
+    rStrm.exportDocumentProperties(xDocProps);
+    rStrm.exportCustomFragments();
 
     sax_fastparser::FSHelperPtr& rWorkbook = rStrm.GetCurrentStream();
     rWorkbook->startElement( XML_workbook,

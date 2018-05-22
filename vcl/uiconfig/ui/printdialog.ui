@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.20.0 -->
 <interface domain="vcl">
-  <requires lib="gtk+" version="3.0"/>
+  <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">1</property>
@@ -217,7 +217,6 @@
                       <object class="GtkSpinButton" id="pageedit-nospin">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="invisible_char">●</property>
                         <property name="xalign">1</property>
                       </object>
                       <packing>
@@ -504,7 +503,6 @@
                                       <object class="GtkSpinButton" id="copycount">
                                         <property name="visible">True</property>
                                         <property name="can_focus">True</property>
-                                        <property name="invisible_char">●</property>
                                         <property name="adjustment">adjustment1</property>
                                       </object>
                                       <packing>
@@ -533,6 +531,7 @@
                                         <property name="sensitive">False</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
                                       </object>
@@ -588,6 +587,7 @@
                                         <property name="label" translatable="yes" context="printdialog|printallsheets">All sheets</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="no_show_all">True</property>
                                         <property name="xalign">0</property>
                                         <property name="active">True</property>
@@ -605,6 +605,7 @@
                                         <property name="label" translatable="yes" context="printdialog|printselectedsheets">Selected sheets</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="no_show_all">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
@@ -621,6 +622,7 @@
                                         <property name="label" translatable="yes" context="printdialog|printselectedcells">Selected cells</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="no_show_all">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
@@ -664,6 +666,7 @@
                                         <property name="label" translatable="yes" context="printdialog|printallpages">All pages</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="no_show_all">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
@@ -685,6 +688,7 @@
                                             <property name="label" translatable="yes" context="printdialog|printpages">Pages</property>
                                             <property name="can_focus">True</property>
                                             <property name="receives_default">False</property>
+                                            <property name="use_underline">True</property>
                                             <property name="no_show_all">True</property>
                                             <property name="xalign">0</property>
                                             <property name="draw_indicator">True</property>
@@ -700,7 +704,6 @@
                                           <object class="GtkEntry" id="pagerange">
                                             <property name="can_focus">True</property>
                                             <property name="no_show_all">True</property>
-                                            <property name="invisible_char">●</property>
                                           </object>
                                           <packing>
                                             <property name="expand">False</property>
@@ -720,6 +723,7 @@
                                         <property name="label" translatable="yes" context="printdialog|printselection">Selection</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="no_show_all">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
@@ -737,6 +741,7 @@
                                         <property name="visible">True</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="xalign">0</property>
                                         <property name="draw_indicator">True</property>
                                       </object>
@@ -1060,6 +1065,7 @@
                                         <property name="visible">True</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">False</property>
+                                        <property name="use_underline">True</property>
                                         <property name="xalign">0</property>
                                         <property name="active">True</property>
                                         <property name="draw_indicator">True</property>
@@ -1093,6 +1099,7 @@
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">False</property>
+                                    <property name="use_underline">True</property>
                                     <property name="xalign">0</property>
                                     <property name="active">True</property>
                                     <property name="draw_indicator">True</property>
@@ -1192,7 +1199,6 @@
                                   <object class="GtkSpinButton" id="pagecols">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment2</property>
                                   </object>
                                   <packing>
@@ -1204,7 +1210,6 @@
                                   <object class="GtkSpinButton" id="pagerows">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment2</property>
                                   </object>
                                   <packing>
@@ -1216,7 +1221,6 @@
                                   <object class="GtkSpinButton" id="pagemarginsb:0mm">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment3</property>
                                   </object>
                                   <packing>
@@ -1228,7 +1232,6 @@
                                   <object class="GtkSpinButton" id="sheetmarginsb:0mm">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
-                                    <property name="invisible_char">●</property>
                                     <property name="adjustment">adjustment3</property>
                                   </object>
                                   <packing>
@@ -1282,6 +1285,7 @@
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">False</property>
+                                    <property name="use_underline">True</property>
                                     <property name="halign">start</property>
                                     <property name="margin_left">12</property>
                                     <property name="xalign">0</property>
@@ -1450,10 +1454,11 @@
                             <property name="row_spacing">6</property>
                             <child>
                               <object class="GtkCheckButton" id="singleprintjob">
-                                <property name="label" translatable="yes" context="printdialog|singleprintjob">Create single print jobs for collated output</property>
+                                <property name="label" translatable="yes" context="printdialog|singleprintjob">Create separate print jobs for collated output</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
+                                <property name="use_underline">True</property>
                                 <property name="xalign">0</property>
                                 <property name="draw_indicator">True</property>
                               </object>
@@ -1467,6 +1472,7 @@
                                 <property name="label" translatable="yes" context="printdialog|printpaperfromsetup">Use only paper tray from printer preferences</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
+                                <property name="use_underline">True</property>
                                 <property name="xalign">0</property>
                                 <property name="draw_indicator">True</property>
                               </object>
@@ -1481,6 +1487,7 @@
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
+                                <property name="use_underline">True</property>
                                 <property name="no_show_all">True</property>
                                 <property name="xalign">0</property>
                                 <property name="draw_indicator">True</property>

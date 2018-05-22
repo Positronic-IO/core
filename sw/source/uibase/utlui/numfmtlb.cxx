@@ -18,7 +18,6 @@
  */
 
 #include <hintids.hxx>
-#include <comphelper/processfactory.hxx>
 #include <editeng/unolingu.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <i18nlangtag/lang.h>
@@ -26,7 +25,6 @@
 #include <svl/eitem.hxx>
 #include <svx/svxids.hrc>
 #include <svx/numinf.hxx>
-#include <vcl/msgbox.hxx>
 #include <vcl/builderfactory.hxx>
 #include <svx/flagsdef.hxx>
 #include <svl/itemset.hxx>

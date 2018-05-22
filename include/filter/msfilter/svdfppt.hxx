@@ -460,9 +460,9 @@ protected:
     PptDocumentAtom     aDocAtom;
     DffRecordManager    aDocRecManager;             // contains all first level container and atoms of the document container
 
-    ::std::vector< PPTOleEntry* > aOleObjectList;
+    ::std::vector< PPTOleEntry > aOleObjectList;
 
-    PptFontCollection*  m_pFonts;
+    std::unique_ptr<PptFontCollection> m_pFonts;
 
     sal_uInt32          nStreamLen;
 
@@ -483,6 +483,7 @@ public:
     void                RecolorGraphic( SvStream& rSt, sal_uInt32 nRecLen, Graphic& rGraph );
     virtual SdrObject*  ReadObjText( PPTTextObj* pTextObj, SdrObject* pObj, SdPageCapsule pPage ) const;
     virtual SdrObject*  ProcessObj( SvStream& rSt, DffObjData& rData, void* pData, tools::Rectangle& rTextRect, SdrObject* pObj ) override;
+    virtual void        NotifyFreeObj(void* pData, SdrObject* pObj) override;
     virtual void        ProcessClientAnchor2( SvStream& rSt, DffRecordHeader& rHd, void* pData, DffObjData& rObj ) override;
     void                ImportHeaderFooterContainer( DffRecordHeader const & rHeader, HeaderFooterEntry& rEntry );
 };
@@ -557,7 +558,7 @@ protected:
     bool                    bOk;
     PptUserEditAtom         aUserEditAtom;
     PptColorSchemeAtom      aPageColors;
-    ::std::vector< SdHyperlinkEntry* > aHyperList;
+    ::std::vector< SdHyperlinkEntry > aHyperList;
     std::unique_ptr<sal_uInt32[]>
                             pPersistPtr;
     sal_uInt32              nPersistPtrCnt;
@@ -565,19 +566,19 @@ protected:
     const PPTStyleSheet*    pPPTStyleSheet; // this is the current stylesheet;
     const PPTStyleSheet*    pDefaultSheet;  // this is a sheet we are using if no masterpage can be found, but that should
                                             // never happen just preventing a crash
-    PptSlidePersistList*    m_pMasterPages;
-    PptSlidePersistList*    m_pSlidePages;
-    PptSlidePersistList*    m_pNotePages;
-    sal_uInt16              nAktPageNum;
+    std::unique_ptr<PptSlidePersistList> m_pMasterPages;
+    std::unique_ptr<PptSlidePersistList> m_pSlidePages;
+    std::unique_ptr<PptSlidePersistList> m_pNotePages;
+    sal_uInt16              nCurrentPageNum;
     sal_uLong               nDocStreamPos;
     sal_uInt16              nPageColorsNum;
     PptPageKind             ePageColorsKind;
-    PptPageKind             eAktPageKind;
+    PptPageKind             eCurrentPageKind;
 
 protected:
     using SdrEscherImport::ReadObjText;
 
-    bool                    SeekToAktPage(DffRecordHeader* pRecHd) const;
+    bool                    SeekToCurrentPage(DffRecordHeader* pRecHd) const;
     bool                    SeekToDocument(DffRecordHeader* pRecHd) const;
     static bool             SeekToContentOfProgTag(
                                 sal_Int32 nVersion,
@@ -606,7 +607,7 @@ protected:
     SdrPage*                MakeBlancPage(bool bMaster) const;
     bool                    ReadFontCollection();
     PptSlidePersistList*    GetPageList(PptPageKind ePageKind) const;
-    sal_uInt32              GetAktPageId();
+    sal_uInt32              GetCurrentPageId();
     sal_uInt32              GetMasterPageId(sal_uInt16 nPageNum, PptPageKind ePageKind) const;
     sal_uInt32              GetNotesPageId(sal_uInt16 nPageNum ) const;
     static SdrOutliner*     GetDrawOutliner( SdrTextObj const * pSdrText );
@@ -673,7 +674,7 @@ struct PPTTextSpecInfo
 struct  PPTTextSpecInfoAtomInterpreter
 {
     bool                bValid;
-    ::std::vector< PPTTextSpecInfo* > aList;
+    ::std::vector< PPTTextSpecInfo > aList;
 
                     PPTTextSpecInfoAtomInterpreter();
                     ~PPTTextSpecInfoAtomInterpreter();
@@ -719,11 +720,10 @@ struct PPTBuGraEntry
 
 class PPTExtParaProv
 {
-    ::std::vector< PPTBuGraEntry* > aBuGraList;
+    ::std::vector< std::unique_ptr<PPTBuGraEntry> > aBuGraList;
 
 public:
     bool                bStyles;
-    bool                bGraphics;
     DffRecordManager    aExtendedPresRules;
 
     o3tl::enumarray<TSS_Type, PPTExtParaSheet> aExtParaSheet;
@@ -1051,14 +1051,11 @@ struct StyleTextProp9
     void Read( SvStream& rSt );
 };
 
-typedef std::vector<PPTParaPropSet*> PPTParaPropSetList;
-typedef std::vector<PPTCharPropSet*> PPTCharPropSetList;
-
 struct PPTStyleTextPropReader
 {
     std::vector< sal_uInt32 >  aSpecMarkerList;    // hiword -> Flags, loword -> Position
-    PPTParaPropSetList         aParaPropList;
-    PPTCharPropSetList         aCharPropList;
+    std::vector<std::unique_ptr<PPTParaPropSet>> aParaPropList;
+    std::vector<std::unique_ptr<PPTCharPropSet>> aCharPropList;
 
             PPTStyleTextPropReader(
                 SvStream& rIn,

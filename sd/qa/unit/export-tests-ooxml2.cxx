@@ -123,6 +123,7 @@ public:
     void testGroupsPosition();
     void testGroupsRotatedPosition();
     void testAccentColor();
+    void testThemeColors();
     void testTdf114848();
     void testTdf68759();
     void testTdf90626();
@@ -131,8 +132,16 @@ public:
     void testFontScale();
     void testTdf115394();
     void testTdf115394Zero();
-    void testBulletsAsImage();
+    void testTdf115005();
+    int testTdf115005_FallBack_Images(bool bAddReplacementImages);
+    void testTdf115005_FallBack_Images_On();
+    void testTdf115005_FallBack_Images_Off();
     void testTdf111789();
+    /// SmartArt animated elements
+    void testTdf104792();
+    void testTdf90627();
+    void testTdf104786();
+    void testTdf104789();
 
     CPPUNIT_TEST_SUITE(SdOOXMLExportTest2);
 
@@ -181,6 +190,7 @@ public:
     CPPUNIT_TEST(testGroupsPosition);
     CPPUNIT_TEST(testGroupsRotatedPosition);
     CPPUNIT_TEST(testAccentColor);
+    CPPUNIT_TEST(testThemeColors);
     CPPUNIT_TEST(testTdf114848);
     CPPUNIT_TEST(testTdf68759);
     CPPUNIT_TEST(testTdf90626);
@@ -189,8 +199,14 @@ public:
     CPPUNIT_TEST(testFontScale);
     CPPUNIT_TEST(testTdf115394);
     CPPUNIT_TEST(testTdf115394Zero);
-    CPPUNIT_TEST(testBulletsAsImage);
+    CPPUNIT_TEST(testTdf115005);
+    CPPUNIT_TEST(testTdf115005_FallBack_Images_On);
+    CPPUNIT_TEST(testTdf115005_FallBack_Images_Off);
     CPPUNIT_TEST(testTdf111789);
+    CPPUNIT_TEST(testTdf104792);
+    CPPUNIT_TEST(testTdf90627);
+    CPPUNIT_TEST(testTdf104786);
+    CPPUNIT_TEST(testTdf104789);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -1320,6 +1336,18 @@ void SdOOXMLExportTest2::testAccentColor()
     assertXPath(pXmlDocTheme2, "/a:theme/a:themeElements/a:clrScheme/a:accent6/a:srgbClr", "val", "deb340");
 }
 
+void SdOOXMLExportTest2::testThemeColors()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf84205.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    xDocShRef->DoClose();
+
+    xmlDocPtr pXmlDocTheme2 = parseExport(tempFile, "ppt/theme/theme2.xml");
+    assertXPath(pXmlDocTheme2, "/a:theme/a:themeElements/a:clrScheme/a:dk2/a:srgbClr", "val", "44546a");
+    assertXPath(pXmlDocTheme2, "/a:theme/a:themeElements/a:clrScheme/a:accent3/a:srgbClr", "val", "a5a5a5");
+}
+
 void SdOOXMLExportTest2::testTdf114848()
 {
     ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf114848.pptx"), PPTX);
@@ -1475,30 +1503,73 @@ void SdOOXMLExportTest2::testTdf115394Zero()
     xDocShRef->DoClose();
 }
 
-void SdOOXMLExportTest2::testBulletsAsImage()
+void SdOOXMLExportTest2::testTdf115005()
 {
-    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/BulletsAsImage.odp"), ODP);
+    sd::DrawDocShellRef xDocShRefOriginal = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/tdf115005.odp"), ODP);
     utl::TempFile tempFile;
-    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    sd::DrawDocShellRef xDocShRefResaved = saveAndReload(xDocShRefOriginal.get(), ODP, &tempFile);
 
-    uno::Reference<beans::XPropertySet> xShape(getShapeFromPage(0, 0, xDocShRef));
-    uno::Reference<text::XTextRange> const xParagraph(getParagraphFromShape(0, xShape));
-    uno::Reference<beans::XPropertySet> xPropSet(xParagraph, uno::UNO_QUERY_THROW);
+    // additional checks of the output file
+    uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory), tempFile.GetURL());
 
-    uno::Reference<container::XIndexAccess> xLevels(xPropSet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
-    uno::Sequence<beans::PropertyValue> aProperties;
-    xLevels->getByIndex(0) >>= aProperties; // 1st level
-    uno::Reference<awt::XBitmap> xBitmap;
-    for (const beans::PropertyValue& rProperty : aProperties)
+    // check that the document contains original vector images
+    const uno::Sequence<OUString> names = xNameAccess->getElementNames();
+    int nSVMFiles = 0;
+    for (int i=0; i<names.getLength(); i++)
     {
-        if (rProperty.Name == "GraphicBitmap")
-        {
-            xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
-        }
+        if(names[i].endsWith(".svm"))
+            nSVMFiles++;
     }
-    CPPUNIT_ASSERT_MESSAGE("No bitmap for the bullets", xBitmap.is());
+    CPPUNIT_ASSERT_EQUAL(3, nSVMFiles);
+}
 
-    xDocShRef->DoClose();
+int SdOOXMLExportTest2::testTdf115005_FallBack_Images(bool bAddReplacementImages)
+{
+    sd::DrawDocShellRef xDocShRefOriginal = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/tdf115005_no_fallback_images.odp"), ODP);
+
+    // check if fallback images were not created if AddReplacementImages=true/false
+    // set AddReplacementImages
+    {
+        std::shared_ptr<comphelper::ConfigurationChanges> batch( comphelper::ConfigurationChanges::create() );
+        if ( !officecfg::Office::Common::Save::Graphic::AddReplacementImages::isReadOnly() )
+            officecfg::Office::Common::Save::Graphic::AddReplacementImages::set(bAddReplacementImages, batch);
+        batch->commit();
+    }
+
+    // save the file with already set options
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRefResaved = saveAndReload(xDocShRefOriginal.get(), ODP, &tempFile);
+
+    // additional checks of the output file
+    uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory), tempFile.GetURL());
+
+    // check that the document contains original vector images
+    const uno::Sequence<OUString> names = xNameAccess->getElementNames();
+    int nSVMFiles = 0;
+    int nPNGFiles = 0;
+    for (int i=0; i<names.getLength(); i++)
+    {
+        if(names[i].endsWith(".svm"))
+            nSVMFiles++;
+        if(names[i].endsWith(".png"))
+            nPNGFiles++;
+    }
+
+    // check results
+    CPPUNIT_ASSERT_EQUAL(1, nSVMFiles);
+    return nPNGFiles;
+}
+
+void SdOOXMLExportTest2::testTdf115005_FallBack_Images_On()
+{
+    const int nPNGFiles = testTdf115005_FallBack_Images(true);
+    CPPUNIT_ASSERT_EQUAL(1, nPNGFiles);
+}
+
+void SdOOXMLExportTest2::testTdf115005_FallBack_Images_Off()
+{
+    const int nPNGFiles = testTdf115005_FallBack_Images(false);
+    CPPUNIT_ASSERT_EQUAL(0, nPNGFiles);
 }
 
 void SdOOXMLExportTest2::testTdf111789()
@@ -1534,6 +1605,58 @@ void SdOOXMLExportTest2::testTdf111789()
         xShape->getPropertyValue("Shadow") >>= bHasShadow;
         CPPUNIT_ASSERT(!bHasShadow);
     }
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf104792()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(
+        m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf104792-smart-art-animation.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    xmlDocPtr pXmlDocContent = parseExport(tempFile, "ppt/slides/slide1.xml");
+    assertXPath(pXmlDocContent, "/p:sld/p:timing/p:tnLst/p:par/p:cTn/p:childTnLst[1]/p:seq/p:cTn/p:childTnLst[1]/p:par[1]/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:childTnLst[1]/p:set/p:cBhvr/p:tgtEl/p:spTgt", 1);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf90627()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/tdf90627.odp"), ODP);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    xmlDocPtr pXmlDocContent = parseExport(tempFile, "ppt/slides/slide1.xml");
+    // Don't export empty conditions
+    assertXPath(pXmlDocContent, "/p:sld/p:timing/p:tnLst/p:par/p:cTn/p:childTnLst[1]/p:seq/p:cTn/p:childTnLst[1]/p:par[2]/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:endCondLst", 0);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf104786()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf104786.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    xmlDocPtr pXmlDocContent = parseExport(tempFile, "ppt/slides/slide2.xml");
+    // Don't export empty 'to'
+    assertXPath(pXmlDocContent, "/p:sld/p:timing/p:tnLst/p:par/p:cTn/p:childTnLst[1]/p:seq/p:cTn/p:childTnLst[1]/p:par[2]/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:childTnLst[1]/p:par/p:cTn/p:childTnLst/p:set[2]/p:to", 0);
+
+    xDocShRef->DoClose();
+}
+
+void SdOOXMLExportTest2::testTdf104789()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf104789.pptx"), PPTX);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+
+    xmlDocPtr pXmlDocContent = parseExport(tempFile, "ppt/slides/slide1.xml");
+    OUString sAttributeName = getXPathContent(pXmlDocContent, "/p:sld/p:timing/p:tnLst/p:par/p:cTn/p:childTnLst/p:seq/p:cTn/p:childTnLst/p:par/p:cTn/p:childTnLst/p:par/p:cTn/p:childTnLst/p:par/p:cTn/p:childTnLst/p:set/p:cBhvr/p:attrNameLst/p:attrName");
+    CPPUNIT_ASSERT_EQUAL(OUString("style.opacity"), sAttributeName);
 
     xDocShRef->DoClose();
 }

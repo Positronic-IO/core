@@ -96,15 +96,12 @@
 #include <svx/svxids.hrc>
 #include <vcl/unohelp.hxx>
 #include <tools/diagnose_ex.h>
-#include <vcl/msgbox.hxx>
 #include <vcl/stdtext.hxx>
 #include <vcl/wrkwin.hxx>
 #include <sal/macros.h>
 
 #include <limits>
 #include <memory>
-
-#define GRAPHOBJ_URLPREFIX "vnd.sun.star.GraphicObject:"
 
 extern "C" void createRegistryInfo_FormComponentPropertyHandler()
 {
@@ -320,9 +317,7 @@ namespace pcr
         if ( PROPERTY_ID_IMAGE_URL == nPropId && ( _rValue >>= xGrfObj ) )
         {
             DBG_ASSERT( xGrfObj.is(), "FormComponentPropertyHandler::setPropertyValue() xGrfObj is invalid");
-            OUString sObjectID(  GRAPHOBJ_URLPREFIX  );
-            sObjectID = sObjectID + xGrfObj->getUniqueID();
-            m_xComponent->setPropertyValue( _rPropertyName, uno::makeAny( sObjectID ) );
+            m_xComponent->setPropertyValue(PROPERTY_GRAPHIC, uno::makeAny(xGrfObj->getGraphic()));
         }
         else if ( PROPERTY_ID_FONT == nPropId )
         {
@@ -1163,7 +1158,7 @@ namespace pcr
 
                 Optional< double > aValueNotPresent( false, 0 );
                 aDescriptor.Control = PropertyHandlerHelper::createNumericControl(
-                    _rxControlFactory, nDigits, aValueNotPresent, aValueNotPresent, false );
+                    _rxControlFactory, nDigits, aValueNotPresent, aValueNotPresent );
 
                 Reference< XNumericControl > xNumericControl( aDescriptor.Control, UNO_QUERY_THROW );
                 if ( nValueUnit != -1 )
@@ -1187,10 +1182,10 @@ namespace pcr
                 ||  ( nPropId == PROPERTY_ID_SHOW_FILTERSORT )
                 )
             {
-                aDescriptor.Control = PropertyHandlerHelper::createListBoxControl(_rxControlFactory, RID_RSC_ENUM_SHOWHIDE, SAL_N_ELEMENTS(RID_RSC_ENUM_SHOWHIDE), false, false);
+                aDescriptor.Control = PropertyHandlerHelper::createListBoxControl(_rxControlFactory, RID_RSC_ENUM_SHOWHIDE, SAL_N_ELEMENTS(RID_RSC_ENUM_SHOWHIDE), false);
             }
             else
-                aDescriptor.Control = PropertyHandlerHelper::createListBoxControl(_rxControlFactory, RID_RSC_ENUM_YESNO, SAL_N_ELEMENTS(RID_RSC_ENUM_YESNO), false, false);
+                aDescriptor.Control = PropertyHandlerHelper::createListBoxControl(_rxControlFactory, RID_RSC_ENUM_YESNO, SAL_N_ELEMENTS(RID_RSC_ENUM_YESNO), false);
             bNeedDefaultStringIfVoidAllowed = true;
         }
 
@@ -1232,7 +1227,7 @@ namespace pcr
 
             // create the control
             if ( PROPERTY_ID_TARGET_FRAME == nPropId )
-                aDescriptor.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aListEntries, false, false );
+                aDescriptor.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aListEntries, false );
             else
             {
                 aDescriptor.Control = PropertyHandlerHelper::createListBoxControl( _rxControlFactory, aListEntries, false, false );
@@ -1272,7 +1267,7 @@ namespace pcr
                     aMinValue.Value = 0;
 
                 aDescriptor.Control = PropertyHandlerHelper::createNumericControl(
-                    _rxControlFactory, 0, aMinValue, aMaxValue, false );
+                    _rxControlFactory, 0, aMinValue, aMaxValue );
             }
             break;
 
@@ -1282,7 +1277,7 @@ namespace pcr
                 Optional< double > aMaxValue( true, 20 );
 
                 aDescriptor.Control = PropertyHandlerHelper::createNumericControl(
-                    _rxControlFactory, 0, aMinValue, aMaxValue, false );
+                    _rxControlFactory, 0, aMinValue, aMaxValue );
             }
             break;
 
@@ -1299,7 +1294,7 @@ namespace pcr
                 aListEntries.resize( aDatasources.getLength() );
                 std::copy( aDatasources.begin(), aDatasources.end(), aListEntries.begin() );
                 aDescriptor.Control = PropertyHandlerHelper::createComboBoxControl(
-                    _rxControlFactory, aListEntries, false, true );
+                    _rxControlFactory, aListEntries, true );
             }
             break;
 
@@ -1308,7 +1303,7 @@ namespace pcr
                 std::vector< OUString > aFieldNames;
                 impl_initFieldList_nothrow( aFieldNames );
                 aDescriptor.Control = PropertyHandlerHelper::createComboBoxControl(
-                    _rxControlFactory, aFieldNames, false, false );
+                    _rxControlFactory, aFieldNames, false );
             }
             break;
 
@@ -1724,13 +1719,10 @@ namespace pcr
 
         }   // switch ( nActuatingPropId )
 
-        for ( std::vector< PropertyId >::const_iterator loopAffected = aDependentProperties.begin();
-              loopAffected != aDependentProperties.end();
-              ++loopAffected
-            )
+        for (auto const& dependentProperty : aDependentProperties)
         {
-            if ( impl_isSupportedProperty_nothrow( *loopAffected ) )
-                impl_updateDependentProperty_nothrow( *loopAffected, _rxInspectorUI );
+            if ( impl_isSupportedProperty_nothrow(dependentProperty) )
+                impl_updateDependentProperty_nothrow(dependentProperty, _rxInspectorUI);
         }
     }
 
@@ -1941,8 +1933,8 @@ namespace pcr
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::impl_updateDependentProperty_nothrow: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -2018,8 +2010,8 @@ namespace pcr
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::onNewComponent: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -2272,8 +2264,8 @@ namespace pcr
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::impl_getRowSet_nothrow: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
         return xReturn;
     }
@@ -2307,8 +2299,8 @@ namespace pcr
         }
         catch (const Exception&)
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::impl_initFieldList_nothrow: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -2346,7 +2338,7 @@ namespace pcr
         }
         catch ( const SQLException& ) { aError = SQLExceptionInfo( ::cppu::getCaughtException() ); }
         catch ( const WrappedTargetException& e ) { aError = SQLExceptionInfo( e.TargetException ); }
-        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION(); }
+        catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("extensions.propctrlr"); }
 
         // report errors, if necessary
         if ( aError.isValid() )
@@ -2358,8 +2350,8 @@ namespace pcr
             }
             catch( const Exception& )
             {
+                DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
                 OSL_FAIL( "FormComponentPropertyHandler::impl_ensureRowsetConnection_nothrow: caught an exception during error handling!" );
-                DBG_UNHANDLED_EXCEPTION();
             }
             // additional info about what happened
             INetURLObject aParser( sDataSourceName );
@@ -2406,7 +2398,7 @@ namespace pcr
                     else
                         impl_fillQueryNames_throw( aNames );
                 }
-                _out_rProperty.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aNames, false, true );
+                _out_rProperty.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aNames, true );
             }
             break;
 
@@ -2417,8 +2409,8 @@ namespace pcr
         }
         catch (const Exception&)
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL("FormComponentPropertyHandler::impl_describeCursorSource_nothrow: caught an exception !");
-            DBG_UNHANDLED_EXCEPTION();
         }
     }
 
@@ -2516,7 +2508,7 @@ namespace pcr
                 else
                     impl_fillTableNames_throw( aListEntries );
             }
-            _out_rDescriptor.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aListEntries, false, false );
+            _out_rDescriptor.Control = PropertyHandlerHelper::createComboBoxControl( _rxControlFactory, aListEntries, false );
         }
         break;
         case ListSourceType_SQL:
@@ -2590,8 +2582,8 @@ namespace pcr
         catch (const SQLException& e) { aErrorInfo = e; }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::impl_dialogFilterOrSort_nothrow: caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
 
         if ( aErrorInfo.isValid() )
@@ -2685,8 +2677,8 @@ namespace pcr
         }
         catch( const Exception& )
         {
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             OSL_FAIL( "FormComponentPropertyHandler::impl_dialogFormatting_nothrow: : caught an exception!" );
-            DBG_UNHANDLED_EXCEPTION();
         }
         return bChanged;
     }
@@ -2696,9 +2688,10 @@ namespace pcr
         bool bIsLink = true;// reflect the legacy behavior
         OUString aStrTrans = m_pInfoService->getPropertyTranslation( PROPERTY_ID_IMAGE_URL );
 
+        vcl::Window* pWin = impl_getDefaultDialogParent_nothrow();
         ::sfx2::FileDialogHelper aFileDlg(
                 ui::dialogs::TemplateDescription::FILEOPEN_LINK_PREVIEW,
-                FileDialogFlags::Graphic, impl_getDefaultDialogParent_nothrow());
+                FileDialogFlags::Graphic, pWin ? pWin->GetFrameWeld() : nullptr);
 
         aFileDlg.SetTitle(aStrTrans);
         // non-linked images ( e.g. those located in the document
@@ -2729,7 +2722,7 @@ namespace pcr
 
         OUString sCurValue;
         OSL_VERIFY( impl_getPropertyValue_throw( PROPERTY_IMAGE_URL ) >>= sCurValue );
-        if ( !sCurValue.isEmpty() && !sCurValue.startsWith(GRAPHOBJ_URLPREFIX) )
+        if (!sCurValue.isEmpty())
         {
             aFileDlg.SetDisplayDirectory( sCurValue );
             // TODO: need to set the display directory _and_ the default name
@@ -2746,11 +2739,10 @@ namespace pcr
             if ( !bIsLink )
             {
                 Graphic aGraphic;
-                aFileDlg.GetGraphic( aGraphic );
+                aFileDlg.GetGraphic(aGraphic);
 
                 Reference< graphic::XGraphicObject > xGrfObj = graphic::GraphicObject::create( m_xContext );
                 xGrfObj->setGraphic( aGraphic.GetXGraphic() );
-
 
                 _out_rNewValue <<= xGrfObj;
 
@@ -2763,9 +2755,10 @@ namespace pcr
 
     bool FormComponentPropertyHandler::impl_browseForTargetURL_nothrow( Any& _out_rNewValue, ::osl::ClearableMutexGuard& _rClearBeforeDialog ) const
     {
+        vcl::Window* pWin = impl_getDefaultDialogParent_nothrow();
         ::sfx2::FileDialogHelper aFileDlg(
                 ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION,
-                FileDialogFlags::NONE, impl_getDefaultDialogParent_nothrow());
+                FileDialogFlags::NONE, pWin ? pWin->GetFrameWeld() : nullptr);
 
         OUString sURL;
         OSL_VERIFY( impl_getPropertyValue_throw( PROPERTY_TARGET_URL ) >>= sURL );
@@ -2817,9 +2810,10 @@ namespace pcr
 
     bool FormComponentPropertyHandler::impl_browseForDatabaseDocument_throw( Any& _out_rNewValue, ::osl::ClearableMutexGuard& _rClearBeforeDialog ) const
     {
+        vcl::Window* pWin = impl_getDefaultDialogParent_nothrow();
         ::sfx2::FileDialogHelper aFileDlg(
                 ui::dialogs::TemplateDescription::FILEOPEN_READONLY_VERSION, FileDialogFlags::NONE,
-                "sdatabase", SfxFilterFlags::NONE, SfxFilterFlags::NONE, impl_getDefaultDialogParent_nothrow());
+                "sdatabase", SfxFilterFlags::NONE, SfxFilterFlags::NONE, pWin ? pWin->GetFrameWeld() : nullptr);
 
         OUString sDataSource;
         OSL_VERIFY( impl_getPropertyValue_throw( PROPERTY_DATASOURCE ) >>= sDataSource );
@@ -2847,9 +2841,8 @@ namespace pcr
 
     bool FormComponentPropertyHandler::impl_dialogColorChooser_throw( sal_Int32 _nColorPropertyId, Any& _out_rNewValue, ::osl::ClearableMutexGuard& _rClearBeforeDialog ) const
     {
-        sal_Int32 nColor = 0;
-        OSL_VERIFY( impl_getPropertyValue_throw( impl_getPropertyNameFromId_nothrow( _nColorPropertyId ) ) >>= nColor );
-        ::Color aColor( nColor );
+        ::Color aColor;
+        OSL_VERIFY( impl_getPropertyValue_throw( impl_getPropertyNameFromId_nothrow( _nColorPropertyId ) ) >>= aColor );
         SvColorDialog aColorDlg( impl_getDefaultDialogParent_nothrow() );
         aColorDlg.SetColor( aColor );
 
@@ -2857,9 +2850,7 @@ namespace pcr
         if ( !aColorDlg.Execute() )
             return false;
 
-        aColor = aColorDlg.GetColor();
-        nColor = aColor.GetColor();
-        _out_rNewValue <<= nColor;
+        _out_rNewValue <<= aColorDlg.GetColor();
         return true;
     }
 
@@ -3148,7 +3139,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return m_xCommandDesigner.is();
     }
@@ -3174,7 +3165,7 @@ namespace pcr
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
             }
         }
     }
@@ -3203,8 +3194,8 @@ namespace pcr
             }
             catch( const Exception& )
             {
+                DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
                 OSL_FAIL( "FormComponentPropertyHandler::impl_hasValidDataSourceSignature_nothrow: caught an exception!" );
-                DBG_UNHANDLED_EXCEPTION();
             }
         }
         return bHas;
@@ -3221,7 +3212,7 @@ namespace pcr
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("extensions.propctrlr");
         }
         return sURL;
     }

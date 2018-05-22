@@ -93,6 +93,7 @@ void VCartesianCoordinateSystem::createVAxisList(
               const uno::Reference<chart2::XChartDocument> & xChartDoc
             , const awt::Size& rFontReferenceSize
             , const awt::Rectangle& rMaximumSpaceForLabels
+            , bool bLimitSpaceForLabels
             )
 {
     // note: using xChartDoc itself as XNumberFormatsSupplier would cause
@@ -125,6 +126,7 @@ void VCartesianCoordinateSystem::createVAxisList(
             aAxisProperties.m_nDimensionIndex = nDimensionIndex;
             aAxisProperties.m_bSwapXAndY = bSwapXAndY;
             aAxisProperties.m_bIsMainAxis = (nAxisIndex==0);
+            aAxisProperties.m_bLimitSpaceForLabels = bLimitSpaceForLabels;
             Reference< XAxis > xCrossingMainAxis( AxisHelper::getCrossingMainAxis( xAxis, m_xCooSysModel ) );
             if( xCrossingMainAxis.is() )
             {
@@ -165,15 +167,13 @@ void VCartesianCoordinateSystem::initVAxisInList()
     sal_Int32 nDimensionCount = m_xCooSysModel->getDimension();
     bool bSwapXAndY = getPropertySwapXAndYAxis();
 
-    tVAxisMap::iterator aIt( m_aAxisMap.begin() );
-    tVAxisMap::const_iterator aEnd( m_aAxisMap.end() );
-    for( ; aIt != aEnd; ++aIt )
+    for (auto const& elem : m_aAxisMap)
     {
-        VAxisBase* pVAxis = aIt->second.get();
+        VAxisBase* pVAxis = elem.second.get();
         if( pVAxis )
         {
-            sal_Int32 nDimensionIndex = aIt->first.first;
-            sal_Int32 nAxisIndex = aIt->first.second;
+            sal_Int32 nDimensionIndex = elem.first.first;
+            sal_Int32 nAxisIndex = elem.first.second;
             pVAxis->setExplicitScaleAndIncrement( getExplicitScale( nDimensionIndex, nAxisIndex ), getExplicitIncrement( nDimensionIndex, nAxisIndex ) );
             pVAxis->initPlotter(m_xLogicTargetForAxes,m_xFinalTarget,m_xShapeFactory
                 , createCIDForAxis( nDimensionIndex, nAxisIndex ) );
@@ -192,15 +192,13 @@ void VCartesianCoordinateSystem::updateScalesAndIncrementsOnAxes()
     sal_Int32 nDimensionCount = m_xCooSysModel->getDimension();
     bool bSwapXAndY = getPropertySwapXAndYAxis();
 
-    tVAxisMap::iterator aIt( m_aAxisMap.begin() );
-    tVAxisMap::const_iterator aEnd( m_aAxisMap.end() );
-    for( ; aIt != aEnd; ++aIt )
+    for (auto const& elem : m_aAxisMap)
     {
-        VAxisBase* pVAxis = aIt->second.get();
+        VAxisBase* pVAxis = elem.second.get();
         if( pVAxis )
         {
-            sal_Int32 nDimensionIndex = aIt->first.first;
-            sal_Int32 nAxisIndex = aIt->first.second;
+            sal_Int32 nDimensionIndex = elem.first.first;
+            sal_Int32 nAxisIndex = elem.first.second;
             pVAxis->setExplicitScaleAndIncrement( getExplicitScale( nDimensionIndex, nAxisIndex ), getExplicitIncrement( nDimensionIndex, nAxisIndex ) );
             if(nDimensionCount==2)
                 pVAxis->setTransformationSceneToScreen( m_aMatrixSceneToScreen );

@@ -25,7 +25,6 @@
 #include <osl/file.hxx>
 
 #include <stdlib.h>
-#include <vcl/msgbox.hxx>
 #include <rtl/ustring.hxx>
 #include <svl/itempool.hxx>
 #include <svl/aeitem.hxx>
@@ -68,8 +67,6 @@
 #include <appdata.hxx>
 #include <workwin.hxx>
 #include <helper.hxx>
-#include <sfx2/strings.hrc>
-#include <sfx2/sfxresid.hxx>
 #include "shutdownicon.hxx"
 
 using namespace ::com::sun::star::uno;

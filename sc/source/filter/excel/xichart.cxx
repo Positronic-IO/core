@@ -74,6 +74,7 @@
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
 #include <com/sun/star/chart2/data/XDataSink.hpp>
 #include <com/sun/star/chart2/data/LabeledDataSequence.hpp>
+#include <comphelper/processfactory.hxx>
 #include <o3tl/numeric.hxx>
 #include <o3tl/make_unique.hxx>
 #include <sfx2/objsh.hxx>
@@ -1872,6 +1873,11 @@ void XclImpChSeries::SetDataLabel( const XclImpChTextRef& xLabel )
 void XclImpChSeries::AddChildSeries( const XclImpChSeries& rSeries )
 {
     OSL_ENSURE( !HasParentSeries(), "XclImpChSeries::AddChildSeries - not allowed for child series" );
+    if (&rSeries == this)
+    {
+        SAL_WARN("sc.filter", "self add attempt");
+        return;
+    }
 
     /*  In Excel, trend lines and error bars are stored as own series. In Calc,
         these are properties of the parent series. This function adds the
@@ -3368,15 +3374,19 @@ Reference< XAxis > XclImpChAxis::CreateAxis( const XclImpChTypeGroup& rTypeGroup
         {
             case cssc2::AxisType::CATEGORY:
             case cssc2::AxisType::SERIES:
-                OSL_ENSURE( mxLabelRange, "Missing Label Range" );
                 // #i71684# radar charts have reversed rotation direction
                 if (mxLabelRange)
                     mxLabelRange->Convert( aAxisProp, aScaleData, rTypeInfo.meTypeCateg == EXC_CHTYPECATEG_RADAR );
+                else
+                    SAL_WARN("sc.filter", "missing LabelRange");
             break;
             case cssc2::AxisType::REALNUMBER:
             case cssc2::AxisType::PERCENT:
                 // #i85167# pie/donut charts have reversed rotation direction (at Y axis!)
-                mxValueRange->Convert( aScaleData, rTypeInfo.meTypeCateg == EXC_CHTYPECATEG_PIE );
+                if (mxValueRange)
+                    mxValueRange->Convert( aScaleData, rTypeInfo.meTypeCateg == EXC_CHTYPECATEG_PIE );
+                else
+                    SAL_WARN("sc.filter", "missing ValueRange");
             break;
             default:
                 OSL_FAIL( "XclImpChAxis::CreateAxis - unknown axis type" );
@@ -3425,12 +3435,18 @@ void XclImpChAxis::ConvertAxisPosition( ScfPropertySet& rPropSet, const XclImpCh
 {
     if( ((GetAxisType() == EXC_CHAXIS_X) && rTypeGroup.GetTypeInfo().mbCategoryAxis) || (GetAxisType() == EXC_CHAXIS_Z) )
     {
-        OSL_ENSURE( mxLabelRange, "Missing Label Range" );
         if (mxLabelRange)
             mxLabelRange->ConvertAxisPosition( rPropSet, rTypeGroup.Is3dChart() );
+        else
+            SAL_WARN("sc.filter", "missing LabelRange");
     }
     else
-        mxValueRange->ConvertAxisPosition( rPropSet );
+    {
+        if (mxValueRange)
+            mxValueRange->ConvertAxisPosition( rPropSet );
+        else
+            SAL_WARN("sc.filter", "missing ValueRange");
+    }
 }
 
 void XclImpChAxis::ReadChAxisLine( XclImpStream& rStrm )
@@ -4206,7 +4222,7 @@ void XclImpChartDrawing::ConvertObjects( XclImpDffConverter& rDffConv,
             Reference< XDrawPageSupplier > xDrawPageSupp( rxModel, UNO_QUERY_THROW );
             Reference< XDrawPage > xDrawPage( xDrawPageSupp->getDrawPage(), UNO_SET_THROW );
             pSdrPage = ::GetSdrPageFromXDrawPage( xDrawPage );
-            pSdrModel = pSdrPage ? pSdrPage->GetModel() : nullptr;
+            pSdrModel = pSdrPage ? &pSdrPage->getSdrModelFromSdrPage() : nullptr;
         }
         catch( Exception& )
         {

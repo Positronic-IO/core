@@ -742,21 +742,10 @@ rtl_cache_type * rtl_cache_activate(
         cache->m_source = source;
 
         slabsize = source->m_quantum; /* minimum slab size */
-        if (flags & RTL_CACHE_FLAG_QUANTUMCACHE)
+        /* waste at most 1/8 of slab */
+        if(slabsize < cache->m_type_size * 8)
         {
-            /* next power of 2 above 3 * qcache_max */
-            if (slabsize < ((sal_Size(1)) << highbit(3 * source->m_qcache_max)))
-            {
-                slabsize = ((sal_Size(1)) << highbit(3 * source->m_qcache_max));
-            }
-        }
-        else
-        {
-            /* waste at most 1/8 of slab */
-            if(slabsize < cache->m_type_size * 8)
-            {
-                slabsize = cache->m_type_size * 8;
-            }
+            slabsize = cache->m_type_size * 8;
         }
 
         slabsize = RTL_MEMORY_P2ROUNDUP(slabsize, source->m_quantum);
@@ -1153,7 +1142,7 @@ void SAL_CALL rtl_cache_free(
 }
 
 // FIXME: foreachFn called for free'd blocks and will break free-chains.
-void rtl_cache_foreach(rtl_cache_type *cache, ArenaForeachFn foreachFn, void *user_data)
+void rtl_cache_foreach(rtl_cache_type *cache, ArenaForeachFn foreachFn)
 {
     for (rtl_cache_slab_type *cur = &(cache->m_used_head);
          cur && cur->m_slab_next != &(cache->m_used_head);
@@ -1163,7 +1152,7 @@ void rtl_cache_foreach(rtl_cache_type *cache, ArenaForeachFn foreachFn, void *us
              item < reinterpret_cast<char *>(cur->m_bp);
              item += cache->m_type_size)
         {
-            foreachFn(item, cache->m_type_size, user_data);
+            foreachFn(item, cache->m_type_size);
         }
     }
 

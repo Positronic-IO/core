@@ -91,7 +91,7 @@ class SM_DLLPUBLIC SmDocShell : public SfxObjectShell, public SfxListener
     SvtLinguOptions     maLinguOptions;
     std::unique_ptr<SmTableNode> mpTree;
     SfxItemPool        *mpEditEngineItemPool;
-    EditEngine         *mpEditEngine;
+    std::unique_ptr<EditEngine> mpEditEngine;
     VclPtr<SfxPrinter>  mpPrinter;       //q.v. comment to SmPrinter Access!
     VclPtr<Printer>     mpTmpPrinter;    //ditto
     sal_uInt16          mnModifyCount;
@@ -106,7 +106,7 @@ class SM_DLLPUBLIC SmDocShell : public SfxObjectShell, public SfxListener
 
     virtual void        Draw(OutputDevice *pDevice,
                              const JobSetup & rSetup,
-                             sal_uInt16 nAspect = ASPECT_CONTENT) override;
+                             sal_uInt16 nAspect) override;
 
     virtual void        FillClass(SvGlobalName* pClassName,
                                   SotClipboardFormatId*  pFormat,

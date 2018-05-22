@@ -15,6 +15,7 @@
 #include <document.hxx>
 #include <generalfunction.hxx>
 
+#include <o3tl/temporary.hxx>
 #include <oox/export/utils.hxx>
 #include <oox/token/namespaces.hxx>
 #include <sax/tools/converter.hxx>
@@ -263,7 +264,6 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
         double fMin = std::numeric_limits<double>::infinity(), fMax = -std::numeric_limits<double>::infinity();
         bool isValueInteger = true;
         bool isContainsDate = rCache.IsDateDimension(i);
-        double intpart;
         for (; it != itEnd; ++it)
         {
             ScDPItemData::Type eType = it->GetType();
@@ -275,7 +275,7 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
                 fMax = std::max(fMax, fVal);
 
                 // Check if all values are integers
-                if (isValueInteger && (modf(fVal, &intpart) != 0.0))
+                if (isValueInteger && (modf(fVal, &o3tl::temporary(double())) != 0.0))
                 {
                     isValueInteger = false;
                 }
@@ -954,7 +954,7 @@ void XclExpXmlPivotTables::SavePivotTableXml( XclExpXmlStream& rStrm, const ScDP
             long nDimIdx = it->mnPos;
             assert(aCachedDims[nDimIdx]); // the loop above should have screened for NULL's.
             const ScDPSaveDimension& rDim = *it->mpDim;
-            const OUString* pName = rDim.GetLayoutName();
+            const boost::optional<OUString> & pName = rDim.GetLayoutName();
             pPivotStrm->write("<")->writeId(XML_dataField);
             if (pName)
                 rStrm.WriteAttributes(XML_name, XclXmlUtils::ToOString(*pName), FSEND);

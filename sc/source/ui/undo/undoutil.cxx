@@ -23,7 +23,6 @@
 #include <tabvwsh.hxx>
 #include <document.hxx>
 #include <dbdata.hxx>
-#include <globstr.hrc>
 #include <globalnames.hxx>
 #include <global.hxx>
 #include <markdata.hxx>
@@ -87,7 +86,7 @@ ScDBData* ScUndoUtil::GetOldDBData( const ScDBData* pUndoData, ScDocument* pDoc,
             pRet = new ScDBData( STR_DB_LOCAL_NONAME, nTab,
                                 nCol1,nRow1, nCol2,nRow2, true,
                                 pDoc->HasColHeader( nCol1,nRow1,nCol2,nRow2,nTab ) );
-            pDoc->SetAnonymousDBData(nTab,pRet);
+            pDoc->SetAnonymousDBData(nTab, std::unique_ptr<ScDBData>(pRet));
         }
     }
 

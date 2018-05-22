@@ -22,6 +22,7 @@
 #include <window.h>
 #include <salframe.hxx>
 
+#include <comphelper/lok.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
@@ -39,6 +40,7 @@ public:
     VclPtr<ToolBox> mpBox;
     tools::Rectangle       maItemEdgeClipRect; // used to clip the common edge between a toolbar item and the border of this window
     Point maPos; // position of the floating window wrt. parent
+    Point maLOKTwipsPos; ///< absolute position of the floating window in the document - in twips (for toplevel floating windows).
 };
 
 FloatingWindow::ImplData::ImplData()
@@ -53,7 +55,7 @@ tools::Rectangle& FloatingWindow::ImplGetItemEdgeClipRect()
 
 void FloatingWindow::ImplInit( vcl::Window* pParent, WinBits nStyle )
 {
-    mpImplData = new ImplData;
+    mpImplData.reset(new ImplData);
 
     mpWindowImpl->mbFloatWin = true;
     mbInCleanUp = false;
@@ -215,8 +217,7 @@ void FloatingWindow::dispose()
         mnPostId = nullptr;
     }
 
-    delete mpImplData;
-    mpImplData = nullptr;
+    mpImplData.reset();
 
     mpNextFloat.clear();
     mpFirstPopupModeWin.clear();
@@ -229,9 +230,9 @@ Point FloatingWindow::CalcFloatingPosition( vcl::Window* pWindow, const tools::R
     return ImplCalcPos( pWindow, rRect, nFlags, rArrangeIndex );
 }
 
-Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
-                                   const tools::Rectangle& rRect, FloatWinPopupFlags nFlags,
-                                   sal_uInt16& rArrangeIndex )
+Point FloatingWindow::ImplCalcPos(vcl::Window* pWindow,
+                                  const tools::Rectangle& rRect, FloatWinPopupFlags nFlags,
+                                  sal_uInt16& rArrangeIndex, Point* pLOKTwipsPos)
 {
     // get window position
     Point       aPos;
@@ -297,6 +298,7 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
     }
 
     sal_uInt16 nArrangeIndex = 0;
+    const bool bLOKActive = comphelper::LibreOfficeKit::isActive();
 
     for ( ; nArrangeIndex < 5; nArrangeIndex++ )
     {
@@ -318,7 +320,7 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
                     if ( aPos.X() < aScreenRect.Left() )
                         bBreak = false;
                 }
-                if( bBreak )
+                if (bBreak || bLOKActive)
                 {
                     e1 = devRect.TopLeft();
                     e2 = devRect.BottomLeft();
@@ -342,7 +344,7 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
                     if ( aPos.X()+aSize.Width() > aScreenRect.Right() )
                         bBreak = false;
                 }
-                if( bBreak )
+                if (bBreak || bLOKActive)
                 {
                     e1 = devRect.TopRight();
                     e2 = devRect.BottomRight();
@@ -358,7 +360,7 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
                 aPos.setY( devRect.Top()-aSize.Height()+1 );
                 if ( aPos.Y() < aScreenRect.Top() )
                     bBreak = false;
-                if( bBreak )
+                if (bBreak || bLOKActive)
                 {
                     e1 = devRect.TopLeft();
                     e2 = devRect.TopRight();
@@ -373,7 +375,7 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
                 aPos = devRect.BottomLeft();
                 if ( aPos.Y()+aSize.Height() > aScreenRect.Bottom() )
                     bBreak = false;
-                if( bBreak )
+                if (bBreak || bLOKActive)
                 {
                     e1 = devRect.BottomLeft();
                     e2 = devRect.BottomRight();
@@ -386,6 +388,10 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
                 break;
             default: break;
         }
+
+        // no further adjustment for LibreOfficeKit
+        if (bLOKActive)
+            break;
 
         // adjust if necessary
         if (bBreak)
@@ -431,6 +437,26 @@ Point FloatingWindow::ImplCalcPos( vcl::Window* pWindow,
     {
         pFloatingWindow->mpImplData->maItemEdgeClipRect =
             tools::Rectangle( e1, e2 );
+    }
+
+    if (bLOKActive && pLOKTwipsPos)
+    {
+        if (pW->IsMapModeEnabled() || pW->GetMapMode().GetMapUnit() == MapUnit::MapPixel)
+        {
+            // if we use pW->LogicToLogic(aPos, pW->GetMapMode(), MapMode(MapUnit::MapTwip)),
+            // for pixel conversions when map mode is not enabled, we gets
+            // a 20 twips per pixel conversion since LogicToLogic uses
+            // a fixed 72 dpi value, instead of a correctly computed output
+            // device dpi or at least the most commonly used 96 dpi value;
+            // and anyway the following is what we already do in
+            // ScGridWindow::LogicInvalidate when map mode is not enabled.
+
+            *pLOKTwipsPos = pW->PixelToLogic(aPos, MapMode(MapUnit::MapTwip));
+        }
+        else
+        {
+            *pLOKTwipsPos = OutputDevice::LogicToLogic(aPos, pW->GetMapMode(), MapMode(MapUnit::MapTwip));
+        }
     }
 
     // caller expects coordinates relative to top-level win
@@ -585,12 +611,15 @@ bool FloatingWindow::EventNotify( NotifyEvent& rNEvt )
     return bRet;
 }
 
-void FloatingWindow::LogicInvalidate(const tools::Rectangle* /*pRectangle*/)
+void FloatingWindow::PixelInvalidate(const tools::Rectangle* /*pRectangle*/)
 {
     if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
     {
+        std::vector<vcl::LOKPayloadItem> aPayload;
+        const tools::Rectangle aRect(Point(0,0), Size(GetSizePixel().Width()+1, GetSizePixel().Height()+1));
+        aPayload.push_back(std::make_pair(OString("rectangle"), aRect.toString()));
         const vcl::ILibreOfficeKitNotifier* pNotifier = pParent->GetLOKNotifier();
-        pNotifier->notifyWindow(GetLOKWindowId(), "invalidate");
+        pNotifier->notifyWindow(GetLOKWindowId(), "invalidate", aPayload);
     }
 }
 
@@ -615,17 +644,16 @@ void FloatingWindow::StateChanged( StateChangedType nType )
                 // dialog - but maybe we'll need a separate type for this
                 // later
                 aItems.emplace_back("type", "dialog");
+                aItems.emplace_back("position", mpImplData->maLOKTwipsPos.toString()); // twips
             }
             else
             {
                 SetLOKNotifier(pParent->GetLOKNotifier());
                 aItems.emplace_back("type", "child");
                 aItems.emplace_back("parentId", OString::number(pParent->GetLOKWindowId()));
+                aItems.emplace_back("position", mpImplData->maPos.toString()); // pixels
             }
             aItems.emplace_back("size", GetSizePixel().toString());
-            aItems.emplace_back("position", mpImplData->maPos.toString());
-            if (!GetText().isEmpty())
-                aItems.emplace_back("title", GetText().toUtf8());
             GetLOKNotifier()->notifyWindow(GetLOKWindowId(), "created", aItems);
         }
         else if (!IsVisible() && nType == StateChangedType::Visible)
@@ -711,7 +739,7 @@ void FloatingWindow::StartPopupMode( const tools::Rectangle& rRect, FloatWinPopu
     // compute window position according to flags and arrangement
     sal_uInt16 nArrangeIndex;
     DoInitialLayout();
-    mpImplData->maPos = ImplCalcPos( this, rRect, nFlags, nArrangeIndex );
+    mpImplData->maPos = ImplCalcPos(this, rRect, nFlags, nArrangeIndex, &mpImplData->maLOKTwipsPos);
     SetPosPixel( mpImplData->maPos );
 
     // set data and display window

@@ -66,11 +66,9 @@ class SVX_DLLPUBLIC SdrViewIter
     const SdrModel*                                     mpModel;
     const SdrPage*                                      mpPage;
     const SdrObject*                                    mpObject;
-    SdrView*                                            mpAktView;
+    SdrView*                                            mpCurrentView;
 
     size_t                                              mnListenerNum;
-
-    bool                                                mbNoMasterPage : 1;
 
 private:
     SVX_DLLPRIVATE void          ImpInitVars();

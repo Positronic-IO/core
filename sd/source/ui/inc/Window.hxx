@@ -131,6 +131,7 @@ public:
     void    SetVisibleXY(double fX, double fY);
     double  GetVisibleWidth();
     double  GetVisibleHeight();
+    Point   GetVisibleCenter();
     double  GetScrlLineWidth();
     double  GetScrlLineHeight();
     double  GetScrlPageWidth();
@@ -190,7 +191,7 @@ protected:
 
     OUString GetSurroundingText() const override;
     Selection GetSurroundingTextSelection() const override;
-    /// @see OutputDevice::LogicInvalidate().
+    /// @see Window::LogicInvalidate().
     void LogicInvalidate(const ::tools::Rectangle* pRectangle) override;
     /// Same as MouseButtonDown(), but coordinates are in logic unit.
     virtual void LogicMouseButtonDown(const MouseEvent& rMouseEvent) override;

@@ -13,8 +13,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>
 
-#include <boost/intrusive_ptr.hpp>
+#include <tools/ref.hxx>
 #include "rtfvalue.hxx"
 
 namespace writerfilter
@@ -24,18 +25,9 @@ namespace rtftok
 using RTFSprmsImplBase = std::vector<std::pair<Id, RTFValue::Pointer_t>>;
 
 /// The payload of RTFSprms which is only copied on write.
-class RTFSprmsImpl : public RTFSprmsImplBase
+class RTFSprmsImpl : public RTFSprmsImplBase, public SvRefBase
 {
-public:
-    sal_Int32 m_nRefCount = 0;
 };
-
-inline void intrusive_ptr_add_ref(RTFSprmsImpl* p) { ++(p->m_nRefCount); }
-inline void intrusive_ptr_release(RTFSprmsImpl* p)
-{
-    if (!--(p->m_nRefCount))
-        delete p;
-}
 
 enum class RTFOverwrite
 {
@@ -65,6 +57,10 @@ public:
     /// Also insert default values to override attributes of style
     /// (yes, really; that's what Word does).
     RTFSprms cloneAndDeduplicate(RTFSprms& rReference) const;
+    /// Inserts default values to override attributes of pAbstract.
+    void duplicateList(const RTFValue::Pointer_t& pAbstract);
+    /// Removes duplicated values based on in-list properties.
+    void deduplicateList(const std::map<int, int>& rInvalidListLevelFirstIndents);
     std::size_t size() const { return m_pSprms->size(); }
     bool empty() const { return m_pSprms->empty(); }
     Entry_t& back() { return m_pSprms->back(); }
@@ -75,7 +71,7 @@ public:
 
 private:
     void ensureCopyBeforeWrite();
-    boost::intrusive_ptr<RTFSprmsImpl> m_pSprms;
+    tools::SvRef<RTFSprmsImpl> m_pSprms;
 };
 
 /// RTF keyword with a parameter

@@ -211,14 +211,6 @@ void PPTWriterBase::exportPPT( const std::vector< css::beans::PropertyValue >& r
 
     sal_uInt32 i;
 
-    for ( i = 0; i < mnPages; i++ )
-    {
-    if ( GetPageByIndex( i, NORMAL ) ) {
-        sal_uInt32 nMasterNum = GetMasterIndex( NORMAL );
-        ImplWriteLayout( GetLayoutOffset( mXPagePropSet ), nMasterNum );
-    }
-    }
-
     for ( i = 0; i < mnMasterPages; i++ )
     {
         if ( !CreateSlideMaster( i ) )
@@ -499,7 +491,7 @@ void PPTWriterBase::SetCurrentStyleSheet( sal_uInt32 nPageNum )
 {
     if ( nPageNum >= maStyleSheetList.size() )
         nPageNum = 0;
-    mpStyleSheet = maStyleSheetList[ nPageNum ];
+    mpStyleSheet = maStyleSheetList[ nPageNum ].get();
 }
 
 bool PPTWriterBase::GetStyleSheets()
@@ -526,7 +518,7 @@ bool PPTWriterBase::GetStyleSheets()
             ? static_cast<sal_uInt16>( *o3tl::doAccess<sal_Int32>(mAny) / 4.40972 )
             : 1250;
 
-        maStyleSheetList.push_back( new PPTExStyleSheet( nDefaultTab, dynamic_cast<PPTExBulletProvider*>(this) ) );
+        maStyleSheetList.emplace_back( new PPTExStyleSheet( nDefaultTab, dynamic_cast<PPTExBulletProvider*>(this) ) );
         SetCurrentStyleSheet( nPageNum );
         if ( GetPageByIndex( nPageNum, MASTER ) )
             aXNamed.set( mXDrawPage, UNO_QUERY );

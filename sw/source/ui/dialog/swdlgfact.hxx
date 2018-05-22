@@ -25,6 +25,11 @@ class SwInsertAbstractDlg;
 class SwAsciiFilterDlg;
 class Dialog;
 class SwBreakDlg;
+class SwMultiTOXMarkDlg;
+class SwSortDlg;
+class SwTableHeightDlg;
+class SwTableWidthDlg;
+class SwMergeTableDlg;
 class SfxTabDialog;
 class SwConvertTableDlg;
 class SwInsertDBColAutoPilot;
@@ -38,8 +43,8 @@ class SwTOXMark;
 class SwSplitTableDlg;
 
 #include <itabenum.hxx>
-
 #include <boost/optional.hpp>
+#include <o3tl/deleter.hxx>
 
 namespace sw
 {
@@ -91,14 +96,56 @@ class SwAbstractSfxDialog_Impl :public SfxAbstractDialog
 
 class AbstractSwAsciiFilterDlg_Impl : public AbstractSwAsciiFilterDlg
 {
-    DECL_ABSTDLG_BASE( AbstractSwAsciiFilterDlg_Impl,SwAsciiFilterDlg )
+protected:
+    std::unique_ptr<SwAsciiFilterDlg> m_xDlg;
+public:
+    explicit AbstractSwAsciiFilterDlg_Impl(SwAsciiFilterDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual void FillOptions( SwAsciiOptions& rOptions ) override;
-
 };
 
 class VclAbstractDialog_Impl : public VclAbstractDialog
 {
     DECL_ABSTDLG_BASE(VclAbstractDialog_Impl,Dialog)
+};
+
+class AbstractGenericDialog_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<weld::GenericDialogController> m_xDlg;
+public:
+    explicit AbstractGenericDialog_Impl(weld::GenericDialogController* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+};
+
+class AbstractSwSortDlg_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<SwSortDlg> m_xDlg;
+public:
+    explicit AbstractSwSortDlg_Impl(SwSortDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+};
+
+class AbstractMultiTOXMarkDlg_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<SwMultiTOXMarkDlg> m_xDlg;
+public:
+    explicit AbstractMultiTOXMarkDlg_Impl(SwMultiTOXMarkDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
 };
 
 class AbstractSwBreakDlg_Impl : public AbstractSwBreakDlg
@@ -116,19 +163,79 @@ public:
     virtual ::boost::optional<sal_uInt16>   GetPageNumber() override;
 };
 
+class AbstractSwTableWidthDlg_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<SwTableWidthDlg> m_xDlg;
+public:
+    explicit AbstractSwTableWidthDlg_Impl(SwTableWidthDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+};
+
+class AbstractSwTableHeightDlg_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<SwTableHeightDlg> m_xDlg;
+public:
+    explicit AbstractSwTableHeightDlg_Impl(SwTableHeightDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+};
+
+class AbstractSwMergeTableDlg_Impl : public VclAbstractDialog
+{
+protected:
+    std::unique_ptr<SwMergeTableDlg> m_xDlg;
+public:
+    explicit AbstractSwMergeTableDlg_Impl(SwMergeTableDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+};
+
 class AbstractSplitTableDialog_Impl : public AbstractSplitTableDialog // add for
 {
-    DECL_ABSTDLG_BASE(AbstractSplitTableDialog_Impl, SwSplitTableDlg)
+protected:
+    std::unique_ptr<SwSplitTableDlg> m_xDlg;
+public:
+    explicit AbstractSplitTableDialog_Impl(SwSplitTableDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual SplitTable_HeadlineOption GetSplitMode() override;
 };
 
 class AbstractTabDialog_Impl : virtual public SfxAbstractTabDialog
 {
     DECL_ABSTDLG_BASE( AbstractTabDialog_Impl,SfxTabDialog )
-    virtual void                SetCurPageId( sal_uInt16 nId ) override;
     virtual void                SetCurPageId( const OString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual const sal_uInt16*       GetInputRanges( const SfxItemPool& pItem ) override;
+    virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
+        //From class Window.
+    virtual void        SetText( const OUString& rStr ) override;
+};
+
+class AbstractTabController_Impl : virtual public SfxAbstractTabDialog
+{
+protected:
+    std::unique_ptr<SfxTabDialogController> m_xDlg;
+public:
+    explicit AbstractTabController_Impl(SfxTabDialogController* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+    virtual void                SetCurPageId( const OString &rName ) override;
+    virtual const SfxItemSet*   GetOutputItemSet() const override;
+    virtual const sal_uInt16*   GetInputRanges( const SfxItemPool& pItem ) override;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) override;
         //From class Window.
     virtual void        SetText( const OUString& rStr ) override;
@@ -149,7 +256,14 @@ private:
 
 class AbstractSwConvertTableDlg_Impl :  public AbstractSwConvertTableDlg
 {
-    DECL_ABSTDLG_BASE( AbstractSwConvertTableDlg_Impl,SwConvertTableDlg)
+protected:
+    std::unique_ptr<SwConvertTableDlg> m_xDlg;
+public:
+    explicit AbstractSwConvertTableDlg_Impl(SwConvertTableDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual void GetValues( sal_Unicode& rDelim,SwInsertTableOptions& rInsTableFlags,
                     SwTableAutoFormat const*& prTAFormat) override;
 };
@@ -165,17 +279,28 @@ class AbstractSwInsertDBColAutoPilot_Impl :  public AbstractSwInsertDBColAutoPil
 
 class AbstractDropDownFieldDialog_Impl : public AbstractDropDownFieldDialog
 {
-    DECL_ABSTDLG_BASE(AbstractDropDownFieldDialog_Impl, sw::DropDownFieldDialog)
-    virtual OString       GetWindowState() const override; //this method inherit from SystemWindow
-    virtual void          SetWindowState( const OString& rStr ) override; //this method inherit from SystemWindow
+protected:
+    std::unique_ptr<sw::DropDownFieldDialog> m_xDlg;
+public:
+    explicit AbstractDropDownFieldDialog_Impl(sw::DropDownFieldDialog* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual bool          PrevButtonPressed() const override;
     virtual bool          NextButtonPressed() const override;
 };
 
 class AbstractSwLabDlg_Impl  : public AbstractSwLabDlg
 {
-    DECL_ABSTDLG_BASE(AbstractSwLabDlg_Impl,SwLabDlg)
-    virtual void                SetCurPageId( sal_uInt16 nId ) override;
+protected:
+    std::unique_ptr<SwLabDlg> m_xDlg;
+public:
+    explicit AbstractSwLabDlg_Impl(SwLabDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual void                SetCurPageId( const OString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual const sal_uInt16*       GetInputRanges( const SfxItemPool& pItem ) override;
@@ -196,14 +321,20 @@ class AbstractSwSelGlossaryDlg_Impl : public AbstractSwSelGlossaryDlg
 
 class AbstractSwAutoFormatDlg_Impl : public AbstractSwAutoFormatDlg
 {
-    DECL_ABSTDLG_BASE(AbstractSwAutoFormatDlg_Impl,SwAutoFormatDlg )
-    virtual void FillAutoFormatOfIndex( SwTableAutoFormat*& rToFill ) const override;
+protected:
+    std::unique_ptr<SwAutoFormatDlg, o3tl::default_delete<SwAutoFormatDlg>> m_xDlg;
+public:
+    explicit AbstractSwAutoFormatDlg_Impl(SwAutoFormatDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+    virtual SwTableAutoFormat* FillAutoFormatOfIndex() const override;
 };
 
 class AbstractSwFieldDlg_Impl : public AbstractSwFieldDlg
 {
     DECL_ABSTDLG_BASE(AbstractSwFieldDlg_Impl,SwFieldDlg )
-    virtual void                SetCurPageId( sal_uInt16 nId ) override;
     virtual void                SetCurPageId( const OString &rName ) override;
     virtual const SfxItemSet*   GetOutputItemSet() const override;
     virtual const sal_uInt16*   GetInputRanges( const SfxItemPool& pItem ) override;
@@ -220,8 +351,15 @@ class AbstractSwFieldDlg_Impl : public AbstractSwFieldDlg
 
 class AbstractSwRenameXNamedDlg_Impl : public AbstractSwRenameXNamedDlg
 {
-    DECL_ABSTDLG_BASE(AbstractSwRenameXNamedDlg_Impl,SwRenameXNamedDlg )
-    virtual void    SetForbiddenChars( const OUString& rSet ) override;
+protected:
+    std::unique_ptr<SwRenameXNamedDlg> m_xDlg;
+public:
+    explicit AbstractSwRenameXNamedDlg_Impl(SwRenameXNamedDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
+    virtual void SetForbiddenChars( const OUString& rSet ) override;
     virtual void SetAlternativeAccess(
              css::uno::Reference< css::container::XNameAccess > & xSecond,
              css::uno::Reference< css::container::XNameAccess > & xThird ) override;
@@ -244,10 +382,14 @@ class AbstractGlossaryDlg_Impl : public AbstractGlossaryDlg
 class SwFieldInputDlg;
 class AbstractFieldInputDlg_Impl : public AbstractFieldInputDlg
 {
-    DECL_ABSTDLG_BASE(AbstractFieldInputDlg_Impl,SwFieldInputDlg)
-    //from class SalFrame
-    virtual void          SetWindowState( const OString & rStr ) override;
-    virtual OString       GetWindowState() const override;
+protected:
+    std::unique_ptr<SwFieldInputDlg> m_xDlg;
+public:
+    explicit AbstractFieldInputDlg_Impl(SwFieldInputDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual void          EndDialog(sal_Int32) override;
     virtual bool          PrevButtonPressed() const override;
     virtual bool          NextButtonPressed() const override;
@@ -256,7 +398,14 @@ class AbstractFieldInputDlg_Impl : public AbstractFieldInputDlg
 class SwInsFootNoteDlg;
 class AbstractInsFootNoteDlg_Impl : public AbstractInsFootNoteDlg
 {
-    DECL_ABSTDLG_BASE(AbstractInsFootNoteDlg_Impl,SwInsFootNoteDlg)
+protected:
+    std::unique_ptr<SwInsFootNoteDlg> m_xDlg;
+public:
+    explicit AbstractInsFootNoteDlg_Impl(SwInsFootNoteDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual OUString        GetFontName() override;
     virtual bool            IsEndNote() override;
     virtual OUString        GetStr() override;
@@ -268,7 +417,14 @@ class AbstractInsFootNoteDlg_Impl : public AbstractInsFootNoteDlg
 class SwInsTableDlg;
 class AbstractInsTableDlg_Impl : public AbstractInsTableDlg
 {
-    DECL_ABSTDLG_BASE(AbstractInsTableDlg_Impl,SwInsTableDlg)
+protected:
+    std::unique_ptr<SwInsTableDlg> m_xDlg;
+public:
+    explicit AbstractInsTableDlg_Impl(SwInsTableDlg* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual void            GetValues( OUString& rName, sal_uInt16& rRow, sal_uInt16& rCol,
                                 SwInsertTableOptions& rInsTableFlags, OUString& rTableAutoFormatName,
                                 SwTableAutoFormat *& prTAFormat ) override;
@@ -277,7 +433,14 @@ class AbstractInsTableDlg_Impl : public AbstractInsTableDlg
 class SwJavaEditDialog;
 class AbstractJavaEditDialog_Impl : public AbstractJavaEditDialog
 {
-    DECL_ABSTDLG_BASE(AbstractJavaEditDialog_Impl,SwJavaEditDialog)
+protected:
+    std::unique_ptr<SwJavaEditDialog> m_xDlg;
+public:
+    explicit AbstractJavaEditDialog_Impl(SwJavaEditDialog* p)
+        : m_xDlg(p)
+    {
+    }
+    virtual short Execute() override;
     virtual OUString            GetScriptText() const override;
     virtual OUString            GetScriptType() const override;
     virtual bool                IsUrl() const override;
@@ -388,8 +551,8 @@ public:
         SfxChildWindow* pChild, vcl::Window *pParent, SfxChildWinInfo* pInfo) override;
     virtual VclPtr<AbstractSwInsertAbstractDlg> CreateSwInsertAbstractDlg() override;
     virtual VclPtr<SfxAbstractDialog> CreateSwAddressAbstractDlg(vcl::Window* pParent, const SfxItemSet& rSet) override;
-    virtual VclPtr<AbstractSwAsciiFilterDlg>  CreateSwAsciiFilterDlg ( SwDocShell& rDocSh,
-                                                                SvStream* pStream ) override;
+    virtual VclPtr<AbstractSwAsciiFilterDlg>  CreateSwAsciiFilterDlg(weld::Window* pParent, SwDocShell& rDocSh,
+                                                                SvStream* pStream) override;
     virtual VclPtr<VclAbstractDialog> CreateSwInsertBookmarkDlg( vcl::Window *pParent, SwWrtShell &rSh, SfxRequest& rReq ) override;
     virtual VclPtr<AbstractSwBreakDlg> CreateSwBreakDlg(weld::Window *pParent, SwWrtShell &rSh) override;
     virtual VclPtr<VclAbstractDialog> CreateSwChangeDBDlg(SwView& rVw) override;
@@ -397,19 +560,16 @@ public:
         SwCharDlgMode nDialogMode, const OUString* pFormatStr = nullptr) override;
     virtual VclPtr<AbstractSwConvertTableDlg> CreateSwConvertTableDlg(SwView& rView, bool bToTable) override;
     virtual VclPtr<VclAbstractDialog> CreateSwCaptionDialog ( vcl::Window *pParent, SwView &rV) override;
-    virtual VclPtr<VclAbstractDialog> CreateSignatureLineDialog(vcl::Window* pParent,
-                                                                SwView& rView) override;
-
     virtual VclPtr<AbstractSwInsertDBColAutoPilot> CreateSwInsertDBColAutoPilot(SwView& rView,
         css::uno::Reference< css::sdbc::XDataSource> rxSource,
         css::uno::Reference<css::sdbcx::XColumnsSupplier> xColSupp,
         const SwDBData& rData) override;
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwFootNoteOptionDlg(vcl::Window *pParent, SwWrtShell &rSh) override;
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwFootNoteOptionDlg(weld::Window *pParent, SwWrtShell &rSh) override;
 
-    virtual VclPtr<AbstractDropDownFieldDialog> CreateDropDownFieldDialog(SwWrtShell &rSh,
+    virtual VclPtr<AbstractDropDownFieldDialog> CreateDropDownFieldDialog(weld::Window* pParent, SwWrtShell &rSh,
         SwField* pField, bool bPrevButton, bool bNextButton) override;
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwEnvDlg ( vcl::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert ) override;
-    virtual VclPtr<AbstractSwLabDlg> CreateSwLabDlg(const SfxItemSet& rSet,
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwEnvDlg(weld::Window* pParent, const SfxItemSet& rSet, SwWrtShell* pWrtSh, Printer* pPrt, bool bInsert) override;
+    virtual VclPtr<AbstractSwLabDlg> CreateSwLabDlg(weld::Window* pParent, const SfxItemSet& rSet,
                                                      SwDBManager* pDBManager, bool bLabel) override;
 
     virtual SwLabDlgMethod GetSwLabDlgStaticMethod () override;
@@ -421,28 +581,28 @@ public:
 
     virtual VclPtr<VclAbstractDialog> CreateSwAutoMarkDialog(vcl::Window *pParent, SwWrtShell &rSh) override;
     virtual VclPtr<AbstractSwSelGlossaryDlg> CreateSwSelGlossaryDlg(const OUString &rShortName) override;
-    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(vcl::Window * pParent, SwWrtShell &rSh) override;
-    virtual VclPtr<VclAbstractDialog> CreateSwTableHeightDialog(vcl::Window *pParent, SwWrtShell &rSh) override;
+    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(weld::Window * pParent, SwWrtShell &rSh) override;
+    virtual VclPtr<VclAbstractDialog> CreateSwTableHeightDialog(weld::Window *pParent, SwWrtShell &rSh) override;
     virtual VclPtr<VclAbstractDialog> CreateSwColumnDialog(vcl::Window *pParent, SwWrtShell &rSh) override;
-    virtual VclPtr<AbstractSplitTableDialog> CreateSplitTableDialog ( vcl::Window * pParent, SwWrtShell &rSh ) override;
+    virtual VclPtr<AbstractSplitTableDialog> CreateSplitTableDialog(weld::Window* pParent, SwWrtShell &rSh) override;
 
-    virtual VclPtr<AbstractSwAutoFormatDlg> CreateSwAutoFormatDlg( vcl::Window* pParent, SwWrtShell* pShell,
-                                                            bool bSetAutoFormat = true,
-                                                            const SwTableAutoFormat* pSelFormat = nullptr ) override;
+    virtual VclPtr<AbstractSwAutoFormatDlg> CreateSwAutoFormatDlg(weld::Window* pParent, SwWrtShell* pShell,
+                                                                  bool bSetAutoFormat = true,
+                                                                  const SwTableAutoFormat* pSelFormat = nullptr) override;
     virtual VclPtr<SfxAbstractDialog> CreateSwBorderDlg (vcl::Window* pParent, SfxItemSet& rSet, SwBorderModes nType ) override;
 
     virtual VclPtr<SfxAbstractDialog> CreateSwWrapDlg ( vcl::Window* pParent, SfxItemSet& rSet, SwWrtShell* pSh ) override;
-    virtual VclPtr<VclAbstractDialog> CreateSwTableWidthDlg(vcl::Window *pParent, SwTableFUNC &rFnc) override;
+    virtual VclPtr<VclAbstractDialog> CreateSwTableWidthDlg(weld::Window *pParent, SwTableFUNC &rFnc) override;
     virtual VclPtr<SfxAbstractTabDialog> CreateSwTableTabDlg(vcl::Window* pParent,
         const SfxItemSet* pItemSet, SwWrtShell* pSh) override;
     virtual VclPtr<AbstractSwFieldDlg> CreateSwFieldDlg(SfxBindings* pB, SwChildWinWrapper* pCW, vcl::Window *pParent) override;
     virtual VclPtr<SfxAbstractDialog>   CreateSwFieldEditDlg ( SwView& rVw ) override;
-    virtual VclPtr<AbstractSwRenameXNamedDlg> CreateSwRenameXNamedDlg(vcl::Window* pParent,
+    virtual VclPtr<AbstractSwRenameXNamedDlg> CreateSwRenameXNamedDlg(weld::Window* pParent,
         css::uno::Reference< css::container::XNamed > & xNamed,
         css::uno::Reference< css::container::XNameAccess > & xNameAccess) override;
     virtual VclPtr<AbstractSwModalRedlineAcceptDlg> CreateSwModalRedlineAcceptDlg(vcl::Window *pParent) override;
 
-    virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog(vcl::Window* pParent, bool& rWithPrev) override;
+    virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog(weld::Window* pParent, bool& rWithPrev) override;
     virtual VclPtr<SfxAbstractTabDialog>       CreateFrameTabDialog( const OUString &rDialogType,
                                                 SfxViewFrame *pFrame, vcl::Window *pParent,
                                                 const SfxItemSet& rCoreSet,
@@ -458,14 +618,14 @@ public:
     virtual VclPtr<AbstractGlossaryDlg>        CreateGlossaryDlg(SfxViewFrame* pViewFrame,
                                                 SwGlossaryHdl* pGlosHdl,
                                                 SwWrtShell *pWrtShell) override;
-    virtual VclPtr<AbstractFieldInputDlg>        CreateFieldInputDlg(vcl::Window *pParent,
+    virtual VclPtr<AbstractFieldInputDlg>        CreateFieldInputDlg(weld::Window *pParent,
         SwWrtShell &rSh, SwField* pField, bool bPrevButton, bool bNextButton) override;
     virtual VclPtr<AbstractInsFootNoteDlg>     CreateInsFootNoteDlg(
-        vcl::Window * pParent, SwWrtShell &rSh, bool bEd = false) override;
+        weld::Window * pParent, SwWrtShell &rSh, bool bEd = false) override;
     virtual VclPtr<VclAbstractDialog>         CreateTitlePageDlg ( vcl::Window * pParent ) override;
     virtual VclPtr<VclAbstractDialog>         CreateVclSwViewDialog(SwView& rView) override;
     virtual VclPtr<AbstractInsTableDlg>        CreateInsTableDlg(SwView& rView) override;
-    virtual VclPtr<AbstractJavaEditDialog>     CreateJavaEditDialog(vcl::Window* pParent,
+    virtual VclPtr<AbstractJavaEditDialog>     CreateJavaEditDialog(weld::Window* pParent,
         SwWrtShell* pWrtSh) override;
     virtual VclPtr<AbstractMailMergeDlg>       CreateMailMergeDlg(
                                                 vcl::Window* pParent, SwWrtShell& rSh,
@@ -475,8 +635,8 @@ public:
                                                 const css::uno::Reference< css::sdbc::XConnection>& xConnection ) override;
     virtual VclPtr<AbstractMailMergeCreateFromDlg>     CreateMailMergeCreateFromDlg(vcl::Window* pParent) override;
     virtual VclPtr<AbstractMailMergeFieldConnectionsDlg> CreateMailMergeFieldConnectionsDlg(vcl::Window* pParent) override;
-    virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(vcl::Window* pParent, SwTOXMgr &rTOXMgr) override;
-    virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(vcl::Window* pParent, const SfxItemSet* pSwItemSet,
+    virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(weld::Window* pParent, SwTOXMgr &rTOXMgr) override;
+    virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(weld::Window* pParent, const SfxItemSet* pSwItemSet,
                                                 SwWrtShell &) override;
     virtual VclPtr<SfxAbstractTabDialog>       CreateSvxNumBulletTabDialog(vcl::Window* pParent,
                                                 const SfxItemSet* pSwItemSet,
@@ -510,8 +670,8 @@ public:
     // For TabPage
     virtual CreateTabPage               GetTabPageCreatorFunc( sal_uInt16 nId ) override;
 
-    virtual void ExecuteMMResultSaveDialog() override;
-    virtual void ExecuteMMResultPrintDialog() override;
+    virtual void ExecuteMMResultSaveDialog(weld::Window* pParent) override;
+    virtual void ExecuteMMResultPrintDialog(weld::Window* pParent) override;
     virtual void ExecuteMMResultEmailDialog() override;
 };
 

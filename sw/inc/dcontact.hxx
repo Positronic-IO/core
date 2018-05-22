@@ -30,20 +30,17 @@
 #include "calbck.hxx"
 #include "anchoreddrawobject.hxx"
 
-class SfxPoolItem;
-class SwFrameFormat;
-class SwFlyFrameFormat;
 class SwFlyFrame;
 class SwFrame;
 class SwPageFrame;
 class SwVirtFlyDrawObj;
-class SwFormatAnchor;
 class SwFlyDrawObj;
 class SwRect;
 class SwDrawContact;
 struct SwPosition;
 class SwIndex;
 class SdrTextObj;
+class SwContact;
 
 /** The other way round: Search format for given object.
  If object is a SwVirtFlyDrawObj the format will be obtained from it.
@@ -86,8 +83,6 @@ class SW_DLLPUBLIC SwContact : public SdrObjUserCall, public SwClient
         <SdrObjGroup::SetLayer(..)|NbcSetLayer(..)> sets also the layer of
         the members.
 
-        @author OD
-
         @param _bToVisible
         input parameter - boolean indicating, if object has to be moved to
         visible (== true) or invisible (== false) layer.
@@ -125,8 +120,6 @@ public:
 
         uses method <MoveObjToLayer(..)>
 
-        @author OD
-
         @param _pDrawObj
         drawing object, which will be moved to the visible layer
     */
@@ -135,8 +128,6 @@ public:
     /** method to move drawing object to corresponding invisible layer
 
         uses method <MoveObjToLayer(..)>
-
-        @author OD
 
         @param _pDrawObj
         drawing object, which will be moved to the visible layer
@@ -167,9 +158,7 @@ public:
 
     const SwIndex&     GetContentAnchorIndex() const;
 
-    /** get data collection of anchored objects, handled by with contact
-
-    */
+    /** get data collection of anchored objects, handled by with contact */
     virtual void GetAnchoredObjs( std::vector<SwAnchoredObject*>& _roAnchoredObjs ) const = 0;
 
     /** get minimum order number of anchored objects handled by with contact
@@ -189,14 +178,16 @@ public:
 class SW_DLLPUBLIC SwFlyDrawContact final : public SwContact
 {
 private:
-    std::unique_ptr<SwFlyDrawObj> mpMasterObj;
+    typedef std::unique_ptr< SwFlyDrawObj, SdrObjectFreeOp > SwFlyDrawObjPtr;
+
+    SwFlyDrawObjPtr mpMasterObj;
     void SwClientNotify(const SwModify&, const SfxHint& rHint) override;
     sal_uInt32 GetOrdNumForNewRef(const SwFlyFrame* pFly);
 
 public:
 
     /// Creates DrawObject and registers it with the Model.
-    SwFlyDrawContact( SwFlyFrameFormat* pToRegisterIn );
+    SwFlyDrawContact(SwFlyFrameFormat* pToRegisterIn, SdrModel& rTargetModel);
     static SwVirtFlyDrawObj* CreateNewRef(SwFlyFrame* pFly, SwFlyFrameFormat* pFormat);
     virtual ~SwFlyDrawContact() override;
 
@@ -213,8 +204,7 @@ public:
     virtual void MoveObjToVisibleLayer( SdrObject* _pDrawObj ) override;
     virtual void MoveObjToInvisibleLayer( SdrObject* _pDrawObj ) override;
 
-    /** get data collection of anchored objects handled by with contact
-    */
+    /** get data collection of anchored objects handled by with contact */
     virtual void GetAnchoredObjs( std::vector<SwAnchoredObject*>& _roAnchoredObjs ) const override;
 };
 
@@ -239,16 +229,19 @@ class SwDrawVirtObj : public SdrVirtObj
          of original SnapRect) */
         virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
 
-    public:
-
-        SwDrawVirtObj( SdrObject&       _rNewObj,
-                       SwDrawContact&   _rDrawContact );
+        // protected destructor
         virtual ~SwDrawVirtObj() override;
+
+    public:
+        SwDrawVirtObj(
+            SdrModel& rSdrModel,
+            SdrObject& _rNewObj,
+            SwDrawContact& _rDrawContact);
 
         /// access to offset
         virtual const Point GetOffset() const override;
 
-        virtual SwDrawVirtObj* Clone() const override;
+        virtual SwDrawVirtObj* CloneSdrObject(SdrModel& rTargetModel) const override;
         SwDrawVirtObj& operator= (const SwDrawVirtObj& rObj);
 
         /// connection to writer layout
@@ -309,7 +302,8 @@ bool CheckControlLayer( const SdrObject *pObj );
 
 /** ContactObject for connection of formats as representatives of draw objects
  in SwClient and the objects themselves in Drawing (SDrObjUserCall). */
-class NestedUserCallHdl;
+
+typedef std::unique_ptr< SwDrawVirtObj, SdrObjectFreeOp > SwDrawVirtObjPtr;
 
 class SwDrawContact final : public SwContact
 {
@@ -319,7 +313,7 @@ class SwDrawContact final : public SwContact
         SwAnchoredDrawObject maAnchoredDrawObj;
 
         /** container for 'virtual' drawing object supporting drawing objects in headers/footers. */
-        std::vector<std::unique_ptr<SwDrawVirtObj>> maDrawVirtObjs;
+        std::vector< SwDrawVirtObjPtr > maDrawVirtObjs;
 
         /** boolean indicating set 'master' drawing
          object has been cleared. */
@@ -412,8 +406,7 @@ class SwDrawContact final : public SwContact
 
         void NotifyBackgrdOfAllVirtObjs( const tools::Rectangle* pOldBoundRect );
 
-        /** get data collection of anchored objects, handled by with contact
-        */
+        /** get data collection of anchored objects, handled by with contact */
 
         static void GetTextObjectsFromFormat( std::list<SdrTextObj*>&, SwDoc* );
         virtual void GetAnchoredObjs( std::vector<SwAnchoredObject*>& _roAnchoredObjs ) const override;

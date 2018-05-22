@@ -60,6 +60,7 @@
 #include <document.hxx>
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <conditio.hxx>
 #include <validat.hxx>
 #include <scmod.hxx>
@@ -70,7 +71,7 @@ using sc::TwipsToHMM;
 
 ScPatternAttr::ScPatternAttr( std::unique_ptr<SfxItemSet>&& pItemSet, const OUString& rStyleName )
     :   SfxSetItem  ( ATTR_PATTERN, std::move(pItemSet) ),
-        pName       ( new OUString( rStyleName ) ),
+        pName       ( rStyleName ),
         pStyle      ( nullptr ),
         mnKey(0)
 {
@@ -78,7 +79,6 @@ ScPatternAttr::ScPatternAttr( std::unique_ptr<SfxItemSet>&& pItemSet, const OUSt
 
 ScPatternAttr::ScPatternAttr( std::unique_ptr<SfxItemSet>&& pItemSet )
     :   SfxSetItem  ( ATTR_PATTERN, std::move(pItemSet) ),
-        pName       ( nullptr ),
         pStyle      ( nullptr ),
         mnKey(0)
 {
@@ -86,7 +86,6 @@ ScPatternAttr::ScPatternAttr( std::unique_ptr<SfxItemSet>&& pItemSet )
 
 ScPatternAttr::ScPatternAttr( SfxItemPool* pItemPool )
     :   SfxSetItem  ( ATTR_PATTERN, o3tl::make_unique<SfxItemSet>( *pItemPool, svl::Items<ATTR_PATTERN_START, ATTR_PATTERN_END>{} ) ),
-        pName       ( nullptr ),
         pStyle      ( nullptr ),
         mnKey(0)
 {
@@ -94,11 +93,10 @@ ScPatternAttr::ScPatternAttr( SfxItemPool* pItemPool )
 
 ScPatternAttr::ScPatternAttr( const ScPatternAttr& rPatternAttr )
     :   SfxSetItem  ( rPatternAttr ),
+        pName       ( rPatternAttr.pName ),
         pStyle      ( rPatternAttr.pStyle ),
         mnKey(rPatternAttr.mnKey)
 {
-    if (rPatternAttr.pName)
-        pName.reset( new OUString(*rPatternAttr.pName) );
 }
 
 ScPatternAttr::~ScPatternAttr()
@@ -107,10 +105,10 @@ ScPatternAttr::~ScPatternAttr()
 
 SfxPoolItem* ScPatternAttr::Clone( SfxItemPool *pPool ) const
 {
-    ScPatternAttr* pPattern = new ScPatternAttr( std::unique_ptr<SfxItemSet>(GetItemSet().Clone(true, pPool)) );
+    ScPatternAttr* pPattern = new ScPatternAttr( GetItemSet().Clone(true, pPool) );
 
     pPattern->pStyle = pStyle;
-    pPattern->pName.reset( pName ? new OUString(*pName) : nullptr );
+    pPattern->pName = pName;
 
     return pPattern;
 }
@@ -961,7 +959,7 @@ static SfxStyleSheetBase* lcl_CopyStyleToPool
         const OUString   aStrParent = pSrcStyle->GetParent();
         const SfxItemSet& rSrcSet = pSrcStyle->GetItemSet();
 
-        pDestStyle = &pDestPool->Make( aStrSrcStyle, eFamily, SFXSTYLEBIT_USERDEF );
+        pDestStyle = &pDestPool->Make( aStrSrcStyle, eFamily, SfxStyleSearchBits::UserDefined );
         SfxItemSet& rDestSet = pDestStyle->GetItemSet();
         rDestSet.Put( rSrcSet );
 
@@ -983,7 +981,7 @@ static SfxStyleSheetBase* lcl_CopyStyleToPool
 
         // if necessary create derivative Styles, if not available:
 
-        if ( ScGlobal::GetRscString(STR_STYLENAME_STANDARD) != aStrParent &&
+        if ( ScResId(STR_STYLENAME_STANDARD) != aStrParent &&
              aStrSrcStyle != aStrParent &&
              !pDestPool->Find( aStrParent, eFamily ) )
         {
@@ -1134,7 +1132,7 @@ bool ScPatternAttr::IsVisibleEqual( const ScPatternAttr& rOther ) const
 
 const OUString* ScPatternAttr::GetStyleName() const
 {
-    return pName ? pName.get() : ( pStyle ? &pStyle->GetName() : nullptr );
+    return pName ? &*pName : ( pStyle ? &pStyle->GetName() : nullptr );
 }
 
 void ScPatternAttr::SetStyleSheet( ScStyleSheet* pNewStyle, bool bClearDirectFormat )
@@ -1175,7 +1173,7 @@ void ScPatternAttr::UpdateStyleSheet(const ScDocument* pDoc)
         //  Assumes that "Standard" is always the 1st entry!
         if (!pStyle)
         {
-            std::shared_ptr<SfxStyleSheetIterator> pIter = pDoc->GetStyleSheetPool()->CreateIterator( SfxStyleFamily::Para, SFXSTYLEBIT_ALL );
+            std::shared_ptr<SfxStyleSheetIterator> pIter = pDoc->GetStyleSheetPool()->CreateIterator( SfxStyleFamily::Para, SfxStyleSearchBits::All );
             pStyle = dynamic_cast< ScStyleSheet* >(pIter->First());
         }
 
@@ -1195,11 +1193,7 @@ void ScPatternAttr::StyleToName()
 
     if ( pStyle )
     {
-        if ( pName )
-            *pName = pStyle->GetName();
-        else
-            pName.reset( new OUString( pStyle->GetName() ) );
-
+        pName = pStyle->GetName();
         pStyle = nullptr;
         GetItemSet().SetParent( nullptr );
     }

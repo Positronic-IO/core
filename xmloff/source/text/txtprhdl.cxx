@@ -34,8 +34,10 @@
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/RubyAdjust.hpp>
+#include <com/sun/star/text/RubyPosition.hpp>
 #include <com/sun/star/text/FontEmphasis.hpp>
 #include <com/sun/star/text/ParagraphVertAlign.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <sax/tools/converter.hxx>
 #include <xmloff/xmltypes.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -55,6 +57,7 @@
 #include <com/sun/star/drawing/RectanglePoint.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
 #include <XMLBitmapRepeatOffsetPropertyHandler.hxx>
+#include <vcl/graph.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -196,6 +199,14 @@ static SvXMLEnumMapEntry<RubyAdjust> const pXML_RubyAdjust_Enum[] =
     { XML_DISTRIBUTE_LETTER,    RubyAdjust_BLOCK },
     { XML_DISTRIBUTE_SPACE,     RubyAdjust_INDENT_BLOCK },
     { XML_TOKEN_INVALID,        RubyAdjust(0) }
+};
+
+static SvXMLEnumMapEntry<sal_Int16> const pXML_RubyPosition_Enum[] =
+{
+    { XML_ABOVE,                RubyPosition::ABOVE},
+    { XML_BELOW,                RubyPosition::BELOW},
+    { XML_INTER_CHARACTER,      RubyPosition::INTER_CHARACTER},
+    { XML_TOKEN_INVALID,        0 }
 };
 
 static SvXMLEnumMapEntry<sal_uInt16> const pXML_FontRelief_Enum[] =
@@ -1121,6 +1132,38 @@ bool XMLNumber8OneBasedHdl::exportXML(
     return bRet;
 }
 
+class XMLGraphicPropertyHandler : public XMLPropertyHandler
+{
+public:
+    XMLGraphicPropertyHandler() {}
+
+    virtual bool importXML(const OUString& , uno::Any& , const SvXMLUnitConverter& ) const override
+    {
+        SAL_WARN( "xmloff", "drop caps are an element import property" );
+        return false;
+    }
+
+    virtual bool exportXML(OUString& , const uno::Any& , const SvXMLUnitConverter& ) const override
+    {
+        SAL_WARN( "xmloff", "drop caps are an element import property" );
+        return false;
+    }
+
+    virtual bool equals(const css::uno::Any& rAny1, const css::uno::Any& rAny2) const override;
+};
+
+bool XMLGraphicPropertyHandler::equals(const Any& rAny1, const Any& rAny2) const
+{
+    uno::Reference<graphic::XGraphic> xGraphic1;
+    uno::Reference<graphic::XGraphic> xGraphic2;
+    rAny1 >>= xGraphic1;
+    rAny2 >>= xGraphic2;
+    Graphic aGraphic1(xGraphic1);
+    Graphic aGraphic2(xGraphic2);
+
+    return aGraphic1 == aGraphic2;
+}
+
 static const XMLPropertyHandler *GetPropertyHandler
     ( sal_Int32 nType )
 {
@@ -1256,8 +1299,10 @@ static const XMLPropertyHandler *GetPropertyHandler
         pHdl = new XMLConstantsPropertyHandler( pXML_ParaVerticalAlign_Enum, XML_TOKEN_INVALID );
         break;
     case XML_TYPE_TEXT_RUBY_POSITION:
-        pHdl = new XMLNamedBoolPropertyHdl( ::xmloff::token::XML_ABOVE,
-                                            ::xmloff::token::XML_BELOW );
+        pHdl = new XMLConstantsPropertyHandler( pXML_RubyPosition_Enum, XML_TOKEN_INVALID );
+        break;
+    case XML_TYPE_TEXT_RUBY_IS_ABOVE:
+        pHdl = new XMLNamedBoolPropertyHdl(::xmloff::token::XML_ABOVE, ::xmloff::token::XML_BELOW);
         break;
     // OD 2004-05-05 #i28701#
     case XML_TYPE_WRAP_INFLUENCE_ON_POSITION:
@@ -1309,7 +1354,9 @@ static const XMLPropertyHandler *GetPropertyHandler
     case XML_SW_TYPE_BITMAPREPOFFSETY:
         pHdl = new XMLBitmapRepeatOffsetPropertyHandler(XML_SW_TYPE_BITMAPREPOFFSETX == nType);
         break;
-
+    case XML_TYPE_GRAPHIC:
+        pHdl = new XMLGraphicPropertyHandler;
+        break;
     default:
     {
         OSL_ENSURE(false, "XMLPropertyHandler missing (!)");

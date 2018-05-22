@@ -60,6 +60,8 @@
 #include <ndtxt.hxx>
 #include <numrule.hxx>
 #include <frmatr.hxx>
+#include <swtable.hxx>
+#include <IMark.hxx>
 
 using namespace ::com::sun::star;
 
@@ -107,23 +109,23 @@ bool RtfExport::CollapseScriptsforWordOk(sal_uInt16 nScript, sal_uInt16 nWhich)
     return true;
 }
 
-void RtfExport::AppendBookmarks(const SwTextNode& rNode, sal_Int32 nAktPos, sal_Int32 nLen)
+void RtfExport::AppendBookmarks(const SwTextNode& rNode, sal_Int32 nCurrentPos, sal_Int32 nLen)
 {
     std::vector<OUString> aStarts;
     std::vector<OUString> aEnds;
 
     IMarkVector aMarks;
-    if (GetBookmarks(rNode, nAktPos, nAktPos + nLen, aMarks))
+    if (GetBookmarks(rNode, nCurrentPos, nCurrentPos + nLen, aMarks))
     {
         for (const auto& pMark : aMarks)
         {
             const sal_Int32 nStart = pMark->GetMarkStart().nContent.GetIndex();
             const sal_Int32 nEnd = pMark->GetMarkEnd().nContent.GetIndex();
 
-            if (nStart == nAktPos)
+            if (nStart == nCurrentPos)
                 aStarts.push_back(pMark->GetName());
 
-            if (nEnd == nAktPos)
+            if (nEnd == nCurrentPos)
                 aEnds.push_back(pMark->GetName());
         }
     }
@@ -142,23 +144,24 @@ void RtfExport::AppendBookmark(const OUString& rName)
     m_pAttrOutput->WriteBookmarks_Impl(aStarts, aEnds);
 }
 
-void RtfExport::AppendAnnotationMarks(const SwTextNode& rNode, sal_Int32 nAktPos, sal_Int32 nLen)
+void RtfExport::AppendAnnotationMarks(const SwTextNode& rNode, sal_Int32 nCurrentPos,
+                                      sal_Int32 nLen)
 {
     std::vector<OUString> aStarts;
     std::vector<OUString> aEnds;
 
     IMarkVector aMarks;
-    if (GetAnnotationMarks(rNode, nAktPos, nAktPos + nLen, aMarks))
+    if (GetAnnotationMarks(rNode, nCurrentPos, nCurrentPos + nLen, aMarks))
     {
         for (const auto& pMark : aMarks)
         {
             const sal_Int32 nStart = pMark->GetMarkStart().nContent.GetIndex();
             const sal_Int32 nEnd = pMark->GetMarkEnd().nContent.GetIndex();
 
-            if (nStart == nAktPos)
+            if (nStart == nCurrentPos)
                 aStarts.push_back(pMark->GetName());
 
-            if (nEnd == nAktPos)
+            if (nEnd == nCurrentPos)
                 aEnds.push_back(pMark->GetName());
         }
     }
@@ -423,7 +426,7 @@ void RtfExport::WriteMainText()
         std::vector<std::pair<OString, OString>> aProperties;
         aProperties.push_back(std::make_pair<OString, OString>("shapeType", "1"));
         aProperties.push_back(std::make_pair<OString, OString>(
-            "fillColor", OString::number(msfilter::util::BGRToRGB(oBrush->GetColor().GetColor()))));
+            "fillColor", OString::number(wwUtility::RGBToBGR(oBrush->GetColor()))));
         for (std::pair<OString, OString>& rPair : aProperties)
         {
             Strm().WriteCharPtr("{" OOO_STRING_SVTOOLS_RTF_SP "{");
@@ -439,7 +442,7 @@ void RtfExport::WriteMainText()
     }
 
     SwTableNode* pTableNode = m_pCurPam->GetNode().FindTableNode();
-    if (m_pWriter && m_pWriter->bWriteOnlyFirstTable && pTableNode != nullptr)
+    if (m_pWriter && m_pWriter->m_bWriteOnlyFirstTable && pTableNode != nullptr)
     {
         m_pCurPam->GetPoint()->nNode = *pTableNode;
         m_pCurPam->GetMark()->nNode = *(pTableNode->EndOfSectionNode());
@@ -840,7 +843,7 @@ void RtfExport::ExportDocument_Impl()
         // following title page are correctly added - i13107
         if (pSttPgDsc)
         {
-            m_pAktPageDesc = &rPageDesc;
+            m_pCurrentPageDesc = &rPageDesc;
         }
     }
 
@@ -1287,7 +1290,7 @@ void RtfExport::OutColorTable()
     for (std::size_t n = 0; n < m_aColTable.size(); ++n)
     {
         const Color& rCol = m_aColTable[n];
-        if (n || COL_AUTO != rCol.GetColor())
+        if (n || COL_AUTO != rCol)
         {
             Strm().WriteCharPtr(OOO_STRING_SVTOOLS_RTF_RED);
             OutULong(rCol.GetRed()).WriteCharPtr(OOO_STRING_SVTOOLS_RTF_GREEN);
@@ -1333,47 +1336,48 @@ const OUString* RtfExport::GetRedline(sal_uInt16 nId)
 void RtfExport::OutPageDescription(const SwPageDesc& rPgDsc, bool bCheckForFirstPage)
 {
     SAL_INFO("sw.rtf", OSL_THIS_FUNC << " start");
-    const SwPageDesc* pSave = m_pAktPageDesc;
+    const SwPageDesc* pSave = m_pCurrentPageDesc;
 
-    m_pAktPageDesc = &rPgDsc;
-    if (bCheckForFirstPage && m_pAktPageDesc->GetFollow()
-        && m_pAktPageDesc->GetFollow() != m_pAktPageDesc)
-        m_pAktPageDesc = m_pAktPageDesc->GetFollow();
+    m_pCurrentPageDesc = &rPgDsc;
+    if (bCheckForFirstPage && m_pCurrentPageDesc->GetFollow()
+        && m_pCurrentPageDesc->GetFollow() != m_pCurrentPageDesc)
+        m_pCurrentPageDesc = m_pCurrentPageDesc->GetFollow();
 
-    if (m_pAktPageDesc->GetLandscape())
+    if (m_pCurrentPageDesc->GetLandscape())
         Strm().WriteCharPtr(OOO_STRING_SVTOOLS_RTF_LNDSCPSXN);
 
-    const SwFormat* pFormat = &m_pAktPageDesc->GetMaster(); //GetLeft();
+    const SwFormat* pFormat = &m_pCurrentPageDesc->GetMaster(); //GetLeft();
     m_bOutPageDescs = true;
     OutputFormat(*pFormat, true, false);
     m_bOutPageDescs = false;
 
     // normal header / footer (without a style)
     const SfxPoolItem* pItem;
-    if (m_pAktPageDesc->GetLeft().GetAttrSet().GetItemState(RES_HEADER, false, &pItem)
+    if (m_pCurrentPageDesc->GetLeft().GetAttrSet().GetItemState(RES_HEADER, false, &pItem)
         == SfxItemState::SET)
         WriteHeaderFooter(*pItem, true);
-    if (m_pAktPageDesc->GetLeft().GetAttrSet().GetItemState(RES_FOOTER, false, &pItem)
+    if (m_pCurrentPageDesc->GetLeft().GetAttrSet().GetItemState(RES_FOOTER, false, &pItem)
         == SfxItemState::SET)
         WriteHeaderFooter(*pItem, false);
 
     // title page
-    if (m_pAktPageDesc != &rPgDsc)
+    if (m_pCurrentPageDesc != &rPgDsc)
     {
         Strm().WriteCharPtr(OOO_STRING_SVTOOLS_RTF_TITLEPG);
-        m_pAktPageDesc = &rPgDsc;
-        if (m_pAktPageDesc->GetMaster().GetAttrSet().GetItemState(RES_HEADER, false, &pItem)
+        m_pCurrentPageDesc = &rPgDsc;
+        if (m_pCurrentPageDesc->GetMaster().GetAttrSet().GetItemState(RES_HEADER, false, &pItem)
             == SfxItemState::SET)
             WriteHeaderFooter(*pItem, true);
-        if (m_pAktPageDesc->GetMaster().GetAttrSet().GetItemState(RES_FOOTER, false, &pItem)
+        if (m_pCurrentPageDesc->GetMaster().GetAttrSet().GetItemState(RES_FOOTER, false, &pItem)
             == SfxItemState::SET)
             WriteHeaderFooter(*pItem, false);
     }
 
     // numbering type
-    AttrOutput().SectionPageNumbering(m_pAktPageDesc->GetNumType().GetNumberingType(), boost::none);
+    AttrOutput().SectionPageNumbering(m_pCurrentPageDesc->GetNumType().GetNumberingType(),
+                                      boost::none);
 
-    m_pAktPageDesc = pSave;
+    m_pCurrentPageDesc = pSave;
     SAL_INFO("sw.rtf", OSL_THIS_FUNC << " end");
 }
 
@@ -1397,13 +1401,13 @@ void RtfExport::WriteHeaderFooter(const SfxPoolItem& rItem, bool bHeader)
     const sal_Char* pStr
         = (bHeader ? OOO_STRING_SVTOOLS_RTF_HEADER : OOO_STRING_SVTOOLS_RTF_FOOTER);
     /* is this a title page? */
-    if (m_pAktPageDesc->GetFollow() && m_pAktPageDesc->GetFollow() != m_pAktPageDesc)
+    if (m_pCurrentPageDesc->GetFollow() && m_pCurrentPageDesc->GetFollow() != m_pCurrentPageDesc)
     {
         Strm().WriteCharPtr(OOO_STRING_SVTOOLS_RTF_TITLEPG);
         pStr = (bHeader ? OOO_STRING_SVTOOLS_RTF_HEADERF : OOO_STRING_SVTOOLS_RTF_FOOTERF);
     }
     Strm().WriteChar('{').WriteCharPtr(pStr);
-    WriteHeaderFooterText(m_pAktPageDesc->GetMaster(), bHeader);
+    WriteHeaderFooterText(m_pCurrentPageDesc->GetMaster(), bHeader);
     Strm().WriteChar('}');
 
     SAL_INFO("sw.rtf", OSL_THIS_FUNC << " end");
@@ -1440,8 +1444,8 @@ SwRTFWriter::SwRTFWriter(const OUString& rFilterName, const OUString& rBaseURL)
 
 ErrCode SwRTFWriter::WriteStream()
 {
-    SwPaM aPam(*pCurPam->End(), *pCurPam->Start());
-    RtfExport aExport(nullptr, pDoc, &aPam, pCurPam, this, m_bOutOutlineOnly);
+    SwPaM aPam(*m_pCurrentPam->End(), *m_pCurrentPam->Start());
+    RtfExport aExport(nullptr, m_pDoc, &aPam, m_pCurrentPam, this, m_bOutOutlineOnly);
     aExport.ExportDocument(true);
     return ERRCODE_NONE;
 }

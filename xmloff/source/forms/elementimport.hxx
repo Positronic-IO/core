@@ -33,6 +33,7 @@
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/form/XGridColumnFactory.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 #include <osl/diagnose.h>
 
 #include <map>
@@ -140,7 +141,7 @@ namespace xmloff
     protected:
         /** can be used to handle properties where the attribute default and the property default differ.
             <p>In such case, if the property had the attribute default upon writing, nothing is read, so upon reading,
-            the property is still at it's own default (which is not the attribute default).<p/>
+            the property is still at its own default (which is not the attribute default).<p/>
             <p>This method, if told the attribute and the property, and the (implied) attribute default, sets the
             property value as if the attribute was encountered.</p>
             @see encounteredAttribute
@@ -275,6 +276,7 @@ namespace xmloff
     //= OImagePositionImport
     class OImagePositionImport : public OControlImport
     {
+        css::uno::Reference<css::graphic::XGraphic> m_xGraphic;
         sal_Int16   m_nImagePosition;
         sal_Int16   m_nImageAlign;
         bool    m_bHaveImagePosition;

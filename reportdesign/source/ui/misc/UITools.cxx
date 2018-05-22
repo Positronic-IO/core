@@ -97,7 +97,6 @@
 #include <com/sun/star/sdb/SQLContext.hpp>
 #include <i18nlangtag/languagetag.hxx>
 #include <dlgpage.hxx>
-#include <vcl/msgbox.hxx>
 #include <rptui_slotid.hrc>
 #include <strings.hxx>
 #include <core_resource.hxx>
@@ -339,7 +338,7 @@ namespace
         _rItemSet.Put(SvxCharHiddenItem(_rxReportControlFormat->getCharHidden(),ITEMID_CHARHIDDEN));
         _rItemSet.Put(SvxTwoLinesItem(_rxReportControlFormat->getCharCombineIsOn(),_rxReportControlFormat->getCharCombinePrefix().toChar(),_rxReportControlFormat->getCharCombineSuffix().toChar(),ITEMID_TWOLINES));
         SvxUnderlineItem aUnderLineItem(aFont.GetUnderline(),ITEMID_UNDERLINE);
-        aUnderLineItem.SetColor(_rxReportControlFormat->getCharUnderlineColor());
+        aUnderLineItem.SetColor(Color(_rxReportControlFormat->getCharUnderlineColor()));
         _rItemSet.Put(aUnderLineItem);
         _rItemSet.Put(SvxKerningItem(_rxReportControlFormat->getCharKerning(),ITEMID_KERNING));
         _rItemSet.Put(SvxEmphasisMarkItem(static_cast<FontEmphasisMark>(_rxReportControlFormat->getCharEmphasis()),ITEMID_EMPHASISMARK));
@@ -430,7 +429,7 @@ namespace
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_COLOR,true,&pItem) && dynamic_cast< const SvxColorItem *>( pItem ) !=  nullptr)
         {
             const SvxColorItem* pFontItem = static_cast<const SvxColorItem*>(pItem);
-            aNewFont.SetColor(pFontItem->GetValue().GetColor());
+            aNewFont.SetColor(pFontItem->GetValue());
         }
 
         _out_rAwtFont = VCLUnoHelper::CreateFontDescriptor( aNewFont );
@@ -464,7 +463,7 @@ namespace
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_UNDERLINE,true,&pItem) && dynamic_cast< const SvxUnderlineItem *>( pItem ) !=  nullptr)
         {
             const SvxUnderlineItem* pFontItem = static_cast<const SvxUnderlineItem*>(pItem);
-            lcl_pushBack( _out_rProperties, PROPERTY_CHARUNDERLINECOLOR, uno::makeAny( pFontItem->GetColor().GetColor() ) );
+            lcl_pushBack( _out_rProperties, PROPERTY_CHARUNDERLINECOLOR, uno::makeAny( pFontItem->GetColor() ) );
         }
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_HORJUSTIFY,true,&pItem) && dynamic_cast< const SvxHorJustifyItem *>( pItem ) !=  nullptr)
         {
@@ -498,7 +497,7 @@ namespace
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_BRUSH,true,&pItem) && dynamic_cast< const SvxBrushItem *>( pItem ) !=  nullptr)
         {
             const SvxBrushItem* pFontItem = static_cast<const SvxBrushItem*>(pItem);
-            lcl_pushBack( _out_rProperties, PROPERTY_CONTROLBACKGROUND, uno::makeAny( pFontItem->GetColor().GetColor() ) );
+            lcl_pushBack( _out_rProperties, PROPERTY_CONTROLBACKGROUND, uno::makeAny( pFontItem->GetColor() ) );
         }
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_BLINK,true,&pItem) && dynamic_cast< const SvxBlinkItem *>( pItem ) !=  nullptr)
         {
@@ -520,7 +519,7 @@ namespace
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_COLOR,true,&pItem) && dynamic_cast< const SvxColorItem *>( pItem ) !=  nullptr)
         {
             const SvxColorItem* pFontItem = static_cast<const SvxColorItem*>(pItem);
-            lcl_pushBack( _out_rProperties, PROPERTY_CHARCOLOR, uno::makeAny( pFontItem->GetValue().GetColor() ) );
+            lcl_pushBack( _out_rProperties, PROPERTY_CHARCOLOR, uno::makeAny( pFontItem->GetValue() ) );
         }
         if ( SfxItemState::SET == _rItemSet.GetItemState( ITEMID_KERNING,true,&pItem) && dynamic_cast< const SvxKerningItem *>( pItem ) !=  nullptr)
         {
@@ -726,7 +725,7 @@ bool openCharDialog( const uno::Reference<report::XReportControlFormat >& _rxRep
     }
     catch(uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 
     SfxItemPool::Free(pPool);
@@ -765,7 +764,7 @@ bool openAreaDialog( const uno::Reference<report::XShape >& _xShape,const uno::R
     }
     catch(uno::Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 
     return bSuccess;
@@ -826,7 +825,7 @@ void applyCharacterSettings( const uno::Reference< report::XReportControlFormat 
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 }
 
@@ -943,7 +942,7 @@ uno::Sequence< OUString > getParameterNames( const uno::Reference< sdbc::XRowSet
     }
     catch( const uno::Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
     }
 
     return aNames;

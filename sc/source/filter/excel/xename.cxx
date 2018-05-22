@@ -21,7 +21,6 @@
 
 #include <map>
 
-#include <globstr.hrc>
 #include <document.hxx>
 #include <rangenam.hxx>
 #include <dbdata.hxx>
@@ -602,7 +601,7 @@ void XclExpNameManagerImpl::CreateBuiltInNames()
                     aRange.aStart.SetTab( nScTab );
                     aRange.aEnd.SetTab( nScTab );
                     aRange.PutInOrder();
-                    aRangeList.Append( aRange );
+                    aRangeList.push_back( aRange );
                 }
                 // create the NAME record (do not warn if ranges are shrunken)
                 GetAddressConverter().ValidateRangeList( aRangeList, false );
@@ -615,12 +614,12 @@ void XclExpNameManagerImpl::CreateBuiltInNames()
             ScRangeList aTitleList;
             // repeated columns
             if( const ScRange* pColRange = rDoc.GetRepeatColRange( nScTab ) )
-                aTitleList.Append( ScRange(
+                aTitleList.push_back( ScRange(
                     pColRange->aStart.Col(), 0, nScTab,
                     pColRange->aEnd.Col(), GetXclMaxPos().Row(), nScTab ) );
             // repeated rows
             if( const ScRange* pRowRange = rDoc.GetRepeatRowRange( nScTab ) )
-                aTitleList.Append( ScRange(
+                aTitleList.push_back( ScRange(
                     0, pRowRange->aStart.Row(), nScTab,
                     GetXclMaxPos().Col(), pRowRange->aEnd.Row(), nScTab ) );
             // create the NAME record
@@ -695,7 +694,7 @@ sal_uInt16 XclExpNameManager::InsertBuiltInName( sal_Unicode cBuiltIn, const ScR
     if( !rRangeList.empty() )
     {
         XclTokenArrayRef xTokArr = GetFormulaCompiler().CreateFormula( EXC_FMLATYPE_NAME, rRangeList );
-        nNameIdx = mxImpl->InsertBuiltInName( cBuiltIn, xTokArr, rRangeList.front()->aStart.Tab(), rRangeList );
+        nNameIdx = mxImpl->InsertBuiltInName( cBuiltIn, xTokArr, rRangeList.front().aStart.Tab(), rRangeList );
     }
     return nNameIdx;
 }

@@ -7,6 +7,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 
+include $(SRCDIR)/odk/build-examples_common.mk
+
 $(eval $(call gb_Module_Module,odk))
 
 $(eval $(call gb_Module_add_targets,odk,\
@@ -58,6 +60,9 @@ $(eval $(call gb_Module_add_check_targets,odk,\
 ifneq ($(filter $(OS),LINUX MACOSX),)
 $(eval $(call gb_Module_add_subsequentcheck_targets,odk, \
     CustomTarget_build-examples \
+    $(if $(ENABLE_JAVA),\
+        CustomTarget_build-examples_java \
+    ) \
 ))
 endif
 

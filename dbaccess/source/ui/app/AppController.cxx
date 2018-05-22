@@ -79,7 +79,6 @@
 #include <comphelper/interaction.hxx>
 #include <comphelper/processfactory.hxx>
 
-#include <vcl/msgbox.hxx>
 #include <vcl/stdtext.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/menu.hxx>
@@ -312,7 +311,7 @@ void OApplicationController::disconnect()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     m_xDataSourceConnection.clear();
@@ -403,7 +402,7 @@ void SAL_CALL OApplicationController::disposing()
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     clearView();
@@ -523,7 +522,7 @@ sal_Bool SAL_CALL OApplicationController::suspend(sal_Bool bSuspend)
                 )
             )
         {
-            switch (ExecuteQuerySaveDocument(getFrameWeld(),getStrippedDatabaseName()))
+            switch (ExecuteQuerySaveDocument(getFrameWeld(), getStrippedDatabaseName()))
             {
                 case RET_YES:
                     Execute(ID_BROWSER_SAVEDOC,Sequence<PropertyValue>());
@@ -769,12 +768,11 @@ FeatureState OApplicationController::GetState(sal_uInt16 _nId) const
                             std::vector< OUString > aSelected;
                             getSelectionElementNames( aSelected );
                             bool bAlterableViews = true;
-                            for (   std::vector< OUString >::const_iterator selectedName = aSelected.begin();
-                                    bAlterableViews && ( selectedName != aSelected.end() ) ;
-                                    ++selectedName
-                                )
+                            for (auto const& selectedName : aSelected)
                             {
-                                bAlterableViews &= impl_isAlterableView_nothrow( *selectedName );
+                                bAlterableViews &= impl_isAlterableView_nothrow(selectedName);
+                                if (!bAlterableViews)
+                                    break;
                             }
                             aReturn.bEnabled = bAlterableViews;
                         }
@@ -929,7 +927,7 @@ FeatureState OApplicationController::GetState(sal_uInt16 _nId) const
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return aReturn;
 }
@@ -955,7 +953,7 @@ namespace
             }
             catch( const Exception& )
             {
-                DBG_UNHANDLED_EXCEPTION();
+                DBG_UNHANDLED_EXCEPTION("dbaccess");
             }
 
             bHandled = pApprove->wasSelected();
@@ -1044,12 +1042,11 @@ void OApplicationController::Execute(sal_uInt16 _nId, const Sequence< PropertyVa
                     if ( !aArgs.getLength() )
                     {
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                        ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog( getView() ));
+                        ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(getFrameWeld()));
                         std::vector<SotClipboardFormatId> aFormatIds;
                         getSupportedFormats(getContainer()->getElementType(),aFormatIds);
-                        const std::vector<SotClipboardFormatId>::const_iterator aEnd = aFormatIds.end();
-                        for (std::vector<SotClipboardFormatId>::const_iterator aIter = aFormatIds.begin();aIter != aEnd; ++aIter)
-                            pDlg->Insert(*aIter,"");
+                        for (auto const& formatId : aFormatIds)
+                            pDlg->Insert(formatId,"");
 
                         const TransferableDataHelper& rClipboard = getViewClipboard();
                         pasteFormat(pDlg->GetFormat(rClipboard.GetTransferable()));
@@ -1116,7 +1113,7 @@ void OApplicationController::Execute(sal_uInt16 _nId, const Sequence< PropertyVa
 
                     ::sfx2::FileDialogHelper aFileDlg(
                         ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION,
-                        FileDialogFlags::NONE, getView());
+                        FileDialogFlags::NONE, getFrameWeld());
                     aFileDlg.SetDisplayDirectory( sUrl );
 
                     std::shared_ptr<const SfxFilter> pFilter = getStandardDatabaseFilter();
@@ -1379,7 +1376,7 @@ void OApplicationController::Execute(sal_uInt16 _nId, const Sequence< PropertyVa
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     InvalidateFeature(_nId);
 }
@@ -1610,7 +1607,7 @@ void SAL_CALL OApplicationController::elementReplaced( const ContainerEvent& _rE
         }
         catch( Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 }
@@ -1730,7 +1727,7 @@ bool OApplicationController::onEntryDoubleClick( SvTreeListBox const & _rTree )
         }
         catch(const Exception&)
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     return false;   // not handled
@@ -1756,7 +1753,7 @@ bool OApplicationController::impl_isAlterableView_nothrow( const OUString& _rTab
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
     return bIsAlterableView;
 }
@@ -1771,7 +1768,7 @@ Reference< XComponent > OApplicationController::openElementWithArguments( const 
     Reference< XComponent > xRet;
     if ( _eOpenMode == E_OPEN_DESIGN )
     {
-        // OJ: http://www.openoffice.org/issues/show_bug.cgi?id=30382
+        // https://bz.apache.org/ooo/show_bug.cgi?id=30382
         getContainer()->showPreview(nullptr);
     }
 
@@ -1999,7 +1996,7 @@ void OApplicationController::addContainerListener(const Reference<XNameAccess>& 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2140,7 +2137,7 @@ void OApplicationController::renameEntry()
                         }
                         catch(const Exception& )
                         {
-                            DBG_UNHANDLED_EXCEPTION();
+                            DBG_UNHANDLED_EXCEPTION("dbaccess");
                         }
                     }
                     else
@@ -2151,7 +2148,7 @@ void OApplicationController::renameEntry()
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2218,7 +2215,7 @@ void OApplicationController::showPreviewFor(const ElementType _eType,const OUStr
     }
     catch(const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2314,7 +2311,7 @@ bool OApplicationController::requestDrag( sal_Int8 /*_nAction*/, const Point& /*
         }
         catch(const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -2486,7 +2483,7 @@ void OApplicationController::onAttachedFrame()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     if ( nConnectedControllers > 1 )
@@ -2539,7 +2536,7 @@ void OApplicationController::OnFirstControllerConnected()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2593,7 +2590,7 @@ sal_Bool SAL_CALL OApplicationController::attachModel(const Reference< XModel > 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     m_xModel = _rxModel;
@@ -2616,7 +2613,7 @@ sal_Bool SAL_CALL OApplicationController::attachModel(const Reference< XModel > 
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 
     // initial preview mode
@@ -2636,7 +2633,7 @@ sal_Bool SAL_CALL OApplicationController::attachModel(const Reference< XModel > 
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
 
@@ -2655,7 +2652,7 @@ void OApplicationController::containerFound( const Reference< XContainer >& _xCo
     }
     catch(const Exception&)
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 
@@ -2674,7 +2671,7 @@ OUString OApplicationController::getCurrentlySelectedName(sal_Int32& _rnCommandT
         }
         catch( const Exception& )
         {
-            DBG_UNHANDLED_EXCEPTION();
+            DBG_UNHANDLED_EXCEPTION("dbaccess");
         }
     }
     return sName;
@@ -2788,18 +2785,15 @@ sal_Bool SAL_CALL OApplicationController::select( const Any& _aSelection )
             }
         }
     }
-    for (   SelectionByElementType::const_iterator sel = aSelectedElements.begin();
-            sel != aSelectedElements.end();
-            ++sel
-        )
+    for (auto const& selectedElement : aSelectedElements)
     {
-        if ( sel->first == m_eCurrentType )
+        if ( selectedElement.first == m_eCurrentType )
         {
-            getContainer()->selectElements( comphelper::containerToSequence(sel->second) );
+            getContainer()->selectElements( comphelper::containerToSequence(selectedElement.second) );
         }
         else
         {
-            m_aPendingSelection[ sel->first ] = sel->second;
+            m_aPendingSelection[ selectedElement.first ] = selectedElement.second;
         }
     }
 
@@ -2848,7 +2842,7 @@ void OApplicationController::impl_migrateScripts_nothrow()
     }
     catch( const Exception& )
     {
-        DBG_UNHANDLED_EXCEPTION();
+        DBG_UNHANDLED_EXCEPTION("dbaccess");
     }
 }
 

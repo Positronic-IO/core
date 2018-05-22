@@ -30,7 +30,7 @@ ifeq ($(COM_IS_CLANG),TRUE)
 firebird_NO_CXX11_NARROWING := -Wno-c++11-narrowing
 endif
 
-MAKE_PRE=$(call gb_Helper_extend_ld_path,$(call gb_UnpackedTarball_get_dir,icu)/source/lib) LC_ALL=C
+MAKE_PRE=LC_ALL=C
 
 MAKE_POST=$(if $(filter MACOSX,$(OS)),&& $(PERL) \
 			$(SRCDIR)/solenv/bin/macosx-change-install-names.pl shl OOO \
@@ -58,8 +58,6 @@ $(call gb_ExternalProject_get_state_target,firebird,build):
 			" \
 		&& export CXXFLAGS=" \
 			$(if $(filter MSC,$(COM)),$(if $(MSVC_USE_DEBUG_RUNTIME),-DMSVC_USE_DEBUG_RUNTIME)) \
-			$(if $(filter LINUX/X86_64/TRUE,$(OS)/$(CPUNAME)/$(COM_IS_CLANG)), \
-				-DDEBUG_GDS_ALLOC) \
 			$(if $(HAVE_GCC_FNO_SIZED_DEALLOCATION),-fno-sized-deallocation -fno-delete-null-pointer-checks) \
 			$(if $(SYSTEM_BOOST),$(BOOST_CPPFLAGS), \
 				$(BOOST_CPPFLAGS) \
@@ -70,12 +68,12 @@ $(call gb_ExternalProject_get_state_target,firebird,build):
 				-I$(call gb_UnpackedTarball_get_dir,icu)/source/i18n \
 				-I$(call gb_UnpackedTarball_get_dir,icu)/source/common \
 			) \
-			$(ICU_UCHAR_TYPE) \
 			$(if $(SYSTEM_LIBTOMMATH),$(LIBTOMMATH_CFLAGS), \
 				-L$(call gb_UnpackedTarball_get_dir,libtommath) \
 			) \
 			$(CXXFLAGS_CXX11) \
 			$(firebird_NO_CXX11_NARROWING) \
+			$(if $(filter $(true),$(gb_SYMBOL)),$(gb_DEBUGINFO_FLAGS)) \
 		" \
 		&& export LDFLAGS=" \
 			$(if $(SYSTEM_ICU),$(ICU_LIBS), \
@@ -98,9 +96,9 @@ $(call gb_ExternalProject_get_state_target,firebird,build):
 							'<' 101200)), \
 					ac_cv_func_clock_gettime=no)) \
 		&& if [ -n "$${FB_CPU_ARG}" ]; then \
-			   $(MAKE_PRE) $(MAKE) $(if $(ENABLE_DEBUG),Debug) $(INVOKE_FPA) SHELL='$(SHELL)' $(MAKE_POST); \
+			   $(MAKE_PRE) $(MAKE) $(if $(ENABLE_DEBUG),Debug) $(INVOKE_FPA) SHELL='$(SHELL)' LIBO_TUNNEL_LIBRARY_PATH='$(subst ','\'',$(subst $$,$$$$,$(call gb_Helper_extend_ld_path,$(call gb_UnpackedTarball_get_dir,icu)/source/lib)))' $(MAKE_POST); \
 			else \
-			   $(MAKE_PRE) $(MAKE) $(if $(ENABLE_DEBUG),Debug) SHELL='$(SHELL)' $(MAKE_POST); \
+			   $(MAKE_PRE) $(MAKE) $(if $(ENABLE_DEBUG),Debug) SHELL='$(SHELL)' LIBO_TUNNEL_LIBRARY_PATH='$(subst ','\'',$(subst $$,$$$$,$(call gb_Helper_extend_ld_path,$(call gb_UnpackedTarball_get_dir,icu)/source/lib)))' $(MAKE_POST); \
 			fi \
 	)
 # vim: set noet sw=4 ts=4:

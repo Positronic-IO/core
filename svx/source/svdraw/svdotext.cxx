@@ -26,7 +26,7 @@
 #include <svx/svdetc.hxx>
 #include <svx/svdoutl.hxx>
 #include <svx/svdmodel.hxx>
-#include <svdglob.hxx>
+#include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <editeng/writingmodeitem.hxx>
 #include <svx/sdtfchim.hxx>
@@ -60,29 +60,23 @@
 #include <drawinglayer/geometry/viewinformation2d.hxx>
 #include <vcl/virdev.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
-#include "svdconv.hxx"
 
 using namespace com::sun::star;
 
-
 // BaseProperties section
-
 sdr::properties::BaseProperties* SdrTextObj::CreateObjectSpecificProperties()
 {
     return new sdr::properties::TextProperties(*this);
 }
 
-
 // DrawContact section
-
 sdr::contact::ViewContact* SdrTextObj::CreateObjectSpecificViewContact()
 {
     return new sdr::contact::ViewContactOfTextObj(*this);
 }
 
-
-SdrTextObj::SdrTextObj()
-:   SdrAttrObj(),
+SdrTextObj::SdrTextObj(SdrModel& rSdrModel)
+:   SdrAttrObj(rSdrModel),
     mpText(nullptr),
     pEdtOutl(nullptr),
     eTextKind(OBJ_TEXT)
@@ -90,7 +84,6 @@ SdrTextObj::SdrTextObj()
     bTextSizeDirty=false;
     bTextFrame=false;
     bNoShear=false;
-    bNoMirror=false;
     bDisableAutoWidthOnDragging=false;
 
     mbInEditMode = false;
@@ -102,8 +95,10 @@ SdrTextObj::SdrTextObj()
     mbInDownScale = false;
 }
 
-SdrTextObj::SdrTextObj(const tools::Rectangle& rNewRect)
-:   SdrAttrObj(),
+SdrTextObj::SdrTextObj(
+    SdrModel& rSdrModel,
+    const tools::Rectangle& rNewRect)
+:   SdrAttrObj(rSdrModel),
     maRect(rNewRect),
     mpText(nullptr),
     pEdtOutl(nullptr),
@@ -112,7 +107,6 @@ SdrTextObj::SdrTextObj(const tools::Rectangle& rNewRect)
     bTextSizeDirty=false;
     bTextFrame=false;
     bNoShear=false;
-    bNoMirror=false;
     bDisableAutoWidthOnDragging=false;
     ImpJustifyRect(maRect);
 
@@ -125,8 +119,10 @@ SdrTextObj::SdrTextObj(const tools::Rectangle& rNewRect)
     mbSupportTextIndentingOnLineWidthChange = true;
 }
 
-SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind)
-:   SdrAttrObj(),
+SdrTextObj::SdrTextObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewTextKind)
+:   SdrAttrObj(rSdrModel),
     mpText(nullptr),
     pEdtOutl(nullptr),
     eTextKind(eNewTextKind)
@@ -134,7 +130,6 @@ SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind)
     bTextSizeDirty=false;
     bTextFrame=true;
     bNoShear=true;
-    bNoMirror=true;
     bDisableAutoWidthOnDragging=false;
 
     mbInEditMode = false;
@@ -146,8 +141,11 @@ SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind)
     mbSupportTextIndentingOnLineWidthChange = true;
 }
 
-SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind, const tools::Rectangle& rNewRect)
-:   SdrAttrObj(),
+SdrTextObj::SdrTextObj(
+    SdrModel& rSdrModel,
+    SdrObjKind eNewTextKind,
+    const tools::Rectangle& rNewRect)
+:   SdrAttrObj(rSdrModel),
     maRect(rNewRect),
     mpText(nullptr),
     pEdtOutl(nullptr),
@@ -156,7 +154,6 @@ SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind, const tools::Rectangle& rNewRect
     bTextSizeDirty=false;
     bTextFrame=true;
     bNoShear=true;
-    bNoMirror=true;
     bDisableAutoWidthOnDragging=false;
     ImpJustifyRect(maRect);
 
@@ -171,25 +168,19 @@ SdrTextObj::SdrTextObj(SdrObjKind eNewTextKind, const tools::Rectangle& rNewRect
 
 SdrTextObj::~SdrTextObj()
 {
-    if( pModel )
-    {
-        SdrOutliner& rOutl = pModel->GetHitTestOutliner();
-        if( rOutl.GetTextObj() == this )
-            rOutl.SetTextObj( nullptr );
-    }
-
+    SdrOutliner& rOutl(getSdrModelFromSdrObject().GetHitTestOutliner());
+    if( rOutl.GetTextObj() == this )
+        rOutl.SetTextObj( nullptr );
     mpText.reset();
-
     ImpDeregisterLink();
 }
 
 void SdrTextObj::FitFrameToTextSize()
 {
-    DBG_ASSERT(pModel!=nullptr,"SdrTextObj::FitFrameToTextSize(): pModel=NULL!");
     ImpJustifyRect(maRect);
 
     SdrText* pText = getActiveText();
-    if( pText==nullptr || !pText->GetOutlinerParaObject() || pModel==nullptr)
+    if(pText==nullptr || !pText->GetOutlinerParaObject())
         return;
 
     SdrOutliner& rOutliner=ImpGetDrawOutliner();
@@ -478,39 +469,6 @@ void SdrTextObj::SetPage(SdrPage* pNewPage)
     }
 }
 
-void SdrTextObj::SetModel(SdrModel* pNewModel)
-{
-    SdrModel* pOldModel=pModel;
-    bool bLinked=IsLinkedText();
-    bool bChg=pNewModel!=pModel;
-
-    if (bLinked && bChg)
-    {
-        ImpDeregisterLink();
-    }
-
-    SdrAttrObj::SetModel(pNewModel);
-
-    if( bChg )
-    {
-        if( pNewModel != nullptr && pOldModel != nullptr )
-            SetTextSizeDirty();
-
-        sal_Int32 nCount = getTextCount();
-        for( sal_Int32 nText = 0; nText < nCount; nText++ )
-        {
-            SdrText* pText = getText( nText );
-            if( pText )
-                pText->SetModel( pNewModel );
-        }
-    }
-
-    if (bLinked && bChg)
-    {
-        ImpRegisterLink();
-    }
-}
-
 void SdrTextObj::NbcSetEckenradius(long nRad)
 {
     SetObjectItem(makeSdrEckenradiusItem(nRad));
@@ -524,7 +482,7 @@ void SdrTextObj::AdaptTextMinSize()
         // Only do this for text frame.
         return;
 
-    if (pModel && pModel->IsPasteResize())
+    if (getSdrModelFromSdrObject().IsPasteResize())
         // Don't do this during paste resize.
         return;
 
@@ -573,7 +531,7 @@ void SdrTextObj::AdaptTextMinSize()
     SetObjectItemSet(aSet);
 }
 
-void SdrTextObj::ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle& rAnchorRect, bool bLineWidth ) const
+void SdrTextObj::ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle const & rAnchorRect, bool bLineWidth ) const
 {
     basegfx::B2DPolyPolygon aXorPolyPolygon(TakeXorPoly());
     basegfx::B2DPolyPolygon* pContourPolyPolygon = nullptr;
@@ -607,7 +565,7 @@ void SdrTextObj::ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle&
         if(bShadowOn)
         {
             // force shadow off
-            SdrObject* pCopy = Clone();
+            SdrObject* pCopy(CloneSdrObject(getSdrModelFromSdrObject()));
             pCopy->SetMergedItem(makeSdrShadowItem(false));
             *pContourPolyPolygon = pCopy->TakeContour();
             SdrObject::Free( pCopy );
@@ -754,11 +712,9 @@ void SdrTextObj::TakeTextRect( SdrOutliner& rOutliner, tools::Rectangle& rTextRe
 
     if (pPara)
     {
-        bool bHitTest = false;
-        if( pModel )
-            bHitTest = &pModel->GetHitTestOutliner() == &rOutliner;
-
+        const bool bHitTest(&getSdrModelFromSdrObject().GetHitTestOutliner() == &rOutliner);
         const SdrTextObj* pTestObj = rOutliner.GetTextObj();
+
         if( !pTestObj || !bHitTest || pTestObj != this ||
             pTestObj->GetOutlinerParaObject() != pOutlinerParaObject )
         {
@@ -972,22 +928,22 @@ OUString SdrTextObj::TakeObjNameSingul() const
     {
         case OBJ_OUTLINETEXT:
         {
-            aStr = ImpGetResStr(STR_ObjNameSingulOUTLINETEXT);
+            aStr = SvxResId(STR_ObjNameSingulOUTLINETEXT);
             break;
         }
 
         case OBJ_TITLETEXT  :
         {
-            aStr = ImpGetResStr(STR_ObjNameSingulTITLETEXT);
+            aStr = SvxResId(STR_ObjNameSingulTITLETEXT);
             break;
         }
 
         default:
         {
             if(IsLinkedText())
-                aStr = ImpGetResStr(STR_ObjNameSingulTEXTLNK);
+                aStr = SvxResId(STR_ObjNameSingulTEXTLNK);
             else
-                aStr = ImpGetResStr(STR_ObjNameSingulTEXT);
+                aStr = SvxResId(STR_ObjNameSingulTEXT);
             break;
         }
     }
@@ -1036,30 +992,31 @@ OUString SdrTextObj::TakeObjNamePlural() const
 {
     OUString sName;
     switch (eTextKind) {
-        case OBJ_OUTLINETEXT: sName=ImpGetResStr(STR_ObjNamePluralOUTLINETEXT); break;
-        case OBJ_TITLETEXT  : sName=ImpGetResStr(STR_ObjNamePluralTITLETEXT);   break;
+        case OBJ_OUTLINETEXT: sName=SvxResId(STR_ObjNamePluralOUTLINETEXT); break;
+        case OBJ_TITLETEXT  : sName=SvxResId(STR_ObjNamePluralTITLETEXT);   break;
         default: {
             if (IsLinkedText()) {
-                sName=ImpGetResStr(STR_ObjNamePluralTEXTLNK);
+                sName=SvxResId(STR_ObjNamePluralTEXTLNK);
             } else {
-                sName=ImpGetResStr(STR_ObjNamePluralTEXT);
+                sName=SvxResId(STR_ObjNamePluralTEXT);
             }
         } break;
     } // switch
     return sName;
 }
 
-SdrTextObj* SdrTextObj::Clone() const
+SdrTextObj* SdrTextObj::CloneSdrObject(SdrModel& rTargetModel) const
 {
-    return CloneHelper< SdrTextObj >();
+    return CloneHelper< SdrTextObj >(rTargetModel);
 }
 
 SdrTextObj& SdrTextObj::operator=(const SdrTextObj& rObj)
 {
     if( this == &rObj )
         return *this;
-    // call parent
-    SdrObject::operator=(rObj);
+
+    // call parent. tdf#116979: use the correct parent class
+    SdrAttrObj::operator=(rObj);
 
     maRect = rObj.maRect;
     aGeo      =rObj.aGeo;
@@ -1070,16 +1027,19 @@ SdrTextObj& SdrTextObj::operator=(const SdrTextObj& rObj)
 
     // Not all of the necessary parameters were copied yet.
     bNoShear = rObj.bNoShear;
-    bNoMirror = rObj.bNoMirror;
     bDisableAutoWidthOnDragging = rObj.bDisableAutoWidthOnDragging;
-
-    OutlinerParaObject* pNewOutlinerParaObject = nullptr;
-
     SdrText* pText = getActiveText();
 
     if( pText && rObj.HasText() )
     {
+        // before pNewOutlinerParaObject was created the same, but
+        // set at mpText (outside this scope), but mpText might be
+        // empty (this operator== seems not prepared for MultiText
+        // objects). In the current form it makes only sense to
+        // create locally and use locally on a known existing SdrText
         const Outliner* pEO=rObj.pEdtOutl;
+        OutlinerParaObject* pNewOutlinerParaObject = nullptr;
+
         if (pEO!=nullptr)
         {
             pNewOutlinerParaObject = pEO->CreateParaObject();
@@ -1088,9 +1048,10 @@ SdrTextObj& SdrTextObj::operator=(const SdrTextObj& rObj)
         {
             pNewOutlinerParaObject = new OutlinerParaObject(*rObj.getActiveText()->GetOutlinerParaObject());
         }
+
+        pText->SetOutlinerParaObject( pNewOutlinerParaObject );
     }
 
-    mpText->SetOutlinerParaObject( pNewOutlinerParaObject );
     ImpSetTextStyleSheetListeners();
     return *this;
 }
@@ -1111,7 +1072,7 @@ basegfx::B2DPolyPolygon SdrTextObj::TakeContour() const
     basegfx::B2DPolyPolygon aRetval(SdrAttrObj::TakeContour());
 
     // and now add the BoundRect of the text, if necessary
-    if ( pModel && GetOutlinerParaObject() && !IsFontwork() && !IsContourTextFrame() )
+    if ( GetOutlinerParaObject() && !IsFontwork() && !IsContourTextFrame() )
     {
         // using Clone()-Paint() strategy inside TakeContour() leaves a destroyed
         // SdrObject as pointer in DrawOutliner. Set *this again in fetching the outliner
@@ -1213,7 +1174,7 @@ void SdrTextObj::ImpInitDrawOutliner( SdrOutliner& rOutl ) const
 
 SdrOutliner& SdrTextObj::ImpGetDrawOutliner() const
 {
-    SdrOutliner& rOutl=pModel->GetDrawOutliner(this);
+    SdrOutliner& rOutl(getSdrModelFromSdrObject().GetDrawOutliner(this));
 
     // Code extracted to ImpInitDrawOutliner()
     ImpInitDrawOutliner( rOutl );
@@ -1261,7 +1222,7 @@ void SdrTextObj::ImpSetupDrawOutlinerForPaint( bool             bContourFrame,
 double SdrTextObj::GetFontScaleY() const
 {
     SdrText* pText = getActiveText();
-    if (pText == nullptr || !pText->GetOutlinerParaObject() || pModel == nullptr)
+    if (pText == nullptr || !pText->GetOutlinerParaObject())
         return 1.0;
 
     SdrOutliner& rOutliner = ImpGetDrawOutliner();
@@ -1403,17 +1364,21 @@ void SdrTextObj::UpdateOutlinerFormatting( SdrOutliner& rOutl, tools::Rectangle&
     tools::Rectangle aAnchorRect;
     Fraction aFitXCorrection(1,1);
 
-    bool bContourFrame=IsContourTextFrame();
+    const bool bContourFrame(IsContourTextFrame());
+    const MapMode aMapMode(
+        getSdrModelFromSdrObject().GetScaleUnit(),
+        Point(0,0),
+        getSdrModelFromSdrObject().GetScaleFraction(),
+        getSdrModelFromSdrObject().GetScaleFraction());
 
-    if( GetModel() )
-    {
-        MapMode aMapMode(GetModel()->GetScaleUnit(), Point(0,0),
-                         GetModel()->GetScaleFraction(),
-                         GetModel()->GetScaleFraction());
-        rOutl.SetRefMapMode(aMapMode);
-    }
-
-    ImpSetupDrawOutlinerForPaint( bContourFrame, rOutl, aTextRect, aAnchorRect, rPaintRect, aFitXCorrection );
+    rOutl.SetRefMapMode(aMapMode);
+    ImpSetupDrawOutlinerForPaint(
+        bContourFrame,
+        rOutl,
+        aTextRect,
+        aAnchorRect,
+        rPaintRect,
+        aFitXCorrection);
 }
 
 
@@ -1561,7 +1526,7 @@ TextChain *SdrTextObj::GetTextChain() const
     //if (!IsChainable())
     //    return NULL;
 
-    return pModel->GetTextChain();
+    return getSdrModelFromSdrObject().GetTextChain();
 }
 
 bool SdrTextObj::IsVerticalWriting() const
@@ -1670,36 +1635,11 @@ bool SdrTextObj::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B2DP
     basegfx::B2DTuple aTranslate(aRectangle.Left(), aRectangle.Top());
 
     // position maybe relative to anchorpos, convert
-    if( pModel && pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {
             aTranslate -= basegfx::B2DTuple(GetAnchorPos().X(), GetAnchorPos().Y());
-        }
-    }
-
-    // force MapUnit to 100th mm
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplTwipsToMM(aTranslate.getX()));
-                aTranslate.setY(ImplTwipsToMM(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplTwipsToMM(aScale.getX()));
-                aScale.setY(ImplTwipsToMM(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRGetBaseGeometry: Missing unit translation to 100th mm!");
-            }
         }
     }
 
@@ -1743,33 +1683,8 @@ void SdrTextObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
     aGeo.nShearAngle = 0;
     aGeo.RecalcTan();
 
-    // force metric to pool metric
-    const MapUnit eMapUnit(GetObjectMapUnit());
-    if(eMapUnit != MapUnit::Map100thMM)
-    {
-        switch(eMapUnit)
-        {
-            case MapUnit::MapTwip :
-            {
-                // position
-                aTranslate.setX(ImplMMToTwips(aTranslate.getX()));
-                aTranslate.setY(ImplMMToTwips(aTranslate.getY()));
-
-                // size
-                aScale.setX(ImplMMToTwips(aScale.getX()));
-                aScale.setY(ImplMMToTwips(aScale.getY()));
-
-                break;
-            }
-            default:
-            {
-                OSL_FAIL("TRSetBaseGeometry: Missing unit translation to PoolMetric!");
-            }
-        }
-    }
-
     // if anchor is used, make position relative to it
-    if( pModel && pModel->IsWriter() )
+    if( getSdrModelFromSdrObject().IsWriter() )
     {
         if(GetAnchorPos().X() || GetAnchorPos().Y())
         {

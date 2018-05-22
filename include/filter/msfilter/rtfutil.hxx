@@ -20,6 +20,8 @@
 // RTF values are often multiplied by 2^16
 #define RTF_MULTIPLIER 65536
 
+class SvStream;
+
 namespace msfilter
 {
 namespace rtfutil
@@ -52,6 +54,22 @@ MSFILTER_DLLPUBLIC OString OutString(const OUString& rStr, rtl_TextEncoding eDes
  */
 MSFILTER_DLLPUBLIC OString OutStringUpr(const sal_Char* pToken, const OUString& rStr,
                                         rtl_TextEncoding eDestEnc);
+
+/**
+ * Get the numeric value of a single character, representing a hex value.
+ *
+ * @return -1 on failure
+ */
+MSFILTER_DLLPUBLIC int AsHex(char ch);
+
+/// Writes binary data as a hex dump.
+MSFILTER_DLLPUBLIC OString WriteHex(const sal_uInt8* pData, sal_uInt32 nSize,
+                                    SvStream* pStream = nullptr, sal_uInt32 nLimit = 64);
+
+/**
+ * Extract OLE2 data from an \objdata hex dump.
+ */
+MSFILTER_DLLPUBLIC bool ExtractOLE2FromObjdata(const OString& rObjdata, SvStream& rOle2);
 }
 }
 

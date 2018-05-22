@@ -19,6 +19,8 @@
 
 $(eval $(call gb_Library_Library,vcl))
 
+$(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.common))
+
 ifeq ($(OS),MACOSX)
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.macosx))
 else ifeq ($(OS),WNT)
@@ -43,10 +45,10 @@ $(eval $(call gb_Library_set_include,vcl,\
 $(eval $(call gb_Library_add_defs,vcl,\
     -DVCL_DLLIMPLEMENTATION \
     -DDLLIMPLEMENTATION_UITEST \
-	-DCUI_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,cui))\" \
-	-DDESKTOP_DETECTOR_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,desktop_detector))\" \
-	-DTK_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,tk))\" \
-	-DENABLE_MERGELIBS=$(if $(MERGELIBS),1,0) \
+    -DCUI_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,cui))\" \
+    -DDESKTOP_DETECTOR_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,desktop_detector))\" \
+    -DTK_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,tk))\" \
+    -DENABLE_MERGELIBS=$(if $(MERGELIBS),1,0) \
 ))
 
 ifeq ($(SYSTEM_GLM),TRUE)
@@ -58,18 +60,18 @@ endif
 $(eval $(call gb_Library_use_sdk_api,vcl))
 
 $(eval $(call gb_Library_use_custom_headers,vcl,\
-	officecfg/registry \
+    officecfg/registry \
 ))
 
 $(eval $(call gb_Library_use_externals,vcl,\
-	libjpeg \
-	libeot \
-	$(if $(filter PDFIUM,$(BUILD_TYPE)),pdfium) \
+    libjpeg \
+    libeot \
+    $(if $(filter PDFIUM,$(BUILD_TYPE)),pdfium) \
 ))
 
 $(eval $(call gb_Library_use_libraries,vcl,\
     $(call gb_Helper_optional,BREAKPAD, \
-		crashreport) \
+        crashreport) \
     svl \
     tl \
     utl \
@@ -110,15 +112,15 @@ $(eval $(call gb_Library_use_libraries,vcl,\
 endif
 
 $(eval $(call gb_Library_use_externals,vcl,\
-	boost_headers \
-	gio \
-	glm_headers \
-	graphite \
-	harfbuzz \
-	icu_headers \
-	icuuc \
-	lcms2 \
-	mdds_headers \
+    boost_headers \
+    gio \
+    glm_headers \
+    graphite \
+    harfbuzz \
+    icu_headers \
+    icuuc \
+    lcms2 \
+    mdds_headers \
 ))
 ifeq ($(ENABLE_HEADLESS),)
 $(eval $(call gb_Library_use_externals,vcl,\
@@ -140,7 +142,6 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/window/stacking \
     vcl/source/window/debug \
     vcl/source/window/globalization \
-    vcl/source/window/btndlg \
     vcl/source/window/builder \
     vcl/source/window/commandevent \
     vcl/source/window/cursor \
@@ -247,8 +248,6 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/animate \
     vcl/source/gdi/base14 \
     vcl/source/gdi/bitmap3 \
-    vcl/source/gdi/bitmap4 \
-    vcl/source/gdi/bitmap \
     vcl/source/gdi/bitmapex \
     vcl/source/gdi/bmpacc2 \
     vcl/source/gdi/bmpacc3 \
@@ -268,7 +267,6 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/graphictools \
     vcl/source/gdi/hatch \
     vcl/source/gdi/impanmvw \
-    vcl/source/gdi/impbmp \
     vcl/source/gdi/impgraph \
     vcl/source/gdi/impvect \
     vcl/source/gdi/jobset \
@@ -301,11 +299,42 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/wall \
     vcl/source/gdi/scrptrun \
     vcl/source/gdi/CommonSalLayout \
+    vcl/source/graphic/GraphicLoader \
+    vcl/source/graphic/GraphicObject \
+    vcl/source/graphic/GraphicObject2 \
+    vcl/source/graphic/grfattr \
+    vcl/source/graphic/Manager \
+    vcl/source/graphic/UnoGraphic \
+    vcl/source/graphic/UnoGraphicDescriptor \
+    vcl/source/graphic/UnoGraphicObject \
+    vcl/source/graphic/UnoGraphicProvider \
+    vcl/source/graphic/UnoGraphicTransformer \
+    vcl/source/bitmap/bitmap \
     vcl/source/bitmap/bitmapfilter \
-    vcl/source/bitmap/bitmapscalesuper \
-    vcl/source/bitmap/BitmapScaleConvolution \
+    vcl/source/bitmap/BitmapMonochromeFilter \
+    vcl/source/bitmap/BitmapSmoothenFilter \
+    vcl/source/bitmap/BitmapLightenFilter \
+    vcl/source/bitmap/BitmapDisabledImageFilter \
+    vcl/source/bitmap/BitmapColorizeFilter \
+    vcl/source/bitmap/bitmappaint \
+    vcl/source/bitmap/BitmapGaussianSeparableBlurFilter \
+    vcl/source/bitmap/BitmapSobelGreyFilter \
+    vcl/source/bitmap/BitmapSolarizeFilter \
+    vcl/source/bitmap/BitmapSepiaFilter \
+    vcl/source/bitmap/BitmapMosaicFilter \
+    vcl/source/bitmap/BitmapEmbossGreyFilter \
+    vcl/source/bitmap/BitmapPopArtFilter \
+    vcl/source/bitmap/BitmapDuoToneFilter \
+    vcl/source/bitmap/BitmapConvolutionMatrixFilter \
+    vcl/source/bitmap/BitmapMedianFilter \
+    vcl/source/bitmap/BitmapInterpolateScaleFilter \
+    vcl/source/bitmap/BitmapSeparableUnsharpenFilter \
+	vcl/source/bitmap/BitmapFastScaleFilter \
+    vcl/source/bitmap/BitmapScaleSuperFilter \
+    vcl/source/bitmap/BitmapScaleConvolutionFilter \
     vcl/source/bitmap/BitmapSymmetryCheck \
-    vcl/source/bitmap/BitmapProcessor \
+    vcl/source/bitmap/BitmapColorQuantizationFilter \
+    vcl/source/bitmap/BitmapSimpleColorQuantizationFilter \
     vcl/source/bitmap/BitmapTools \
     vcl/source/bitmap/checksum \
     vcl/source/image/Image \
@@ -327,10 +356,10 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/app/dndhelp \
     vcl/source/app/help \
     vcl/source/app/i18nhelp \
-	vcl/source/app/idle \
-	vcl/source/app/salusereventlist \
+    vcl/source/app/idle \
+    vcl/source/app/salusereventlist \
     vcl/source/app/salvtables \
-	vcl/source/app/scheduler \
+    vcl/source/app/scheduler \
     vcl/source/app/session \
     vcl/source/app/settings \
     vcl/source/app/IconThemeInfo \
@@ -428,7 +457,7 @@ $(eval $(call gb_Library_add_cxxflags,vcl,\
 ))
 
 $(eval $(call gb_Library_add_defs,vcl,\
-	-DMACOSX_BUNDLE_IDENTIFIER=\"$(MACOSX_BUNDLE_IDENTIFIER)\" \
+    -DMACOSX_BUNDLE_IDENTIFIER=\"$(MACOSX_BUNDLE_IDENTIFIER)\" \
 ))
 
 $(eval $(call gb_Library_add_exception_objects,vcl,\
@@ -436,7 +465,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
 ))
 
 $(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
-	ApplicationServices \
+    ApplicationServices \
 ))
 
 $(eval $(call gb_Library_add_objcxxobjects,vcl,\
@@ -518,9 +547,9 @@ endif
 vcl_headless_code= \
     vcl/headless/svpframe \
     $(if $(filter-out IOS,$(OS)), \
-	    vcl/headless/svpbmp \
-		vcl/headless/svpgdi \
-	    vcl/headless/svpdata) \
+        vcl/headless/svpbmp \
+        vcl/headless/svpgdi \
+        vcl/headless/svpdata) \
     vcl/headless/svpdummies \
     vcl/headless/svpinst \
     vcl/headless/svpvd \
@@ -561,7 +590,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     $(if $(filter TRUE,$(ENABLE_CUPS)),\
         vcl/unx/generic/printer/cupsmgr \
         vcl/unx/generic/printer/printerinfomanager \
-		, \
+        , \
         vcl/null/printerinfomanager \
     ) \
     $(vcl_headless_code) \
@@ -569,12 +598,12 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
 ))
 
 $(eval $(call gb_Library_use_externals,vcl,\
-	cairo \
-	cups \
-	dbus \
-	fontconfig \
-	freetype \
-	valgrind \
+    cairo \
+    cups \
+    dbus \
+    fontconfig \
+    freetype \
+    valgrind \
 ))
 endif
 
@@ -589,9 +618,9 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
 ))
 
 $(eval $(call gb_Library_use_externals,vcl,\
-	cairo \
-	freetype \
-	fontconfig \
+    cairo \
+    freetype \
+    fontconfig \
 ))
 ifeq ($(OS), $(filter LINUX %BSD SOLARIS, $(OS)))
 $(eval $(call gb_Library_add_libs,vcl,\
@@ -600,17 +629,17 @@ $(eval $(call gb_Library_add_libs,vcl,\
 endif
 else
  $(eval $(call gb_Library_add_exception_objects,vcl,\
-	vcl/opengl/DeviceInfo \
-	vcl/opengl/gdiimpl \
-	vcl/opengl/salbmp \
-	vcl/opengl/scale \
-	vcl/opengl/framebuffer \
-	vcl/opengl/program \
-	vcl/opengl/texture \
-	vcl/opengl/FixedTextureAtlas \
-	vcl/opengl/PackedTextureAtlas \
-	vcl/opengl/RenderList \
-	vcl/opengl/LineRenderUtils \
+    vcl/opengl/DeviceInfo \
+    vcl/opengl/gdiimpl \
+    vcl/opengl/salbmp \
+    vcl/opengl/scale \
+    vcl/opengl/framebuffer \
+    vcl/opengl/program \
+    vcl/opengl/texture \
+    vcl/opengl/FixedTextureAtlas \
+    vcl/opengl/PackedTextureAtlas \
+    vcl/opengl/RenderList \
+    vcl/opengl/LineRenderUtils \
     vcl/source/opengl/OpenGLContext \
     vcl/source/opengl/OpenGLHelper \
     vcl/source/window/openglwin \
@@ -623,16 +652,43 @@ $(eval $(call gb_Library_add_libs,vcl,\
     -lXext \
 ))
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-	vcl/opengl/x11/X11DeviceInfo \
+    vcl/opengl/x11/X11DeviceInfo \
 ))
 endif
 endif
 
+ifeq ($(OS),HAIKU)
+$(eval $(call gb_Library_add_exception_objects,vcl,\
+    vcl/unx/generic/printer/jobdata \
+    vcl/unx/generic/printer/ppdparser \
+    vcl/null/printerinfomanager \
+    $(vcl_headless_code) \
+    $(vcl_headless_freetype_code) \
+))
+
+$(eval $(call gb_Library_add_libs,vcl,\
+    -lbe \
+))
+
+ifeq ($(ENABLE_QT5),TRUE)
+$(eval $(call gb_Library_add_exception_objects,vcl,\
+    vcl/unx/generic/plugadapt/salplug \
+))
+endif
+
+$(eval $(call gb_Library_use_externals,vcl,\
+    cairo \
+    fontconfig \
+    freetype \
+    expat \
+))
+endif
+
 ifeq ($(OS),ANDROID)
 $(eval $(call gb_Library_add_libs,vcl,\
-	-llog \
-	-landroid \
-	-llo-bootstrap \
+    -llog \
+    -landroid \
+    -llo-bootstrap \
 ))
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/unx/generic/printer/jobdata \
@@ -644,10 +700,10 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
 ))
 
 $(eval $(call gb_Library_use_externals,vcl,\
-	cairo \
-	fontconfig \
-	freetype \
-	expat \
+    cairo \
+    fontconfig \
+    freetype \
+    expat \
 ))
 endif
 
@@ -660,12 +716,12 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/ios/dummies \
     $(vcl_really_generic_code) \
     $(vcl_coretext_code) \
-	$(vcl_quartz_code) \
-	$(vcl_headless_code) \
+    $(vcl_quartz_code) \
+    $(vcl_headless_code) \
 ))
 $(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
-	UIKit \
-	CoreFoundation \
+    UIKit \
+    CoreFoundation \
 ))
 endif
 
@@ -673,9 +729,9 @@ endif
 
 ifeq ($(OS),WNT)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-	vcl/opengl/win/gdiimpl \
-	vcl/opengl/win/WinDeviceInfo \
-	vcl/opengl/win/blocklist_parser \
+    vcl/opengl/win/gdiimpl \
+    vcl/opengl/win/WinDeviceInfo \
+    vcl/opengl/win/blocklist_parser \
     vcl/win/app/saldata \
     vcl/win/app/salinfo \
     vcl/win/app/salinst \
@@ -699,20 +755,20 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
 ))
 
 $(eval $(call gb_Library_use_system_win32_libs,vcl,\
-	advapi32 \
-	crypt32 \
-	gdi32 \
-	gdiplus \
-	imm32 \
-	mpr \
-	ole32 \
-	shell32 \
-	usp10 \
-	uuid \
-	version \
-	winspool \
-	setupapi \
-	shlwapi \
+    advapi32 \
+    crypt32 \
+    gdi32 \
+    gdiplus \
+    imm32 \
+    mpr \
+    ole32 \
+    shell32 \
+    usp10 \
+    uuid \
+    version \
+    winspool \
+    setupapi \
+    shlwapi \
 ))
 
 $(eval $(call gb_Library_add_nativeres,vcl,vcl/salsrc))
@@ -722,24 +778,6 @@ ifeq ($(OS),WNT)
 # HACK: dependency on icon themes so running unit tests don't
 # prevent delivering these by having open file handles on WNT
 $(eval $(call gb_Library_use_package,vcl,postprocess_images))
-endif
-
-ifeq ($(ENABLE_QT5),TRUE)
-$(eval $(call gb_Library_use_externals,vcl,\
-	qt5 \
-))
-$(eval $(call gb_Library_add_defs,vcl,\
-    $(QT5_CFLAGS) \
-))
-$(eval $(call gb_Library_add_libs,vcl,\
-    $(QT5_LIBS) \
-))
-$(eval $(call gb_Library_add_cxxflags,vcl,\
-    $(QT5_CFLAGS) \
-))
-$(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/qt5/Qt5Font \
-))
 endif
 
 # vim: set noet sw=4 ts=4:

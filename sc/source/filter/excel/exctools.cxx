@@ -28,7 +28,6 @@
 #include <document.hxx>
 #include <patattr.hxx>
 #include <attrib.hxx>
-#include <globstr.hrc>
 #include <scextopt.hxx>
 #include <progress.hxx>
 #include <rangenam.hxx>
@@ -197,7 +196,7 @@ ExcScenario::ExcScenario( XclImpStream& rIn, const RootData& rR )
         rIn.Ignore( 1 );
     }
 
-    aUserName = rIn.ReadUniString();
+    rIn.ReadUniString(); // username
 
     if( nComment )
         aComment = rIn.ReadUniString();

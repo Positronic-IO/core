@@ -22,6 +22,7 @@
 #include <sal/types.h>
 #include <rtl/ustring.hxx>
 #include <editeng/numitem.hxx>
+#include <i18nlangtag/lang.h>
 #include "swdllapi.h"
 #include "swtypes.hxx"
 #include "calbck.hxx"
@@ -38,7 +39,6 @@ class SwNodeNum;
 namespace vcl { class Font; }
 class SvxBrushItem;
 class SfxGrabBagItem;
-class SvxNumRule;
 class SwDoc;
 class SwFormatVertOrient;
 class SwTextNode;
@@ -89,7 +89,6 @@ public:
     bool IsItemize() const; // #i29560#
 };
 
-class SwPaM;
 enum SwNumRuleType { OUTLINE_RULE = 0, NUM_RULE = 1, RULE_END = 2 };
 class SW_DLLPUBLIC SwNumRule
 {
@@ -113,7 +112,7 @@ private:
     static SwNumFormat* maLabelAlignmentBaseFormats [ RULE_END ][ MAXLEVEL ];
     static sal_uInt16 mnRefCount;
 
-    SwNumFormat* maFormats[ MAXLEVEL ];
+    std::unique_ptr<SwNumFormat> maFormats[ MAXLEVEL ];
 
     /** container for associated text nodes */
     tTextNodeList maTextNodeList;
@@ -168,15 +167,13 @@ public:
                           const bool bInclStrings = true,
                           const bool bOnlyArabic = false,
                           const unsigned int _nRestrictToThisLevel = MAXLEVEL,
-                          Extremities* pExtremities = nullptr ) const;
+                          Extremities* pExtremities = nullptr,
+                          LanguageType nLang = LANGUAGE_SYSTEM) const;
     OUString MakeRefNumString( const SwNodeNum& rNodeNum,
                              const bool bInclSuperiorNumLabels,
                              const int nRestrictInclToThisLevel ) const;
 
-    /**
-
-       @return list of associated text nodes
-    */
+    /** @return list of associated text nodes */
     void GetTextNodeList( SwNumRule::tTextNodeList& rTextNodeList ) const;
     SwNumRule::tTextNodeList::size_type GetTextNodeListSize() const;
 
@@ -274,44 +271,28 @@ public:
 /// namespace for static functions and methods for numbering and bullets
 namespace numfunc
 {
-    /** retrieve font family name used for the default bullet list characters
-
-        @author OD
-    */
+    /** retrieve font family name used for the default bullet list characters */
     OUString const & GetDefBulletFontname();
 
     /** determine if default bullet font is user defined
 
         The default bullet font is user defined, if it is given in the user configuration
-
-        @author OD
     */
     bool IsDefBulletFontUserDefined();
 
-    /** retrieve font used for the default bullet list characters
-
-        @author OD
-    */
+    /** retrieve font used for the default bullet list characters */
     SW_DLLPUBLIC const vcl::Font& GetDefBulletFont();
 
-    /** retrieve unicode of character used for the default bullet list for the given list level
-
-        @author OD
-    */
+    /** retrieve unicode of character used for the default bullet list for the given list level */
     sal_Unicode GetBulletChar( sal_uInt8 nLevel );
 
     /** configuration, if at first position of the first list item the <TAB>-key
         increased the indent of the complete list or only demotes this list item.
         The same for <SHIFT-TAB>-key at the same position for decreasing the
         indent of the complete list or only promotes this list item.
-
-        @author OD
     */
     bool ChangeIndentOnTabAtFirstPosOfFirstListItem();
 
-    /**
-        @author OD
-    */
     SvxNumberFormat::SvxNumPositionAndSpaceMode GetDefaultPositionAndSpaceMode();
 }
 

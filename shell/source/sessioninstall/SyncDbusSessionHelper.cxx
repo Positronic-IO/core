@@ -67,6 +67,7 @@ void request(
     css::uno::Sequence<OUString> const & resources,
     OUString const & interaction)
 {
+    // Keep strings alive until after call to g_dbus_proxy_call_sync
     std::vector<OString> resUtf8;
     std::shared_ptr<GVariantBuilder> builder(
         g_variant_builder_new(G_VARIANT_TYPE ("as")), GVariantBuilderDeleter());

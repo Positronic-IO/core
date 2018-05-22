@@ -223,4 +223,59 @@ void SvxTextEncodingBox::SelectTextEncoding( const rtl_TextEncoding nEnc )
         SelectEntryPos( nAt );
 }
 
+TextEncodingBox::TextEncodingBox(weld::ComboBoxText* pControl)
+    : m_xControl(pControl)
+{
+}
+
+TextEncodingBox::~TextEncodingBox()
+{
+}
+
+void TextEncodingBox::FillFromTextEncodingTable(
+        bool bExcludeImportSubsets )
+{
+    const sal_uInt32 nCount = SAL_N_ELEMENTS(RID_SVXSTR_TEXTENCODING_TABLE);
+    for (sal_uInt32 j = 0; j < nCount; ++j)
+    {
+        bool bInsert = true;
+        rtl_TextEncoding nEnc = RID_SVXSTR_TEXTENCODING_TABLE[j].second;
+        if ( bExcludeImportSubsets )
+        {
+            switch ( nEnc )
+            {
+                // subsets of RTL_TEXTENCODING_GB_18030
+                case RTL_TEXTENCODING_GB_2312 :
+                case RTL_TEXTENCODING_GBK :
+                case RTL_TEXTENCODING_MS_936 :
+                    bInsert = false;
+                break;
+            }
+        }
+        if ( bInsert )
+            InsertTextEncoding(nEnc, SvxResId(RID_SVXSTR_TEXTENCODING_TABLE[j].first));
+    }
+}
+
+
+void TextEncodingBox::InsertTextEncoding( const rtl_TextEncoding nEnc,
+            const OUString& rEntry )
+{
+    m_xControl->append(OUString::number(nEnc), rEntry);
+}
+
+rtl_TextEncoding TextEncodingBox::GetSelectTextEncoding() const
+{
+    OUString sId(m_xControl->get_active_id());
+    if (!sId.isEmpty())
+        return rtl_TextEncoding(sId.toInt32());
+    else
+        return RTL_TEXTENCODING_DONTKNOW;
+}
+
+void TextEncodingBox::SelectTextEncoding( const rtl_TextEncoding nEnc )
+{
+    m_xControl->set_active_id(OUString::number(nEnc));
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

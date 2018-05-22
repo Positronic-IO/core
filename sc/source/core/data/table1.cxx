@@ -33,6 +33,7 @@
 #include <stlsheet.hxx>
 #include <global.hxx>
 #include <globstr.hrc>
+#include <scresid.hxx>
 #include <refupdat.hxx>
 #include <markdata.hxx>
 #include <progress.hxx>
@@ -51,6 +52,7 @@
 #include <rowheightcontext.hxx>
 
 #include <formula/vectortoken.hxx>
+#include <token.hxx>
 
 #include <vector>
 #include <memory>
@@ -75,7 +77,7 @@ ScProgress* GetProgressBar(
 
     if (nCount > 1)
         return new ScProgress(
-            pDoc->GetDocumentShell(), ScGlobal::GetRscString(STR_PROGRESS_HEIGHTING), nTotalCount, true);
+            pDoc->GetDocumentShell(), ScResId(STR_PROGRESS_HEIGHTING), nTotalCount, true);
 
     return nullptr;
 }
@@ -240,7 +242,7 @@ ScTable::ScTable( ScDocument* pDoc, SCTAB nNewTab, const OUString& rNewName,
     aCodeName( rNewName ),
     nLinkRefreshDelay( 0 ),
     nLinkMode( ScLinkMode::NONE ),
-    aPageStyle( ScGlobal::GetRscString(STR_STYLENAME_STANDARD) ),
+    aPageStyle( ScResId(STR_STYLENAME_STANDARD) ),
     nRepeatStartX( SCCOL_REPEAT_NONE ),
     nRepeatEndX( SCCOL_REPEAT_NONE ),
     nRepeatStartY( SCROW_REPEAT_NONE ),
@@ -296,7 +298,7 @@ ScTable::ScTable( ScDocument* pDoc, SCTAB nNewTab, const OUString& rNewName,
     if (bRowInfo)
     {
         mpRowHeights.reset(new ScFlatUInt16RowSegments(ScGlobal::nStdRowHeight));
-        pRowFlags  = new ScBitMaskCompressedArray<SCROW, CRFlags>( MAXROW, CRFlags::NONE);
+        pRowFlags.reset(new ScBitMaskCompressedArray<SCROW, CRFlags>( MAXROW, CRFlags::NONE));
     }
 
     if ( pDocument->IsDocVisible() )
@@ -339,15 +341,15 @@ ScTable::~ScTable() COVERITY_NOEXCEPT_FALSE
             pDrawLayer->ScRemovePage( nTab );
     }
 
-    delete pRowFlags;
-    delete pSheetEvents;
-    delete pOutlineTable;
-    delete pSearchText;
-    delete pRepeatColRange;
-    delete pRepeatRowRange;
-    delete pScenarioRanges;
-    delete mpRangeName;
-    delete pDBDataNoName;
+    pRowFlags.reset();
+    pSheetEvents.reset();
+    pOutlineTable.reset();
+    pSearchText.reset();
+    pRepeatColRange.reset();
+    pRepeatRowRange.reset();
+    pScenarioRanges.reset();
+    mpRangeName.reset();
+    pDBDataNoName.reset();
     DestroySortCollator();
 }
 
@@ -488,7 +490,7 @@ bool ScTable::SetOptimalHeight(
 
     rCxt.getHeightArray().enableTreeSearch(true);
     SetRowHeightRangeFunc aFunc(this, rCxt.getPPTY());
-    bool bChanged = SetOptimalHeightsToRows(rCxt, aFunc, pRowFlags, nStartRow, nEndRow);
+    bool bChanged = SetOptimalHeightsToRows(rCxt, aFunc, pRowFlags.get(), nStartRow, nEndRow);
 
     if ( pProgress != pOuterProgress )
         delete pProgress;
@@ -515,7 +517,7 @@ void ScTable::SetOptimalHeightOnly(
     SetRowHeightOnlyFunc aFunc(this);
 
     rCxt.getHeightArray().enableTreeSearch(true);
-    SetOptimalHeightsToRows(rCxt, aFunc, pRowFlags, nStartRow, nEndRow);
+    SetOptimalHeightsToRows(rCxt, aFunc, pRowFlags.get(), nStartRow, nEndRow);
 
     if ( pProgress != pOuterProgress )
         delete pProgress;
@@ -1133,8 +1135,10 @@ void ScTable::LimitChartArea( SCCOL& rStartCol, SCROW& rStartRow, SCCOL& rEndCol
     while ( rStartRow<rEndRow && IsEmptyLine(rStartRow, rStartCol, rEndCol) )
         ++rStartRow;
 
-    while ( rStartRow<rEndRow && IsEmptyLine(rEndRow, rStartCol, rEndCol) )
-        --rEndRow;
+    // Optimised loop for finding the bottom of the area, can be costly in large
+    // spreadsheets.
+    for (SCCOL i=rStartCol; i<=rEndCol; i++)
+        rEndRow = std::min(rEndRow, aCol[i].GetLastDataPos());
 }
 
 SCCOL ScTable::FindNextVisibleCol( SCCOL nCol, bool bRight ) const
@@ -1318,10 +1322,47 @@ bool ScTable::ValidNextPos( SCCOL nCol, SCROW nRow, const ScMarkData& rMark,
     return true;
 }
 
+// Skips the current cell if it is Hidden, Overlapped or Protected and Sheet is Protected
+bool ScTable::SkipRow( const SCCOL nCol, SCROW& rRow, const SCROW nMovY,
+        const ScMarkData& rMark, const bool bUp, const SCROW nUsedY, const bool bSheetProtected ) const
+{
+    if ( !ValidRow( rRow ))
+        return false;
+
+    if (bSheetProtected && pDocument->HasAttrib( nCol, rRow, nTab, nCol, rRow, nTab, HasAttrFlags::Protected))
+    {
+        if ( rRow > nUsedY )
+            rRow = (bUp ? nUsedY : MAXROW + nMovY);
+        else
+            rRow += nMovY;
+
+        rRow  = rMark.GetNextMarked( nCol, rRow, bUp );
+
+        return true;
+    }
+    else
+    {
+        bool bRowHidden  = RowHidden( rRow );
+        bool bOverlapped = pDocument->HasAttrib( nCol, rRow, nTab, nCol, rRow, nTab, HasAttrFlags::Overlapped );
+
+        if ( bRowHidden || bOverlapped )
+        {
+            rRow += nMovY;
+            rRow  = rMark.GetNextMarked( nCol, rRow, bUp );
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void ScTable::GetNextPos( SCCOL& rCol, SCROW& rRow, SCCOL nMovX, SCROW nMovY,
                                 bool bMarked, bool bUnprotected, const ScMarkData& rMark ) const
 {
-    if (bUnprotected && !IsProtected())     // Is sheet really protected?
+    bool bSheetProtected = IsProtected();
+
+    if ( bUnprotected && !bSheetProtected )     // Is sheet really protected?
         bUnprotected = false;
 
     sal_uInt16 nWrap = 0;
@@ -1336,30 +1377,33 @@ void ScTable::GetNextPos( SCCOL& rCol, SCROW& rRow, SCCOL nMovX, SCROW nMovY,
 
     if ( nMovY && bMarked )
     {
-        bool bUp = ( nMovY < 0 );
+        bool  bUp    = ( nMovY < 0 );
+        SCROW nUsedY = nRow;
+        SCCOL nUsedX = nCol;
+
         nRow = rMark.GetNextMarked( nCol, nRow, bUp );
-        while ( ValidRow(nRow) &&
-                (RowHidden(nRow) || pDocument->HasAttrib(nCol, nRow, nTab, nCol, nRow, nTab, HasAttrFlags::Overlapped)) )
-        {
-            //  skip hidden rows (see above)
-            nRow += nMovY;
-            nRow = rMark.GetNextMarked( nCol, nRow, bUp );
-        }
+        pDocument->GetPrintArea( nTab, nUsedX, nUsedY );
+
+        while ( SkipRow( nCol, nRow, nMovY, rMark, bUp, nUsedY, bSheetProtected ))
+            ;
 
         while ( nRow < 0 || nRow > MAXROW )
         {
             nCol = sal::static_int_cast<SCCOL>( nCol + static_cast<SCCOL>(nMovY) );
+
             while ( ValidCol(nCol) && ColHidden(nCol) )
                 nCol = sal::static_int_cast<SCCOL>( nCol + static_cast<SCCOL>(nMovY) );   //  skip hidden rows (see above)
             if (nCol < 0)
             {
-                nCol = MAXCOL;
+                nCol = (bSheetProtected ? nUsedX : MAXCOL);
+
                 if (++nWrap >= 2)
                     return;
             }
-            else if (nCol > MAXCOL)
+            else if (nCol > MAXCOL || ( nCol > nUsedX && bSheetProtected ))
             {
                 nCol = 0;
+
                 if (++nWrap >= 2)
                     return;
             }
@@ -1367,14 +1411,11 @@ void ScTable::GetNextPos( SCCOL& rCol, SCROW& rRow, SCCOL nMovX, SCROW nMovY,
                 nRow = MAXROW;
             else if (nRow > MAXROW)
                 nRow = 0;
+
             nRow = rMark.GetNextMarked( nCol, nRow, bUp );
-            while ( ValidRow(nRow) &&
-                    (RowHidden(nRow) || pDocument->HasAttrib(nCol, nRow, nTab, nCol, nRow, nTab, HasAttrFlags::Overlapped)) )
-            {
-                //  skip hidden rows (see above)
-                nRow += nMovY;
-                nRow = rMark.GetNextMarked( nCol, nRow, bUp );
-            }
+
+            while ( SkipRow( nCol, nRow, nMovY, rMark, bUp, nUsedY, bSheetProtected ))
+                ;
         }
     }
 
@@ -1966,19 +2007,6 @@ public:
     }
 };
 
-void setPrintRange(ScRange*& pRange1, const ScRange* pRange2)
-{
-    if (pRange2)
-    {
-        if (pRange1)
-            *pRange1 = *pRange2;
-        else
-            pRange1 = new ScRange(*pRange2);
-    }
-    else
-        DELETEZ(pRange1);
-}
-
 }
 
 void ScTable::CopyPrintRange(const ScTable& rTable)
@@ -1991,37 +2019,35 @@ void ScTable::CopyPrintRange(const ScTable& rTable)
 
     bPrintEntireSheet = rTable.bPrintEntireSheet;
 
-    delete pRepeatColRange;
-    pRepeatColRange = nullptr;
+    pRepeatColRange.reset();
     if (rTable.pRepeatColRange)
     {
-        pRepeatColRange = new ScRange(*rTable.pRepeatColRange);
+        pRepeatColRange.reset(new ScRange(*rTable.pRepeatColRange));
         pRepeatColRange->aStart.SetTab(nTab);
         pRepeatColRange->aEnd.SetTab(nTab);
     }
 
-    delete pRepeatRowRange;
-    pRepeatRowRange = nullptr;
+    pRepeatRowRange.reset();
     if (rTable.pRepeatRowRange)
     {
-        pRepeatRowRange = new ScRange(*rTable.pRepeatRowRange);
+        pRepeatRowRange.reset(new ScRange(*rTable.pRepeatRowRange));
         pRepeatRowRange->aStart.SetTab(nTab);
         pRepeatRowRange->aEnd.SetTab(nTab);
     }
 }
 
-void ScTable::SetRepeatColRange( const ScRange* pNew )
+void ScTable::SetRepeatColRange( std::unique_ptr<ScRange> pNew )
 {
-    setPrintRange( pRepeatColRange, pNew );
+    pRepeatColRange = std::move(pNew);
 
     SetStreamValid(false);
 
     InvalidatePageBreaks();
 }
 
-void ScTable::SetRepeatRowRange( const ScRange* pNew )
+void ScTable::SetRepeatRowRange( std::unique_ptr<ScRange> pNew )
 {
-    setPrintRange( pRepeatRowRange, pNew );
+    pRepeatRowRange = std::move(pNew);
 
     SetStreamValid(false);
 
@@ -2066,15 +2092,17 @@ const ScRange* ScTable::GetPrintRange(sal_uInt16 nPos) const
 void ScTable::FillPrintSaver( ScPrintSaverTab& rSaveTab ) const
 {
     rSaveTab.SetAreas( aPrintRanges, bPrintEntireSheet );
-    rSaveTab.SetRepeat( pRepeatColRange, pRepeatRowRange );
+    rSaveTab.SetRepeat( pRepeatColRange.get(), pRepeatRowRange.get() );
 }
 
 void ScTable::RestorePrintRanges( const ScPrintSaverTab& rSaveTab )
 {
     aPrintRanges = rSaveTab.GetPrintRanges();
     bPrintEntireSheet = rSaveTab.IsEntireSheet();
-    SetRepeatColRange( rSaveTab.GetRepeatCol() );
-    SetRepeatRowRange( rSaveTab.GetRepeatRow() );
+    auto p = rSaveTab.GetRepeatCol();
+    SetRepeatColRange( std::unique_ptr<ScRange>(p ? new ScRange(*p) : nullptr) );
+    p = rSaveTab.GetRepeatRow();
+    SetRepeatRowRange( std::unique_ptr<ScRange>(p ? new ScRange(*p) : nullptr) );
 
     InvalidatePageBreaks();     // #i117952# forget page breaks for an old print range
     UpdatePageBreaks(nullptr);
@@ -2174,10 +2202,9 @@ ScRefCellValue ScTable::VisibleDataCellIterator::next()
     return ScRefCellValue();
 }
 
-void ScTable::SetAnonymousDBData(ScDBData* pDBData)
+void ScTable::SetAnonymousDBData(std::unique_ptr<ScDBData> pDBData)
 {
-    delete pDBDataNoName;
-    pDBDataNoName = pDBData;
+    pDBDataNoName = std::move(pDBData);
 }
 
 sal_uLong ScTable::AddCondFormat( ScConditionalFormat* pNew )

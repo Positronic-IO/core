@@ -56,8 +56,11 @@ class ScDrawView final : public FmFormView
     virtual SdrUndoManager* getSdrUndoManagerForEnhancedTextEdit() const override;
 
 public:
-                    ScDrawView( OutputDevice* pOut, ScViewData* pData );
-    virtual         ~ScDrawView() override;
+    ScDrawView(
+        OutputDevice* pOut,
+        ScViewData* pData);
+
+    virtual ~ScDrawView() override;
 
     virtual void    MarkListHasChanged() override;
     virtual void    Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
@@ -100,7 +103,7 @@ public:
     void            CalcNormScale( Fraction& rFractX, Fraction& rFractY ) const;
 
     void            SetPageAnchored();
-    void            SetCellAnchored();
+    void            SetCellAnchored(bool bResizeWithCell);
     ScAnchorType    GetAnchorType() const;
 
     void            UpdateIMap( SdrObject* pObj );
@@ -108,6 +111,7 @@ public:
     void            UpdateUserViewOptions();
 
     void            SetMarkedOriginalSize();
+    void            FitToCellSize();
 
     bool            SelectObject( const OUString& rName );
     bool            HasMarkedControl() const;

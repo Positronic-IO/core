@@ -227,6 +227,17 @@ namespace
     }
 }
 
+void SwFrame::dumpTopMostAsXml(xmlTextWriterPtr writer) const
+{
+    const SwFrame* pFrame = this;
+    while (pFrame->GetUpper())
+    {
+        pFrame = pFrame->GetUpper();
+    }
+
+    pFrame->dumpAsXml(writer);
+}
+
 void SwFrame::dumpAsXml( xmlTextWriterPtr writer ) const
 {
     bool bCreateWriter = ( nullptr == writer );
@@ -465,7 +476,8 @@ void SwFont::dumpAsXml(xmlTextWriterPtr writer) const
 {
     xmlTextWriterStartElement(writer, BAD_CAST("SwFont"));
     xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("ptr"), "%p", this);
-    xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("color"), "%s", GetColor().AsRGBHexString().toUtf8().getStr());
+    // do not use Color::AsRGBHexString() as that omits the transparency
+    xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("color"), "%08" SAL_PRIxUINT32, sal_uInt32(GetColor()));
     xmlTextWriterEndElement(writer);
 }
 

@@ -29,7 +29,6 @@
 #include <sfx2/bindings.hxx>
 #include <svl/aeitem.hxx>
 #include <sfx2/dispatch.hxx>
-#include <vcl/msgbox.hxx>
 #include <editeng/eeitem.hxx>
 #include <sfx2/request.hxx>
 #include <editeng/numitem.hxx>
@@ -107,12 +106,12 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
     if( pArgs && SfxItemState::SET == pArgs->GetItemState( SID_STYLE_FAMILY,
         false, &pItem ))
     {
-        nFamily = static_cast<SfxStyleFamily>(static_cast<const SfxUInt16Item &>( pArgs->Get( SID_STYLE_FAMILY ) ).GetValue());
+        nFamily = static_cast<SfxStyleFamily>( pArgs->Get( SID_STYLE_FAMILY ).GetValue());
     }
     else if( pArgs && SfxItemState::SET == pArgs->GetItemState( SID_STYLE_FAMILYNAME,
         false, &pItem ))
     {
-        OUString sFamily = static_cast<const SfxStringItem &>( pArgs->Get( SID_STYLE_FAMILYNAME ) ).GetValue();
+        OUString sFamily = pArgs->Get( SID_STYLE_FAMILYNAME ).GetValue();
         if (sFamily == "graphics")
             nFamily = SfxStyleFamily::Para;
         else
@@ -120,7 +119,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
     }
 
     OUString aStyleName;
-    sal_uInt16 nRetMask = SFXSTYLEBIT_ALL;
+    sal_uInt16 nRetMask = static_cast<sal_uInt16>(SfxStyleSearchBits::All);
 
     switch( nSId )
     {
@@ -168,11 +167,11 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
                 pSSPool->Remove(p);
                 p = nullptr;
             }
-            pStyleSheet = &pSSPool->Make( aStyleName, nFamily, SFXSTYLEBIT_USERDEF );
+            pStyleSheet = &pSSPool->Make( aStyleName, nFamily, SfxStyleSearchBits::UserDefined );
 
             if (pArgs && pArgs->GetItemState(SID_STYLE_REFERENCE) == SfxItemState::SET)
             {
-                OUString aParentName(static_cast<const SfxStringItem&>( pArgs->Get(SID_STYLE_REFERENCE)).GetValue());
+                OUString aParentName( pArgs->Get(SID_STYLE_REFERENCE).GetValue());
                 pStyleSheet->SetParent(aParentName);
             }
             else
@@ -191,7 +190,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
                 pSSPool->Remove(p);
                 p = nullptr;
             }
-            pStyleSheet = &pSSPool->Make( aStyleName, nFamily, SFXSTYLEBIT_USERDEF );
+            pStyleSheet = &pSSPool->Make( aStyleName, nFamily, SfxStyleSearchBits::UserDefined );
             pStyleSheet->SetParent(SdResId(STR_STANDARD_STYLESHEET_NAME));
         }
         break;
@@ -383,7 +382,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
                 {
                     case RET_OK:
                     {
-                        nRetMask = pStyleSheet->GetMask();
+                        nRetMask = static_cast<sal_uInt16>(pStyleSheet->GetMask());
 
                         if (eFamily == SfxStyleFamily::Pseudo)
                         {
@@ -569,7 +568,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
         {
             if( pStyleSheet )
             {
-                nRetMask = pStyleSheet->GetMask();
+                nRetMask = static_cast<sal_uInt16>(pStyleSheet->GetMask());
                 SfxItemSet aCoreSet( mpDoc->GetPool() );
                 mpView->GetAttributes( aCoreSet, true );
 
@@ -613,7 +612,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
 
                 if( pStyleSheet )
                 {
-                    nRetMask = pStyleSheet->GetMask();
+                    nRetMask = static_cast<sal_uInt16>(pStyleSheet->GetMask());
                     SfxItemSet aCoreSet( mpDoc->GetPool() );
                     mpView->GetAttributes( aCoreSet );
 
@@ -631,7 +630,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
         break;
 
     }
-    if( nRetMask != SFXSTYLEBIT_ALL )
+    if( nRetMask != static_cast<sal_uInt16>(SfxStyleSearchBits::All) )
         rReq.SetReturnValue( SfxUInt16Item( nSId, nRetMask ) );
 }
 

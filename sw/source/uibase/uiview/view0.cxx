@@ -55,11 +55,10 @@
 #include <cmdid.h>
 #include <globdoc.hxx>
 #include <wview.hxx>
-#include <strings.hrc>
 
-#define SwView
-#define Text
-#define TextDrawText
+#define ShellClass_SwView
+#define ShellClass_Text
+#define ShellClass_TextDrawText
 
 #include <sfx2/msg.hxx>
 #include <swslots.hxx>
@@ -68,6 +67,7 @@
 using namespace ::com::sun::star;
 
 #include <unotools/moduleoptions.hxx>
+#include <sfx2/viewfac.hxx>
 
 #include <IDocumentSettingAccess.hxx>
 
@@ -323,6 +323,8 @@ void SwView::StateViewOptions(SfxItemSet &rSet)
                 else
                     aBool.SetValue( pOpt->IsShadowCursor() );
             break;
+            case FN_SHOW_INLINETOOLTIPS:
+              aBool.SetValue( pOpt->IsShowInlineTooltips() );
 
         }
 
@@ -539,6 +541,13 @@ void SwView::ExecViewOptions(SfxRequest &rReq)
         pOpt->SetShadowCursor(bSet);
         break;
 
+    case FN_SHOW_INLINETOOLTIPS:
+        if( STATE_TOGGLE == eState )
+            bFlag = !pOpt->IsShowInlineTooltips();
+
+        pOpt->SetShowInlineTooltips( bFlag );
+        break;
+
     default:
         OSL_FAIL("wrong request method");
         return;
@@ -591,7 +600,7 @@ void SwView::ExecFormatFootnote()
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-    ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwFootNoteOptionDlg(GetWindow(), GetWrtShell()));
+    ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwFootNoteOptionDlg(GetFrameWeld(), GetWrtShell()));
     OSL_ENSURE(pDlg, "Dialog creation failed!");
     pDlg->Execute();
 }
@@ -601,7 +610,7 @@ void SwView::ExecNumberingOutline(SfxItemPool & rPool)
     SfxItemSet aTmp(rPool, svl::Items<FN_PARAM_1, FN_PARAM_1>{});
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
     assert(pFact && "Dialog creation failed!");
-    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateOutlineTabDialog(GetWindow(), &aTmp, GetWrtShell()));
+    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateOutlineTabDialog(GetFrameWeld(), &aTmp, GetWrtShell()));
     assert(pDlg && "Dialog creation failed!");
     pDlg->Execute();
 }

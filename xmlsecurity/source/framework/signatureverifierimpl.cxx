@@ -22,7 +22,6 @@
 #include <com/sun/star/xml/crypto/XXMLSignatureTemplate.hpp>
 #include <com/sun/star/xml/wrapper/XXMLElementWrapper.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/diagnose.h>
 
@@ -39,27 +38,6 @@ SignatureVerifierImpl::SignatureVerifierImpl()
 
 SignatureVerifierImpl::~SignatureVerifierImpl()
 {
-}
-
-bool SignatureVerifierImpl::checkReady() const
-/****** SignatureVerifierImpl/checkReady *************************************
- *
- *   NAME
- *  checkReady -- checks the conditions for the signature verification.
- *
- *   SYNOPSIS
- *  bReady = checkReady( );
- *
- *   FUNCTION
- *  checks whether all following conditions are satisfied:
- *  1. the result listener is ready;
- *  2. the SignatureEngine is ready.
- *
- *   RESULT
- *  bReady - true if all conditions are satisfied, false otherwise
- ******************************************************************************/
-{
-    return (m_xResultListener.is() && SignatureEngine::checkReady());
 }
 
 void SignatureVerifierImpl::notifyResultListener() const

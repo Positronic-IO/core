@@ -27,11 +27,9 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
-#include <com/sun/star/document/XGraphicObjectResolver.hpp>
 #include <com/sun/star/xml/sax/SAXException.hpp>
 
 #include <sal/log.hxx>
-#include <comphelper/processfactory.hxx>
 #include <i18nlangtag/languagetag.hxx>
 
 using namespace ::com::sun::star;
@@ -893,7 +891,7 @@ void ImageControlElement::endElement()
     ctx.importDefaults( _nBasePosX, _nBasePosY, _xAttributes );
     ctx.importBooleanProperty( "ScaleImage", "scale-image", _xAttributes );
     ctx.importImageScaleModeProperty( "ScaleMode" , "scale-mode" , _xAttributes );
-    ctx.importImageURLProperty( "ImageURL" , "src" , _xAttributes );
+    ctx.importGraphicOrImageProperty("src" , _xAttributes);
     ctx.importBooleanProperty( "Tabstop", "tabstop", _xAttributes );
     ctx.importEvents( _events );
     // avoid ring-reference:
@@ -1150,7 +1148,7 @@ void TitledBoxElement::endElement()
         ctx.importStringProperty( "Label", "value", xAttributes );
         ctx.importAlignProperty( "Align", "align", xAttributes );
         ctx.importVerticalAlignProperty( "VerticalAlign", "valign", xAttributes );
-        ctx.importImageURLProperty( "ImageURL" ,  "image-src" , _xAttributes );
+        ctx.importGraphicOrImageProperty("image-src" , _xAttributes);
         ctx.importImagePositionProperty( "ImagePosition", "image-position", xAttributes );
         ctx.importBooleanProperty( "MultiLine", "multiline", xAttributes );
         ctx.importStringProperty( "GroupName", "group-name", xAttributes );
@@ -1241,7 +1239,7 @@ void RadioGroupElement::endElement()
         ctx.importStringProperty( "Label", "value", xAttributes );
         ctx.importAlignProperty( "Align", "align", xAttributes );
         ctx.importVerticalAlignProperty( "VerticalAlign", "valign", xAttributes );
-        ctx.importImageURLProperty( "ImageURL" , "image-src" , xAttributes );
+        ctx.importGraphicOrImageProperty("image-src" , _xAttributes);
         ctx.importImagePositionProperty( "ImagePosition", "image-position", xAttributes );
         ctx.importBooleanProperty( "MultiLine", "multiline", xAttributes );
         ctx.importStringProperty( "GroupName", "group-name", xAttributes );
@@ -1491,7 +1489,7 @@ void CheckBoxElement::endElement()
     ctx.importStringProperty( "Label", "value", _xAttributes );
     ctx.importAlignProperty( "Align", "align", _xAttributes );
     ctx.importVerticalAlignProperty( "VerticalAlign", "valign", _xAttributes );
-    ctx.importImageURLProperty( "ImageURL" ,  "image-src" , _xAttributes );
+    ctx.importGraphicOrImageProperty("image-src" , _xAttributes);
     ctx.importImagePositionProperty( "ImagePosition", "image-position", _xAttributes );
     ctx.importBooleanProperty( "MultiLine", "multiline", _xAttributes );
 
@@ -1557,7 +1555,7 @@ void ButtonElement::endElement()
     ctx.importVerticalAlignProperty( "VerticalAlign", "valign", _xAttributes );
     ctx.importBooleanProperty( "DefaultButton", "default", _xAttributes );
     ctx.importButtonTypeProperty( "PushButtonType", "button-type", _xAttributes );
-    ctx.importImageURLProperty( "ImageURL" , "image-src" , _xAttributes );
+    ctx.importGraphicOrImageProperty("image-src" , _xAttributes);
     ctx.importImagePositionProperty( "ImagePosition", "image-position", _xAttributes );
     ctx.importImageAlignProperty( "ImageAlign", "image-align", _xAttributes );
     if (ctx.importLongProperty( "RepeatDelay", "repeat", _xAttributes ))
@@ -1832,7 +1830,7 @@ void WindowElement::endElement()
     ctx.importBooleanProperty("Sizeable", "resizeable", _xAttributes );
     ctx.importStringProperty("Title", "title", _xAttributes );
     ctx.importBooleanProperty("Decoration", "withtitlebar", _xAttributes );
-        ctx.importImageURLProperty( "ImageURL" , "image-src" , _xAttributes );
+    ctx.importGraphicOrImageProperty("image-src" , _xAttributes);
     ctx.importScollableSettings( _xAttributes );
     ctx.importEvents( _events );
     // avoid ring-reference:

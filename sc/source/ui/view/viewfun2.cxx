@@ -46,6 +46,7 @@
 
 #include <sc.hrc>
 #include <globstr.hrc>
+#include <scresid.hxx>
 
 #include <attrib.hxx>
 #include <autoform.hxx>
@@ -87,6 +88,7 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
 #include <mergecellsdialog.hxx>
+#include <sheetevents.hxx>
 
 #include <vector>
 #include <memory>
@@ -330,7 +332,7 @@ static ScAutoSum lcl_GetAutoSumForColumnRange( ScDocument* pDoc, ScRangeList& rR
         bool bContinue = false;
         do
         {
-            rRangeList.Append( ScRange( nCol, nStartRow, nTab, nCol, nEndRow, nTab ) );
+            rRangeList.push_back( ScRange( nCol, nStartRow, nTab, nCol, nEndRow, nTab ) );
             nEndRow = static_cast< SCROW >( nExtend );
             bContinue = lcl_FindNextSumEntryInColumn( pDoc, nCol, nEndRow /*inout*/, nTab, nExtend /*out*/, aStart.Row() );
             if ( bContinue )
@@ -346,7 +348,7 @@ static ScAutoSum lcl_GetAutoSumForColumnRange( ScDocument* pDoc, ScRangeList& rR
         {
             --nStartRow;
         }
-        rRangeList.Append( ScRange( nCol, nStartRow, nTab, nCol, nEndRow, nTab ) );
+        rRangeList.push_back( ScRange( nCol, nStartRow, nTab, nCol, nEndRow, nTab ) );
         if (eSum == ScAutoSumNone)
             eSum = ScAutoSumData;
     }
@@ -375,7 +377,7 @@ static ScAutoSum lcl_GetAutoSumForRowRange( ScDocument* pDoc, ScRangeList& rRang
         bool bContinue = false;
         do
         {
-            rRangeList.Append( ScRange( nStartCol, nRow, nTab, nEndCol, nRow, nTab ) );
+            rRangeList.push_back( ScRange( nStartCol, nRow, nTab, nEndCol, nRow, nTab ) );
             nEndCol = static_cast< SCCOL >( nExtend );
             bContinue = lcl_FindNextSumEntryInRow( pDoc, nEndCol /*inout*/, nRow, nTab, nExtend /*out*/, aStart.Col() );
             if ( bContinue )
@@ -391,7 +393,7 @@ static ScAutoSum lcl_GetAutoSumForRowRange( ScDocument* pDoc, ScRangeList& rRang
         {
             --nStartCol;
         }
-        rRangeList.Append( ScRange( nStartCol, nRow, nTab, nEndCol, nRow, nTab ) );
+        rRangeList.push_back( ScRange( nStartCol, nRow, nTab, nEndCol, nRow, nTab ) );
         if (eSum == ScAutoSumNone)
             eSum = ScAutoSumData;
     }
@@ -476,7 +478,7 @@ bool ScViewFunc::GetAutoSumArea( ScRangeList& rRangeList )
                         --nStartCol;
                 }
             }
-            rRangeList.Append(
+            rRangeList.push_back(
                 ScRange( nStartCol, nStartRow, nTab, nEndCol, nEndRow, nTab ) );
             if ( eSum == ScAutoSumSum )
             {
@@ -632,7 +634,10 @@ bool ScViewFunc::AutoSum( const ScRange& rRange, bool bSubTotal, bool bSetCursor
     SCCOL nMarkEndCol = nEndCol;
     SCROW nMarkEndRow = nEndRow;
     ScAutoSum eSum = ScAutoSumNone;
-    ScRangeList aSumRangeList;
+    SCROW nColSums = 0;
+    SCCOL nRowSums = 0;
+    SCROW nColSumsStartRow = 0;
+    SCCOL nRowSumsStartCol = 0;
 
     if ( bRow )
     {
@@ -656,12 +661,15 @@ bool ScViewFunc::AutoSum( const ScRange& rRange, bool bSubTotal, bool bSetCursor
         {
             if ( !pDoc->IsBlockEmpty( nTab, nCol, nStartRow, nCol, nSumEndRow ) )
             {
+                ScRangeList aRangeList;
                 // Include the originally selected start row.
                 const ScRange aRange( nCol, rRange.aStart.Row(), nTab, nCol, nSumEndRow, nTab );
-                if ( (eSum = lcl_GetAutoSumForColumnRange( pDoc, aSumRangeList, aRange )) != ScAutoSumNone )
+                if ( (eSum = lcl_GetAutoSumForColumnRange( pDoc, aRangeList, aRange )) != ScAutoSumNone )
                 {
+                    if (++nRowSums == 1)
+                        nRowSumsStartCol = aRangeList[0].aStart.Col();
                     const OUString aFormula = GetAutoSumFormula(
-                        aSumRangeList, bSubTotal, ScAddress(nCol, nInsRow, nTab));
+                        aRangeList, bSubTotal, ScAddress(nCol, nInsRow, nTab));
                     EnterData( nCol, nInsRow, nTab, aFormula );
                 }
             }
@@ -690,11 +698,14 @@ bool ScViewFunc::AutoSum( const ScRange& rRange, bool bSubTotal, bool bSetCursor
         {
             if ( !pDoc->IsBlockEmpty( nTab, nStartCol, nRow, nSumEndCol, nRow ) )
             {
+                ScRangeList aRangeList;
                 // Include the originally selected start column.
                 const ScRange aRange( rRange.aStart.Col(), nRow, nTab, nSumEndCol, nRow, nTab );
-                if ( (eSum = lcl_GetAutoSumForRowRange( pDoc, aSumRangeList, aRange )) != ScAutoSumNone )
+                if ( (eSum = lcl_GetAutoSumForRowRange( pDoc, aRangeList, aRange )) != ScAutoSumNone )
                 {
-                    const OUString aFormula = GetAutoSumFormula( aSumRangeList, bSubTotal, ScAddress(nInsCol, nRow, nTab) );
+                    if (++nColSums == 1)
+                        nColSumsStartRow = aRangeList[0].aStart.Row();
+                    const OUString aFormula = GetAutoSumFormula( aRangeList, bSubTotal, ScAddress(nInsCol, nRow, nTab) );
                     EnterData( nInsCol, nRow, nTab, aFormula );
                 }
             }
@@ -707,10 +718,10 @@ bool ScViewFunc::AutoSum( const ScRange& rRange, bool bSubTotal, bool bSetCursor
     // original selection. All extended by end column/row where the sum is put.
     const ScRange aMarkRange(
             (eSum == ScAutoSumSum ?
-             (aSumRangeList.size() == 1 ? aSumRangeList[0]->aStart.Col() : nStartCol) :
+             (nRowSums == 1 ? nRowSumsStartCol : nStartCol) :
              rRange.aStart.Col()),
             (eSum == ScAutoSumSum ?
-             (aSumRangeList.size() == 1 ? aSumRangeList[0]->aStart.Row() : nStartRow) :
+             (nColSums == 1 ? nColSumsStartRow : nStartRow) :
              rRange.aStart.Row()),
             nTab, nMarkEndCol, nMarkEndRow, nTab );
     MarkRange( aMarkRange, false, bContinue );
@@ -740,15 +751,14 @@ OUString ScViewFunc::GetAutoSumFormula( const ScRangeList& rRangeList, bool bSub
     if(!rRangeList.empty())
     {
         ScRangeList aRangeList = rRangeList;
-        const ScRange* pFirst = aRangeList.front();
         size_t ListSize = aRangeList.size();
         for ( size_t i = 0; i < ListSize; ++i )
         {
-            const ScRange* p = aRangeList[i];
-            if (p != pFirst)
+            const ScRange & r = aRangeList[i];
+            if (i != 0)
                 pArray->AddOpCode(ocSep);
             ScComplexRefData aRef;
-            aRef.InitRangeRel(*p, rAddr);
+            aRef.InitRangeRel(r, rAddr);
             pArray->AddDoubleReference(aRef);
         }
     }
@@ -987,8 +997,8 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
                 rMark.FillRangeListWithMarks( pList.get(), false );
                 for (size_t i = 0, n = pList->size(); i < n; ++i)
                 {
-                    ScRange* pR = (*pList)[i];
-                    rDoc.AddPrintRange(nTab, *pR);
+                    const ScRange & rR = (*pList)[i];
+                    rDoc.AddPrintRange(nTab, rR);
                 }
             }
         }
@@ -1001,7 +1011,7 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
                 rDoc.SetRepeatColRange( nTab, nullptr );
             else
                 if ( aRange.ParseAny( *pRepCol, &rDoc, aDetails ) & ScRefFlags::VALID )
-                    rDoc.SetRepeatColRange( nTab, &aRange );
+                    rDoc.SetRepeatColRange( nTab, std::unique_ptr<ScRange>(new ScRange(aRange)) );
         }
 
         //  repeat rows
@@ -1012,7 +1022,7 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
                 rDoc.SetRepeatRowRange( nTab, nullptr );
             else
                 if ( aRange.ParseAny( *pRepRow, &rDoc, aDetails ) & ScRefFlags::VALID )
-                    rDoc.SetRepeatRowRange( nTab, &aRange );
+                    rDoc.SetRepeatRowRange( nTab, std::unique_ptr<ScRange>(new ScRange(aRange)) );
         }
     }
 
@@ -1139,12 +1149,13 @@ bool ScViewFunc::MergeCells( bool bApi, bool& rDoContents, bool bCenter )
         bool bShowDialog = officecfg::Office::Calc::Compatibility::MergeCells::ShowDialog::get();
         if (!bApi && bShowDialog)
         {
-            ScopedVclPtr<ScMergeCellsDialog> aBox( VclPtr<ScMergeCellsDialog>::Create( GetViewData().GetDialogParent() ) );
-            sal_uInt16 nRetVal = aBox->Execute();
+            vcl::Window* pWin = GetViewData().GetDialogParent();
+            ScMergeCellsDialog aBox(pWin ? pWin->GetFrameWeld() : nullptr);
+            sal_uInt16 nRetVal = aBox.run();
 
             if ( nRetVal == RET_OK )
             {
-                switch ( aBox->GetMergeCellsOption() )
+                switch (aBox.GetMergeCellsOption())
                 {
                     case MoveContentHiddenCells:
                         rDoContents = true;
@@ -1282,10 +1293,36 @@ void ScViewFunc::FillSimple( FillDir eDir )
         {
             pDocSh->UpdateOle(&GetViewData());
             UpdateScrollBars();
+
             bool bDoAutoSpell = pDocSh->GetDocument().GetDocOptions().IsAutoSpell();
             if ( bDoAutoSpell )
+            {
+                // Copy AutoSpellData from above(left/right/below) if no selection.
+                switch (eDir)
+                {
+                    case FILL_TO_BOTTOM:
+                        if (aRange.aStart.Row() > 0 && aRange.aStart.Row() == aRange.aEnd.Row())
+                            aRange.aStart.IncRow(-1);
+                    break;
+                    case FILL_TO_TOP:
+                        if (aRange.aEnd.Row() < MAXROW && aRange.aStart.Row() == aRange.aEnd.Row())
+                            aRange.aEnd.IncRow(1);
+                    break;
+                    case FILL_TO_RIGHT:
+                        if (aRange.aStart.Col() > 0 && aRange.aStart.Col() == aRange.aEnd.Col())
+                            aRange.aStart.IncCol(-1);
+                    break;
+                    case FILL_TO_LEFT:
+                        if (aRange.aEnd.Col() < MAXCOL && aRange.aStart.Col() == aRange.aEnd.Col())
+                            aRange.aEnd.IncCol(1);
+                    break;
+                }
                 CopyAutoSpellData(eDir, aRange.aStart.Col(), aRange.aStart.Row(), aRange.aEnd.Col(), aRange.aEnd.Row(),
                         ::std::numeric_limits<sal_uLong>::max());
+            }
+
+            // Invalidate cell slots and update input line with new content.
+            CellContentChanged();
         }
     }
     else
@@ -1356,7 +1393,7 @@ void ScViewFunc::FillAuto( FillDir eDir, SCCOL nStartCol, SCROW nStartRow,
                 default:
                     break;
             }
-            aChangeRanges.Append( aChangeRange );
+            aChangeRanges.push_back( aChangeRange );
             HelperNotifyChanges::Notify(*pModelObj, aChangeRanges);
         }
     }
@@ -1828,7 +1865,7 @@ bool ScViewFunc::SearchAndReplace( const SvxSearchItem* pSearchItem,
                 rMark.ResetMark();
                 for (size_t i = 0, n = aMatchedRanges.size(); i < n; ++i)
                 {
-                    const ScRange& r = *aMatchedRanges[i];
+                    const ScRange& r = aMatchedRanges[i];
                     if (r.aStart.Tab() == nTab)
                         rMark.SetMultiMarkArea(r);
                 }
@@ -2017,8 +2054,8 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
         }
 
         OUString  aTargetValStr;
-        if ( rParam.pStrTargetVal != nullptr )
-            aTargetValStr = *(rParam.pStrTargetVal);
+        if ( rParam.pStrTargetVal )
+            aTargetValStr = *rParam.pStrTargetVal;
 
         OUString  aMsgStr;
         OUString  aResStr;
@@ -2047,22 +2084,22 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
 
         if ( bExact )
         {
-            aMsgStr += ScGlobal::GetRscString( STR_MSSG_SOLVE_0 );
+            aMsgStr += ScResId( STR_MSSG_SOLVE_0 );
             aMsgStr += aResStr;
-            aMsgStr += ScGlobal::GetRscString( STR_MSSG_SOLVE_1 );
+            aMsgStr += ScResId( STR_MSSG_SOLVE_1 );
         }
         else
         {
-            aMsgStr  = ScGlobal::GetRscString( STR_MSSG_SOLVE_2 );
-            aMsgStr += ScGlobal::GetRscString( STR_MSSG_SOLVE_3 );
+            aMsgStr  = ScResId( STR_MSSG_SOLVE_2 );
+            aMsgStr += ScResId( STR_MSSG_SOLVE_3 );
             aMsgStr += aResStr ;
-            aMsgStr += ScGlobal::GetRscString( STR_MSSG_SOLVE_4 );
+            aMsgStr += ScResId( STR_MSSG_SOLVE_4 );
         }
 
         vcl::Window* pWin = GetViewData().GetDialogParent();
         std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                   VclMessageType::Question, VclButtonsType::YesNo, aMsgStr));
-        xBox->set_title(ScGlobal::GetRscString(STR_MSSG_DOSUBTOTALS_0));
+        xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0));
         xBox->set_default_response(RET_NO);
         if (xBox->run() == RET_NO)
             EnterValue( nDestCol, nDestRow, nDestTab, nSolveResult );
@@ -2335,7 +2372,8 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
             }
             pUndoDoc->SetVisible( nTab, rDoc.IsVisible( nTab ) );
             pUndoDoc->SetTabBgColor( nTab, rDoc.GetTabBgColor(nTab) );
-            pUndoDoc->SetSheetEvents( nTab, rDoc.GetSheetEvents( nTab ) );
+            auto pSheetEvents = rDoc.GetSheetEvents( nTab );
+            pUndoDoc->SetSheetEvents( nTab, std::unique_ptr<ScSheetEvents>(pSheetEvents ? new ScSheetEvents(*pSheetEvents) : nullptr) );
             pUndoDoc->SetLayoutRTL( nTab, rDoc.IsLayoutRTL( nTab ) );
 
             if ( rDoc.IsTabProtected( nTab ) )
@@ -2727,7 +2765,7 @@ void ScViewFunc::MoveTable(
                 break;  // for
             }
             ScRange aRange( 0, 0, TheTabs[j], MAXCOL, MAXROW, TheTabs[j] );
-            aParam.maRanges.Append(aRange);
+            aParam.maRanges.push_back(aRange);
         }
         pDoc->SetClipParam(aParam);
         if ( nErrVal > 0 )

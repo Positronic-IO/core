@@ -97,14 +97,22 @@ class SVX_DLLPUBLIC SdrTableObj : public ::SdrTextObj
     friend class Cell;
     friend class SdrTableObjImpl;
 
-public:
-    SdrTableObj(SdrModel* _pModel);
-    SdrTableObj(SdrModel* _pModel, const ::tools::Rectangle& rNewRect, sal_Int32 nColumns, sal_Int32 nRows);
+protected:
+    // protected destructor
     virtual ~SdrTableObj() override;
 
+public:
+    SdrTableObj(SdrModel& rSdrModel);
+    SdrTableObj(
+        SdrModel& rSdrModel,
+        const ::tools::Rectangle& rNewRect,
+        sal_Int32 nColumns,
+        sal_Int32 nRows);
+
+    // helper to limit existing TableModel to a given selection
+    void CropTableModelToSelection(const CellPos& rStart, const CellPos& rEnd);
 
     // Table stuff
-    SdrTableObj* CloneRange( const CellPos& rStartPos, const CellPos& rEndPos );
     void DistributeColumns( sal_Int32 nFirstColumn, sal_Int32 nLastColumn );
     void DistributeRows( sal_Int32 nFirstRow, sal_Int32 nLastRow );
 
@@ -184,7 +192,6 @@ public:
 
     virtual bool IsFontwork() const override;
 
-    virtual void SetModel(SdrModel* pNewModel) override;
     virtual void TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual sal_uInt16 GetObjIdentifier() const override;
     virtual void SetChanged() override;
@@ -193,7 +200,7 @@ public:
     virtual bool AdjustTextFrameWidthAndHeight() override;
     virtual OUString TakeObjNameSingul() const override;
     virtual OUString TakeObjNamePlural() const override;
-    virtual SdrTableObj* Clone() const override;
+    virtual SdrTableObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrTableObj& operator=(const SdrTableObj& rObj);
     virtual void RecalcSnapRect() override;
     virtual const tools::Rectangle& GetSnapRect() const override;

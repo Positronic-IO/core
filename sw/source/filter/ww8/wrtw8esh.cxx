@@ -48,7 +48,6 @@
 #include <editeng/editeng.hxx>
 #include <editeng/flditem.hxx>
 #include <editeng/shaditem.hxx>
-#include <unotools/ucbstreamhelper.hxx>
 #include <svx/fmglob.hxx>
 #include <svx/svdouno.hxx>
 #include <svx/unoapi.hxx>
@@ -79,6 +78,7 @@
 #include "ww8par.hxx"
 #include <breakit.hxx>
 #include <com/sun/star/i18n/ScriptType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include "ww8attributeoutput.hxx"
 #include "writerhelper.hxx"
 #include "writerwordglue.hxx"
@@ -100,6 +100,7 @@
 #include <unotools/saveopt.hxx>
 #include <o3tl/enumrange.hxx>
 #include <o3tl/enumarray.hxx>
+#include <sfx2/docfile.hxx>
 
 #include <algorithm>
 
@@ -1000,7 +1001,7 @@ void MSWord_SdrAttrIter::NextPara( sal_Int32 nPar )
     // the attributes are outputted at start of a paragraph anyway.
     aChrTextAtrArr.clear();
     aChrSetArr.clear();
-    nAktSwPos = nTmpSwPos = 0;
+    nCurrentSwPos = nTmpSwPos = 0;
 
     SfxItemSet aSet( pEditObj->GetParaAttribs( nPara ));
     pEditPool = aSet.GetPool();
@@ -1010,7 +1011,7 @@ void MSWord_SdrAttrIter::NextPara( sal_Int32 nPar )
     nScript = g_pBreakIt->GetBreakIter()->getScriptType( pEditObj->GetText(nPara), 0);
 
     pEditObj->GetCharAttribs( nPara, aTextAtrArr );
-    nAktSwPos = SearchNext( 1 );
+    nCurrentSwPos = SearchNext( 1 );
 }
 
 rtl_TextEncoding MSWord_SdrAttrIter::GetNextCharSet() const
@@ -1339,7 +1340,7 @@ void WW8Export::WriteOutliner(const OutlinerParaObject& rParaObj, sal_uInt8 nTyp
         OSL_ENSURE( pO->empty(), " pO is not empty at start of line" );
 
         OUString aStr( rEditObj.GetText( n ));
-        sal_Int32 nAktPos = 0;
+        sal_Int32 nCurrentPos = 0;
         const sal_Int32 nEnd = aStr.getLength();
 
         const SfxItemSet aSet(rEditObj.GetParaAttribs(n));
@@ -1354,17 +1355,17 @@ void WW8Export::WriteOutliner(const OutlinerParaObject& rParaObj, sal_uInt8 nTyp
         do {
             const sal_Int32 nNextAttr = std::min(aAttrIter.WhereNext(), nEnd);
 
-            bool bTextAtr = aAttrIter.IsTextAttr( nAktPos );
+            bool bTextAtr = aAttrIter.IsTextAttr( nCurrentPos );
             if( !bTextAtr )
-                OutSwString(aStr, nAktPos, nNextAttr - nAktPos);
+                OutSwString(aStr, nCurrentPos, nNextAttr - nCurrentPos);
 
             // At the end of the line the attributes are extended over the CR.
             // exception: foot note at line end
             if( nNextAttr == nEnd && !bTextAtr )
                 WriteCR();              // CR after it
 
-                                            // output of character attributes
-            aAttrIter.OutAttr( nAktPos );   // nAktPos - 1 ??
+                                                // output of character attributes
+            aAttrIter.OutAttr( nCurrentPos );   // nCurrentPos - 1 ??
 
             if (bIsRTLPara)
             {
@@ -1383,10 +1384,10 @@ void WW8Export::WriteOutliner(const OutlinerParaObject& rParaObj, sal_uInt8 nTyp
             // exception: foot note at line end
             if( nNextAttr == nEnd && bTextAtr )
                 WriteCR();              // CR after it
-            nAktPos = nNextAttr;
+            nCurrentPos = nNextAttr;
             aAttrIter.NextPos();
         }
-        while( nAktPos < nEnd );
+        while( nCurrentPos < nEnd );
 
         OSL_ENSURE( pO->empty(), " pO is not empty at start of line" );
 
@@ -2009,7 +2010,7 @@ sal_Int32 SwBasicEscherEx::WriteFlyFrameAttr(const SwFrameFormat& rFormat,
                 const sal_uInt16 nCstScale = 635;        // unit scale between AOO and MS Word
                 const sal_uInt32 nShadowType = 131074;   // shadow type of ms word. need to set the default value.
 
-                sal_uInt32  nColor = static_cast<sal_uInt32>(pSI->GetColor().GetColor()) ;
+                Color  nColor = pSI->GetColor();
                 sal_Int32 nOffX = pSI->GetWidth() * nCstScale;
                 sal_Int32 nOffY = pSI->GetWidth() * nCstScale;
 
@@ -2966,10 +2967,8 @@ void SwEscherEx::WriteOCXControl( const SwFrameFormat& rFormat, sal_uInt32 nShap
 
     // #i71538# use complete SdrViews
     // SdrExchangeView aExchange(pModel, pDevice);
-    SdrView aExchange(pModel, pDevice);
-
-    Graphic aGraphic(SdrExchangeView::GetObjGraphic(pModel, pSdrObj));
-
+    SdrView aExchange(*pModel, pDevice);
+    const Graphic aGraphic(SdrExchangeView::GetObjGraphic(*pSdrObj));
     EscherPropertyContainer aPropOpt;
     WriteOLEPicture(aPropOpt,
         ShapeFlag::HaveAnchor | ShapeFlag::HaveShapeProperty | ShapeFlag::OLEShape, aGraphic,

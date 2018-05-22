@@ -84,8 +84,8 @@ public:
     virtual void SAL_CALL modified(const css::lang::EventObject& Source) override;
 
 // resolve ambiguity : both OWeakObject and OInterfaceContainerHelper2 have these memory operators
-    void * operator new( size_t size ) throw() { return OWeakSubObject::operator new(size); }
-    void operator delete( void * p ) throw() { OWeakSubObject::operator delete(p); }
+    using OWeakSubObject::operator new;
+    using OWeakSubObject::operator delete;
 };
 
 
@@ -109,8 +109,8 @@ public:
     virtual void SAL_CALL updated(const css::lang::EventObject &) override;
 
 // resolve ambiguity : both OWeakObject and OInterfaceContainerHelper2 have these memory operators
-    void * operator new( size_t size ) throw() { return OWeakSubObject::operator new(size); }
-    void operator delete( void * p ) throw() { OWeakSubObject::operator delete(p); }
+    using OWeakSubObject::operator new;
+    using OWeakSubObject::operator delete;
 };
 
 
@@ -133,8 +133,8 @@ public:
     virtual void SAL_CALL selectionChanged( const css::lang::EventObject& aEvent ) override;
 
 // resolve ambiguity : both OWeakObject and OInterfaceContainerHelper2 have these memory operators
-    void * operator new( size_t size ) throw() { return OWeakSubObject::operator new(size); }
-    void operator delete( void * p ) throw() { OWeakSubObject::operator delete(p); }
+    using OWeakSubObject::operator new;
+    using OWeakSubObject::operator delete;
 };
 
 
@@ -157,8 +157,8 @@ public:
     virtual void SAL_CALL columnChanged( const css::lang::EventObject& _event ) override;
 
 // resolve ambiguity : both OWeakObject and OInterfaceContainerHelper2 have these memory operators
-    void * operator new( size_t size ) throw() { return OWeakSubObject::operator new(size); }
-    void operator delete( void * p ) throw() { OWeakSubObject::operator delete(p); }
+    using OWeakSubObject::operator new;
+    using OWeakSubObject::operator delete;
 };
 
 
@@ -182,8 +182,8 @@ public:
     virtual void SAL_CALL elementReplaced(const css::container::ContainerEvent& Event) override;
 
 // resolve ambiguity : both OWeakObject and OInterfaceContainerHelper2 have these memory operators
-    void * operator new( size_t size ) throw() { return OWeakSubObject::operator new(size); }
-    void operator delete( void * p ) throw() { OWeakSubObject::operator delete(p); }
+    using OWeakSubObject::operator new;
+    using OWeakSubObject::operator delete;
 };
 
 
@@ -351,9 +351,9 @@ class SAL_WARN_UNUSED SVX_DLLPUBLIC FmXGridPeer:
 
     bool                                m_bInterceptingDispatch;
 
-    bool*                               m_pStateCache;
+    std::unique_ptr<bool[]>                 m_pStateCache;
         // one bool for each supported url
-    css::uno::Reference< css::frame::XDispatch > *                    m_pDispatchers;
+    std::unique_ptr<css::uno::Reference< css::frame::XDispatch >[]>   m_pDispatchers;
         // one dispatcher for each supported url
         // (I would like to have a vector here but including the stl in an exported file seems
         // very risky to me ....)

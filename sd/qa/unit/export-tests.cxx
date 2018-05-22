@@ -9,7 +9,6 @@
 #include <officecfg/Office/Common.hxx>
 #include "sdmodeltestbase.hxx"
 #include <Outliner.hxx>
-#include <comphelper/propertysequence.hxx>
 #include <svl/stritem.hxx>
 #include <editeng/editobj.hxx>
 #include <editeng/outlobj.hxx>
@@ -56,6 +55,7 @@
 #include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/awt/FontDescriptor.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/graphic/GraphicType.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeParameterPair.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
@@ -82,6 +82,7 @@ public:
     void testTdf97630();
     void testSwappedOutImageExport();
     void testOOoXMLAnimations();
+    void testUnknownAttributes();
     void testTdf80020();
     void testLinkedGraphicRT();
     void testImageWithSpecialID();
@@ -94,6 +95,7 @@ public:
     void testPageWithTransparentBackground();
     void testTextRotation();
     void testTdf115394PPT();
+    void testBulletsAsImage();
 
     CPPUNIT_TEST_SUITE(SdExportTest);
 
@@ -103,6 +105,7 @@ public:
     CPPUNIT_TEST(testTdf97630);
     CPPUNIT_TEST(testSwappedOutImageExport);
     CPPUNIT_TEST(testOOoXMLAnimations);
+    CPPUNIT_TEST(testUnknownAttributes);
     CPPUNIT_TEST(testTdf80020);
     CPPUNIT_TEST(testLinkedGraphicRT);
     CPPUNIT_TEST(testImageWithSpecialID);
@@ -115,6 +118,7 @@ public:
     CPPUNIT_TEST(testPageWithTransparentBackground);
     CPPUNIT_TEST(testTextRotation);
     CPPUNIT_TEST(testTdf115394PPT);
+    CPPUNIT_TEST(testBulletsAsImage);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -135,6 +139,8 @@ public:
             { "text", "urn:oasis:names:tc:opendocument:xmlns:text:1.0" },
             { "xlink", "http://www.w3c.org/1999/xlink" },
             { "loext", "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" },
+            // user-defined
+            { "foo", "http://example.com/" },
         };
         for (size_t i = 0; i < SAL_N_ELEMENTS(namespaces); ++i)
         {
@@ -456,16 +462,13 @@ void SdExportTest::testSwappedOutImageExport()
 
         uno::Reference<drawing::XShape> xImage(xDrawPage->getByIndex(2), uno::UNO_QUERY);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width );
@@ -476,16 +479,13 @@ void SdExportTest::testSwappedOutImageExport()
         xDrawPage.set(xDrawPagesSupplier->getDrawPages()->getByIndex(1), uno::UNO_QUERY_THROW );
         xImage.set(xDrawPage->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width );
@@ -515,6 +515,28 @@ void SdExportTest::testOOoXMLAnimations()
     assertXPath(pXmlDoc, "//anim:par[@presentation:node-type='timing-root']", 26);
     // currently getting 52 of these without the fix (depends on timing)
     assertXPath(pXmlDoc, "//anim:par", 223);
+}
+
+void SdExportTest::testUnknownAttributes()
+{
+    ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/unknown-attribute.fodp"), FODP);
+
+    uno::Reference<lang::XComponent> xComponent(xDocShRef->GetModel(), uno::UNO_QUERY);
+    uno::Reference<frame::XStorable> xStorable(xComponent, uno::UNO_QUERY);
+    utl::MediaDescriptor aMediaDescriptor;
+    aMediaDescriptor["FilterName"] <<= OStringToOUString(OString(getFormat(ODP)->pFilterName), RTL_TEXTENCODING_UTF8);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+
+    xDocShRef->DoClose();
+
+    xmlDocPtr pXmlDoc = parseExport(aTempFile, "content.xml");
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name='gr1']/style:graphic-properties[@foo:non-existent-att='bar']");
+// TODO: if the namespace is *known*, the attribute is not preserved, but that seems to be a pre-existing problem, or maybe it's even intentional?
+//    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name='gr1']/style:graphic-properties[@svg:non-existent-att='blah']");
+    // this was on style:graphic-properties on the import, but the export moves it to root node which is OK
+    assertXPathNSDef(pXmlDoc, "/office:document-content", "foo", "http://example.com/");
 }
 
 void SdExportTest::testTdf80020()
@@ -569,9 +591,8 @@ void SdExportTest::testLinkedGraphicRT()
             CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), pObject->IsLinkedGraphic() );
 
             const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
-            CPPUNIT_ASSERT_MESSAGE(sFailedImportMessage.getStr(), !rGraphicObj.IsSwappedOut());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedImportMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedImportMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedImportMessage.getStr(), sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
         }
 
         // Save and reload
@@ -595,9 +616,8 @@ void SdExportTest::testLinkedGraphicRT()
             CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pObject->IsLinkedGraphic() );
 
             const GraphicObject& rGraphicObj = pObject->GetGraphicObject(true);
-            CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), !rGraphicObj.IsSwappedOut());
             CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetGraphic().GetType()));
-            CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetSizeBytes());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), sal_uLong(864900), rGraphicObj.GetGraphic().GetSizeBytes());
         }
 
         xDocShRef->DoClose();
@@ -645,16 +665,13 @@ void SdExportTest::testImageWithSpecialID()
 
         uno::Reference<drawing::XShape> xImage(xDrawPage->getByIndex(2), uno::UNO_QUERY);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width );
@@ -665,16 +682,13 @@ void SdExportTest::testImageWithSpecialID()
         xDrawPage.set(xDrawPagesSupplier->getDrawPages()->getByIndex(1), uno::UNO_QUERY_THROW );
         xImage.set(xDrawPage->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check Graphic, Size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic->getType() != graphic::GraphicType::EMPTY);
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
             CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width );
@@ -901,6 +915,46 @@ void SdExportTest::testTdf115394PPT()
     CPPUNIT_ASSERT_EQUAL(1.0, fTransitionDuration);
 
     xDocShRef->DoClose();
+}
+
+void SdExportTest::testBulletsAsImage()
+{
+    for (sal_Int32 nExportFormat : {ODP, PPTX, PPT})
+    {
+        ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/BulletsAsImage.odp"), ODP);
+        const OString sFailedMessageBase = OString("Failed on filter '") + OString(aFileFormats[nExportFormat].pFilterName) + OString("': ");
+
+        uno::Reference< lang::XComponent > xComponent(xDocShRef->GetModel(), uno::UNO_QUERY);
+        uno::Reference<frame::XStorable> xStorable(xComponent, uno::UNO_QUERY);
+        utl::MediaDescriptor aMediaDescriptor;
+        aMediaDescriptor["FilterName"] <<= OStringToOUString(OString(aFileFormats[nExportFormat].pFilterName), RTL_TEXTENCODING_UTF8);
+
+        utl::TempFile aTempFile;
+        aTempFile.EnableKillingFile();
+        xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+        xComponent.set(xStorable, uno::UNO_QUERY);
+        xComponent->dispose();
+
+        xDocShRef = loadURL(aTempFile.GetURL(), nExportFormat);
+
+        uno::Reference<beans::XPropertySet> xShape(getShapeFromPage(0, 0, xDocShRef));
+        uno::Reference<text::XTextRange> const xParagraph(getParagraphFromShape(0, xShape));
+        uno::Reference<beans::XPropertySet> xPropSet(xParagraph, uno::UNO_QUERY_THROW);
+
+        uno::Reference<container::XIndexAccess> xLevels(xPropSet->getPropertyValue("NumberingRules"), uno::UNO_QUERY_THROW);
+        uno::Sequence<beans::PropertyValue> aProperties;
+        xLevels->getByIndex(0) >>= aProperties; // 1st level
+        uno::Reference<awt::XBitmap> xBitmap;
+        for (const beans::PropertyValue& rProperty : aProperties)
+        {
+            if (rProperty.Name == "GraphicBitmap")
+                xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
+        }
+        const OString sFailed = sFailedMessageBase + "No bitmap for the bullets";
+        CPPUNIT_ASSERT_MESSAGE(sFailed.getStr(), xBitmap.is());
+
+        xDocShRef->DoClose();
+    }
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdExportTest);

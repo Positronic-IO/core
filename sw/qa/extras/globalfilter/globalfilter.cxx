@@ -11,11 +11,12 @@
 
 #include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
-#include <officecfg/Office/Common.hxx>
-#include <comphelper/processfactory.hxx>
+#include <com/sun/star/graphic/GraphicType.hpp>
+#include <sfx2/linkmgr.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <unotxdoc.hxx>
 #include <docsh.hxx>
+#include <editsh.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <IDocumentContentOperations.hxx>
 #include <doc.hxx>
@@ -30,7 +31,7 @@ class Test : public SwModelTestBase
 public:
     Test() : SwModelTestBase() {}
 
-    void testSwappedOutImageExport();
+    void testEmbeddedGraphicRoundtrip();
     void testLinkedGraphicRT();
     void testImageWithSpecialID();
     void testGraphicShape();
@@ -43,9 +44,10 @@ public:
     void testSkipImages();
 #endif
     void testRedlineFlags();
+    void testBulletAsImage();
 
     CPPUNIT_TEST_SUITE(Test);
-    CPPUNIT_TEST(testSwappedOutImageExport);
+    CPPUNIT_TEST(testEmbeddedGraphicRoundtrip);
     CPPUNIT_TEST(testLinkedGraphicRT);
     CPPUNIT_TEST(testImageWithSpecialID);
     CPPUNIT_TEST(testGraphicShape);
@@ -57,36 +59,33 @@ public:
     CPPUNIT_TEST(testSkipImages);
 #endif
     CPPUNIT_TEST(testRedlineFlags);
+    CPPUNIT_TEST(testBulletAsImage);
     CPPUNIT_TEST_SUITE_END();
 };
 
-void Test::testSwappedOutImageExport()
+void Test::testEmbeddedGraphicRoundtrip()
 {
-    const char* aFilterNames[] = {
+    OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         // Check whether the export code swaps in the image which was swapped out before by auto mechanism
 
-        // Set cache size to a very small value to make sure one of the images is swapped out
-        std::shared_ptr< comphelper::ConfigurationChanges > batch(comphelper::ConfigurationChanges::create());
-        officecfg::Office::Common::Cache::GraphicManager::TotalCacheSize::set(static_cast<sal_Int32>(1), batch);
-        batch->commit();
-
         if (mxComponent.is())
             mxComponent->dispose();
+
         mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/document_with_two_images.odt"), "com.sun.star.text.TextDocument");
 
         // Export the document and import again for a check
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -99,74 +98,65 @@ void Test::testSwappedOutImageExport()
         uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
         uno::Reference<container::XIndexAccess> xDraws(xDrawPageSupplier->getDrawPage(), uno::UNO_QUERY);
 
-        const OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
         CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(2), xDraws->getCount());
 
         // First image
         uno::Reference<drawing::XShape> xImage(xDraws->getByIndex(0), uno::UNO_QUERY);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check graphic, size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), graphic::GraphicType::PIXEL, xGraphic->getType());
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width );
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(381), xBitmap->getSize().Height );
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(381), xBitmap->getSize().Height);
         }
 
         // Second Image
         xImage.set(xDraws->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT_MESSAGE(
-                sFailedMessage.getStr(), sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check graphic, size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), graphic::GraphicType::PIXEL, xGraphic->getType());
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width );
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(600), xBitmap->getSize().Height );
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(600), xBitmap->getSize().Height);
         }
     }
 }
 
 void Test::testLinkedGraphicRT()
 {
-    const std::vector<OUString> aFilterNames = {
+    const OUString aFilterNames[] = {
         "writer8",
 //        "Rich Text Format",  Note: picture is there, but SwGrfNode is not found?
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    for( size_t nFilter = 0; nFilter < aFilterNames.size(); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
         mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/document_with_linked_graphic.odt"), "com.sun.star.text.TextDocument");
 
-        const OString sFailedMessage = OString("Failed on filter: ")
-            + OUStringToOString(aFilterNames[nFilter], RTL_TEXTENCODING_ASCII_US);
-
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
 
         // Export the document and import again for a check
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= aFilterNames[nFilter];
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -183,25 +173,30 @@ void Test::testLinkedGraphicRT()
 
         // Find the image
         bool bImageFound = false;
-        for( sal_uLong nIndex = 0; nIndex < aNodes.Count(); ++nIndex)
+        Graphic aGraphic;
+        for (sal_uLong nIndex = 0; nIndex < aNodes.Count(); ++nIndex)
         {
-            if( aNodes[nIndex]->IsGrfNode() )
+            if (aNodes[nIndex]->IsGrfNode())
             {
                 SwGrfNode* pGrfNode = aNodes[nIndex]->GetGrfNode();
                 CPPUNIT_ASSERT(pGrfNode);
-                // RT via DOCX makes linked graphic embedded?!
-                if( aFilterNames[nFilter] != "Office Open XML Text" )
-                {
-                    CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), pGrfNode->IsGrfLink());
-                }
+
                 const GraphicObject& rGraphicObj = pGrfNode->GetGrfObj(true);
-                CPPUNIT_ASSERT_MESSAGE( sFailedMessage.getStr(), !rGraphicObj.IsSwappedOut());
-                CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), int(GraphicType::Bitmap), int(rGraphicObj.GetType()));
-                CPPUNIT_ASSERT_EQUAL_MESSAGE( sFailedMessage.getStr(), static_cast<sal_uLong>(864900), rGraphicObj.GetSizeBytes());
+                aGraphic = rGraphicObj.GetGraphic();
                 bImageFound = true;
             }
         }
+
         CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), bImageFound);
+
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), GraphicType::Bitmap, aGraphic.GetType());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_uLong(864900), aGraphic.GetSizeBytes());
+
+        // Check if linked graphic is registered in LinkManager
+        sfx2::LinkManager& rLinkManager = pTextDoc->GetDocShell()->GetDoc()->GetEditShell()->GetLinkManager();
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), size_t(1), rLinkManager.GetLinks().size());
+        const tools::SvRef<sfx2::SvBaseLink> & rLink = rLinkManager.GetLinks()[0];
+        CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), rLink->GetLinkSourceName().indexOf("linked_graphic.jpg") >= 0);
     }
 }
 
@@ -210,19 +205,14 @@ void Test::testImageWithSpecialID()
     // Check how LO handles when the imported graphic's ID is different from that one
     // which is generated by LO.
 
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    // Trigger swap out mechanism to test swapped state factor too.
-    std::shared_ptr< comphelper::ConfigurationChanges > batch(comphelper::ConfigurationChanges::create());
-    officecfg::Office::Common::Cache::GraphicManager::TotalCacheSize::set(static_cast<sal_Int32>(1), batch);
-    batch->commit();
-
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
@@ -232,7 +222,7 @@ void Test::testImageWithSpecialID()
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -245,43 +235,38 @@ void Test::testImageWithSpecialID()
         uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
         uno::Reference<container::XIndexAccess> xDraws(xDrawPageSupplier->getDrawPage(), uno::UNO_QUERY);
 
-        const OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
         CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(2), xDraws->getCount());
 
         uno::Reference<drawing::XShape> xImage = getShape(1);
         uno::Reference< beans::XPropertySet > XPropSet( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT(sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check graphic, size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), graphic::GraphicType::PIXEL, xGraphic->getType());
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
-            CPPUNIT_ASSERT(xBitmap.is());
-            CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(610), xBitmap->getSize().Width );
-            CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(381), xBitmap->getSize().Height );
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(610), xBitmap->getSize().Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(381), xBitmap->getSize().Height);
         }
+
         // Second Image
-        xImage = getShape(2);
+        xImage.set(xDraws->getByIndex(1), uno::UNO_QUERY);
         XPropSet.set( xImage, uno::UNO_QUERY_THROW );
-        // Check URL
-        {
-            OUString sURL;
-            XPropSet->getPropertyValue("GraphicURL") >>= sURL;
-            CPPUNIT_ASSERT(sURL != "vnd.sun.star.GraphicObject:00000000000000000000000000000000");
-        }
-        // Check size
+
+        // Check graphic, size
         {
             uno::Reference<graphic::XGraphic> xGraphic;
             XPropSet->getPropertyValue("Graphic") >>= xGraphic;
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xGraphic.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), graphic::GraphicType::PIXEL, xGraphic->getType());
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
-            CPPUNIT_ASSERT(xBitmap.is());
-            CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(900), xBitmap->getSize().Width );
-            CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(600), xBitmap->getSize().Height );
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(900), xBitmap->getSize().Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(600), xBitmap->getSize().Height);
         }
     }
 }
@@ -319,19 +304,14 @@ void Test::testGraphicShape()
     // There are two kind of images in Writer: 1) Writer specific handled by SwGrfNode and
     // 2) graphic shape handled by SdrGrafObj (e.g. after copy&paste from Impress).
 
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    // Trigger swap out mechanism to test swapped state factor too.
-    std::shared_ptr< comphelper::ConfigurationChanges > batch(comphelper::ConfigurationChanges::create());
-    officecfg::Office::Common::Cache::GraphicManager::TotalCacheSize::set(static_cast<sal_Int32>(1), batch);
-    batch->commit();
-
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
@@ -341,7 +321,7 @@ void Test::testGraphicShape()
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -354,7 +334,7 @@ void Test::testGraphicShape()
         uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
         uno::Reference<container::XIndexAccess> xDraws(xDrawPageSupplier->getDrawPage(), uno::UNO_QUERY);
 
-        const OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
         CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(2), xDraws->getCount());
 
         uno::Reference<drawing::XShape> xImage = lcl_getShape(mxComponent, true);
@@ -373,13 +353,13 @@ void Test::testGraphicShape()
         }
 
         // MS filters make this kind of linked images broken !?
-        if( OUString::createFromAscii(aFilterNames[nFilter]) != "writer8" )
+        if (rFilterName != "writer8")
             return;
 
         // Second image is a linked one
         xImage = lcl_getShape(mxComponent, false);
-        XPropSet.set( xImage, uno::UNO_QUERY );
-        const OString sFailedImageLoad = OString("Couldn't load the shape/image for ") + aFilterNames[nFilter];
+        XPropSet.set(xImage, uno::UNO_QUERY);
+        const OString sFailedImageLoad = OString("Couldn't load the shape/image for ") + rFilterName.toUtf8();
         CPPUNIT_ASSERT_MESSAGE(sFailedImageLoad.getStr(), xImage.is());
 
         // Check size
@@ -394,8 +374,8 @@ void Test::testGraphicShape()
 
             uno::Reference<awt::XBitmap> xBitmap(xGraphic, uno::UNO_QUERY);
             CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(620), xBitmap->getSize().Width );
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(465), xBitmap->getSize().Height );
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(620), xBitmap->getSize().Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(465), xBitmap->getSize().Height);
         }
     }
 }
@@ -405,27 +385,27 @@ void Test::testCharHighlightBody()
     // MS Word has two kind of character backgrounds called character shading and highlighting
     // MS filters handle these attributes separately, but ODF export merges them into one background attribute
 
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
         mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/char_highlight.docx"),
                                       "com.sun.star.text.TextDocument");
 
-        const OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
 
         // Export the document and import again for a check
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -461,7 +441,7 @@ void Test::testCharHighlightBody()
                 case 16: nHighlightColor = 0xC0C0C0; break; //light gray
             }
 
-            if( strcmp(aFilterNames[nFilter], "writer8") == 0 )
+            if (rFilterName == "writer8")
             {
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(COL_TRANSPARENT), getProperty<sal_Int32>(xRun,"CharHighlight"));
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), nHighlightColor, getProperty<sal_Int32>(xRun,"CharBackColor"));
@@ -476,7 +456,7 @@ void Test::testCharHighlightBody()
         // Only highlight
         {
             const uno::Reference<beans::XPropertySet> xRun(getRun(xPara,18), uno::UNO_QUERY);
-            if( strcmp(aFilterNames[nFilter], "writer8") == 0 )
+            if (rFilterName == "writer8")
             {
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(COL_TRANSPARENT), getProperty<sal_Int32>(xRun,"CharHighlight"));
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(0xff0000), getProperty<sal_Int32>(xRun,"CharBackColor"));
@@ -592,14 +572,14 @@ void Test::testMSCharBackgroundEditing()
     // Simulate the editing process of imported MSO character background attributes
     // and check how export behaves.
 
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
@@ -607,7 +587,7 @@ void Test::testMSCharBackgroundEditing()
         mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/char_background_editing.docx"),
                                       "com.sun.star.text.TextDocument");
 
-        const OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        const OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
 
         // Check whether import was done on the right way
         uno::Reference< text::XTextRange > xPara = getParagraph(1);
@@ -666,7 +646,7 @@ void Test::testMSCharBackgroundEditing()
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -688,7 +668,7 @@ void Test::testMSCharBackgroundEditing()
                 case 4: nBackColor = 0xff00ff; break; //magenta
             }
             const uno::Reference<beans::XPropertySet> xRun(getRun(xPara,i), uno::UNO_QUERY);
-            if( strcmp(aFilterNames[nFilter], "writer8") == 0 )
+            if (rFilterName == "writer8")
             {
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), static_cast<sal_Int32>(COL_TRANSPARENT), getProperty<sal_Int32>(xRun,"CharHighlight"));
                 CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), nBackColor, getProperty<sal_Int32>(xRun,"CharBackColor"));
@@ -707,20 +687,20 @@ void Test::testCharBackgroundToHighlighting()
     // MSO highlighting has less kind of values so let's see how LO character background is converted
     // to these values
 
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "Rich Text Format",
         "MS Word 97",
         "Office Open XML Text",
     };
 
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (OUString const & rFilterName : aFilterNames)
     {
         if (mxComponent.is())
             mxComponent->dispose();
         mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/char_background.odt"),
                                       "com.sun.star.text.TextDocument");
 
-        OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter];
+        OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
 
 
         SvtFilterOptions& rOpt = SvtFilterOptions::Get();
@@ -730,7 +710,7 @@ void Test::testCharBackgroundToHighlighting()
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
 
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
@@ -779,17 +759,17 @@ void Test::testSkipImages()
     // Check how LO skips image loading (but not texts of textboxes and custom shapes)
     // during DOC and DOCX import, using the "SkipImages" FilterOptions.
 
-    const char* aFilterNames[][2] = {
-        { "/sw/qa/extras/globalfilter/data/skipimages.doc", nullptr },
+    std::pair<OUString, OUString> aFilterNames[] = {
+        { "/sw/qa/extras/globalfilter/data/skipimages.doc", "" },
         { "/sw/qa/extras/globalfilter/data/skipimages.doc", "SkipImages" },
-        { "/sw/qa/extras/globalfilter/data/skipimages.docx", nullptr },
+        { "/sw/qa/extras/globalfilter/data/skipimages.docx", "" },
         { "/sw/qa/extras/globalfilter/data/skipimages.docx", "SkipImages" }
     };
 
-    for( size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter )
+    for (auto const & rFilterNamePair : aFilterNames)
     {
-        bool bSkipImages = aFilterNames[nFilter][1] != nullptr;
-        OString sFailedMessage = OString("Failed on filter: ") + aFilterNames[nFilter][0];
+        bool bSkipImages = !rFilterNamePair.second.isEmpty();
+        OString sFailedMessage = OString("Failed on filter: ") + rFilterNamePair.first.toUtf8();
 
         if (mxComponent.is())
             mxComponent->dispose();
@@ -797,13 +777,16 @@ void Test::testSkipImages()
         if (bSkipImages)
         {
             // FilterOptions parameter
-            uno::Sequence<beans::PropertyValue> args( comphelper::InitPropertySequence({
-                    { "FilterOptions", uno::Any(OUString::createFromAscii(aFilterNames[nFilter][1])) }
+            uno::Sequence<beans::PropertyValue> args(comphelper::InitPropertySequence({
+                    { "FilterOptions", uno::Any(rFilterNamePair.second) }
             }));
-            mxComponent = loadFromDesktop(m_directories.getURLFromSrc(OUString::createFromAscii(aFilterNames[nFilter][0])), "com.sun.star.text.TextDocument", args);
-            sFailedMessage = sFailedMessage + " - " + aFilterNames[nFilter][1];
-        } else
-            mxComponent = loadFromDesktop(m_directories.getURLFromSrc(OUString::createFromAscii(aFilterNames[nFilter][0])), "com.sun.star.text.TextDocument");
+            mxComponent = loadFromDesktop(m_directories.getURLFromSrc(rFilterNamePair.first), "com.sun.star.text.TextDocument", args);
+            sFailedMessage = sFailedMessage + " - " + rFilterNamePair.second.toUtf8();
+        }
+        else
+        {
+            mxComponent = loadFromDesktop(m_directories.getURLFromSrc(rFilterNamePair.first), "com.sun.star.text.TextDocument");
+        }
 
         // Check shapes (images, textboxes, custom shapes)
         uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
@@ -851,7 +834,7 @@ void Test::testSkipImages()
 
 void Test::testRedlineFlags()
 {
-    const char* aFilterNames[] = {
+    const OUString aFilterNames[] = {
         "writer8",
         "Rich Text Format",
         "MS Word 97",
@@ -882,13 +865,13 @@ void Test::testRedlineFlags()
         rIDRA.GetRedlineFlags() & ~RedlineFlags::ShowDelete;
     rIDRA.SetRedlineFlags(nRedlineFlags);
 
-    for (size_t nFilter = 0; nFilter < SAL_N_ELEMENTS(aFilterNames); ++nFilter)
+    for (OUString const & rFilterName : aFilterNames)
     {
         // export the document
         uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
 
         utl::MediaDescriptor aMediaDescriptor;
-        aMediaDescriptor["FilterName"] <<= OUString::createFromAscii(aFilterNames[nFilter]);
+        aMediaDescriptor["FilterName"] <<= rFilterName;
         utl::TempFile aTempFile;
         aTempFile.EnableKillingFile();
         xStorable->storeToURL(aTempFile.GetURL(),
@@ -896,8 +879,148 @@ void Test::testRedlineFlags()
 
         // tdf#97103 check that redline mode is properly restored
         CPPUNIT_ASSERT_EQUAL_MESSAGE(
-            OString(OString("redline mode not restored in ") + aFilterNames[nFilter]).getStr(),
+            OString(OString("redline mode not restored in ") + rFilterName.toUtf8()).getStr(),
             static_cast<int>(nRedlineFlags), static_cast<int>(rIDRA.GetRedlineFlags()));
+    }
+}
+
+void Test::testBulletAsImage()
+{
+    OUString aFilterNames[] = {
+        "writer8",
+        "MS Word 97",
+        "Office Open XML Text",
+        "Rich Text Format",
+    };
+
+    for (OUString const & rFilterName : aFilterNames)
+    {
+        OString sFailedMessage = OString("Failed on filter: ") + rFilterName.toUtf8();
+
+        if (mxComponent.is())
+            mxComponent->dispose();
+
+        mxComponent = loadFromDesktop(m_directories.getURLFromSrc("/sw/qa/extras/globalfilter/data/BulletAsImage.odt"), "com.sun.star.text.TextDocument");
+
+        // Check if import was successful
+        {
+            uno::Reference<text::XTextRange> xPara(getParagraph(1));
+            uno::Reference<beans::XPropertySet> xPropertySet(xPara, uno::UNO_QUERY);
+            uno::Reference<container::XIndexAccess> xLevels;
+            xLevels.set(xPropertySet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+            uno::Sequence<beans::PropertyValue> aProperties;
+            xLevels->getByIndex(0) >>= aProperties;
+            uno::Reference<awt::XBitmap> xBitmap;
+            awt::Size aSize;
+            sal_Int16 nNumberingType = -1;
+
+            for (beans::PropertyValue const & rProperty : aProperties)
+            {
+                if (rProperty.Name == "NumberingType")
+                {
+                    nNumberingType = rProperty.Value.get<sal_Int16>();
+                }
+                else if (rProperty.Name == "GraphicBitmap")
+                {
+                    if (rProperty.Value.has<uno::Reference<awt::XBitmap>>())
+                    {
+                        xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
+                    }
+                }
+                else if (rProperty.Name == "GraphicSize")
+                {
+                    aSize = rProperty.Value.get<awt::Size>();
+                }
+            }
+
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), style::NumberingType::BITMAP, nNumberingType);
+
+            // Graphic Bitmap
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
+            Graphic aGraphic(uno::Reference<graphic::XGraphic>(xBitmap, uno::UNO_QUERY));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), GraphicType::Bitmap, aGraphic.GetType());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), aGraphic.GetSizeBytes() > sal_uLong(0));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), 16L, aGraphic.GetSizePixel().Width());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), 16L, aGraphic.GetSizePixel().Height());
+
+            // Graphic Size
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(400), aSize.Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(400), aSize.Height);
+        }
+
+        // Export the document and import again for a check
+        uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
+
+        utl::MediaDescriptor aMediaDescriptor;
+        aMediaDescriptor["FilterName"] <<= rFilterName;
+
+
+        utl::TempFile aTempFile;
+        aTempFile.EnableKillingFile();
+        xStorable->storeToURL(aTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+        uno::Reference<lang::XComponent> xComponent(xStorable, uno::UNO_QUERY);
+        xComponent->dispose();
+
+        mxComponent = loadFromDesktop(aTempFile.GetURL(), "com.sun.star.text.TextDocument");
+
+        {
+            uno::Reference<text::XTextRange> xPara(getParagraph(1));
+            uno::Reference<beans::XPropertySet> xPropertySet(xPara, uno::UNO_QUERY);
+            uno::Reference<container::XIndexAccess> xLevels;
+            xLevels.set(xPropertySet->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+            uno::Sequence<beans::PropertyValue> aProperties;
+            xLevels->getByIndex(0) >>= aProperties;
+            uno::Reference<awt::XBitmap> xBitmap;
+            awt::Size aSize;
+            sal_Int16 nNumberingType = -1;
+
+            for (beans::PropertyValue const & rProperty : aProperties)
+            {
+                if (rProperty.Name == "NumberingType")
+                {
+                    nNumberingType = rProperty.Value.get<sal_Int16>();
+                }
+                else if (rProperty.Name == "GraphicBitmap")
+                {
+                    if (rProperty.Value.has<uno::Reference<awt::XBitmap>>())
+                    {
+                        xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
+                    }
+                }
+                else if (rProperty.Name == "GraphicSize")
+                {
+                    aSize = rProperty.Value.get<awt::Size>();
+                }
+            }
+
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), style::NumberingType::BITMAP, nNumberingType);
+
+            // Graphic Bitmap
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), xBitmap.is());
+            Graphic aGraphic(uno::Reference<graphic::XGraphic>(xBitmap, uno::UNO_QUERY));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), GraphicType::Bitmap, aGraphic.GetType());
+            CPPUNIT_ASSERT_MESSAGE(sFailedMessage.getStr(), aGraphic.GetSizeBytes() > sal_uLong(0));
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), 16L, aGraphic.GetSizePixel().Width());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), 16L, aGraphic.GetSizePixel().Height());
+
+            // Graphic Size
+            if (rFilterName == "write8") // ODT is correct
+            {
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(400), aSize.Width);
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(400), aSize.Height);
+            }
+            // FIXME: MS Filters don't work correctly for graphic bullet size
+            else if (rFilterName == "Office Open XML Text" || rFilterName == "Rich Text Format")
+            {
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(279), aSize.Width);
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(279), aSize.Height);
+            }
+            else if (rFilterName == "MS Word 97")
+            {
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(296), aSize.Width);
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), sal_Int32(296), aSize.Height);
+            }
+        }
     }
 }
 

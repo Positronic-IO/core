@@ -59,11 +59,7 @@ ScXMLTableScenarioContext::ScXMLTableScenarioContext(
                 bDisplayBorder = IsXMLToken(aIter, XML_TRUE);
                 break;
             case XML_ELEMENT( TABLE, XML_BORDER_COLOR ):
-                {
-                    sal_Int32 nColor(0);
-                    ::sax::Converter::convertColor(nColor, aIter.toString());
-                    aBorderColor = nColor;
-                }
+                ::sax::Converter::convertColor(aBorderColor, aIter.toString());
                 break;
             case XML_ELEMENT( TABLE, XML_COPY_BACK ):
                 bCopyBack = IsXMLToken(aIter, XML_TRUE);
@@ -118,10 +114,9 @@ void SAL_CALL ScXMLTableScenarioContext::endFastElement( sal_Int32 /*nElement*/ 
         pDoc->SetScenarioData( nCurrTable, sComment, aBorderColor, nFlags );
         for( size_t i = 0; i < aScenarioRanges.size(); ++i )
         {
-            ScRange* pRange(aScenarioRanges[ i ]);
-            if( pRange )
-                pDoc->ApplyFlagsTab( pRange->aStart.Col(), pRange->aStart.Row(),
-                    pRange->aEnd.Col(), pRange->aEnd.Row(), nCurrTable, ScMF::Scenario );
+            ScRange const & rRange = aScenarioRanges[ i ];
+            pDoc->ApplyFlagsTab( rRange.aStart.Col(), rRange.aStart.Row(),
+                rRange.aEnd.Col(), rRange.aEnd.Row(), nCurrTable, ScMF::Scenario );
         }
         pDoc->SetActiveScenario( nCurrTable, bIsActive );
     }

@@ -58,7 +58,7 @@ enum class SdrEndTextEditKind
 // - macromod
 
 
-class SVX_DLLPUBLIC SdrObjEditView: public SdrGlueEditView, public EditViewCallbacks
+class SVX_DLLPUBLIC SdrObjEditView : public SdrGlueEditView, public EditViewCallbacks
 {
     friend class                SdrPageView;
     friend class                ImpSdrEditPara;
@@ -77,7 +77,7 @@ protected:
     tools::WeakReference<SdrTextObj>
                                 mxTextEditObj;         // current object in TextEdit
     SdrPageView*                pTextEditPV;
-    SdrOutliner*                pTextEditOutliner;     // outliner for the TextEdit
+    std::unique_ptr<SdrOutliner> pTextEditOutliner;     // outliner for the TextEdit
     OutlinerView*               pTextEditOutlinerView; // current view of the outliners
     VclPtr<vcl::Window>         pTextEditWin;          // matching window to pTextEditOutlinerView
     vcl::Cursor*                pTextEditCursorMerker; // to restore the cursor in each window
@@ -150,7 +150,10 @@ protected:
 
 protected:
     // #i71538# make constructors of SdrView sub-components protected to avoid incomplete incarnations which may get casted to SdrView
-    SdrObjEditView(SdrModel* pModel1, OutputDevice* pOut);
+    SdrObjEditView(
+        SdrModel& rSdrModel,
+        OutputDevice* pOut);
+
     virtual ~SdrObjEditView() override;
 
 public:
@@ -219,15 +222,15 @@ public:
     SdrTextObj* GetTextEditObject() const { return mxTextEditObj.get(); }
 
     // info about TextEditPageView. Default is 0L.
-    virtual SdrPageView* GetTextEditPageView() const override;
+    SdrPageView* GetTextEditPageView() const;
 
     // Current window of the outliners.
     void SetTextEditWin(vcl::Window* pWin);
 
     // Now at this outliner, events can be send, attributes can be set,
     // call Cut/Copy/Paste, call Undo/Redo, and so on...
-    const SdrOutliner* GetTextEditOutliner() const { return pTextEditOutliner; }
-    SdrOutliner* GetTextEditOutliner() { return pTextEditOutliner; }
+    const SdrOutliner* GetTextEditOutliner() const { return pTextEditOutliner.get(); }
+    SdrOutliner* GetTextEditOutliner() { return pTextEditOutliner.get(); }
     const OutlinerView* GetTextEditOutlinerView() const { return pTextEditOutlinerView; }
     OutlinerView* GetTextEditOutlinerView() { return pTextEditOutlinerView; }
 

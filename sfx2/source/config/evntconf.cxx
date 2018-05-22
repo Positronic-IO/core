@@ -20,7 +20,6 @@
 
 #include <memory>
 
-#include <vcl/msgbox.hxx>
 #include <svl/lstner.hxx>
 #include <basic/basmgr.hxx>
 #include <basic/sbmod.hxx>
@@ -37,7 +36,6 @@
 #include <sfx2/app.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/dispatch.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <eventsupplier.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -52,21 +50,18 @@ using namespace com::sun::star;
 
 SfxEventNamesList& SfxEventNamesList::operator=( const SfxEventNamesList& rTbl )
 {
-    DelDtor();
+    aEventNamesList.clear();
     for ( size_t i = 0, n = rTbl.size(); i < n; ++i )
     {
         SfxEventName* pTmp = rTbl.at( i );
-        SfxEventName* pNew = new SfxEventName( *pTmp );
-        aEventNamesList.push_back( pNew );
+        std::unique_ptr<SfxEventName> pNew(new SfxEventName( *pTmp ));
+        aEventNamesList.push_back( std::move(pNew) );
     }
     return *this;
 }
 
-void SfxEventNamesList::DelDtor()
+SfxEventNamesList::~SfxEventNamesList()
 {
-    for (SfxEventName* i : aEventNamesList)
-        delete i;
-    aEventNamesList.clear();
 }
 
 bool SfxEventNamesItem::operator==( const SfxPoolItem& rAttr ) const
@@ -116,7 +111,7 @@ sal_uInt16 SfxEventNamesItem::GetVersion( sal_uInt16 ) const
 
 void SfxEventNamesItem::AddEvent( const OUString& rName, const OUString& rUIName, SvMacroItemId nID )
 {
-    aEventsList.push_back( new SfxEventName( nID, rName, !rUIName.isEmpty() ? rUIName : rName ) );
+    aEventsList.push_back( std::unique_ptr<SfxEventName>(new SfxEventName( nID, rName, !rUIName.isEmpty() ? rUIName : rName )) );
 }
 
 
@@ -244,7 +239,7 @@ void SfxEventConfiguration::ConfigureEvent( const OUString& aName, const SvxMacr
 
 SvxMacro* SfxEventConfiguration::ConvertToMacro( const css::uno::Any& rElement, SfxObjectShell* pDoc )
 {
-    return SfxEvents_Impl::ConvertToMacro( rElement, pDoc, true/*bBlowUp*/ );
+    return SfxEvents_Impl::ConvertToMacro( rElement, pDoc );
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

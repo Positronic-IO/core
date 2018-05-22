@@ -19,18 +19,18 @@
 
 #include "Qt5Graphics.hxx"
 #include "Qt5FontFace.hxx"
-#include <qt5/Qt5Font.hxx>
+#include "Qt5Font.hxx"
 
 #include <vcl/fontcharmap.hxx>
 
-#include <CommonSalLayout.hxx>
+#include <sallayout.hxx>
 #include <PhysicalFontCollection.hxx>
 
 #include <QtGui/QFontDatabase>
 #include <QtGui/QRawFont>
 #include <QtCore/QStringList>
 
-void Qt5Graphics::SetTextColor(SalColor nSalColor) { m_aTextColor = nSalColor; }
+void Qt5Graphics::SetTextColor(Color nColor) { m_aTextColor = nColor; }
 
 void Qt5Graphics::SetFont(const FontSelectPattern* pReqFont, int nFallbackLevel)
 {
@@ -39,17 +39,18 @@ void Qt5Graphics::SetFont(const FontSelectPattern* pReqFont, int nFallbackLevel)
     {
         if (!m_pTextStyle[i])
             break;
-        m_pTextStyle[i].reset();
+        m_pTextStyle[i]->Release();
+        m_pTextStyle[i] = nullptr;
     }
 
     if (!pReqFont)
-        // handle release-font-resources request
-        m_pFontData[nFallbackLevel] = nullptr;
-    else
-    {
-        m_pFontData[nFallbackLevel] = static_cast<const Qt5FontFace*>(pReqFont->mpFontData);
-        m_pTextStyle[nFallbackLevel].reset(new Qt5Font(*pReqFont));
-    }
+        return;
+    assert(pReqFont->mpFontInstance);
+    if (!pReqFont->mpFontInstance)
+        return;
+
+    m_pTextStyle[nFallbackLevel] = static_cast<Qt5Font*>(pReqFont->mpFontInstance);
+    m_pTextStyle[nFallbackLevel]->Acquire();
 }
 
 void Qt5Graphics::GetFontMetric(ImplFontMetricDataRef& rFMD, int nFallbackLevel)
@@ -66,27 +67,22 @@ void Qt5Graphics::GetFontMetric(ImplFontMetricDataRef& rFMD, int nFallbackLevel)
 
     rFMD->SetWidth(aRawFont.averageCharWidth());
 
-    const QChar nKashidaCh[2] = { 0x06, 0x40 };
-    quint32 nKashidaGid = 0;
-    QPointF aPoint;
-    int nNumGlyphs;
-    if (aRawFont.glyphIndexesForChars(nKashidaCh, 1, &nKashidaGid, &nNumGlyphs)
-        && aRawFont.advancesForGlyphIndexes(&nKashidaGid, &aPoint, 1))
-        rFMD->SetMinKashida(lrint(aPoint.rx()));
+    rFMD->SetMinKashida(m_pTextStyle[nFallbackLevel]->GetKashidaWidth());
 }
 
 const FontCharMapRef Qt5Graphics::GetFontCharMap() const
 {
-    if (!m_pFontData[0])
+    if (!m_pTextStyle[0])
         return FontCharMapRef(new FontCharMap());
-    return m_pFontData[0]->GetFontCharMap();
+    return static_cast<const Qt5FontFace*>(m_pTextStyle[0]->GetFontFace())->GetFontCharMap();
 }
 
 bool Qt5Graphics::GetFontCapabilities(vcl::FontCapabilities& rFontCapabilities) const
 {
-    if (!m_pFontData[0])
+    if (!m_pTextStyle[0])
         return false;
-    return m_pFontData[0]->GetFontCapabilities(rFontCapabilities);
+    return static_cast<const Qt5FontFace*>(m_pTextStyle[0]->GetFontFace())
+        ->GetFontCapabilities(rFontCapabilities);
 }
 
 void Qt5Graphics::GetDevFontList(PhysicalFontCollection* pPFC)
@@ -140,10 +136,10 @@ bool Qt5Graphics::GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) { 
 std::unique_ptr<SalLayout> Qt5Graphics::GetTextLayout(ImplLayoutArgs&, int nFallbackLevel)
 {
     if (m_pTextStyle[nFallbackLevel])
-        return std::unique_ptr<SalLayout>(new CommonSalLayout(*m_pTextStyle[nFallbackLevel]));
+        return std::unique_ptr<SalLayout>(new GenericSalLayout(*m_pTextStyle[nFallbackLevel]));
     return std::unique_ptr<SalLayout>();
 }
 
-void Qt5Graphics::DrawTextLayout(const CommonSalLayout&) {}
+void Qt5Graphics::DrawTextLayout(const GenericSalLayout&) {}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

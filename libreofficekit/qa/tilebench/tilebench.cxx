@@ -104,15 +104,15 @@ int main( int argc, char* argv[] )
         return 1;
     }
 
-    // Use realistic dimensions, similar to the Online client.
-    long nTilePixelWidth = 512;
-    long nTilePixelHeight = 512;
-    long nTileTwipWidth = 3840;
-    long nTileTwipHeight = 3840;
-
     aTimes.emplace_back("initialization");
     // coverity[tainted_string] - build time test tool
     Office *pOffice = lok_cpp_init(argv[1]);
+    if (pOffice == nullptr)
+    {
+        fprintf(stderr, "Failed to initialize Office from %s\n", argv[1]);
+        return 1;
+    }
+
     aTimes.emplace_back();
 
     const int max_parts = (argc > 3 ? atoi(argv[3]) : -1);
@@ -147,9 +147,15 @@ int main( int argc, char* argv[] )
         }
         aTimes.emplace_back();
 
+        // Use realistic dimensions, similar to the Online client.
+        long nTilePixelWidth = 512;
+        long nTilePixelHeight = 512;
+        long nTileTwipWidth = 3840;
+        long nTileTwipHeight = 3840;
+
         // Estimate the maximum tiles based on the number of parts requested, if Writer.
         if (pDocument->getDocumentType() == LOK_DOCTYPE_TEXT)
-            max_tiles = static_cast<int>(ceil(max_parts * 16128. / nTilePixelHeight)) * ceil(static_cast<double>(nWidth) / nTilePixelWidth);
+            max_tiles = static_cast<int>(ceil(max_parts * 16128. / nTilePixelHeight) * ceil(static_cast<double>(nWidth) / nTilePixelWidth));
         fprintf(stderr, "Parts to render: %d, Total Parts: %d, Max parts: %d, Max tiles: %d\n", nParts, nTotalParts, max_parts, max_tiles);
 
         std::vector<unsigned char> vBuffer(nTilePixelWidth * nTilePixelHeight * 4);
@@ -204,7 +210,7 @@ int main( int argc, char* argv[] )
                 aTimes.emplace_back("render sub-regions at scale");
                 int nMaxTiles = max_tiles;
                 if (pDocument->getDocumentType() == LOK_DOCTYPE_TEXT)
-                    nMaxTiles = static_cast<int>(ceil(max_parts * 16128. / nTileTwipHeight)) * ceil(static_cast<double>(nWidth) / nTileTwipWidth);
+                    nMaxTiles = static_cast<int>(ceil(max_parts * 16128. / nTileTwipHeight) * ceil(static_cast<double>(nWidth) / nTileTwipWidth));
                 int nTiles = 0;
                 for (int nY = 0; nY < nHeight - 1; nY += nTileTwipHeight)
                 {

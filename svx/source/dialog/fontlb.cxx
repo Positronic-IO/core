@@ -46,9 +46,9 @@ SvLBoxFontString::~SvLBoxFontString()
 {
 }
 
-SvLBoxItem* SvLBoxFontString::Create() const
+std::unique_ptr<SvLBoxItem> SvLBoxFontString::Clone(SvLBoxItem const *) const
 {
-    return new SvLBoxFontString;
+    return std::unique_ptr<SvLBoxItem>(new SvLBoxFontString);
 }
 
 void SvLBoxFontString::Paint(const Point& rPos, SvTreeListBox& rDev, vcl::RenderContext& rRenderContext,
@@ -79,12 +79,12 @@ void SvLBoxFontString::InitViewData( SvTreeListBox* pView, SvTreeListEntry* pEnt
 
 SvxFontListBox::SvxFontListBox(vcl::Window* pParent, WinBits nStyle)
     : SvTabListBox(pParent, nStyle)
-    , maStdFont(GetFont())
     , mpEntryColor(nullptr)
     , mbUseFont(false)
 {
-    maStdFont.SetTransparent(true);
-    maEntryFont = maStdFont;
+    vcl::Font aStdFont(GetFont()); // Used for entries without specific font.
+    aStdFont.SetTransparent(true);
+    maEntryFont = aStdFont;
 }
 
 VCL_BUILDER_FACTORY_CONSTRUCTOR(SvxFontListBox, WB_TABSTOP)

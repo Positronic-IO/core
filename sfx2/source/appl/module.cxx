@@ -20,7 +20,6 @@
 #include <cstdarg>
 #include <sfx2/module.hxx>
 #include <sfx2/app.hxx>
-#include <sfx2/sfxresid.hxx>
 #include <sfx2/styfitem.hxx>
 #include <sfx2/msgpool.hxx>
 #include <sfx2/tbxctrl.hxx>
@@ -35,7 +34,7 @@
 #include <rtl/strbuf.hxx>
 #include <sal/log.hxx>
 
-#define SfxModule
+#define ShellClass_SfxModule
 #include <sfxslots.hxx>
 #include <childwinimpl.hxx>
 #include <ctrlfactoryimpl.hxx>
@@ -189,7 +188,7 @@ SfxChildWinFactArr_Impl* SfxModule::GetChildWinFactories_Impl() const
     return pImpl->pFactArr.get();
 }
 
-VclPtr<SfxTabPage> SfxModule::CreateTabPage( sal_uInt16, vcl::Window*, const SfxItemSet& )
+VclPtr<SfxTabPage> SfxModule::CreateTabPage(sal_uInt16, TabPageParent, const SfxItemSet&)
 {
     return VclPtr<SfxTabPage>();
 }

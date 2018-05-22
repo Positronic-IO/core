@@ -23,6 +23,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/strbuf.hxx>
 
+#include <array>
 #include <limits>
 #include <ostream>
 
@@ -480,7 +481,7 @@ inline bool ValidAddress( const ScAddress& rAddress )
 }
 
 //  ScRange
-class SAL_WARN_UNUSED ScRange
+class SAL_WARN_UNUSED ScRange final
 {
 public:
     ScAddress aStart;
@@ -763,10 +764,10 @@ inline bool ValidRange( const ScRange& rRange )
 }
 
 //  ScRangePair
-class SAL_WARN_UNUSED ScRangePair
+class SAL_WARN_UNUSED ScRangePair final
 {
 private:
-    ScRange aRange[2];
+    std::array<ScRange,2> aRange;
 
 public:
     ScRangePair( const ScRangePair& r )

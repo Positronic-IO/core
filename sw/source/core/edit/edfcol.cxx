@@ -86,8 +86,10 @@
 #include <undobj.hxx>
 #include <UndoParagraphSignature.hxx>
 #include <txtatr.hxx>
+#include <fmtmeta.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <tools/diagnose_ex.h>
 
 #define WATERMARK_NAME "PowerPlusWaterMarkObject"
 #define WATERMARK_AUTO_SIZE sal_uInt32(1)
@@ -490,10 +492,10 @@ bool lcl_DoUpdateParagraphSignatureField(SwDoc* pDoc,
             return true;
         }
     }
-    catch (const uno::Exception& ex)
+    catch (const uno::Exception&)
     {
         // We failed; avoid crashing.
-        SAL_WARN("sw.uno", "Failed to update paragraph signature: " << ex);
+        DBG_UNHANDLED_EXCEPTION("sw.uno", "Failed to update paragraph signature");
     }
 
     return false;
@@ -1402,7 +1404,7 @@ SfxWatermarkItem SwEditShell::GetWatermark()
             SfxWatermarkItem aItem;
             uno::Reference<text::XTextRange> xTextRange(xWatermark, uno::UNO_QUERY);
             uno::Reference<beans::XPropertySet> xPropertySet(xWatermark, uno::UNO_QUERY);
-            sal_uInt32 nColor;
+            Color nColor;
             sal_Int16 nTransparency;
             OUString aFont;
             drawing::HomogenMatrix3 aMatrix;
@@ -1442,7 +1444,7 @@ void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     if (xWatermark.is())
     {
         drawing::HomogenMatrix3 aMatrix;
-        sal_uInt32 nColor = 0xc0c0c0;
+        Color nColor = 0xc0c0c0;
         sal_Int16 nTransparency = 50;
         sal_Int16 nAngle = 45;
         OUString aFont = "";
@@ -1476,7 +1478,7 @@ void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     OUString sFont = rWatermark.GetFont();
     sal_Int16 nAngle = rWatermark.GetAngle();
     sal_Int16 nTransparency = rWatermark.GetTransparency();
-    sal_uInt32 nColor = rWatermark.GetColor();
+    Color nColor = rWatermark.GetColor();
 
     // Calc the ratio.
     double fRatio = 0;
@@ -2021,7 +2023,7 @@ bool SwEditShell::IsCursorInParagraphMetadataField() const
     return false;
 }
 
-bool SwEditShell::RemoveParagraphMetadataFieldAtCursor(const bool bBackspaceNotDel)
+bool SwEditShell::RemoveParagraphMetadataFieldAtCursor()
 {
     if (GetCursor() && GetCursor()->Start())
     {
@@ -2032,10 +2034,7 @@ bool SwEditShell::RemoveParagraphMetadataFieldAtCursor(const bool bBackspaceNotD
         {
             // Try moving the cursor to see if we're _facing_ a metafield or not,
             // as opposed to being within one.
-            if (bBackspaceNotDel)
-                index--; // Backspace moves left
-            else
-                index++; // Delete moves right
+            index--; // Backspace moves left
 
             xField = lcl_GetParagraphMetadataFieldAtIndex(GetDoc()->GetDocShell(), pNode, index);
         }

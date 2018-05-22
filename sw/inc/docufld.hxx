@@ -131,7 +131,7 @@ public:
     SwPageNumberFieldType();
 
     OUString Expand( SvxNumType nFormat, short nOff, sal_uInt16 const nPageNumber,
-                     sal_uInt16 const nMaxPage, const OUString& ) const;
+                     sal_uInt16 const nMaxPage, const OUString&, LanguageType = LANGUAGE_NONE ) const;
     void ChangeExpansion( SwDoc* pDoc,
                           bool bVirtPageNum, const SvxNumType* pNumFormat );
     virtual SwFieldType* Copy() const override;
@@ -308,7 +308,7 @@ public:
                      bool   bConditional,
                      const OUString& rCond,
                      const OUString& rText,
-                     bool   bHidden  = false,
+                     bool   bHidden,
                      sal_uInt16 nSubType = TYP_HIDDENTXTFLD);
 
     SwHiddenTextField( SwHiddenTextFieldType*,
@@ -632,7 +632,7 @@ public:
 class SwJumpEditFieldType : public SwFieldType
 {
     SwDoc* m_pDoc;
-    SwDepend m_aDep;
+    sw::WriterMultiListener m_aDep;
 
 public:
     SwJumpEditFieldType( SwDoc* pDoc );

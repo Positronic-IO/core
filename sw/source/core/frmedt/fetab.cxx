@@ -178,7 +178,7 @@ void SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
 
@@ -218,7 +218,7 @@ void SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
 
@@ -228,7 +228,7 @@ void SwFEShell::InsertCol( sal_uInt16 nCnt, bool bBehind )
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLINSCOL_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
 
@@ -273,7 +273,7 @@ bool SwFEShell::DeleteCol()
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return false;
     }
 
@@ -325,7 +325,7 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return false;
     }
 
@@ -445,7 +445,7 @@ TableMergeErr SwFEShell::MergeTab()
         {
             vcl::Window* pWin = GetWin();
             ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                            DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                            DialogMask::MessageInfo | DialogMask::ButtonsOk );
         }
         else
         {
@@ -477,7 +477,7 @@ void SwFEShell::SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight )
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
 
@@ -487,7 +487,7 @@ void SwFEShell::SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight )
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLSPLIT_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
     StartAllAction();
@@ -1281,7 +1281,7 @@ bool SwFEShell::DeleteTableSel()
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return false;
     }
 
@@ -2174,7 +2174,7 @@ void SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 
     {
         vcl::Window* pWin = GetWin();
         ErrorHandler::HandleError( ERR_TBLDDECHG_ERROR, pWin ? pWin->GetFrameWeld() : nullptr,
-                        DialogMask::MessageInfo | DialogMask::ButtonDefaultsOk );
+                        DialogMask::MessageInfo | DialogMask::ButtonsOk );
         return;
     }
 
@@ -2192,8 +2192,9 @@ void SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 
     const SwFormatFrameSize& rTableFrameSz = pTab->GetFormat()->GetFrameSize();
     SwRectFnSet aRectFnSet(pTab);
     long nPrtWidth = aRectFnSet.GetWidth(pTab->getFramePrintArea());
+    TableChgWidthHeightType eTypePos = extractPosition(eType);
     if( TableChgMode::VarWidthChangeAbs == pTab->GetTable()->GetTableChgMode() &&
-        ( eType & TableChgWidthHeightType::ColLeft || eType & TableChgWidthHeightType::ColRight ) &&
+        ( eTypePos == TableChgWidthHeightType::ColLeft || eTypePos == TableChgWidthHeightType::ColRight ) &&
         text::HoriOrientation::NONE == pTab->GetFormat()->GetHoriOrient().GetHoriOrient() &&
         nPrtWidth != rTableFrameSz.GetWidth() )
     {
@@ -2202,18 +2203,15 @@ void SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 
         pTab->GetFormat()->SetFormatAttr( aSz );
     }
 
-    if( extractPosition(eType) == TableChgWidthHeightType::ColLeft &&
-        (eType & (TableChgWidthHeightType::BiggerMode | TableChgWidthHeightType::InsertDeleteMode)) )
+    if( (eType & TableChgWidthHeightType::BiggerMode) &&
+        (eType & TableChgWidthHeightType::InsertDeleteMode) )
     {
         nDiff = sal_uInt16(aRectFnSet.GetWidth(pFrame->getFrameArea()));
 
         // we must move the cursor outside the current cell before
         // deleting the cells.
-        switch( extractPosition(eType) )
+        switch( eTypePos )
         {
-        case TableChgWidthHeightType::RowTop:
-            lcl_GoTableRow( this, true );
-            break;
         case TableChgWidthHeightType::RowBottom:
             lcl_GoTableRow( this, false );
             break;
@@ -2255,7 +2253,6 @@ void SwFEShell::SetColRowWidthHeight( TableChgWidthHeightType eType, sal_uInt16 
                 break;
 
         case TableChgWidthHeightType::CellTop:
-        case TableChgWidthHeightType::RowTop:
                 lcl_GoTableRow( this, true );
                 break;
 

@@ -30,7 +30,7 @@
 #include <editeng/editengdllapi.h>
 #include <editeng/editeng.hxx>
 
-#include <list>
+#include <vector>
 
 struct ESelection;
 struct EFieldInfo;
@@ -45,7 +45,7 @@ class SvxFieldItem;
 class SfxBroadcaster;
 class SvxUnoTextRangeBase;
 
-typedef std::list< SvxUnoTextRangeBase* > SvxUnoTextRangeBaseList;
+typedef std::vector< SvxUnoTextRangeBase* > SvxUnoTextRangeBaseVec;
 
 /** Wrapper class for unified EditEngine/Outliner access
 
@@ -59,7 +59,7 @@ public:
     virtual                 ~SvxEditSource();
 
     /// Returns a new reference to the same object. This is a shallow copy
-    virtual SvxEditSource*      Clone() const = 0;
+    virtual std::unique_ptr<SvxEditSource> Clone() const = 0;
 
     /** Query the text forwarder
 
@@ -122,7 +122,7 @@ public:
 
     /** returns a const list of all text ranges that are registered
         for the underlying text object. */
-    virtual const SvxUnoTextRangeBaseList& getRanges() const;
+    virtual const SvxUnoTextRangeBaseVec& getRanges() const;
 };
 
 
@@ -155,7 +155,7 @@ public:
     virtual void        QuickSetAttribs( const SfxItemSet& rSet, const ESelection& rSel ) = 0;
     virtual void        QuickInsertLineBreak( const ESelection& rSel ) = 0;
 
-    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, Color*& rpTxtColor, Color*& rpFldColor ) = 0;
+    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, boost::optional<Color>& rpTxtColor, boost::optional<Color>& rpFldColor ) = 0;
     virtual void         FieldClicked( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos ) = 0;
 
     virtual SfxItemPool* GetPool() const = 0;

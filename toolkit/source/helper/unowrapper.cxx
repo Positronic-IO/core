@@ -18,7 +18,6 @@
  */
 
 #include <com/sun/star/awt/WindowEvent.hpp>
-#include <comphelper/processfactory.hxx>
 
 #include <toolkit/helper/vclunohelper.hxx>
 #include <toolkit/helper/convert.hxx>
@@ -160,6 +159,11 @@ css::uno::Reference< css::awt::XWindowPeer> UnoWrapper::GetWindowInterface( vcl:
         SetWindowInterface( pWindow, xPeer );
     }
     return xPeer;
+}
+
+VclPtr<vcl::Window> UnoWrapper::GetWindow(const css::uno::Reference<css::awt::XWindow>& rWindow)
+{
+    return VCLUnoHelper::GetWindow(rWindow);
 }
 
 void UnoWrapper::SetWindowInterface( vcl::Window* pWindow, css::uno::Reference< css::awt::XWindowPeer> xIFace )

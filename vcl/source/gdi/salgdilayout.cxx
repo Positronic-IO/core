@@ -106,6 +106,12 @@ bool SalGraphics::drawTransformedBitmap(
     return false;
 }
 
+long SalGraphics::mirror2( long x, const OutputDevice *pOutDev ) const
+{
+    mirror(x, pOutDev);
+    return x;
+}
+
 void SalGraphics::mirror( long& x, const OutputDevice *pOutDev ) const
 {
     long w;
@@ -367,11 +373,11 @@ void SalGraphics::DrawPixel( long nX, long nY, const OutputDevice *pOutDev )
     drawPixel( nX, nY );
 }
 
-void SalGraphics::DrawPixel( long nX, long nY, SalColor nSalColor, const OutputDevice *pOutDev )
+void SalGraphics::DrawPixel( long nX, long nY, Color nColor, const OutputDevice *pOutDev )
 {
     if( (m_nLayout & SalLayoutFlags::BiDiRtl) || (pOutDev && pOutDev->IsRTLEnabled()) )
         mirror( nX, pOutDev );
-    drawPixel( nX, nY, nSalColor );
+    drawPixel( nX, nY, nColor );
 }
 
 void SalGraphics::DrawLine( long nX1, long nY1, long nX2, long nY2, const OutputDevice *pOutDev )
@@ -588,7 +594,7 @@ void SalGraphics::DrawBitmap( const SalTwoRect& rPosAry,
 
 void SalGraphics::DrawMask( const SalTwoRect& rPosAry,
                             const SalBitmap& rSalBitmap,
-                            SalColor nMaskColor, const OutputDevice *pOutDev )
+                            Color nMaskColor, const OutputDevice *pOutDev )
 {
     if( (m_nLayout & SalLayoutFlags::BiDiRtl) || (pOutDev && pOutDev->IsRTLEnabled()) )
     {
@@ -607,7 +613,7 @@ SalBitmap* SalGraphics::GetBitmap( long nX, long nY, long nWidth, long nHeight, 
     return getBitmap( nX, nY, nWidth, nHeight );
 }
 
-SalColor SalGraphics::GetPixel( long nX, long nY, const OutputDevice *pOutDev )
+Color SalGraphics::GetPixel( long nX, long nY, const OutputDevice *pOutDev )
 {
     if( (m_nLayout & SalLayoutFlags::BiDiRtl) || (pOutDev && pOutDev->IsRTLEnabled()) )
         mirror( nX, pOutDev );
@@ -647,7 +653,7 @@ bool SalGraphics::HitTestNativeScrollbar( ControlPart nPart, const tools::Rectan
     {
         Point pt( aPos );
         tools::Rectangle rgn( rControlRegion );
-        mirror( pt.X(), pOutDev );
+        pt.setX( mirror2( pt.X(), pOutDev ) );
         mirror( rgn, pOutDev );
         return hitTestNativeControl( ControlType::Scrollbar, nPart, rgn, pt, rIsInside );
     }

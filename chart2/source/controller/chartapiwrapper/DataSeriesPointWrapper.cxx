@@ -53,6 +53,7 @@
 #include <com/sun/star/drawing/LineJoint.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
+#include <comphelper/sequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
 using namespace ::com::sun::star;
@@ -590,7 +591,7 @@ beans::PropertyState SAL_CALL DataSeriesPointWrapper::getPropertyState( const OU
     beans::PropertyState aState( beans::PropertyState_DIRECT_VALUE );
     try
     {
-        if (rPropertyName == "SymbolBitmapURL")
+        if (rPropertyName == "SymbolBitmap" || rPropertyName == "SymbolBitmapURL")
         {
             uno::Any aAny = WrappedPropertySet::getPropertyValue("SymbolType");
             sal_Int32 nVal = css::chart::ChartSymbolType::NONE;
