@@ -219,3 +219,186 @@ LibreOfficeDev_SDK
         include {installscriptdir},{filelistpath}/PackageSet,{filelistpath}/GeneratedPackage,{filelistpath}/Package,{licensepath},{packinfopath}
     }
 }
+
+SafeOffice
+{
+    Settings
+    {
+        variables
+        {
+            PRODUCTNAME @PRODUCTNAME@
+            PRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PRODUCTEXTENSION .@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            POSTVERSIONEXTENSION
+            BUNDLEIDENTIFIER @MACOSX_BUNDLE_IDENTIFIER@
+            BRANDPACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            USERDIRPRODUCTVERSION 4
+            ABOUTBOXPRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            ABOUTBOXPRODUCTVERSIONSUFFIX @LIBO_VERSION_SUFFIX_SUFFIX@
+            BASEPRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PCPFILENAME libreoffice.pcp
+            UPDATEURL  
+            ADD_INCLUDE_FILES cli_ure/version/version.txt,unoil/climaker/version.txt
+            ADDSYSTEMINTEGRATION 1
+            PACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            PACKAGEREVISION {buildid}
+            LICENSENAME LGPL
+            ROOTMODULEGID gid_Module_Root
+            GLOBALPATCHFILEGID gid_File_Txt_Patchfiles
+            SPELLCHECKERFILE spellchecker_selection.txt
+            OOODOWNLOADNAME 1
+            CHANGETARGETDIR 1
+            PATCHCODEFILE ooo_patchcodes.txt
+            STARTCENTER_ADDFEATURE_URL http://extensions.libreoffice.org/
+            STARTCENTER_INFO_URL https://www.safeofficesuite.com/
+            STARTCENTER_TEMPLREP_URL http://templates.libreoffice.org/
+            DICT_REPO_URL http://extensions.libreoffice.org/dictionaries/
+            STARTCENTER_HIDE_EXTERNAL_LINKS 0
+        }
+        active          1
+        compression     5
+        script          setup_osl
+        downloadname    SafeOffice_{productversion}_{os}_install_{languages}
+        langpackdownloadname    SafeOffice_{productversion}_languagepack_{os}_install_{languages}
+        helppackdownloadname    SafeOffice_{productversion}_helppack_{os}_install_{languages}
+        include         {installscriptdir},{customtargetpath}/readlicense_oo/readme,{customtargetpath}/sysui/{pkgtype},{customtargetpath}/setup_native,{filelistpath}/PackageSet,{filelistpath}/GeneratedPackage,{filelistpath}/Package,{filelistpath}/ExtensionPackage,{extensionsdir},{licensepath},{packinfopath}
+    }
+}
+
+SafeOfficeDev
+{
+    Settings
+    {
+        variables
+        {
+            PRODUCTNAME SafeOfficeDev
+            PRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PRODUCTEXTENSION .@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            WINDOWSBASISROOTNAME SafeOfficeDev @LIBO_VERSION_MAJOR@
+            UNIXBASISROOTNAME Safefficedev@LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            POSTVERSIONEXTENSION
+            BUNDLEIDENTIFIER @MACOSX_BUNDLE_IDENTIFIER@
+            BRANDPACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            USERDIRPRODUCTVERSION 4
+            ABOUTBOXPRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            ABOUTBOXPRODUCTVERSIONSUFFIX @LIBO_VERSION_SUFFIX_SUFFIX@
+            BASEPRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            DEVELOPMENTPRODUCT 1
+            BASISPACKAGEPREFIX lodevbasis
+            UREPACKAGEPREFIX safeofficedev
+            SOLSUREPACKAGEPREFIX safeofficedev
+            REGISTRYLAYERNAME LayerDev
+            UPDATEURL http://update.libreoffice.org/check.php
+            ADD_INCLUDE_FILES cli_ure/version/version.txt,unoil/climaker/version.txt
+            ADDSYSTEMINTEGRATION 1
+            PACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            PACKAGEREVISION {buildid}
+            LICENSENAME LGPL
+            ROOTMODULEGID gid_Module_Root
+            GLOBALPATCHFILEGID gid_File_Txt_Patchfiles
+            SPELLCHECKERFILE spellchecker_selection.txt
+            OOODOWNLOADNAME 1
+            CHANGETARGETDIR 1
+            PATCHCODEFILE ooodev_patchcodes.txt
+            CODEFILENAME codes_ooodev.txt
+            LOCALUSERDIR $ORIGIN/..
+            STARTCENTER_ADDFEATURE_URL http://extensions.libreoffice.org/
+            STARTCENTER_INFO_URL https://www.safeofficesuite.com/
+            STARTCENTER_TEMPLREP_URL http://templates.libreoffice.org/
+            DICT_REPO_URL http://extensions.libreoffice.org/dictionaries/
+            STARTCENTER_HIDE_EXTERNAL_LINKS 0
+        }
+        active          1
+        compression     5
+        script          setup_osl
+        downloadname    SafeOfficeDev_{productversion}_{os}_install_{languages}
+        langpackdownloadname    SafeOfficeDev_{productversion}_languagepack_{os}_install_{languages}
+        helppackdownloadname    SafeOfficeDev_{productversion}_helppack_{os}_install_{languages}
+        include         {installscriptdir},{customtargetpath}/readlicense_oo/readme,{customtargetpath}/sysui/{pkgtype},{customtargetpath}/setup_native,{filelistpath}/PackageSet,{filelistpath}/GeneratedPackage,{filelistpath}/Package,{filelistpath}/ExtensionPackage,{extensionsdir},{licensepath},{packinfopath}
+    }
+}
+
+SafeOffice_SDK
+{
+    Settings
+    {
+        downloadname SafeOffice-SDK_{packageversion}_{os}_install_{languages}
+        variables
+        {
+            PRODUCTNAME LibreOffice
+            PRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PRODUCTEXTENSION .@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            POSTVERSIONEXTENSION SDK
+            BUNDLEIDENTIFIER @MACOSX_BUNDLE_IDENTIFIER@.SDK
+            BRANDPACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            PACKAGEREVISION {buildid}
+            PACK_INSTALLED 1
+            DMG_VOLUMEEXTENSION SDK
+            DATABASENAME safeoffice40sdk
+            NO_README_IN_ROOTDIR 1
+            LICENSENAME LGPL
+            IGNOREDIRECTORYLAYER 1
+            NOVERSIONINDIRNAME 0
+            NOSPACEINDIRECTORYNAME 1
+            NOSHORTDIRECTORYNAMES 1
+            CHANGETARGETDIR 1
+            DONTUSESTARTMENUFOLDER 1
+            STARTCENTER_ADDFEATURE_URL http://extensions.libreoffice.org/
+            STARTCENTER_INFO_URL https://www.safeofficesuite.com/
+            STARTCENTER_TEMPLREP_URL http://templates.libreoffice.org/
+            DICT_REPO_URL http://extensions.libreoffice.org/dictionaries/
+            STARTCENTER_HIDE_EXTERNAL_LINKS 0
+        }
+        active 1
+        compression 5
+        script sdkoo
+        include {installscriptdir},{filelistpath}/PackageSet,{filelistpath}/GeneratedPackage,{filelistpath}/Package,{licensepath},{packinfopath}
+    }
+}
+
+SafeOfficeDev_SDK
+{
+    Settings
+    {
+        downloadname SafeOfficeDev-SDK_{packageversion}_{os}_install_{languages}
+        variables
+        {
+            PRODUCTNAME SafeOfficeDev
+            PRODUCTVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PRODUCTEXTENSION .@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            WINDOWSBASISROOTNAME LibreOfficeDev @LIBO_VERSION_MAJOR@
+            UNIXBASISROOTNAME libreofficedev@LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            POSTVERSIONEXTENSION SDK
+            BUNDLEIDENTIFIER @MACOSX_BUNDLE_IDENTIFIER@.SDK
+            BRANDPACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@
+            PACKAGEVERSION @LIBO_VERSION_MAJOR@.@LIBO_VERSION_MINOR@.@LIBO_VERSION_MICRO@.@LIBO_VERSION_PATCH@@LIBO_VERSION_SUFFIX@
+            PACKAGEREVISION {buildid}
+            BASISPACKAGEPREFIX lodevbasis
+            UREPACKAGEPREFIX safeofficedev
+            SOLSUREPACKAGEPREFIX safeofficedev
+            REGISTRYLAYERNAME LayerDev
+            DEVELOPMENTPRODUCT 1
+            PACK_INSTALLED 1
+            DMG_VOLUMEEXTENSION SDK
+            DATABASENAME safeoffice40devsdk
+            NO_README_IN_ROOTDIR 1
+            LICENSENAME LGPL
+            IGNOREDIRECTORYLAYER 1
+            NOVERSIONINDIRNAME 0
+            NOSPACEINDIRECTORYNAME 1
+            NOSHORTDIRECTORYNAMES 1
+            CHANGETARGETDIR 1
+            DONTUSESTARTMENUFOLDER 1
+            STARTCENTER_ADDFEATURE_URL http://extensions.libreoffice.org/
+            STARTCENTER_INFO_URL https://www.safeofficesuite.com/
+            STARTCENTER_TEMPLREP_URL http://templates.libreoffice.org/
+            DICT_REPO_URL http://extensions.libreoffice.org/dictionaries/
+            STARTCENTER_HIDE_EXTERNAL_LINKS 0
+        }
+        active 1
+        compression 5
+        script sdkoo
+        include {installscriptdir},{filelistpath}/PackageSet,{filelistpath}/GeneratedPackage,{filelistpath}/Package,{licensepath},{packinfopath}
+    }
+}
