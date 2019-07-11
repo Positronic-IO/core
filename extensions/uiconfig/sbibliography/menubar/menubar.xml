@@ -11,16 +11,16 @@
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <!-- <menu:menuitem menu:id=".uno:Cut"/>
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
+            <menu:menuitem menu:id=".uno:Paste"/> -->
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:DataMenu">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Bib/InsertRecord"/>
+            <!-- <menu:menuitem menu:id=".uno:Bib/InsertRecord"/>
             <menu:menuitem menu:id=".uno:Bib/DeleteRecord"/>
-            <menu:menuseparator/>
+            <menu:menuseparator/> -->
             <menu:menuitem menu:id=".uno:Bib/standardFilter"/>
             <menu:menuitem menu:id=".uno:Bib/removeFilter"/>
             <menu:menuseparator/>

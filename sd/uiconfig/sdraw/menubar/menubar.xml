@@ -25,17 +25,17 @@
       <menu:menuitem menu:id=".uno:RecentFileList"/>
       <menu:menuitem menu:id=".uno:CloseDoc"/>
       <menu:menuseparator/>
-      <menu:menu menu:id=".uno:TemplateMenu">
+      <!-- <menu:menu menu:id=".uno:TemplateMenu">
           <menu:menupopup>
               <menu:menuitem menu:id=".uno:OpenTemplate"/>
               <menu:menuitem menu:id=".uno:SaveAsTemplate"/>
               <menu:menuseparator/>
               <menu:menuitem menu:id=".uno:NewDoc"/>
           </menu:menupopup>
-      </menu:menu>
+      </menu:menu> -->
       <!-- <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
       <menu:menuseparator/> -->
-      <menu:menuitem menu:id=".uno:Reload"/>
+      <!-- <menu:menuitem menu:id=".uno:Reload"/>
       <menu:menuitem menu:id=".uno:VersionDialog"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Save"/>
@@ -48,16 +48,16 @@
       <menu:menuitem menu:id=".uno:CheckIn"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ExportTo"/>
-      <menu:menuitem menu:id=".uno:ExportToPDF"/>
-      <menu:menu menu:id=".uno:SendMenu">
+      <menu:menuitem menu:id=".uno:ExportToPDF"/> -->
+      <!-- <menu:menu menu:id=".uno:SendMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:SendMail"/>
           <menu:menuitem menu:id=".uno:SendMailDocAsPDF"/>
         </menu:menupopup>
-      </menu:menu>
+      </menu:menu> -->
       <menu:menuitem menu:id=".uno:WebHtml"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Print"/>
+      <!-- <menu:menuitem menu:id=".uno:Print"/>
       <menu:menuitem menu:id=".uno:PrinterSetup"/>
       <menu:menuseparator/>
       <menu:menu menu:id=".uno:SignaturesMenu">
@@ -65,7 +65,7 @@
           <menu:menuitem menu:id=".uno:Signature"/>
           <menu:menuitem menu:id=".uno:SignPDF"/>
         </menu:menupopup>
-      </menu:menu>
+      </menu:menu> -->
       <menu:menuitem menu:id=".uno:SetDocumentProperties"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Quit"/>
@@ -73,18 +73,18 @@
   </menu:menu>
   <menu:menu menu:id=".uno:EditMenu">
     <menu:menupopup>
-      <menu:menuitem menu:id=".uno:Undo"/>
+      <!-- <menu:menuitem menu:id=".uno:Undo"/>
       <menu:menuitem menu:id=".uno:Redo"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Cut"/>
+      <menu:menuitem menu:id=".uno:Cut"/> -->
       <menu:menuitem menu:id=".uno:Copy"/>
-      <menu:menuitem menu:id=".uno:Paste"/>
+      <!-- <menu:menuitem menu:id=".uno:Paste"/>
       <menu:menu menu:id=".uno:PasteSpecialMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:PasteUnformatted"/>
           <menu:menuitem menu:id=".uno:PasteSpecial"/>
         </menu:menupopup>
-      </menu:menu>
+      </menu:menu> -->
       <menu:menuitem menu:id=".uno:SelectAll"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id="vnd.sun.star.findbar:FocusToFindbar"/>
@@ -98,8 +98,8 @@
       <menu:menuitem menu:id=".uno:ManageLinks"/>
       <menu:menuitem menu:id=".uno:ImageMapDialog"/>
       <menu:menuitem menu:id=".uno:ObjectMenue"/>
-      <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:EditDoc"/>
+      <!-- <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:EditDoc"/> -->
     </menu:menupopup>
   </menu:menu>
   <menu:menu menu:id=".uno:ViewMenu">

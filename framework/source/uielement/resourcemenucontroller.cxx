@@ -370,11 +370,11 @@ void SaveAsMenuController::impl_setPopupMenu()
     if ( !pVCLPopupMenu )
         return;
 
-    pVCLPopupMenu->InsertItem( ".uno:SaveAs", nullptr );
-    pVCLPopupMenu->InsertItem( ".uno:ExportTo", nullptr );
-    pVCLPopupMenu->InsertItem( ".uno:SaveAsTemplate", nullptr );
-    pVCLPopupMenu->InsertSeparator();
-    pVCLPopupMenu->InsertItem( ".uno:SaveAsRemote", nullptr );
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAs", nullptr );
+    // pVCLPopupMenu->InsertItem( ".uno:ExportTo", nullptr );
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAsTemplate", nullptr );
+    // pVCLPopupMenu->InsertSeparator();
+    // pVCLPopupMenu->InsertItem( ".uno:SaveAsRemote", nullptr );
 }
 
 OUString SaveAsMenuController::getImplementationName()

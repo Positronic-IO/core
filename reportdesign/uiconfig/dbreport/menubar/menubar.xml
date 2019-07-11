@@ -19,18 +19,18 @@
 <menu:menubar xmlns:menu="http://openoffice.org/2001/menu" menu:id="menubar">
     <menu:menu menu:id=".uno:PickList" >
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:AddDirect"/>
+            <!-- <menu:menuitem menu:id=".uno:AddDirect"/> -->
             <menu:menuitem menu:id=".uno:Open"/>
-            <menu:menuitem menu:id=".uno:OpenRemote"/>
+            <!-- <menu:menuitem menu:id=".uno:OpenRemote"/> -->
             <menu:menuitem menu:id=".uno:RecentFileList"/>
             <menu:menuitem menu:id=".uno:CloseDoc"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Save"/>
+            <!-- <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAsRemote"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
-            <menu:menuitem menu:id=".uno:SaveAll"/>
+            <menu:menuitem menu:id=".uno:SaveAll"/> -->
             <menu:menuseparator/>
             <menu:menu menu:id=".uno:ExportReportTo">
                 <menu:menupopup>
@@ -44,12 +44,12 @@
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu" >
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Undo"/>
+            <!-- <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuitem menu:id=".uno:Redo"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/> -->
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
+            <!-- <menu:menuitem menu:id=".uno:Paste"/> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:SelectAll"/>
             <menu:menu menu:id=".uno:Select">
@@ -60,7 +60,7 @@
                 </menu:menupopup>
             </menu:menu>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Delete"/>
+            <!-- <menu:menuitem menu:id=".uno:Delete"/> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:PageHeaderFooter"/>
             <menu:menuitem menu:id=".uno:ReportHeaderFooter"/>

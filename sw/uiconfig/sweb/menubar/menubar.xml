@@ -24,9 +24,9 @@
       <!-- <menu:menuitem menu:id=".uno:OpenRemote"/> -->
       <menu:menuitem menu:id=".uno:RecentFileList"/>
       <menu:menuitem menu:id=".uno:CloseDoc"/>
-      <!-- <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:AutoPilotMenu"/> -->
-      <menu:menu menu:id=".uno:TemplateMenu">
+      <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:AutoPilotMenu"/>
+      <!-- <menu:menu menu:id=".uno:TemplateMenu">
           <menu:menupopup>
               <menu:menuitem menu:id=".uno:OpenTemplate"/>
               <menu:menuitem menu:id=".uno:SaveAsTemplate"/>
@@ -67,17 +67,17 @@
           <menu:menuseparator/>
           <menu:menuitem menu:id=".uno:SendOutlineToStarImpress"/>
           <menu:menuitem menu:id=".uno:SendOutlineToClipboard"/>
-          <menu:menuseparator/>
+          <menu:menuseparator/> -->
           <menu:menuitem menu:id=".uno:CreateAbstract"/>
           <menu:menuitem menu:id=".uno:SendAbstractToStarImpress"/>
         </menu:menupopup>
       </menu:menu>
       <menu:menuitem menu:id=".uno:WebHtml"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:PrintPreview"/>
+      <!-- <menu:menuitem menu:id=".uno:PrintPreview"/>
       <menu:menuitem menu:id=".uno:Print"/>
       <menu:menuitem menu:id=".uno:PrinterSetup"/>
-      <menu:menuseparator/>
+      <menu:menuseparator/> -->
       <menu:menuitem menu:id=".uno:SetDocumentProperties"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Quit"/>
@@ -85,19 +85,19 @@
   </menu:menu>
   <menu:menu menu:id=".uno:EditMenu">
     <menu:menupopup>
-      <menu:menuitem menu:id=".uno:Undo"/>
+      <!-- <menu:menuitem menu:id=".uno:Undo"/>
       <menu:menuitem menu:id=".uno:Redo"/>
       <menu:menuitem menu:id=".uno:Repeat"/>
       <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:Cut"/>
+      <menu:menuitem menu:id=".uno:Cut"/> -->
       <menu:menuitem menu:id=".uno:Copy"/>
-      <menu:menuitem menu:id=".uno:Paste"/>
+      <!-- <menu:menuitem menu:id=".uno:Paste"/>
       <menu:menu menu:id=".uno:PasteSpecialMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:PasteUnformatted"/>
           <menu:menuitem menu:id=".uno:PasteSpecial"/>
         </menu:menupopup>
-      </menu:menu>
+      </menu:menu> -->
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:SelectAll"/>
       <menu:menu menu:id=".uno:SelectionModeMenu">

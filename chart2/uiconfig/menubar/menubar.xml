@@ -21,24 +21,24 @@
         <menu:menupopup>
             <!-- <menu:menuitem menu:id=".uno:AddDirect"/> -->
             <menu:menuitem menu:id=".uno:CloseDoc"/>
-            <menu:menuseparator/>
+            <!-- <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:SaveAs"/>
             <menu:menuitem menu:id=".uno:SaveAll"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:SetDocumentProperties"/>
+            <menu:menuitem menu:id=".uno:SetDocumentProperties"/> -->
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Quit"/>
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:EditMenu">
         <menu:menupopup>
-            <menu:menuitem menu:id=".uno:Undo"/>
+            <!-- <menu:menuitem menu:id=".uno:Undo"/>
             <menu:menuitem menu:id=".uno:Redo"/>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:Cut"/>
+            <menu:menuitem menu:id=".uno:Cut"/> -->
             <menu:menuitem menu:id=".uno:Copy"/>
-            <menu:menuitem menu:id=".uno:Paste"/>
+            <!-- <menu:menuitem menu:id=".uno:Paste"/> -->
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:ViewMenu">
