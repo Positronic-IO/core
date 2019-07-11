@@ -1283,7 +1283,7 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                         (( pVSh = m_xObjSh->GetViewShell()) && (pFSh = pVSh->GetFormShell()) && pFSh->IsDesignMode())))
                 {
                     bool bSignPDF = IsSignPDF(m_xObjSh);
-
+#ifdef NOTVIEWONLY
                     auto pInfoBar = AppendInfoBar("readonly", SfxResId(bSignPDF ? STR_READONLY_PDF : STR_READONLY_DOCUMENT), InfoBarType::Info);
                     if (pInfoBar)
                     {
@@ -1304,6 +1304,7 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                         xBtn->SetClickHdl(LINK(this, SfxViewFrame, SwitchReadOnlyHandler));
                         pInfoBar->addButton(xBtn);
                     }
+#endif
                 }
 
                 if (SfxClassificationHelper::IsClassified(m_xObjSh->getDocProperties()))
